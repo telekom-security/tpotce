@@ -243,6 +243,7 @@ class PatchTest(unittest.TestCase):
 
         Protocol.commands = commands
         protocol_obj = Protocol()
+        self.protocol_obj = protocol_obj
         return lambda name, cwd="/root": get_command(protocol_obj, name, PATH, cwd)
 
     def test_txtcmd_answers_every_spelling_through_the_bin_link(self):
@@ -297,6 +298,16 @@ class PatchTest(unittest.TestCase):
             self.assertEqual(find("top"), ("script", "/usr/bin/top"))
             self.assertIsNone(find("nothere"))
         self.assertLessEqual(asked.count("skip_python_commands"), 1)
+
+    def test_a_program_the_session_installed_answers_although_skipped(self):
+        # apt / dnf install of a package whose program is on the skip list (git where it is not installed)
+        find = self.lookup({}, {"/bin/top": "top", "top": "top", "git": "git"}, skip="top,git")
+        self.assertEqual(find("top"), ("script", "/usr/bin/top"))
+        self.protocol_obj.tpot_installed = {"top": "4.0.0"}
+        self.assertEqual(find("top"), "top")
+        self.assertEqual(find("/bin/top"), "top")
+        self.assertEqual(find("/usr/bin/top"), "top")
+        self.assertIsNone(find("git"))
 
     def test_skipped_python_command_stays_skipped_in_every_spelling(self):
         find = self.lookup({}, {"/bin/top": "top", "top": "top"}, skip="top")
@@ -658,7 +669,13 @@ class PatchTest(unittest.TestCase):
         git.call()
         self.assertEqual(bytes(git.out), b"git version 2.43.0\n")
 
-    def twisted_command(self, module, cls, values, args, uid=0):
+    def test_git_version_of_a_git_the_session_installed(self):
+        _, git = self.command("git", "Command_git", {}, ["--version"])
+        git.protocol.tpot_installed = {"git": "2.39.5"}
+        git.call()
+        self.assertEqual(bytes(git.out), b"git version 2.39.5\n")
+
+    def twisted_command(self, module, cls, values, args, uid=0, commands=None):
         """A command with inlineCallbacks: the generators run through at once, sleep returns."""
         def inline_callbacks(function):
             def run(*a, **k):
@@ -677,11 +694,14 @@ class PatchTest(unittest.TestCase):
         command.sleep = lambda *a, **k: None
 
         class Fs:
-            def mkfile(self, *a, **k):
-                pass
+            made = []
+
+            def mkfile(self, path, *a, **k):
+                self.made.append(path)
+                return True
 
         command.fs = Fs()
-        command.protocol.commands = {}
+        command.protocol.commands = dict(commands or {})
         command.start()
         return namespace, command
 
@@ -715,9 +735,95 @@ class PatchTest(unittest.TestCase):
         _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["-y", "install", "wget"])
         self.assertIn("  wget \n", bytes(apt.out).decode())
 
-    def apt_with_packages(self, packages, fallback="ubuntu", available=None):
+    def test_apt_install_takes_package_names_only(self):
+        # apt: a name of Debian's form (lower case, digits, + - .) or a .deb file by its path
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", "..", ".", "./x.deb",
+                                                                          "Wget", "-x-", "../../tmp/a", "nmap"])
+        self.assertEqual(bytes(apt.out).decode(), "Reading package lists... Done\nBuilding dependency tree... Done\n"
+                         "Reading state information... Done\n")
+        self.assertEqual(apt.err, "E: Unable to locate package ..\nE: Unable to locate package .\n"
+                         "E: Unsupported file ./x.deb given on commandline\nE: Unable to locate package Wget\n"
+                         "E: Unsupported file ../../tmp/a given on commandline\n")
+        self.assertEqual((apt.code, apt.fs.made, apt.protocol.commands), (100, [], {}))
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", "g++", "libc6:amd64"])
+        self.assertIn("  g++ libc6 \n", bytes(apt.out).decode())
+        self.assertEqual((apt.err, apt.fs.made), ("", ["/usr/bin/g++", "/usr/bin/libc6"]))
+
+    def test_apt_install_marks_the_programs_for_the_session(self):
+        values = self.apt_with_packages({}, "debian", available={"git": "1:2.39.5-0+deb12u2", "net-tools": "2.10-0.1",
+                                                                 "nmap": "7.93+dfsg1-1"},
+                                        programs={"net-tools": ["/usr/bin/netstat", "/usr/sbin/ifconfig"]})
+        cowrie = {"git": "Command_git", "/bin/git": "Command_git", "ifconfig": "Command_ifconfig",
+                  "netstat": "Command_netstat"}
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "git", "net-tools", "nmap"],
+                                      commands=cowrie)
+        self.assertEqual(apt.code, None)
+        self.assertEqual(apt.protocol.tpot_installed, {"git": "2.39.5", "netstat": "2.10", "ifconfig": "2.10",
+                                                       "nmap": "7.93+dfsg1"})
+        self.assertEqual(apt.fs.made, ["/usr/bin/git", "/usr/bin/netstat", "/usr/sbin/ifconfig", "/usr/bin/nmap"])
+        # Cowrie's own commands answer for theirs, a program Cowrie does not have is the faked one
+        self.assertEqual(set(apt.protocol.commands), set(cowrie) | {"/usr/bin/nmap"})
+
+    def test_apt_packages_name_the_programs_of_the_available_packages(self):
+        persona = catalog.by_id("debian-bookworm")
+        from tpot_personas.identity import draw
+        programs = system.apt_packages(persona, draw(persona, 1))["programs"]
+        self.assertEqual(programs["net-tools"], ["/usr/bin/netstat", "/usr/sbin/ifconfig"])
+        self.assertEqual(programs["busybox"], ["/usr/bin/busybox", "/usr/bin/ftpget"])
+        self.assertEqual(programs["php-cli"], ["/usr/bin/php"])
+        self.assertEqual(programs["unzip"], ["/usr/bin/unzip"])
+        self.assertEqual(programs["git"], ["/usr/bin/git"])
+
+    def test_dnf_install_marks_the_programs_for_the_session(self):
+        run = self.upstream_session("rhel-9", uid=0, extra_modules=("git",))
+        evr = self.dnf_data(run)["available"]["git-core"]["evr"]
+        self.assertEqual(run("dnf install -y git")[2], 0)
+        self.assertEqual(run.protocol.tpot_installed["git"], evr.split(":")[-1].rsplit("-", 1)[0])
+        self.assertNotIn("/usr/bin/git", run.protocol.commands)
+        self.assertEqual(run("git --version"), (f"git version {evr.split(':')[-1].rsplit('-', 1)[0]}\n", "", 0))
+        self.assertEqual(run("dnf remove -y git-core")[2], 0)
+        self.assertNotIn("git", run.protocol.tpot_installed)
+
+    def test_dnf_takes_no_path_as_a_package(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        for word in ("..", ".", "./x.rpm", "../../usr/bin/x"):
+            out, err, code = run(["dnf", "install", "-y", word])
+            self.assertEqual((err, code), (f"Error: Unable to find a match: {word}\n", 1), word)
+        self.assertEqual(getattr(run.protocol.fs, "made", []), [])
+
+    def test_rpm_qf_reads_the_owners_once(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        data = run.commands["rpm"].call.__globals__["tpot_dnf_data"]()
+        reads = []
+
+        from collections.abc import Mapping
+
+        class Owners(Mapping):
+            def __init__(self, owners):
+                self.owners = owners
+
+            def __getitem__(self, key):
+                return self.owners[key]
+
+            def __iter__(self):
+                return iter(self.owners)
+
+            def __len__(self):
+                return len(self.owners)
+
+            def keys(self):
+                reads.append(1)
+                return self.owners.keys()
+
+        data["owners"] = Owners(data["owners"])
+        out, err, code = run("rpm -qf /usr/bin/bash /usr/bin/ls /etc/passwd")
+        self.assertEqual(code, 0, (out, err))
+        self.assertEqual(len(out.splitlines()), 3)
+        self.assertLessEqual(len(reads), 1)
+
+    def apt_with_packages(self, packages, fallback="ubuntu", available=None, programs=None):
         path = tmpdir(self) / "apt-packages.json"
-        path.write_text(json.dumps({"installed": packages, "available": available or {}}))
+        path.write_text(json.dumps({"installed": packages, "available": available or {}, "programs": programs or {}}))
         return {**self.APT, ("shell", "apt_packages"): str(path), ("shell", "apt_fallback"): fallback}
 
     def test_apt_install_shows_the_versions_of_the_persona(self):

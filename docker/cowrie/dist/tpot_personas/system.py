@@ -1483,13 +1483,25 @@ def sudo_list(persona):
             "rules": {persona.user: [group, "(ALL) NOPASSWD: ALL"], "root": [group]}}
 
 
+# programs of an apt package besides those of TOOL_PROGRAMS
+APT_PROGRAMS = {"busybox": ("usr/bin/busybox",)}
+
+
+def apt_programs(name):
+    """The programs an apt install of the package puts on PATH: its tools (TOOL_PROGRAMS) and
+    APT_PROGRAMS, else /usr/bin/<name>."""
+    found = set(TOOL_PROGRAMS.get(name, {}).values()) | set(APT_PROGRAMS.get(name, ()))
+    return ["/" + rel for rel in sorted(found)] if found else [f"/usr/bin/{name}"]
+
+
 def apt_packages(persona, ident):
-    """What apt knows on a Debian server: the installed packages (the release's, APT_INSTALLED) and the
-    versions of the packages it would install (APT_AVAILABLE)."""
+    """What apt knows on a Debian server: the installed packages (the release's, APT_INSTALLED), the
+    versions of the packages it would install (APT_AVAILABLE) and their programs."""
     code = ident.release.extra["codename"]
     installed = dict(sorted({**APT_INSTALLED[code], **ident.release.packages}.items()))
     available = {name: version for name, version in sorted(APT_AVAILABLE[code].items()) if name not in installed}
-    return {"installed": installed, "available": available}
+    return {"installed": installed, "available": available,
+            "programs": {name: apt_programs(name) for name in available}}
 
 
 def rpm_evr(value, minor):

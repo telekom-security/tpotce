@@ -68,8 +68,12 @@ def tpot_skip_python_commands() -> frozenset[str]:
             return None
 """,
         """        skip_python_commands = tpot_skip_python_commands()
+        # the programs apt / dnf installed in this session ({name: version}) answer
+        installed = getattr(self, "tpot_installed", None) or {}
 
         def skip_python_command(name):
+            if Path(name).name in installed:
+                return False
             return name in skip_python_commands or Path(name).name in skip_python_commands
 
         if cmd in self.commands and not skip_python_command(cmd):
@@ -908,14 +912,16 @@ commands["python3"] = Command_python
 
 
 def patch_git(cowrie_root):
-    """git --version names [shell] git_version (upstream's 2.34.1 without it)."""
+    """git --version names [shell] git_version, else that of a git the session installed
+    (upstream's 2.34.1 without both)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "git.py"
     replace_once(path, *CONFIG_IMPORT)
     replace_once(
         path,
         """            self.write("git version 2.34.1\\n")
 """,
-        """            version = CowrieConfig.get("shell", "git_version", fallback="2.34.1")
+        """            version = (CowrieConfig.get("shell", "git_version", fallback="")
+                       or (getattr(self.protocol, "tpot_installed", None) or {}).get("git") or "2.34.1")
             self.write(f"git version {version}\\n")
 """,
     )
@@ -1724,8 +1730,27 @@ def tpot_apt_data() -> dict[str, dict[str, str]]:
         data = {}
     if not isinstance(data, dict):
         data = {}
-    return {part: {str(k): str(v) for k, v in data.get(part, {}).items()} if isinstance(data.get(part), dict)
-            else {} for part in ("installed", "available")}
+    found = {part: {str(k): str(v) for k, v in data.get(part, {}).items()} if isinstance(data.get(part), dict)
+             else {} for part in ("installed", "available")}
+    programs = data.get("programs") if isinstance(data.get("programs"), dict) else {}
+    found["programs"] = {str(name): [str(path) for path in paths] for name, paths in programs.items()
+                         if isinstance(paths, list)}
+    return found
+
+
+def tpot_upstream(version: str) -> str:
+    \"\"\"T-Pot: the upstream part of a package version (no epoch, no revision): 1:2.39.5-0+deb12u2 -> 2.39.5.\"\"\"
+    plain = version.split(":", 1)[-1]
+    return plain.rpartition("-")[0] or plain
+
+
+def tpot_mark_installed(protocol, name: str, version: str) -> None:
+    \"\"\"T-Pot: a program this session installed answers although the persona skips it.\"\"\"
+    installed = getattr(protocol, "tpot_installed", None)
+    if installed is None:
+        installed = {}
+        protocol.tpot_installed = installed
+    installed[name] = tpot_upstream(version)
 
 
 def tpot_apt_known() -> dict[str, str]:
@@ -1871,9 +1896,18 @@ def tpot_apt_size(name: str) -> int:
             yield self.sleep(2)
         self.exit()
 """,
-        """        # T-Pot: package names as apt takes them; an installed package of the persona is already
-        # the newest version, another one gets a version that fits the release
-        names = list(dict.fromkeys(re.sub("[^a-z0-9.+-]", "", x.lower()) for x in self.tpot_words[1:]))
+        """        # T-Pot: package names as apt takes them (Debian's form, an architecture after the colon), a
+        # path is a .deb file; an installed package of the persona is already the newest version,
+        # another one gets a version that fits the release
+        names, errors = [], []
+        for word in self.tpot_words[1:]:
+            found = re.fullmatch(r"([a-z0-9][a-z0-9+.-]+)(?::[a-z0-9-]+)?", word)
+            if "/" in word or word.endswith(".deb"):
+                errors.append(f"E: Unsupported file {word} given on commandline\\n")
+            elif not found:
+                errors.append(f"E: Unable to locate package {word}\\n")
+            elif found.group(1) not in names:
+                names.append(found.group(1))
         known = tpot_apt_known()
         for y in names:
             if y and y not in known:
@@ -1883,6 +1917,11 @@ def tpot_apt_size(name: str) -> int:
         self.write("Reading package lists... Done\\n")
         self.write("Building dependency tree... Done\\n" if tpot_apt("apt_version", "") else "Building dependency tree\\n")
         self.write("Reading state information... Done\\n")
+        if errors:
+            for error in errors:
+                self.errorWrite(error)
+            self.exit(100)
+            return
         for y in names:
             if y in known:
                 self.write(f"{y} is already the newest version ({known[y]}).\\n")
@@ -1919,16 +1958,19 @@ def tpot_apt_size(name: str) -> int:
             yield self.sleep(1, 2)
         for p in self.packages:
             self.write(f"Setting up {p} ({self.packages[p]['version']}) ...\\n")
-            self.fs.mkfile(
-                f"/usr/bin/{p}",
-                self.user["uid"],
-                self.user["gid"],
-                random.randint(10000, 90000),
-                33188,
-            )
-            self.protocol.commands[f"/usr/bin/{p}"] = (
-                Command_faked_package_class_factory.getCommand(p)
-            )
+            # the programs of the package; one Cowrie has a command for answers with it
+            for program in tpot_apt_data()["programs"].get(p) or [f"/usr/bin/{p}"]:
+                name = program.rsplit("/", 1)[-1]
+                self.fs.mkfile(
+                    program,
+                    self.user["uid"],
+                    self.user["gid"],
+                    random.randint(10000, 90000),
+                    33188,
+                )
+                tpot_mark_installed(self.protocol, name, self.packages[p]["version"])
+                if name not in self.protocol.commands:
+                    self.protocol.commands[program] = Command_faked_package_class_factory.getCommand(name)
             yield self.sleep(2)
         self.write(f"Processing triggers for man-db ({tpot_apt_version('man-db')}) ...\\n")
         self.exit()""",
@@ -2208,6 +2250,19 @@ def tpot_dnf_session(protocol) -> dict:
         except AttributeError:
             pass
     return session
+
+
+def tpot_dnf_mark(protocol, name: str, evr: str) -> None:
+    """A program this session installed answers although the persona skips it ({name: version})."""
+    installed = getattr(protocol, "tpot_installed", None)
+    if installed is None:
+        installed = {}
+        try:
+            protocol.tpot_installed = installed
+        except AttributeError:
+            return
+    plain = evr.split(":", 1)[-1]
+    installed[name] = plain.rpartition("-")[0] or plain
 
 
 def tpot_dnf_installed(protocol) -> dict:
@@ -2813,17 +2868,25 @@ class Command_dnf(HoneyPotCommand):
             yield self.sleep(0.05, 0.25)
         self.tpot_out("Installed products updated.\n\n")
         session = tpot_dnf_session(self.protocol)
+        marked = getattr(self.protocol, "tpot_installed", None)
         for title, name, entry in order:
             if kind == "remove":
+                for program in session["installed"].get(name, {}).get("programs", []):
+                    if marked is not None:
+                        marked.pop(program.rsplit("/", 1)[-1], None)
                 session["installed"].pop(name, None)
                 session["removed"].add(name)
             elif title != "Reinstalling":
+                for program in entry.get("programs", []):
+                    tpot_dnf_mark(self.protocol, program.rsplit("/", 1)[-1], entry["evr"])
                 session["installed"][name] = {"evr": entry["evr"], "arch": entry["arch"],
                                               "from": "@" + entry["repo"], "summary": entry.get("summary", ""),
                                               "size": entry.get("size", 0), "programs": entry.get("programs", [])}
                 session["removed"].discard(name)
         for program in made:
-            self.protocol.commands[program] = Command_faked_package_class_factory.getCommand(program.rsplit("/", 1)[-1])
+            # one Cowrie has a command for answers with it
+            if program.rsplit("/", 1)[-1] not in self.protocol.commands:
+                self.protocol.commands[program] = Command_faked_package_class_factory.getCommand(program.rsplit("/", 1)[-1])
         names = sorted(tpot_dnf_nevra(name, entry) for _, name, entry in order)
         title = {"install": "Installed", "reinstall": "Reinstalled", "remove": "Removed"}[kind]
         self.tpot_out("\n".join(tpot_dnf_pto(title, names)) + "\n\nComplete!\n")
@@ -3009,16 +3072,18 @@ class Command_rpm(HoneyPotCommand):
                 self.errorWrite("rpm: no arguments given for query\n")
                 return 1
             failed = 0
+            owners = {}
+            if "f" in flags:
+                owners = dict(data["owners"])
+                for name, entry in installed.items():
+                    for program in entry.get("programs", []):
+                        owners[program] = name
             for word in words:
                 if "f" in flags:
                     path = self.fs.resolve_path(word, self.cwd)
                     for top in ("/bin/", "/sbin/"):
                         if path.startswith(top):
                             path = "/usr" + path
-                    owners = dict(data["owners"])
-                    for name, entry in installed.items():
-                        for program in entry.get("programs", []):
-                            owners[program] = name
                     if not self.fs.exists(path):
                         self.errorWrite(f"error: file {path}: No such file or directory\n")
                         failed += 1
