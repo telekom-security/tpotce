@@ -137,7 +137,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 [conpot](http://conpot.org/),
 [cowrie](https://github.com/cowrie/cowrie),
-[ddospot](https://github.com/t3chn0m4g3/ddospot),
+[ddospot](https://github.com/telekom-security/ddospot),
 [dicompot](https://github.com/nsmfoo/dicompot),
 [dionaea](https://github.com/DinoTools/dionaea),
 [elasticpot](https://gitlab.com/bontchev/elasticpot),
@@ -345,7 +345,7 @@ ChatGPT support for these honeypots will remain untested in relation to T-Pot.
 <br><br>
 
 ## Ddospot, the DDoS Reflection Honeypot
-[Ddospot](https://github.com/t3chn0m4g3/ddospot) offers four services and records who sends them requests: CHARGEN (`19/udp`), DNS (`53/udp`, `53/tcp`), NTP (`123/udp`) and SSDP (`1900/udp`). It is part of the Tarpit edition, the [customizer](#customize-t-pot-honeypots-and-services) adds it to other editions. Its data reads differently from that of the other honeypots: during an attack, the address in the packets Ddospot receives is not the one of the attacker.
+[Ddospot](https://github.com/telekom-security/ddospot) offers four services and records who sends them requests: CHARGEN (`19/udp`), DNS (`53/udp`, `53/tcp`), NTP (`123/udp`) and SSDP (`1900/udp`). It is part of the Tarpit edition, the [customizer](#customize-t-pot-honeypots-and-services) adds it to other editions. Its data reads differently from that of the other honeypots: during an attack, the address in the packets Ddospot receives is not the one of the attacker.
 
 ### How reflection attacks work
 UDP has no handshake. A server that receives a UDP request sends its answer to the source address written in the packet, it cannot tell whether that address belongs to the real sender. In a reflection attack the attacker writes the address of its victim as the source of small requests and sends them to many servers whose answers are larger than the requests, the *reflectors*. All of them answer the victim, which receives traffic it never asked for, from servers it does not know, while the attacker stays hidden behind them.
@@ -1262,7 +1262,7 @@ The software that T-Pot is built on uses the following licenses.
 [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub?tab=MIT-1-ov-file#readme),
 [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE),
-[ddospot](https://github.com/t3chn0m4g3/ddospot/blob/v2/LICENSE),
+[ddospot](https://github.com/telekom-security/ddospot/blob/master/LICENSE),
 [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE),
 [glutton](https://github.com/mushorg/glutton/blob/main/LICENSE),
 [hellpot](https://github.com/yunginnanet/HellPot/blob/main/LICENSE),
@@ -1299,7 +1299,7 @@ Without open source and the development community we are proud to be a part of, 
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),
 [conpot](https://github.com/mushorg/conpot/graphs/contributors),
 [cowrie](https://github.com/cowrie/cowrie/graphs/contributors),
-[ddospot](https://github.com/t3chn0m4g3/ddospot/graphs/contributors),
+[ddospot](https://github.com/telekom-security/ddospot/graphs/contributors),
 [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors),
 [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors),
 [docker](https://github.com/moby/moby/graphs/contributors),
