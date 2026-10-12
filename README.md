@@ -710,7 +710,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot images` | *Images* | T-Pot host | Docker images, `dim` is short for it |
 | `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot.service` |
 | `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log, after `--check-data-loss` and a question if the update would [lose data](#loss-of-data) |
-| `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` (naming the size of the Elasticsearch data in the archive) |
+| `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` (naming the size of the Elasticsearch data when the archive holds it) |
 | `tpot edition [list]` / `tpot edition set EDITION` | *Edition & services* | every host (switching: T-Pot host) | the editions, and switching to another one: T-Pot stops, `docker-compose.yml` is kept in `~/tpot_backups`, the edition takes its place, T-Pot starts again |
 | `tpot customize [OPTIONS]` | *Edition & services*, `c` | every host | the [customizer](#customize-t-pot-honeypots-and-services) |
 | `tpot env [list [--all] [--show-secrets]]` | *Settings* (*All settings*) | every host | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
@@ -1000,7 +1000,7 @@ be merged with an older copy. The files under `data/` go into `TPOT_DATA_PATH` o
 
 Restoring `data/` replaces newer files and log lines, with a `--full` archive the Elasticsearch data
 and every event since the backup: `restore.sh` asks first (default no), even with `-y` or `-g`.
-Without a terminal only `--accept-data-loss` confirms it; not confirmed, `data/` stays as it is and
+Without a terminal `--accept-data-loss` or a `data` line in `--accept-data-loss-file` confirms it; not confirmed, `data/` stays as it is and
 the other groups go on (a warning at the end). Where the answer is no for sure (no terminal, no
 `--accept-data-loss`, no `data` line in `--accept-data-loss-file`) `restore.sh` skips `data/` before it
 stops T-Pot: if no other group needs T-Pot stopped (`restore.sh -f <archive> -g data` alone), T-Pot keeps running. The same holds for an ILM policy of the archive that
@@ -1009,7 +1009,7 @@ so not confirmed it is left out and `restore.sh` names the `curl` command to put
 shorter `TPOT_ES_RETENTION` in the restored `.env` waits, T-Pot never shortens the policy on its own
 (`tpot elastic retention --force` applies it, it asks first). `--accept-data-loss-file <file>` confirms
 only the losses its `@@tpot loss data ...` / `@@tpot loss ilm ...` lines name. The menu asks before it
-restores `data/`, names the size of the Elasticsearch data in the archive and after a yes confirms that one
+restores `data/`, names the size of the Elasticsearch data when the archive holds it and after a yes confirms that one
 alone (`--accept-data-loss-file` with a `data` line): a shorter ILM policy of the archive is not put back from the menu.
 
 If you would rather do it by hand, the archive is a plain tar: `tar tvf <archive>` lists it,
@@ -1109,10 +1109,10 @@ T-Pot never shortens the retention by itself. Change it on the *Elastic* page of
 <br>
 A shorter value that gets into `.env` any other way (by hand, `tpot env set`, `restore.sh`) waits: T-Pot warns about it on every start and keeps the policy as it is until `tpot elastic retention --force` or the *Elastic* page applies it, both ask first. If the policy is missing and `TPOT_ES_RETENTION` is empty, T-Pot creates it to keep everything (`off`). If the value would delete older events that exist, the policy is created to keep everything as well and the value waits.
 <br>
-A policy that was changed in Kibana (make sure to "Include managed system policies") is detected and left alone, T-Pot warns about it (`tpot elastic status` shows both). *Set* on the *Elastic* page does the same as saving the value on the Settings page: it writes `.env` and leaves the policy as it is, *Take over from Kibana* or *Apply .env to the policy* change it. `tpot elastic retention --adopt` keeps the policy and writes its days into `.env`, `tpot elastic retention --force` applies the `.env` value to it (`--force DAYS` the given value), both show first what a shorter time deletes. A changed policy that keeps the events just as long as `.env` says is adopted on the next start.
+A policy that was changed in Kibana (make sure to "Include managed system policies") is detected and left alone, T-Pot warns about it (`tpot elastic status` shows both). *Set* on the *Elastic* page does the same as saving the value on the Settings page: it writes `.env` and leaves the policy as it is, *Take over from Kibana* keeps the policy and writes its days into `.env`, *Apply .env to the policy* applies the `.env` value to it and asks first when that value is shorter. `tpot elastic retention --adopt` keeps the policy and writes its days into `.env`, `tpot elastic retention --force` applies the `.env` value to it (`--force DAYS` the given value), both show first what a shorter time deletes. A changed policy that keeps the events just as long as `.env` says is adopted on the next start.
 ![IndexManagement1](doc/kibana_b.png)
 <br>
-If Elasticsearch answers with something T-Pot cannot read (a policy or an index list of a shape it does not know, no answer at all), T-Pot says why (`Why: ...`) next to the waiting text, writes only `.env` and leaves the policy as it is. A closed index is listed as "closed, size unknown" and is not counted in the sizes. On its start tpotinit only works with the values `env.schema.yml` accepts for `TPOT_ES_RETENTION` (1 to 3650 days, `off` or empty); any other value is warned about and the policy is not touched.
+If Elasticsearch answers with something T-Pot cannot read (a policy or an index list of a shape it does not know, no answer at all), T-Pot says why (`Why: ...`) next to the waiting text, writes only `.env` and leaves the policy as it is. A closed index is listed as "closed, size unknown" and is not counted in the sizes. tpotinit rejects any other value of `TPOT_ES_RETENTION` than the ones `env.schema.yml` accepts (1 to 3650 days, `off` or empty) in its `.env` check and does not start; `es_retention.sh` never touches the policy for a value that still gets through.
 <br>
 `update.sh` writes the retention of an existing policy into `.env` once, so an update keeps the time you set in Kibana before. If it cannot read the policy or its time is no whole number of days, it leaves `TPOT_ES_RETENTION` empty: T-Pot then leaves the policy as it is, `tpot elastic retention --adopt` lets T-Pot manage it.
 ![IndexManagement2](doc/kibana_c.png)
