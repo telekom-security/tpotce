@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 #
-# The fetch stage gets ddospot v2.0.0 at a pinned commit into the stage src, a local
+# The fetch stage gets ddospot v2.0.1 at a pinned commit into the stage src, a local
 # checkout can replace src with --build-context src=<path>
 FROM --platform=$BUILDPLATFORM alpine:3.24 AS fetch
 RUN apk --no-cache add git ca-certificates
 WORKDIR /src
 RUN git -c init.defaultBranch=main init --quiet && \
     git remote add origin https://github.com/telekom-security/ddospot && \
-    git fetch --quiet --depth 1 origin 6e1970379dba5f539330dbf5d56036f32d84259a && \
+    git fetch --quiet --depth 1 origin 84dae58c6045453c9a4b6d315e2ca12885776d82 && \
     git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
 FROM scratch AS src
 COPY --from=fetch /src/ /
