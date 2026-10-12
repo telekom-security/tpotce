@@ -558,6 +558,64 @@ def _check_links(fs, out):
         out.append(f"link: {len(dangling)} links name nothing: {', '.join(dangling[:4])}")
 
 
+_LSB_LEVELS = re.compile(r"^# Default-(Start|Stop):[ \t]*(.*)$", re.M)
+_CHKCONFIG = re.compile(r"^# chkconfig:[ \t]+(-|\d+)[ \t]", re.M)
+_RC_LINK = re.compile(r"([SK])\d\d(.+)")
+
+
+def _run_levels(name, text):
+    """(start levels, stop levels) of an init script: chkconfig's line (Red Hat), the LSB header,
+    else those of Cowrie's own scripts; None if it names none."""
+    text = text.decode("utf-8", "replace") if isinstance(text, bytes) else ""
+    match = _CHKCONFIG.search(text)
+    if match:
+        start = "" if match.group(1) == "-" else match.group(1)
+        return set(start), set("0123456") - set(start)
+    header = dict(_LSB_LEVELS.findall(text))
+    if header:
+        return set(header.get("Start", "").split()), set(header.get("Stop", "").split())
+    levels = system.TREE_INIT_LEVELS.get(name)
+    return None if levels is None else (set(levels[0].split()), set(levels[1].split()))
+
+
+def _check_init_links(persona, fs, out):
+    """The run level links of a server are those of its init scripts: S<nn><name> in every level of
+    Default-Start (chkconfig's levels on Red Hat), K<nn><name> in every level of Default-Stop, each
+    naming its script (update-rc.d / chkconfig)."""
+    init = tree.find_dir(fs, "etc/init.d")
+    if persona.kind != "server" or init is None:
+        return
+    expected = {}
+    for node in tree.node_children(init):
+        name = tree.node_get(node, tree.A_NAME)
+        if name in ("README", "functions") or not _is_file(node):
+            continue
+        levels = _run_levels(name, tree.node_get(node, tree.A_CONTENTS))
+        if levels is None:
+            out.append(f"init: /etc/init.d/{name} names no run levels")
+            continue
+        expected.update({(level, sign, name): None for sign, part in zip("SK", levels) for level in part})
+    found = set()
+    for level in "0123456S":
+        directory = tree.find_dir(fs, f"etc/rc{level}.d")
+        for node in tree.node_children(directory) if directory is not None else ():
+            match = _RC_LINK.fullmatch(tree.node_get(node, tree.A_NAME))
+            if match is None:
+                continue
+            link = f"etc/rc{level}.d/{tree.node_get(node, tree.A_NAME)}"
+            sign, name = match.groups()
+            target = tree.target_path(fs, link) if tree.node_get(node, tree.A_TYPE) == tree.T_LINK else None
+            if target is None or target != tree.real_path(fs, f"etc/init.d/{name}"):
+                out.append(f"init: /{link} names {'/' + target if target else 'nothing'}, not /etc/init.d/{name}")
+            elif (level, sign, name) not in expected:
+                out.append(f"init: /{link}, /etc/init.d/{name} does not {'start' if sign == 'S' else 'stop'} "
+                           f"in run level {level}")
+            found.add((level, sign, name))
+    for level, sign, name in sorted(set(expected) - found):
+        out.append(f"init: /etc/init.d/{name} {'starts' if sign == 'S' else 'stops'} in run level {level}, "
+                   f"/etc/rc{level}.d has no {sign} link to it")
+
+
 def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
     """Cowrie's Debian 12 x86_64 container tree is the persona's system (tpot_personas.system):
     no foreign paths, no x86_64 names on another architecture and no names of Debian's own
@@ -746,6 +804,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         _check_programs(fs, txtcmds, out)
         _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out)
         _check_links(fs, out)
+        _check_init_links(persona, fs, out)
     return out
 
 

@@ -1078,6 +1078,8 @@ def sudo_grammar(version):
 
 # the init scripts of service --status-all that Cowrie's Debian tree has (kept as they are)
 TREE_INIT = frozenset({"hwclock.sh", "procps", "ssh"})
+# their Default-Start / Default-Stop (Cowrie's pickle has their names and links, not their text)
+TREE_INIT_LEVELS = {"hwclock.sh": ("S", "0 6"), "procps": ("S", ""), "ssh": ("2 3 4 5", "")}
 # Short-Description of the LSB header of each script (unverified: the wording of each package)
 INIT_DESCRIPTIONS = {
     "alsa-utils": "Restore and store ALSA driver settings", "apparmor": "AppArmor initialization",

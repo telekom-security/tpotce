@@ -84,6 +84,10 @@ def base_tree():
     tree.ensure_file(root, "etc/rcS.d/README", b"", ctime=OLD)
     for name in ("hwclock.sh", "procps", "ssh"):
         tree.ensure_file(root, f"etc/init.d/{name}", b"#!/bin/sh\n", mode=0o755, ctime=OLD)
+    # their run level links as Cowrie's pickle has them (targets from the root)
+    for level, name in (("S", "S01hwclock.sh"), ("0", "K01hwclock.sh"), ("6", "K01hwclock.sh"), ("S", "S01procps"),
+                        ("2", "S01ssh"), ("3", "S01ssh"), ("4", "S01ssh"), ("5", "S01ssh")):
+        _link(root, f"etc/rc{level}.d/{name}", f"etc/init.d/{name[3:]}")
     tree.ensure_file(root, "usr/bin/which.debianutils", b"#! /bin/sh\n", mode=0o755, ctime=OLD)
     _link(root, "usr/bin/which", "usr/bin/which.debianutils")
     tree.ensure_file(root, "proc/969/status", b"Name:\tpython3\n", ctime=OLD)

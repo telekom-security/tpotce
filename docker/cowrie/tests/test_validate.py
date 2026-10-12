@@ -474,6 +474,28 @@ class ValidateServerCommandTest(unittest.TestCase):
         found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
         self.assertIn("systemctl: /lib/systemd/system/cron.service of cron.service has no text", found)
 
+    def test_run_level_links_follow_the_init_scripts(self):
+        persona = catalog.by_id("debian-bookworm")
+        ident, out, keys = render_one(self, persona, 1)
+        fs = tree.load_pickle(out / "fs.pickle")
+        tree.remove_node(fs, "etc/rc3.d/S01cron")
+        tree.remove_node(fs, "etc/rc2.d/S01ssh")
+        tree.ensure_link(fs, "etc/rc0.d/K01kmod", "../init.d/kmod")
+        tree.ensure_link(fs, "etc/rcS.d/S01dbus", "../init.d/cron")
+        tree.dump_pickle(fs, out / "fs.pickle")
+        found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+        self.assertIn("init: /etc/init.d/cron starts in run level 3, /etc/rc3.d has no S link to it", found)
+        self.assertIn("init: /etc/init.d/ssh starts in run level 2, /etc/rc2.d has no S link to it", found)
+        self.assertIn("init: /etc/rc0.d/K01kmod, /etc/init.d/kmod does not stop in run level 0", found)
+        self.assertIn("init: /etc/rcS.d/S01dbus names /etc/init.d/cron, not /etc/init.d/dbus", found)
+        persona = catalog.by_id("centos-7")
+        ident, out, keys = render_one(self, persona, 1)
+        fs = tree.load_pickle(out / "fs.pickle")
+        tree.remove_node(fs, "etc/rc.d/rc0.d/K50netconsole")
+        tree.dump_pickle(fs, out / "fs.pickle")
+        found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+        self.assertIn("init: /etc/init.d/netconsole stops in run level 0, /etc/rc0.d has no K link to it", found)
+
     def test_exec_start_names_a_missing_program(self):
         persona = catalog.by_id("raspios")
         ident, out, keys = render_one(self, persona, 1)
