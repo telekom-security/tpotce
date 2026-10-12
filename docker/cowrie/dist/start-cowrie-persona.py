@@ -21,6 +21,7 @@ import random
 import re
 import secrets
 import shutil
+import stat
 import sys
 import time
 from pathlib import Path
@@ -57,14 +58,25 @@ def rotation_days(environ):
 
 
 def load_state(path):
-    """The saved state, None when there is none; ValueError when it cannot be read."""
+    """The saved state, None when there is none; ValueError when it cannot be read
+    or is no regular file (a link, a FIFO, a folder)."""
     try:
-        with open(path, "rb") as handle:
-            data = handle.read(STATE_MAX_BYTES + 1)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
         return None
     except OSError as exc:
         raise ValueError(f"unreadable: {exc.strerror or exc}") from None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError("no regular file")
+        with os.fdopen(fd, "rb") as handle:
+            fd = None
+            data = handle.read(STATE_MAX_BYTES + 1)
+    except OSError as exc:
+        raise ValueError(f"unreadable: {exc.strerror or exc}") from None
+    finally:
+        if fd is not None:
+            os.close(fd)
     if len(data) > STATE_MAX_BYTES:
         raise ValueError("too large")
     try:
@@ -99,8 +111,27 @@ def kept_identity(state_path, selection, days, now):
 
 
 def save_state(path, data):
-    """Written in full next to the state, then renamed over it; a failure only logs."""
+    """Written in full next to the state, then renamed over it; a failure only logs.
+    Something else than a file in the way of the staged file: an empty folder is
+    removed, anything else stays and the state is not saved."""
     staged = path.with_name(path.name + ".new")
+    try:
+        mode = os.lstat(staged).st_mode
+    except FileNotFoundError:
+        mode = None
+    except OSError as exc:
+        log(f"Could not save the Cowrie persona state {path.name} ({exc.strerror or exc}), "
+            "the next start draws a new persona")
+        return
+    if mode is not None and not stat.S_ISREG(mode):
+        try:
+            if not stat.S_ISDIR(mode):
+                raise OSError("no file")
+            staged.rmdir()
+        except OSError:
+            log(f"Could not save the Cowrie persona state {path.name}: {staged.name} is no file, "
+                "remove it; the next start draws a new persona")
+            return
     try:
         fd = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, STATE_MODE)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:

@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import random
+import shutil
 import stat
 import unittest
 import unittest.mock
@@ -284,6 +285,7 @@ class RotationTest(unittest.TestCase):
             "path as persona": b'{"persona": "../etc", "version": 1}',
             "old version": None,
             "another image": None,
+            "other catalog data": None,
             "too large": b" " * (64 * 1024 + 1),
         }
         for name, data in cases.items():
@@ -293,6 +295,8 @@ class RotationTest(unittest.TestCase):
                     state = self.state()
                     if name == "old version":
                         state.pop("version")
+                    elif name == "other catalog data":
+                        state["digest"] = "0" * 64
                     else:
                         state["release_label"] = "an older release"
                     data = json.dumps(state).encode()
@@ -309,9 +313,53 @@ class RotationTest(unittest.TestCase):
         self.state_path.mkdir()
         self.assertEqual(self.prepare("ipcam", "7", NOW), "ipcam")
         self.assertEqual(len(self.lines), 2, self.lines)
-        self.assertIn("not used (unreadable", self.lines[0])
+        self.assertIn("not used (no regular file)", self.lines[0])
         self.assertTrue(self.lines[1].startswith("Could not save the Cowrie persona state persona-state.json ("))
         self.assertTrue((self.runtime / "runtime" / "cowrie.cfg").is_file())
+
+    def test_a_state_that_is_no_regular_file_is_not_followed(self):
+        target = tmpdir(self) / "elsewhere.json"
+        self.prepare("ipcam", "7", NOW)
+        target.write_text(self.state_path.read_text())
+        self.state_path.unlink()
+        self.state_path.symlink_to(target)
+        self.assertEqual(self.prepare("ipcam", "7", NOW + DAY), "ipcam")
+        self.assertEqual(len(self.lines), 1, self.lines)
+        self.assertIn("not used (unreadable", self.lines[0])
+        self.assertEqual(self.identity()["chosen_at"], NOW + DAY)
+        # the link was replaced by the new state, the file it named stays as it was
+        self.assertFalse(self.state_path.is_symlink())
+        self.assertEqual(json.loads(target.read_text())["chosen_at"], NOW)
+        self.state_path.unlink()
+        os.mkfifo(self.state_path)
+        self.assertEqual(self.prepare("ipcam", "7", NOW + 2 * DAY), "ipcam")
+        self.assertEqual(self.lines[0], "Cowrie persona state persona-state.json not used (no regular file), "
+                                        "drawing a new persona")
+
+    def test_an_empty_folder_as_staged_file_is_removed(self):
+        staged = self.cowrie / "etc" / "persona-state.json.new"
+        staged.mkdir()
+        self.prepare("ipcam", "7", NOW)
+        self.assertEqual(self.lines, [])
+        self.assertFalse(staged.exists())
+        self.assertEqual(self.state()["persona"], "ipcam")
+
+    def test_something_else_as_staged_file_stays_and_logs_one_line(self):
+        staged = self.cowrie / "etc" / "persona-state.json.new"
+        for name in ("folder", "link"):
+            with self.subTest(name):
+                if name == "folder":
+                    (staged / "x").mkdir(parents=True)
+                else:
+                    shutil.rmtree(staged)
+                    staged.symlink_to(tmpdir(self) / "target")
+                self.assertEqual(self.prepare("ipcam", "7", NOW), "ipcam")
+                self.assertEqual(self.lines, ["Could not save the Cowrie persona state persona-state.json: "
+                                              "persona-state.json.new is no file, remove it; "
+                                              "the next start draws a new persona"])
+                self.assertTrue(os.path.lexists(staged))
+                self.assertFalse(self.state_path.exists())
+                self.assertFalse((tmpdir(self) / "target").exists())
 
     @unittest.skipIf(os.geteuid() == 0, "root writes into a read-only folder")
     def test_an_unwritable_state_file_logs_one_line_and_starts(self):

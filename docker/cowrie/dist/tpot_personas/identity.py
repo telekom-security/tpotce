@@ -5,6 +5,8 @@ COWRIE_PERSONA_ROTATION the identity of an earlier start comes back
 (restore): drawn again from its seed and its time, only `now` moves on."""
 import calendar
 import dataclasses
+import hashlib
+import json
 import random
 import re
 import string
@@ -280,10 +282,24 @@ STATE_VERSION = 1
 _STATE_INTS = ("seed", "chosen_at", "booted_at", "installed_at", "hardware_index")
 
 
+def _plain(value):
+    if callable(value):
+        return f"{value.__module__}.{value.__qualname__}"
+    raise TypeError(f"no catalog value: {type(value).__name__}")
+
+
+def persona_digest(persona):
+    """sha256 of the catalog data of the persona (pools, files to remove, tokens,
+    the builder by name): another image with other data for it does not keep a
+    state made from the old one."""
+    data = json.dumps(dataclasses.asdict(persona), sort_keys=True, default=_plain, ensure_ascii=True)
+    return hashlib.sha256(data.encode("ascii")).hexdigest()
+
+
 def to_state(persona, ident):
     """What a later start needs to bring the identity back (etc/persona-state.json)."""
-    return {"version": STATE_VERSION, "persona": ident.persona_id, "seed": ident.seed,
-            "chosen_at": ident.chosen_at or ident.now, "booted_at": ident.booted_at,
+    return {"version": STATE_VERSION, "persona": ident.persona_id, "digest": persona_digest(persona),
+            "seed": ident.seed, "chosen_at": drawn_at(ident), "booted_at": ident.booted_at,
             "installed_at": ident.installed_at, "release_label": ident.release.label,
             "hardware_index": persona.hardware.index(ident.hardware), "hostname": ident.hostname}
 
@@ -300,6 +316,8 @@ def restore(persona, state, now):
         raise ValueError(f"unknown version {state.get('version')!r}")
     if state.get("persona") != persona.id:
         raise ValueError(f"made for {state.get('persona')!r}, not {persona.id}")
+    if state.get("digest") != persona_digest(persona):
+        raise ValueError(f"made from other data of {persona.id}")
     for key in _STATE_INTS:
         if type(state.get(key)) is not int or state[key] < 0:
             raise ValueError(f"{key} is no number")

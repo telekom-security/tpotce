@@ -1,14 +1,19 @@
 import calendar
+import dataclasses
 import json
+import os
 import random
 import re
 import unittest
 
-from tests.helpers import DIST  # noqa: F401
+import subprocess
+import sys
+
+from tests.helpers import DIST
 from tpot_personas import catalog, servers
 from tpot_personas.identity import (DAY, draw, first_install, host_patterns, hostname_regex, is_fresh, is_medium,
                                     kernel_time, is_firmware, log_window, ready_at, restore, stale_at, superseded_at,
-                                    to_json, to_state, updated_at)
+                                    persona_digest, to_json, to_state, updated_at)
 
 NOW = 1_790_000_000  # fixed "now" for reproducible tests
 
@@ -305,6 +310,34 @@ class FirmwareTest(unittest.TestCase):
                 self.assertIn("J4125", i.hardware.cpu_model, seed)
 
 
+class DigestTest(unittest.TestCase):
+    def test_digest_follows_the_catalog_data(self):
+        p = catalog.by_id("ubuntu-noble")
+        digests = {persona_digest(q) for q in catalog.PERSONAS}
+        self.assertEqual(len(digests), len(catalog.PERSONAS))
+        for change in ({"hostnames": p.hostnames + ("extra-{n}",)}, {"releases": p.releases[:-1]},
+                       {"remove_paths": p.remove_paths + ("etc/extra",)}, {"max_install_days": 901}):
+            with self.subTest(next(iter(change))):
+                self.assertNotEqual(persona_digest(dataclasses.replace(p, **change)), persona_digest(p))
+
+    def test_a_state_of_changed_catalog_data_is_refused(self):
+        p = catalog.by_id("ubuntu-noble")
+        state = to_state(p, draw(p, 5, NOW))
+        changed = dataclasses.replace(p, hostnames=p.hostnames + ("extra-{n}",))
+        with self.assertRaisesRegex(ValueError, "other data of ubuntu-noble"):
+            restore(changed, state, NOW + DAY)
+
+    def test_digest_is_the_same_in_every_process(self):
+        # no set or address in the data: the hash seed of a process must not change it
+        code = ("import sys; sys.path.insert(0, sys.argv[1]); from tpot_personas import catalog; "
+                "from tpot_personas.identity import persona_digest; "
+                "print(' '.join(persona_digest(p) for p in catalog.PERSONAS))")
+        out = {subprocess.run([sys.executable, "-c", code, str(DIST)], capture_output=True, text=True, check=True,
+                              env={**os.environ, "PYTHONHASHSEED": seed}).stdout for seed in ("1", "2")}
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out.pop().split(), [persona_digest(p) for p in catalog.PERSONAS])
+
+
 class RestoreTest(unittest.TestCase):
     """COWRIE_PERSONA_ROTATION: the identity of an earlier start, at a later now."""
 
@@ -314,8 +347,9 @@ class RestoreTest(unittest.TestCase):
         self.state = to_state(self.persona, self.first)
 
     def test_state_names_what_brings_the_identity_back(self):
-        self.assertEqual(set(self.state), {"version", "persona", "seed", "chosen_at", "booted_at", "installed_at",
-                                           "release_label", "hardware_index", "hostname"})
+        self.assertEqual(set(self.state), {"version", "persona", "digest", "seed", "chosen_at", "booted_at",
+                                           "installed_at", "release_label", "hardware_index", "hostname"})
+        self.assertEqual(self.state["digest"], persona_digest(self.persona))
         self.assertEqual(self.state["persona"], "ubuntu-noble")
         self.assertEqual(self.state["chosen_at"], NOW)
         self.assertEqual(self.state["booted_at"], self.first.booted_at)
@@ -358,6 +392,8 @@ class RestoreTest(unittest.TestCase):
             "another boot": {**self.state, "booted_at": self.state["booted_at"] + 1},
             "another installation": {**self.state, "installed_at": self.state["installed_at"] + 1},
             "hardware beyond the pool": {**self.state, "hardware_index": len(self.persona.hardware)},
+            "no digest": {k: v for k, v in self.state.items() if k != "digest"},
+            "other catalog data": {**self.state, "digest": "0" * 64},
         }
         for name, state in cases.items():
             with self.subTest(name), self.assertRaises(ValueError):
