@@ -949,8 +949,19 @@ class SettingsPane(Vertical):
         try:
             await self.save_confirmed(saved, chosen)
         except Exception as err:        # noqa: BLE001 - whatever breaks, the worker must not end the Manager
-            self.app.notify(f"The save stopped with an error ({err}). Nothing more was written.", title="Not saved",
-                            severity="error", timeout=12)
+            new = saved["TPOT_ES_RETENTION"]
+            try:                        # did .env take the value before the error?
+                written = self.app.backend.settings().values.get("TPOT_ES_RETENTION") == new
+            except Exception:           # noqa: BLE001 - unknown: nothing is claimed
+                written = False
+            waits = ""
+            if written:
+                how = ("Apply .env to the policy on the Elastic page, or tpot elastic retention --force"
+                       if self.app.backend.linux_host() else f"change the ILM policy tpot in {KIBANA_ILM}")
+                waits = (f" TPOT_ES_RETENTION={new} is in .env, but the ILM policy tpot was not changed: the value "
+                         f"waits until it is applied ({how}).")
+            self.app.notify(f"The save stopped with an error ({err}).{waits} Nothing more was written.",
+                            title="Not saved", severity="error", timeout=12)
         finally:
             self.save_done()
 

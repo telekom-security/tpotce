@@ -1819,7 +1819,7 @@ class DataLossTest(Harness):
         start = restore.index("\tmyOLDVERSION=$(grep")
         oldversion = restore[start:restore.index("esac\n", start) + 5]
         chain = (f'eval "$(sed -n \'/^fuUI_VERSION_GE () {{/,/^}}/p\' {REPO}/installer/lib/ui.sh)"\n'
-                 + self.functions("fuTMPDIR", "fuOLD_UPDATER_CONFIG")
+                 + self.functions("fuTMPDIR", "fuOLD_UPDATER_UNREADABLE", "fuOLD_UPDATER_CONFIG")
                  + 'trap \'[ -z "${myTMPDIR}" ] || rm -rf "${myTMPDIR}"\' EXIT\n'
                  + 'myPREPARED=""\nfuOLD_UPDATER_CONFIG\n' + oldversion + 'echo "OLDVERSION=${myOLDVERSION}"\n')
         tail = 'fuCHECK_ELASTIC\necho "went on"\n'
@@ -2552,7 +2552,8 @@ class OldUpdaterConfigTest(Harness):
 
     HELPERS = DataLossTest.HELPERS
     FUNCTIONS = ("fuENV_VALUE", "fuTMPDIR", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
-                 "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV", "fuOLD_UPDATER_CONFIG")
+                 "fuOLD_UPDATER_FILE", "fuOLD_UPDATER_UNREADABLE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV",
+                 "fuOLD_UPDATER_CONFIG")
     RELEASE_ENV = "TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\nWEB_USER=\n"
     RELEASE_COMPOSE = "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: x\n"
     USER_ENV = "TPOT_REPO=dtagdevsec\nTPOT_VERSION=24.04.1\nWEB_USER=dXNlcg==\n"
@@ -2766,6 +2767,77 @@ class OldUpdaterConfigTest(Harness):
         self.assertIn(f"OK: Your configuration of 24.04.1 from {archive} is in place already.", out)
         self.assertNotIn("Put back:", out)
         self.assertNotIn("DID:", out)
+
+    def stub(self, name, text):
+        path = os.path.join(self.bin, name)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(text)
+        os.chmod(path, 0o755)
+
+    def test_a_broken_extract_stops_before_anything_is_written(self):
+        """tar xf stops half way (a full disk, an I/O error): what it left is no file to take, the run stops
+        as for a member it cannot read and changes nothing."""
+        archive = self.archive()
+        real = shutil.which("tar")
+        self.stub("tar", '#!/bin/sh\ncase "$1" in\n  xf)\n    while [ $# -gt 0 ]; do [ "$1" = "-C" ] && myDIR="$2"; shift; done\n'
+                         '    printf "TPOT_REPO=dtag" > "$myDIR/.env"; printf "# T-Pot" > "$myDIR/docker-compose.yml"\n'
+                         f'    exit 1 ;;\nesac\nexec {real} "$@"\n')
+        out = self.run_config()
+        self.assertEqual(self.rc, 1, out)
+        self.assertReleaseFiles(out)
+        self.assertIn(f"ERROR: Could not read .env from {archive}", out)
+        self.assertIn("HINT: Nothing was changed.", out)
+        self.assertIn("DID: fail: .env could not be read from", out)
+
+    def test_a_broken_extract_of_an_archive_that_does_not_count_changes_nothing(self):
+        self.archive(age=25 * 3600)
+        real = shutil.which("tar")
+        self.stub("tar", f'#!/bin/sh\n[ "$1" = xf ] && exit 1\nexec {real} "$@"\n')
+        out = self.run_config()
+        self.assertIn("rc=0", out)
+        self.assertReleaseFiles(out)
+        self.assertNotIn("ERROR", out)
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root writes a read-only file")
+    def test_a_rollback_that_fails_says_so_and_how(self):
+        """The compose file cannot be written and .env, written before it, cannot be put back either (git show
+        fails): no claim that it is the one of the checkout, the way to put it back by hand instead."""
+        archive = self.archive()
+        compose = os.path.join(self.tpotce, "docker-compose.yml")
+        os.chmod(compose, 0o444)
+        self.addCleanup(os.chmod, compose, 0o644)
+        real = shutil.which("git")
+        self.stub("git", f'#!/bin/sh\nfor myA; do [ "$myA" = show ] && exit 1; done\nexec {real} "$@"\n')
+        out = self.run_config()
+        self.assertEqual(self.rc, 1, out)
+        self.assertEqual(self.get(".env"), self.USER_ENV, out)          # written, and could not go back
+        self.assertNotIn("is the one of the checkout again", out)
+        self.assertIn(f"ERROR: Could not put docker-compose.yml back from {archive}", out)
+        self.assertIn("HINT: .env could not be put back to the one of the checkout: "
+                      "git -C ~/tpotce checkout HEAD -- .env", out)
+        self.assertIn("DID: fail: .env could not be put back to the one of the checkout: "
+                      "git -C ~/tpotce checkout HEAD -- .env", out)
+
+    def test_a_compose_file_changed_after_the_reset_is_named_as_kept(self):
+        """.env is back already, the compose file is neither the one of the checkout nor of the archive: it is
+        not "in place", it stays as it is and the text says so."""
+        archive = self.archive()
+        self.put(".env", self.USER_ENV)
+        self.put("docker-compose.yml", "# mine since the reset\n")
+        out = self.run_config()
+        self.assertIn("rc=0", out)
+        self.assertNotIn("Your configuration of 24.04.1 from", out)
+        self.assertIn("docker-compose.yml was changed after the reset, it stays as it is (the archive has the one "
+                      "of 24.04.1).", out)
+        self.assertIn(f"Your .env of 24.04.1 from {archive} is in place already.", out)
+        self.assertEqual(self.get("docker-compose.yml"), "# mine since the reset\n")
+        # with .env taken, the same note for the compose file
+        self.commit(self.RELEASE_ENV)
+        self.put("docker-compose.yml", "# mine since the reset\n")
+        out = self.run_config()
+        self.assertIn("HINT: Put back: .env.", out)
+        self.assertIn("docker-compose.yml was changed after the reset, it stays as it is (the archive has the one "
+                      "of 24.04.1).", out)
 
     def test_a_member_that_is_no_file_stops_before_anything_is_written(self):
         """Both files are read from the archive before either is written: a docker-compose.yml that is a link

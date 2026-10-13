@@ -1403,7 +1403,8 @@ function fuOLD_UPDATER_FRESH () {   # $1 = archive
 # That archive is read once per run, it holds the data folder and may be large: the list of its
 # members (tar tf) and its .env and docker-compose.yml (one tar xf of both) go to a folder in
 # myTMPDIR, every lookup of a member and every value comes from there. myOLD_READ names the archive,
-# myOLD_DIR the folder. A file that cannot be taken out is missing in the folder (fuOLD_UPDATER_FILE).
+# myOLD_DIR the folder. A tar xf that fails (a full disk, an I/O error) may leave half a file: the
+# folder is emptied and marked broken, fuOLD_UPDATER_FILE then gives no file of it at all.
 # rc 1 when the archive cannot be listed or there is no myTMPDIR.
 function fuOLD_UPDATER_READ () {   # $1 = archive
 	local myDIR="" myFILE="" myMEMBER="" myMEMBERS=()
@@ -1415,16 +1416,33 @@ function fuOLD_UPDATER_READ () {   # $1 = archive
 	  do
 	    myMEMBER=$(grep -m1 -xF -e "${myFILE}" -e "./${myFILE}" "${myDIR}/toc") && myMEMBERS+=("${myMEMBER}")
 	  done
-	[ "${#myMEMBERS[@]}" -eq 0 ] || tar xf "$1" -C "${myDIR}/files" "${myMEMBERS[@]}" 2>/dev/null
+	if [ "${#myMEMBERS[@]}" -gt 0 ] && ! tar xf "$1" -C "${myDIR}/files" "${myMEMBERS[@]}" 2>/dev/null;
+	  then
+	    rm -rf "${myDIR}/files"
+	    mkdir "${myDIR}/files"
+	    : > "${myDIR}/broken"
+	fi
 	myOLD_READ="$1"
 	myOLD_DIR="${myDIR}"
 }
 
 # The file of ~/tpotce as fuOLD_UPDATER_READ took it out of that archive: prints its path, rc 1 when
-# it is no regular file there (not in the archive, a link, or it could not be taken out).
+# it is no regular file there (not in the archive, a link, or it could not be taken out) or the
+# extract failed.
 function fuOLD_UPDATER_FILE () {   # $1 = the file name in ~/tpotce
-	[ -n "${myOLD_DIR}" ] && [ -f "${myOLD_DIR}/files/$1" ] && [ ! -L "${myOLD_DIR}/files/$1" ] || return 1
+	[ -n "${myOLD_DIR}" ] && [ ! -e "${myOLD_DIR}/broken" ] || return 1
+	[ -f "${myOLD_DIR}/files/$1" ] && [ ! -L "${myOLD_DIR}/files/$1" ] || return 1
 	echo "${myOLD_DIR}/files/$1"
+}
+
+# A file of that archive that cannot be read: nothing was changed, the run stops.
+function fuOLD_UPDATER_UNREADABLE () {   # $1 = archive, $2 = the file name in ~/tpotce, $3 = its member
+	fuUI_ERROR "Could not read $2 from $1, the earlier updater had reset it."
+	fuUI_HINT "Nothing was changed. Put it back with: tar xOf $1 $3 > ~/tpotce/$2"
+	fuUI_HINT "Then run the update again. Exiting."
+	echo
+	fuDID fail "$2 could not be read from $1: tar xOf $1 $3 > ~/tpotce/$2, then update again."
+	exit 1
 }
 
 # The name of a file of ~/tpotce in that archive: `tar cvf <archive> * .env` names it .env, a tar of
@@ -1456,8 +1474,8 @@ function fuARCHIVE_ENV () {   # $1 = archive, $2 = key
 # Otherwise nothing changes; a .env of the checkout without a web user gets the way to take it
 # from the archive yourself.
 function fuOLD_UPDATER_CONFIG () {
-	local myOLD="" myVER="" myCHECKOUT="" myFILE="" myMEMBER="" myENV="" myUNDO="" myBACK=""
-	local myTAKE=() myWRITTEN=()
+	local myOLD="" myVER="" myCHECKOUT="" myFILE="" myMEMBER="" myENV="" myUNDO="" myBACK="" myKEPT=""
+	local myTAKE=() myWRITTEN=() myAGAIN=() myLEFT=()
 	local myGIT=(git -C "$HOME/tpotce")
 	[ -z "${myPREPARED}" ] || return 0
 	myOLD=$(fuOLD_UPDATER_ARCHIVE) || return 0
@@ -1467,6 +1485,11 @@ function fuOLD_UPDATER_CONFIG () {
 	myENV=$(fuOLD_UPDATER_FILE .env)
 	myVER=$(fuARCHIVE_ENV "${myOLD}" TPOT_VERSION)
 	myCHECKOUT=$(tr -d "[:space:]" < "$HOME/tpotce/version" 2>/dev/null)
+	# the extract failed: its version is unknown, an archive that may count stops the run unchanged
+	if [ -e "${myOLD_DIR}/broken" ] && fuOLD_UPDATER_FRESH "${myOLD}" && "${myGIT[@]}" diff --quiet HEAD -- .env 2>/dev/null;
+	  then
+	    fuOLD_UPDATER_UNREADABLE "${myOLD}" .env "${myMEMBER}"
+	fi
 	if ! fuOLD_UPDATER_FRESH "${myOLD}" \
 	   || ! fuUI_VERSION_GE "${myCHECKOUT}" "${myVER}" || fuUI_VERSION_GE "${myVER}" "${myCHECKOUT}" \
 	   || ! { "${myGIT[@]}" diff --quiet HEAD -- .env 2>/dev/null || cmp -s "${myENV}" "$HOME/tpotce/.env"; };
@@ -1484,21 +1507,28 @@ function fuOLD_UPDATER_CONFIG () {
 	for myFILE in .env docker-compose.yml;
 	  do
 	    myMEMBER=$(fuARCHIVE_MEMBER "${myOLD}" "${myFILE}") || continue
-	    "${myGIT[@]}" diff --quiet HEAD -- "${myFILE}" 2>/dev/null || continue
-	    if ! fuOLD_UPDATER_FILE "${myFILE}" >/dev/null;
+	    if ! "${myGIT[@]}" diff --quiet HEAD -- "${myFILE}" 2>/dev/null;
 	      then
-	        fuUI_ERROR "Could not read ${myFILE} from ${myOLD}, the earlier updater had reset it."
-	        fuUI_HINT "Nothing was changed. Put it back with: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/${myFILE}"
-	        fuUI_HINT "Then run the update again. Exiting."
-	        echo
-	        fuDID fail "${myFILE} could not be read from ${myOLD}: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/${myFILE}, then update again."
-	        exit 1
+	        # a compose file of its own since the reset stays, and is named
+	        if [ "${myFILE}" == "docker-compose.yml" ] && fuOLD_UPDATER_FILE "${myFILE}" >/dev/null \
+	           && ! cmp -s "$(fuOLD_UPDATER_FILE "${myFILE}")" "$HOME/tpotce/${myFILE}";
+	          then
+	            myKEPT="docker-compose.yml was changed after the reset, it stays as it is (the archive has the one of ${myVER})."
+	        fi
+	        continue
 	    fi
+	    fuOLD_UPDATER_FILE "${myFILE}" >/dev/null || fuOLD_UPDATER_UNREADABLE "${myOLD}" "${myFILE}" "${myMEMBER}"
 	    myTAKE+=("${myFILE}")
 	  done
 	if [ "${#myTAKE[@]}" -eq 0 ];
 	  then
-	    fuUI_OK "Your configuration of ${myVER} from ${myOLD} is in place already."
+	    if [ -n "${myKEPT}" ];
+	      then
+	        fuUI_OK "Your .env of ${myVER} from ${myOLD} is in place already."
+	        fuUI_HINT "${myKEPT}"
+	      else
+	        fuUI_OK "Your configuration of ${myVER} from ${myOLD} is in place already."
+	    fi
 	    echo
 	    return 0
 	fi
@@ -1507,13 +1537,27 @@ function fuOLD_UPDATER_CONFIG () {
 	    # `cat >` keeps mode and owner; a failed write puts the files of the checkout back, in place
 	    if ! cat "$(fuOLD_UPDATER_FILE "${myFILE}")" > "$HOME/tpotce/${myFILE}";
 	      then
+	        # every file that changed goes back, each rollback checked: only what is back is said to be.
+	        # The file of the checkout is read in full first, a git show that fails leaves the file as it is
 	        for myUNDO in ${myWRITTEN[@]+"${myWRITTEN[@]}"} "${myFILE}";
 	          do
-	            "${myGIT[@]}" diff --quiet HEAD -- "${myUNDO}" 2>/dev/null || "${myGIT[@]}" show "HEAD:${myUNDO}" > "$HOME/tpotce/${myUNDO}" 2>/dev/null
+	            if "${myGIT[@]}" diff --quiet HEAD -- "${myUNDO}" 2>/dev/null \
+	               || { "${myGIT[@]}" show "HEAD:${myUNDO}" > "${myOLD_DIR}/head" 2>/dev/null \
+	                    && cat "${myOLD_DIR}/head" > "$HOME/tpotce/${myUNDO}" 2>/dev/null; };
+	              then
+	                [ "${myUNDO}" == "${myFILE}" ] || myAGAIN+=("${myUNDO}")
+	              else
+	                myLEFT+=("${myUNDO}")
+	            fi
 	          done
 	        myMEMBER=$(fuARCHIVE_MEMBER "${myOLD}" "${myFILE}")
 	        fuUI_ERROR "Could not put ${myFILE} back from ${myOLD}, the earlier updater had reset it."
-	        [ "${#myWRITTEN[@]}" -eq 0 ] || fuUI_HINT "${myWRITTEN[*]} is the one of the checkout again."
+	        [ "${#myAGAIN[@]}" -eq 0 ] || fuUI_HINT "${myAGAIN[*]} is the one of the checkout again."
+	        for myUNDO in ${myLEFT[@]+"${myLEFT[@]}"};
+	          do
+	            fuUI_HINT "${myUNDO} could not be put back to the one of the checkout: git -C ~/tpotce checkout HEAD -- ${myUNDO}"
+	            fuDID fail "${myUNDO} could not be put back to the one of the checkout: git -C ~/tpotce checkout HEAD -- ${myUNDO}"
+	          done
 	        fuUI_HINT "Put it back with: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/${myFILE}"
 	        fuUI_HINT "Then run the update again. Exiting."
 	        echo
@@ -1525,6 +1569,7 @@ function fuOLD_UPDATER_CONFIG () {
 	  done
 	fuUI_OK "Your configuration of ${myVER} is back from ${myOLD} (the earlier updater had reset it)."
 	fuUI_HINT "Put back: ${myBACK}. Other files you changed in ~/tpotce are in that archive as well."
+	[ -z "${myKEPT}" ] || fuUI_HINT "${myKEPT}"
 	fuDID ok "Your configuration of ${myVER} is back from ${myOLD} (the earlier updater had reset it)."
 	echo
 }
