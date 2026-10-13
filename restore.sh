@@ -219,8 +219,8 @@ myCONFIG_ONLY=""
 myKIBANA="http://127.0.0.1:64296"
 myES="http://127.0.0.1:64298"
 
-# How long to wait for Kibana before printing the commands to run by hand. Weaker
-# hardware is allowed to take longer.
+# How long to wait for Kibana, and for Elasticsearch, before printing the commands to run by
+# hand. Weaker hardware is allowed to take longer.
 myKIBANA_TIMEOUT="${TPOT_KIBANA_TIMEOUT:-300}"
 myTMPDIR=""
 
@@ -841,16 +841,32 @@ function fuDO_DATA () {
 
 # The Elasticsearch import needs a running instance - unlike everything else, which
 # wants T-Pot stopped. So it runs last, after the start.
-# Under the spinner: wait for Kibana, up to myKIBANA_TIMEOUT seconds
-function fuWAIT_KIBANA () {
+# Under the spinner: wait for Kibana or Elasticsearch, up to myKIBANA_TIMEOUT seconds. What it
+# waited for goes into the log (restore.log), which a failed spinner shows the end of.
+function fuWAIT_UP () {   # $1 = URL, $2 = name
 	local myWAIT=0
 	while [ "${myWAIT}" -lt "${myKIBANA_TIMEOUT}" ];
 	  do
-	    curl -s -f -o /dev/null --connect-timeout 3 "${myKIBANA}/api/status" && return 0
+	    curl -s -f -o /dev/null --connect-timeout 3 "$1" && return 0
 	    sleep 5
 	    myWAIT=$((myWAIT+5))
 	done
-	curl -s -f -o /dev/null "${myKIBANA}/api/status"
+	curl -s -f -o /dev/null --connect-timeout 3 "$1" && return 0
+	echo "$2 on $1 did not answer within ${myKIBANA_TIMEOUT}s."
+	return 1
+}
+
+# The folder that keeps files of elastic/ for the manual route, the working directory is about to
+# vanish: ${myBACKUPDIR}/${myDATE}_elastic in myKEEP, 0700 like the backups, on every path. rc 1
+# when it or a file could not be made, the hints name the archive then.
+function fuKEEP_ELASTIC () {   # $@ = the files of ${myTMPDIR}/elastic to keep
+	local myFILE=""
+	myKEEP="${myBACKUPDIR}/${myDATE}_elastic"
+	{ mkdir -p "${myKEEP}" && chmod 0700 "${myKEEP}"; } 2>/dev/null || return 1
+	for myFILE in "$@";
+	  do
+	    cp "${myTMPDIR}/elastic/${myFILE}" "${myKEEP}/${myFILE}" 2>/dev/null || return 1
+	done
 }
 
 # Does an ILM policy delete events at all: has its delete phase the delete action
@@ -931,6 +947,12 @@ function fuDO_ELASTIC () {
 	local myKEEP=""
 	local mySINCE="${SECONDS}"
 	local myRC=0
+	local myKIBANA_FILE="${myTMPDIR}/elastic/kibana_export.ndjson"
+	local myILM_FILE="${myTMPDIR}/elastic/ilm_policy_tpot.json"
+	local myPUT_HINT="curl -X PUT '${myES}/_ilm/policy/tpot' -H 'Content-Type: application/json' -d @"
+	local myBAD=""
+	local myKIBANA_UP=""
+	local myMINAGE=""
 	[ -z "${myDO_ELASTIC}" ] && return
 	fuMARK phase elastic Importing the Kibana objects and the ILM policy
 	echo
@@ -942,29 +964,37 @@ function fuDO_ELASTIC () {
 	    fuFAILED elastic
 	    return 1
 	fi
-	fuUI_SPIN "Waiting for Kibana on ${myKIBANA} ..." "${myLOG}" fuWAIT_KIBANA || myRC=$?
-	[ "${myRC}" -ne 130 ] || fuSTOPPED "waiting for Kibana"
-	myWAIT=$((SECONDS - mySINCE))
-	if ! curl -s -f -o /dev/null "${myKIBANA}/api/status";
+	if [ ! -s "${myKIBANA_FILE}" ] && [ ! -s "${myILM_FILE}" ];
 	  then
-	    fuUI_ERROR "Kibana does not answer."
-	    fuFAILED elastic
-	    # The files sit in the working directory, which is about to vanish - for the
-	    # manual route they have to stay, and the commands have to name the real path.
-	    myKEEP="${myBACKUPDIR}/${myDATE}_elastic"
-	    mkdir -p "${myKEEP}" && cp -a "${myTMPDIR}/elastic/." "${myKEEP}/" 2>/dev/null
-	    fuUI_HINT "Kibana did not come up in ${myWAIT}s. The files are in ${myKEEP}, run these once it does:"
-	    fuUI_HINT "  curl -X POST '${myKIBANA}/api/saved_objects/_import?overwrite=true' -H 'kbn-xsrf: true' --form file=@${myKEEP}/kibana_export.ndjson"
-	    if [ -s "${myTMPDIR}/elastic/ilm_policy_tpot.json" ];
-	      then
-	        myTEXT=$(fuILM_LOSS "${myTMPDIR}/elastic/ilm_policy_tpot.json")
-	        [ -z "${myTEXT}" ] || fuUI_WARN "${myTEXT} The PUT below does that, run it only if you accept it."
-	    fi
-	    fuUI_HINT "  curl -X PUT '${myES}/_ilm/policy/tpot' -H 'Content-Type: application/json' -d @${myKEEP}/ilm_policy_tpot.json"
-	    return 1
+	    fuUI_HINT "elastic/ of the archive holds no Kibana objects and no ILM policy, nothing to import."
 	fi
-	fuUI_OK "Kibana answers after ${myWAIT}s."
-	if [ -s "${myTMPDIR}/elastic/kibana_export.ndjson" ];
+	# The Kibana objects, only when the archive has them: the ILM policy below needs Elasticsearch
+	# alone and goes on when Kibana does not answer
+	if [ -s "${myKIBANA_FILE}" ];
+	  then
+	    fuUI_SPIN "Waiting for Kibana on ${myKIBANA} ..." "${myLOG}" fuWAIT_UP "${myKIBANA}/api/status" Kibana || myRC=$?
+	    [ "${myRC}" -ne 130 ] || fuSTOPPED "waiting for Kibana"
+	    myWAIT=$((SECONDS - mySINCE))
+	    if ! curl -s -f -o /dev/null --connect-timeout 3 "${myKIBANA}/api/status";
+	      then
+	        fuUI_ERROR "Kibana does not answer, the Kibana objects are not imported."
+	        fuFAILED elastic
+	        myBAD="1"
+	        # the working directory is about to vanish: for the manual route the file stays, and the
+	        # command names the real path
+	        if fuKEEP_ELASTIC kibana_export.ndjson;
+	          then
+	            fuUI_HINT "Kibana did not come up in ${myWAIT}s. The Kibana objects are in ${myKEEP}, import them once it does:"
+	            fuUI_HINT "  curl -X POST '${myKIBANA}/api/saved_objects/_import?overwrite=true' -H 'kbn-xsrf: true' --form file=@${myKEEP}/kibana_export.ndjson"
+	          else
+	            fuUI_HINT "Kibana did not come up in ${myWAIT}s. The Kibana objects are in the archive under elastic/kibana_export.ndjson, a POST to ${myKIBANA}/api/saved_objects/_import?overwrite=true imports them."
+	        fi
+	      else
+	        fuUI_OK "Kibana answers after ${myWAIT}s."
+	        myKIBANA_UP="1"
+	    fi
+	fi
+	if [ -n "${myKIBANA_UP}" ];
 	  then
 	    myRC=0
 	    fuUI_SPIN "Importing the Kibana objects ..." "${myLOG}" \
@@ -981,40 +1011,68 @@ function fuDO_ELASTIC () {
 	          else
 	            fuUI_WARN "Imported ${myOBJ:-0} Kibana objects, errors reported:"
 	            fuFAILED elastic
+	            myBAD="1"
 	            sed 's/^/    /' "${myTMPDIR}/import.json" | head -5
 	        fi
 	      else
 	        fuUI_ERROR "The Kibana objects could not be imported."
 	        fuFAILED elastic
+	        myBAD="1"
 	    fi
 	fi
-	if [ -s "${myTMPDIR}/elastic/ilm_policy_tpot.json" ] && ! fuILM_CONFIRMED "${myTMPDIR}/elastic/ilm_policy_tpot.json";
+	# The ILM policy, after the Kibana part whatever came of it: it needs Elasticsearch only
+	if [ -s "${myILM_FILE}" ];
 	  then
-	    # kept for the manual route, the working directory is about to vanish
-	    myKEEP="${myBACKUPDIR}/${myDATE}_elastic"
-	    fuUI_WARN "The ILM policy of the archive was not put back: not confirmed."
-	    if mkdir -p "${myKEEP}" 2>/dev/null && cp "${myTMPDIR}/elastic/ilm_policy_tpot.json" "${myKEEP}/" 2>/dev/null;
+	    mySINCE="${SECONDS}"
+	    myRC=0
+	    fuUI_SPIN "Waiting for Elasticsearch on ${myES} ..." "${myLOG}" fuWAIT_UP "${myES}" Elasticsearch || myRC=$?
+	    [ "${myRC}" -ne 130 ] || fuSTOPPED "waiting for Elasticsearch"
+	    myWAIT=$((SECONDS - mySINCE))
+	    if ! curl -s -f -o /dev/null --connect-timeout 3 "${myES}";
 	      then
-	        fuUI_HINT "It deletes the older events right away. To put it back yourself:" \
-	                  "  curl -X PUT '${myES}/_ilm/policy/tpot' -H 'Content-Type: application/json' -d @${myKEEP}/ilm_policy_tpot.json"
-	      else
-	        fuUI_HINT "It is in the archive under elastic/ilm_policy_tpot.json, a PUT to ${myES}/_ilm/policy/tpot puts it back."
-	    fi
-	    fuWARNED elastic "the ILM policy of the archive was not put back: not confirmed, see above"
-	elif [ -s "${myTMPDIR}/elastic/ilm_policy_tpot.json" ];
-	  then
-	    # update.sh stored it ready to be put back, so this is a plain PUT against the
-	    # Elasticsearch port every edition that ships it publishes on the loopback.
-	    if curl -s -f -X PUT "${myES}/_ilm/policy/tpot" \
-	         -H "Content-Type: application/json" \
-	         -d @"${myTMPDIR}/elastic/ilm_policy_tpot.json" -o /dev/null;
-	      then
-	        fuUI_OK "The ILM policy is back."
-	      else
-	        fuUI_WARN "Could not put the ILM policy back, the file is in the archive under elastic/."
+	        fuUI_ERROR "Elasticsearch does not answer, the ILM policy is not put back."
 	        fuFAILED elastic
+	        myBAD="1"
+	        if fuKEEP_ELASTIC ilm_policy_tpot.json;
+	          then
+	            fuUI_HINT "Elasticsearch did not come up in ${myWAIT}s. The ILM policy is in ${myKEEP}, put it back once it does:"
+	            # how long the current policy keeps the events cannot be read now: the PUT may shorten it
+	            if myMINAGE=$(fuPOLICY_DELETES "${myILM_FILE}") || [ $? -ne 1 ];
+	              then
+	                fuUI_WARN "The ILM policy of the archive deletes events (min_age ${myMINAGE:-not set}): if the current one keeps them longer, the PUT below deletes older events right away, run it only if you accept it."
+	            fi
+	            fuUI_HINT "  ${myPUT_HINT}${myKEEP}/ilm_policy_tpot.json"
+	          else
+	            fuUI_HINT "Elasticsearch did not come up in ${myWAIT}s. The ILM policy is in the archive under elastic/ilm_policy_tpot.json, a PUT to ${myES}/_ilm/policy/tpot puts it back."
+	        fi
+	    elif ! fuILM_CONFIRMED "${myILM_FILE}";
+	      then
+	        # kept for the manual route, the working directory is about to vanish
+	        fuUI_WARN "The ILM policy of the archive was not put back: not confirmed."
+	        if fuKEEP_ELASTIC ilm_policy_tpot.json;
+	          then
+	            fuUI_HINT "It deletes the older events right away. To put it back yourself:" \
+	                      "  ${myPUT_HINT}${myKEEP}/ilm_policy_tpot.json"
+	          else
+	            fuUI_HINT "It is in the archive under elastic/ilm_policy_tpot.json, a PUT to ${myES}/_ilm/policy/tpot puts it back."
+	        fi
+	        fuWARNED elastic "the ILM policy of the archive was not put back: not confirmed, see above"
+	    else
+	        # update.sh stored it ready to be put back, so this is a plain PUT against the
+	        # Elasticsearch port every edition that ships it publishes on the loopback.
+	        if curl -s -f -X PUT "${myES}/_ilm/policy/tpot" \
+	             -H "Content-Type: application/json" \
+	             -d @"${myILM_FILE}" -o /dev/null;
+	          then
+	            fuUI_OK "The ILM policy is back."
+	          else
+	            fuUI_WARN "Could not put the ILM policy back, the file is in the archive under elastic/."
+	            fuFAILED elastic
+	            myBAD="1"
+	        fi
 	    fi
 	fi
+	[ -z "${myBAD}" ]
 }
 
 # The end of a restore: one line per chosen group in a summary, exit 1 when one of

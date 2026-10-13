@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import tarfile
 import tempfile
@@ -443,6 +444,7 @@ class RestoreShTest(Harness):
 # curl for restore.sh: every call in HOME/curl_calls, a PUT of the ILM policy in HOME/puts, a GET of it
 # answers with HOME/current_policy.json (none: 404, curl -f exits 22), everything else answers
 CURL = ('#!/bin/sh\necho "curl $*" >> "$HOME/curl_calls"\nout=""; put=""; prev=""\n'
+        'case "$*" in *64298*) [ -e "$HOME/es_down" ] && exit 7 ;; esac\n'
         'for a in "$@"; do\n  [ "$prev" = "-o" ] && out="$a"\n'
         '  [ "$prev" = "-X" ] && [ "$a" = "PUT" ] && put=1\n  prev="$a"\ndone\n'
         'case "$*" in\n  *api/status*) [ -e "$HOME/kibana_down" ] && exit 7; exit 0 ;;\n  *_ilm/policy/tpot*)\n'
@@ -676,18 +678,124 @@ class RestoreRetentionTest(RestoreScriptHarness):
         self.assertIn("PUT", self.puts(), out)
         self.assertNotIn("WARN", out)
 
-    def test_kibana_down_names_the_loss_before_the_manual_put(self):
+    def curl_calls(self):
+        try:
+            with open(os.path.join(self.home, "curl_calls"), encoding="utf-8") as handle:
+                text = handle.read()
+            os.remove(os.path.join(self.home, "curl_calls"))
+            return text
+        except FileNotFoundError:
+            return ""
+
+    def kept(self):
+        """The kept folders *_elastic of the run: {name: (mode, files)}."""
+        backups = os.path.join(self.home, "tpot_backups")
+        if not os.path.isdir(backups):
+            return {}
+        return {name: (stat.S_IMODE(os.stat(os.path.join(backups, name)).st_mode),
+                       sorted(os.listdir(os.path.join(backups, name))))
+                for name in os.listdir(backups) if name.endswith("_elastic")}
+
+    def test_an_ilm_only_archive_does_not_wait_for_kibana(self):
+        """Kibana down and no Kibana objects in the archive: the ILM policy goes by its rules alone."""
         self.write("kibana_down", "")
-        for archived, warned in (("30d", True), ("36h", True), ("400d", False)):
+        for archived, put in (("400d", True), ("30d", False)):
             with self.subTest(archived=archived):
+                if os.path.exists(os.path.join(self.home, "puts")):
+                    os.remove(os.path.join(self.home, "puts"))
+                self.curl_calls()
                 out = self.elastic("365d", archived)
-                self.assertEqual(self.puts(), "", out)
-                lines = out.splitlines()
-                put = next(i for i, line in enumerate(lines) if "curl -X PUT" in line)
-                loss = [i for i, line in enumerate(lines) if line.startswith("WARN: ") and "delete" in line]
-                self.assertEqual(bool(loss), warned, out)
-                if warned:
-                    self.assertLess(loss[0], put, out)
+                self.assertNotIn("api/status", self.curl_calls(), out)
+                self.assertNotIn("Kibana", out.replace("The Kibana objects and the ILM policy", ""))
+                self.assertEqual("PUT" in self.puts(), put, out)
+                self.assertIn("failed=\n", out)
+                if not put:
+                    self.assertIn("WARN: The ILM policy of the archive was not put back: not confirmed.", out)
+                    self.assertIn("warned=elastic:", out)
+        self.write("yes", "")                            # at a terminal it asks, a yes puts it back
+        out = self.elastic("365d", "30d", terminal=True)
+        self.assertIn("ASKED: --default no", out)
+        self.assertIn("PUT", self.puts(), out)
+
+    def test_kibana_down_fails_the_kibana_part_and_the_ilm_part_still_runs(self):
+        self.write("kibana_down", "")
+        self.write("current_policy.json", json.dumps({"tpot": {"version": 3, "policy": ilm_policy("365d")}}))
+        for archived, put in (("400d", True), ("30d", False)):
+            with self.subTest(archived=archived):
+                if os.path.exists(os.path.join(self.home, "puts")):
+                    os.remove(os.path.join(self.home, "puts"))
+                archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/kibana_export.ndjson": "{}\n",
+                                                  "elastic/ilm_policy_tpot.json":
+                                                  json.dumps({"policy": ilm_policy(archived)})})
+                result = self.bash(f"myARCHIVE='{archive}' myDO_ELASTIC=1 myKIBANA_TIMEOUT=0\nfuTMPDIR; fuTOC\n"
+                                   'fuDO_ELASTIC; echo "rc=$?"\necho "failed=${myFAILED}"\n')
+                out = result.stdout + result.stderr
+                self.assertIn("ERROR: Kibana does not answer, the Kibana objects are not imported.", out)
+                self.assertIn("rc=1", out)
+                self.assertIn("failed=elastic\n", out)
+                # the hint names the kept file, and that file is there
+                post = [line for line in out.splitlines() if "curl -X POST" in line and "_import" in line]
+                self.assertTrue(post, out)
+                path = re.search(r"file=@(\S+)", post[0]).group(1)
+                self.assertTrue(os.path.isfile(path), (path, out))
+                self.assertNotIn("ilm_policy_tpot.json", " ".join(post))
+                # the ILM part ran: put back, or not confirmed with its own hint on its kept file
+                self.assertEqual("PUT" in self.puts(), put, out)
+                if not put:
+                    manual = [line for line in out.splitlines() if "curl -X PUT" in line]
+                    self.assertTrue(manual, out)
+                    self.assertTrue(os.path.isfile(re.search(r"-d @(\S+)", manual[0]).group(1)), out)
+
+    def test_elasticsearch_down_fails_the_ilm_part_with_its_own_hint(self):
+        self.write("es_down", "")
+        out = self.elastic(None, "30d")
+        self.assertEqual(self.puts(), "", out)
+        self.assertIn("ERROR: Elasticsearch does not answer, the ILM policy is not put back.", out)
+        self.assertIn("failed=elastic\n", out)
+        lines = out.splitlines()
+        put = next(i for i, line in enumerate(lines) if "curl -X PUT" in line)
+        self.assertTrue(os.path.isfile(re.search(r"-d @(\S+)", lines[put]).group(1)), out)
+        loss = [i for i, line in enumerate(lines) if line.startswith("WARN: ") and "deletes" in line]
+        self.assertTrue(loss and loss[0] < put, out)                     # the loss is named before the PUT
+        self.assertNotIn("kibana_export", out)
+        # a policy that deletes nothing names no loss
+        out = self.elastic(None, None)
+        self.assertFalse([line for line in out.splitlines() if line.startswith("WARN: ")], out)
+
+    def test_the_kept_folder_is_0700_on_every_path(self):
+        script_umask = "umask 022\n"
+        self.write("kibana_down", "")                    # the Kibana part fails, its file is kept
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/kibana_export.ndjson": "{}\n"})
+        self.bash(script_umask + f"myARCHIVE='{archive}' myDO_ELASTIC=1 myKIBANA_TIMEOUT=0 myDATE=1\n"
+                  "fuTMPDIR; fuTOC\nfuDO_ELASTIC\n")
+        os.remove(os.path.join(self.home, "kibana_down"))
+        self.write("current_policy.json", json.dumps({"tpot": {"version": 3, "policy": ilm_policy("365d")}}))
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/ilm_policy_tpot.json":
+                                          json.dumps({"policy": ilm_policy("30d")})})    # not confirmed
+        self.bash(script_umask + f"myARCHIVE='{archive}' myDO_ELASTIC=1 myKIBANA_TIMEOUT=0 myDATE=2\n"
+                  "fuTMPDIR; fuTOC\nfuDO_ELASTIC\n")
+        self.write("es_down", "")                        # Elasticsearch down, the policy is kept
+        self.bash(script_umask + f"myARCHIVE='{archive}' myDO_ELASTIC=1 myKIBANA_TIMEOUT=0 myDATE=3\n"
+                  "fuTMPDIR; fuTOC\nfuDO_ELASTIC\n")
+        self.assertEqual(self.kept(), {"1_elastic": (0o700, ["kibana_export.ndjson"]),
+                                       "2_elastic": (0o700, ["ilm_policy_tpot.json"]),
+                                       "3_elastic": (0o700, ["ilm_policy_tpot.json"])})
+
+    def test_a_failed_wait_names_a_log_that_says_what_it_waited_for(self):
+        self.write("kibana_down", "")
+        self.write("current_policy.json", json.dumps({"tpot": {"version": 3, "policy": ilm_policy("365d")}}))
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/kibana_export.ndjson": "{}\n",
+                                          "elastic/ilm_policy_tpot.json": json.dumps({"policy": ilm_policy("400d")})})
+        result = self.run_script(os.path.join(REPO, "restore.sh"), "-f", archive, "-g", "elastic",
+                                 env={"TPOT_KIBANA_TIMEOUT": "0"}, cwd=REPO)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out[-600:])
+        log = os.path.join(self.home, "tpot_backups", "restore.log")
+        self.assertIn(f"the end of {log}", out)
+        with open(log, encoding="utf-8") as handle:
+            self.assertIn("Kibana on http://127.0.0.1:64296/api/status did not answer within 0s.", handle.read())
+        self.assertIn("PUT", self.puts(), out)                          # the ILM part ran all the same
+        self.assertIn("Not restored: elastic.", out)
 
     def test_the_whole_run_ends_with_a_warning(self):
         self.write("current_policy.json", json.dumps({"tpot": {"version": 3, "policy": ilm_policy("365d")}}))

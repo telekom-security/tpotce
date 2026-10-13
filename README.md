@@ -830,7 +830,7 @@ Should an update fail, opening an issue or a discussion will help to improve thi
   - `~/install_tpot_pull.log`: the image pull at the end of `install.sh`
   - `~/uninstall_tpot.log`: the Ansible playbook of `uninstall.sh` and the removal of `~/tpotce`
   - `~/tpot_backups/update.log`: the steps of `update.sh` (the backup archive, the setup of the T-Pot Manager, the image pull and the removal of old images)
-  - `~/tpot_backups/restore.log`: the steps of `restore.sh` (reading the archive, stop and start of T-Pot, the extract of `data/`, the Kibana import)
+  - `~/tpot_backups/restore.log`: the steps of `restore.sh` (reading the archive, stop and start of T-Pot, the extract of `data/`, the waits for Kibana and Elasticsearch, the Kibana import)
   - `docker/_builder/log/`: a log per image and step of the image builder
 - They end with a summary: what was done, what failed, what to do next.
 - `-h` shows the options with examples and exits with 0, a wrong option names itself and exits with 1 before anything else is shown (the image builder with 2). `genuser.sh` and `deploy.sh` check the options of the `tpot` command they hand over to (`tpot users add`, `tpot sensors add`) the same way; without `tpot` they take none.
