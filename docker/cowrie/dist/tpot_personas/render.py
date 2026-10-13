@@ -182,7 +182,7 @@ def real_target(link, target, systemd="", el=False):
     """The target a real system has for a link (link: its real path; target: from the root, as
     Cowrie's pickle stores it): relative within the directory of the link and in the run level
     directories, absolute elsewhere; units under the unit directory of the release."""
-    if not target or target.startswith("/"):
+    if not target or target.startswith(("/", "../")):
         return target
     link = link.strip("/")
     if el and link == "etc/localtime":

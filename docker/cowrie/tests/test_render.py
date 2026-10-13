@@ -132,7 +132,8 @@ class NetToolsTest(unittest.TestCase):
                     "rhel-9": {"ip", "ss"}, "centos-7": {"ip", "ss", "ifconfig", "netstat"},
                     "openwrt": {"ip", "ifconfig", "netstat"}, "tplink-wr841n": {"ip", "ifconfig", "netstat"},
                     "ubiquiti-edgerouter-x": {"ip", "ss", "ifconfig", "netstat"}, "dlink-dir859": {"ifconfig", "netstat"}}
-        paths = {"rhel-9": {"ip": "usr/sbin/ip"}, "debian-bookworm": {"ip": "usr/bin/ip"},
+        paths = {"rhel-9": {"ip": "usr/sbin/ip"}, "debian-bookworm": {"ip": "usr/bin/ip", "ss": "usr/bin/ss"},
+                 "ubuntu-noble": {"ip": "usr/bin/ip", "ifconfig": "usr/sbin/ifconfig", "netstat": "usr/bin/netstat"},
                  "openwrt": {"ip": "sbin/ip"}, "tplink-wr841n": {"ip": "usr/bin/ip"}}
         for persona_id, names in expected.items():
             persona = catalog.by_id(persona_id)
@@ -149,6 +150,11 @@ class NetToolsTest(unittest.TestCase):
                     self.assertIsNotNone(tree.find_node(fs, rel), rel)
                 if persona_id == "openwrt":
                     self.assertEqual(tree.find_node(fs, "sbin/ip")[tree.A_TARGET], "../bin/busybox")
+                if persona_id in ("debian-bookworm", "ubuntu-noble"):
+                    # root's PATH finds /usr/sbin/ip, the link of Debian's iproute2 (ubuntu:24.04, debian:12)
+                    self.assertEqual(tree.find_node(fs, "usr/sbin/ip")[tree.A_TARGET], "/bin/ip")
+                if persona_id == "tplink-wr841n":
+                    self.assertEqual({i["qdisc"] for i in data["interfaces"]}, {"noqueue", "pfifo_fast"})
                 if persona_id == "centos-7":
                     # yum knows the package of ip and ss as installed
                     self.assertIn("iproute 4.11.0-30.el7", cfg.get("shell", "yum_installed").split(","))

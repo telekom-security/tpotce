@@ -323,6 +323,9 @@ def tool_programs(persona, ident):
                 found += [(rel, f"/etc/alternatives/{name}"), (f"etc/alternatives/{name}", "/bin/nc.openbsd")]
             else:
                 programs.append(rel)
+            if tool == "iproute2" and name == "ip" and not is_el(persona):
+                # Debian's iproute2: /sbin/ip -> /bin/ip (trixie: ../bin/ip), so root finds /usr/sbin/ip first
+                found.append(("usr/sbin/ip", "../bin/ip" if _codename(persona, ident) == "trixie" else "/bin/ip"))
         if tool == "netcat-openbsd":
             programs.append(NETCAT)
     return tuple(programs), tuple(found)

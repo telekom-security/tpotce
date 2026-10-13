@@ -330,6 +330,22 @@ class PatchTest(unittest.TestCase):
         command.start()
         self.assertIn(b"inet 10.0.2.15/24 brd 10.0.2.255 scope global eth0", bytes(command.out))
 
+    def test_ps_names_the_session_with_the_pid_of_its_connection(self):
+        root = self.patched()
+        base = (root / "src/cowrie/commands/base.py").read_text()
+        self.assertIn('process = getattr(self.protocol, "tpot_session_pid", None)', base)
+        self.assertIn("self.protocol.tpot_session_pid = process", base)
+        namespace = module_all((root / "src/cowrie/commands/netstat.py").read_text(),
+                               {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig({}), "log": None})
+
+        class Protocol:
+            pass
+
+        protocol = Protocol()
+        first = namespace["tpot_session_pid"](protocol)
+        self.assertEqual(namespace["tpot_session_pid"](protocol), first)
+        self.assertTrue(4000 <= first <= 8000)
+
     def test_links_resolve_from_their_directory(self):
         from tpot_personas.identity import draw
         from tpot_personas.render import apply_to_tree
@@ -2244,7 +2260,8 @@ class PatchTest(unittest.TestCase):
         root = self.patched()
         netstat = (root / "src/cowrie/commands/netstat.py").read_text()
         self.assertNotIn("com/ubuntu/upstart", netstat)
-        self.assertNotIn("Phil Blundell", netstat)
+        # the name list of Cowrie's own netstat 1.60 text; net-tools 2.10 of the persona keeps its own
+        self.assertNotIn("Fred Baumgarten, Alan Cox, Bernd Eckenfels, Phil Blundell, Tuan Hoang and others\\n", netstat)
         service = (root / "src/cowrie/commands/service.py").read_text()
         self.assertNotIn("whoopsie", service)
         self.assertIn("for line in output:", service)
@@ -3028,6 +3045,8 @@ class PatchTest(unittest.TestCase):
                   "import ipaddress\nimport socket as sock\n"),
                  ("src/cowrie/commands/ifconfig.py", 'commands["ifconfig"] = Command_ifconfig\n',
                   'commands["ifconfig"] = Command_ifconfig  # ifconfig\n'),
+                 ("src/cowrie/commands/base.py", "            process = random.randint(4000, 8000)\n",
+                  "            process = random.randint(4000, 9000)\n"),
                  ("src/cowrie/commands/fs.py", "from cowrie.shell import fs\n", "from cowrie.shell import fs as f\n"),
                  ("src/cowrie/commands/fs.py", "from typing import TYPE_CHECKING\n",
                   "from typing import TYPE_CHECKING, Any\n"),

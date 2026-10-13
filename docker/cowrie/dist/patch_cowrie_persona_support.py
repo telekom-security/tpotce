@@ -1071,6 +1071,7 @@ NET_COMMAND = r'''
 import functools
 import ipaddress
 import json
+import random
 import time
 from pathlib import Path
 
@@ -1111,10 +1112,9 @@ TPOT_IFCONFIG_HELP = {
     '2.10': ('Usage:\n  ifconfig [-a] [-v] [-s] <interface> [[<AF>] <address>]\n  [add <address>[/<prefixlen>]]\n  [del <address>[/<prefixlen>]]\n  [[-]broadcast [<address>]]  [[-]pointopoint [<address>]]\n  [netmask <address>]  [dstaddr <address>]  [tunnel <address>]\n  [outfill <NN>] [keepalive <NN>]\n  [hw <HW> <address>]  [mtu <NN>]\n  [[-]trailers]  [[-]arp]  [[-]allmulti]\n  [multicast]  [[-]promisc]\n  [mem_start <NN>]  [io_addr <NN>]  [irq <NN>]  [media <type>]\n  [txqueuelen <NN>]\n  [name <newname>]\n  [[-]dynamic]\n  [up|down] ...\n\n  <HW>=Hardware Type.\n  List of possible hardware types:\n  <AF>=Address family. Default: inet\n  List of possible address families:\n', '    loop (Local Loopback) slip (Serial Line IP) cslip (VJ Serial Line IP) \n    slip6 (6-bit Serial Line IP) cslip6 (VJ 6-bit Serial Line IP) adaptive (Adaptive Serial Line IP) \n    ash (Ash) ether (Ethernet) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) rose (AMPR ROSE) tunnel (IPIP Tunnel) \n    ppp (Point-to-Point Protocol) hdlc ((Cisco)-HDLC) lapb (LAPB) \n    arcnet (ARCnet) dlci (Frame Relay DLCI) frad (Frame Relay Access Device) \n    sit (IPv6-in-IPv4) fddi (Fiber Distributed Data Interface) hippi (HIPPI) \n    irda (IrLAP) ec (Econet) x25 (generic X.25) \n    eui64 (Generic EUI-64) \n    unix (UNIX Domain) inet (DARPA Internet) inet6 (IPv6) \n    ax25 (AMPR AX.25) netrom (AMPR NET/ROM) rose (AMPR ROSE) \n    ipx (Novell IPX) ddp (Appletalk DDP) ec (Econet) \n    ash (Ash) x25 (CCITT X.25) \n'),
 }
 
-# (the name list without the one the earlier rounds keep out of netstat's texts)
 TPOT_NETSTAT_VERSION = {
-    '2.10': 'net-tools 2.10\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n',
-    '2.10-alpha': 'net-tools 2.10-alpha\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n',
+    '2.10': 'net-tools 2.10\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Phil Blundell, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n',
+    '2.10-alpha': 'net-tools 2.10-alpha\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Phil Blundell, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n',
 }
 TPOT_NET_XFRM = "Usage: ip xfrm XFRM-OBJECT { COMMAND | help }\nwhere  XFRM-OBJECT := state | policy | monitor\n"
 TPOT_NET_DEFAULT = {
@@ -1128,6 +1128,24 @@ TPOT_NET_DEFAULT = {
                     "dynamic": False, "rates": [1200, 400]}],
     "gateway": "10.0.2.2", "gateway_mac": "52:55:0a:00:02:02", "manager": "static", "kernel": [6, 1],
     "booted_at": 0, "sockets": [], "family": "debian", "resolved": False, "gateway_name": ""}
+
+
+def tpot_session_pid(protocol) -> int:
+    """The PID of the session's server process: drawn once per session, ps shows it and the
+    session's connection belongs to it."""
+    pid = getattr(protocol, "tpot_session_pid", None)
+    if not isinstance(pid, int):
+        pid = random.randint(4000, 8000)
+        try:
+            protocol.tpot_session_pid = pid
+        except Exception:  # noqa: BLE001 - a protocol that takes no attribute keeps no PID
+            pass
+    return pid
+
+
+TPOT_NET_STATES = {"ESTAB": "ESTABLISHED", "TIME-WAIT": "TIME_WAIT", "FIN-WAIT-1": "FIN_WAIT1",
+                   "FIN-WAIT-2": "FIN_WAIT2", "CLOSE-WAIT": "CLOSE_WAIT", "SYN-SENT": "SYN_SENT",
+                   "SYN-RECV": "SYN_RECV", "LAST-ACK": "LAST_ACK", "LISTEN": "LISTEN", "UNCONN": ""}
 
 
 @functools.cache
@@ -1191,9 +1209,12 @@ class TpotNetTool(HoneyPotCommand):
         found += [dict(iface) for iface in self.net["interfaces"]]
         total = [0, 0]
         for index, iface in enumerate(found, 1):
-            iface["index"] = index
+            iface["index"] = iface.get("index") or index
             rates = iface.get("rates")
-            if rates:
+            if iface.get("counters"):
+                rx, rxp, tx, txp = (int(x) for x in iface["counters"])
+                iface["rx"], iface["tx"] = (rx, rxp), (tx, txp)
+            elif rates:
                 rx = int(rates[0] * up)
                 rxp = rx // max(64, int(rates[1]))
                 iface["rx"], iface["tx"] = (rx, rxp), (int(rx * 0.37), int(rxp * 0.71))
@@ -1201,7 +1222,16 @@ class TpotNetTool(HoneyPotCommand):
             else:
                 iface["rx"] = iface["tx"] = (0, 0)
         found[0]["rx"] = found[0]["tx"] = (total[0], total[1])
+        if self.net.get("lo_counters"):
+            rx, rxp, tx, txp = (int(x) for x in self.net["lo_counters"])
+            found[0]["rx"], found[0]["tx"] = (rx, rxp), (tx, txp)
         return found
+
+    def privileged(self) -> bool:
+        try:
+            return int(self.protocol.user.uid) == 0
+        except Exception:  # noqa: BLE001 - a protocol without an avatar (tests): root
+            return True
 
     def find_iface(self, name: str):
         return next((i for i in self.interfaces() if i["name"] == name), None)
@@ -1222,22 +1252,30 @@ class TpotNetTool(HoneyPotCommand):
 
     def sockets(self) -> list[dict]:
         """The daemons' sockets and the session's connection (tcp, established)."""
-        found = [dict(s, state="LISTEN" if s["proto"] == "tcp" else "UNCONN") for s in self.net.get("sockets", [])]
+        found = [dict(s, state=s.get("state") or ("LISTEN" if s["proto"] == "tcp" else "UNCONN"))
+                 for s in self.net.get("sockets", [])]
         local, peer, port = self.session()
         if peer and port:
             try:
                 family = ipaddress.ip_address(peer).version
             except ValueError:
                 family = 4
-            listener = next((s for s in found if s["proto"] == "tcp" and s["port"] == local), None)
-            address = self.net["interfaces"][0]["inet"]
+            # the address of the interface of the default route; the connection belongs to the session's
+            # server process of ps (/usr/sbin/sshd: user@pts/0)
+            route = self.routes()[0]["iface"]
+            address = next((i["inet"] for i in self.net["interfaces"] if i["name"] == route and i.get("inet")),
+                           self.net["interfaces"][0]["inet"])
             if family == 6:
                 address = "::ffff:" + address
                 peer = peer if ":" in peer else "::ffff:" + peer
+            user = "root"
+            try:
+                user = str(self.user.get("username", "root"))
+            except Exception:  # noqa: BLE001
+                pass
             found.append({"proto": "tcp", "family": family, "address": address, "port": local, "peer": peer,
-                          "peer_port": port, "state": "ESTAB", "pid": listener["pid"] if listener else 0,
-                          "comm": listener["comm"] if listener else "", "cmdline": listener["cmdline"] if listener
-                          else "", "fd": 4, "backlog": 36})
+                          "peer_port": port, "state": "ESTAB", "pid": tpot_session_pid(self.protocol), "comm": "sshd",
+                          "cmdline": f"/usr/sbin/sshd: {user}@pts/0", "fd": 4, "backlog": 0})
         return found
 
     def routes(self) -> list[dict]:
@@ -1278,6 +1316,7 @@ class Command_tpot_ip(TpotNetTool):
         self.busybox = self.style["style"] == "busybox"
         self.version = tpot_net_version(self.style.get("version", "6.1.0"))
         self.family, self.brief, self.oneline, self.stats = 0, False, False, False
+        self.json, self.pretty = False, False
         while args and args[0].startswith("-") and args[0] != "-":
             opt = args.pop(0)
             word = opt.lstrip("-")
@@ -1293,6 +1332,10 @@ class Command_tpot_ip(TpotNetTool):
                 self.oneline = True
             elif not self.busybox and word and "statistics".startswith(word):
                 self.stats = True
+            elif not self.busybox and self.version >= (4, 13) and word and "json".startswith(word):
+                self.json = True
+            elif not self.busybox and self.version >= (4, 13) and word and "pretty".startswith(word):
+                self.pretty = True
             elif word and "family".startswith(word) and args:
                 fam = args.pop(0)
                 self.family = {"inet": 4, "inet6": 6, "link": -1}.get(fam, 0)
@@ -1366,15 +1409,18 @@ class Command_tpot_ip(TpotNetTool):
         return 0
 
     def command_and_device(self, args: list[str], object_name: str):
-        """(command, device or None, error status or None) of `show [dev] IFACE`."""
+        """(command, device or None, error status or None) of `show [dev] IFACE`; a command is any
+        prefix of its name, in the order iproute2 matches them."""
         command = "show"
-        if args and not args[0].startswith("dev"):
+        if args and args[0] != "dev":
             word = args[0]
-            if word in ("show", "list", "lst", "sh", "ls") or "show".startswith(word):
+            names = ("add", "change", "chg", "replace", "delete", "list", "show", "lst", "flush", "save", "restore",
+                     "showdump", "set", "help")
+            found = next((n for n in names if n.startswith(word)), None)
+            if found in ("list", "show", "lst"):
                 args = args[1:]
-            elif word in ("add", "del", "delete", "change", "replace", "flush", "set", "append", "test", "get",
-                          "save", "restore"):
-                return word, None, None
+            elif found is not None:
+                return found, None, None
             elif not self.busybox and self.find_iface(word) is None:
                 self.warn(f'Command "{word}" is unknown, try "ip {object_name} help".\n')
                 return command, None, 255
@@ -1389,15 +1435,11 @@ class Command_tpot_ip(TpotNetTool):
                 return command, None, 1
         return command, device, None
 
-    def privileged(self) -> bool:
-        try:
-            return int(self.protocol.user.uid) == 0
-        except Exception:  # noqa: BLE001
-            return True
-
     def change(self, command: str) -> int:
-        if command in ("save", "test"):
+        if command in ("save", "test", "showdump"):
             return 0
+        if command == "help":
+            return self.usage()
         if not self.privileged():
             self.warn("RTNETLINK answers: Operation not permitted\n")
             return 2
@@ -1476,6 +1518,8 @@ class Command_tpot_ip(TpotNetTool):
             return error
         if command != "show":
             return self.change(command)
+        if self.json:
+            return self.json_out([self.json_link(i, True) for i in self.interfaces() if not device or i["name"] == device])
         for iface in self.interfaces():
             if device and iface["name"] != device:
                 continue
@@ -1506,16 +1550,64 @@ class Command_tpot_ip(TpotNetTool):
             return error
         if command != "show":
             return self.change(command)
+        if self.json:
+            return self.json_out([self.json_link(i, False) for i in self.interfaces() if not device or i["name"] == device])
         for iface in self.interfaces():
             if device and iface["name"] != device:
                 continue
             if self.brief:
                 self.put(f"{iface['name']:<16} {iface['state']:<14} {iface['mac']} {self.flags(iface)} \n")
                 continue
+            if self.oneline:
+                self.put(self.header(iface, link=True) + "\\" + "\\".join(self.link_lines(iface)) + "\n")
+                continue
             self.put(self.header(iface, link=True) + "\n" + "\n".join(self.link_lines(iface)) + "\n")
             if self.stats:
                 self.put(self.stats_lines(iface))
         return 0
+
+    def json_out(self, data) -> int:
+        self.put((json.dumps(data, indent=4) if self.pretty else json.dumps(data, separators=(",", ":"))) + "\n")
+        return 0
+
+    def json_link(self, iface: dict, addresses: bool) -> dict:
+        """An interface as `ip -j` writes it."""
+        flags = self.flags(iface)[1:-1].split(",")
+        found = {"ifindex": iface["index"], "ifname": iface["name"], "flags": flags, "mtu": iface["mtu"],
+                 "qdisc": iface["qdisc"], "operstate": iface["state"], "group": "default", "txqlen": 1000,
+                 "link_type": "loopback" if iface.get("loopback") else "ether", "address": iface["mac"],
+                 "broadcast": "00:00:00:00:00:00" if iface.get("loopback") else "ff:ff:ff:ff:ff:ff"}
+        if iface.get("altname") and self.version >= (5, 4):
+            found["altnames"] = [iface["altname"]]
+        if not addresses:
+            return found
+        kernel = tuple(self.net.get("kernel", [6, 1]))
+        proto = self.version >= (6, 3) and kernel >= (6, 3)
+        info = []
+        if iface.get("inet") and self.family in (0, 4):
+            entry = {"family": "inet", "local": iface["inet"], "prefixlen": iface["prefix"]}
+            if not iface.get("loopback"):
+                entry["broadcast"] = iface["broadcast"]
+            entry["scope"] = "host" if iface.get("loopback") else "global"
+            if iface.get("dynamic"):
+                entry["dynamic"] = True
+            if iface.get("noprefixroute"):
+                entry["noprefixroute"] = True
+            entry["label"] = iface["name"]
+            left = self.lease(iface) if iface.get("dynamic") else 4294967295
+            entry.update(valid_life_time=left, preferred_life_time=left)
+            info.append(entry)
+        if iface.get("inet6") and self.family in (0, 6):
+            entry = {"family": "inet6", "local": iface["inet6"], "prefixlen": 128 if iface.get("loopback") else 64,
+                     "scope": "host" if iface.get("loopback") else "link"}
+            if proto:
+                entry["protocol"] = "kernel_lo" if iface.get("loopback") else "kernel_ll"
+            if iface.get("noprefixroute"):
+                entry["noprefixroute"] = True
+            entry.update(valid_life_time=4294967295, preferred_life_time=4294967295)
+            info.append(entry)
+        found["addr_info"] = info
+        return found
 
     def stats_lines(self, iface: dict) -> str:
         rx, tx = iface["rx"], iface["tx"]
@@ -1529,7 +1621,11 @@ class Command_tpot_ip(TpotNetTool):
                 f"    {tx[0]:>10} {tx[1]:>7} {0:>6} {0:>7} {0:>7} {0:>7} \n")
 
     def route(self, args: list[str]) -> int:
-        if args and args[0] not in ("show", "list", "ls", "lst") and not "show".startswith(args[0]):
+        names = ("list", "show", "lst", "flush", "add", "delete", "change", "append", "replace", "prepend", "get",
+                 "save", "restore", "showdump", "help")
+        if args:
+            args = [next((n for n in names if n.startswith(args[0])), args[0])] + args[1:]
+        if args and args[0] not in ("show", "list", "lst"):
             if args[0] == "get" and len(args) > 1:
                 main = self.net["interfaces"][0]
                 self.put(f"{args[1]} via {self.net['gateway']} dev {main['name']} src {main['inet']} uid 0 \n"
@@ -1537,7 +1633,8 @@ class Command_tpot_ip(TpotNetTool):
                 return 0
             if self.busybox:
                 return self.change(args[0])
-            if args[0] in ("add", "del", "delete", "change", "replace", "append", "flush"):
+            if args[0] in ("add", "delete", "change", "replace", "append", "prepend", "flush", "save", "restore",
+                           "showdump", "help"):
                 return self.change(args[0])
             self.warn(f'Command "{args[0]}" is unknown, try "ip route help".\n')
             return 255
@@ -1682,11 +1779,14 @@ class Command_tpot_ss(TpotNetTool):
             listening = s["state"] in ("LISTEN", "UNCONN")
             if listen and not listening:
                 continue
-            if not listen and not every and listening:
+            # without -a: connected sockets, not those in TIME-WAIT or SYN-RECV
+            if not listen and not every and (listening or s["state"] in ("TIME-WAIT", "SYN-RECV")):
                 continue
             shown.append(s)
         shown.sort(key=lambda s: (s["proto"] != "udp", s["state"] != "LISTEN" and s["state"] != "UNCONN"))
-        rows = [self.row(s, numeric, processes, many_kinds) for s in shown]
+        # the processes of other users only for root
+        processes_shown = processes and self.privileged()
+        rows = [self.row(s, numeric, processes_shown, many_kinds) for s in shown]
         if self.version < (4, 15):
             self.render_old(rows, header, many_kinds, len({"LISTEN"} if listen and not every else {1, 2}) > 1,
                             processes)
@@ -1701,7 +1801,7 @@ class Command_tpot_ss(TpotNetTool):
     def endpoint(self, address: str, port, numeric: bool, old: bool):
         host, _, ifname = address.partition("%")
         if ":" in host:
-            shown = f"[{host}]" if (host != "::" or True) else "*"
+            shown = f"[{host}]"
         elif old and host == "0.0.0.0":
             shown = "*"
         else:
@@ -1721,9 +1821,9 @@ class Command_tpot_ss(TpotNetTool):
             peer = self.endpoint(s["peer"], s["peer_port"], True, old)
         else:
             peer = ("[::]" if s["family"] == 6 else ("*" if old else "0.0.0.0")), "*"
-        state = {"ESTAB": "ESTAB", "LISTEN": "LISTEN", "UNCONN": "UNCONN"}[s["state"]]
+        state = s["state"]
         recv = 0
-        send = s.get("backlog", 0) if s["state"] == "LISTEN" else (36 if s["state"] == "ESTAB" else 0)
+        send = s.get("backlog", 0) if s["state"] == "LISTEN" else 0
         process = f' users:(("{s["comm"][:15]}",pid={s["pid"]},fd={s["fd"]}))' if processes and s.get("pid") else ""
         return {"netid": s["proto"], "state": state, "recv": str(recv), "send": str(send), "local": local,
                 "peer": peer, "process": process}
@@ -1805,7 +1905,16 @@ class Command_tpot_ss(TpotNetTool):
         tcp4, tcp6 = sum(1 for s in tcp if s["family"] == 4), sum(1 for s in tcp if s["family"] == 6)
         udp4, udp6 = sum(1 for s in udp if s["family"] == 4), sum(1 for s in udp if s["family"] == 6)
         total = 120 + len(sockets)
-        self.put(f"Total: {total}\nTCP:   {len(tcp)} (estab {estab}, closed 0, orphaned 0, timewait 0)\n\n"
+        waiting = sum(1 for s in tcp if s["state"] == "TIME-WAIT")
+        if self.version < (4, 15):
+            self.put(f"Total: {total} (kernel {total + 900})\nTCP:   {len(tcp)} (estab {estab}, closed 0, orphaned 0, "
+                     f"synrecv 0, timewait {waiting}/0), ports 0\n\nTransport Total     IP        IPv6\n"
+                     f"*\t  {total + 900:<9} {'-':<9} {'-':<9}\n"
+                     f"RAW\t  {0:<9} {0:<9} {0:<9}\nUDP\t  {len(udp):<9} {udp4:<9} {udp6:<9}\n"
+                     f"TCP\t  {len(tcp):<9} {tcp4:<9} {tcp6:<9}\nINET\t  {len(tcp) + len(udp):<9} {tcp4 + udp4:<9} "
+                     f"{tcp6 + udp6:<9}\nFRAG\t  {0:<9} {0:<9} {0:<9}\n\n")
+            return 0
+        self.put(f"Total: {total}\nTCP:   {len(tcp)} (estab {estab}, closed 0, orphaned 0, timewait {waiting})\n\n"
                  "Transport Total     IP        IPv6\n"
                  f"RAW\t  {0:<9} {0:<9} {0:<9}\nUDP\t  {len(udp):<9} {udp4:<9} {udp6:<9}\n"
                  f"TCP\t  {len(tcp):<9} {tcp4:<9} {tcp6:<9}\nINET\t  {len(tcp) + len(udp):<9} {tcp4 + udp4:<9} "
@@ -1959,8 +2068,8 @@ class Command_tpot_netstat(TpotNetTool):
                     peer = self.endpoint(s["peer"], s["peer_port"], True if not numeric else numeric, wide, v6)
                 else:
                     peer = ":::*" if v6 and (numeric or busybox) else ("[::]:*" if v6 else "0.0.0.0:*")
-                state = {"LISTEN": "LISTEN", "ESTAB": "ESTABLISHED", "UNCONN": ""}[s["state"]]
-                send = 0 if s["state"] != "ESTAB" else 36
+                state = TPOT_NET_STATES.get(s["state"], s["state"])
+                send = 0
                 line = f"{proto:<5} {0:>6} {send:>6} {local:<23} {peer:<23} "
                 if busybox:
                     line += f"{state:<12}"
@@ -1969,7 +2078,7 @@ class Command_tpot_netstat(TpotNetTool):
                 else:
                     line += f"{state:<11}"
                     if programs:
-                        name = s.get("cmdline") or s["comm"]
+                        name = s.get("cmdline") or s.get("comm") or "-"
                         if name.startswith("/") or self.style.get("basename"):
                             name = name.split()[0].rsplit("/", 1)[-1] if self.style.get("basename") else \
                                 name.rsplit("/", 1)[-1]
@@ -2049,12 +2158,9 @@ class Command_tpot_ifconfig(TpotNetTool):
                     self.put(out)
                     self.warn(err)
                     return 0
-                if busybox:
-                    self.warn(f"{CowrieConfig.get('shell', 'text_banner', fallback='BusyBox')} multi-call binary.\n\n"
-                             "Usage: ifconfig [-a] interface [address]\n\nConfigure a network interface\n\n")
-                    return 1
-                self.warn(self.help_text())
-                return 0
+                self.warn(f"{CowrieConfig.get('shell', 'text_banner', fallback='BusyBox')} multi-call binary.\n\n"
+                          "Usage: ifconfig [-a] interface [address]\n\nConfigure a network interface\n\n")
+                return 1
             elif arg.startswith("-"):
                 if busybox:
                     names.append(arg)
@@ -2148,6 +2254,18 @@ for _name in ("ss", "/sbin/ss", "/bin/ss", "/usr/sbin/ss", "/usr/bin/ss"):
 for _name in ("netstat", "/bin/netstat", "/usr/bin/netstat", "/sbin/netstat", "/usr/sbin/netstat"):
     commands[_name] = Command_tpot_netstat
 '''
+
+
+def patch_ps_session(cowrie_root):
+    """ps names the session's server process with the PID its connection has in ss and netstat (one
+    per session, tpot_session_pid of the patched netstat.py), not a new one per call."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "base.py"
+    replace_once(path, "            process = random.randint(4000, 8000)\n",
+                 "            # T-Pot: one PID per session (the attribute tpot_session_pid of netstat.py uses)\n"
+                 "            process = getattr(self.protocol, \"tpot_session_pid\", None)\n"
+                 "            if not isinstance(process, int):\n"
+                 "                process = random.randint(4000, 8000)\n"
+                 "                self.protocol.tpot_session_pid = process\n")
 
 
 def patch_net_tools(cowrie_root):
@@ -10117,6 +10235,7 @@ def main():
     patch_ssh_factory(cowrie_root)
     patch_netstat(cowrie_root)
     patch_net_tools(cowrie_root)
+    patch_ps_session(cowrie_root)
     patch_service(cowrie_root)
     patch_systemctl(cowrie_root)
     patch_free(cowrie_root)

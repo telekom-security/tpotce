@@ -284,6 +284,9 @@ def network(persona, ident, processes):
     for iface in interfaces:
         if "inet" in iface and manager.startswith("nm"):
             iface["noprefixroute"] = True
+        if persona.kind == "device" and family not in ("openwrt", "synology") and iface.get("qdisc") == "fq_codel":
+            # no systemd sets fq_codel: the kernel's pfifo_fast (unverified on EdgeOS)
+            iface["qdisc"] = "pfifo_fast"
     gateway_mac = _mac(rng, rng.choice(OUIS["tplink"])) if persona.kind == "device" or \
         ident.hardware.provider == "pi" else _mac(rng)
     # the traffic of the interfaces since boot (bytes per second and the mean packet size, drawn per identity)
