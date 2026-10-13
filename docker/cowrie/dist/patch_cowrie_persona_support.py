@@ -6469,7 +6469,11 @@ class Command_df(HoneyPotCommand):
                 "Report any translation bugs to <https://translationproject.org/team/>\n"
                 "Full documentation <https://www.gnu.org/software/coreutils/df>\n"
                 "or available locally via: info '(coreutils) df invocation'\n")
-        return self.gnu_help_of_release(text)
+        text = self.gnu_help_of_release(text)
+        if str(self.data.get("collate", "c")).startswith("en"):
+            # coreutils names no translation address in an English locale
+            text = re.sub(r"Report (?:any|df) translation bugs to <[^>]+>\n", "", text)
+        return text
 
     def gnu_help_of_release(self, text: str) -> str:
         """The help of coreutils before 8.29 (checked: 8.22 of CentOS 7, 8.26 of Debian 9)."""
@@ -6510,8 +6514,9 @@ class Command_df(HoneyPotCommand):
             old = tuple(int(x) for x in version.split(".")[:2]) < (8, 27)
         except ValueError:
             old = False
-        return (f"df (GNU coreutils) {version}\n"
-                f"Copyright (C) {self.data.get('coreutils_year', '2022')} Free Software Foundation, Inc.\n"
+        packager = self.data.get("packager")
+        return (f"df (GNU coreutils) {version}\n" + (f"Packaged by {packager}\n" if packager else "")
+                + f"Copyright (C) {self.data.get('coreutils_year', '2022')} Free Software Foundation, Inc.\n"
                 f"License GPLv3+: GNU GPL version 3 or later <{'http' if old else 'https'}://gnu.org/licenses/gpl.html>.\n"
                 "This is free software: you are free to change and redistribute it.\n"
                 "There is NO WARRANTY, to the extent permitted by law.\n\n"
@@ -6525,10 +6530,25 @@ class Command_df(HoneyPotCommand):
         except (TypeError, ValueError):
             return (1, 24, 1)
 
+    def busybox_option_error(self, option: str, kind: str) -> str:
+        """The getopt message of the firmware's C library (glibc, uClibc, musl)."""
+        libc = self.data.get("libc", "glibc")
+        if kind == "long":
+            return {"musl": f"df: unrecognized option: {option[2:].partition('=')[0]}\n",
+                    "uclibc": f"df: unrecognized option `{option}'\n"}.get(libc, f"df: unrecognized option '{option}'\n")
+        if kind == "argument":
+            return {"musl": f"df: option requires an argument: {option}\n",
+                    "uclibc": f"df: option requires an argument -- {option}\n"}.get(
+                libc, f"df: option requires an argument -- '{option}'\n")
+        return {"musl": f"df: unrecognized option: {option}\n", "uclibc": f"df: invalid option -- {option}\n"}.get(
+            libc, f"df: invalid option -- '{option}'\n")
+
     def busybox_usage(self) -> str:
         version = self.busybox_version()
         banner = self.data.get("banner", "")
-        head = f"{banner} multi-call binary.\n\n" if banner else ""
+        # libbb of 1.14 prints no dot after "multi-call binary"
+        head = (f"{banner} multi-call binary.\n\n" if version >= (1, 15) else f"{banner} multi-call binary\n\n") \
+            if banner else ""
         if version < (1, 15):
             return (f"{head}Usage: df [-Pkmhai] [-B SIZE] [FILESYSTEM...]\n\n"
                     "Print filesystem usage statistics\n\nOptions:\n"
@@ -6558,7 +6578,7 @@ class Command_df(HoneyPotCommand):
                 operands += args[index:]
                 break
             if arg.startswith("--"):
-                self.errorWrite(f"df: unrecognized option '{arg}'\n" + self.busybox_usage())
+                self.errorWrite(self.busybox_option_error(arg, "long") + self.busybox_usage())
                 return 1
             if arg.startswith("-") and arg != "-":
                 position = 1
@@ -6566,13 +6586,13 @@ class Command_df(HoneyPotCommand):
                     letter = arg[position]
                     position += 1
                     if letter not in letters:
-                        self.errorWrite(f"df: invalid option -- '{letter}'\n" + self.busybox_usage())
+                        self.errorWrite(self.busybox_option_error(letter, "short") + self.busybox_usage())
                         return 1
                     if letter in "Bt":
                         value = arg[position:]
                         if not value:
                             if index >= len(args):
-                                self.errorWrite(f"df: option requires an argument -- '{letter}'\n"
+                                self.errorWrite(self.busybox_option_error(letter, "argument")
                                                 + self.busybox_usage())
                                 return 1
                             value, index = args[index], index + 1

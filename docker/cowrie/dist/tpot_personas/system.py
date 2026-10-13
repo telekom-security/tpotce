@@ -1075,7 +1075,7 @@ COREUTILS_YEARS = {"8.22": "2013", "8.26": "2016", "8.28": "2017", "8.30": "2018
 
 
 # the devices whose firmware has GNU coreutils (their df, procps top)
-COREUTILS_DEVICES = ("synology", "ubiquiti")
+COREUTILS_DEVICES = ("synology",)
 
 
 def coreutils_version(persona, ident):
@@ -1181,12 +1181,15 @@ def df_table(persona, ident, filesystems):
     data = {"filesystems": filesystems}
     if persona.kind == "server" or persona.family in COREUTILS_DEVICES:
         version = coreutils_version(persona, ident)
+        text = text_keys(persona, ident)
+        data.update(collate=text["text_collate"], **({"packager": text["text_packager"]} if "text_packager" in text
+                                                     else {}))
         data.update(style="gnu", coreutils=version, coreutils_year=COREUTILS_YEARS.get(version, "2022"),
                     el=persona.family in ("rhel", "centos"))
     else:
         banner = ident.release.extra.get("busybox", "")
         found = re.match(r"BusyBox v(\d+)\.(\d+)\.(\d+)", banner)
-        data.update(style="busybox", banner=banner,
+        data.update(style="busybox", banner=banner, libc=FIRMWARE_LIBC.get(persona.family, "glibc"),
                     busybox=[int(x) for x in found.groups()] if found else [1, 24, 1])
     return data
 

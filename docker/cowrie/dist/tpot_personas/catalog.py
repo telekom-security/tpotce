@@ -16,6 +16,7 @@ its download or release-note page above it (Release.extra["firmware"]): the
 device was set up with it on or after the day it came out and still runs it, so
 its versions go stale only when the next firmware came out.
 """
+import re
 from dataclasses import replace
 
 from . import PersonaError
@@ -685,11 +686,14 @@ QNAP_HARDWARE = (
 def _qts(version, number, build, released, superseded, uts, openssh, openssl):
     # unverified: uname -v (built the night of the build date), builder and compiler of the QNAP kernel
     #   (gcc 8.4.0, binutils assumed), the OpenSSH / OpenSSL of each build; a 5.10 kernel names the
-    #   compiler as `cc --version` and the linker (the format of Linux 5.8 and later)
+    #   compiler as `cc --version` and the linker (the format of Linux 5.8 and later); the BusyBox of
+    #   QTS (1.24.1, built the night of the build like the kernel)
+    clock = re.search(r"\d\d:\d\d:\d\d", uts).group()
     return _firmware(f"{version}.{number}", released, superseded, f"SSH-2.0-OpenSSH_{openssh.split('p')[0]}",
                      f"OpenSSH_{openssh}, {openssl}", "5.10.60-qnap", uts, "root@U16BuildServer141",
                      "gcc (GCC) 8.4.0, GNU ld (GNU Binutils) 2.32", f"{version}.{number} build {build}", version,
-                     build=build, number=number)
+                     build=build, number=number,
+                     busybox=f"BusyBox v1.24.1 ({build[:4]}-{build[4:6]}-{build[6:]} {clock} CST)")
 
 
 # QTS 5.2 builds of the release notes; superseded by the next build of the notes

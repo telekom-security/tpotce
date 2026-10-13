@@ -305,6 +305,46 @@ class DfTest(unittest.TestCase):
         self.assertIn("Usage: df [-Pkmhai] [-B SIZE] [FILESYSTEM...]\n\nPrint filesystem usage statistics\n\n"
                       "Options:", self.busybox(["-Z"], version=(1, 14, 1))[1])
 
+    def test_busybox_option_errors_follow_the_c_library(self):
+        """busybox:1.36.1-musl / -uclibc / -glibc and the libbb of 1.14.1 (no dot after the banner)."""
+        def bb(args, libc, version=(1, 36, 1)):
+            return self.df(args, {"style": "busybox", "busybox": list(version), "filesystems": BB_ROWS, "libc": libc,
+                                  "banner": "BusyBox v%d.%d.%d (2023-05-18 22:34:17 UTC)" % version})
+        self.assertEqual(bb(["-Q"], "musl")[1].splitlines()[0], "df: unrecognized option: Q")
+        self.assertEqual(bb(["--output"], "musl")[1].splitlines()[0], "df: unrecognized option: output")
+        self.assertEqual(bb(["-Q"], "uclibc")[1].splitlines()[0], "df: invalid option -- Q")
+        self.assertEqual(bb(["--output"], "uclibc")[1].splitlines()[0], "df: unrecognized option `--output'")
+        self.assertEqual(bb(["-t"], "musl")[1].splitlines()[0], "df: option requires an argument: t")
+        self.assertEqual(bb(["-Q"], "glibc")[1].splitlines()[0], "df: invalid option -- 'Q'")
+        old = bb(["-Q"], "uclibc", (1, 14, 1))[1]
+        self.assertTrue(old.startswith("df: invalid option -- Q\nBusyBox v1.14.1 (2023-05-18 22:34:17 UTC) "
+                                       "multi-call binary\n\nUsage: df "), old[:120])
+
+    def test_gnu_texts_follow_the_locale_and_the_packager(self):
+        """en_US (centos:7 with LC_ALL=en_US.UTF-8) names no translation address; trixie's coreutils
+        says who packaged it (debian:13)."""
+        en = self.gnu(["--help"], collate="en")[0]
+        self.assertNotIn("translation bugs", en)
+        self.assertIn("translation bugs", self.gnu(["--help"])[0])
+        self.assertNotIn("translation bugs", self.gnu(["--help"], coreutils="8.22", coreutils_year="2013",
+                                                         collate="en-2.17")[0])
+        out = self.gnu(["--version"], coreutils="9.7", coreutils_year="2025", packager="Debian (9.7-3)")[0]
+        self.assertTrue(out.startswith("df (GNU coreutils) 9.7\nPackaged by Debian (9.7-3)\nCopyright (C) 2025 "))
+
+    def test_df_of_edgeos_is_its_busybox(self):
+        """EdgeOS 2.0.9: /bin/df is a link to its BusyBox 1.27.2 (the image's squashfs)."""
+        persona = catalog.by_id("ubiquiti-edgerouter-x")
+        ident = draw(persona, 1)
+        data = system.df_table(persona, ident, persona.builder(persona, ident).filesystems)
+        self.assertEqual((data["style"], data["busybox"], data["libc"]), ("busybox", [1, 27, 2], "glibc"))
+        for pid, keys in (("debian-trixie", {"packager": "Debian (9.7-3)", "collate": "c"}),
+                          ("rhel-9", {"collate": "en"}), ("openwrt", {"libc": "musl"})):
+            persona = catalog.by_id(pid)
+            ident = draw(persona, 1)
+            data = system.df_table(persona, ident, [])
+            for key, value in keys.items():
+                self.assertEqual(data.get(key), value, (pid, key))
+
     def test_busybox_wraps_long_device_names(self):
         rows = [row("/dev/mapper/cachedev_0", "/volume1", "btrfs", 5615615744, 1626629622, 3988986122)]
         out = self.busybox([], rows)[0].splitlines()

@@ -158,7 +158,7 @@ class BusyboxTest(unittest.TestCase):
     def test_devices_with_busybox_run_cowries_busybox_with_their_help(self):
         with_busybox = [p for p in catalog.PERSONAS if any(r.extra.get("busybox") for r in p.releases)]
         self.assertEqual({p.id for p in with_busybox}, {"dlink-dir859", "tplink-wr841n", "zyxel-nas326", "openwrt",
-                                                       "ubiquiti-edgerouter-x", "ipcam"})
+                                                       "ubiquiti-edgerouter-x", "ipcam", "qnap-qts"})
         for persona in with_busybox:
             for seed in range(3):
                 ident, out, _ = render_one(self, persona, seed)
@@ -171,6 +171,19 @@ class BusyboxTest(unittest.TestCase):
                 listed = "".join(text.split("Currently defined functions:\n", 1)[1].split()).split(",")
                 self.assertEqual(listed, system.busybox_applets(persona, ident), persona.id)
                 self.assertFalse((out / "txtcmds/bin/busybox").exists(), persona.id)
+
+    def test_the_busybox_of_qnap_agrees_with_itself(self):
+        """The banner of busybox, of its applets' messages and of df is one; the program is in the tree."""
+        persona = catalog.by_id("qnap-qts")
+        ident, out, _ = render_one(self, persona, 2)
+        banner = ident.release.extra.get("busybox", "")
+        self.assertTrue(banner.startswith("BusyBox v1.24.1 ("), banner)
+        cfg = cfg_of(out)
+        self.assertEqual(cfg.get("shell", "text_banner"), banner)
+        self.assertEqual(json.loads((out / "df.json").read_text())["banner"], banner)
+        self.assertTrue((out / "busybox-help.txt").read_text().startswith(f"{banner} multi-call binary.\n"))
+        self.assertNotIn("busybox", skipped(out))
+        self.assertIsNotNone(tree.find_node(tree.load_pickle(out / "fs.pickle"), "bin/busybox"))
 
     def test_systems_without_busybox_skip_it(self):
         for persona in catalog.PERSONAS:
@@ -1152,7 +1165,11 @@ class FileSystemTableTest(unittest.TestCase):
             ident = draw(persona, 2, NOW)
             content = persona.builder(persona, ident)
             data = system.df_table(persona, ident, content.filesystems)
-            self.assertEqual(data["style"], "gnu" if content.top_style == "procps" else "busybox", persona.id)
+            # df is a program of the coreutils or the BusyBox that wc, sort and seq are (EdgeOS: procps
+            # top of Debian, the BusyBox df of its firmware)
+            self.assertEqual(data["style"], system.text_keys(persona, ident)["text_style"], persona.id)
+            if persona.family != "ubiquiti":
+                self.assertEqual(data["style"], "gnu" if content.top_style == "procps" else "busybox", persona.id)
             if data["style"] == "busybox":
                 self.assertEqual(len(data["busybox"]), 3)
             else:

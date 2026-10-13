@@ -456,8 +456,10 @@ def _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out):
     if not isinstance(rows, list) or found != json.loads(json.dumps(system.df_table(persona, ident, rows))):
         out.append("df: df.json is not the persona's")
         rows = []
-    if (found or {}).get("style") != ("gnu" if _top_style(cfg) == "procps" else "busybox"):
-        out.append(f"df: the {(found or {}).get('style')} df differs from the {_top_style(cfg)} top")
+    # df is a program of the coreutils or the BusyBox that wc, sort and seq are
+    if (found or {}).get("style") != system.text_keys(persona, ident)["text_style"]:
+        out.append(f"df: the {(found or {}).get('style')} df differs from the {system.text_keys(persona, ident)['text_style']} "
+                   "wc, sort and seq")
     mounted = {(dev, mp, fs) for dev, mp, fs in _MOUNT.findall(_text(txtcmds / "bin/mount"))}
     proc = {tuple(line.split()[:3]) for line in _text(honeyfs / "proc/mounts").splitlines() if line.strip()}
     for row in rows:
