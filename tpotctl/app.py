@@ -926,6 +926,9 @@ class SettingsPane(Vertical):
                                 title="Not saved", severity="error", timeout=10)
                 return
             if chosen.reachable and chosen.shortening:
+                if another_screen(self.app, "Save"):      # nothing written, Save is free again (finally)
+                    return
+
                 def answered(yes) -> None:
                     if yes:
                         self.run_worker(self.save_after_yes(saved, chosen), group=f"{self.PREFIX}-save")
@@ -945,6 +948,9 @@ class SettingsPane(Vertical):
     async def save_after_yes(self, saved: Dict[str, str], chosen) -> None:
         try:
             await self.save_confirmed(saved, chosen)
+        except Exception as err:        # noqa: BLE001 - whatever breaks, the worker must not end the Manager
+            self.app.notify(f"The save stopped with an error ({err}). Nothing more was written.", title="Not saved",
+                            severity="error", timeout=12)
         finally:
             self.save_done()
 
@@ -1659,9 +1665,12 @@ class ElasticPane(Vertical):
                 if self.is_attached and not self.app._closing and not self._closing:
                     raise
 
-    def ask(self, value: str, chosen) -> None:
-        """A shorter retention: what it deletes, before anything is written; #no has the focus."""
+    def ask(self, value: str, chosen, button: str) -> None:
+        """A shorter retention: what it deletes, before anything is written; #no has the focus. Another
+        screen opened while the plan was made: no question on top of it, button is pressed again."""
         from tpotctl.cli import _retention_shown as shown
+        if another_screen(self.app, button):
+            return
         self.app.push_screen(ConfirmDialog(f"Keep the events {shown(value)}?", shortening_text(chosen.doomed, value),
                                            yes="Delete and set", no="Back"),
                              lambda yes: self.start(self.write(value, chosen)) if yes else None)
@@ -1682,7 +1691,7 @@ class ElasticPane(Vertical):
             await self.write(value, chosen, waits=force or cli._shortens_env(old, value))
             return
         if chosen.shortening:           # deletes events the policy keeps now: always asked, indices or not
-            self.ask(value, chosen)
+            self.ask(value, chosen, "Apply .env to the policy" if force else "Set")
             return
         await self.write(value, chosen)
 
@@ -1699,7 +1708,7 @@ class ElasticPane(Vertical):
         if chosen is None:
             chosen = await asyncio.to_thread(self.app.backend.retention_plan, value, True)
             if chosen.reachable and chosen.shortening:
-                self.ask(value, chosen)
+                self.ask(value, chosen, "Take over from Kibana")
                 return
         old = self.status.value if self.status else ""
         if waits is None:
@@ -1750,6 +1759,16 @@ def retention_waits(value: str, later: str) -> str:
 # what the two buttons of the Elastic page do with a policy changed in Kibana; each asks first where it shortens
 FOREIGN_BUTTONS = ("Take over from Kibana keeps it, Apply .env to the policy applies .env to it; either asks first "
                    "if that shortens the retention.")
+
+
+def another_screen(app, button: str) -> bool:
+    """Another screen opened while a check ran (the palette, a question of another page): the question of the
+    check does not land on top of it, a note says to press the button again. True when one is open."""
+    if len(app.screen_stack) <= 1:
+        return False
+    app.notify(f"The check of the ILM policy is done, but another screen was open: press {button} again.",
+               title="Not saved" if button == "Save" else "Elastic", severity="warning", timeout=10)
+    return True
 
 
 def foreign_kept(value: str, where: str) -> str:

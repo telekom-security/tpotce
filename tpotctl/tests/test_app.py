@@ -1305,6 +1305,142 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("On the Elastic page, Take over from Kibana keeps it, Apply .env to the policy applies .env "
                       "to it; either asks first if that shortens the retention.", notes)
 
+    async def test_elastic_a_question_never_lands_on_another_screen(self):
+        """Another screen opened while the plan was made (the palette, a question of another page): no question
+        on top of it, a note to press the button again, nothing written, the buttons free again."""
+        import threading
+        from tpotctl import elastic
+        for button, value, again in (("#elastic-set", "30", "Set"), ("#elastic-apply", None, "Apply .env to the policy"),
+                                     ("#elastic-adopt", None, "Take over from Kibana")):
+            with self.subTest(button=button):
+                release = threading.Event()
+
+                class Slow(FakeBackend):
+                    def retention_plan(self, value, force=False):
+                        self.calls.append(("plan", value, force))
+                        release.wait(5)
+                        return elastic.Plan(elastic.Decision("update", {}, "120", False),
+                                            [elastic.Index("logstash-2026.08.01", 0, 1200, 5 * 2 ** 20)], True,
+                                            shortening=True)
+
+                backend = Slow()
+                backend._retention = elastic.Status("30", "120", "foreign")
+                app = tapp.TpotApp(backend=backend, runner=Recorder())
+                try:
+                    async with app.run_test(size=(120, 40)) as pilot:
+                        await pilot.pause(0.2)
+                        app.goto("elastic")
+                        await pilot.pause(0.3)
+                        if value:
+                            app.query_one("#elastic-value").value = value
+                        await pilot.click(button)
+                        await pilot.pause(0.2)
+                        self.assertTrue(any(call[0] == "plan" for call in backend.calls if isinstance(call, tuple)))
+                        other = ConfirmDialog("Something else?")
+                        app.push_screen(other)
+                        await pilot.pause(0.2)
+                        release.set()
+                        await pilot.pause(0.4)
+                        self.assertIs(app.screen, other)
+                        self.assertEqual(len(app.screen_stack), 2)
+                        notes = [str(note.message) for note in app._notifications]
+                        self.assertIn(f"The check of the ILM policy is done, but another screen was open: press "
+                                      f"{again} again.", notes)
+                        pane = app.query_one("#elastic", tapp.ElasticPane)
+                        self.assertFalse(pane.busy)
+                        self.assertFalse(app.query_one("#elastic-set").disabled)
+                    done = [call[0] for call in backend.calls if isinstance(call, tuple)]
+                    self.assertNotIn("set", done)
+                    self.assertNotIn("apply", done)
+                finally:
+                    release.set()
+
+    async def test_settings_a_question_never_lands_on_another_screen(self):
+        import threading
+        from tpotctl import elastic, settings
+        repo = self.retention_checkout()
+        release = threading.Event()
+
+        class Slow(FakeBackend):
+            def settings(self):
+                return settings.load(repo)
+
+            def retention_plan(self, value, force=False):
+                self.calls.append(("plan", value, force))
+                release.wait(5)
+                return elastic.Plan(elastic.Decision("update", {}, "90", True),
+                                    [elastic.Index("logstash-2026.08.01", 0, 1200, 5 * 2 ** 20)], True,
+                                    shortening=True)
+
+        backend = Slow()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        try:
+            async with app.run_test(size=(150, 50)) as pilot:
+                await pilot.pause(0.3)
+                app.goto("settings")
+                await pilot.pause(0.4)
+                app.query_one("#set-TPOT_ES_RETENTION").value = "30"
+                await pilot.pause(0.3)
+                await pilot.click("#settings-save")
+                await pilot.pause(0.2)
+                other = ConfirmDialog("Something else?")
+                app.push_screen(other)
+                await pilot.pause(0.2)
+                release.set()
+                await pilot.pause(0.4)
+                self.assertIs(app.screen, other)
+                notes = [str(note.message) for note in app._notifications]
+                self.assertIn("The check of the ILM policy is done, but another screen was open: press Save again.",
+                              notes)
+                self.assertFalse(app.query_one("#settings").saving)
+                self.assertFalse(app.query_one("#settings-save").disabled)
+            self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")
+            self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
+        finally:
+            release.set()
+
+    async def test_settings_an_error_after_the_yes_releases_save_and_names_it(self):
+        """save_after_yes: whatever goes wrong, the T-Pot Manager stays, Save is free again, the note names the
+        error and nothing more is written (an error in the write itself: nothing at all)."""
+        from unittest import mock
+        from tpotctl import settings
+        for where in ("write", "apply"):
+            with self.subTest(where=where):
+                repo = self.retention_checkout()
+                backend = self.settings_backend(repo)
+                applied = []
+
+                def apply(plan):
+                    applied.append(plan)
+                    raise RuntimeError("the policy went away")
+
+                backend.apply_retention = apply
+                patch = (mock.patch.object(settings.Settings, "change", side_effect=PermissionError("read-only"))
+                         if where == "write" else mock.patch.object(settings.Settings, "change", autospec=True,
+                                                                     side_effect=settings.Settings.change))
+                with patch:
+                    app, pilot = await self.save_retention(backend, "30")
+                    self.assertIsInstance(app.screen, ConfirmDialog)
+                    await pilot.click("#yes")
+                    await pilot.pause(0.5)
+                    self.assertTrue(app.is_running)
+                    notes = " ".join(str(note.message) for note in app._notifications)
+                    pane = app.query_one("#settings")
+                    self.assertFalse(pane.saving)
+                    # Save as the changes say: free while the value is not written, nothing to save once it is
+                    self.assertEqual(app.query_one("#settings-save").disabled, not pane.changes())
+                    if where == "write":
+                        self.assertFalse(app.query_one("#settings-save").disabled)
+                        self.assertIn("read-only", notes)
+                        self.assertEqual(applied, [])
+                        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")
+                    else:
+                        self.assertIn("the policy went away", notes)
+                        self.assertEqual(len(applied), 1)
+                        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "30")
+                    self.assertIn("The save stopped with an error", notes)
+                    self.assertIn("Nothing more was written", notes)
+
     async def test_elastic_unset_env_and_no_elasticsearch_does_not_promise_a_wait(self):
         # an unset .env shortens nothing (cli._shortens_env): the text of an unknown policy, as tpot env set
         from tpotctl import elastic
