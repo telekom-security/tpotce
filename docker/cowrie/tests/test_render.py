@@ -149,6 +149,9 @@ class NetToolsTest(unittest.TestCase):
                     self.assertIsNotNone(tree.find_node(fs, rel), rel)
                 if persona_id == "openwrt":
                     self.assertEqual(tree.find_node(fs, "sbin/ip")[tree.A_TARGET], "../bin/busybox")
+                if persona_id == "centos-7":
+                    # yum knows the package of ip and ss as installed
+                    self.assertIn("iproute 4.11.0-30.el7", cfg.get("shell", "yum_installed").split(","))
 
 
 class BusyboxTest(unittest.TestCase):
@@ -575,7 +578,8 @@ class PackageNamesTest(unittest.TestCase):
             if persona.family == "centos":
                 self.assertFalse(set(ident.release.packages) - set(lines))
                 installed = dict(e.split(" ", 1) for e in cfg_of(out).get("shell", "yum_installed").split(","))
-                self.assertEqual(installed, ident.release.packages)
+                self.assertEqual(installed, {**system.CENTOS_BASE, **ident.release.packages})
+                self.assertIn("iproute", lines)
 
     def test_names_of_the_kernel_virtual_names_and_providers(self):
         for pid in ("debian-bookworm", "debian-trixie", "ubuntu-noble", "ubuntu-jammy", "raspios", "gpu-ubuntu"):

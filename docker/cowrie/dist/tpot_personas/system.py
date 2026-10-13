@@ -288,6 +288,8 @@ COWRIE_TOOL_NAMES = frozenset({"dig", "ftpget", "ethtool", "iptables", "ping", "
 # the tools of the Red Hat images (rpm: bind-utils, net-tools, iptables, ethtool, iputils; unverified)
 EL_TOOLS = {"rhel": frozenset({"ethtool", "iproute2", "iputils-ping"}),
             "centos": frozenset({"ethtool", "iproute2", "iptables", "iputils-ping", "net-tools"})}
+# the packages of the CentOS 7.9 image yum knows as installed besides the release's (iproute of @core)
+CENTOS_BASE = {"iproute": "4.11.0-30.el7"}
 # where Red Hat's packages put the programs of a tool (iproute: /usr/sbin/ip, /usr/sbin/ss)
 EL_TOOL_PROGRAMS = {"iproute2": {"ip": "usr/sbin/ip", "ss": "usr/sbin/ss"}}
 
@@ -1957,7 +1959,8 @@ def shell_keys(persona, ident, files, runtime_dir):
         keys["package_names"] = f"{runtime_dir}/{PACKAGE_NAMES}"
     if persona.family == "centos":
         keys["yum_plugins"] = YUM_PLUGINS
-        keys["yum_installed"] = ",".join(f"{name} {evr}" for name, evr in sorted(ident.release.packages.items()))
+        keys["yum_installed"] = ",".join(f"{name} {evr}" for name, evr in sorted({**CENTOS_BASE,
+                                                                                  **ident.release.packages}.items()))
     if persona.family == "rhel":
         keys["dnf_packages"] = f"{runtime_dir}/{DNF_PACKAGES}"
     return keys
