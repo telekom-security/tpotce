@@ -373,10 +373,15 @@ def _retention_status(state, console, shown) -> None:
                  "otherwise forever (nothing is deleted) and the value waits.", console.file)
 
 
-def _foreign_error(current: str) -> str:
-    return (f"The ILM policy tpot was changed outside of T-Pot (retention: "
-            f"{_retention_shown(current) if current else 'not in days'}). "
-            "tpot elastic retention --adopt keeps it, tpot elastic retention --force applies this value to it.")
+def _foreign_kept(new: str, current: str, settings, console) -> int:
+    """VALUE on a policy changed outside of T-Pot, as the Elastic and the Settings page do it: .env takes the
+    value, the policy stays as it is until --force applies the value or --adopt keeps the policy."""
+    settings.change({"TPOT_ES_RETENTION": new})
+    say.warn(f"TPOT_ES_RETENTION={new} is set in .env. The ILM policy tpot was changed outside of T-Pot "
+             f"(retention: {_retention_shown(current) if current else 'not in days'}), T-Pot leaves it as it is: "
+             "'tpot elastic retention --force' applies the value to it (it asks first), "
+             "'tpot elastic retention --adopt' keeps the policy.", console.file)
+    return 0
 
 
 UNKNOWN_POLICY = ("T-Pot applies it on its next start if the ILM policy tpot keeps the events less long; "
@@ -432,11 +437,10 @@ def run_elastic(args) -> int:
         new, chosen = args.value, elastic.plan(args.value, force=args.force)
     if not chosen.reachable:
         # the status above may have read the policy before Elasticsearch went away: a foreign policy stays
-        # foreign, nothing is written
+        # foreign, only .env is written
         if (state.state == "foreign" and not args.force and not args.adopt
                 and not (state.current and state.current == new)):
-            error(_foreign_error(state.current))
-            return 1
+            return _foreign_kept(new, state.current, current, console)
         # nothing can be shown or applied: only .env changes, and a shorter value waits for the user's yes
         current.change({"TPOT_ES_RETENTION": new})
         if from_env or _shortens_env(value, new):
@@ -450,8 +454,7 @@ def run_elastic(args) -> int:
             say.hint(f"Why: {chosen.problem}.", stream=console.file)
         return 0
     if chosen.decision.action == "foreign":
-        error(_foreign_error(chosen.decision.current))
-        return 1
+        return _foreign_kept(new, chosen.decision.current, current, console)
     if chosen.shortening:
         _retention_preview(chosen, new, console)
         if not confirm_data_loss(f"Keep the Elasticsearch events {shown(new)}?",

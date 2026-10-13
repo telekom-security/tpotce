@@ -643,13 +643,22 @@ class RunElasticTest(unittest.TestCase):
 
     OLD = elastic.Index("logstash-old", 1.0, 1200, 5000)
 
-    def test_foreign_policy_without_force_changes_nothing(self):
-        foreign = elastic.Status("90", "90", "foreign")
-        code = self.run_cli(["retention", "30", "-y"], state=foreign, plan=self.plan("foreign"))
-        self.assertEqual(code, 1)
-        self.assertEqual((self.settings.changes, self.applied), ([], []))
-        self.assertEqual(self.planned, [("30", False)])
-        self.assertIn("--adopt", self.err.getvalue())
+    FOREIGN_KEPT = ("TPOT_ES_RETENTION=30 is set in .env. The ILM policy tpot was changed outside of T-Pot "
+                    "(retention: {}), T-Pot leaves it as it is: 'tpot elastic retention --force' applies the "
+                    "value to it (it asks first), 'tpot elastic retention --adopt' keeps the policy.")
+
+    def test_foreign_policy_without_force_writes_env_and_leaves_the_policy(self):
+        """As the Elastic and the Settings page: .env takes the value, the policy stays as it is."""
+        for argv in (["retention", "30"], ["retention", "30", "-y"]):
+            with self.subTest(argv=argv):
+                foreign = elastic.Status("90", "90", "foreign")
+                code = self.run_cli(argv, state=foreign, plan=self.plan("foreign", current="120"))
+                self.assertEqual(code, 0)
+                self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
+                self.assertEqual((self.applied, self.asked, self.plain_confirmed), ([], [], []))
+                self.assertEqual(self.planned[-1], ("30", False))
+                text = " ".join((self.out.getvalue() + self.err.getvalue()).split())
+                self.assertIn(self.FOREIGN_KEPT.format("120 days"), text)
 
     def test_force_is_handed_to_the_plan(self):
         self.run_cli(["retention", "30", "--force", "-y"], plan=self.plan())
@@ -688,14 +697,15 @@ class RunElasticTest(unittest.TestCase):
         self.assertEqual((self.applied, self.asked, self.plain_confirmed), ([], [], []))
 
     def test_unreachable_after_a_foreign_status_says_it_is_foreign(self):
-        # the status read the foreign policy, then Elasticsearch went away: nothing is written, no waiting text
+        # the status read the foreign policy, then Elasticsearch went away: .env only, no waiting text
         foreign = elastic.Status("90", "365", "foreign")
         code = self.run_cli(["retention", "30"], state=foreign, plan=self.plan("keep", reachable=False))
-        self.assertEqual(code, 1)
-        self.assertIn("was changed outside of T-Pot (retention: 365 days)", self.err.getvalue())
-        self.assertIn("--adopt", self.err.getvalue())
-        self.assertEqual((self.settings.changes, self.applied, self.asked), ([], [], []))
-        self.assertNotIn("waits", self.out.getvalue())
+        self.assertEqual(code, 0)
+        text = " ".join((self.out.getvalue() + self.err.getvalue()).split())
+        self.assertIn(self.FOREIGN_KEPT.format("365 days"), text)
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
+        self.assertEqual((self.applied, self.asked), ([], []))
+        self.assertNotIn("waits", text)
 
     def test_unreachable_after_a_foreign_status_with_force_or_the_same_duration_still_writes_env(self):
         foreign = elastic.Status("90", "365", "foreign")
