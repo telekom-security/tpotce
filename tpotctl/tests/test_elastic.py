@@ -228,6 +228,43 @@ class WiringTest(unittest.TestCase):
         with open(os.path.join(REPO_DIR, *parts), encoding="utf-8") as handle:
             return handle.read()
 
+    # the yq test of the guard, its expression in ' or " (after the spaces are collapsed)
+    YQ_TEST = re.compile(r"""^yq -e (?P<q>['"])(?P<expr>.*)(?P=q) "\$\{COMPOSE\}" >/dev/null 2>&1$""")
+    GUARD = ['[ "${TPOT_TYPE}" == "HIVE" ]', """yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1"""]
+
+    @classmethod
+    def guard(cls, cond: str) -> list:
+        """The tests of an if condition split at &&, each with its spaces collapsed and the yq expression in
+        one quoting (' around it; " around it with escaped quotes inside is the same)."""
+        tests = []
+        for part in cond.split("&&"):
+            part = " ".join(part.split())
+            match = cls.YQ_TEST.match(part)
+            if match:
+                expr = match.group("expr")
+                if match.group("q") == '"':
+                    expr = expr.replace('\\"', '"')
+                part = "yq -e '" + " ".join(expr.split()) + "' \"${COMPOSE}\" >/dev/null 2>&1"
+            tests.append(part)
+        return tests
+
+    def test_the_guard_check_is_about_the_logic_not_the_spelling(self):
+        same = (r"""[ "${TPOT_TYPE}" == "HIVE" ] && yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1""",
+                r"""[  "${TPOT_TYPE}"  ==  "HIVE" ]&&  yq   -e '.services  | has("elasticsearch")'  "${COMPOSE}" >/dev/null  2>&1""",
+                r"""[ "${TPOT_TYPE}" == "HIVE" ] && yq -e ".services | has(\"elasticsearch\")" "${COMPOSE}" >/dev/null 2>&1""")
+        for cond in same:
+            with self.subTest(cond=cond):
+                self.assertEqual(self.guard(cond), self.GUARD)
+        other = (r"""[ "${TPOT_TYPE}" == "SENSOR" ] && yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1""",
+                 r"""[ "${TPOT_TYPE}" == "HIVE" ] && yq -e '.services | has("kibana")' "${COMPOSE}" >/dev/null 2>&1""",
+                 r"""[ "${TPOT_TYPE}" == "HIVE" ] || yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1""",
+                 r"""[ "${TPOT_TYPE}" == "HIVE" ] && yq -e '.services | has("elasticsearch")' "${COMPOSE}" """,
+                 r"""[ "${TPOT_TYPE}" == "HIVE" ] && ! yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1""",
+                 r"""[ "${TPOT_TYPE}" == "HIVE" ]""")
+        for cond in other:
+            with self.subTest(cond=cond):
+                self.assertNotEqual(self.guard(cond), self.GUARD)
+
     # an if block of entrypoint.sh: its condition, its body, up to its own fi
     IF_BLOCK = re.compile(r"^if (?P<cond>[^\n]*);\n\s*then\n(?P<body>(?:(?!fi\n)[^\n]*\n)*?)fi$", re.M)
 
@@ -243,11 +280,9 @@ class WiringTest(unittest.TestCase):
         blocks = [b for b in self.IF_BLOCK.finditer(text, start) if "es_retention.sh" in b.group("body")]
         self.assertEqual(len(blocks), 1, blocks)
         block = blocks[0]
-        # the guard: both tests, joined by &&, nothing else
-        tests = [part.strip() for part in block.group("cond").split("&&")]
+        # the guard: both tests, joined by &&, nothing else (spaces and the quoting of the yq expression aside)
         self.assertNotIn("||", block.group("cond"))
-        self.assertEqual(tests, ['[ "${TPOT_TYPE}" == "HIVE" ]',
-                                 """yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1"""])
+        self.assertEqual(self.guard(block.group("cond")), self.GUARD)
         # the body: the call alone, in the background
         body = [line.strip() for line in block.group("body").splitlines() if line.strip()]
         self.assertEqual(body, ["/opt/tpot/bin/es_retention.sh &"])
