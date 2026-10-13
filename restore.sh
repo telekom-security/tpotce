@@ -1086,7 +1086,7 @@ function fuDO_ELASTIC () {
 # The end of a restore: one line per chosen group in a summary, exit 1 when one of
 # them did not come back (the rest is through then)
 function fuEND () {
-	local myGROUP="" myDO="" myITEMS=() myRC=0 myWARN="" myITEM=""
+	local myGROUP="" myDO="" myITEMS=() myRC=0 myWARN="" myITEM="" myBACK=""
 	for myGROUP in git patch config untracked data elastic;
 	  do
 	    case "${myGROUP}" in
@@ -1105,7 +1105,8 @@ function fuEND () {
 	    done
 	    case ", ${myFAILED}, " in
 	      *", ${myGROUP}, "*) myITEMS+=("fail:$(fuGROUP_TITLE "${myGROUP}"): not restored, see above") ;;
-	      *) if [ -n "${myWARN}" ];
+	      *) myBACK="1"
+	         if [ -n "${myWARN}" ];
 	           then myITEMS+=("warn:$(fuGROUP_TITLE "${myGROUP}"): ${myWARN}")
 	           else myITEMS+=("ok:$(fuGROUP_TITLE "${myGROUP}")")
 	         fi ;;
@@ -1114,7 +1115,8 @@ function fuEND () {
 	if [ -n "${myFAILED}" ];
 	  then
 	    myRC=1
-	    myITEMS+=("info:Not restored: ${myFAILED}. The rest is back, the archive is ${myARCHIVE}.")
+	    # "the rest" only where a chosen group did come back
+	    myITEMS+=("info:Not restored: ${myFAILED}.${myBACK:+ The rest is back.} The archive is ${myARCHIVE}.")
 	fi
 	if [ -n "${mySTART_FAILED}" ];
 	  then

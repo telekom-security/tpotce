@@ -323,6 +323,7 @@ class RestoreShTest(Harness):
         self.assertTrue(os.path.exists(os.path.join(self.tpotce, "notes.txt")))     # the other group is back
         text = result.stdout + result.stderr
         self.assertTrue("Not restored: config." in text, text[-400:])
+        self.assertTrue("The rest is back." in text, text[-400:])
 
     def test_everything_restored_ends_with_0(self):
         result = self.restore("-f", self.archive, "-g", "config")
@@ -372,6 +373,7 @@ class RestoreShTest(Harness):
         self.assertEqual(result.returncode, 1, text[-400:])
         self.assertTrue("Could not read elastic/" in text, text[-400:])
         self.assertTrue("Not restored: elastic." in text, text[-400:])
+        self.assertFalse("The rest is back" in text, text[-400:])      # nothing else was chosen
 
     def test_an_unreadable_patch_is_not_called_empty(self):
         archive = self.git_checkout_with_a_patch()
