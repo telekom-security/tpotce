@@ -257,6 +257,23 @@ class DfTest(unittest.TestCase):
         self.assertNotIn("--direct", self.gnu(["--help"])[0])
         self.assertIn("      --help        display this help", self.gnu(["--help"])[0])
 
+    def test_gnu_help_of_older_releases(self):
+        """Lines of `df --help` in centos:7 (coreutils 8.22) and debian:9 (8.26) that differ from 8.32."""
+        old = self.gnu(["--help"], coreutils="8.22", coreutils_year="2013", el=True)[0]
+        self.assertIn("      --direct          show statistics for a file instead of mount point\n"
+                      "      --total           produce a grand total\n"
+                      "  -h, --human-readable  print sizes in human readable format (e.g., 1K 234M 2G)\n"
+                      "  -H, --si              likewise, but use powers of 1000 not 1024\n", old)
+        self.assertIn("SIZE is an integer and optional unit (example: 10M is 10*1024*1024).  Units\n", old)
+        self.assertTrue(old.endswith("Report df translation bugs to <http://translationproject.org/team/>\n"
+                                     "For complete documentation, run: info coreutils 'df invocation'\n"))
+        stretch = self.gnu(["--help"], coreutils="8.26", coreutils_year="2016")[0]
+        self.assertIn("  -h, --human-readable  print sizes in powers of 1024 (e.g., 1023M)\n", stretch)
+        self.assertNotIn("Binary prefixes", stretch)
+        self.assertTrue(stretch.endswith("Full documentation at: <http://www.gnu.org/software/coreutils/df>\n"
+                                         "or available locally via: info '(coreutils) df invocation'\n"))
+        self.assertIn("Binary prefixes", self.gnu(["--help"], coreutils="8.32", coreutils_year="2020")[0])
+
     def test_busybox_tables_are_those_of_busybox(self):
         self.assertEqual(self.busybox([]), (BB_DF, "", 0))
         self.assertEqual(self.busybox(["-h"]), (BB_DF_H, "", 0))

@@ -4853,7 +4853,7 @@ class Command_df(HoneyPotCommand):
                 "      --version     output version information and exit\n") if nine else \
             ("      --help     display this help and exit\n"
              "      --version  output version information and exit\n")
-        return ("Usage: df [OPTION]... [FILE]...\n"
+        text = ("Usage: df [OPTION]... [FILE]...\n"
                 "Show information about the file system on which each FILE resides,\n"
                 "or all file systems by default.\n\n"
                 "Mandatory arguments to long options are mandatory for short options too.\n"
@@ -4892,6 +4892,40 @@ class Command_df(HoneyPotCommand):
                 "Report any translation bugs to <https://translationproject.org/team/>\n"
                 "Full documentation <https://www.gnu.org/software/coreutils/df>\n"
                 "or available locally via: info '(coreutils) df invocation'\n")
+        return self.gnu_help_of_release(text)
+
+    def gnu_help_of_release(self, text: str) -> str:
+        """The help of coreutils before 8.29 (checked: 8.22 of CentOS 7, 8.26 of Debian 9)."""
+        try:
+            version = tuple(int(x) for x in str(self.data.get("coreutils", "9.1")).split(".")[:2])
+        except ValueError:
+            return text
+        if version >= (8, 29):
+            return text
+        total = ("      --total           elide all entries insignificant to available space,\n"
+                 "                          and produce a grand total\n")
+        text = text.replace("Binary prefixes can be used, too: KiB=K, MiB=M, and so on.\n", "").replace(
+            "GNU coreutils online help: <https://www.gnu.org/software/coreutils/>\n"
+            "Report any translation bugs to <https://translationproject.org/team/>\n"
+            "Full documentation <https://www.gnu.org/software/coreutils/df>\n",
+            "GNU coreutils online help: <http://www.gnu.org/software/coreutils/>\n"
+            "Report df translation bugs to <http://translationproject.org/team/>\n"
+            "Full documentation at: <http://www.gnu.org/software/coreutils/df>\n")
+        if version >= (8, 23):
+            return text
+        return text.replace(total, "").replace(
+            "  -h, --human-readable  print sizes in powers of 1024 (e.g., 1023M)\n"
+            "  -H, --si              print sizes in powers of 1000 (e.g., 1.1G)\n",
+            "      --total           produce a grand total\n"
+            "  -h, --human-readable  print sizes in human readable format (e.g., 1K 234M 2G)\n"
+            "  -H, --si              likewise, but use powers of 1000 not 1024\n").replace(
+            "The SIZE argument is an integer and optional unit (example: 10K is 10*1024).\n"
+            "Units are K,M,G,T,P,E,Z,Y (powers of 1024) or KB,MB,... (powers of 1000).\n",
+            "SIZE is an integer and optional unit (example: 10M is 10*1024*1024).  Units\n"
+            "are K, M, G, T, P, E, Z, Y (powers of 1024) or KB, MB, ... (powers of 1000).\n").replace(
+            "Full documentation at: <http://www.gnu.org/software/coreutils/df>\n"
+            "or available locally via: info '(coreutils) df invocation'\n",
+            "For complete documentation, run: info coreutils 'df invocation'\n")
 
     def gnu_version(self) -> str:
         version = str(self.data.get("coreutils", "9.1"))
@@ -5071,6 +5105,8 @@ AWK_COMMAND = r'''
 # persona's awk.
 import math
 
+from twisted.python import log
+
 from cowrie.commands.fs import TpotGrepMatcher
 from cowrie.core.config import CowrieConfig
 
@@ -5125,14 +5161,17 @@ TPOT_AWK_COMPARE = {"<": lambda x, y: x < y, "<=": lambda x, y: x <= y, ">": lam
                     ">=": lambda x, y: x >= y, "==": lambda x, y: x == y, "!=": lambda x, y: x != y}
 TPOT_AWK_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", '"': '"', "/": "/", "a": "\a", "b": "\b",
                     "f": "\f", "v": "\v"}
-TPOT_AWK_NUMBER = re.compile(r"[ \t\n\r\f\v]*([-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?)")
-TPOT_AWK_HEX = re.compile(r"[ \t\n\r\f\v]*([-+]?)0[xX]([0-9a-fA-F]+)")
-TPOT_AWK_LOOKS = re.compile(r"[ \t\n\r\f\v]*[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?[ \t\n\r\f\v]*")
-TPOT_AWK_LITERAL = re.compile(r"(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?")
-TPOT_AWK_BLANKS = re.compile(r"[ \t\n]+")
-TPOT_AWK_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=", re.S)
-TPOT_AWK_FORMAT = re.compile(r"%([-+ #0]*)(\*|[0-9]+)?(?:\.(\*|[0-9]*))?(.?)", re.S)
-TPOT_AWK_INTERVAL = re.compile(r"\{[0-9]+(,[0-9]*)?\}")
+# the regular expressions of the interpreter have one way to match a text (possessive, no
+# alternatives that overlap), so their time grows with the text
+TPOT_AWK_DECIMAL = r"(?:[0-9]++(?:\.[0-9]*+)?+|\.[0-9]++)(?:[eE][-+]?+[0-9]++)?+"
+TPOT_AWK_NUMBER = re.compile(r"[ \t\n\r\f\v]*+([-+]?+" + TPOT_AWK_DECIMAL + ")")
+TPOT_AWK_HEX = re.compile(r"[ \t\n\r\f\v]*+([-+]?+)0[xX]([0-9a-fA-F]++)")
+TPOT_AWK_LOOKS = re.compile(r"[ \t\n\r\f\v]*+[-+]?+" + TPOT_AWK_DECIMAL + r"[ \t\n\r\f\v]*+")
+TPOT_AWK_LITERAL = re.compile(TPOT_AWK_DECIMAL)
+TPOT_AWK_BLANKS = re.compile(r"[ \t\n]++")
+TPOT_AWK_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*+=")
+TPOT_AWK_FORMAT = re.compile(r"%([-+ #0]*+)(\*|[0-9]++)?+(?:\.(\*|[0-9]*+))?+(.?)", re.S)
+TPOT_AWK_INTERVAL = re.compile(r"\{[0-9]++(?:,[0-9]*+)?+\}")
 TPOT_AWK_CLASSES = {"alpha": "a-zA-Z", "digit": "0-9", "alnum": "0-9a-zA-Z", "upper": "A-Z", "lower": "a-z",
                     "space": " \\t\\n\\r\\f\\v", "blank": " \\t", "punct": "!-/:-@\\[-`{-~", "xdigit": "0-9A-Fa-f",
                     "cntrl": "\\x00-\\x1f\\x7f", "print": " -~", "graph": "!-~"}
@@ -5148,7 +5187,7 @@ def tpot_awk_unescape(raw: str, gawk: bool) -> str:
         if d == "\n":
             return ""
         return TPOT_AWK_ESCAPES.get(d, d if gawk else "\\" + d)
-    return re.sub(r"\\([0-7]{1,3}|.)", one, raw, flags=re.S) if "\\" in raw else raw
+    return re.sub(r"\\([0-7]{1,3}+|.)", one, raw, flags=re.S) if "\\" in raw else raw
 
 
 def tpot_awk_bytes(text: str) -> bytes:
@@ -5229,15 +5268,20 @@ class TpotAwkRegex:
             self.matcher = TpotGrepMatcher("".join(c if c.isascii() else "\\xff" for c in pattern).encode("ascii"))
         except (re.error, RecursionError, OverflowError, TpotGrepMatcher.TooBig):
             raise TpotAwkStop(2) from None
+        awk.charge(awk.STATE_STEPS * len(self.matcher.kind))
         if not self.matcher.regular:
             raise TpotAwkStop(2)
 
     def search(self, text: str) -> bool:
+        """Whether text has a match; the automaton states it builds count as steps of awk."""
         data = tpot_awk_bytes(text)
-        self.awk.charge(len(data) // 32 + 1)
-        found = self.matcher.search(data)
-        if self.matcher.spent:
+        awk, matcher = self.awk, self.matcher
+        awk.charge(len(data) >> 1)  # the automaton reads each byte once
+        matcher.budget = budget = max(0, awk.MAX_STEPS - awk.steps) * 2
+        found = matcher.search(data)
+        if matcher.spent:
             raise TpotAwkStop(2)
+        awk.charge((budget - matcher.budget) >> 1)
         return bool(found)
 
     def find(self, data: bytes, pos: int):
@@ -5271,7 +5315,7 @@ class TpotAwkRegex:
                             stack.append(out1[s])
                     elif best_start < 0 or start < best_start or (start == best_start and i > best_end):
                         best_start, best_end = start, i
-            self.awk.charge(len(seen) + 1)
+            self.awk.charge(8 * (len(seen) + 1))
             if best_start >= 0:
                 current = {s: st for s, st in current.items() if st <= best_start}
             if i >= n or (not current and best_start >= 0):
@@ -5720,7 +5764,9 @@ class TpotAwk:
     MAX_INPUT = 1024 * 1024  # bytes of input one awk reads
     MAX_OUTPUT = 1024 * 1024  # characters of output
     MAX_STRING = 1024 * 1024  # characters of one value
-    MAX_STEPS = 2_000_000  # evaluated nodes, records and matcher work
+    MAX_STEPS = 2_000_000  # evaluated nodes, records, characters touched and matcher work (about 1 s)
+    MAX_LIVE = 32 * 1024 * 1024  # characters in all variables together
+    STATE_STEPS = 32  # steps per automaton state built
     MAX_NESTING = 32  # nested blocks, parentheses and operators while parsing
     MAX_DEPTH = 200  # levels of the program tree
     MAX_FIELDS = 32767
@@ -5735,8 +5781,9 @@ class TpotAwk:
         self.source_name = "cmd. line"
         self.out, self.err = [], []
         self.written = self.steps = self.status = 0
-        self.vars = {"FS": " ", "OFS": " ", "ORS": "\n", "OFMT": "%.6g", "CONVFMT": "%.6g", "SUBSEP": "\x1c",
-                     "NR": 0.0, "FNR": 0.0, "NF": 0.0, "FILENAME": TPOT_AWK_UNINIT, "RS": "\n"}
+        self.vars = {"FS": " ", "OFS": " ", "ORS": "\n", "OFMT": "%.6g", "CONVFMT": "%.6g", "NR": 0.0, "FNR": 0.0,
+                     "NF": 0.0, "FILENAME": TPOT_AWK_UNINIT}
+        self.sizes, self.live = {}, 0  # characters per variable, in all of them
         self.record, self.fields, self.regexes, self.in_begin = TPOT_AWK_UNINIT, [], {}, True
 
     # -- limits and messages
@@ -5749,7 +5796,12 @@ class TpotAwk:
     def cap(self, text: str) -> str:
         if len(text) > self.MAX_STRING:
             raise TpotAwkStop(2)
-        self.charge(len(text) >> 8)
+        self.charge(len(text) >> 6)
+        return text
+
+    def touch(self, text: str, shift: int = 6) -> str:
+        """text, its characters charged as steps (one per 64, one per 16 for a regular expression)."""
+        self.charge(len(text) >> shift)
         return text
 
     def emit(self, text: str) -> None:
@@ -5794,6 +5846,7 @@ class TpotAwk:
             return value
         if not value:
             return 0.0
+        self.touch(value, 4)
         if self.style != "gawk":
             found = TPOT_AWK_HEX.match(value)
             if found:
@@ -5824,7 +5877,7 @@ class TpotAwk:
 
     def numeric(self, value) -> bool:
         return isinstance(value, (float, TpotAwkUninit)) or (
-            isinstance(value, TpotAwkStrnum) and TPOT_AWK_LOOKS.fullmatch(value) is not None)
+            isinstance(value, TpotAwkStrnum) and TPOT_AWK_LOOKS.fullmatch(self.touch(value, 4)) is not None)
 
     def truth(self, value) -> bool:
         if isinstance(value, TpotAwkStrnum) and self.numeric(value):
@@ -5919,7 +5972,14 @@ class TpotAwk:
             self.set_field(self.field_index(self.value(target[1])), value)
         elif target[1] == "NF":
             self.set_nf(value)
+        elif target[1] == "RS":  # records end at newlines only
+            raise TpotAwkStop(2)
         else:
+            size = 0 if isinstance(value, float) else len(value)
+            self.live += size - self.sizes.get(target[1], 0)
+            if self.live > self.MAX_LIVE:
+                raise TpotAwkStop(2)
+            self.sizes[target[1]] = size
             self.vars[target[1]] = value
 
     # -- expressions
@@ -5977,7 +6037,7 @@ class TpotAwk:
     def compare(self, op: str, a, b) -> bool:
         if self.numeric(a) and self.numeric(b):
             return TPOT_AWK_COMPARE[op](self.num(a), self.num(b))
-        return TPOT_AWK_COMPARE[op](self.text(a), self.text(b))
+        return TPOT_AWK_COMPARE[op](self.touch(self.text(a)), self.touch(self.text(b)))
 
     def arith(self, op: str, x: float, y: float) -> float:
         if op == "+":
@@ -6008,7 +6068,7 @@ class TpotAwk:
         if name in ("sub", "gsub"):
             return self.substitute(name == "gsub", args)
         values = [self.value(arg) for arg in args]
-        text = self.text(values[0])
+        text = self.touch(self.text(values[0]))
         if name == "substr":
             start = self.num(values[1])
             if not math.isfinite(start):
@@ -6021,7 +6081,7 @@ class TpotAwk:
                 return ""
             return text[start - 1:start - 1 + int(min(length, 2.0 ** 31))]
         if name == "index":
-            return float(text.find(self.text(values[1])) + 1)
+            return float(text.find(self.touch(self.text(values[1]))) + 1)
         if name == "tolower":
             return text.lower() if text.isascii() else "".join(c.lower() if c.isascii() else c for c in text)
         if name == "toupper":
@@ -6098,10 +6158,14 @@ class TpotAwk:
             if conv == "" or conv not in "cdiouxXeEfFgGs":
                 out.append(fmt[i:pos])
                 continue
+            self.charge(8)
+            if "*" in (width, precision) and self.style == "busybox":
+                self.fatal("", "", "%*x formats are not supported")
             if width == "*":
                 width, used = str(self.integer(args[used]) if used < len(args) else 0), used + 1
             if precision == "*":
                 precision, used = str(self.integer(args[used]) if used < len(args) else 0), used + 1
+                precision = None if precision.startswith("-") else precision  # as if omitted
             if width and width.startswith("-"):
                 flags, width = flags + "-", width[1:]
             if int(width or 0) > self.MAX_WIDTH or int(precision or 0) > self.MAX_WIDTH:
@@ -6210,8 +6274,8 @@ class TpotAwk:
             if self.style == "mawk":
                 raise TpotAwkStop(2, f"awk: cannot open {name} (No such file or directory)\n")
             where = "" if self.num(self.vars["NR"]) == 0 else f"{self.source_name}:1: "
-            raise TpotAwkStop(2, f"awk: {where}fatal: cannot open file `{name}' for reading: "
-                                 "No such file or directory\n")
+            why = " (No such file or directory)" if self.version.startswith("4.0") else ": No such file or directory"
+            raise TpotAwkStop(2, f"awk: {where}fatal: cannot open file `{name}' for reading{why}\n")
         return data
 
     def records(self, operands: list):
@@ -6346,6 +6410,42 @@ Examples:
 \tawk '{{ sum += $1 }}; END {{ print sum }}' file
 \tawk -F: '{{ print $1 }}' /etc/passwd
 """
+TPOT_AWK_GAWK40_USAGE = """Usage: awk [POSIX or GNU style options] -f progfile [--] file ...
+Usage: awk [POSIX or GNU style options] [--] 'program' file ...
+POSIX options:\t\tGNU long options: (standard)
+\t-f progfile\t\t--file=progfile
+\t-F fs\t\t\t--field-separator=fs
+\t-v var=val\t\t--assign=var=val
+Short options:\t\tGNU long options: (extensions)
+\t-b\t\t\t--characters-as-bytes
+\t-c\t\t\t--traditional
+\t-C\t\t\t--copyright
+\t-d[file]\t\t--dump-variables[=file]
+\t-e 'program-text'\t--source='program-text'
+\t-E file\t\t\t--exec=file
+\t-g\t\t\t--gen-pot
+\t-h\t\t\t--help
+\t-L [fatal]\t\t--lint[=fatal]
+\t-n\t\t\t--non-decimal-data
+\t-N\t\t\t--use-lc-numeric
+\t-O\t\t\t--optimize
+\t-p[file]\t\t--profile[=file]
+\t-P\t\t\t--posix
+\t-r\t\t\t--re-interval
+\t-S\t\t\t--sandbox
+\t-t\t\t\t--lint-old
+\t-V\t\t\t--version
+
+To report bugs, see node `Bugs' in `gawk.info', which is
+section `Reporting Problems and Bugs' in the printed version.
+
+gawk is a pattern scanning and processing language.
+By default it reads standard input and writes standard output.
+
+Examples:
+\tgawk '{ sum += $1 }; END { print sum }' file
+\tgawk -F: '{ print $1 }' /etc/passwd
+"""
 TPOT_AWK_MAWK_USAGE = """Usage: mawk [Options] [Program] [file ...]
 
 Program:
@@ -6375,12 +6475,14 @@ Options:
 
 
 def tpot_awk_gawk_usage(version: str) -> str:
-    new, old = version.startswith("5"), version.startswith("4.0")
+    if version.startswith("4.0"):
+        return TPOT_AWK_GAWK40_USAGE
+    new = version.startswith("5")
     return TPOT_AWK_GAWK_USAGE.format(
-        include="" if old else "\t-i includefile\t\t--include=includefile\n\t-l library\t\t--load=library\n",
+        include="\t-i includefile\t\t--include=includefile\n\t-l library\t\t--load=library\n",
         lint="\t-L[fatal|invalid|no-ext]\t--lint[=fatal|invalid|no-ext]\n" if new else
-        "\t-L [fatal]\t\t--lint[=fatal]\n" if old else "\t-L[fatal|invalid]\t--lint[=fatal|invalid]\n",
-        bignum="" if old else "\t-M\t\t\t--bignum\n",
+        "\t-L[fatal|invalid]\t--lint[=fatal|invalid]\n",
+        bignum="\t-M\t\t\t--bignum\n",
         no_optimize="\t-s\t\t\t--no-optimize\n" if new else "",
         bugs=("To report bugs, see node `Bugs' in `gawk.info'\nwhich is section `Reporting Problems and Bugs' in "
               "the\nprinted version.  This same information may be found at\n"
@@ -6440,7 +6542,8 @@ class Command_tpot_awk(Command_awk):
         self.tpot_out, self.tpot_err = [], []
         try:
             code = self.tpot_run(list(self.args))
-        except Exception:  # noqa: BLE001 - awk ends, the session goes on
+        except Exception:  # noqa: BLE001 - awk ends, the session goes on; the error goes to Cowrie's log
+            log.err(None, "awk of the persona ended on an internal error")
             code = 2
         if self.tpot_out:
             self.write("".join(self.tpot_out))
@@ -6460,7 +6563,8 @@ class Command_tpot_awk(Command_awk):
     def tpot_usage(self, gawk: str = "", mawk: str = "", busybox: str = "") -> int:
         """A wrong option or no program: the message of the persona's awk (none: its usage)."""
         if self.style == "mawk":
-            self.tpot_err.append(f"awk: {mawk}\n" if mawk else tpot_awk_mawk_usage(self.version))
+            if mawk or not self.version.startswith("1.3.3"):  # 1.3.3 ends without a word
+                self.tpot_err.append(f"awk: {mawk}\n" if mawk else tpot_awk_mawk_usage(self.version))
             return 2 if mawk else 0
         text = busybox if self.style == "busybox" else gawk
         usage = tpot_awk_busybox_usage(self.version) if self.style == "busybox" else tpot_awk_gawk_usage(self.version)
@@ -6564,6 +6668,8 @@ class Command_tpot_awk(Command_awk):
                     awk.err.append(f"awk: can't open '{value}': No such file or directory\n")
                     return 1
                 awk.err.append(f"awk: cannot open {value} (No such file or directory)\n" if style == "mawk" else
+                               f"awk: fatal: can't open source file `{value}' for reading (No such file or directory)\n"
+                               if self.version.startswith("4.0") else
                                f"awk: fatal: cannot open source file `{value}' for reading: No such file or directory\n")
                 return 2
             texts.append(data.decode("utf-8", errors="replace"))

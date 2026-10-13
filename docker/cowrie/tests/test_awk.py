@@ -200,10 +200,20 @@ class Base:
 
 
 _MATCHER = None
+GROW = 's = "x"; while (length(s) < 1048576) s = s s; '
+LIMIT_SECONDS = 2.0  # a whole awk run on the reactor
 
 
-def awk(style, args, data=None, version=None):
-    """(stdout, stderr, status) of the patched awk of a style."""
+class FakeLog:
+    def __init__(self):
+        self.errors = []
+
+    def err(self, *args, **kwargs):
+        self.errors.append((args, kwargs))
+
+
+def awk(style, args, data=None, version=None, log=None, broken=False):
+    """(stdout, stderr, status) of the patched awk of a style; broken makes the interpreter fail."""
     global _MATCHER
     root = patched_root()
     if _MATCHER is None:
@@ -213,7 +223,9 @@ def awk(style, args, data=None, version=None):
     config = FakeConfig({("shell", "awk_style"): style, ("shell", "awk_version"): version or VERSIONS[style]})
     namespace = module_all((root / "src/cowrie/commands/awk.py").read_text(),
                            {"HoneyPotCommand": Base, "FileNotFound": FileNotFoundError, "TpotGrepMatcher": _MATCHER,
-                            "CowrieConfig": config})
+                            "CowrieConfig": config, "log": log or FakeLog()})
+    if broken:
+        namespace["TpotAwk"].run = lambda *_: 1 // 0
     cmd = namespace["Command_tpot_awk"](args, None if data is None else data.encode())
     cmd.start()
     return cmd.out, cmd.err, cmd.exit_code
@@ -279,6 +291,22 @@ class AwkTest(unittest.TestCase):
         self.assertTrue(err.startswith("awk: warning: option -W is ignored\nBusyBox v1.36.1"))
         self.assertIn("-e AWK_PROGRAM", err)
 
+    def test_old_gawk_and_mawk(self):
+        """gawk 4.0.2 of centos:7 and mawk 1.3.3 of debian:9."""
+        out, err, code = awk("gawk", [], version="4.0.2")
+        self.assertEqual((out, code), ("", 1))
+        self.assertIn("\t-L [fatal]\t\t--lint[=fatal]\n\t-n\t\t\t--non-decimal-data\n", err)
+        self.assertNotIn("--debug", err)
+        self.assertTrue(err.endswith("\tgawk -F: '{ print $1 }' /etc/passwd\n"))
+        self.assertEqual(awk("gawk", ["{print}", "/nonexist"], "", version="4.0.2")[1],
+                         "awk: fatal: cannot open file `/nonexist' for reading (No such file or directory)\n")
+        self.assertEqual(awk("gawk", ["-f", "/nope"], version="4.0.2")[1],
+                         "awk: fatal: can't open source file `/nope' for reading (No such file or directory)\n")
+        self.assertEqual(awk("mawk", [], version="1.3.3"), ("", "", 0))
+        self.assertEqual(awk("mawk", ["-W", "version"], version="1.3.3"), (
+            "mawk 1.3.3 Nov 1996, Copyright (C) Michael D. Brennan\n\n",
+            "compiled limits:\nmax NF             32767\nsprintf buffer      2040\n", 0))
+
     def test_limits(self):
         cases = {"endless while": (["BEGIN { while (1) ; }"], None),
                  "endless for": (["BEGIN { for (;;) x++ }"], None),
@@ -291,7 +319,24 @@ class AwkTest(unittest.TestCase):
                  "long chain": (["BEGIN { print " + "+".join(["1"] * 20000) + " }"], None),
                  "deep unary": (["BEGIN { print " + "!" * 5000 + "1 }"], None),
                  "large program": (["BEGIN { x = 1 }" + " " * (64 * 1024)], None),
-                 "large regex": (['BEGIN { s = "(a|b)"; while (i++ < 12) s = s s; if ("ab" ~ s) print 1 }'], None)}
+                 "large regex": (['BEGIN { s = "(a|b)"; while (i++ < 12) s = s s; if ("ab" ~ s) print 1 }'], None),
+                 "tolower of a large value": (["BEGIN { " + GROW + "while (1) t = tolower(s) }"], None),
+                 "toupper of a large value": (["BEGIN { " + GROW + "while (1) t = toupper(s) }"], None),
+                 "index in a large value": (["BEGIN { " + GROW + 'while (1) n = index(s, "y") }'], None),
+                 "substr of a large value": (["BEGIN { " + GROW + "while (1) t = substr(s, 2) }"], None),
+                 "length of a large value": (["BEGIN { " + GROW + "while (1) n = length(s) }"], None),
+                 "comparing large values": (["BEGIN { " + GROW + "t = s; while (1) n = (s == t) }"], None),
+                 "sprintf of many conversions": (['BEGIN { f = "%c"; while (length(f) < 1048576) f = f f; '
+                                                  "while (1) t = sprintf(f) }"], None),
+                 "number of a large value": (['BEGIN { s = " "; while (length(s) < 1048576) s = s s; '
+                                              "while (1) n = s + 0 }"], None),
+                 "large numeric field": (['BEGIN { s = "1"; while (length(s) < 1048576) s = s s; $0 = s; '
+                                          "while (1) n = ($1 < 2) }"], None),
+                 "new regex each time": (['BEGIN { while (1) { i++; if ("ab" ~ ("(a|b){200}" i)) n++ } }'], None),
+                 "matching a large value": (["BEGIN { " + GROW + "while (1) n = (s ~ /y$/) }"], None),
+                 "gsub on a large value": (["BEGIN { " + GROW + 'while (1) { t = s; gsub(/x/, "y", t) } }'], None),
+                 "large values in many variables": (['BEGIN { s = "x"; while (length(s) < 524288) s = s s; '
+                                                     + " ".join(f"v{k} = s;" for k in range(3000)) + " }"], None)}
         for name, (args, data) in cases.items():
             for style in VERSIONS:
                 with self.subTest(name, style=style):
@@ -299,7 +344,38 @@ class AwkTest(unittest.TestCase):
                     out, _, code = awk(style, args, data)
                     self.assertEqual(code, 2)
                     self.assertLessEqual(len(out), 1024 * 1024)
-                    self.assertLess(time.monotonic() - started, 15)
+                    self.assertLess(time.monotonic() - started, LIMIT_SECONDS)
+
+    def test_long_digit_runs_take_linear_time(self):
+        program = 'BEGIN { s="1"; while (length(s) < 32768) s = s s; $0 = s "x"; if ($1 == 1) print "y"; print "z" }'
+        for style in VERSIONS:
+            with self.subTest(style=style):
+                started = time.monotonic()
+                self.assertEqual(awk(style, [program]), ("z\n", "", 0))
+                self.assertLess(time.monotonic() - started, LIMIT_SECONDS)
+        data = "1" * 300000 + "x 1" * 3 + "\n"
+        started = time.monotonic()
+        self.assertEqual(awk("mawk", ["$1 == 1 { print 1 } $2 + 0 == 1 { print 2 }"], data), ("2\n", "", 0))
+        self.assertLess(time.monotonic() - started, LIMIT_SECONDS)
+
+    def test_printf_negative_star_precision_is_omitted(self):
+        program = 'BEGIN { printf "%.*d|%.*f|%*d|\\n", -3, 5, -1, 2.5, -4, 7 }'
+        for style in ("gawk", "mawk"):
+            with self.subTest(style=style):
+                self.assertEqual(awk(style, [program]), ("5|2.500000|7   |\n", "", 0))
+        self.assertEqual(awk("busybox", [program]), ("", "awk: cmd. line:1: %*x formats are not supported\n", 1))
+
+    def test_record_separator_is_left_out(self):
+        for program in ('BEGIN { RS = "" } { print }', "BEGIN { RS = \";\" } { print }"):
+            for style in VERSIONS:
+                with self.subTest(program=program, style=style):
+                    self.assertEqual(awk(style, [program], "a\nb\n"), ("", "", 2))
+        self.assertEqual(awk("gawk", ["-v", "RS=x", "{ print }"], "a\n"), ("", "", 2))
+
+    def test_internal_errors_go_to_the_log(self):
+        log = FakeLog()
+        self.assertEqual(awk("gawk", ["{ print }"], "a\n", log=log, broken=True), ("", "", 2))
+        self.assertEqual(len(log.errors), 1)
 
     def test_huge_input_is_read_up_to_the_limit(self):
         data = "a b c\n" * (3 * 1024 * 1024 // 6)
@@ -322,10 +398,10 @@ class AwkTest(unittest.TestCase):
             style, version = keys["awk_style"], keys["awk_version"]
             with self.subTest(persona=persona.id, style=style):
                 human = df.df(["-h"], data)[0]
-                second = human.splitlines()[1]
-                if len(second.split()) == 1:  # a long name on a line of its own (BusyBox)
-                    second = " ".join(human.splitlines()[1:3])
-                self.assertEqual(awk(style, ["FNR == 2 {print $4}"], human, version), (second.split()[3] + "\n", "", 0))
+                second = human.splitlines()[1].split()
+                # a long name on a line of its own (BusyBox) has no fourth field
+                self.assertEqual(awk(style, ["FNR == 2 {print $4}"], human, version),
+                                 ((second[3] if len(second) > 3 else "") + "\n", "", 0))
                 self.assertEqual(awk(style, ["NR==2{print $5}"], human, version)[0].strip(),
                                  human.splitlines()[1].split()[4] if len(human.splitlines()[1].split()) > 4 else "")
                 last = df.df(["-k"], data)[0].splitlines()[-1] + "\n"
