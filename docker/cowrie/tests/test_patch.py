@@ -297,6 +297,22 @@ class PatchTest(unittest.TestCase):
         command.start()
         self.assertEqual((bytes(command.out), command.exit_code), (b"7834\n", 0))
 
+    def test_text_tools_follow_the_commands_of_wc_py(self):
+        root = self.patched()
+        source = (root / "src/cowrie/commands/wc.py").read_text()
+        self.assertIn('commands["/usr/bin/wc"] = Command_wc\ncommands["/bin/wc"] = Command_wc\n'
+                      'commands["wc"] = Command_wc\n\n\n# T-Pot: wc, sort and seq', source)
+        config = FakeConfig({("shell", "text_style"): "gnu", ("shell", "text_version"): "9.4"})
+        namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "CowrieConfig": config})
+        commands = namespace["commands"]
+        for name in ("wc", "sort", "seq"):
+            for spelling in (name, f"/bin/{name}", f"/usr/bin/{name}"):
+                self.assertIs(commands[spelling], namespace[f"Command_tpot_{name}"], spelling)
+        command = commands["wc"](["-l"], input_data=b"a\nb\n")
+        command.start()
+        self.assertEqual((bytes(command.out), command.code), (b"2\n", None))
+        self.assertEqual(command.exit_code, 0)
+
     def test_links_resolve_from_their_directory(self):
         from tpot_personas.identity import draw
         from tpot_personas.render import apply_to_tree
@@ -2987,6 +3003,8 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/fs.py", "import copy\nimport getopt\n", "import copy\nimport getopt as g\n"),
                  ("src/cowrie/commands/awk.py", 'commands["awk"] = Command_awk\n',
                   'commands["awk"] = Command_awk  # awk\n'),
+                 ("src/cowrie/commands/wc.py", 'commands["/bin/wc"] = Command_wc\n',
+                  'commands["/bin/wc"] = Command_wc  # wc\n'),
                  ("src/cowrie/commands/fs.py", "from cowrie.shell import fs\n", "from cowrie.shell import fs as f\n"),
                  ("src/cowrie/commands/fs.py", "from typing import TYPE_CHECKING\n",
                   "from typing import TYPE_CHECKING, Any\n"),

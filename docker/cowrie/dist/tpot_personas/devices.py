@@ -10,7 +10,7 @@ from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, assign_processes, 
                      embedded_group, embedded_passwd, embedded_shadow, fs_row, kernel_line, kernel_series, lscpu,
                      mount_text, nproc, proc_mounts_text, ps_entry, rng_for, shadow_ctime, shadow_days, with_inodes)
 from .model import Content
-from .system import proc_modules
+from .system import busybox_applets, proc_modules
 
 
 # --- shared parts of the device builders -------------------------------------------
@@ -81,14 +81,11 @@ def used_kb(ident, purpose, size, low, high):
 # BusyBox 1.14-1.20 print the copyright of their year, 1.21 and later one text
 # (unverified: the exact wording per release)
 _BB_YEARS = {(1, 14): "2008", (1, 19): "2011"}
-_BB_APPLETS = ("[, [[, ash, awk, basename, cat, chmod, chown, cp, cut, date, dd, df, dmesg, echo, egrep, env, "
-               "false, free, grep, gunzip, gzip, head, hostname, ifconfig, kill, killall, ln, login, ls, mkdir, "
-               "mknod, mount, mv, netstat, ping, ps, pwd, reboot, rm, route, sed, sh, sleep, sync, tail, tar, "
-               "telnetd, test, top, touch, tr, true, udhcpc, umount, uname, uptime, vi, wc, wget")
 
 
-def busybox_help(banner):
-    """What `busybox` without arguments prints, for "BusyBox v1.19.2 (2025-03-28 14:13:40 CST)"."""
+def busybox_help(banner, applets):
+    """What `busybox` without arguments prints, for "BusyBox v1.19.2 (2025-03-28 14:13:40 CST)" and the
+    applets of system.busybox_applets."""
     major, minor = (int(x) for x in re.match(r"BusyBox v(\d+)\.(\d+)", banner).groups())
     if (major, minor) < (1, 21):
         year = _BB_YEARS.get((major, minor), "2012")
@@ -97,7 +94,7 @@ def busybox_help(banner):
     else:
         notice = ("BusyBox is copyrighted by many authors between 1998-2015.\n"
                   "Licensed under GPLv2. See source distribution for detailed\ncopyright notices.\n")
-    applets = "\n".join("\t" + line.strip() for line in re.findall(r".{1,64}(?:, |$)", _BB_APPLETS))
+    applets = "\n".join("\t" + line.strip() for line in re.findall(r".{1,64}(?:, |$)", ", ".join(applets)))
     return (f"{banner} multi-call binary.\n{notice}\n"
             "Usage: busybox [function] [arguments]...\n"
             "   or: busybox --list\n"
@@ -163,7 +160,7 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
     return Content(files=all_files, txtcmds=commands, processes=processes,
                    ctimes={"etc/shadow": shadow_ctime(ident)},
                    programs=("bin/busybox",) if banner else (),
-                   busybox_help=busybox_help(banner) if banner else "",
+                   busybox_help=busybox_help(banner, busybox_applets(persona, ident)) if banner else "",
                    # the kernel threads and helpers of a small system (top counts them, ps lists them not)
                    tasks=len(processes) + (60 if coreutils else 40), top_style="procps" if coreutils else "busybox",
                    filesystems=filesystems)

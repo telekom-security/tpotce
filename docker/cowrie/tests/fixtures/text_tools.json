@@ -1,0 +1,4020 @@
+{
+ "_source": "outputs of wc, seq and sort in containers of these images (LC_ALL=C.UTF-8, centos:7 with LC_ALL=en_US.UTF-8), 2026-10-13",
+ "images": {
+  "busybox_1.27.2": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "        1         2         4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "        1         2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "        0         0         0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "BusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq --help": [
+     "",
+     "BusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     0
+    ],
+    "seq --version": [
+     "",
+     "seq: unrecognized option `--version'\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -1": [
+     "",
+     "seq: invalid option -- 1\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -f '%03g' 3": [
+     "",
+     "seq: invalid option -- f\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "1\n1\n1\n",
+     "",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "BusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "sort --help": [
+     "",
+     "BusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k start[.offset][opts][,end[.offset][opts]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-n\tSort numbers\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tLines are terminated by NUL, not newline\n",
+     0
+    ],
+    "sort --version": [
+     "",
+     "sort: unrecognized option `--version'\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k start[.offset][opts][,end[.offset][opts]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-n\tSort numbers\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tLines are terminated by NUL, not newline\n",
+     2
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "Check line 2\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "",
+     "sort: invalid option -- h\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k start[.offset][opts][,end[.offset][opts]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-n\tSort numbers\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tLines are terminated by NUL, not newline\n",
+     2
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: bad field specification\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: bad -t parameter\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: invalid option -- x\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k start[.offset][opts][,end[.offset][opts]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-n\tSort numbers\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tLines are terminated by NUL, not newline\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "",
+     0
+    ],
+    "sort nosuch": [
+     "",
+     "sort: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "        3         3       117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option `--bogus'\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --help": [
+     "",
+     "BusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     0
+    ],
+    "wc --lines p.txt": [
+     "",
+     "wc: unrecognized option `--lines'\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --version": [
+     "",
+     "wc: unrecognized option `--version'\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "        0 d\n        3 p.txt\n        3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "        3 p.txt\n        2 w.txt\n        5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "        3       117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: invalid option -- x\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc d": [
+     "        0         0         0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "        3         3       117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "        3         3       117 p.txt\n        3         3       117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "        3         3       117 p.txt\n        2         5        25 w.txt\n        0         0         0 e.txt\n        5         8       142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "busybox uclibc"
+  },
+  "busybox_1.33.1-musl": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "        1         2         4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "        1         2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "        0         0         0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq --help": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     0
+    ],
+    "seq --version": [
+     "",
+     "seq: unrecognized option: version\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -1": [
+     "",
+     "seq: unrecognized option: 1\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -f '%03g' 3": [
+     "",
+     "seq: unrecognized option: f\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "1\n1\n1\n",
+     "",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "sort --help": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tLines are terminated by NUL, not newline\n",
+     0
+    ],
+    "sort --version": [
+     "",
+     "sort: unrecognized option: version\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tLines are terminated by NUL, not newline\n",
+     2
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "Check line 2\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "",
+     "sort: unrecognized option: h\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tLines are terminated by NUL, not newline\n",
+     2
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: bad field specification\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: bad -t parameter\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: unrecognized option: x\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tLines are terminated by NUL, not newline\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "",
+     0
+    ],
+    "sort nosuch": [
+     "",
+     "sort: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "        3         3       117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option: bogus\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --help": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     0
+    ],
+    "wc --lines p.txt": [
+     "",
+     "wc: unrecognized option: lines\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --version": [
+     "",
+     "wc: unrecognized option: version\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "        0 d\n        3 p.txt\n        3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "        3 p.txt\n        2 w.txt\n        5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "        3       117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: unrecognized option: x\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc d": [
+     "        0         0         0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "        3         3       117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "        3         3       117 p.txt\n        3         3       117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "        3         3       117 p.txt\n        2         5        25 w.txt\n        0         0         0 e.txt\n        5         8       142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "busybox musl"
+  },
+  "busybox_1.35.0": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "        1         2         4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "        1         2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "        0         0         0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "BusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq --help": [
+     "",
+     "BusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     0
+    ],
+    "seq --version": [
+     "",
+     "seq: unrecognized option '--version'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -1": [
+     "",
+     "seq: invalid option -- '1'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -f '%03g' 3": [
+     "",
+     "seq: invalid option -- 'f'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "1\n1\n1\n",
+     "",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "BusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "sort --help": [
+     "",
+     "BusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     0
+    ],
+    "sort --version": [
+     "",
+     "sort: unrecognized option '--version'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     2
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "Check line 2\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "",
+     "sort: invalid option -- 'h'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     2
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: bad field specification\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: bad -t parameter\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: invalid option -- 'x'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: sort [-nrugMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "",
+     0
+    ],
+    "sort nosuch": [
+     "",
+     "sort: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "        3         3       117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option '--bogus'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --help": [
+     "",
+     "BusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     0
+    ],
+    "wc --lines p.txt": [
+     "",
+     "wc: unrecognized option '--lines'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --version": [
+     "",
+     "wc: unrecognized option '--version'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "        0 d\n        3 p.txt\n        3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "        3 p.txt\n        2 w.txt\n        5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "        3       117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: invalid option -- 'x'\nBusyBox v1.35.0 (2021-12-26 16:56:57 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc d": [
+     "        0         0         0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "        3         3       117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "        3         3       117 p.txt\n        3         3       117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "        3         3       117 p.txt\n        2         5        25 w.txt\n        0         0         0 e.txt\n        5         8       142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "busybox glibc"
+  },
+  "busybox_1.36.1": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "        1         2         4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "        1         2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "        0         0         0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     0
+    ],
+    "seq --version": [
+     "",
+     "seq: unrecognized option '--version'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -1": [
+     "",
+     "seq: invalid option -- '1'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -f '%03g' 3": [
+     "",
+     "seq: invalid option -- 'f'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "1\n1\n1\n",
+     "",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "sort --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: sort [-nrughMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-h\tSort human readable numbers (2K 1G)\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     0
+    ],
+    "sort --version": [
+     "",
+     "sort: unrecognized option '--version'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: sort [-nrughMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-h\tSort human readable numbers (2K 1G)\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     2
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "Check line 2\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "512\n1K\n1.5K\n2M\n3G\n",
+     "",
+     0
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: bad field specification\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: bad -t parameter\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: invalid option -- 'x'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: sort [-nrughMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-h\tSort human readable numbers (2K 1G)\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "",
+     0
+    ],
+    "sort nosuch": [
+     "",
+     "sort: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "        3         3       117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option '--bogus'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     0
+    ],
+    "wc --lines p.txt": [
+     "",
+     "wc: unrecognized option '--lines'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --version": [
+     "",
+     "wc: unrecognized option '--version'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "        0 d\n        3 p.txt\n        3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "        3 p.txt\n        2 w.txt\n        5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "        3       117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: invalid option -- 'x'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc d": [
+     "        0         0         0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "        3         3       117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "        3         3       117 p.txt\n        3         3       117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "        3         3       117 p.txt\n        2         5        25 w.txt\n        0         0         0 e.txt\n        5         8       142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "busybox glibc"
+  },
+  "busybox_1.36.1-musl": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "        1         2         4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "        1         2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "        0         0         0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     0
+    ],
+    "seq --version": [
+     "",
+     "seq: unrecognized option: version\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -1": [
+     "",
+     "seq: unrecognized option: 1\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -f '%03g' 3": [
+     "",
+     "seq: unrecognized option: f\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "1\n1\n1\n",
+     "",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "sort --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: sort [-nrughMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-h\tSort human readable numbers (2K 1G)\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     0
+    ],
+    "sort --version": [
+     "",
+     "sort: unrecognized option: version\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: sort [-nrughMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-h\tSort human readable numbers (2K 1G)\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     2
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "Check line 2\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "512\n1K\n1.5K\n2M\n3G\n",
+     "",
+     0
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: bad field specification\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: bad -t parameter\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: unrecognized option: x\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: sort [-nrughMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-h\tSort human readable numbers (2K 1G)\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "",
+     0
+    ],
+    "sort nosuch": [
+     "",
+     "sort: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "        3         3       117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option: bogus\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     0
+    ],
+    "wc --lines p.txt": [
+     "",
+     "wc: unrecognized option: lines\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --version": [
+     "",
+     "wc: unrecognized option: version\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "        0 d\n        3 p.txt\n        3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "        3 p.txt\n        2 w.txt\n        5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "        3       117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: unrecognized option: x\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc d": [
+     "        0         0         0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "        3         3       117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "        3         3       117 p.txt\n        3         3       117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "        3         3       117 p.txt\n        2         5        25 w.txt\n        0         0         0 e.txt\n        5         8       142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "busybox musl"
+  },
+  "busybox_1.36.1-uclibc": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "        1         2         4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "        1         2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "        0         0         0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     0
+    ],
+    "seq --version": [
+     "",
+     "seq: unrecognized option `--version'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -1": [
+     "",
+     "seq: invalid option -- 1\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -f '%03g' 3": [
+     "",
+     "seq: invalid option -- f\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "1\n1\n1\n",
+     "",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: seq [-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\nFIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n",
+     1
+    ],
+    "sort --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: sort [-nrughMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-h\tSort human readable numbers (2K 1G)\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     0
+    ],
+    "sort --version": [
+     "",
+     "sort: unrecognized option `--version'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: sort [-nrughMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-h\tSort human readable numbers (2K 1G)\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     2
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "Check line 2\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "512\n1K\n1.5K\n2M\n3G\n",
+     "",
+     0
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: bad field specification\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: bad -t parameter\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: invalid option -- x\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: sort [-nrughMcszbdfiokt] [-o FILE] [-k START[.OFS][OPTS][,END[.OFS][OPTS]] [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n\t-h\tSort human readable numbers (2K 1G)\n\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tNUL terminated input and output\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "",
+     0
+    ],
+    "sort nosuch": [
+     "",
+     "sort: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "        3         3       117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option `--bogus'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     0
+    ],
+    "wc --lines p.txt": [
+     "",
+     "wc: unrecognized option `--lines'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc --version": [
+     "",
+     "wc: unrecognized option `--version'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "        0 d\n        3 p.txt\n        3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "        3 p.txt\n        2 w.txt\n        5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "        3       117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: invalid option -- x\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: wc [-cmlwL] [FILE]...\n\nCount lines, words, and bytes for FILEs (or stdin)\n\n\t-c\tCount bytes\n\t-m\tCount characters\n\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n",
+     1
+    ],
+    "wc d": [
+     "        0         0         0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "        3         3       117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "        3         3       117 p.txt\n        3         3       117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "        3         3       117 p.txt\n        2         5        25 w.txt\n        0         0         0 e.txt\n        5         8       142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "busybox uclibc"
+  },
+  "centos_7": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     "100 c\n10 b\n2.5 e\n-3 d\n9 a\n9 a\n b x\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "      1       2       4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "      1       2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "      0       0       0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "seq: missing operand\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "seq --help": [
+     "Usage: seq [OPTION]... LAST\n  or:  seq [OPTION]... FIRST LAST\n  or:  seq [OPTION]... FIRST INCREMENT LAST\nPrint numbers from FIRST to LAST, in steps of INCREMENT.\n\nMandatory arguments to long options are mandatory for short options too.\n  -f, --format=FORMAT      use printf style floating-point FORMAT\n  -s, --separator=STRING   use STRING to separate numbers (default: \\n)\n  -w, --equal-width        equalize width by padding with leading zeroes\n      --help     display this help and exit\n      --version  output version information and exit\n\nIf FIRST or INCREMENT is omitted, it defaults to 1.  That is, an\nomitted INCREMENT defaults to 1 even when LAST is smaller than FIRST.\nThe sequence of numbers ends when the sum of the current number and\nINCREMENT would become greater than LAST.\nFIRST, INCREMENT, and LAST are interpreted as floating point values.\nINCREMENT is usually positive if FIRST is smaller than LAST, and\nINCREMENT is usually negative if FIRST is greater than LAST.\nFORMAT must be suitable for printing one argument of type 'double';\nit defaults to %.PRECf if FIRST, INCREMENT, and LAST are all fixed point\ndecimal numbers with maximum precision PREC, and to %g otherwise.\n\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\nFor complete documentation, run: info coreutils 'seq invocation'\n",
+     "",
+     0
+    ],
+    "seq --version": [
+     "seq (GNU coreutils) 8.22\nCopyright (C) 2013 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Ulrich Drepper.\n",
+     "",
+     0
+    ],
+    "seq -1": [
+     "",
+     "",
+     0
+    ],
+    "seq -f '%03g' 3": [
+     "001\n002\n003\n",
+     "",
+     0
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "1\n1\n1\n",
+     "",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "seq: invalid floating point argument: a\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "sort --help": [
+     "Usage: sort [OPTION]... [FILE]...\n  or:  sort [OPTION]... --files0-from=F\nWrite sorted concatenation of all FILE(s) to standard output.\n\nMandatory arguments to long options are mandatory for short options too.\nOrdering options:\n\n  -b, --ignore-leading-blanks  ignore leading blanks\n  -d, --dictionary-order      consider only blanks and alphanumeric characters\n  -f, --ignore-case           fold lower case to upper case characters\n  -g, --general-numeric-sort  compare according to general numerical value\n  -i, --ignore-nonprinting    consider only printable characters\n  -M, --month-sort            compare (unknown) < 'JAN' < ... < 'DEC'\n  -h, --human-numeric-sort    compare human readable numbers (e.g., 2K 1G)\n  -n, --numeric-sort          compare according to string numerical value\n  -R, --random-sort           sort by random hash of keys\n      --random-source=FILE    get random bytes from FILE\n  -r, --reverse               reverse the result of comparisons\n      --sort=WORD             sort according to WORD:\n                                general-numeric -g, human-numeric -h, month -M,\n                                numeric -n, random -R, version -V\n  -V, --version-sort          natural sort of (version) numbers within text\n\nOther options:\n\n      --batch-size=NMERGE   merge at most NMERGE inputs at once;\n                            for more use temp files\n  -c, --check, --check=diagnose-first  check for sorted input; do not sort\n  -C, --check=quiet, --check=silent  like -c, but do not report first bad line\n      --compress-program=PROG  compress temporaries with PROG;\n                              decompress them with PROG -d\n      --debug               annotate the part of the line used to sort,\n                              and warn about questionable usage to stderr\n      --files0-from=F       read input from the files specified by\n                            NUL-terminated names in file F;\n                            If F is - then read names from standard input\n  -k, --key=KEYDEF          sort via a key; KEYDEF gives location and type\n  -m, --merge               merge already sorted files; do not sort\n  -o, --output=FILE         write result to FILE instead of standard output\n  -s, --stable              stabilize sort by disabling last-resort comparison\n  -S, --buffer-size=SIZE    use SIZE for main memory buffer\n  -t, --field-separator=SEP  use SEP instead of non-blank to blank transition\n  -T, --temporary-directory=DIR  use DIR for temporaries, not $TMPDIR or /tmp;\n                              multiple options specify multiple directories\n      --parallel=N          change the number of sorts run concurrently to N\n  -u, --unique              with -c, check for strict ordering;\n                              without -c, output only the first of an equal run\n  -z, --zero-terminated     end lines with 0 byte, not newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nKEYDEF is F[.C][OPTS][,F[.C][OPTS]] for start and stop position, where F is a\nfield number and C a character position in the field; both are origin 1, and\nthe stop position defaults to the line's end.  If neither -t nor -b is in\neffect, characters in a field are counted from the beginning of the preceding\nwhitespace.  OPTS is one or more single-letter ordering options [bdfgiMhnRrV],\nwhich override global ordering options for that key.  If no key is given, use\nthe entire line as the key.\n\nSIZE may be followed by the following multiplicative suffixes:\n% 1% of memory, b 1, K 1024 (default), and so on for M, G, T, P, E, Z, Y.\n\nWith no FILE, or when FILE is -, read standard input.\n\n*** WARNING ***\nThe locale specified by the environment affects sort order.\nSet LC_ALL=C to get the traditional sort order that uses\nnative byte values.\n\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\nFor complete documentation, run: info coreutils 'sort invocation'\n",
+     "",
+     0
+    ],
+    "sort --version": [
+     "sort (GNU coreutils) 8.22\nCopyright (C) 2013 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Mike Haertel and Paul Eggert.\n",
+     "",
+     0
+    ],
+    "sort -b s.txt": [
+     "100 c\n10 b\n2.5 e\n-3 d\n9 a\n9 a\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "sort: s.txt:3: disorder: 100 c\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "512\n1K\n1.5K\n2M\n3G\n",
+     "",
+     0
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: field number is zero: invalid field specification ‘0’\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n b x\n9 a\n9 a\n-3 d\n2.5 e\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: multi-character tab ‘ab’\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     "100 c\n10 b\n2.5 e\n-3 d\n9 a\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: invalid option -- 'x'\nTry 'sort --help' for more information.\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "sort: read failed: d: Is a directory\n",
+     2
+    ],
+    "sort nosuch": [
+     "",
+     "sort: cannot read: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     "100 c\n10 b\n2.5 e\n-3 d\n9 a\n9 a\n b x\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "  3   3 117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option '--bogus'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc --help": [
+     "Usage: wc [OPTION]... [FILE]...\n  or:  wc [OPTION]... --files0-from=F\nPrint newline, word, and byte counts for each FILE, and a total line if\nmore than one FILE is specified.  With no FILE, or when FILE is -,\nread standard input.  A word is a non-zero-length sequence of characters\ndelimited by white space.\nThe options below may be used to select which counts are printed, always in\nthe following order: newline, word, character, byte, maximum line length.\n  -c, --bytes            print the byte counts\n  -m, --chars            print the character counts\n  -l, --lines            print the newline counts\n      --files0-from=F    read input from the files specified by\n                           NUL-terminated names in file F;\n                           If F is - then read names from standard input\n  -L, --max-line-length  print the length of the longest line\n  -w, --words            print the word counts\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\nFor complete documentation, run: info coreutils 'wc invocation'\n",
+     "",
+     0
+    ],
+    "wc --lines p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc --version": [
+     "wc (GNU coreutils) 8.22\nCopyright (C) 2013 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Paul Rubin and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "      0 d\n      3 p.txt\n      3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "  3 p.txt\n  2 w.txt\n  5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "  3 117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: invalid option -- 'x'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc d": [
+     "      0       0       0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "  3   3 117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "  3   3 117 p.txt\n  3   3 117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "  3   3 117 p.txt\n  2   5  25 w.txt\n  0   0   0 e.txt\n  5   8 142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "gnu 8.22 en-2.17 bytes"
+  },
+  "debian_12": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "      1       2       4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "      1       2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "      0       0       0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "seq: missing operand\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "seq --help": [
+     "Usage: seq [OPTION]... LAST\n  or:  seq [OPTION]... FIRST LAST\n  or:  seq [OPTION]... FIRST INCREMENT LAST\nPrint numbers from FIRST to LAST, in steps of INCREMENT.\n\nMandatory arguments to long options are mandatory for short options too.\n  -f, --format=FORMAT      use printf style floating-point FORMAT\n  -s, --separator=STRING   use STRING to separate numbers (default: \\n)\n  -w, --equal-width        equalize width by padding with leading zeroes\n      --help        display this help and exit\n      --version     output version information and exit\n\nIf FIRST or INCREMENT is omitted, it defaults to 1.  That is, an\nomitted INCREMENT defaults to 1 even when LAST is smaller than FIRST.\nThe sequence of numbers ends when the sum of the current number and\nINCREMENT would become greater than LAST.\nFIRST, INCREMENT, and LAST are interpreted as floating point values.\nINCREMENT is usually positive if FIRST is smaller than LAST, and\nINCREMENT is usually negative if FIRST is greater than LAST.\nINCREMENT must not be 0; none of FIRST, INCREMENT and LAST may be NaN.\nFORMAT must be suitable for printing one argument of type 'double';\nit defaults to %.PRECf if FIRST, INCREMENT, and LAST are all fixed point\ndecimal numbers with maximum precision PREC, and to %g otherwise.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/seq>\nor available locally via: info '(coreutils) seq invocation'\n",
+     "",
+     0
+    ],
+    "seq --version": [
+     "seq (GNU coreutils) 9.1\nCopyright (C) 2022 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Ulrich Drepper.\n",
+     "",
+     0
+    ],
+    "seq -1": [
+     "",
+     "",
+     0
+    ],
+    "seq -f '%03g' 3": [
+     "001\n002\n003\n",
+     "",
+     0
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "",
+     "seq: invalid Zero increment value: ‘0’\nTry 'seq --help' for more information.\n",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "seq: invalid floating point argument: ‘a’\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "sort --help": [
+     "Usage: sort [OPTION]... [FILE]...\n  or:  sort [OPTION]... --files0-from=F\nWrite sorted concatenation of all FILE(s) to standard output.\n\nWith no FILE, or when FILE is -, read standard input.\n\nMandatory arguments to long options are mandatory for short options too.\nOrdering options:\n\n  -b, --ignore-leading-blanks  ignore leading blanks\n  -d, --dictionary-order      consider only blanks and alphanumeric characters\n  -f, --ignore-case           fold lower case to upper case characters\n  -g, --general-numeric-sort  compare according to general numerical value\n  -i, --ignore-nonprinting    consider only printable characters\n  -M, --month-sort            compare (unknown) < 'JAN' < ... < 'DEC'\n  -h, --human-numeric-sort    compare human readable numbers (e.g., 2K 1G)\n  -n, --numeric-sort          compare according to string numerical value\n  -R, --random-sort           shuffle, but group identical keys.  See shuf(1)\n      --random-source=FILE    get random bytes from FILE\n  -r, --reverse               reverse the result of comparisons\n      --sort=WORD             sort according to WORD:\n                                general-numeric -g, human-numeric -h, month -M,\n                                numeric -n, random -R, version -V\n  -V, --version-sort          natural sort of (version) numbers within text\n\nOther options:\n\n      --batch-size=NMERGE   merge at most NMERGE inputs at once;\n                            for more use temp files\n  -c, --check, --check=diagnose-first  check for sorted input; do not sort\n  -C, --check=quiet, --check=silent  like -c, but do not report first bad line\n      --compress-program=PROG  compress temporaries with PROG;\n                              decompress them with PROG -d\n      --debug               annotate the part of the line used to sort,\n                              and warn about questionable usage to stderr\n      --files0-from=F       read input from the files specified by\n                            NUL-terminated names in file F;\n                            If F is - then read names from standard input\n  -k, --key=KEYDEF          sort via a key; KEYDEF gives location and type\n  -m, --merge               merge already sorted files; do not sort\n  -o, --output=FILE         write result to FILE instead of standard output\n  -s, --stable              stabilize sort by disabling last-resort comparison\n  -S, --buffer-size=SIZE    use SIZE for main memory buffer\n  -t, --field-separator=SEP  use SEP instead of non-blank to blank transition\n  -T, --temporary-directory=DIR  use DIR for temporaries, not $TMPDIR or /tmp;\n                              multiple options specify multiple directories\n      --parallel=N          change the number of sorts run concurrently to N\n  -u, --unique              with -c, check for strict ordering;\n                              without -c, output only the first of an equal run\n  -z, --zero-terminated     line delimiter is NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nKEYDEF is F[.C][OPTS][,F[.C][OPTS]] for start and stop position, where F is a\nfield number and C a character position in the field; both are origin 1, and\nthe stop position defaults to the line's end.  If neither -t nor -b is in\neffect, characters in a field are counted from the beginning of the preceding\nwhitespace.  OPTS is one or more single-letter ordering options [bdfgiMhnRrV],\nwhich override global ordering options for that key.  If no key is given, use\nthe entire line as the key.  Use --debug to diagnose incorrect key usage.\n\nSIZE may be followed by the following multiplicative suffixes:\n% 1% of memory, b 1, K 1024 (default), and so on for M, G, T, P, E, Z, Y.\n\n*** WARNING ***\nThe locale specified by the environment affects sort order.\nSet LC_ALL=C to get the traditional sort order that uses\nnative byte values.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/sort>\nor available locally via: info '(coreutils) sort invocation'\n",
+     "",
+     0
+    ],
+    "sort --version": [
+     "sort (GNU coreutils) 9.1\nCopyright (C) 2022 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Mike Haertel and Paul Eggert.\n",
+     "",
+     0
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "sort: s.txt:3: disorder: 100 c\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "512\n1K\n1.5K\n2M\n3G\n",
+     "",
+     0
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: field number is zero: invalid field specification ‘0’\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: multi-character tab ‘ab’\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: invalid option -- 'x'\nTry 'sort --help' for more information.\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "sort: read failed: d: Is a directory\n",
+     2
+    ],
+    "sort nosuch": [
+     "",
+     "sort: cannot read: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "  3   3 117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option '--bogus'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc --help": [
+     "Usage: wc [OPTION]... [FILE]...\n  or:  wc [OPTION]... --files0-from=F\nPrint newline, word, and byte counts for each FILE, and a total line if\nmore than one FILE is specified.  A word is a non-zero-length sequence of\nprintable characters delimited by white space.\n\nWith no FILE, or when FILE is -, read standard input.\n\nThe options below may be used to select which counts are printed, always in\nthe following order: newline, word, character, byte, maximum line length.\n  -c, --bytes            print the byte counts\n  -m, --chars            print the character counts\n  -l, --lines            print the newline counts\n      --files0-from=F    read input from the files specified by\n                           NUL-terminated names in file F;\n                           If F is - then read names from standard input\n  -L, --max-line-length  print the maximum display width\n  -w, --words            print the word counts\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/wc>\nor available locally via: info '(coreutils) wc invocation'\n",
+     "",
+     0
+    ],
+    "wc --lines p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc --version": [
+     "wc (GNU coreutils) 9.1\nCopyright (C) 2022 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Paul Rubin and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "      0 d\n      3 p.txt\n      3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "  3 p.txt\n  2 w.txt\n  5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "  3 117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: invalid option -- 'x'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc d": [
+     "      0       0       0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "  3   3 117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "  3   3 117 p.txt\n  3   3 117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "  3   3 117 p.txt\n  2   5  25 w.txt\n  0   0   0 e.txt\n  5   8 142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "gnu 9.1 c"
+  },
+  "debian_13": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "      1       2       4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "      1       2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "      0       0       0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "seq: missing operand\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "seq --help": [
+     "Usage: seq [OPTION]... LAST\n  or:  seq [OPTION]... FIRST LAST\n  or:  seq [OPTION]... FIRST INCREMENT LAST\nPrint numbers from FIRST to LAST, in steps of INCREMENT.\n\nMandatory arguments to long options are mandatory for short options too.\n  -f, --format=FORMAT      use printf style floating-point FORMAT\n  -s, --separator=STRING   use STRING to separate numbers (default: \\n)\n  -w, --equal-width        equalize width by padding with leading zeroes\n      --help        display this help and exit\n      --version     output version information and exit\n\nIf FIRST or INCREMENT is omitted, it defaults to 1.  That is, an\nomitted INCREMENT defaults to 1 even when LAST is smaller than FIRST.\nThe sequence of numbers ends when the sum of the current number and\nINCREMENT would become greater than LAST.\nFIRST, INCREMENT, and LAST are interpreted as floating point values.\nINCREMENT is usually positive if FIRST is smaller than LAST, and\nINCREMENT is usually negative if FIRST is greater than LAST.\nINCREMENT must not be 0; none of FIRST, INCREMENT and LAST may be NaN.\nFORMAT must be suitable for printing one argument of type 'double';\nit defaults to %.PRECf if FIRST, INCREMENT, and LAST are all fixed point\ndecimal numbers with maximum precision PREC, and to %g otherwise.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/seq>\nor available locally via: info '(coreutils) seq invocation'\n",
+     "",
+     0
+    ],
+    "seq --version": [
+     "seq (GNU coreutils) 9.7\nPackaged by Debian (9.7-3)\nCopyright (C) 2025 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Ulrich Drepper.\n",
+     "",
+     0
+    ],
+    "seq -1": [
+     "",
+     "",
+     0
+    ],
+    "seq -f '%03g' 3": [
+     "001\n002\n003\n",
+     "",
+     0
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "",
+     "seq: invalid Zero increment value: ‘0’\nTry 'seq --help' for more information.\n",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "seq: invalid floating point argument: ‘a’\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "sort --help": [
+     "Usage: sort [OPTION]... [FILE]...\n  or:  sort [OPTION]... --files0-from=F\nWrite sorted concatenation of all FILE(s) to standard output.\n\nWith no FILE, or when FILE is -, read standard input.\n\nMandatory arguments to long options are mandatory for short options too.\nOrdering options:\n\n  -b, --ignore-leading-blanks  ignore leading blanks\n  -d, --dictionary-order      consider only blanks and alphanumeric characters\n  -f, --ignore-case           fold lower case to upper case characters\n  -g, --general-numeric-sort  compare according to general numerical value\n  -i, --ignore-nonprinting    consider only printable characters\n  -M, --month-sort            compare (unknown) < 'JAN' < ... < 'DEC'\n  -h, --human-numeric-sort    compare human readable numbers (e.g., 2K 1G)\n  -n, --numeric-sort          compare according to string numerical value;\n                                see full documentation for supported strings\n  -R, --random-sort           shuffle, but group identical keys.  See shuf(1)\n      --random-source=FILE    get random bytes from FILE\n  -r, --reverse               reverse the result of comparisons\n      --sort=WORD             sort according to WORD:\n                                general-numeric -g, human-numeric -h, month -M,\n                                numeric -n, random -R, version -V\n  -V, --version-sort          natural sort of (version) numbers within text\n\nOther options:\n\n      --batch-size=NMERGE   merge at most NMERGE inputs at once;\n                            for more use temp files\n  -c, --check, --check=diagnose-first  check for sorted input; do not sort\n  -C, --check=quiet, --check=silent  like -c, but do not report first bad line\n      --compress-program=PROG  compress temporaries with PROG;\n                              decompress them with PROG -d\n      --debug               annotate the part of the line used to sort,\n                              and warn about questionable usage to stderr\n      --files0-from=F       read input from the files specified by\n                            NUL-terminated names in file F;\n                            If F is - then read names from standard input\n  -k, --key=KEYDEF          sort via a key; KEYDEF gives location and type\n  -m, --merge               merge already sorted files; do not sort\n  -o, --output=FILE         write result to FILE instead of standard output\n  -s, --stable              stabilize sort by disabling last-resort comparison\n  -S, --buffer-size=SIZE    use SIZE for main memory buffer\n  -t, --field-separator=SEP  use SEP instead of non-blank to blank transition\n  -T, --temporary-directory=DIR  use DIR for temporaries, not $TMPDIR or /tmp;\n                              multiple options specify multiple directories\n      --parallel=N          change the number of sorts run concurrently to N\n  -u, --unique              output only the first of lines with equal keys;\n                              with -c, check for strict ordering\n  -z, --zero-terminated     line delimiter is NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nKEYDEF is F[.C][OPTS][,F[.C][OPTS]] for start and stop position, where F is a\nfield number and C a character position in the field; both are origin 1, and\nthe stop position defaults to the line's end.  If neither -t nor -b is in\neffect, characters in a field are counted from the beginning of the preceding\nwhitespace.  OPTS is one or more single-letter ordering options [bdfgiMhnRrV],\nwhich override global ordering options for that key.  If no key is given, use\nthe entire line as the key.  Use --debug to diagnose incorrect key usage.\n\nSIZE may be followed by the following multiplicative suffixes:\n% 1% of memory, b 1, K 1024 (default), and so on for M, G, T, P, E, Z, Y, R, Q.\n\n*** WARNING ***\nThe locale specified by the environment affects sort order.\nSet LC_ALL=C to get the traditional sort order that uses\nnative byte values.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/sort>\nor available locally via: info '(coreutils) sort invocation'\n",
+     "",
+     0
+    ],
+    "sort --version": [
+     "sort (GNU coreutils) 9.7\nPackaged by Debian (9.7-3)\nCopyright (C) 2025 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Mike Haertel and Paul Eggert.\n",
+     "",
+     0
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "sort: s.txt:3: disorder: 100 c\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "512\n1K\n1.5K\n2M\n3G\n",
+     "",
+     0
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: field number is zero: invalid field specification ‘0’\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: multi-character tab ‘ab’\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: invalid option -- 'x'\nTry 'sort --help' for more information.\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "sort: read failed: d: Is a directory\n",
+     2
+    ],
+    "sort nosuch": [
+     "",
+     "sort: cannot read: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "  3   3 117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option '--bogus'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc --help": [
+     "Usage: wc [OPTION]... [FILE]...\n  or:  wc [OPTION]... --files0-from=F\nPrint newline, word, and byte counts for each FILE, and a total line if\nmore than one FILE is specified.  A word is a nonempty sequence of non white\nspace delimited by white space characters or by start or end of input.\n\nWith no FILE, or when FILE is -, read standard input.\n\nThe options below may be used to select which counts are printed, always in\nthe following order: newline, word, character, byte, maximum line length.\n  -c, --bytes            print the byte counts\n  -m, --chars            print the character counts\n  -l, --lines            print the newline counts\n      --files0-from=F    read input from the files specified by\n                           NUL-terminated names in file F;\n                           If F is - then read names from standard input\n  -L, --max-line-length  print the maximum display width\n  -w, --words            print the word counts\n      --total=WHEN       when to print a line with total counts;\n                           WHEN can be: auto, always, only, never\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/wc>\nor available locally via: info '(coreutils) wc invocation'\n",
+     "",
+     0
+    ],
+    "wc --lines p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc --version": [
+     "wc (GNU coreutils) 9.7\nPackaged by Debian (9.7-3)\nCopyright (C) 2025 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Paul Rubin and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "      0 d\n      3 p.txt\n      3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "  3 p.txt\n  2 w.txt\n  5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "  3 117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: invalid option -- 'x'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc d": [
+     "      0       0       0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "  3   3 117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "  3   3 117 p.txt\n  3   3 117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "  3   3 117 p.txt\n  2   5  25 w.txt\n  0   0   0 e.txt\n  5   8 142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "gnu 9.7 c"
+  },
+  "ubuntu_22.04": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "      1       2       4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "      1       2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "      0       0       0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "seq: missing operand\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "seq --help": [
+     "Usage: seq [OPTION]... LAST\n  or:  seq [OPTION]... FIRST LAST\n  or:  seq [OPTION]... FIRST INCREMENT LAST\nPrint numbers from FIRST to LAST, in steps of INCREMENT.\n\nMandatory arguments to long options are mandatory for short options too.\n  -f, --format=FORMAT      use printf style floating-point FORMAT\n  -s, --separator=STRING   use STRING to separate numbers (default: \\n)\n  -w, --equal-width        equalize width by padding with leading zeroes\n      --help     display this help and exit\n      --version  output version information and exit\n\nIf FIRST or INCREMENT is omitted, it defaults to 1.  That is, an\nomitted INCREMENT defaults to 1 even when LAST is smaller than FIRST.\nThe sequence of numbers ends when the sum of the current number and\nINCREMENT would become greater than LAST.\nFIRST, INCREMENT, and LAST are interpreted as floating point values.\nINCREMENT is usually positive if FIRST is smaller than LAST, and\nINCREMENT is usually negative if FIRST is greater than LAST.\nINCREMENT must not be 0; none of FIRST, INCREMENT and LAST may be NaN.\nFORMAT must be suitable for printing one argument of type 'double';\nit defaults to %.PRECf if FIRST, INCREMENT, and LAST are all fixed point\ndecimal numbers with maximum precision PREC, and to %g otherwise.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/seq>\nor available locally via: info '(coreutils) seq invocation'\n",
+     "",
+     0
+    ],
+    "seq --version": [
+     "seq (GNU coreutils) 8.32\nCopyright (C) 2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Ulrich Drepper.\n",
+     "",
+     0
+    ],
+    "seq -1": [
+     "",
+     "",
+     0
+    ],
+    "seq -f '%03g' 3": [
+     "001\n002\n003\n",
+     "",
+     0
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "",
+     "seq: invalid Zero increment value: ‘0’\nTry 'seq --help' for more information.\n",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "seq: invalid floating point argument: ‘a’\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "sort --help": [
+     "Usage: sort [OPTION]... [FILE]...\n  or:  sort [OPTION]... --files0-from=F\nWrite sorted concatenation of all FILE(s) to standard output.\n\nWith no FILE, or when FILE is -, read standard input.\n\nMandatory arguments to long options are mandatory for short options too.\nOrdering options:\n\n  -b, --ignore-leading-blanks  ignore leading blanks\n  -d, --dictionary-order      consider only blanks and alphanumeric characters\n  -f, --ignore-case           fold lower case to upper case characters\n  -g, --general-numeric-sort  compare according to general numerical value\n  -i, --ignore-nonprinting    consider only printable characters\n  -M, --month-sort            compare (unknown) < 'JAN' < ... < 'DEC'\n  -h, --human-numeric-sort    compare human readable numbers (e.g., 2K 1G)\n  -n, --numeric-sort          compare according to string numerical value\n  -R, --random-sort           shuffle, but group identical keys.  See shuf(1)\n      --random-source=FILE    get random bytes from FILE\n  -r, --reverse               reverse the result of comparisons\n      --sort=WORD             sort according to WORD:\n                                general-numeric -g, human-numeric -h, month -M,\n                                numeric -n, random -R, version -V\n  -V, --version-sort          natural sort of (version) numbers within text\n\nOther options:\n\n      --batch-size=NMERGE   merge at most NMERGE inputs at once;\n                            for more use temp files\n  -c, --check, --check=diagnose-first  check for sorted input; do not sort\n  -C, --check=quiet, --check=silent  like -c, but do not report first bad line\n      --compress-program=PROG  compress temporaries with PROG;\n                              decompress them with PROG -d\n      --debug               annotate the part of the line used to sort,\n                              and warn about questionable usage to stderr\n      --files0-from=F       read input from the files specified by\n                            NUL-terminated names in file F;\n                            If F is - then read names from standard input\n  -k, --key=KEYDEF          sort via a key; KEYDEF gives location and type\n  -m, --merge               merge already sorted files; do not sort\n  -o, --output=FILE         write result to FILE instead of standard output\n  -s, --stable              stabilize sort by disabling last-resort comparison\n  -S, --buffer-size=SIZE    use SIZE for main memory buffer\n  -t, --field-separator=SEP  use SEP instead of non-blank to blank transition\n  -T, --temporary-directory=DIR  use DIR for temporaries, not $TMPDIR or /tmp;\n                              multiple options specify multiple directories\n      --parallel=N          change the number of sorts run concurrently to N\n  -u, --unique              with -c, check for strict ordering;\n                              without -c, output only the first of an equal run\n  -z, --zero-terminated     line delimiter is NUL, not newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nKEYDEF is F[.C][OPTS][,F[.C][OPTS]] for start and stop position, where F is a\nfield number and C a character position in the field; both are origin 1, and\nthe stop position defaults to the line's end.  If neither -t nor -b is in\neffect, characters in a field are counted from the beginning of the preceding\nwhitespace.  OPTS is one or more single-letter ordering options [bdfgiMhnRrV],\nwhich override global ordering options for that key.  If no key is given, use\nthe entire line as the key.  Use --debug to diagnose incorrect key usage.\n\nSIZE may be followed by the following multiplicative suffixes:\n% 1% of memory, b 1, K 1024 (default), and so on for M, G, T, P, E, Z, Y.\n\n*** WARNING ***\nThe locale specified by the environment affects sort order.\nSet LC_ALL=C to get the traditional sort order that uses\nnative byte values.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/sort>\nor available locally via: info '(coreutils) sort invocation'\n",
+     "",
+     0
+    ],
+    "sort --version": [
+     "sort (GNU coreutils) 8.32\nCopyright (C) 2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Mike Haertel and Paul Eggert.\n",
+     "",
+     0
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "sort: s.txt:3: disorder: 100 c\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "512\n1K\n1.5K\n2M\n3G\n",
+     "",
+     0
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: field number is zero: invalid field specification ‘0’\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: multi-character tab ‘ab’\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: invalid option -- 'x'\nTry 'sort --help' for more information.\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "sort: read failed: d: Is a directory\n",
+     2
+    ],
+    "sort nosuch": [
+     "",
+     "sort: cannot read: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "  3   3 117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option '--bogus'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc --help": [
+     "Usage: wc [OPTION]... [FILE]...\n  or:  wc [OPTION]... --files0-from=F\nPrint newline, word, and byte counts for each FILE, and a total line if\nmore than one FILE is specified.  A word is a non-zero-length sequence of\ncharacters delimited by white space.\n\nWith no FILE, or when FILE is -, read standard input.\n\nThe options below may be used to select which counts are printed, always in\nthe following order: newline, word, character, byte, maximum line length.\n  -c, --bytes            print the byte counts\n  -m, --chars            print the character counts\n  -l, --lines            print the newline counts\n      --files0-from=F    read input from the files specified by\n                           NUL-terminated names in file F;\n                           If F is - then read names from standard input\n  -L, --max-line-length  print the maximum display width\n  -w, --words            print the word counts\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/wc>\nor available locally via: info '(coreutils) wc invocation'\n",
+     "",
+     0
+    ],
+    "wc --lines p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc --version": [
+     "wc (GNU coreutils) 8.32\nCopyright (C) 2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Paul Rubin and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "      0 d\n      3 p.txt\n      3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "  3 p.txt\n  2 w.txt\n  5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "  3 117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: invalid option -- 'x'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc d": [
+     "      0       0       0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "  3   3 117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "  3   3 117 p.txt\n  3   3 117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "  3   3 117 p.txt\n  2   5  25 w.txt\n  0   0   0 e.txt\n  5   8 142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "gnu 8.32 c"
+  },
+  "ubuntu_24.04": {
+   "cases": {
+    "cat p.txt | wc -l": [
+     "3\n",
+     "",
+     0
+    ],
+    "cat s.txt | sort": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "cut -d: -f1 p.txt | sort | uniq -c | sort -rn": [
+     "      1 root\n      1 daemon\n      1 bin\n",
+     "",
+     0
+    ],
+    "echo a b | wc": [
+     "      1       2       4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -c": [
+     "4\n",
+     "",
+     0
+    ],
+    "echo a b | wc -l": [
+     "1\n",
+     "",
+     0
+    ],
+    "echo a b | wc -lw": [
+     "      1       2\n",
+     "",
+     0
+    ],
+    "echo a b | wc -w": [
+     "2\n",
+     "",
+     0
+    ],
+    "printf '' | wc": [
+     "      0       0       0\n",
+     "",
+     0
+    ],
+    "seq": [
+     "",
+     "seq: missing operand\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "seq --help": [
+     "Usage: seq [OPTION]... LAST\n  or:  seq [OPTION]... FIRST LAST\n  or:  seq [OPTION]... FIRST INCREMENT LAST\nPrint numbers from FIRST to LAST, in steps of INCREMENT.\n\nMandatory arguments to long options are mandatory for short options too.\n  -f, --format=FORMAT      use printf style floating-point FORMAT\n  -s, --separator=STRING   use STRING to separate numbers (default: \\n)\n  -w, --equal-width        equalize width by padding with leading zeroes\n      --help        display this help and exit\n      --version     output version information and exit\n\nIf FIRST or INCREMENT is omitted, it defaults to 1.  That is, an\nomitted INCREMENT defaults to 1 even when LAST is smaller than FIRST.\nThe sequence of numbers ends when the sum of the current number and\nINCREMENT would become greater than LAST.\nFIRST, INCREMENT, and LAST are interpreted as floating point values.\nINCREMENT is usually positive if FIRST is smaller than LAST, and\nINCREMENT is usually negative if FIRST is greater than LAST.\nINCREMENT must not be 0; none of FIRST, INCREMENT and LAST may be NaN.\nFORMAT must be suitable for printing one argument of type 'double';\nit defaults to %.PRECf if FIRST, INCREMENT, and LAST are all fixed point\ndecimal numbers with maximum precision PREC, and to %g otherwise.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/seq>\nor available locally via: info '(coreutils) seq invocation'\n",
+     "",
+     0
+    ],
+    "seq --version": [
+     "seq (GNU coreutils) 9.4\nCopyright (C) 2023 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Ulrich Drepper.\n",
+     "",
+     0
+    ],
+    "seq -1": [
+     "",
+     "",
+     0
+    ],
+    "seq -f '%03g' 3": [
+     "001\n002\n003\n",
+     "",
+     0
+    ],
+    "seq -s ' ' 1 3": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "seq -s , 5": [
+     "1,2,3,4,5\n",
+     "",
+     0
+    ],
+    "seq -w 8 11": [
+     "08\n09\n10\n11\n",
+     "",
+     0
+    ],
+    "seq 0.5 3": [
+     "0.5\n1.5\n2.5\n",
+     "",
+     0
+    ],
+    "seq 1 -0": [
+     "",
+     "",
+     0
+    ],
+    "seq 1 0 3 | head -3": [
+     "",
+     "seq: invalid Zero increment value: ‘0’\nTry 'seq --help' for more information.\n",
+     0
+    ],
+    "seq 1 0.5 3": [
+     "1.0\n1.5\n2.0\n2.5\n3.0\n",
+     "",
+     0
+    ],
+    "seq 1 2 10": [
+     "1\n3\n5\n7\n9\n",
+     "",
+     0
+    ],
+    "seq 10 1": [
+     "",
+     "",
+     0
+    ],
+    "seq 1e3 1e3": [
+     "1000\n",
+     "",
+     0
+    ],
+    "seq 2 5": [
+     "2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "seq 3": [
+     "1\n2\n3\n",
+     "",
+     0
+    ],
+    "seq 5 -1 1": [
+     "5\n4\n3\n2\n1\n",
+     "",
+     0
+    ],
+    "seq a": [
+     "",
+     "seq: invalid floating point argument: ‘a’\nTry 'seq --help' for more information.\n",
+     1
+    ],
+    "sort --help": [
+     "Usage: sort [OPTION]... [FILE]...\n  or:  sort [OPTION]... --files0-from=F\nWrite sorted concatenation of all FILE(s) to standard output.\n\nWith no FILE, or when FILE is -, read standard input.\n\nMandatory arguments to long options are mandatory for short options too.\nOrdering options:\n\n  -b, --ignore-leading-blanks  ignore leading blanks\n  -d, --dictionary-order      consider only blanks and alphanumeric characters\n  -f, --ignore-case           fold lower case to upper case characters\n  -g, --general-numeric-sort  compare according to general numerical value\n  -i, --ignore-nonprinting    consider only printable characters\n  -M, --month-sort            compare (unknown) < 'JAN' < ... < 'DEC'\n  -h, --human-numeric-sort    compare human readable numbers (e.g., 2K 1G)\n  -n, --numeric-sort          compare according to string numerical value\n  -R, --random-sort           shuffle, but group identical keys.  See shuf(1)\n      --random-source=FILE    get random bytes from FILE\n  -r, --reverse               reverse the result of comparisons\n      --sort=WORD             sort according to WORD:\n                                general-numeric -g, human-numeric -h, month -M,\n                                numeric -n, random -R, version -V\n  -V, --version-sort          natural sort of (version) numbers within text\n\nOther options:\n\n      --batch-size=NMERGE   merge at most NMERGE inputs at once;\n                            for more use temp files\n  -c, --check, --check=diagnose-first  check for sorted input; do not sort\n  -C, --check=quiet, --check=silent  like -c, but do not report first bad line\n      --compress-program=PROG  compress temporaries with PROG;\n                              decompress them with PROG -d\n      --debug               annotate the part of the line used to sort,\n                              and warn about questionable usage to stderr\n      --files0-from=F       read input from the files specified by\n                            NUL-terminated names in file F;\n                            If F is - then read names from standard input\n  -k, --key=KEYDEF          sort via a key; KEYDEF gives location and type\n  -m, --merge               merge already sorted files; do not sort\n  -o, --output=FILE         write result to FILE instead of standard output\n  -s, --stable              stabilize sort by disabling last-resort comparison\n  -S, --buffer-size=SIZE    use SIZE for main memory buffer\n  -t, --field-separator=SEP  use SEP instead of non-blank to blank transition\n  -T, --temporary-directory=DIR  use DIR for temporaries, not $TMPDIR or /tmp;\n                              multiple options specify multiple directories\n      --parallel=N          change the number of sorts run concurrently to N\n  -u, --unique              with -c, check for strict ordering;\n                              without -c, output only the first of an equal run\n  -z, --zero-terminated     line delimiter is NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nKEYDEF is F[.C][OPTS][,F[.C][OPTS]] for start and stop position, where F is a\nfield number and C a character position in the field; both are origin 1, and\nthe stop position defaults to the line's end.  If neither -t nor -b is in\neffect, characters in a field are counted from the beginning of the preceding\nwhitespace.  OPTS is one or more single-letter ordering options [bdfgiMhnRrV],\nwhich override global ordering options for that key.  If no key is given, use\nthe entire line as the key.  Use --debug to diagnose incorrect key usage.\n\nSIZE may be followed by the following multiplicative suffixes:\n% 1% of memory, b 1, K 1024 (default), and so on for M, G, T, P, E, Z, Y, R, Q.\n\n*** WARNING ***\nThe locale specified by the environment affects sort order.\nSet LC_ALL=C to get the traditional sort order that uses\nnative byte values.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/sort>\nor available locally via: info '(coreutils) sort invocation'\n",
+     "",
+     0
+    ],
+    "sort --version": [
+     "sort (GNU coreutils) 9.4\nCopyright (C) 2023 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Mike Haertel and Paul Eggert.\n",
+     "",
+     0
+    ],
+    "sort -b s.txt": [
+     "-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n b x\n",
+     "",
+     0
+    ],
+    "sort -c s.txt": [
+     "",
+     "sort: s.txt:3: disorder: 100 c\n",
+     1
+    ],
+    "sort -f s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -h h.txt": [
+     "512\n1K\n1.5K\n2M\n3G\n",
+     "",
+     0
+    ],
+    "sort -k 2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -k0 s.txt": [
+     "",
+     "sort: field number is zero: invalid field specification ‘0’\n",
+     2
+    ],
+    "sort -k2 s.txt": [
+     "9 a\n9 a\n10 b\n100 c\n-3 d\n2.5 e\n b x\nB y\n",
+     "",
+     0
+    ],
+    "sort -n -u s.txt": [
+     "-3 d\n b x\n2.5 e\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -n s.txt": [
+     "-3 d\n b x\nB y\n2.5 e\n9 a\n9 a\n10 b\n100 c\n",
+     "",
+     0
+    ],
+    "sort -nr s.txt": [
+     "100 c\n10 b\n9 a\n9 a\n2.5 e\nB y\n b x\n-3 d\n",
+     "",
+     0
+    ],
+    "sort -r s.txt": [
+     "B y\n9 a\n9 a\n2.5 e\n100 c\n10 b\n-3 d\n b x\n",
+     "",
+     0
+    ],
+    "sort -rn s.txt | head -3": [
+     "100 c\n10 b\n9 a\n",
+     "",
+     0
+    ],
+    "sort -t ab s.txt": [
+     "",
+     "sort: multi-character tab ‘ab’\n",
+     2
+    ],
+    "sort -t: -k2 -n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k2,2n k.txt": [
+     "y:1:a\nz:2:m\nx:3:z\nw:10:b\n",
+     "",
+     0
+    ],
+    "sort -t: -k3 k.txt": [
+     "y:1:a\nw:10:b\nz:2:m\nx:3:z\n",
+     "",
+     0
+    ],
+    "sort -u s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "sort -x s.txt": [
+     "",
+     "sort: invalid option -- 'x'\nTry 'sort --help' for more information.\n",
+     2
+    ],
+    "sort d": [
+     "",
+     "sort: read failed: d: Is a directory\n",
+     2
+    ],
+    "sort nosuch": [
+     "",
+     "sort: cannot read: nosuch: No such file or directory\n",
+     2
+    ],
+    "sort p.txt k.txt": [
+     "bin:x:2:2:bin:/bin:/usr/sbin/nologin\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nroot:x:0:0:root:/root:/bin/bash\nw:10:b\nx:3:z\ny:1:a\nz:2:m\n",
+     "",
+     0
+    ],
+    "sort s.txt": [
+     " b x\n-3 d\n10 b\n100 c\n2.5 e\n9 a\n9 a\nB y\n",
+     "",
+     0
+    ],
+    "wc - < p.txt": [
+     "  3   3 117 -\n",
+     "",
+     0
+    ],
+    "wc --bogus": [
+     "",
+     "wc: unrecognized option '--bogus'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc --help": [
+     "Usage: wc [OPTION]... [FILE]...\n  or:  wc [OPTION]... --files0-from=F\nPrint newline, word, and byte counts for each FILE, and a total line if\nmore than one FILE is specified.  A word is a non-zero-length sequence of\nprintable characters delimited by white space.\n\nWith no FILE, or when FILE is -, read standard input.\n\nThe options below may be used to select which counts are printed, always in\nthe following order: newline, word, character, byte, maximum line length.\n  -c, --bytes            print the byte counts\n  -m, --chars            print the character counts\n  -l, --lines            print the newline counts\n      --files0-from=F    read input from the files specified by\n                           NUL-terminated names in file F;\n                           If F is - then read names from standard input\n  -L, --max-line-length  print the maximum display width\n  -w, --words            print the word counts\n      --total=WHEN       when to print a line with total counts;\n                           WHEN can be: auto, always, only, never\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/wc>\nor available locally via: info '(coreutils) wc invocation'\n",
+     "",
+     0
+    ],
+    "wc --lines p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc --version": [
+     "wc (GNU coreutils) 9.4\nCopyright (C) 2023 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Paul Rubin and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "wc -L p.txt": [
+     "47 p.txt\n",
+     "",
+     0
+    ],
+    "wc -c u.txt": [
+     "13 u.txt\n",
+     "",
+     0
+    ],
+    "wc -c w.txt": [
+     "25 w.txt\n",
+     "",
+     0
+    ],
+    "wc -l d p.txt": [
+     "      0 d\n      3 p.txt\n      3 total\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc -l p.txt": [
+     "3 p.txt\n",
+     "",
+     0
+    ],
+    "wc -l p.txt w.txt": [
+     "  3 p.txt\n  2 w.txt\n  5 total\n",
+     "",
+     0
+    ],
+    "wc -lc - < p.txt": [
+     "  3 117 -\n",
+     "",
+     0
+    ],
+    "wc -m u.txt": [
+     "11 u.txt\n",
+     "",
+     0
+    ],
+    "wc -w w.txt": [
+     "5 w.txt\n",
+     "",
+     0
+    ],
+    "wc -x p.txt": [
+     "",
+     "wc: invalid option -- 'x'\nTry 'wc --help' for more information.\n",
+     1
+    ],
+    "wc d": [
+     "      0       0       0 d\n",
+     "wc: d: Is a directory\n",
+     1
+    ],
+    "wc nosuch": [
+     "",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt": [
+     "  3   3 117 p.txt\n",
+     "",
+     0
+    ],
+    "wc p.txt nosuch": [
+     "  3   3 117 p.txt\n  3   3 117 total\n",
+     "wc: nosuch: No such file or directory\n",
+     1
+    ],
+    "wc p.txt w.txt e.txt": [
+     "  3   3 117 p.txt\n  2   5  25 w.txt\n  0   0   0 e.txt\n  5   8 142 total\n",
+     "",
+     0
+    ]
+   },
+   "kind": "gnu 9.4 c"
+  }
+ }
+}

@@ -148,6 +148,10 @@ def skip_python_commands(persona, ident, content):
         commands |= set(EMBEDDED_SKIP_PYTHON_COMMANDS) - ({"perl"} if system.has_perl(persona) else set())
     # the tools of packages the server has not installed
     commands |= set(system.skipped_tools(persona, ident))
+    # wc, sort and seq where the firmware's BusyBox has no such applet
+    present = system.text_programs(persona, ident)
+    commands |= {spelling for name in system.TEXT_TOOLS if name not in present
+                 for spelling in (name, f"/bin/{name}", f"/usr/bin/{name}")}
     if not content.busybox_help:
         commands |= set(BUSYBOX_PYTHON_COMMANDS)
     if persona.family == "openwrt":
@@ -386,6 +390,17 @@ def apply_to_tree(base_tree, persona, ident, content):
         tree.ensure_executable(t, rel, program_size(ident, rel, sizes), ctime=ident.installed_at)
     for rel in system.directories(persona):
         tree.ensure_dir(t, rel, ctime=ident.installed_at)
+    # wc, sort and seq as the system has them: coreutils (Cowrie's tree has those of Debian) or the
+    # applets of the firmware's BusyBox
+    if persona.kind == "device":
+        for name in system.TEXT_TOOLS:
+            for folder in ("bin", "sbin", "usr/bin", "usr/sbin"):
+                tree.remove_node(t, f"{folder}/{name}")
+    for rel, target in system.text_programs(persona, ident).values():
+        if target:
+            tree.ensure_link(t, rel, target, ctime=ident.installed_at)
+        else:
+            tree.ensure_executable(t, rel, program_size(ident, rel, sizes), ctime=ident.installed_at)
     if persona.kind == "server":
         # Red Hat's sudo package keeps sudoers.d closed
         tree.ensure_dir(t, "etc/sudoers.d", mode=0o750 if system.is_el(persona) else 0o755, ctime=ident.installed_at)
@@ -416,6 +431,7 @@ def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, c
     top = "".join(f"{key} = {value}\n" for key, value in top_keys(persona, ident, content).items())
     top += f"df_table = {runtime_dir}/{DF_TABLE}\n"
     top += "".join(f"{key} = {value}\n" for key, value in system.awk_keys(persona, ident).items())
+    top += "".join(f"{key} = {value}\n" for key, value in system.text_keys(persona, ident).items())
     profile = PROFILES[persona.ssh_profile]
     keys = "\n".join(
         f"{KEY_FILES[k]}_public_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key.pub\n"

@@ -7200,6 +7200,1458 @@ def patch_awk(cowrie_root):
                  'commands["/bin/awk"] = Command_awk\ncommands["awk"] = Command_awk\n' + AWK_COMMAND)
 
 
+# module code of the patched commands/wc.py after its commands: wc, sort and seq of the persona
+TEXT_COMMAND = r'''
+
+# T-Pot: wc, sort and seq of the persona. [shell] text_style gnu: GNU coreutils (text_version,
+# text_year, text_packager, text_collate c or en for the order of sort); text_style busybox: the
+# BusyBox of the firmware (text_banner, text_version, text_libc glibc, uclibc or musl for the texts
+# of option errors, text_unicode). They read files of the emulated file system and the data of a pipe
+# or of the terminal; input, output, lines and keys have limits.
+import unicodedata
+from decimal import Decimal, InvalidOperation
+
+from cowrie.core.config import CowrieConfig
+
+TPOT_TEXT_INPUT = 4 << 20
+TPOT_TEXT_OUTPUT = 1 << 20
+TPOT_SORT_BYTES = 2 << 20
+TPOT_SORT_LINES = 100_000
+TPOT_SORT_KEYS = 32
+TPOT_TEXT_DIGITS = 4096
+# white space of glibc in a UTF-8 locale (iswspace: no no-break spaces)
+TPOT_TEXT_SPACE = "[ \t\n\v\f\r\u1680\u2000-\u2006\u2008-\u200a\u2028\u2029\u205f\u3000]"
+TPOT_TEXT_WORDS = re.compile(f"(?:(?!{TPOT_TEXT_SPACE}).)++", re.S)
+TPOT_TEXT_C_WORDS = re.compile(rb"[^ \t\n\v\f\r]++")
+TPOT_TEXT_C_PRINT = re.compile(rb"[!-~]")
+TPOT_TEXT_C_CONTROL_RUNS = re.compile(rb"(?<![^ \t\n\v\f\r])[\x00-\x08\x0e-\x1f\x7f]++(?![^ \t\n\v\f\r])")
+TPOT_TEXT_C_PLAIN = re.compile(rb"[ -~]*+")
+TPOT_WC_INPUT = 64 << 20
+TPOT_TEXT_LINE_ENDS = re.compile("[\n\r\f]")
+TPOT_TEXT_ASCII_PRINT = re.compile(r"[ -~]*+")
+TPOT_TEXT_MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
+TPOT_TEXT_NUMBER = re.compile(r"[ \t]*+(-?+)([0-9]*+)(?:\.([0-9]*+))?+")
+TPOT_TEXT_STRTOD = re.compile(r"[ \t\n\v\f\r]*+([-+]?+(?:(?:[0-9]++\.?+[0-9]*+|\.[0-9]++)(?:[eE][-+]?+[0-9]++)?+"
+                              r"|0[xX][0-9a-fA-F]++|inf(?:inity)?+|nan))", re.I)
+TPOT_TEXT_GNU_FLOAT = re.compile(r"[ \t\n\v\f\r]*+[-+]?+(?:(?:[0-9]++\.?+[0-9]*+|\.[0-9]++)(?:[eE][-+]?+[0-9]++)?+"
+                                 r"|0[xX][0-9a-fA-F]++(?:\.[0-9a-fA-F]*+)?+(?:[pP][-+]?+[0-9]++)?+|inf(?:inity)?+"
+                                 r"|nan)", re.I)
+TPOT_TEXT_FORMAT = re.compile(r"%([-+ #0']*+)([0-9]*+)(?:\.([0-9]*+))?+([a-zA-Z%]?)")
+
+
+def tpot_text(key: str, fallback: str = "") -> str:
+    return CowrieConfig.get("shell", key, fallback=fallback) or fallback
+
+
+class TpotTextStop(Exception):
+    """Ends the command: the text for stderr and the exit status."""
+
+    def __init__(self, text: str, code: int) -> None:
+        super().__init__(text)
+        self.text, self.code = text, code
+
+
+def tpot_text_quote(value: str) -> str:
+    """quote() of gnulib: the quotation marks of a UTF-8 locale, ASCII ones in the POSIX locale."""
+    if tpot_text("text_collate", "c") == "posix":
+        return f"'{value}'"
+    return f"\u2018{value}\u2019"
+
+
+def tpot_text_quotef(name: str) -> str:
+    """A file name in a message of coreutils 9: quoted only with characters a shell would treat."""
+    if re.fullmatch(r"[\w./+,:@%^=-]++", name):
+        return name
+    return "'" + name.replace("'", "'\\''") + "'"
+
+
+class TpotTextTool(HoneyPotCommand):
+    """What wc, sort and seq share: the persona's style, the option parsers and their messages, the
+    files of the emulated file system and standard input (a pipe or the terminal until its end)."""
+
+    consumes_stdin = True
+    tool = ""
+    status = 1           # the exit status of an option error
+    shorts = ""          # GNU getopt string ("+" first: options end at the first operand)
+    longs: dict = {}     # GNU long option: (short letter or own key, 0 no argument, 1 required, 2 optional)
+    busybox_shorts = ""
+
+    def start(self) -> None:
+        self.gnu = tpot_text("text_style", "gnu") != "busybox"
+        numbers = re.findall(r"[0-9]+", tpot_text("text_version", "9.1" if self.gnu else "1.36.1"))
+        self.version = tuple(int(x) for x in numbers[:3]) or ((9, 1) if self.gnu else (1, 36, 1))
+        self.libc = tpot_text("text_libc", "glibc")
+        self.unicode = tpot_text("text_unicode", "false").lower() in ("1", "true", "yes")
+        self.collate = tpot_text("text_collate", "c")
+        self.tpot_lines = None
+        self.tpot_run(None)
+
+    # --- running ---------------------------------------------------------------------------
+
+    def tpot_run(self, terminal: bytes | None) -> None:
+        self.tpot_out, self.tpot_size, self.tpot_err = [], 0, []
+        try:
+            code = self.tpot_main(terminal)
+        except TpotTextStop as stop:
+            self.tpot_err.append(stop.text)
+            code = stop.code
+        if code is None:
+            # standard input is the terminal: its lines until ctrl-d
+            self.tpot_lines, self.tpot_read_size = [], 0
+            return
+        if self.tpot_out:
+            self.writeBytes(b"".join(self.tpot_out))
+        if self.tpot_err:
+            self.errorWrite("".join(self.tpot_err))
+        self.exit_code = code
+        self.exit()
+
+    def tpot_main(self, terminal: bytes | None) -> int | None:
+        raise NotImplementedError
+
+    def lineReceived(self, line: str) -> None:
+        self.protocol.events.dispatch("cowrie.command.input", "INPUT (%(realm)s): %(input)s",
+                                      realm=self.tool, input=line)
+        if self.tpot_lines is None:
+            return
+        data = line.encode("utf-8", "surrogateescape") + b"\n"
+        if self.tpot_read_size + len(data) <= TPOT_TEXT_INPUT:
+            self.tpot_lines.append(data)
+            self.tpot_read_size += len(data)
+
+    def eofReceived(self) -> None:
+        if self.tpot_lines is None:
+            self.exit()
+            return
+        data, self.tpot_lines = b"".join(self.tpot_lines), None
+        self.tpot_run(data)
+
+    def tpot_emit(self, data) -> bool:
+        """Output, at most TPOT_TEXT_OUTPUT bytes; False once the limit is reached."""
+        if isinstance(data, str):
+            data = data.encode("utf-8", "surrogateescape")
+        room = TPOT_TEXT_OUTPUT - self.tpot_size
+        if room <= 0:
+            return False
+        self.tpot_out.append(data[:room])
+        self.tpot_size += min(len(data), room)
+        return len(data) <= room
+
+    def tpot_stdin(self, terminal: bytes | None, limit: int = TPOT_TEXT_INPUT) -> bytes | None:
+        """The data of standard input: the pipe, the terminal's lines, None while the terminal is open."""
+        if terminal is not None:
+            return terminal
+        if self.input_data is not None:
+            return bytes(self.input_data[:limit])
+        return None
+
+    def tpot_file(self, name: str):
+        """(kind, data, size) of a file operand: kind file, dir or missing; the size of /proc and /sys
+        files is 0, as stat gives it."""
+        path = self.fs.resolve_path(name, self.cwd)
+        try:
+            if self.fs.isdir(path):
+                return "dir", b"", 0
+            data = self.fs.file_contents(path)
+        except Exception:  # noqa: BLE001 - a missing or unreadable file of the emulated file system
+            return "missing", b"", 0
+        data = bytes(data or b"")[:TPOT_TEXT_INPUT]
+        return "file", data, 0 if path.startswith(("/proc/", "/sys/")) else len(data)
+
+    # --- options ---------------------------------------------------------------------------
+
+    def tpot_try(self) -> str:
+        return f"Try '{self.tool} --help' for more information.\n"
+
+    def tpot_gnu_options(self, args: list[str], negative_numbers: bool = False):
+        """getopt_long of glibc: options and operands in any order (unless shorts starts with "+"),
+        unique prefixes of long options, "--" ends the options. negative_numbers: an operand like
+        -1 or -.5 ends the options (seq). Returns ([(name, value)], operands)."""
+        found, operands, index = [], [], 0
+        permute = not self.shorts.startswith("+")
+        shorts = self.shorts.lstrip("+")
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if arg == "--":
+                operands += args[index:]
+                break
+            if negative_numbers and re.match(r"-[0-9.]", arg):
+                operands += args[index - 1:]
+                break
+            if not arg.startswith("-") or arg == "-":
+                operands.append(arg)
+                if not permute:
+                    operands += args[index:]
+                    break
+                continue
+            if arg.startswith("--"):
+                word, eq, value = arg[2:].partition("=")
+                names = [name for name in self.longs if name.startswith(word)]
+                if word in self.longs:
+                    names = [word]
+                if not names:
+                    raise TpotTextStop(f"{self.tool}: unrecognized option '{arg}'\n" + self.tpot_try(), self.status)
+                if len(names) > 1 and len({self.longs[n] for n in names}) > 1:
+                    raise TpotTextStop(f"{self.tool}: option '{arg.partition('=')[0]}' is ambiguous; possibilities:"
+                                       + "".join(f" '--{n}'" for n in names) + "\n" + self.tpot_try(), self.status)
+                name = names[0]
+                key, takes = self.longs[name]
+                if eq and not takes:
+                    raise TpotTextStop(f"{self.tool}: option '--{name}' doesn't allow an argument\n" + self.tpot_try(),
+                                       self.status)
+                if takes == 1 and not eq:
+                    if index >= len(args):
+                        raise TpotTextStop(f"{self.tool}: option '--{name}' requires an argument\n"
+                                           + self.tpot_try(), self.status)
+                    value, index = args[index], index + 1
+                found.append((key, value if (eq or takes == 1) else None))
+                continue
+            letters = arg[1:]
+            for at, letter in enumerate(letters):
+                spot = shorts.find(letter)
+                if spot < 0 or letter == ":":
+                    raise TpotTextStop(f"{self.tool}: invalid option -- '{letter}'\n" + self.tpot_try(), self.status)
+                if shorts[spot + 1:spot + 2] == ":":
+                    value = letters[at + 1:]
+                    if not value:
+                        if index >= len(args):
+                            raise TpotTextStop(f"{self.tool}: option requires an argument -- '{letter}'\n"
+                                               + self.tpot_try(), self.status)
+                        value, index = args[index], index + 1
+                    found.append((letter, value))
+                    break
+                found.append((letter, None))
+        return found, operands
+
+    def tpot_busybox_usage(self) -> str:
+        raise NotImplementedError
+
+    def tpot_usage_stop(self, prefix: str = "") -> TpotTextStop:
+        banner = tpot_text("text_banner", "BusyBox v1.36.1")
+        head = f"{banner} multi-call binary.\n" if self.version >= (1, 15) else f"{banner} multi-call binary\n"
+        return TpotTextStop(f"{prefix}{head}\nUsage: {self.tool} {self.tpot_busybox_usage()}", self.status)
+
+    def tpot_busybox_options(self, args: list[str]):
+        """getopt32 of BusyBox: the getopt of the firmware's C library (its messages; musl does not
+        reorder), then the usage text on an error."""
+        found, operands, index = [], [], 0
+        shorts = self.busybox_shorts.lstrip("+")
+        permute = not self.busybox_shorts.startswith("+") and self.libc != "musl"
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if arg == "--":
+                operands += args[index:]
+                break
+            if not arg.startswith("-") or arg == "-":
+                operands.append(arg)
+                if not permute:
+                    operands += args[index:]
+                    break
+                continue
+            if arg.startswith("--"):
+                if self.libc == "musl":
+                    text = f"{self.tool}: unrecognized option: {arg[2:].partition('=')[0]}\n"
+                elif self.libc == "uclibc":
+                    text = f"{self.tool}: unrecognized option `{arg}'\n"
+                else:
+                    text = f"{self.tool}: unrecognized option '{arg}'\n"
+                if arg == "--help":
+                    raise TpotTextStop(self.tpot_usage_stop().text, 0)
+                raise self.tpot_usage_stop(text)
+            letters = arg[1:]
+            for at, letter in enumerate(letters):
+                spot = shorts.find(letter)
+                if spot < 0 or letter == ":":
+                    text = {"musl": f"{self.tool}: unrecognized option: {letter}\n",
+                            "uclibc": f"{self.tool}: invalid option -- {letter}\n"}.get(
+                        self.libc, f"{self.tool}: invalid option -- '{letter}'\n")
+                    raise self.tpot_usage_stop(text)
+                if shorts[spot + 1:spot + 2] == ":":
+                    value = letters[at + 1:]
+                    if not value:
+                        if index >= len(args):
+                            text = {"musl": f"{self.tool}: option requires an argument: {letter}\n",
+                                    "uclibc": f"{self.tool}: option requires an argument -- {letter}\n"}.get(
+                                self.libc, f"{self.tool}: option requires an argument -- '{letter}'\n")
+                            raise self.tpot_usage_stop(text)
+                        value, index = args[index], index + 1
+                    found.append((letter, value))
+                    break
+                found.append((letter, None))
+        return found, operands
+
+    # --- GNU texts -------------------------------------------------------------------------
+
+    def tpot_gnu_help_lines(self) -> str:
+        if self.version >= (9, 0):
+            return ("      --help        display this help and exit\n"
+                    "      --version     output version information and exit\n")
+        return "      --help     display this help and exit\n      --version  output version information and exit\n"
+
+    def tpot_gnu_footer(self) -> str:
+        name = self.tool
+        if self.version < (8, 23):
+            return ("\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\n"
+                    + ("" if self.collate.startswith("en") else
+                       f"Report {name} translation bugs to <http://translationproject.org/team/>\n")
+                    + f"For complete documentation, run: info coreutils '{name} invocation'\n")
+        if self.version < (8, 29):
+            return ("\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\n"
+                    + ("" if self.collate.startswith("en") else
+                       "Report translation bugs to <http://translationproject.org/team/>\n")
+                    + f"Full documentation at: <http://www.gnu.org/software/coreutils/{name}>\n"
+                    f"or available locally via: info '(coreutils) {name} invocation'\n")
+        return ("\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\n"
+                + ("" if self.collate.startswith("en") else
+                   "Report any translation bugs to <https://translationproject.org/team/>\n")
+                + f"Full documentation <https://www.gnu.org/software/coreutils/{name}>\n"
+                f"or available locally via: info '(coreutils) {name} invocation'\n")
+
+    def tpot_gnu_version(self, authors: str) -> str:
+        version = tpot_text("text_version", "9.1")
+        packager = tpot_text("text_packager")
+        return (f"{self.tool} (GNU coreutils) {version}\n" + (f"Packaged by {packager}\n" if packager else "")
+                + f"Copyright (C) {tpot_text('text_year', '2022')} Free Software Foundation, Inc.\n"
+                f"License GPLv3+: GNU GPL version 3 or later <{'http' if self.version < (8, 27) else 'https'}"
+                "://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\n"
+                f"There is NO WARRANTY, to the extent permitted by law.\n\nWritten by {authors}\n")
+
+
+# --- wc ----------------------------------------------------------------------------------------
+
+def tpot_wc_width(text: str) -> int:
+    """The display width of a line (wc -L): tab stops of 8, wide characters 2, others of no width 0."""
+    if TPOT_TEXT_ASCII_PRINT.fullmatch(text):
+        return len(text)
+    width = 0
+    for char in text:
+        if char == "\t":
+            width = (width // 8 + 1) * 8
+        elif char.isprintable():
+            if unicodedata.combining(char):
+                continue
+            width += 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+    return width
+
+
+def tpot_wc_piece(data: bytes, gnu: bool, version: tuple, unicode: bool, longest: bool) -> list[int]:
+    """[lines, words, characters, bytes, longest line] of whole lines, as GNU wc (UTF-8) or BusyBox
+    wc (bytes) counts them; the longest line only when asked for (-L)."""
+    lines = data.count(b"\n")
+    if data.isascii():
+        words = len(data.split())
+        if (gnu and version < (9, 5)) or not gnu:
+            # a word has a printable character
+            words -= len(TPOT_TEXT_C_CONTROL_RUNS.findall(data))
+        chars = len(data)
+        widest = 0
+        if longest:
+            for part in re.split(rb"[\n\r\f]" if gnu else rb"[\n\r\f\v]", data):
+                if TPOT_TEXT_C_PLAIN.fullmatch(part):
+                    widest = max(widest, len(part))
+                    continue
+                position = 0
+                for byte in part:
+                    if 0x20 <= byte <= 0x7E:
+                        position += 1
+                    elif byte == 9:
+                        position = (position | 7) + 1
+                widest = max(widest, position)
+        return [lines, words, chars, len(data), widest]
+    if gnu:
+        text = data.decode("utf-8", "ignore")
+        runs = TPOT_TEXT_WORDS.findall(text)
+        if version >= (9, 5):
+            words = len(runs)
+        else:
+            words = sum(1 for run in runs if any(c.isprintable() for c in run))
+        widest = max((tpot_wc_width(part) for part in TPOT_TEXT_LINE_ENDS.split(text)), default=0) if longest else 0
+        return [lines, words, len(text), len(data), widest]
+    words = sum(1 for run in TPOT_TEXT_C_WORDS.findall(data) if TPOT_TEXT_C_PRINT.search(run))
+    chars = len(data) - sum(1 for byte in data if byte & 0xC0 == 0x80) if unicode else len(data)
+    widest = 0
+    if longest:
+        for part in re.split(rb"[\n\r\f\v]", data):
+            position = 0
+            for byte in part:
+                if 0x20 <= byte <= 0x7E:
+                    position += 1
+                elif byte == 9:
+                    position = (position | 7) + 1
+            widest = max(widest, position)
+    return [lines, words, chars, len(data), widest]
+
+
+def tpot_wc_counts(data: bytes, gnu: bool, version: tuple, unicode: bool, longest: bool = True,
+                   posix: bool = False) -> list[int]:
+    """The counts of the data, in pieces of whole lines of about 1 MiB (bounded memory); in the
+    POSIX locale GNU wc counts bytes as characters."""
+    totals, at = [0, 0, 0, 0, 0], 0
+    data = data[:TPOT_WC_INPUT]
+    while at < len(data):
+        end = data.find(b"\n", at + (1 << 20))
+        end = len(data) if end < 0 else end + 1
+        piece = tpot_wc_piece(data[at:end], gnu, version, unicode, longest)
+        if posix:
+            piece[2] = piece[3]
+        totals = [a + b for a, b in zip(totals[:4], piece[:4])] + [max(totals[4], piece[4])]
+        at = end
+    return totals
+
+
+class Command_tpot_wc(TpotTextTool):
+    """wc of the persona: GNU coreutils or BusyBox."""
+
+    tool = "wc"
+    shorts = "clLmw"
+    longs = {"bytes": ("c", 0), "chars": ("m", 0), "lines": ("l", 0), "files0-from": ("files0", 1),
+             "max-line-length": ("L", 0), "words": ("w", 0), "total": ("total", 1), "help": ("help", 0),
+             "version": ("version", 0)}
+
+    @property
+    def busybox_shorts(self) -> str:
+        return "lwcL" if self.version < (1, 15) else "lwmcL"
+
+    def tpot_busybox_usage(self) -> str:
+        if self.version < (1, 15):
+            return ("[OPTION]... [FILE]...\n\n"
+                    "Print line, word, and byte counts for each FILE, and a total line if\n"
+                    "more than one FILE is specified. With no FILE, read standard input.\n\n"
+                    "Options:\n\t-c\tPrint the byte counts\n\t-l\tPrint the newline counts\n"
+                    "\t-L\tPrint the length of the longest line\n\t-w\tPrint the word counts\n")
+        each = "FILEs" if self.version >= (1, 35) else "each FILE"
+        return (f"[-c{'m' if self.unicode else ''}lwL] [FILE]...\n\n"
+                f"Count lines, words, and bytes for {each} (or stdin)\n\n\t-c\tCount bytes\n"
+                + ("\t-m\tCount characters\n" if self.unicode else "")
+                + "\t-l\tCount newlines\n\t-w\tCount words\n\t-L\tPrint longest line length\n")
+
+    def tpot_gnu_help(self) -> str:
+        v = self.version
+        if v < (8, 23):
+            words = ("more than one FILE is specified.  With no FILE, or when FILE is -,\n"
+                     "read standard input.  A word is a non-zero-length sequence of characters\n"
+                     "delimited by white space.\n")
+        elif v >= (9, 5):
+            words = ("more than one FILE is specified.  A word is a nonempty sequence of non white\n"
+                     "space delimited by white space characters or by start or end of input.\n\n"
+                     "With no FILE, or when FILE is -, read standard input.\n\n")
+        else:
+            words = ("more than one FILE is specified.  A word is a non-zero-length sequence of\n"
+                     + ("printable characters" if v >= (9, 0) else "characters") + " delimited by white space.\n\n"
+                     "With no FILE, or when FILE is -, read standard input.\n\n")
+        longest = "print the length of the longest line" if v < (8, 23) else "print the maximum display width"
+        total = ("      --total=WHEN       when to print a line with total counts;\n"
+                 "                           WHEN can be: auto, always, only, never\n") if v >= (9, 2) else ""
+        return ("Usage: wc [OPTION]... [FILE]...\n  or:  wc [OPTION]... --files0-from=F\n"
+                "Print newline, word, and byte counts for each FILE, and a total line if\n" + words +
+                "The options below may be used to select which counts are printed, always in\n"
+                "the following order: newline, word, character, byte, maximum line length.\n"
+                "  -c, --bytes            print the byte counts\n  -m, --chars            print the character counts\n"
+                "  -l, --lines            print the newline counts\n"
+                "      --files0-from=F    read input from the files specified by\n"
+                "                           NUL-terminated names in file F;\n"
+                "                           If F is - then read names from standard input\n"
+                f"  -L, --max-line-length  {longest}\n  -w, --words            print the word counts\n"
+                + total + self.tpot_gnu_help_lines() + self.tpot_gnu_footer())
+
+    def tpot_main(self, terminal: bytes | None) -> int | None:
+        args = list(self.args)
+        if self.gnu:
+            options, names = self.tpot_gnu_options(args)
+        else:
+            options, names = self.tpot_busybox_options(args)
+        chosen, total, files0 = set(), "auto", None
+        for key, value in options:
+            if key == "help":
+                self.tpot_emit(self.tpot_gnu_help())
+                return 0
+            if key == "version":
+                self.tpot_emit(self.tpot_gnu_version("Paul Rubin and David MacKenzie."))
+                return 0
+            if key == "total":
+                if self.version < (9, 2):
+                    raise TpotTextStop(f"wc: unrecognized option '--total={value}'\n" + self.tpot_try(), 1)
+                matches = [w for w in ("auto", "always", "only", "never") if w.startswith(value or "\0")]
+                if len(matches) != 1:
+                    raise TpotTextStop(f"wc: invalid argument {tpot_text_quote(value)} for '--total'\n"
+                                       "Valid arguments are:\n  - 'auto'\n  - 'always'\n  - 'only'\n  - 'never'\n"
+                                       + self.tpot_try(), 1)
+                total = matches[0]
+            elif key == "files0":
+                files0 = value
+            else:
+                chosen.add(key)
+        order = [k for k in "lwmcL" if k in chosen] or ["l", "w", "c"]
+        if files0 is not None:
+            if names:
+                raise TpotTextStop(f"wc: extra operand {tpot_text_quote(names[0])}\n"
+                                   "file operands cannot be combined with --files0-from\n" + self.tpot_try(), 1)
+            kind, data, _ = self.tpot_file(files0) if files0 != "-" else ("file", self.tpot_stdin(terminal), 0)
+            if data is None:
+                return None
+            if kind != "file":
+                raise TpotTextStop(f"wc: cannot open {tpot_text_quote(files0)} for reading: "
+                                   + ("Is a directory" if kind == "dir" else "No such file or directory") + "\n", 1)
+            names = [n.decode("utf-8", "surrogateescape") for n in data.split(b"\0") if n]
+        operands = names or [None]
+        if any(n in (None, "-") for n in operands) and self.tpot_stdin(terminal) is None:
+            return None
+        rows, code, sizes, stat_ok = [], 0, 0, []
+        for name in operands:
+            if name in (None, "-"):
+                kind, data, size = "stdin", self.tpot_stdin(terminal, TPOT_WC_INPUT), 0
+            else:
+                kind, data, size = self.tpot_file(name)
+            if kind == "missing":
+                if self.gnu:
+                    shown = tpot_text_quotef(name) if self.version >= (8, 23) else name
+                else:
+                    shown = name
+                rows.append((None, f"wc: {shown}: No such file or directory\n"))
+                code = 1
+                continue
+            counts = tpot_wc_counts(data, self.gnu, self.version, self.unicode, "L" in order,
+                                    self.gnu and self.collate == "posix")
+            error = ""
+            if kind == "dir":
+                counts, code = [0, 0, 0, 0, 0], 1
+                error = f"wc: {name}: Is a directory\n"
+            rows.append(((counts, name), error))
+            stat_ok.append(kind)
+            sizes += size
+        totals = [0, 0, 0, 0, 0]
+        for row, _ in rows:
+            if row:
+                totals = [a + b for a, b in zip(totals, row[0])]
+        index = {"l": 0, "w": 1, "m": 2, "c": 3, "L": 4}
+        many = len(operands) > 1
+        if self.gnu:
+            if len(operands) == 1 and len(order) == 1:
+                width = 1
+            else:
+                width = len(str(sizes)) if sizes else 1
+                if any(k in ("stdin", "dir") for k in stat_ok):
+                    width = max(width, 7)
+        for row, error in rows:
+            if row:
+                counts, name = row
+                if self.gnu:
+                    if total != "only":
+                        line = " ".join(f"{counts[index[k]]:>{width}}" for k in order)
+                        self.tpot_emit(line + (f" {name}" if name is not None else "") + "\n")
+                else:
+                    if len(order) == 1 and not many:
+                        line = str(counts[index[order[0]]])
+                    else:
+                        line = " ".join(f"{counts[index[k]]:>9}" for k in order)
+                    self.tpot_emit(line + (f" {name}" if name is not None else "") + "\n")
+            if error:
+                self.tpot_err.append(error)
+        if self.gnu:
+            if total == "always" or (total == "auto" and many):
+                line = " ".join(f"{totals[index[k]]:>{width}}" for k in order)
+                self.tpot_emit(line + " total\n")
+            elif total == "only":
+                self.tpot_emit(" ".join(str(totals[index[k]]) for k in order) + "\n")
+        elif many:
+            self.tpot_emit(" ".join(f"{totals[index[k]]:>9}" for k in order) + " total\n")
+        return code
+
+
+# --- seq ---------------------------------------------------------------------------------------
+
+def tpot_seq_operand(text: str):
+    """(value, precision, width) of a seq operand as GNU seq scans it: precision None for hex,
+    infinities and NaN (%g then); None if it is no number."""
+    match = TPOT_TEXT_GNU_FLOAT.fullmatch(text)
+    if not match:
+        return None
+    word = text.strip(" \t\n\v\f\r").lstrip("+")
+    lower = word.lower()
+    if "x" in lower or "inf" in lower or "nan" in lower:
+        try:
+            value = float.fromhex(word) if "x" in lower else float(word)
+        except ValueError:
+            return None
+        return value, None, len(word)
+    mantissa, _, exponent = lower.partition("e")
+    whole, dot, fraction = mantissa.partition(".")
+    precision = len(fraction) if dot else 0
+    value = Decimal(word)
+    if exponent:
+        shift = int(exponent)
+        precision = max(0, precision - shift)
+    return value, precision, len(word)
+
+
+def tpot_strtod(text: str):
+    """(value, rest) as C strtod reads the front of text; value None without a number."""
+    match = TPOT_TEXT_STRTOD.match(text)
+    if not match:
+        return None, text
+    word = match.group(1)
+    try:
+        value = float.fromhex(word) if "x" in word.lower() else float(word)
+    except (ValueError, OverflowError):
+        return None, text
+    return value, text[match.end():]
+
+
+class Command_tpot_seq(TpotTextTool):
+    """seq of the persona: GNU coreutils or BusyBox."""
+
+    tool = "seq"
+    consumes_stdin = False
+    shorts = "+f:s:w"
+    longs = {"format": ("f", 1), "separator": ("s", 1), "equal-width": ("w", 0), "help": ("help", 0),
+             "version": ("version", 0)}
+    busybox_shorts = "+ws:"
+
+    def tpot_busybox_usage(self) -> str:
+        if self.version < (1, 15):
+            return ("[-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\n"
+                    "FIRST, INC default to 1\n\nOptions:\n\t-w\tPad to last with leading zeros\n"
+                    "\t-s SEP\tString separator\n")
+        return ("[-w] [-s SEP] [FIRST [INC]] LAST\n\nPrint numbers from FIRST to LAST, in steps of INC.\n"
+                "FIRST, INC default to 1.\n\n\t-w\tPad to last with leading zeros\n\t-s SEP\tString separator\n")
+
+    def tpot_gnu_help(self) -> str:
+        zero = "" if self.version < (8, 23) else \
+            "INCREMENT must not be 0; none of FIRST, INCREMENT and LAST may be NaN.\n"
+        return ("Usage: seq [OPTION]... LAST\n  or:  seq [OPTION]... FIRST LAST\n"
+                "  or:  seq [OPTION]... FIRST INCREMENT LAST\n"
+                "Print numbers from FIRST to LAST, in steps of INCREMENT.\n\n"
+                "Mandatory arguments to long options are mandatory for short options too.\n"
+                "  -f, --format=FORMAT      use printf style floating-point FORMAT\n"
+                "  -s, --separator=STRING   use STRING to separate numbers (default: \\n)\n"
+                "  -w, --equal-width        equalize width by padding with leading zeroes\n"
+                + self.tpot_gnu_help_lines()
+                + "\nIf FIRST or INCREMENT is omitted, it defaults to 1.  That is, an\n"
+                "omitted INCREMENT defaults to 1 even when LAST is smaller than FIRST.\n"
+                "The sequence of numbers ends when the sum of the current number and\n"
+                "INCREMENT would become greater than LAST.\n"
+                "FIRST, INCREMENT, and LAST are interpreted as floating point values.\n"
+                "INCREMENT is usually positive if FIRST is smaller than LAST, and\n"
+                "INCREMENT is usually negative if FIRST is greater than LAST.\n" + zero
+                + "FORMAT must be suitable for printing one argument of type 'double';\n"
+                "it defaults to %.PRECf if FIRST, INCREMENT, and LAST are all fixed point\n"
+                "decimal numbers with maximum precision PREC, and to %g otherwise.\n" + self.tpot_gnu_footer())
+
+    def tpot_main(self, terminal: bytes | None) -> int | None:
+        if not self.gnu:
+            return self.tpot_busybox()
+        options, operands = self.tpot_gnu_options(list(self.args), negative_numbers=True)
+        fmt, sep, equal = None, "\n", False
+        for key, value in options:
+            if key == "help":
+                self.tpot_emit(self.tpot_gnu_help())
+                return 0
+            if key == "version":
+                self.tpot_emit(self.tpot_gnu_version("Ulrich Drepper."))
+                return 0
+            if key == "f":
+                fmt = value
+            elif key == "s":
+                sep = value
+            elif key == "w":
+                equal = True
+        if not operands:
+            raise TpotTextStop("seq: missing operand\n" + self.tpot_try(), 1)
+        if len(operands) > 3:
+            raise TpotTextStop(f"seq: extra operand {tpot_text_quote(operands[3])}\n" + self.tpot_try(), 1)
+        if fmt is not None and equal:
+            raise TpotTextStop("seq: format string may not be specified when printing equal width strings\n"
+                               + self.tpot_try(), 1)
+        scanned = []
+        for operand in operands:
+            found = tpot_seq_operand(operand)
+            shown = tpot_text_quote(operand) if self.version >= (8, 23) else operand
+            if found is None:
+                raise TpotTextStop(f"seq: invalid floating point argument: {shown}\n" + self.tpot_try(), 1)
+            if found[0] != found[0]:
+                raise TpotTextStop(f"seq: invalid {tpot_text_quote('not-a-number')} argument: {shown}\n"
+                                   + self.tpot_try(), 1)
+            scanned.append(found)
+        one = (Decimal(1), 0, 1)
+        first, step, last = (scanned + [None])[:1] and (
+            (one, one, scanned[0]) if len(scanned) == 1 else
+            (scanned[0], one, scanned[1]) if len(scanned) == 2 else tuple(scanned))
+        if step[0] == 0 and self.version >= (8, 23):
+            raise TpotTextStop(f"seq: invalid Zero increment value: {tpot_text_quote(operands[1])}\n"
+                               + self.tpot_try(), 1)
+        if fmt is not None:
+            directives = [m for m in TPOT_TEXT_FORMAT.finditer(fmt) if m.group(4) != "%"]
+            if not directives:
+                raise TpotTextStop(f"seq: format {tpot_text_quote(fmt)} has no % directive\n", 1)
+            if directives[0].group(4) not in tuple("aAeEfFgG"):
+                bad = "%" + directives[0].group(1) + directives[0].group(2) + (
+                    "." + directives[0].group(3) if directives[0].group(3) is not None else "") + directives[0].group(4)
+                raise TpotTextStop(f"seq: format {tpot_text_quote(fmt)} has unknown {bad} directive\n", 1)
+            if len(directives) > 1:
+                raise TpotTextStop(f"seq: format {tpot_text_quote(fmt)} has too many % directives\n", 1)
+        fixed = all(p is not None for _, p, _ in (first, step, last))
+        precision = max(first[1], step[1]) if fixed else None
+        width = 0
+        if equal and fixed:
+            width = max(len(f"{first[0]:.{precision}f}"), len(f"{last[0]:.{precision}f}"))
+
+        def show(value) -> str:
+            if fmt is not None:
+                try:
+                    return fmt.replace("%%", "\0") % float(value) if False else self.tpot_printf(fmt, float(value))
+                except (TypeError, ValueError, OverflowError):
+                    return ""
+            if not fixed:
+                return "%g" % float(value)
+            text = f"{value:.{precision}f}"
+            if width and len(text) < width:
+                negative = text.startswith("-")
+                text = ("-" if negative else "") + text[1 if negative else 0:].rjust(width - negative, "0")
+            return text
+
+        start, increment, end = (x[0] if fixed else float(x[0]) for x in (first, step, last))
+        index, value, wrote = 0, start, False
+        while (increment < 0 and value >= end) or (increment >= 0 and value <= end):
+            if not self.tpot_emit((sep if wrote else "") + show(value)):
+                return 0
+            wrote = True
+            index += 1
+            value = start + index * increment
+        if wrote:
+            self.tpot_emit("\n")
+        return 0
+
+    def tpot_printf(self, fmt: str, value: float) -> str:
+        """The -f format with its one directive (C printf of a double)."""
+        out, last = [], 0
+        for match in TPOT_TEXT_FORMAT.finditer(fmt):
+            out.append(fmt[last:match.start()])
+            last = match.end()
+            flags, width, precision, conversion = match.groups()
+            if conversion == "%":
+                out.append("%")
+                continue
+            if len(width) > 4 or (precision and len(precision) > 4):
+                raise ValueError("width")
+            spec = "%" + flags.replace("'", "") + width + ("." + precision if precision is not None else "")
+            if conversion in "aA":
+                text = float.hex(value)
+                out.append(text.upper() if conversion == "A" else text)
+            else:
+                out.append((spec + conversion) % value)
+        out.append(fmt[last:])
+        return "".join(out).replace("\\n", "\n")
+
+    def tpot_busybox(self) -> int:
+        options, operands = self.tpot_busybox_options(list(self.args))
+        equal, sep = False, "\n"
+        for key, value in options:
+            if key == "w":
+                equal = True
+            elif key == "s":
+                sep = value
+        if not 1 <= len(operands) <= 3:
+            raise self.tpot_usage_stop()
+        values = []
+        for operand in operands:
+            value, rest = tpot_strtod(operand)
+            if value is None or rest:
+                raise self.tpot_usage_stop()
+            values.append(value)
+        first = increment = 1.0
+        if len(values) == 3:
+            first, increment, last = values
+        elif len(values) == 2:
+            first, last = values
+        else:
+            last = values[0]
+        width, fraction = 0, 0
+        for at, operand in enumerate(operands):
+            dot = operand.find(".")
+            whole = len(operand) if dot < 0 else dot
+            width = max(width, whole)
+            if at < len(operands) - 1:
+                fraction = max(fraction, len(operand) - whole)
+        if fraction:
+            fraction -= 1
+            if fraction:
+                width += fraction + 1
+        if not equal:
+            width = 0
+        count, value, prefix = 0, first, ""
+        while (increment >= 0 and value <= last) or (increment < 0 and value >= last):
+            if not self.tpot_emit(prefix + "%0*.*f" % (width, fraction, value)):
+                return 0
+            prefix = sep
+            count += 1
+            value = first + count * increment
+        if count:
+            self.tpot_emit("\n")
+        return 0
+
+
+# --- sort --------------------------------------------------------------------------------------
+
+def tpot_en_key(text: str, old: bool = False):
+    """The order of glibc's en_US.UTF-8 (en_GB) collation, its levels as a tuple: letters and
+    digits without case and accents, the accents, the case (lower first), then every character
+    with punctuation and blanks marked; glibc 2.28 and later order a line with punctuation before
+    the same line without it, glibc 2.17 (old) after it."""
+    marked, plain = (1, 0) if old else (0, 1)
+    if text.isascii():
+        letters = re.sub(r"[^0-9A-Za-z]++", "", text)
+        last = tuple((plain, 0) if c.isalnum() else (marked, ord(c)) for c in text)
+        return letters.lower(), "", letters.translate(TPOT_EN_CASE), last
+    primary, accents, case, last = [], [], [], []
+    for char in text:
+        if char.isalnum():
+            parts = unicodedata.normalize("NFD", char)
+            primary.append(parts[0].lower())
+            accents.append(parts[1:])
+            case.append("1" if char.isupper() else "0")
+            last.append((plain, 0))
+        else:
+            last.append((marked, ord(char)))
+    return "".join(primary), "\0".join(accents), "".join(case), tuple(last)
+
+
+TPOT_SORT_NOT_DICTIONARY = re.compile(rb"[^ \t0-9A-Za-z]++")
+TPOT_SORT_BB_NOT_DICTIONARY = re.compile(rb"[^ \t\n\v\f\r0-9A-Za-z]++")
+TPOT_SORT_NOT_PRINTING = re.compile(rb"[^ -~]++")
+TPOT_EN_CASE = str.maketrans({**{chr(c): "1" for c in range(65, 91)}, **{chr(c): "0" for c in range(97, 123)},
+                              **{chr(c): "0" for c in range(48, 58)}})
+
+
+def tpot_version_key(text: bytes):
+    """A key in the order of version numbers: runs of digits as numbers, other runs by their
+    characters ('~' first, letters before other characters)."""
+    parts = []
+    for match in re.finditer(rb"([^0-9]*+)([0-9]*+)", text):
+        if not match.group(0):
+            continue
+        chars = tuple(-1 if b == 0x7E else b if 65 <= (b | 0x20) - 0 and chr(b).isalpha() else b + 256
+                      for b in match.group(1))
+        parts.append((chars + (0,), int(match.group(2)[:TPOT_TEXT_DIGITS] or b"0")))
+    return parts
+
+
+def tpot_decimal(sign: str, whole: str, fraction: str) -> Decimal:
+    whole = whole.lstrip("0")[:TPOT_TEXT_DIGITS] or "0"
+    fraction = fraction[:TPOT_TEXT_DIGITS]
+    try:
+        return Decimal(f"{sign}{whole}.{fraction or '0'}")
+    except InvalidOperation:
+        return Decimal(0)
+
+
+class TpotSortKey:
+    """One -k of GNU sort (or the whole line): fields and characters 0-based, flags of its letters."""
+
+    def __init__(self) -> None:
+        self.sword, self.schar, self.eword, self.echar = 0, 0, None, 0
+        self.flags = set()
+        self.own = False
+
+
+class Command_tpot_sort(TpotTextTool):
+    """sort of the persona: GNU coreutils (the order of its locale) or BusyBox (byte order)."""
+
+    tool = "sort"
+    status = 2
+    shorts = "bcCdfghik:mMno:rRsS:t:T:uVy:z"
+    longs = {"ignore-leading-blanks": ("b", 0), "check": ("check", 2), "compress-program": ("ignore", 1),
+             "debug": ("ignore0", 0), "dictionary-order": ("d", 0), "files0-from": ("files0", 1),
+             "general-numeric-sort": ("g", 0), "human-numeric-sort": ("h", 0), "ignore-case": ("f", 0),
+             "ignore-nonprinting": ("i", 0), "key": ("k", 1), "merge": ("m", 0), "month-sort": ("M", 0),
+             "numeric-sort": ("n", 0), "output": ("o", 1), "random-sort": ("R", 0), "random-source": ("ignore", 1),
+             "reverse": ("r", 0), "sort": ("sort", 1), "stable": ("s", 0), "buffer-size": ("S", 1),
+             "field-separator": ("t", 1), "temporary-directory": ("T", 1), "unique": ("u", 0),
+             "version-sort": ("V", 0), "zero-terminated": ("z", 0), "parallel": ("ignore", 1),
+             "batch-size": ("ignore", 1), "help": ("help", 0), "version": ("version", 0)}
+
+    @property
+    def busybox_shorts(self) -> str:
+        return ("ngh" if self.version >= (1, 36) else "ng") + ("MV" if self.version >= (1, 33) else "M") + \
+            "ucszbrdfimS:T:o:k:t:"
+
+    def tpot_busybox_usage(self) -> str:
+        v = self.version
+        if v < (1, 26):
+            return ("[-nrugMcszbdfimSTokt] [-o FILE] [-k start[.offset][opts][,end[.offset][opts]] [-t CHAR] "
+                    "[FILE]...\n\nSort lines of text\n\n\t-b\tIgnore leading blanks\n\t-c\tCheck whether input is "
+                    "sorted\n\t-d\tDictionary order (blank or alphanumeric only)\n\t-f\tIgnore case\n\t-g\tGeneral "
+                    "numerical sort\n\t-i\tIgnore unprintable characters\n\t-k\tSort key\n\t-M\tSort month\n\t-n\t"
+                    "Sort numbers\n\t-o\tOutput to file\n\t-k\tSort by key\n\t-t CHAR\tKey separator\n\t-r\tReverse "
+                    "sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\t"
+                    "Lines are terminated by NUL, not newline\n\t-mST\tIgnored for GNU compatibility\n")
+        head = ("[-nru" + ("gh" if v >= (1, 36) else "g") + "Mcszbdfiokt] [-o FILE] [-k "
+                + ("START[.OFS][OPTS][,END[.OFS][OPTS]]" if v >= (1, 33) else "start[.offset][opts][,end[.offset][opts]]")
+                + " [-t CHAR] [FILE]...\n\nSort lines of text\n\n\t-o FILE\tOutput to FILE\n\t-c\tCheck whether input is"
+                " sorted\n\t-b\tIgnore leading blanks\n\t-f\tIgnore case\n\t-i\tIgnore unprintable characters\n\t-d\t"
+                "Dictionary order (blank or alphanumeric only)\n")
+        if v < (1, 33):
+            return head + ("\t-g\tGeneral numerical sort\n\t-M\tSort month\n\t-n\tSort numbers\n\t-t CHAR\tField "
+                           "separator\n\t-k N[,M] Sort by Nth field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort "
+                           "ties alphabetically)\n\t-u\tSuppress duplicate lines\n\t-z\tLines are terminated by NUL, not "
+                           "newline\n")
+        return head + ("\t-n\tSort numbers\n\t-g\tGeneral numerical sort\n"
+                       + ("\t-h\tSort human readable numbers (2K 1G)\n" if v >= (1, 36) else "")
+                       + "\t-M\tSort month\n\t-V\tSort version\n\t-t CHAR\tField separator\n\t-k N[,M] Sort by Nth "
+                       "field\n\t-r\tReverse sort order\n\t-s\tStable (don't sort ties alphabetically)\n\t-u\tSuppress "
+                       "duplicate lines\n\t-z\t" + ("NUL terminated input and output" if v >= (1, 35) else
+                                                   "Lines are terminated by NUL, not newline") + "\n")
+
+    def tpot_gnu_help(self) -> str:
+        v = self.version
+        old = v < (8, 23)
+        numeric = ("  -n, --numeric-sort          compare according to string numerical value;\n"
+                   "                                see full documentation for supported strings\n") if v >= (9, 5) \
+            else "  -n, --numeric-sort          compare according to string numerical value\n"
+        unique = ("  -u, --unique              output only the first of lines with equal keys;\n"
+                  "                              with -c, check for strict ordering\n") if v >= (9, 5) else \
+            ("  -u, --unique              with -c, check for strict ordering;\n"
+             "                              without -c, output only the first of an equal run\n")
+        units = "Y, R, Q" if v >= (9, 2) else "Y"
+        stdin = "" if old else "\nWith no FILE, or when FILE is -, read standard input.\n"
+        return ("Usage: sort [OPTION]... [FILE]...\n  or:  sort [OPTION]... --files0-from=F\n"
+                "Write sorted concatenation of all FILE(s) to standard output.\n" + stdin + "\n"
+                "Mandatory arguments to long options are mandatory for short options too.\nOrdering options:\n\n"
+                "  -b, --ignore-leading-blanks  ignore leading blanks\n"
+                "  -d, --dictionary-order      consider only blanks and alphanumeric characters\n"
+                "  -f, --ignore-case           fold lower case to upper case characters\n"
+                "  -g, --general-numeric-sort  compare according to general numerical value\n"
+                "  -i, --ignore-nonprinting    consider only printable characters\n"
+                "  -M, --month-sort            compare (unknown) < 'JAN' < ... < 'DEC'\n"
+                "  -h, --human-numeric-sort    compare human readable numbers (e.g., 2K 1G)\n" + numeric
+                + ("  -R, --random-sort           sort by random hash of keys\n" if old else
+                   "  -R, --random-sort           shuffle, but group identical keys.  See shuf(1)\n")
+                + "      --random-source=FILE    get random bytes from FILE\n"
+                "  -r, --reverse               reverse the result of comparisons\n"
+                "      --sort=WORD             sort according to WORD:\n"
+                "                                general-numeric -g, human-numeric -h, month -M,\n"
+                "                                numeric -n, random -R, version -V\n"
+                "  -V, --version-sort          natural sort of (version) numbers within text\n\n"
+                "Other options:\n\n"
+                "      --batch-size=NMERGE   merge at most NMERGE inputs at once;\n"
+                "                            for more use temp files\n"
+                "  -c, --check, --check=diagnose-first  check for sorted input; do not sort\n"
+                "  -C, --check=quiet, --check=silent  like -c, but do not report first bad line\n"
+                "      --compress-program=PROG  compress temporaries with PROG;\n"
+                "                              decompress them with PROG -d\n"
+                "      --debug               annotate the part of the line used to sort,\n"
+                "                              and warn about questionable usage to stderr\n"
+                "      --files0-from=F       read input from the files specified by\n"
+                "                            NUL-terminated names in file F;\n"
+                "                            If F is - then read names from standard input\n"
+                "  -k, --key=KEYDEF          sort via a key; KEYDEF gives location and type\n"
+                "  -m, --merge               merge already sorted files; do not sort\n"
+                "  -o, --output=FILE         write result to FILE instead of standard output\n"
+                "  -s, --stable              stabilize sort by disabling last-resort comparison\n"
+                "  -S, --buffer-size=SIZE    use SIZE for main memory buffer\n"
+                "  -t, --field-separator=SEP  use SEP instead of non-blank to blank transition\n"
+                "  -T, --temporary-directory=DIR  use DIR for temporaries, not $TMPDIR or /tmp;\n"
+                "                              multiple options specify multiple directories\n"
+                "      --parallel=N          change the number of sorts run concurrently to N\n" + unique
+                + ("  -z, --zero-terminated     end lines with 0 byte, not newline\n" if old else
+                   "  -z, --zero-terminated     line delimiter is NUL, not newline\n")
+                + self.tpot_gnu_help_lines()
+                + "\nKEYDEF is F[.C][OPTS][,F[.C][OPTS]] for start and stop position, where F is a\n"
+                "field number and C a character position in the field; both are origin 1, and\n"
+                "the stop position defaults to the line's end.  If neither -t nor -b is in\n"
+                "effect, characters in a field are counted from the beginning of the preceding\n"
+                "whitespace.  OPTS is one or more single-letter ordering options [bdfgiMhnRrV],\n"
+                "which override global ordering options for that key.  If no key is given, use\n"
+                + ("the entire line as the key.\n" if old else
+                   "the entire line as the key.  Use --debug to diagnose incorrect key usage.\n")
+                + "\nSIZE may be followed by the following multiplicative suffixes:\n"
+                f"% 1% of memory, b 1, K 1024 (default), and so on for M, G, T, P, E, Z, {units}.\n"
+                + ("\nWith no FILE, or when FILE is -, read standard input.\n" if old else "")
+                + "\n*** WARNING ***\nThe locale specified by the environment affects sort order.\n"
+                "Set LC_ALL=C to get the traditional sort order that uses\nnative byte values.\n"
+                + self.tpot_gnu_footer())
+
+    # --- reading ---------------------------------------------------------------------------
+
+    def tpot_inputs(self, names: list[str], terminal: bytes | None):
+        """The lines of the operands (stdin for none or "-"); None while the terminal is open."""
+        operands = names or ["-"]
+        if "-" in operands and self.tpot_stdin(terminal) is None:
+            return None
+        lines, size = [], 0
+        for name in operands:
+            if name == "-":
+                kind, data = "file", self.tpot_stdin(terminal)
+            else:
+                kind, data, _ = self.tpot_file(name)
+            if kind == "missing":
+                if self.gnu:
+                    raise TpotTextStop(f"sort: cannot read: {tpot_text_quotef(name)}: No such file or directory\n", 2)
+                raise TpotTextStop(f"sort: {name}: No such file or directory\n", 2)
+            if kind == "dir":
+                if self.gnu:
+                    raise TpotTextStop(f"sort: read failed: {tpot_text_quotef(name)}: Is a directory\n", 2)
+                continue
+            size += len(data)
+            parts = data.split(self.tpot_end)
+            if parts and parts[-1] == b"":
+                parts.pop()
+            lines += parts
+            if size > TPOT_SORT_BYTES or len(lines) > TPOT_SORT_LINES:
+                raise TpotTextStop("sort: memory exhausted\n" if self.gnu else "sort: out of memory\n", 2)
+        return lines
+
+    def tpot_main(self, terminal: bytes | None) -> int | None:
+        return self.tpot_gnu(terminal) if self.gnu else self.tpot_busybox(terminal)
+
+    # --- GNU -------------------------------------------------------------------------------
+
+    def tpot_gnu_key(self, spec: str) -> TpotSortKey:
+        key = TpotSortKey()
+
+        def count(text: str, at: int, what: str):
+            match = re.match(r"[0-9]++", text[at:])
+            if not match:
+                raise TpotTextStop(f"sort: {what}: invalid count at start of {tpot_text_quote(text[at:])}\n", 2)
+            return int(match.group()[:18]), at + match.end()
+
+        def bad(what: str):
+            return TpotTextStop(f"sort: {what}: invalid field specification {tpot_text_quote(spec)}\n", 2)
+
+        def letters(at: int, end: bool) -> int:
+            while at < len(spec) and spec[at] in "bdfgiMhnRrV":
+                letter = spec[at]
+                key.flags.add(("B" if end else "b") if letter == "b" else letter)
+                key.own = True
+                at += 1
+            return at
+
+        key.sword, at = count(spec, 0, "invalid number at field start")
+        if key.sword == 0:
+            raise bad("field number is zero")
+        key.sword -= 1
+        if spec[at:at + 1] == ".":
+            key.schar, at = count(spec, at + 1, "invalid number after '.'")
+            if key.schar == 0:
+                raise bad("character offset is zero")
+            key.schar -= 1
+        at = letters(at, False)
+        if spec[at:at + 1] == ",":
+            key.eword, at = count(spec, at + 1, "invalid number after ','")
+            if key.eword == 0:
+                raise bad("field number is zero")
+            key.eword -= 1
+            if spec[at:at + 1] == ".":
+                key.echar, at = count(spec, at + 1, "invalid number after '.'")
+            at = letters(at, True)
+        if at < len(spec):
+            raise bad("stray character in field spec")
+        return key
+
+    def tpot_field_text(self, line: bytes, key: TpotSortKey) -> bytes:
+        """begfield and limfield of GNU sort."""
+        tab, end = self.tpot_tab, len(line)
+
+        def skip_fields(at: int, fields: int, stop_after_tab: bool) -> int:
+            while at < end and fields > 0:
+                fields -= 1
+                if tab is not None:
+                    while at < end and line[at] != tab:
+                        at += 1
+                    if at < end and (fields or stop_after_tab):
+                        at += 1
+                else:
+                    while at < end and line[at] in (32, 9):
+                        at += 1
+                    while at < end and line[at] not in (32, 9):
+                        at += 1
+            return at
+
+        start = skip_fields(0, key.sword, True)
+        if "b" in key.flags:
+            while start < end and line[start] in (32, 9):
+                start += 1
+        start = min(end, start + key.schar)
+        if key.eword is None:
+            stop = end
+        else:
+            fields = key.eword + (1 if key.echar == 0 else 0)
+            stop = skip_fields(0, fields, key.echar != 0)
+            if key.echar:
+                if "B" in key.flags:
+                    while stop < end and line[stop] in (32, 9):
+                        stop += 1
+                stop = min(end, stop + key.echar)
+        return line[start:max(start, stop)]
+
+    def tpot_gnu_value(self, text: bytes, flags: set, salt: bytes):
+        """The value of a key text that orders it by the key's type."""
+        if "b" in flags and not self.tpot_keys_given:
+            text = text.lstrip(b" \t")
+        if "d" in flags:
+            text = TPOT_SORT_NOT_DICTIONARY.sub(b"", text)
+        if "i" in flags:
+            text = TPOT_SORT_NOT_PRINTING.sub(b"", text)
+        if "f" in flags:
+            text = text.upper()
+        if "n" in flags or "h" in flags:
+            word = text.decode("latin-1")
+            match = TPOT_TEXT_NUMBER.match(word.replace(",", "") if self.collate.startswith("en") else word)
+            sign, whole, fraction = match.group(1), match.group(2), match.group(3) or ""
+            if not whole and not fraction:
+                number = Decimal(0)
+            else:
+                number = tpot_decimal(sign, whole, fraction)
+            if "h" not in flags:
+                return number
+            rest = (word.replace(",", "") if self.collate.startswith("en") else word)[match.end():match.end() + 1]
+            order = "KMGTPEZYRQ".find(rest.upper()) + 1 if rest and (rest in "kKMGTPEZYRQ") else 0
+            return (-order if sign else order), number
+        if "g" in flags:
+            value, _ = tpot_strtod(text.decode("latin-1"))
+            if value is None:
+                return 0, 0.0
+            if value != value:
+                return 1, 0.0
+            return 2, value
+        if "M" in flags:
+            head = text.lstrip(b" \t")[:3].upper().decode("latin-1")
+            return TPOT_TEXT_MONTHS.index(head) + 1 if head in TPOT_TEXT_MONTHS else 0
+        if "V" in flags:
+            return tpot_version_key(text)
+        if "R" in flags:
+            import hashlib
+            return hashlib.blake2b(salt + text, digest_size=16).digest()
+        return self.tpot_text_value(text, "f" in flags)
+
+    def tpot_text_value(self, text: bytes, folded: bool = False):
+        """The order of a text in the persona's locale; Red Hat's coreutils compare a text folded
+        by -f byte by byte (text_fold bytes)."""
+        if self.collate.startswith("en") and not (folded and tpot_text("text_fold") == "bytes"):
+            return tpot_en_key(text.decode("utf-8", "surrogateescape"), old=self.collate == "en-2.17")
+        return text
+
+    def tpot_gnu(self, terminal: bytes | None) -> int | None:
+        options, names = self.tpot_gnu_options(list(self.args))
+        flags, keys, check, unique, stable, tab, zero, files0 = set(), [], None, False, False, None, False, None
+        for name, value in options:
+            if name == "help":
+                self.tpot_emit(self.tpot_gnu_help())
+                return 0
+            if name == "version":
+                self.tpot_emit(self.tpot_gnu_version("Mike Haertel and Paul Eggert."))
+                return 0
+            if name in "bdfgiMhnRrV" and len(name) == 1:
+                flags |= {"b", "B"} if name == "b" else {name}
+            elif name == "sort":
+                words = {"general-numeric": "g", "human-numeric": "h", "month": "M", "numeric": "n", "random": "R",
+                         "version": "V"}
+                found = [w for w in words if w.startswith(value)] if value else []
+                if value in words:
+                    found = [value]
+                if len(found) != 1:
+                    raise TpotTextStop(f"sort: invalid argument {tpot_text_quote(value)} for '--sort'\n"
+                                       "Valid arguments are:\n  - 'general-numeric'\n  - 'human-numeric'\n"
+                                       "  - 'month'\n  - 'numeric'\n  - 'random'\n  - 'version'\n" + self.tpot_try(), 2)
+                flags.add(words[found[0]])
+            elif name == "k":
+                if len(keys) >= TPOT_SORT_KEYS:
+                    raise TpotTextStop("sort: memory exhausted\n", 2)
+                keys.append(self.tpot_gnu_key(value))
+            elif name == "c":
+                check = "diagnose"
+            elif name == "C":
+                check = "quiet"
+            elif name == "check":
+                choices = {"diagnose-first": "diagnose", "quiet": "quiet", "silent": "quiet"}
+                found = [w for w in choices if w.startswith(value)] if value else ["diagnose-first"]
+                if value in choices:
+                    found = [value]
+                if len(found) != 1:
+                    raise TpotTextStop(f"sort: invalid argument {tpot_text_quote(value)} for '--check'\n"
+                                       "Valid arguments are:\n  - 'diagnose-first'\n  - 'quiet', 'silent'\n"
+                                       + self.tpot_try(), 2)
+                check = choices[found[0]]
+            elif name == "u":
+                unique = True
+            elif name == "s":
+                stable = True
+            elif name == "z":
+                zero = True
+            elif name == "t":
+                if value == "":
+                    raise TpotTextStop("sort: empty tab\n", 2)
+                if value == "\\0":
+                    value = "\0"
+                if len(value.encode("utf-8", "surrogateescape")) != 1:
+                    raise TpotTextStop(f"sort: multi-character tab {tpot_text_quote(value)}\n", 2)
+                tab = value.encode("utf-8", "surrogateescape")[0]
+            elif name == "files0":
+                files0 = value
+        self.tpot_keys_given = bool(keys)
+        if not keys:
+            # the whole line with the global options
+            whole = TpotSortKey()
+            whole.flags = set(flags)
+            keys = [whole]
+        for key in keys:
+            if not key.own:
+                key.flags |= flags
+            kinds = sum(1 for k in "nghM" if k in key.flags) + (1 if key.flags & {"V", "R", "d", "i"} else 0)
+            if kinds > 1:
+                letters = "".join(k for k in "bdfghiMnRrV" if k in key.flags or (k == "b" and "B" in key.flags))
+                raise TpotTextStop(f"sort: options '-{letters}' are incompatible\n", 2)
+        if files0 is not None:
+            kind, data, _ = self.tpot_file(files0) if files0 != "-" else ("file", self.tpot_stdin(terminal), 0)
+            if data is None:
+                return None
+            if kind != "file":
+                raise TpotTextStop(f"sort: cannot open {tpot_text_quote(files0)} for reading: No such file or "
+                                   "directory\n", 2)
+            names = [n.decode("utf-8", "surrogateescape") for n in data.split(b"\0") if n]
+        if check and len(names) > 1:
+            raise TpotTextStop(f"sort: extra operand {tpot_text_quote(names[1])} not allowed with -{check[0] if check == 'diagnose' else 'C'}\n"
+                               .replace("-d\n", "-c\n").replace("-q\n", "-C\n") + self.tpot_try(), 2)
+        self.tpot_tab, self.tpot_end = tab, b"\0" if zero else b"\n"
+        lines = self.tpot_inputs(names, terminal)
+        if lines is None:
+            return None
+        reverse = "r" in flags
+        import os
+        salt = os.urandom(16)
+        values = []
+        for key in keys:
+            values.append([self.tpot_gnu_value(self.tpot_field_text(line, key) if self.tpot_keys_given else line,
+                                               key.flags, salt) for line in lines])
+        last = None if (stable or unique) else [self.tpot_text_value(line) for line in lines]
+
+        def composite(i: int):
+            return tuple(column[i] for column in values)
+
+        if check:
+            for i in range(1, len(lines)):
+                order = self.tpot_compare(i - 1, i, keys, values, last, reverse)
+                if order > 0 or (unique and order == 0):
+                    if check == "diagnose":
+                        name = names[0] if names else "-"
+                        self.tpot_err.append(f"sort: {name}:{i + 1}: disorder: "
+                                             f"{lines[i].decode('utf-8', 'surrogateescape')}\n")
+                    return 1
+            return 0
+        order = list(range(len(lines)))
+        if last is not None:
+            order.sort(key=last.__getitem__, reverse=reverse)
+        for key, column in reversed(list(zip(keys, values))):
+            order.sort(key=column.__getitem__, reverse="r" in key.flags)
+        end = self.tpot_end
+        previous = None
+        for i in order:
+            if unique:
+                current = composite(i)
+                if previous is not None and current == previous:
+                    continue
+                previous = current
+            if not self.tpot_emit(lines[i] + end):
+                break
+        return 0
+
+    def tpot_compare(self, a: int, b: int, keys, values, last, reverse) -> int:
+        for key, column in zip(keys, values):
+            x, y = column[a], column[b]
+            if x != y:
+                return (1 if x > y else -1) * (-1 if "r" in key.flags else 1)
+        if last is None:
+            return 0
+        x, y = last[a], last[b]
+        return 0 if x == y else (1 if x > y else -1) * (-1 if reverse else 1)
+
+    # --- BusyBox ---------------------------------------------------------------------------
+
+    def tpot_bb_key(self, spec: str):
+        """A -k of BusyBox sort: [start word, start char, end word, end char] and its flags."""
+        allowed = set("nghMbrdfi")
+        ranges, flags, at, part = [0, 0, 0, 0], set(), 0, 0
+
+        def number(at: int):
+            match = re.match(r"[0-9]++", spec[at:])
+            if not match or int(match.group()) == 0 or int(match.group()) > 0x7FFFFFFF:
+                raise TpotTextStop("sort: bad field specification\n", 2)
+            return int(match.group()), at + match.end()
+
+        while at < len(spec):
+            ranges[2 * part], at = number(at)
+            if spec[at:at + 1] == ".":
+                ranges[2 * part + 1], at = number(at + 1)
+            while at < len(spec):
+                letter = spec[at]
+                if letter == "," and part == 0:
+                    part, at = 1, at + 1
+                    break
+                if letter not in self.busybox_shorts.replace(":", ""):
+                    raise TpotTextStop("sort: unknown key option\n", 2)
+                if letter not in allowed:
+                    raise TpotTextStop("sort: unknown sort type\n", 2)
+                flags.add("B" if (part and letter == "b") else letter)
+                at += 1
+        return ranges, flags
+
+    def tpot_bb_field(self, line: bytes, ranges, flags) -> bytes:
+        """get_key of BusyBox sort."""
+        if ranges == [1, 0, 0, 0] and not flags & set("bdfiB"):
+            return line
+        length, start, end = len(line), 0, 0
+        for j in (0, 1):
+            if not ranges[2 * j]:
+                end = length
+            else:
+                end, separator_found = 0, False
+                for _ in range(1, ranges[2 * j] + j):
+                    if self.tpot_tab is not None:
+                        separator_found = False
+                        while end < length:
+                            ch = line[end]
+                            end += 1
+                            if ch == self.tpot_tab:
+                                separator_found = True
+                                break
+                    else:
+                        while end < length and line[end] in b" \t\n\v\f\r":
+                            end += 1
+                        while end < length and line[end] not in b" \t\n\v\f\r":
+                            end += 1
+                if j and separator_found:
+                    end -= 1
+            if not j:
+                start = end
+        if "b" in flags:
+            while start < length and line[start] in b" \t\n\v\f\r":
+                start += 1
+        if "B" in flags:
+            while end > start and line[end - 1] in b" \t\n\v\f\r":
+                end -= 1
+        if ranges[3]:
+            end = min(ranges[3], length)
+        if ranges[1]:
+            start = min(start + ranges[1] - 1, length)
+        text = line[start:max(start, end)]
+        if "d" in flags:
+            text = TPOT_SORT_BB_NOT_DICTIONARY.sub(b"", text)
+        if "i" in flags:
+            text = TPOT_SORT_NOT_PRINTING.sub(b"", text)
+        if "f" in flags:
+            text = text.upper()
+        return text
+
+    def tpot_bb_value(self, text: bytes, flags: set):
+        word = text.decode("latin-1")
+        if "n" in flags:
+            value, _ = tpot_strtod(word)
+            return 0.0 if value is None or value != value else value
+        if "g" in flags or "h" in flags:
+            value, rest = tpot_strtod(word)
+            if value is None:
+                return (0,)
+            if value != value:
+                return (1,)
+            if "h" in flags:
+                suffix = "kmgtpezy".find(rest[:1].lower()) if rest else -1
+                if suffix > 0 and rest[:1] >= "a":
+                    suffix = -1
+                return 2, suffix, value
+            return 2, value
+        if "M" in flags:
+            head = word.lstrip(" \t\n\v\f\r")[:3].upper()
+            return TPOT_TEXT_MONTHS.index(head) if head in TPOT_TEXT_MONTHS else -1
+        if "V" in flags:
+            return tpot_version_key(text)
+        return text
+
+    def tpot_busybox(self, terminal: bytes | None) -> int | None:
+        options, names = self.tpot_busybox_options(list(self.args))
+        flags, keys, tab = set(), [], None
+        for name, value in options:
+            if name == "k":
+                if len(keys) >= TPOT_SORT_KEYS:
+                    raise TpotTextStop("sort: out of memory\n", 2)
+                keys.append(value)
+            elif name == "t":
+                tab = value
+            elif name not in ("o", "S", "T"):
+                flags.add(name)
+        if "b" in flags:
+            flags.add("B")
+        if tab is not None:
+            data = tab.encode("utf-8", "surrogateescape")
+            if len(data) != 1:
+                raise TpotTextStop("sort: bad -t parameter\n", 2)
+            tab = data[0]
+        parsed = [self.tpot_bb_key(spec) for spec in keys] or [([1, 0, 0, 0], set())]
+        self.tpot_tab, self.tpot_end = tab, b"\0" if "z" in flags else b"\n"
+        lines = self.tpot_inputs(names, terminal)
+        if lines is None:
+            return None
+        values = []
+        for ranges, own in parsed:
+            use = own or flags
+            values.append(([self.tpot_bb_value(self.tpot_bb_field(line, ranges, use), use) for line in lines],
+                           "r" in use))
+        stable = "s" in flags
+        unique = "u" in flags
+        reverse = "r" in flags
+        if "c" in flags:
+            for i in range(1, len(lines)):
+                order = 0
+                for column, backwards in values:
+                    if column[i - 1] != column[i]:
+                        order = (1 if column[i - 1] > column[i] else -1) * (-1 if backwards else 1)
+                        break
+                if order == 0 and not stable:
+                    order = (lines[i - 1] > lines[i]) - (lines[i - 1] < lines[i])
+                    order = -order if reverse else order
+                if order > (-1 if unique else 0):
+                    self.tpot_err.append(f"Check line {i}\n")
+                    return 1
+            return 0
+        order = list(range(len(lines)))
+        if not stable:
+            order.sort(key=lines.__getitem__, reverse=reverse)
+        for column, backwards in reversed(values):
+            order.sort(key=column.__getitem__, reverse=backwards)
+        previous = None
+        for i in order:
+            if unique:
+                current = tuple(column[i] for column, _ in values)
+                if previous is not None and current == previous:
+                    continue
+                previous = current
+            if not self.tpot_emit(lines[i] + self.tpot_end):
+                break
+        return 0
+
+
+commands["/usr/bin/wc"] = Command_tpot_wc
+commands["/bin/wc"] = Command_tpot_wc
+commands["wc"] = Command_tpot_wc
+commands["/usr/bin/sort"] = Command_tpot_sort
+commands["/bin/sort"] = Command_tpot_sort
+commands["sort"] = Command_tpot_sort
+commands["/usr/bin/seq"] = Command_tpot_seq
+commands["/bin/seq"] = Command_tpot_seq
+commands["seq"] = Command_tpot_seq
+'''
+
+
+def patch_text_tools(cowrie_root):
+    """wc, sort and seq of the persona (TEXT_COMMAND after the commands of wc.py): GNU coreutils or
+    BusyBox, files of the emulated file system, a pipe or the terminal."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "wc.py"
+    replace_once(path, 'commands["/usr/bin/wc"] = Command_wc\ncommands["/bin/wc"] = Command_wc\n'
+                       'commands["wc"] = Command_wc\n',
+                 'commands["/usr/bin/wc"] = Command_wc\ncommands["/bin/wc"] = Command_wc\n'
+                 'commands["wc"] = Command_wc\n' + TEXT_COMMAND)
+
+
 def patch_prompt(cowrie_root):
     """[shell] prompt_style = redhat gives the bash PS1 of RHEL / CentOS,
     [\\u@\\h \\W]\\$ (short host name, basename of the cwd, ~ for home); anything
@@ -7406,6 +8858,7 @@ def main():
     patch_grep(cowrie_root)
     patch_df(cowrie_root)
     patch_awk(cowrie_root)
+    patch_text_tools(cowrie_root)
     patch_prompt(cowrie_root)
     patch_shell_errors(cowrie_root)
     patch_telnet_banner(cowrie_root)

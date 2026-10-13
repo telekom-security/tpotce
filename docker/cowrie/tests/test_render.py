@@ -75,6 +75,54 @@ class ProgramTest(unittest.TestCase):
         self.assertTrue(all(380_000 <= size <= 1_100_000 for size in sizes), sizes)
 
 
+class TextToolsTest(unittest.TestCase):
+    """wc, sort and seq: coreutils on servers and DSM, the applets of the firmware's BusyBox on the
+    other devices (TL-WR841N: none of them; the shared list: wc only)."""
+
+    def test_the_programs_and_the_answers_agree(self):
+        expected = {"tplink-wr841n": set(), "openwrt": {"wc", "sort", "seq"},
+                    "ubiquiti-edgerouter-x": {"wc", "sort", "seq"}, "dlink-dir859": {"wc"},
+                    "synology-dsm": {"wc", "sort", "seq"}, "debian-bookworm": {"wc", "sort", "seq"}}
+        for persona in catalog.PERSONAS:
+            if persona.id not in expected:
+                continue
+            ident, out, _ = render_one(self, persona, 1)
+            fs = tree.load_pickle(out / "fs.pickle")
+            with self.subTest(persona=persona.id):
+                for name in system.TEXT_TOOLS:
+                    present = name in expected[persona.id]
+                    self.assertEqual(name not in skipped(out), present, name)
+                    self.assertEqual(f"/usr/bin/{name}" not in skipped(out), present, name)
+                    self.assertEqual(tree.find_node(fs, f"usr/bin/{name}") is not None, present, name)
+                if persona.id == "openwrt":
+                    node = tree.find_node(fs, "usr/bin/wc")
+                    self.assertEqual((node[tree.A_TYPE], node[tree.A_TARGET]), (tree.T_LINK, "../../bin/busybox"))
+                if persona.id == "ubiquiti-edgerouter-x":
+                    self.assertEqual(tree.find_node(fs, "usr/bin/sort")[tree.A_TARGET], "/bin/busybox")
+
+    def test_the_keys_name_the_persona_s_coreutils_or_busybox(self):
+        cases = {"debian-trixie": {"text_style": "gnu", "text_version": "9.7", "text_packager": "Debian (9.7-3)",
+                                   "text_collate": "c"},
+                 "ubuntu-noble": {"text_style": "gnu", "text_version": "9.4", "text_year": "2023"},
+                 "rhel-9": {"text_version": "8.32", "text_collate": "en", "text_fold": "bytes"},
+                 "centos-7": {"text_version": "8.22", "text_collate": "en-2.17", "text_fold": "bytes"},
+                 "raspios": {"text_version": "9.1", "text_collate": "en"},
+                 "synology-dsm": {"text_style": "gnu", "text_version": "8.31", "text_collate": "posix"},
+                 "openwrt": {"text_style": "busybox", "text_libc": "musl"},
+                 "tplink-wr841n": {"text_style": "busybox", "text_libc": "uclibc", "text_version": "1.19.2"},
+                 "ubiquiti-edgerouter-x": {"text_style": "busybox", "text_libc": "glibc", "text_version": "1.27.2"}}
+        for persona_id, keys in cases.items():
+            persona = catalog.by_id(persona_id)
+            ident, out, _ = render_one(self, persona, 2)
+            cfg = cfg_of(out)
+            with self.subTest(persona=persona_id):
+                for key, value in keys.items():
+                    self.assertEqual(cfg.get("shell", key), value, key)
+                if keys.get("text_style") == "busybox":
+                    self.assertEqual(cfg.get("shell", "text_banner"), ident.release.extra["busybox"])
+                self.assertEqual(cfg.has_option("shell", "text_packager"), persona_id == "debian-trixie")
+
+
 class BusyboxTest(unittest.TestCase):
     def test_devices_with_busybox_run_cowries_busybox_with_their_help(self):
         with_busybox = [p for p in catalog.PERSONAS if any(r.extra.get("busybox") for r in p.releases)]
@@ -89,7 +137,8 @@ class BusyboxTest(unittest.TestCase):
                 self.assertEqual(cfg_of(out).get("shell", "busybox_help"), f"{out}/busybox-help.txt")
                 text = (out / "busybox-help.txt").read_text()
                 self.assertTrue(text.startswith(f"{banner} multi-call binary.\n"), (persona.id, text[:80]))
-                self.assertIn("wget", text)
+                listed = "".join(text.split("Currently defined functions:\n", 1)[1].split()).split(",")
+                self.assertEqual(listed, system.busybox_applets(persona, ident), persona.id)
                 self.assertFalse((out / "txtcmds/bin/busybox").exists(), persona.id)
 
     def test_systems_without_busybox_skip_it(self):

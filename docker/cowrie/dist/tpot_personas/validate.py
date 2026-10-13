@@ -548,6 +548,25 @@ def _skipped(cfg):
     return {e.strip() for e in cfg.get("shell", "skip_python_commands", fallback="").split(",") if e.strip()}
 
 
+def _check_text_tools(persona, ident, cfg, fs, txtcmds, out):
+    """wc, sort and seq are the patched commands of the persona's coreutils or BusyBox ([shell]
+    text_*): they answer exactly where they are programs on PATH, no txtcmd answers them."""
+    for key, value in system.text_keys(persona, ident).items():
+        if cfg.get("shell", key, fallback=None) != value:
+            out.append(f"text tools: cfg {key}: {cfg.get('shell', key, fallback=None)!r}, expected {value!r}")
+    present = system.text_programs(persona, ident)
+    for name in system.TEXT_TOOLS:
+        if _answered(cfg, name) != _on_path(fs, name):
+            out.append(f"text tools: {name} {'answers' if _answered(cfg, name) else 'does not answer'}, "
+                       f"it is {'' if _on_path(fs, name) else 'not '}on PATH")
+        if _answered(cfg, name) != (name in present):
+            out.append(f"text tools: {name} {'answers' if _answered(cfg, name) else 'does not answer'}, the "
+                       f"system {'has' if name in present else 'has no'} {name}")
+        for directory in PATH_DIRS:
+            if (txtcmds / directory / name).is_file():
+                out.append(f"text tools: a txtcmd /{directory}/{name} answers {name}")
+
+
 def _answered(cfg, name):
     """Cowrie's Python answers the command (it is not in skip_python_commands)."""
     skipped = _skipped(cfg)
@@ -984,6 +1003,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     if persona.kind == "device":
         _check_device_boot(honeyfs, txtcmds, out)
     _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out)
+    _check_text_tools(persona, ident, cfg, fs, txtcmds, out)
 
     os_release = _text(honeyfs / "etc/os-release")
     fields = dict(line.split("=", 1) for line in os_release.splitlines() if "=" in line)

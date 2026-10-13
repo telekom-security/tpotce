@@ -1062,6 +1062,101 @@ COREUTILS_YEARS = {"8.22": "2013", "8.26": "2016", "8.28": "2017", "8.30": "2018
 COREUTILS_DEVICES = ("synology", "ubiquiti")
 
 
+def coreutils_version(persona, ident):
+    """The GNU coreutils of a server or of a device with coreutils (its release's package, else
+    COREUTILS)."""
+    code = "synology" if persona.family == "synology" else _codename(persona, ident)
+    package = {**APT_INSTALLED.get(code, {}), **ident.release.packages}.get("coreutils", "")
+    return COREUTILS.get(code) or _upstream(package) or "9.1"
+
+
+# The applets of the firmware's BusyBox, from the links of its root file system (read 2026-10-13
+#   from the OpenWrt 21.02.7 / 22.03.7 ramips sysupgrade images and the EdgeRouter X
+#   2.0.9-hotfix.2 image); the other firmware keeps the shared list (unverified). The BusyBox of
+#   the TL-WR841N v14 250328 image links no wc, sort or seq: its list is the shared one less wc
+#   (the shared list keeps the applets Cowrie answers there).
+_BB_OPENWRT = ("[, [[, ash, awk, basename, brctl, bunzip2, bzcat, cat, chgrp, chmod, chown, chroot, clear, cmp, cp, "
+               "crond, crontab, cut, date, dd, df, dirname, dmesg, du, echo, egrep, env, expr, false, fgrep, find, "
+               "flock, free, fsync, grep, gunzip, gzip, halt, head, hexdump, hwclock, id, ifconfig, ip, kill, "
+               "killall, less, ln, lock, logger, login, ls, md5sum, mkdir, mkfifo, mknod, mkswap, mktemp, mount, mv, "
+               "nc, netmsg, netstat, nice, nslookup, ntpd, passwd, pgrep, pidof, ping, ping6, pivot_root, poweroff, "
+               "printf, ps, pwd, readlink, reboot, reset, rm, rmdir, route, sed, seq, sh, sha256sum, sleep, sort, "
+               "start-stop-daemon, strings, swapoff, swapon, switch_root, sync, sysctl, tail, tar, tee, test, time, "
+               "top, touch, tr, traceroute, traceroute6, true, udhcpc, umount, uname, uniq, uptime, vi, wc, which, "
+               "xargs, yes, zcat")
+_BB_EDGEOS = ("[, [[, arping, base64, basename, blkdiscard, bunzip2, bzcat, bzip2, cal, cat, chgrp, chroot, cksum, "
+              "comm, cp, cpio, cut, date, dd, df, dirname, dos2unix, du, echo, ed, env, expand, expr, factor, false, "
+              "fatattr, fold, fsfreeze, groups, head, hostid, hostname, i2cdetect, i2cdump, i2cget, i2cset, id, "
+              "install, link, linux32, linux64, ln, logname, ls, lsscsi, lzcat, md5sum, mkdir, mkfifo, mknod, "
+              "mkpasswd, mktemp, mv, nc, nice, nl, nohup, nproc, od, partprobe, paste, printenv, printf, pwd, "
+              "realpath, rm, rmdir, seq, setpriv, sha1sum, sha256sum, sha3sum, sha512sum, shred, shuf, sleep, sort, "
+              "split, ssl_client, stat, stty, sum, svc, sync, tac, tail, tee, telnet, telnetd, test, tftp, touch, tr, "
+              "traceroute, true, truncate, tty, uname, unexpand, uniq, unix2dos, unlink, usleep, uudecode, uuencode, "
+              "vi, wc, who, whoami, whois, xzcat, yes")
+BB_SHARED = ("[, [[, ash, awk, basename, cat, chmod, chown, cp, cut, date, dd, df, dmesg, echo, egrep, env, "
+             "false, free, grep, gunzip, gzip, head, hostname, ifconfig, kill, killall, ln, login, ls, mkdir, "
+             "mknod, mount, mv, netstat, ping, ps, pwd, reboot, rm, route, sed, sh, sleep, sync, tail, tar, "
+             "telnetd, test, top, touch, tr, true, udhcpc, umount, uname, uptime, vi, wc, wget")
+# the C library of the firmware (the texts of option errors): ld-musl of OpenWrt, ld-uClibc of the
+#   TL-WR841N, glibc (libc.so.6) of EdgeOS, read from their BusyBox; unverified: the others
+FIRMWARE_LIBC = {"openwrt": "musl", "tplink": "uclibc", "ubiquiti": "glibc", "dlink": "uclibc", "ipcam": "uclibc",
+                 "zyxel": "glibc", "qnap": "glibc"}
+# where BusyBox installs the applets (the paths of the OpenWrt image)
+APPLET_PATHS = {"wc": "usr/bin/wc", "sort": "usr/bin/sort", "seq": "usr/bin/seq"}
+TEXT_TOOLS = ("wc", "sort", "seq")
+
+
+def busybox_applets(persona, ident):
+    """The applets of the persona's BusyBox, in the order of its help."""
+    if persona.family == "openwrt":
+        text = _BB_OPENWRT if ident.release.label.startswith("21.") else _BB_OPENWRT.replace("bunzip2, bzcat, ", "")
+    elif persona.family == "ubiquiti":
+        text = _BB_EDGEOS
+    elif persona.family == "tplink":
+        text = BB_SHARED.replace(", wc, ", ", ")
+    else:
+        text = BB_SHARED
+    return text.split(", ")
+
+
+def text_programs(persona, ident):
+    """{name: (path, link target or None)} of wc, sort and seq: the coreutils of a server or of DSM
+    (Cowrie's tree has them), the applets of the firmware's BusyBox (links to it; programs where the
+    tree has no busybox)."""
+    if persona.kind == "server" or persona.family == "synology":
+        return {name: (f"usr/bin/{name}", None) for name in TEXT_TOOLS}
+    applets = set(busybox_applets(persona, ident))
+    banner = ident.release.extra.get("busybox")
+    target = "/bin/busybox" if persona.family == "ubiquiti" else "../../bin/busybox"
+    return {name: (APPLET_PATHS[name], target if banner else None) for name in TEXT_TOOLS if name in applets}
+
+
+# the locale of a login (order of sort, quotation marks, help texts): C.UTF-8 of the Ubuntu and
+#   Debian cloud images, en_GB.UTF-8 of Raspberry Pi OS, en_US.UTF-8 of the Red Hat images (glibc
+#   2.17 on CentOS 7 orders ties differently), POSIX on DSM (unverified: the Debian and RHEL images, DSM)
+TEXT_LOCALES = {"raspios": "en", "rhel": "en", "centos": "en-2.17", "synology": "posix"}
+
+
+def text_keys(persona, ident):
+    """[shell] keys of the patched wc, sort and seq: GNU coreutils (version, copyright year, Debian's
+    packager line, the locale, Red Hat's byte order for -f) or the firmware's BusyBox (banner,
+    version, C library)."""
+    if persona.kind == "server" or persona.family == "synology":
+        version = coreutils_version(persona, ident)
+        keys = {"text_style": "gnu", "text_version": version, "text_year": COREUTILS_YEARS.get(version, "2022"),
+                "text_collate": TEXT_LOCALES.get(persona.family, "c")}
+        package = APT_INSTALLED.get(_codename(persona, ident), {}).get("coreutils", "")
+        if _codename(persona, ident) == "trixie" and package:
+            keys["text_packager"] = f"Debian ({package})"
+        if is_el(persona):
+            keys["text_fold"] = "bytes"
+        return keys
+    banner = ident.release.extra.get("busybox", "")
+    found = re.match(r"BusyBox v(\d+\.\d+\.\d+)", banner)
+    return {"text_style": "busybox", "text_banner": banner, "text_version": found.group(1) if found else "1.24.1",
+            "text_libc": FIRMWARE_LIBC.get(persona.family, "glibc")}
+
+
 def df_table(persona, ident, filesystems):
     """What the patched df reads ([shell] df_table): the file system table of the persona, the
     style of df (GNU coreutils on servers and the devices with coreutils, else BusyBox) and its
@@ -1069,9 +1164,7 @@ def df_table(persona, ident, filesystems):
     QNAP, which names none, and coreutils of DSM)."""
     data = {"filesystems": filesystems}
     if persona.kind == "server" or persona.family in COREUTILS_DEVICES:
-        code = "synology" if persona.family == "synology" else _codename(persona, ident)
-        package = {**APT_INSTALLED.get(code, {}), **ident.release.packages}.get("coreutils", "")
-        version = COREUTILS.get(code) or _upstream(package) or "9.1"
+        version = coreutils_version(persona, ident)
         data.update(style="gnu", coreutils=version, coreutils_year=COREUTILS_YEARS.get(version, "2022"),
                     el=persona.family in ("rhel", "centos"))
     else:
