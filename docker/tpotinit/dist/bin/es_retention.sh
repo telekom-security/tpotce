@@ -118,7 +118,8 @@ function fuILM_FIND_ES () {
       fi
     done
     (( SECONDS + 5 <= myEND )) || return 1
-    sleep 5
+    # in the background: a SIGTERM (tpotinit stops) ends the wait at once
+    sleep 5 & wait $!
   done
 }
 
@@ -209,5 +210,9 @@ function fuILM_MAIN () {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  # tpotinit stops (entrypoint.sh cleanup): end without a new request. bash runs the trap once the
+  # command in flight is through, so a PUT already sent (one request, whole or not at all) may finish.
+  trap '[[ -z "${myBODY:-}" ]] || rm -f "${myBODY}"; kill $(jobs -p) 2>/dev/null
+        echo "# tpotinit stops, the check of the ILM policy tpot ends here."; exit 143' TERM
   fuILM_MAIN
 fi

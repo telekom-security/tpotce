@@ -270,6 +270,28 @@ myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myCAT_BODY='[]' myR
 GET http://127.0.0.1:64298/${myCAT}"
 unset -f jq
 unset -f curl
+# tpotinit stops while the script waits for Elasticsearch: a TERM ends it at once (exit 143), no request after it
+myBIN="$(mktemp -d)"
+printf '#!/bin/sh\necho "$*" >> %s/stop_calls\nexit 7\n' "${myBIN}" > "${myBIN}/curl"
+chmod 0755 "${myBIN}/curl"
+PATH="${myBIN}:${PATH}" TPOT_ES_URL=http://es.test TPOT_ES_RETENTION=60 TPOT_ES_RETENTION_WAIT=600 \
+  bash /opt/tpot/bin/es_retention.sh > "${myBIN}/out" 2>&1 &
+myPROC=$!
+for (( i = 0; i < 100; i++ )); do [[ -s "${myBIN}/stop_calls" ]] && break; sleep 0.1; done
+sleep 0.3
+myCOUNT="$(wc -l < "${myBIN}/stop_calls")"
+kill -TERM "${myPROC}"
+myGONE=""
+for (( i = 0; i < 20; i++ )); do kill -0 "${myPROC}" 2>/dev/null || { myGONE=1; break; }; sleep 0.1; done
+myRC=0
+wait "${myPROC}" || myRC=$?
+if [[ -n "${myGONE}" && "${myRC}" -eq 143 && "$(wc -l < "${myBIN}/stop_calls")" -eq "${myCOUNT}" ]] \
+   && grep -q "tpotinit stops" "${myBIN}/out"; then
+  echo "ok   TERM while waiting for Elasticsearch: ends at once, no request after it"
+else
+  echo "FAIL TERM while waiting for Elasticsearch: gone=${myGONE:-no} rc=${myRC} $(cat "${myBIN}/out")"; failed=1
+fi
+rm -rf "${myBIN}"
 rm -rf "${myCALLS}" "${myPUT}" "${myDIR}"
 exit "${failed}"
 EOF

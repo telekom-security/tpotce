@@ -303,9 +303,9 @@ class WiringTest(unittest.TestCase):
         # the guard: both tests, joined by &&, nothing else (spaces and the quoting of the yq expression aside)
         self.assertNotIn("||", block.group("cond"))
         self.assertEqual(self.guard(block.group("cond")), self.GUARD)
-        # the body: the call alone, in the background
+        # the body: the call alone, in the background, and its PID for the cleanup on SIGTERM
         body = [line.strip() for line in block.group("body").splitlines() if line.strip()]
-        self.assertEqual(body, ["/opt/tpot/bin/es_retention.sh &"])
+        self.assertEqual(body, ["/opt/tpot/bin/es_retention.sh &", "myILM_PID=$!"])
         # between the healthcheck and the Kibana block, nothing in between waits
         kibana = text.index('if [ "${myFIRSTRUN}" == "true" ] && [ "${TPOT_TYPE}" == "HIVE" ];')
         self.assertLess(block.end(), kibana)
@@ -334,6 +334,145 @@ class WiringTest(unittest.TestCase):
         text = self.read("docker", "elk", "logstash", "dist", "entrypoint.sh")
         self.assertNotIn("_ilm/policy", text)
         self.assertIn("lifecycle", self.read("docker", "elk", "logstash", "dist", "tpot-template.json"))
+
+    @staticmethod
+    def text_of(path):
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+
+    def cleanup_function(self):
+        text = self.read("docker", "tpotinit", "dist", "entrypoint.sh")
+        return re.search(r"^cleanup\(\) \{\n.*?^\}\n", text, re.S | re.M).group(0)
+
+    def test_the_cleanup_stops_es_retention_and_autoheal_once_they_run(self):
+        """entrypoint.sh keeps the PID of es_retention.sh, its cleanup (the SIGTERM trap) sends it TERM and
+        waits for it, autoheal only once it runs, and ends the script; the waits before autoheal can be
+        interrupted."""
+        text = self.read("docker", "tpotinit", "dist", "entrypoint.sh")
+        cleanup = self.cleanup_function()
+        self.assertIn('[ -n "${PID}" ] && kill -TERM "${PID}"', cleanup)
+        self.assertNotIn('\n  kill -TERM "$PID"', cleanup)
+        self.assertIn('kill -TERM "${myILM_PID}"', cleanup)
+        self.assertIn('wait "${myILM_PID}"', cleanup)
+        self.assertIn('if [ -n "${myILM_PID}" ];', cleanup)
+        self.assertEqual(cleanup.rstrip().splitlines()[-2].strip(), "exit 0")
+        self.assertIn("sleep 60 & wait $!", text)
+        self.assertNotRegex(text, r"(?m)^\s*sleep 60\s*$")
+        self.assertLess(text.index("trap cleanup SIGTERM"), text.index("myILM_PID=$!"))
+        script = self.read("docker", "tpotinit", "dist", "bin", "es_retention.sh")
+        self.assertIn("sleep 5 & wait $!", script)
+        self.assertNotRegex(script, r"(?m)^\s*sleep 5\s*$")
+        main = script[script.index('if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then'):]
+        self.assertRegex(main, re.compile(r"trap '[^']*exit 143' TERM\n  fuILM_MAIN", re.S))
+
+    @unittest.skipUnless(shutil.which("bash"), "no bash")
+    def test_a_sigterm_during_the_wait_before_autoheal_ends_tpotinit_at_once(self):
+        import signal
+        import time
+        script = (self.cleanup_function() + 'PID=""\nTPOT_OSTYPE=test\nsleep 30 &\nmyILM_PID=$!\n'
+                  'echo "ilm=${myILM_PID}"\ntrap cleanup SIGTERM\nsleep 60 & wait $!\necho "went on"\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            log = os.path.join(tmp, "out")
+            with open(log, "w", encoding="utf-8") as handle:      # a file: the sleeps keep no pipe open
+                proc = subprocess.Popen(["bash", "-c", script], stdout=handle, stderr=subprocess.STDOUT)
+            deadline = time.monotonic() + 10
+            while "ilm=" not in self.text_of(log) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            ilm = int(re.search(r"ilm=(\d+)", self.text_of(log)).group(1))
+            time.sleep(0.3)                              # the trap is set and the wait runs
+            sent = time.monotonic()
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=20)
+            took = time.monotonic() - sent
+            out = self.text_of(log)
+        self.assertLess(took, 5, out)
+        self.assertEqual(proc.returncode, 0, out)
+        self.assertIn("# Cleanup done.", out)
+        self.assertNotIn("went on", out)                  # nothing after the wait runs
+        with self.assertRaises(OSError):                  # es_retention.sh got its TERM
+            os.kill(ilm, 0)
+
+
+# curl for es_retention.sh: every step in $CALLS; Elasticsearch answers unless MODE=down, the GET of the
+# policy (404) takes GET_SLEEP seconds, the PUT PUT_SLEEP seconds
+RETENTION_CURL = """#!/bin/sh
+put=""
+for a in "$@"; do [ "$a" = PUT ] && put=1; done
+case "$*" in
+  *_cluster/health*) echo health >> "$CALLS"; [ "$MODE" = down ] && exit 7; exit 0 ;;
+  *_ilm/policy/tpot*)
+    if [ -n "$put" ]; then
+      echo put-start >> "$CALLS"; cat > /dev/null; sleep "$PUT_SLEEP"; echo put-done >> "$CALLS"; exit 0
+    fi
+    echo get-start >> "$CALLS"; sleep "$GET_SLEEP"; echo get-done >> "$CALLS"; printf 404; exit 0 ;;
+  *_cat/indices*) echo cat >> "$CALLS"; echo '[]'; exit 0 ;;
+esac
+exit 0
+"""
+
+
+@unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "needs bash and jq")
+class RetentionStopTest(unittest.TestCase):
+    """es_retention.sh on TERM (tpotinit stops): it ends without a new request, a request in flight finishes."""
+
+    def stop_at(self, mark, mode="up", get_sleep="0", put_sleep="0"):
+        import signal
+        import time
+        tmp = tempfile.mkdtemp(prefix="tpot-retention-")
+        self.addCleanup(shutil.rmtree, tmp)
+        bindir = os.path.join(tmp, "bin")
+        os.makedirs(bindir)
+        with open(os.path.join(bindir, "curl"), "w", encoding="utf-8") as out:
+            out.write(RETENTION_CURL)
+        os.chmod(os.path.join(bindir, "curl"), 0o755)
+        calls = os.path.join(tmp, "calls")
+        open(calls, "w").close()
+        env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", CALLS=calls, MODE=mode, GET_SLEEP=get_sleep,
+                   PUT_SLEEP=put_sleep, TPOT_ES_URL="http://es.test", TPOT_ES_RETENTION="60",
+                   TPOT_ES_RETENTION_WAIT="600", TMPDIR=tmp)
+        log = os.path.join(tmp, "out")
+        with open(log, "w", encoding="utf-8") as handle:          # a file: a sleep keeps no pipe open
+            proc = subprocess.Popen(["bash", os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "bin",
+                                                          "es_retention.sh")],
+                                    env=env, stdout=handle, stderr=subprocess.STDOUT)
+        deadline = time.monotonic() + 15
+        while mark not in self.lines(calls):
+            if time.monotonic() > deadline or proc.poll() is not None:
+                proc.kill()
+                proc.wait()
+                self.fail(f"never reached {mark}: {self.lines(calls)} {WiringTest.text_of(log)}")
+            time.sleep(0.05)
+        time.sleep(0.2)
+        sent = time.monotonic()
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=20)
+        took = time.monotonic() - sent
+        time.sleep(0.1)                                  # what a request in flight writes after it is through
+        return proc.returncode, took, self.lines(calls), WiringTest.text_of(log)
+
+    @staticmethod
+    def lines(path):
+        with open(path, encoding="utf-8") as handle:
+            return handle.read().split()
+
+    def test_the_wait_for_elasticsearch_ends_at_once(self):
+        rc, took, calls, out = self.stop_at("health", mode="down")
+        self.assertEqual(rc, 143, out)
+        self.assertLess(took, 3, out)                     # not the 5 s of the wait
+        self.assertNotIn("put-start", calls)
+        self.assertIn("tpotinit stops", out)
+
+    def test_no_new_request_after_the_one_in_flight(self):
+        rc, took, calls, out = self.stop_at("get-start", get_sleep="2")
+        self.assertEqual(rc, 143, out)
+        self.assertIn("get-done", calls)                  # the GET in flight was let finish
+        self.assertNotIn("cat", calls)
+        self.assertNotIn("put-start", calls)
+
+    def test_a_put_in_flight_finishes(self):
+        rc, took, calls, out = self.stop_at("put-start", put_sleep="2")
+        self.assertEqual(rc, 143, out)
+        self.assertEqual(calls[-1], "put-done", calls)    # whole, and nothing after it
 
 
 class FakeES:
