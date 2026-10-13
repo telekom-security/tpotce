@@ -1290,7 +1290,20 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
         self.assertIn("TPOT_ES_RETENTION=60 is set in .env.", notes)
         self.assertIn("The ILM policy tpot was changed in Kibana, T-Pot leaves it as it is", notes)
-        self.assertIn("Take over from Kibana keeps it", notes)
+        # both buttons ask first where they shorten the retention (Take over too: Kibana may have changed it)
+        self.assertIn("Take over from Kibana keeps it, Apply .env to the policy applies .env to it; either asks "
+                      "first if that shortens the retention.", notes)
+        self.assertNotIn("(it asks first)", notes)
+
+    async def test_settings_on_a_foreign_policy_names_both_buttons_alike(self):
+        from tpotctl import elastic
+        repo = self.retention_checkout()
+        backend = self.settings_backend(repo)
+        backend._plan = elastic.Plan(elastic.Decision("foreign", None, "120", False), [], True)
+        app, _pilot = await self.save_retention(backend, "365")
+        notes = " ".join(str(note.message) for note in app._notifications)
+        self.assertIn("On the Elastic page, Take over from Kibana keeps it, Apply .env to the policy applies .env "
+                      "to it; either asks first if that shortens the retention.", notes)
 
     async def test_elastic_unset_env_and_no_elasticsearch_does_not_promise_a_wait(self):
         # an unset .env shortens nothing (cli._shortens_env): the text of an unknown policy, as tpot env set

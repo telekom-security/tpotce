@@ -986,8 +986,7 @@ class SettingsPane(Vertical):
                                 f"{then}", title="Not applied", severity="warning", timeout=12)
         elif chosen is not None and chosen.decision.action == "foreign":
             foreign = True
-            where = ("On the Elastic page, Take over from Kibana keeps it, Apply .env to the policy applies .env "
-                     "to it." if host else f"Its retention is changed in {KIBANA_ILM}.")
+            where = (f"On the Elastic page, {FOREIGN_BUTTONS}" if host else f"Its retention is changed in {KIBANA_ILM}.")
             self.app.notify(foreign_kept(saved["TPOT_ES_RETENTION"], where), title="Not applied", severity="warning",
                             timeout=12)
         elif chosen is not None and not chosen.reachable:
@@ -1713,8 +1712,7 @@ class ElasticPane(Vertical):
         self.app.config_maybe_changed()             # the Settings page shows TPOT_ES_RETENTION too
         try:
             if chosen.reachable and chosen.decision.action == "foreign":
-                self.app.notify(foreign_kept(value, "Take over from Kibana keeps it, Apply .env to the policy "
-                                                    "applies .env to it (it asks first)."),
+                self.app.notify(foreign_kept(value, FOREIGN_BUTTONS),
                                 title="Not applied", severity="warning", timeout=12)
             elif chosen.reachable:
                 await asyncio.to_thread(self.app.backend.apply_retention, chosen)
@@ -1747,6 +1745,11 @@ def retention_waits(value: str, later: str) -> str:
     """A shorter TPOT_ES_RETENTION written while Elasticsearch does not answer: it waits for a yes."""
     return (f"TPOT_ES_RETENTION={value} is set in .env, but Elasticsearch is not reachable: T-Pot does not shorten "
             f"the ILM policy tpot on its own, the value waits. {later}")
+
+
+# what the two buttons of the Elastic page do with a policy changed in Kibana; each asks first where it shortens
+FOREIGN_BUTTONS = ("Take over from Kibana keeps it, Apply .env to the policy applies .env to it; either asks first "
+                   "if that shortens the retention.")
 
 
 def foreign_kept(value: str, where: str) -> str:
