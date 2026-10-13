@@ -965,14 +965,18 @@ If the `update.sh` of 24.04.1 already restarted into the new one, its checkout i
 before the new script writes its backup, so a rollback is no longer possible. That old script also
 reset `.env` and `docker-compose.yml` to the files of the release: the new one takes both back from
 the archive the old one wrote to `~/*_tpot_backup.tgz` before it checks or writes anything (only if
-the archive is younger than 24 hours, its `.env` names an older version and the files in `~/tpotce`
-are still the ones of the release) and says so. Otherwise it leaves them, and if `.env` is the one of
-the release without a web user, it names the archive and the command to take your `.env` from it. A release with a newer
-Elasticsearch then takes the archive the old script wrote to `~/*_tpot_backup.tgz` as the backup of
-the Elasticsearch data, if it is younger than 24 hours, holds `data/elk/data` of the data folder and its
-`.env` names the version that ran before this update (`TPOT_VERSION`): the archive of an update before that
-one holds the data of an older release and does not count, and `update.sh --check-data-loss` (run by the T-Pot Manager on a
-T-Pot past 24.04.1) never counts it. Otherwise it says that a no cannot stop the upgrade and how to copy the data first.
+the archive is younger than 24 hours, its `.env` names an older version and the `.env` in `~/tpotce`
+is still the one of the release, or already the one of the archive after a run that stopped in
+between; each file only while it is the one of the release) and says so. It reads both files from
+the archive before it writes either; if a write fails, it puts the files of the release back and
+stops, the next run takes both. Otherwise it leaves them, and if `.env` is the one of the release
+without a web user, it names the archive and the command to take your `.env` from it. A release with
+a newer Elasticsearch then takes the archive the old script wrote to `~/*_tpot_backup.tgz` as the
+backup of the Elasticsearch data, if it is younger than 24 hours, holds `data/elk/data` of the data
+folder and its `.env` names the version that ran before this update (`TPOT_VERSION`): the archive of
+an update before that one holds the data of an older release and does not count, and
+`update.sh --check-data-loss` (run by the T-Pot Manager on a T-Pot past 24.04.1) never counts it.
+Otherwise it says that a no cannot stop the upgrade and how to copy the data first.
 
 To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
 

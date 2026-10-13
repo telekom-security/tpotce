@@ -83,6 +83,10 @@ myELASTIC_GRACE="${TPOT_ELASTIC_GRACE:-120}"
 
 # Working directory, cleaned up when the script ends
 myTMPDIR=""
+# The archive of the update.sh of 24.04.1 as read in this run (fuOLD_UPDATER_READ) and the folder in
+# myTMPDIR with its list of members, its .env and its docker-compose.yml
+myOLD_READ=""
+myOLD_DIR=""
 # The sudo password from -B, empty: sudo asks itself (or needs none)
 myBECOME_FILE=""
 
@@ -1362,7 +1366,8 @@ function fuOLD_ES_VERSION () {   # $1 = the registry of .env, $2 = tag
 # it holds a data folder inside ~/tpotce only, under its path there (data/elk/data/...), and the
 # .env of that moment, whose TPOT_VERSION must be $2, the version that ran before this update: the
 # archive of an update before that one holds the data of a release older than the one that ran.
-# Prints the archive, rc 1 when there is none.
+# The list of its members and its .env are the ones fuOLD_UPDATER_READ took (in a subshell: those
+# fuOLD_UPDATER_CONFIG read of the same archive). Prints the archive, rc 1 when there is none.
 function fuOLD_RELEASE_BACKUP () {   # $1 = the data folder, $2 = the version that ran before
 	local myNEWEST="" myMEMBER="" myVER=""
 	case "$1/" in
@@ -1371,7 +1376,10 @@ function fuOLD_RELEASE_BACKUP () {   # $1 = the data folder, $2 = the version th
 	esac
 	myNEWEST=$(fuOLD_UPDATER_ARCHIVE) || return 1
 	fuOLD_UPDATER_FRESH "${myNEWEST}" || return 1
-	tar tf "${myNEWEST}" "${myMEMBER}" >/dev/null 2>&1 || tar tf "${myNEWEST}" "./${myMEMBER}" >/dev/null 2>&1 || return 1
+	fuOLD_UPDATER_READ "${myNEWEST}" || return 1
+	# the folder itself or anything in it, with or without ./ in front
+	awk -v myM="${myMEMBER}" '{ sub(/^\.\//, "") } $0 == myM || index($0, myM "/") == 1 { myHIT = 1; exit }
+	  END { exit !myHIT }' "${myOLD_DIR}/toc" || return 1
 	myVER=$(fuARCHIVE_ENV "${myNEWEST}" TPOT_VERSION)
 	[ -n "${myVER}" ] && [ "${myVER}" == "$2" ] || return 1
 	echo "${myNEWEST}"
@@ -1390,18 +1398,47 @@ function fuOLD_UPDATER_FRESH () {   # $1 = archive
 	[ -n "$(find "$1" -maxdepth 0 -mmin -1440 2>/dev/null)" ]
 }
 
-# The name of a file of ~/tpotce in an archive: `tar cvf <archive> * .env` names it .env, a tar of
-# `.` names it ./.env. Prints the member, rc 1 when the archive does not hold it.
-function fuARCHIVE_MEMBER () {   # $1 = archive, $2 = the file name in ~/tpotce
-	tar tf "$1" 2>/dev/null | grep -m1 -xF -e "$2" -e "./$2"
+# That archive is read once per run, it holds the data folder and may be large: the list of its
+# members (tar tf) and its .env and docker-compose.yml (one tar xf of both) go to a folder in
+# myTMPDIR, every lookup of a member and every value comes from there. myOLD_READ names the archive,
+# myOLD_DIR the folder. A file that cannot be taken out is missing in the folder (fuOLD_UPDATER_FILE).
+# rc 1 when the archive cannot be listed or there is no myTMPDIR.
+function fuOLD_UPDATER_READ () {   # $1 = archive
+	local myDIR="" myFILE="" myMEMBER="" myMEMBERS=()
+	[ -n "${myOLD_READ}" ] && [ "${myOLD_READ}" == "$1" ] && return 0
+	[ -n "${myTMPDIR}" ] && [ -d "${myTMPDIR}" ] || return 1
+	myDIR=$(mktemp -d "${myTMPDIR}/old_updater.XXXXXX") || return 1
+	mkdir "${myDIR}/files" && tar tf "$1" > "${myDIR}/toc" 2>/dev/null || return 1
+	for myFILE in .env docker-compose.yml;
+	  do
+	    myMEMBER=$(grep -m1 -xF -e "${myFILE}" -e "./${myFILE}" "${myDIR}/toc") && myMEMBERS+=("${myMEMBER}")
+	  done
+	[ "${#myMEMBERS[@]}" -eq 0 ] || tar xf "$1" -C "${myDIR}/files" "${myMEMBERS[@]}" 2>/dev/null
+	myOLD_READ="$1"
+	myOLD_DIR="${myDIR}"
 }
 
-# A setting of the .env in an archive, read as fuENV_VALUE reads it (KEY=value or KEY: "value",
+# The file of ~/tpotce as fuOLD_UPDATER_READ took it out of that archive: prints its path, rc 1 when
+# it is no regular file there (not in the archive, a link, or it could not be taken out).
+function fuOLD_UPDATER_FILE () {   # $1 = the file name in ~/tpotce
+	[ -n "${myOLD_DIR}" ] && [ -f "${myOLD_DIR}/files/$1" ] && [ ! -L "${myOLD_DIR}/files/$1" ] || return 1
+	echo "${myOLD_DIR}/files/$1"
+}
+
+# The name of a file of ~/tpotce in that archive: `tar cvf <archive> * .env` names it .env, a tar of
+# `.` names it ./.env. Prints the member, rc 1 when the archive does not hold it.
+function fuARCHIVE_MEMBER () {   # $1 = archive, $2 = the file name in ~/tpotce
+	fuOLD_UPDATER_READ "$1" || return 1
+	grep -m1 -xF -e "$2" -e "./$2" "${myOLD_DIR}/toc"
+}
+
+# A setting of the .env in that archive, read as fuENV_VALUE reads it (KEY=value or KEY: "value",
 # quotes and a CR left out). Empty when the archive holds no .env or the .env not the key.
 function fuARCHIVE_ENV () {   # $1 = archive, $2 = key
-	local myMEMBER=""
-	myMEMBER=$(fuARCHIVE_MEMBER "$1" .env) || return 1
-	tar xOf "$1" "${myMEMBER}" 2>/dev/null | fuENV_VALUE /dev/stdin "$2"
+	local myFILE=""
+	fuOLD_UPDATER_READ "$1" || return 1
+	myFILE=$(fuOLD_UPDATER_FILE .env) || return 1
+	fuENV_VALUE "${myFILE}" "$2"
 }
 
 # The update.sh of 24.04.1 wrote its backup to $HOME/*_tpot_backup.tgz, then ran `git reset --hard`
@@ -1410,48 +1447,78 @@ function fuARCHIVE_ENV () {   # $1 = archive, $2 = key
 # Both come back from it before this run checks or writes anything, so its backup and fuRESTORE
 # work with your configuration and myOLDVERSION names the version that ran. Only when the archive
 # is from the last 24 hours, its .env names an older version than the checkout and the .env here
-# is the one of the checkout (unchanged against HEAD: the reset happened); docker-compose.yml only
-# if it is unchanged too. Written in place, mode and owner stay. Otherwise nothing changes; a .env
-# of the checkout without a web user gets the way to take it from the archive yourself.
+# is the one of the checkout (unchanged against HEAD: the reset happened) or already the one of the
+# archive (a run before this one stopped after it); each file only while it is unchanged against
+# HEAD. Both are read from the archive before either is written, in place (mode and owner stay); a
+# write that fails puts back the files of the checkout (git show HEAD:<file>) and stops the run.
+# Otherwise nothing changes; a .env of the checkout without a web user gets the way to take it
+# from the archive yourself.
 function fuOLD_UPDATER_CONFIG () {
-	local myOLD="" myVER="" myCHECKOUT="" myFILE="" myMEMBER="" myTMP="" myBACK=""
+	local myOLD="" myVER="" myCHECKOUT="" myFILE="" myMEMBER="" myENV="" myUNDO="" myBACK=""
+	local myTAKE=() myWRITTEN=()
 	local myGIT=(git -C "$HOME/tpotce")
 	[ -z "${myPREPARED}" ] || return 0
 	myOLD=$(fuOLD_UPDATER_ARCHIVE) || return 0
+	fuTMPDIR
+	fuOLD_UPDATER_READ "${myOLD}" || return 0
 	myMEMBER=$(fuARCHIVE_MEMBER "${myOLD}" .env) || return 0
+	myENV=$(fuOLD_UPDATER_FILE .env)
 	myVER=$(fuARCHIVE_ENV "${myOLD}" TPOT_VERSION)
 	myCHECKOUT=$(tr -d "[:space:]" < "$HOME/tpotce/version" 2>/dev/null)
 	if ! fuOLD_UPDATER_FRESH "${myOLD}" \
 	   || ! fuUI_VERSION_GE "${myCHECKOUT}" "${myVER}" || fuUI_VERSION_GE "${myVER}" "${myCHECKOUT}" \
-	   || ! "${myGIT[@]}" diff --quiet HEAD -- .env 2>/dev/null;
+	   || ! { "${myGIT[@]}" diff --quiet HEAD -- .env 2>/dev/null || cmp -s "${myENV}" "$HOME/tpotce/.env"; };
 	  then
 	    # a .env of the checkout has no web user, a SENSOR has its own .env and none either
 	    if "${myGIT[@]}" diff --quiet HEAD -- .env 2>/dev/null \
 	       && [ -z "$(fuENV_VALUE "$HOME/tpotce/.env" WEB_USER)" ] \
-	       && ! tar xOf "${myOLD}" "${myMEMBER}" 2>/dev/null | cmp -s - "$HOME/tpotce/.env";
+	       && ! { [ -n "${myENV}" ] && cmp -s "${myENV}" "$HOME/tpotce/.env"; };
 	      then
 	        fuUI_WARN "$HOME/tpotce/.env is the one of the checkout, without a web user. If your configuration is in ${myOLD}, put it back with: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/.env"
 	    fi
 	    return 0
 	fi
-	fuTMPDIR
+	# both files are read before either is written
 	for myFILE in .env docker-compose.yml;
 	  do
 	    myMEMBER=$(fuARCHIVE_MEMBER "${myOLD}" "${myFILE}") || continue
 	    "${myGIT[@]}" diff --quiet HEAD -- "${myFILE}" 2>/dev/null || continue
-	    myTMP=$(mktemp "${myTMPDIR}/old_updater.XXXXXX")
-	    # the file of the checkout stays until the one of the archive is read in full; `cat >` keeps
-	    # mode and owner, a failed write leaves the file of the checkout, which git brings back
-	    if ! tar xOf "${myOLD}" "${myMEMBER}" > "${myTMP}" 2>/dev/null || ! cat "${myTMP}" > "$HOME/tpotce/${myFILE}";
+	    if ! fuOLD_UPDATER_FILE "${myFILE}" >/dev/null;
 	      then
-	        "${myGIT[@]}" diff --quiet HEAD -- "${myFILE}" 2>/dev/null || "${myGIT[@]}" show "HEAD:${myFILE}" > "$HOME/tpotce/${myFILE}" 2>/dev/null
+	        fuUI_ERROR "Could not read ${myFILE} from ${myOLD}, the earlier updater had reset it."
+	        fuUI_HINT "Nothing was changed. Put it back with: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/${myFILE}"
+	        fuUI_HINT "Then run the update again. Exiting."
+	        echo
+	        fuDID fail "${myFILE} could not be read from ${myOLD}: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/${myFILE}, then update again."
+	        exit 1
+	    fi
+	    myTAKE+=("${myFILE}")
+	  done
+	if [ "${#myTAKE[@]}" -eq 0 ];
+	  then
+	    fuUI_OK "Your configuration of ${myVER} from ${myOLD} is in place already."
+	    echo
+	    return 0
+	fi
+	for myFILE in "${myTAKE[@]}";
+	  do
+	    # `cat >` keeps mode and owner; a failed write puts the files of the checkout back, in place
+	    if ! cat "$(fuOLD_UPDATER_FILE "${myFILE}")" > "$HOME/tpotce/${myFILE}";
+	      then
+	        for myUNDO in ${myWRITTEN[@]+"${myWRITTEN[@]}"} "${myFILE}";
+	          do
+	            "${myGIT[@]}" diff --quiet HEAD -- "${myUNDO}" 2>/dev/null || "${myGIT[@]}" show "HEAD:${myUNDO}" > "$HOME/tpotce/${myUNDO}" 2>/dev/null
+	          done
+	        myMEMBER=$(fuARCHIVE_MEMBER "${myOLD}" "${myFILE}")
 	        fuUI_ERROR "Could not put ${myFILE} back from ${myOLD}, the earlier updater had reset it."
+	        [ "${#myWRITTEN[@]}" -eq 0 ] || fuUI_HINT "${myWRITTEN[*]} is the one of the checkout again."
 	        fuUI_HINT "Put it back with: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/${myFILE}"
 	        fuUI_HINT "Then run the update again. Exiting."
 	        echo
 	        fuDID fail "${myFILE} could not be put back from ${myOLD}: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/${myFILE}, then update again."
 	        exit 1
 	    fi
+	    myWRITTEN+=("${myFILE}")
 	    myBACK="${myBACK:+${myBACK} and }${myFILE}"
 	  done
 	fuUI_OK "Your configuration of ${myVER} is back from ${myOLD} (the earlier updater had reset it)."
@@ -1520,6 +1587,8 @@ function fuCHECK_ELASTIC () {
 	    echo
 	    return
 	fi
+	# fuOLD_RELEASE_BACKUP keeps what it reads of that archive in myTMPDIR
+	fuTMPDIR
 	if myOLDARCHIVE=$(fuOLD_RELEASE_BACKUP "${myDATA}" "${myOLDVERSION}");
 	  then
 	    fuUI_OK "The Elasticsearch data is in ${myOLDARCHIVE}, the backup of the update.sh of the release before."

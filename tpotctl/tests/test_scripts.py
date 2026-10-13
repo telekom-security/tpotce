@@ -1717,9 +1717,11 @@ class DataLossTest(Harness):
             fuROLLBACK_CHECKOUT () {{ echo "ROLLBACK"; return 0; }}
             fuCAN_ROLLBACK () {{ return 0; }}
             fuSTART_TPOT () {{ echo "STARTED"; return 0; }}
+            trap '[ -z "${{myTMPDIR}}" ] || rm -rf "${{myTMPDIR}}"' EXIT
         """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS",
                                       "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuELASTIC_REFUSED", "fuOLD_RELEASE_BACKUP",
-                                      "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV",
+                                      "fuTMPDIR", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
+                                      "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV",
                                       "fuCHECK_ELASTIC") \
             + stub_confirm + 'fuCHECK_ELASTIC\necho "went on"\n'
 
@@ -2052,7 +2054,8 @@ class DataLossTest(Harness):
                        "fuCHECK_BACKUP_SPACE",
                        "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuIMAGE_PULLABLE", "fuSORT_IMAGES",
                        # the archive of 24.04.1 is there to be found, the check must not take it
-                       "fuOLD_RELEASE_BACKUP", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV",
+                       "fuOLD_RELEASE_BACKUP", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
+                       "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV",
                        "fuLOCAL_IMAGES_TEXT", "fuUNSURE_IMAGES_TEXT", "fuIMAGES", "fuLOSS_TARGET", "fuCHECK_DATA_LOSS")
 
     def check(self, extra=""):
@@ -2545,8 +2548,8 @@ class OldUpdaterConfigTest(Harness):
     of the checkout."""
 
     HELPERS = DataLossTest.HELPERS
-    FUNCTIONS = ("fuENV_VALUE", "fuTMPDIR", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuARCHIVE_MEMBER",
-                 "fuARCHIVE_ENV", "fuOLD_UPDATER_CONFIG")
+    FUNCTIONS = ("fuENV_VALUE", "fuTMPDIR", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
+                 "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV", "fuOLD_UPDATER_CONFIG")
     RELEASE_ENV = "TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\nWEB_USER=\n"
     RELEASE_COMPOSE = "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: x\n"
     USER_ENV = "TPOT_REPO=dtagdevsec\nTPOT_VERSION=24.04.1\nWEB_USER=dXNlcg==\n"
@@ -2604,6 +2607,7 @@ class OldUpdaterConfigTest(Harness):
         environment.pop("TPOT_MARKS", None)
         result = subprocess.run(["bash", "-c", self.HELPERS + script], cwd=REPO, capture_output=True,
                                 universal_newlines=True, env=environment, stdin=subprocess.DEVNULL, timeout=60)
+        self.rc = result.returncode
         return result.stdout + result.stderr
 
     def assertReleaseFiles(self, out):
@@ -2712,6 +2716,99 @@ class OldUpdaterConfigTest(Harness):
         out = self.run_config()
         self.assertEqual(self.get(".env"), self.USER_ENV, out)
         self.assertEqual(self.get("docker-compose.yml"), self.RELEASE_COMPOSE)
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root writes a read-only file")
+    def test_a_failed_write_puts_back_what_was_written_and_a_rerun_completes(self):
+        """docker-compose.yml cannot be written: .env, written before it, is the one of the checkout again (in
+        place), the run stops; the next run takes both."""
+        archive = self.archive()
+        compose = os.path.join(self.tpotce, "docker-compose.yml")
+        inode = os.stat(os.path.join(self.tpotce, ".env")).st_ino
+        os.chmod(compose, 0o444)
+        self.addCleanup(os.chmod, compose, 0o644)
+        out = self.run_config()
+        self.assertEqual(self.rc, 1, out)
+        self.assertNotIn("rc=0", out)
+        self.assertReleaseFiles(out)
+        self.assertEqual(os.stat(os.path.join(self.tpotce, ".env")).st_ino, inode)
+        self.assertIn(f"ERROR: Could not put docker-compose.yml back from {archive}", out)
+        self.assertIn("HINT: .env is the one of the checkout again.", out)
+        self.assertIn(f"DID: fail: docker-compose.yml could not be put back from {archive}", out)
+        os.chmod(compose, 0o644)
+        out = self.run_config()
+        self.assertIn("rc=0", out)
+        self.assertEqual(self.get(".env"), self.USER_ENV, out)
+        self.assertEqual(self.get("docker-compose.yml"), self.USER_COMPOSE, out)
+        self.assertIn("HINT: Put back: .env and docker-compose.yml.", out)
+
+    def test_a_rerun_with_the_env_of_the_archive_takes_the_compose_file(self):
+        """A run before this one put .env back and stopped before docker-compose.yml: .env is the one of the
+        archive (not of the checkout), the compose file still the one of the checkout."""
+        archive = self.archive()
+        self.put(".env", self.USER_ENV)
+        out = self.run_config()
+        self.assertIn("rc=0", out)
+        self.assertEqual(self.get(".env"), self.USER_ENV, out)
+        self.assertEqual(self.get("docker-compose.yml"), self.USER_COMPOSE, out)
+        self.assertIn(f"OK: Your configuration of 24.04.1 is back from {archive}", out)
+        self.assertIn("HINT: Put back: docker-compose.yml. Other files", out)
+        self.assertNotIn("WARN", out)
+
+    def test_both_in_place_already_writes_nothing(self):
+        archive = self.archive()
+        self.put(".env", self.USER_ENV)
+        self.put("docker-compose.yml", self.USER_COMPOSE)
+        out = self.run_config()
+        self.assertIn("rc=0", out)
+        self.assertIn(f"OK: Your configuration of 24.04.1 from {archive} is in place already.", out)
+        self.assertNotIn("Put back:", out)
+        self.assertNotIn("DID:", out)
+
+    def test_a_member_that_is_no_file_stops_before_anything_is_written(self):
+        """Both files are read from the archive before either is written: a docker-compose.yml that is a link
+        leaves .env as well as it is."""
+        path = os.path.join(self.home, "20261013090000_tpot_backup.tgz")
+        source = os.path.join(self.home, "src")
+        os.makedirs(source)
+        with open(os.path.join(source, ".env"), "w", encoding="utf-8") as out:
+            out.write(self.USER_ENV)
+        os.symlink("/etc/hosts", os.path.join(source, "docker-compose.yml"))
+        with tarfile.open(path, "w") as archive:
+            archive.add(os.path.join(source, "docker-compose.yml"), arcname="docker-compose.yml")
+            archive.add(os.path.join(source, ".env"), arcname=".env")
+        out = self.run_config()
+        self.assertEqual(self.rc, 1, out)
+        self.assertReleaseFiles(out)
+        self.assertIn(f"ERROR: Could not read docker-compose.yml from {path}", out)
+        self.assertIn("HINT: Nothing was changed.", out)
+
+    def test_the_archive_is_listed_once_and_read_once(self):
+        """One tar tf and one tar xf of both files for the whole run, fuOLD_RELEASE_BACKUP of the same
+        archive included."""
+        real = shutil.which("tar")
+        calls = os.path.join(self.home, "tar_calls")
+        with open(os.path.join(self.bin, "tar"), "w", encoding="utf-8") as out:
+            out.write(f'#!/bin/sh\necho "$*" >> "{calls}"\nexec {real} "$@"\n')
+        os.chmod(os.path.join(self.bin, "tar"), 0o755)
+        archive = self.archive()
+        os.makedirs(os.path.join(self.home, "src", "data", "elk", "data"))
+        with tarfile.open(archive, "a") as handle:
+            handle.add(os.path.join(self.home, "src", "data", "elk"), arcname="data/elk")
+        extra = DataLossTest.functions("fuOLD_RELEASE_BACKUP")
+        script = (f'eval "$(sed -n \'/^fuUI_VERSION_GE () {{/,/^}}/p\' {REPO}/installer/lib/ui.sh)"\n'
+                  + DataLossTest.functions(*self.FUNCTIONS) + extra
+                  + 'trap \'[ -z "${myTMPDIR}" ] || rm -rf "${myTMPDIR}"\' EXIT\n'
+                  + f'fuOLD_UPDATER_CONFIG\necho "FOUND=$(fuOLD_RELEASE_BACKUP "{self.tpotce}/data" 24.04.1)"\n')
+        environment = dict(os.environ, HOME=self.home, PATH=f"{self.bin}:{os.environ['PATH']}", TPOT_GUM="off")
+        result = subprocess.run(["bash", "-c", self.HELPERS + script], cwd=REPO, capture_output=True,
+                                universal_newlines=True, env=environment, stdin=subprocess.DEVNULL, timeout=60)
+        out = result.stdout + result.stderr
+        self.assertIn(f"FOUND={archive}\n", out)
+        self.assertEqual(self.get(".env"), self.USER_ENV, out)
+        with open(calls, encoding="utf-8") as handle:
+            named = [line for line in handle.read().splitlines() if archive in line]
+        self.assertLessEqual(len(named), 2, named)
+        self.assertEqual([line.split()[0] for line in named], ["tf", "xf"], named)
 
     def test_it_runs_first_in_both_paths(self):
         main = read("update.sh").split("################\n# Main section #\n################", 1)[1]
