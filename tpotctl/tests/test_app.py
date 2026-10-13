@@ -1439,8 +1439,9 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(len(applied), 1)
                         self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "30")
                         # .env holds it, the policy does not: the value waits, and the note says how to apply it
-                        self.assertIn("TPOT_ES_RETENTION=30 is in .env, but the ILM policy tpot was not changed: "
-                                      "the value waits until it is applied (Apply .env to the policy on the Elastic "
+                        self.assertIn("TPOT_ES_RETENTION=30 is in .env, the ILM policy tpot may not have taken it: "
+                                      "if the policy still keeps the old value, the value waits until it is applied "
+                                      "(Apply .env to the policy on the Elastic "
                                       "page, or tpot elastic retention --force).", notes)
                     if where == "write":
                         self.assertNotIn("is in .env", notes)
