@@ -15,7 +15,7 @@ import textwrap
 import time
 import unittest
 
-from tpotctl.tests import isolate
+from tpotctl.tests import isolate, ptyhelper
 
 isolate()
 
@@ -38,53 +38,8 @@ def read(path):
 def at_terminal(argv, env, cwd, answers=(), timeout=60):
     """argv with stdin, stdout and stderr on a pty: (exit code, output). answers: (text, keys) in their
     order, the keys are typed once the text is in the output (after the text of the answer before)."""
-    import pty
-    import select
-    master, slave = pty.openpty()
-    proc = subprocess.Popen(argv, env=env, cwd=cwd, stdin=slave, stdout=slave, stderr=slave, close_fds=True)
-    os.close(slave)
-    out, seen, waiting = b"", 0, list(answers)
-    deadline = time.time() + timeout
-
-    def chunk(wait):
-        """What the pty has within wait seconds: bytes, b"" for nothing yet, None at its end (EOF, EIO)."""
-        ready, _w, _x = select.select([master], [], [], wait)
-        if not ready:
-            return b""
-        try:
-            data = os.read(master, 65536)
-        except OSError:                             # Linux: EIO once the child is gone
-            return None
-        return data or None
-
-    try:
-        while time.time() < deadline:
-            if waiting and waiting[0][0].encode() in out[seen:]:
-                text, keys = waiting.pop(0)
-                seen = out.index(text.encode(), seen) + len(text.encode())
-                os.write(master, keys)
-            data = chunk(0.1)
-            if data is None:
-                break
-            if data:
-                out += data
-            elif proc.poll() is not None:
-                # gone: what it wrote just before it ended is still in the pty; a child of the child may
-                # keep it open and write on, so the reading ends with the deadline (+2 s) at the latest
-                while time.time() < deadline + 2:
-                    data = chunk(0.2)
-                    if not data:
-                        break
-                    out += data
-                break
-        else:
-            proc.kill()                             # the deadline: the output so far, the code of the kill
-        return proc.wait(timeout=10), out.decode("utf-8", "replace").replace("\r\n", "\n")
-    finally:
-        if proc.poll() is None:                     # the deadline, or a wait that timed out: no child stays
-            proc.kill()
-            proc.wait(timeout=10)
-        os.close(master)
+    code, out, _piped = ptyhelper.run(argv, env, cwd, answers=answers, timeout=timeout)
+    return code, out.decode("utf-8", "replace").replace("\r\n", "\n")
 
 
 @unittest.skipUnless(shutil.which("bash"), "no bash")
@@ -1065,23 +1020,30 @@ class LossConfirmTerminalTest(unittest.TestCase):
                 self.assertEqual(at_terminal(["printf", "x\n"], dict(os.environ), self.home), (0, "x\n"))
         # the race made sure: the first wait of the helper times out, the child writes and ends meanwhile.
         # Linux has that window; macOS keeps the child until its output is read (a pty drains on close),
-        # so the first poll says "gone" here as it would there
-        real_select, real_poll, selects, polls = select.select, subprocess.Popen.poll, [], []
+        # so from that idle wait on every poll says "gone" here as it would there, before it every poll
+        # says what is true: however often and in which order the helper asks
+        real_select, real_poll = select.select, subprocess.Popen.poll
+        state = {"idle": False, "polls_after": 0}
 
         def late(*args):
-            selects.append(args)
-            if len(selects) == 1:
+            if not state["idle"]:
+                state["idle"] = True
                 time.sleep(0.3)
                 return [], [], []
             return real_select(*args)
 
         def gone(proc):
-            polls.append(proc)
-            return 0 if len(polls) == 1 else real_poll(proc)
+            code = real_poll(proc)
+            if not state["idle"]:
+                return code
+            state["polls_after"] += 1
+            return 0 if code is None else code
 
         with mock.patch("select.select", side_effect=late), \
                 mock.patch.object(subprocess.Popen, "poll", autospec=True, side_effect=gone):
             self.assertEqual(at_terminal(["printf", "x\n"], dict(os.environ), self.home), (0, "x\n"))
+        self.assertTrue(state["idle"])
+        self.assertGreater(state["polls_after"], 0)
         started = time.time()
         code, out = at_terminal(["bash", "-c", 'echo "before"; exec sleep 30'], dict(os.environ), self.home,
                                 timeout=1)

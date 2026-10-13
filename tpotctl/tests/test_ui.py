@@ -6,26 +6,21 @@ Every bash here runs with a temporary HOME and XDG folders and a clean environme
 tpot.json or .env of the user running the tests, nothing calls docker or downloads gum.
 """
 
-import fcntl
 import io
 import itertools
 import json
 import os
-import pty
 import re
-import select
 import shutil
 import stat
-import struct
 import subprocess
 import sys
 import tempfile
-import termios
 import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from tpotctl.tests import isolate  # noqa: E402
+from tpotctl.tests import isolate, ptyhelper  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
@@ -175,41 +170,8 @@ def at_terminal(script, env, cols=120, rows=49, source=UI_SH, stdout_tty=True, t
     """Runs the script in a pty of cols x rows (stdin and stderr, stdout too unless stdout_tty is
     False: then a pipe); the output of the pty with the line ends of the script. keys are typed
     into the pty after a second (for a real gum). bash: another bash than the one of PATH."""
-    master, slave = pty.openpty()
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
-    attrs = termios.tcgetattr(slave)
-    attrs[1] &= ~termios.ONLCR                       # \n stays \n, so a CR of the script shows
-    termios.tcsetattr(slave, termios.TCSANOW, attrs)
-    proc = subprocess.Popen([bash or BASH, "-c", f'source "{source}"\n{script}'], env=env, stdin=slave,
-                            stdout=slave if stdout_tty else subprocess.PIPE, stderr=slave, close_fds=True)
-    os.close(slave)
-    out = b""
-    deadline = time.time() + timeout
-    typed_at = time.time() + 1.0
-    while time.time() < deadline:
-        if keys and time.time() >= typed_at:
-            os.write(master, keys)
-            keys = None
-        ready, _w, _x = select.select([master], [], [], 0.1)
-        if ready:
-            try:
-                data = os.read(master, 65536)
-            except OSError:
-                break
-            if not data:
-                break
-            out += data
-        elif proc.poll() is not None:
-            # drained and done
-            ready, _w, _x = select.select([master], [], [], 0.2)
-            if not ready:
-                break
-    proc.wait(timeout=5)
-    os.close(master)
-    piped = ""
-    if proc.stdout:
-        piped = proc.stdout.read().decode("utf-8", "replace")
-        proc.stdout.close()
+    _code, out, piped = ptyhelper.run([bash or BASH, "-c", f'source "{source}"\n{script}'], env, size=(cols, rows),
+                                      onlcr=False, stdout_tty=stdout_tty, keys=keys, timeout=timeout)
     return out.decode("utf-8", "replace") + piped
 
 
