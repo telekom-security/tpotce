@@ -3313,7 +3313,7 @@ class UpdateRepairTest(Harness):
         bad = []
         for number, line in enumerate(read("update.sh").splitlines(), 1):
             code = line.strip()
-            if code.startswith(("#", "echo")) or "fuUI_" in code:
+            if code.startswith(("#", "echo", "fuDID ")) or "fuUI_" in code:      # messages only
                 continue
             # a text for a message (a plain string, nothing run or read in it)
             if re.fullmatch(r'(local )?my[A-Z_]+="[^"$`]*"', code):

@@ -367,6 +367,57 @@ class SummaryTest(Scripts):
                 self.assertEqual(result.stdout.count("[FAILED]"), 1 if rc == 1 else 0, result.stdout)
         self.assertEqual(self.source_update("exit 3").stdout, "")         # not confirmed: no summary
 
+    def test_the_warnings_of_a_run_are_in_its_summary(self):
+        """An unknown edition and a Kibana that does not answer: both warnings are in the summary too."""
+        import tarfile
+        self.stub("docker", "#!/bin/sh\necho kibana\n")                  # the container runs, curl fails
+        compose = "services:\n  kibana:\n    image: mine\n"
+        for name, text in ((".env", "TPOT_TYPE=HIVE\n"), ("docker-compose.yml", compose)):
+            with open(os.path.join(self.tpotce, name), "w", encoding="utf-8") as out:
+                out.write(text)
+        staging = os.path.join(self.home, "staging")
+        os.makedirs(staging)
+        with open(os.path.join(staging, "docker-compose.yml"), "w", encoding="utf-8") as out:
+            out.write(compose)
+        archive = os.path.join(self.home, "x_tpot_backup.tar")
+        with tarfile.open(archive, "w") as tar:
+            tar.add(os.path.join(staging, "docker-compose.yml"), arcname="docker-compose.yml")
+        result = self.source_update(
+            f'myRUNNING=1 myELASTIC_GRACE=0 myARCHIVE="{archive}"\nfuCHECK_EDITION\n'
+            'fuELASTIC_READY kibana kibana "${myKIBANA}/api/status" Kibana\nfuRESTORE_EDITION\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-800:])
+        tail = result.stdout[result.stdout.index("### T-Pot is updated"):]
+        self.assertIn("### [WARNING] - Kibana did not answer within 0s, it is NOT in the backup.", tail)
+        self.assertIn("### [WARNING] - The edition of docker-compose.yml could not be determined.", tail)
+        self.assertIn("### [WARNING] - Your docker-compose.yml matches no edition, the changes of this release "
+                      "are not in it.", tail)
+
+    def test_a_changed_edition_is_in_the_summary(self):
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=HIVE\n")
+        os.makedirs(os.path.join(self.tpotce, "compose"))
+        with open(os.path.join(self.tpotce, "compose", "standard.yml"), "w", encoding="utf-8") as out:
+            out.write("# T-Pot: STANDARD\nservices: {}\n")
+        result = self.source_update('myRUNNING=1 myEDITION=STANDARD myCOMPOSE_CUSTOMIZED=1 myARCHIVE=/b/x.tar\n'
+                                    'fuRESTORE_EDITION\nexit 0\n')
+        tail = result.stdout[result.stdout.index("### T-Pot is updated"):]
+        self.assertIn("### [WARNING] - Your docker-compose.yml had been modified, the STANDARD edition of this "
+                      "release replaces it", tail)
+
+    def test_a_restarted_update_keeps_the_items_of_the_first_pass(self):
+        first = "ok:The backup is /b/x.tar.\nwarn:Kibana did not answer within 120s, it is NOT in the backup.\n"
+        result = self.source_update('myRUNNING=1 myARCHIVE=/b/x.tar\nfuBACKUP\nfuDID ok "Pulled."\nexit 0\n',
+                                    TPOT_UPDATE_PREPARED="1", TPOT_UPDATE_DONE=first)
+        tail = result.stdout[result.stdout.index("### T-Pot is updated"):]
+        self.assertEqual(tail.count("The backup is /b/x.tar."), 1, tail)
+        self.assertIn("### [WARNING] - Kibana did not answer within 120s, it is NOT in the backup.", tail)
+        self.assertIn("### [OK] - Pulled.", tail)
+        # the restart hands them over
+        text = base.read("update.sh")
+        restart = text[text.index('export TPOT_UPDATE_COMPOSE_CUSTOMIZED'):text.index('exec bash "$0" -y')]
+        self.assertIn("export TPOT_UPDATE_DONE", restart)
+
     def test_no_summary_for_the_help_or_without_y(self):
         for args in (("-h",), ()):
             with self.subTest(args=args):

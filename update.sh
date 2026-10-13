@@ -98,6 +98,15 @@ myLOG="${myBACKUPDIR}/update.log"
 # fuUI_SUMMARY. myRUNNING is set once the update is confirmed, from then on every way
 # out ends with it; mySTOPPED while T-Pot is stopped.
 myDONE=()
+# a restarted update.sh (fuSELFUPDATE) goes on with the items of the first pass, one per line,
+# so that a warning of the backup still reaches the summary
+if [ -n "${TPOT_UPDATE_PREPARED}" ] && [ -n "${TPOT_UPDATE_DONE}" ];
+  then
+    while IFS= read -r myDONE_ITEM;
+      do
+        [ -z "${myDONE_ITEM}" ] || myDONE+=("${myDONE_ITEM}")
+    done <<< "${TPOT_UPDATE_DONE}"
+fi
 myEND_TITLE=""
 myRUNNING=""
 mySTOPPED=""
@@ -288,6 +297,8 @@ myARCHIVE="${TPOT_UPDATE_ARCHIVE}"
 
 myEDITION="${TPOT_UPDATE_EDITION}"
 myCOMPOSE_CUSTOMIZED="${TPOT_UPDATE_COMPOSE_CUSTOMIZED}"
+# set when the edition could not be put in place (fuRESTORE_EDITION), the summary does not claim it then
+myEDITION_MISSING=""
 myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
 
 # Services that are no longer part of T-Pot. Their images are not built for this
@@ -843,6 +854,7 @@ function fuCHECK_EDITION () {
 	if [ ! -f "$HOME/tpotce/docker-compose.yml" ];
 	  then
 	    fuUI_WARN "There is no docker-compose.yml, so there is no edition to remember."
+	    fuDID warn "There was no docker-compose.yml, so no edition was remembered."
 	    echo
 	    return
 	fi
@@ -868,6 +880,7 @@ function fuCHECK_EDITION () {
 	if [ "${myEDITION}" == "UNKNOWN" ];
 	  then
 	    fuUI_WARN "Unable to determine the edition, docker-compose.yml is restored as it is."
+	    fuDID warn "The edition of docker-compose.yml could not be determined."
 	  else
 	    # A compose file that differs from its own template was edited by the user.
 	    # The update cannot merge that, so it has to be handed back manually.
@@ -985,6 +998,8 @@ function fuSELFUPDATE () {
 	    export TPOT_UPDATE_ARCHIVE="${myARCHIVE}"
 	    export TPOT_UPDATE_EDITION="${myEDITION}"
 	    export TPOT_UPDATE_COMPOSE_CUSTOMIZED="${myCOMPOSE_CUSTOMIZED}"
+	    TPOT_UPDATE_DONE="$(printf '%s\n' ${myDONE[@]+"${myDONE[@]}"})"
+	    export TPOT_UPDATE_DONE
 	    # an `exec` does not fire the EXIT trap, so clean up here
 	    [ -n "${myTMPDIR}" ] && rm -rf "${myTMPDIR}"
 	    # `-y` is repeated on purpose: after a switch to an older branch the
@@ -1057,6 +1072,7 @@ function fuCHECK_VERSION () {
 	          # A branch or a fork may have moved the version tag on already,
 	          # that must not stop a test of the update procedure itself.
 	          fuUI_WARN "$myVERSION is outside the supported range, continuing because an update source was requested."
+	          fuDID warn "$myVERSION is outside the supported range (${myMINVERSION} to ${myMASTERVERSION}), the update went on because an update source was requested."
 	      else
 	        fuUI_ERROR "$myVERSION cannot be upgraded automatically. Please run a fresh install."
 	        fuDID fail "$myVERSION cannot be upgraded automatically (this update.sh handles ${myMINVERSION} to ${myMASTERVERSION}), please run a fresh install."
@@ -1146,11 +1162,13 @@ function fuELASTIC_READY () {   # $1 = service, $2 = container, $3 = URL, $4 = l
 	if ! fuCONTAINER_UP "$2";
 	  then
 	    fuUI_WARN "$4 is not running, so it cannot be saved. Start T-Pot first if you want it in the backup."
+	    fuDID warn "$4 was not running, it is NOT in the backup."
 	    return 1
 	fi
 	if ! fuWAIT_FOR "$3" "$4";
 	  then
 	    fuUI_WARN "$4 did not answer within ${myELASTIC_GRACE}s, it is NOT in the backup."
+	    fuDID warn "$4 did not answer within ${myELASTIC_GRACE}s, it is NOT in the backup."
 	    fuUI_HINT "Raise the wait with TPOT_ELASTIC_GRACE=<seconds> if this machine needs longer."
 	    return 1
 	fi
@@ -1187,6 +1205,7 @@ function fuEXPORT_ELASTIC () {
 	        fuUI_OK "Kibana objects exported, $(grep -c . "${myOUT}/kibana_export.ndjson") objects."
 	      else
 	        fuUI_WARN "The Kibana objects could not be exported."
+	        fuDID warn "The Kibana objects could not be exported, they are NOT in the backup."
 	        rm -f "${myOUT}/kibana_export.ndjson"
 	    fi
 	fi
@@ -1205,6 +1224,7 @@ json.dump({'policy': myRAW['tpot']['policy']}, open('${myOUT}/ilm_policy_tpot.js
 	        fuUI_OK "ILM policy exported."
 	      else
 	        fuUI_WARN "The ILM policy could not be exported."
+	        fuDID warn "The ILM policy could not be exported, it is NOT in the backup."
 	        rm -f "${myOUT}/ilm_policy_tpot.json"
 	    fi
 	fi
@@ -1235,6 +1255,7 @@ function fuSTART_TPOT () {
 	    mySTOPPED=""
 	    mySTARTED="1"
 	    fuUI_OK "Started with docker compose."
+	    fuDID warn "tpot.service did not start, T-Pot was started with docker compose instead."
 	    return 0
 	fi
 	fuUI_ERROR "Please start T-Pot yourself."
@@ -1510,6 +1531,7 @@ function fuOLD_UPDATER_CONFIG () {
 	       && ! { [ -n "${myENV}" ] && cmp -s "${myENV}" "$HOME/tpotce/.env"; };
 	      then
 	        fuUI_WARN "$HOME/tpotce/.env is the one of the checkout, without a web user. If your configuration is in ${myOLD}, put it back with: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/.env"
+	        fuDID warn "$HOME/tpotce/.env is the one of the checkout, without a web user (see above)."
 	    fi
 	    return 0
 	fi
@@ -1598,6 +1620,7 @@ function fuCHECK_ELASTIC () {
 	if [ -z "${myNEW}" ];
 	  then
 	    fuUI_WARN "Cannot tell which Elasticsearch version this release ships, skipping the check."
+	    fuDID warn "The Elasticsearch version of this release could not be told, its upgrade was not checked."
 	    echo
 	    return
 	fi
@@ -1613,6 +1636,7 @@ function fuCHECK_ELASTIC () {
 	if [ -z "${myOLD}" ];
 	  then
 	    fuUI_WARN "Cannot tell which Elasticsearch version ran so far, assuming it changes to ${myNEW}."
+	    fuDID warn "The Elasticsearch version that ran so far could not be told, the update took it as a change to ${myNEW}."
 	  else
 	    fuUI_HINT "Elasticsearch ${myOLD} -> ${myNEW}."
 	fi
@@ -1634,6 +1658,7 @@ function fuCHECK_ELASTIC () {
 	if [ -n "${myUSED}" ] && [ "${myUSED}" -ge 85 ];
 	  then
 	    fuUI_WARN "${myDATA} is ${myUSED}% full, Elasticsearch starts to complain at 85%."
+	    fuDID warn "${myDATA} is ${myUSED}% full, Elasticsearch starts to complain at 85%."
 	fi
 	# A backup with the data is the only way back to the old version: the `--full` archive of this
 	# run (its members are data/..., whatever the data path), or the one the update.sh of 24.04.1
@@ -1700,7 +1725,8 @@ function fuBACKUP () {
 	if [ -n "${myPREPARED}" ];
 	  then
 	    fuUI_OK "Keeping the backup from before the restart: ${myARCHIVE}"
-	    fuDID ok "The backup is ${myARCHIVE}."
+	    # the first pass named it already, unless it was an update.sh that hands over no items
+	    [ -n "${TPOT_UPDATE_DONE}" ] || fuDID ok "The backup is ${myARCHIVE}."
 	    echo
 	    return
 	fi
@@ -2176,6 +2202,7 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	  then
 	    rm -f "${myNEWFILE}"
 	    fuUI_ERROR "Could not migrate the Beelzebub settings in ${myENVFILE}, please set them up as in env.example."
+	    fuDID warn "The Beelzebub settings of .env could not be migrated, set them up as in env.example."
 	    return 0
 	fi
 	# cat keeps the owner and the mode of .env, it holds credentials
@@ -2204,6 +2231,7 @@ function fuMIGRATE_TOGGLES () {
 	        myNEW="DISABLED" ;;
 	      *)
 	        fuUI_ERROR "${myKEY}=${myOLD} is not a valid value, T-Pot will not start until it is set as described in env.example."
+	        fuDID warn "${myKEY}=${myOLD} in .env is not a valid value, T-Pot will not start until it is set as described in env.example."
 	        continue ;;
 	    esac
 	    [ "${myOLD}" == "${myNEW}" ] && continue
@@ -2211,6 +2239,7 @@ function fuMIGRATE_TOGGLES () {
 	    if [ "$(fuENV_VALUE "${myENVFILE}" "${myKEY}")" != "${myNEW}" ];
 	      then
 	        fuUI_ERROR "Could not change ${myKEY}=${myOLD} to ${myNEW}, please set it in .env."
+	        fuDID warn "${myKEY}=${myOLD} could not be changed to ${myNEW}, please set it in .env."
 	        continue
 	    fi
 	    if [ "${myKEY}" == "TPOT_PERSISTENCE" ] && [ "${myNEW}" == "on" ];
@@ -2271,9 +2300,11 @@ function fuMIGRATE_RETENTION () {
 	      else
 	        fuUI_WARN "TPOT_ES_RETENTION is left empty, T-Pot leaves the ILM policy tpot as it is; tpot elastic retention shows it, --adopt lets T-Pot manage it."
 	        fuUI_HINT "The exported policy could not be read or keeps the events for no whole number of days."
+	        fuDID warn "TPOT_ES_RETENTION is left empty, T-Pot leaves the ILM policy tpot as it is (tpot elastic retention shows it)."
 	    fi
 	  else
 	    fuUI_WARN "TPOT_ES_RETENTION could not be written into ${myENVFILE}, it stays $(fuENV_VALUE "${myENVFILE}" TPOT_ES_RETENTION); tpot elastic retention shows the ILM policy tpot, --adopt lets T-Pot manage it."
+	    fuDID warn "TPOT_ES_RETENTION could not be written into .env (tpot elastic retention shows the ILM policy tpot)."
 	fi
 	[ -z "${myTMP}" ] || rm -f "${myTMP}"
 }
@@ -2374,6 +2405,7 @@ function fuMERGE_ENV_KEYS () {
 	        [ -n "${myOBSOLETE}" ] && fuUI_OK "Settings no longer used, commented out in .env:${myOBSOLETE}"
 	      else
 	        fuUI_ERROR "Could not add the new settings to ${myENVFILE}, please compare it with env.example."
+	        fuDID warn "The new settings could not be added to .env, please compare it with env.example."
 	    fi
 	fi
 	[ -n "${myKEPT}" ] && fuUI_HINT "Not in env.example, kept as a compose file uses them:${myKEPT}"
@@ -2421,8 +2453,11 @@ function fuRESTORE_EDITION () {
 	      then
 	        fuUI_WARN "TPOT_TYPE is SENSOR, restoring the SENSOR edition instead of ${myEDITION}."
 	        # A compose file that matched no edition may be one of your own, and the template replaces it
-	        [ "${myEDITION}" == "UNKNOWN" ] \
-	          && fuUI_WARN "$HOME/tpotce/docker-compose.yml matched no edition and is replaced by the SENSOR edition. Your file is in the backup ${myARCHIVE}: tar xOf ${myARCHIVE} docker-compose.yml"
+	        if [ "${myEDITION}" == "UNKNOWN" ];
+	          then
+	            fuUI_WARN "$HOME/tpotce/docker-compose.yml matched no edition and is replaced by the SENSOR edition. Your file is in the backup ${myARCHIVE}: tar xOf ${myARCHIVE} docker-compose.yml"
+	            fuDID warn "Your docker-compose.yml matched no edition and is replaced by the SENSOR edition, the backup has it."
+	        fi
 	        myEDITION="SENSOR"
 	    fi
 	fi
@@ -2432,6 +2467,8 @@ function fuRESTORE_EDITION () {
 	    if ! cp "${myTEMPLATE}" "$HOME/tpotce/docker-compose.yml";
 	      then
 	        fuUI_ERROR "The ${myEDITION} edition could not be restored, please copy ${myTEMPLATE} to ~/tpotce/docker-compose.yml manually."
+	        fuDID warn "The ${myEDITION} edition could not be put in place, copy ${myTEMPLATE} to ~/tpotce/docker-compose.yml."
+	        myEDITION_MISSING="1"
 	        echo
 	        return
 	    fi
@@ -2439,6 +2476,7 @@ function fuRESTORE_EDITION () {
 	    if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
 	      then
 	        fuUI_WARN "Your docker-compose.yml had been modified. The ${myEDITION} edition of this release is in place now, please add your changes again."
+	        fuDID warn "Your docker-compose.yml had been modified, the ${myEDITION} edition of this release replaces it: add your changes again (the backup has your file)."
 	        fuUI_HINT "Your previous file is in the backup, compare it with:"
 	        fuUI_HINT "  tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml"
 	    fi
@@ -2450,11 +2488,13 @@ function fuRESTORE_EDITION () {
 	      then
 	        fuUI_ERROR "Your own docker-compose.yml could not be taken from ${myARCHIVE}. Put it back by hand with:"
 	        fuUI_HINT "  tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
+	        fuDID warn "Your own docker-compose.yml could not be put back: tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
 	        echo
 	        return
 	    fi
 	    fuUI_OK "Your own docker-compose.yml is restored from the backup."
 	    fuUI_WARN "Your docker-compose.yml does not match any edition in compose/, so the changes of this release were not applied to it."
+	    fuDID warn "Your docker-compose.yml matches no edition, the changes of this release are not in it."
 	fi
 	echo
 }
@@ -2488,6 +2528,7 @@ function fuCUSTOMIZER_DEPS () {
 	    fuUI_OK "${myPKGS[*]} installed."
 	  else
 	    fuUI_WARN "Could not install ${myPKGS[*]}, tpot and the customizer may not start."
+	    fuDID warn "${myPKGS[*]} could not be installed, tpot and the customizer may not start."
 	fi
 	echo
 }
@@ -2502,10 +2543,14 @@ function fuTPOT_SETUP () {
 	fuUI_INFO "Setting up the T-Pot Manager (the tpot command) ..."
 	if [ ! -e "${myLINK}" ] || [ -L "${myLINK}" ];
 	  then
-	    sudo ln -sfn "${myTPOT}" "${myLINK}" \
-	      || fuUI_WARN "Could not link ${myLINK}, run ${myTPOT} directly."
+	    if ! sudo ln -sfn "${myTPOT}" "${myLINK}";
+	      then
+	        fuUI_WARN "Could not link ${myLINK}, run ${myTPOT} directly."
+	        fuDID warn "${myLINK} could not be linked, run ${myTPOT} directly."
+	    fi
 	  else
 	    fuUI_WARN "${myLINK} is a file of its own, update.sh leaves it alone: run ${myTPOT} directly."
+	    fuDID warn "${myLINK} is a file of its own, update.sh leaves it alone: run ${myTPOT} directly."
 	fi
 	# the venv of the Manager: pip writes a lot, it goes to the log under a spinner
 	local myRC=0
@@ -2536,6 +2581,8 @@ function fuRESTORE_CUSTOM () {
 	  then
 	    fuUI_ERROR "Could not take docker-compose.yml from ${myARCHIVE}. Put it back by hand with:"
 	    fuUI_HINT "  tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
+	    fuDID warn "Your docker-compose.yml could not be put back: tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
+	    myEDITION_MISSING="1"
 	    return
 	fi
 	if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
@@ -2562,11 +2609,14 @@ function fuRESTORE_CUSTOM () {
 	if ! cp "${myTMPDIR}/docker-compose.yml" "$HOME/tpotce/docker-compose.yml";
 	  then
 	    fuUI_ERROR "Your docker-compose.yml could not be restored, put it back by hand with: tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
+	    fuDID warn "Your docker-compose.yml could not be put back: tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
+	    myEDITION_MISSING="1"
 	    return
 	fi
 	fuUI_OK "Your docker-compose.yml is restored from the backup."
 	fuUI_WARN "The changes of this release were not applied to it. Run the customizer again to build it anew:"
 	fuUI_HINT "  cd $HOME/tpotce/compose && python3 customizer.py"
+	fuDID warn "Your custom docker-compose.yml is put back as it was, the changes of this release are not in it: run compose/customizer.py again."
 }
 
 # A docker-compose.yml restored from the backup can still hold services of the
@@ -2600,6 +2650,7 @@ function fuREMOVE_DROPPED_SERVICES () {
 	       || ! cp "${myTMPDIR}/docker-compose.yml" "$HOME/tpotce/docker-compose.yml";
 	      then
 	        fuUI_ERROR "Please remove the ${mySERVICE} service from ~/tpotce/docker-compose.yml manually, T-Pot will not start with it."
+	        fuDID warn "${mySERVICE} could not be removed from docker-compose.yml, T-Pot will not start with it: remove it by hand."
 	        continue
 	    fi
 	    fuUI_OK "${mySERVICE} is removed from docker-compose.yml, it is no longer part of T-Pot."
@@ -2641,6 +2692,7 @@ function fuSSHD_DROPIN () {
 	if ! printf '%s\n' "${myNEW}" | sudo tee "${myDROPIN}" > /dev/null;
 	  then
 	    fuUI_WARN "Could not write ${myDROPIN}, it stays as it was."
+	    fuDID warn "SSH does not take LC_TERMINAL along, ${myDROPIN} could not be written."
 	    echo
 	    return 0
 	fi
@@ -3013,7 +3065,7 @@ fuSSHD_DROPIN
 fuMARK phase pull Pulling the images
 fuUPDATER
 
-if [ -n "${myEDITION}" ] && [ "${myEDITION}" != "UNKNOWN" ];
+if [ -n "${myEDITION}" ] && [ "${myEDITION}" != "UNKNOWN" ] && [ -z "${myEDITION_MISSING}" ];
   then
     fuDID ok "The T-Pot ${myEDITION} edition is in ~/tpotce/docker-compose.yml."
 fi
