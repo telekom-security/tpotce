@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # The ILM policy tpot from TPOT_ES_RETENTION, applied by entrypoint.sh on every start of a HIVE.
 #
-# T-Pot marks the policy it writes with _meta.tpot_retention. A policy whose marker does not
-# match its delete phase (or that has none and is not the policy of an earlier release) was
-# changed in Kibana and is left alone, so that nobody loses events they chose to keep - unless
+# T-Pot marks the policy it writes with _meta.tpot_retention, a string (a number or null is no
+# marker of T-Pot). A policy whose marker does not match its delete phase (or that has none and is
+# not the policy of an earlier release) was changed in Kibana and is left alone, so that nobody
+# loses events they chose to keep - unless
 # it keeps them as long as TPOT_ES_RETENTION says, then T-Pot adopts it (only the marker is new).
 # Only the delete phase and _meta are ever changed. tpotinit never writes a shorter retention than
 # the policy has (nor one that deletes the events of an existing index when it creates the policy):
@@ -39,8 +40,9 @@ def value_of:
   end;
 def managed:
   if (part("_meta") | has("tpot_retention")) then
-    (part("_meta").tpot_retention | tostring) as $t
-    | if $t == "off" then (min_age == null) else (min_age == ($t + "d") and deletes) end
+    part("_meta").tpot_retention as $t
+    | if ($t | type) != "string" then false
+      elif $t == "off" then (min_age == null) else (min_age == ($t + "d") and deletes) end
   else (part("_meta").description == "T-Pot ILM policy with a retention of 30 days")
        and ((part("phases") | keys) == ["delete", "hot"]) and min_age == "30d" and deletes
   end;

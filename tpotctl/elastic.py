@@ -1,8 +1,8 @@
 """The retention of the Elasticsearch events: the ILM policy tpot and TPOT_ES_RETENTION.
 
-T-Pot marks the policy it writes with _meta.tpot_retention. A policy whose marker no
-longer matches its delete phase was changed in Kibana: it is "foreign" and T-Pot leaves
-it alone, so that nobody loses events they chose to keep, unless it keeps the events just
+T-Pot marks the policy it writes with _meta.tpot_retention, a string (a number or null is no
+marker of T-Pot). A policy whose marker no longer matches its delete phase was changed in Kibana:
+it is "foreign" and T-Pot leaves it alone, so that nobody loses events they chose to keep, unless it keeps the events just
 as long as .env says (then T-Pot adopts it, only the marker is new). Without `shorten`, the rule never
 writes a shorter retention: tpotinit never shortens, the Manager asks first. tpotinit applies the same
 rule on every start (docker/tpotinit/dist/bin/es_retention.sh), both pass the cases in
@@ -85,7 +85,10 @@ def value_of(policy: Optional[dict]) -> str:
 def is_managed(policy: dict) -> bool:
     meta = _part(policy, "_meta")
     if "tpot_retention" in meta:
-        mark = str(meta["tpot_retention"])
+        # T-Pot writes it as a string: a number (30, 30.0) or null is no marker of T-Pot, the policy is foreign
+        mark = meta["tpot_retention"]
+        if not isinstance(mark, str):
+            return False
         return (_min_age(policy) is None if mark == "off"
                 else _min_age(policy) == f"{mark}d" and _deletes(policy))
     return (meta.get("description") == LEGACY_DESCRIPTION

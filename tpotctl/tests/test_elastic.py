@@ -189,11 +189,11 @@ def generated_policies(seed=17, count=400):
         oldest = rng.choice([None, None, NOW_EPOCH - 5 * 86400, NOW_EPOCH - 400 * 86400])
         yield (rng.choice(["", "30", "90", "365", "off"]), rng.random() < 0.35, rng.random() < 0.3, oldest,
                None if rng.random() < 0.15 else policy)
-    # the marker as a number next to a delete phase of its days: jq (1.7 on) keeps the literal 30.0 for
-    # tostring as Python's str() does, so 30 is a marker of 30 days and 30.0 is none for both
-    for mark in (30, 30.0, "30", 30.5, 3650.0):
+    # the marker as a number (or null) next to a delete phase of its days: only a string is a marker of
+    # T-Pot, a number is foreign on both sides, however jq or Python would print it
+    for mark in (30, 30.0, "30", 30.5, 3650.0, None, "30.0"):
         for value in ("30", "60", "off"):
-            days = int(float(mark))
+            days = 30 if mark is None else int(float(mark))
             yield (value, False, False, None,
                    {"phases": {"hot": {"min_age": "0ms", "actions": {}},
                                "delete": {"min_age": f"{days}d", "actions": {"delete": {}}}},

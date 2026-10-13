@@ -202,7 +202,8 @@ cases:
     min_age: 30d
     retention: "30"
     phases: [delete, hot, warm]
-  - name: the marker written as 30.0 is no marker of 30 days (jq keeps the literal as Python does), adopted
+  # T-Pot writes the marker as a string: a number is no marker of T-Pot (whatever jq or Python make of it)
+  - name: the marker as the number 30.0 is foreign, the same days are adopted
     policy:
       phases:
         hot: {min_age: 0ms, actions: {}}
@@ -215,7 +216,20 @@ cases:
     min_age: 30d
     retention: "30"
     phases: [delete, hot]
-  - name: managed, the marker as the number 30, a longer value
+  - name: the marker as the number 30 is foreign, the same days are adopted
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: 30, description: x}
+    value: "30"
+    current: "30"
+    managed: false
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+  - name: the marker as the number 30 is foreign, a longer value leaves it alone
     policy:
       phases:
         hot: {min_age: 0ms, actions: {}}
@@ -223,11 +237,42 @@ cases:
       _meta: {managed: true, tpot_retention: 30, description: x}
     value: "60"
     current: "30"
-    managed: true
+    managed: false
+    action: foreign
+  - name: the marker as the number 30.0 is foreign, a longer value leaves it alone
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: 30.0, description: x}
+    value: "60"
+    current: "30"
+    managed: false
+    action: foreign
+  - name: the marker as the number 30 with --force, written as a string
+    force: true
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: 30, description: x}
+    value: "60"
+    current: "30"
+    managed: false
     action: update
     min_age: 60d
     retention: "60"
     phases: [delete, hot]
+  - name: a marker of null is foreign
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: null, description: x}
+    value: "60"
+    current: "30"
+    managed: false
+    action: foreign
   - name: a marker of 30.5 is no whole number of days
     policy:
       phases:
