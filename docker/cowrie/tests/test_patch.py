@@ -700,6 +700,15 @@ class PatchTest(unittest.TestCase):
                          (b"", 'syntax error at -e line 1, near ")"\nExecution of -e aborted due to compilation errors.\n', 255))
         self.assertEqual(self.perl(["-e"]), (b"", "No code specified for -e.\n", 29))
 
+    def test_perl_numbers_are_ascii_digits(self):
+        self.assertEqual(self.perl(["-e", "print 12, 3.5"]), (b"123.5", "", 0))
+        for code in ("print \u0661\u0662", "print 1.\u0662", "print \uff11"):
+            with self.subTest(code):
+                out, _, _ = self.perl(["-e", code])
+                self.assertNotIn("\u0661".encode(), out)
+                self.assertNotIn("\uff11".encode(), out)
+                self.assertNotIn(b"1", out)
+
     def test_perl_c_checks_the_syntax_only(self):
         self.assertEqual(self.perl(["-c", "-e", "print 1"]), (b"", "-e syntax OK\n", 0))
         self.assertEqual(self.perl(["-ce", 'print "x']),
@@ -724,7 +733,7 @@ class PatchTest(unittest.TestCase):
         git.call()
         self.assertEqual(bytes(git.out), b"git version 2.39.5\n")
 
-    def twisted_command(self, module, cls, values, args, uid=0, commands=None):
+    def twisted_command(self, module, cls, values, args, uid=0, commands=None, present=()):
         """A command with inlineCallbacks: the generators run through at once, sleep returns."""
         def inline_callbacks(function):
             def run(*a, **k):
@@ -744,12 +753,17 @@ class PatchTest(unittest.TestCase):
 
         class Fs:
             made = []
+            present = set()
 
             def mkfile(self, path, *a, **k):
                 self.made.append(path)
                 return True
 
+            def exists(self, path):
+                return path in self.present
+
         command.fs = Fs()
+        command.fs.present = set(present)
         command.protocol.commands = dict(commands or {})
         command.start()
         return namespace, command
@@ -790,7 +804,7 @@ class PatchTest(unittest.TestCase):
                                                                           "Wget", "-x-", "../../tmp/a", "nmap"])
         self.assertEqual(bytes(apt.out).decode(), "Reading package lists... Done\nBuilding dependency tree... Done\n"
                          "Reading state information... Done\n")
-        self.assertEqual(apt.err, "E: Unable to locate package ..\nE: Unable to locate package .\n"
+        self.assertEqual(apt.err, "E: Unsupported file .. given on commandline\nE: Unsupported file . given on commandline\n"
                          "E: Unsupported file ./x.deb given on commandline\nE: Unable to locate package Wget\n"
                          "E: Unsupported file ../../tmp/a given on commandline\n")
         self.assertEqual((apt.code, apt.fs.made, apt.protocol.commands), (100, [], {}))
@@ -934,11 +948,89 @@ class PatchTest(unittest.TestCase):
         self.assertLessEqual(len(reads), 1)
 
     def apt_with_packages(self, packages, fallback="ubuntu", available=None, programs=None, unavailable=None,
-                          answers=None):
+                          answers=None, names=None):
         path = tmpdir(self) / "apt-packages.json"
         path.write_text(json.dumps({"installed": packages, "available": available or {}, "programs": programs or {},
                                     "unavailable": unavailable or [], "answers": answers or []}))
-        return {**self.APT, ("shell", "apt_packages"): str(path), ("shell", "apt_fallback"): fallback}
+        values = {**self.APT, ("shell", "apt_packages"): str(path), ("shell", "apt_fallback"): fallback}
+        return {**values, **self.names_file(names)} if names is not None else values
+
+    def names_file(self, names):
+        path = tmpdir(self) / "package-names.txt"
+        path.write_text("".join(f"{name}\n" for name in sorted(names)))
+        return {("shell", "package_names"): str(path)}
+
+    HEAD = "Reading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\n"
+
+    def test_apt_does_not_find_a_name_the_release_does_not_have(self):
+        values = self.apt_with_packages({}, "debian", names={"htop", "nmap", "man-db"})
+        for args in (["nosuchpkg123"], ["nosuchpkg123", "htop"], ["htop", "nosuchpkg123"]):
+            with self.subTest(args):
+                _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", *args])
+                self.assertEqual(bytes(apt.out).decode(), self.HEAD)
+                self.assertEqual(apt.err, "E: Unable to locate package nosuchpkg123\n")
+                self.assertEqual((apt.code, apt.fs.made, apt.protocol.commands), (100, [], {}))
+                self.assertFalse(getattr(apt.protocol, "tpot_faked", None))
+
+    def test_apt_installs_a_name_of_the_release_without_data(self):
+        values = self.apt_with_packages({}, "debian", names={"htop", "nmap"})
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "htop"])
+        text = bytes(apt.out).decode()
+        self.assertIn("The following NEW packages will be installed:\n  htop \n", text)
+        self.assertRegex(text, r"Setting up htop \(\d+\.\d+(\.\d+)?-\d(\+b1)?\) \.\.\.\n")
+        self.assertEqual((apt.err, apt.code, apt.fs.made), ("", None, ["/usr/bin/htop"]))
+        self.assertFalse(getattr(apt.protocol, "tpot_installed", None))
+
+    def test_apt_takes_globs_and_names_dots_and_globs_it_does_not_find(self):
+        values = self.apt_with_packages({}, "debian", names={"htop", "nmap", "nginx", "nginx-common"})
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "nginx*", "ht?p"])
+        self.assertIn("  nginx nginx-common htop \n", bytes(apt.out).decode())
+        self.assertEqual(apt.err, "")
+        missing = {"nosuch.pkg": "E: Unable to locate package nosuch.pkg\n"
+                                 "E: Couldn't find any package by glob 'nosuch.pkg'\n"
+                                 "E: Couldn't find any package by regex 'nosuch.pkg'\n",
+                   "nosuch*": "E: Unable to locate package nosuch*\n"
+                              "E: Couldn't find any package by glob 'nosuch*'\n"
+                              "E: Couldn't find any package by regex 'nosuch*'\n",
+                   "Nginx": "E: Unable to locate package Nginx\n"}
+        for word, err in missing.items():
+            with self.subTest(word):
+                _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", word])
+                self.assertEqual((apt.err, apt.code, apt.fs.made), (err, 100, []))
+        # apt tries no regular expression
+        _, apt = self.twisted_command("apt", "Command_apt", values, ["install", "-y", "nosuch.pkg"])
+        self.assertEqual(apt.err, "E: Unable to locate package nosuch.pkg\n"
+                                  "E: Couldn't find any package by glob 'nosuch.pkg'\n")
+
+    def test_apt_glob_matches_are_bounded(self):
+        names = {f"lib{n}" for n in range(500)}
+        values = self.apt_with_packages({}, "debian", names=names)
+        namespace, _ = self.twisted_command("apt", "Command_aptget", values, ["-v"])
+        self.assertEqual(len(namespace["tpot_apt_glob"]("lib*", frozenset(names))), 64)
+        self.assertEqual(namespace["tpot_apt_glob"]("lib*" + "x" * 80, frozenset(names)), [])
+
+    def test_apt_answers_by_package_not_by_program_name(self):
+        # ifconfig is the program of net-tools, no package: its Cowrie command stays skipped
+        values = self.apt_with_packages({}, "debian", available={"net-tools": "2.10-0.1"},
+                                        programs={"net-tools": ["/usr/sbin/ifconfig"]}, answers=["ifconfig"])
+        cowrie = {"ifconfig": "Command_ifconfig"}
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "ifconfig"], commands=cowrie)
+        self.assertFalse(getattr(apt.protocol, "tpot_installed", None))
+        self.assertEqual(list(apt.protocol.tpot_faked), ["/usr/bin/ifconfig"])
+        values = self.apt_with_packages({}, "debian", available={"net-tools": "2.10-0.1"},
+                                        programs={"net-tools": ["/usr/sbin/ifconfig"]}, answers=["ifconfig"],
+                                        names={"net-tools"})
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "ifconfig"], commands=cowrie)
+        self.assertEqual((apt.err, apt.code), ("E: Unable to locate package ifconfig\n", 100))
+
+    def test_apt_leaves_a_program_of_the_persona(self):
+        values = self.apt_with_packages({}, "debian")
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "lspci"],
+                                      commands={"lspci": "Command_lspci"}, present={"/usr/bin/lspci"})
+        self.assertIn("Setting up lspci", bytes(apt.out).decode())
+        self.assertEqual(apt.fs.made, [])
+        self.assertEqual(apt.protocol.commands, {"lspci": "Command_lspci"})
+        self.assertFalse(getattr(apt.protocol, "tpot_faked", None))
 
     def test_apt_install_shows_the_versions_of_the_persona(self):
         values = self.apt_with_packages({"curl": "8.5.0-2ubuntu10.6", "vim": "2:9.1.0016-1ubuntu7.9",
@@ -990,6 +1082,41 @@ class PatchTest(unittest.TestCase):
         self.assertIn("Complete!\n", text)
         _, yum = self.twisted_command("yum", "Command_yum", self.YUM, ["install", "curl"])
         self.assertTrue(bytes(yum.out).decode().endswith("Is this ok [y/d/N]: "))
+
+    def yum_with(self, names=None, installed=""):
+        values = {**self.YUM, ("shell", "yum_installed"): installed}
+        return {**values, **self.names_file(names)} if names is not None else values
+
+    YUM_HEAD = "Loaded plugins: fastestmirror\nLoading mirror speeds from cached hostfile\n"
+
+    def test_yum_has_no_package_for_a_name_the_release_does_not_have(self):
+        values = self.yum_with({"curl", "bash", "python3-pip"})
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "nosuchpkg123"])
+        self.assertEqual(bytes(yum.out).decode(), self.YUM_HEAD + "No package nosuchpkg123 available.\n")
+        self.assertEqual((yum.err, yum.code), ("Error: Nothing to do\n", 1))
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "BASH", "nosuch*"])
+        self.assertEqual(bytes(yum.out).decode(), self.YUM_HEAD + "No package BASH available.\n"
+                         "  * Maybe you meant: bash\nNo package nosuch* available.\n")
+        self.assertEqual((yum.err, yum.code), ("Error: Nothing to do\n", 1))
+        # the names it has are installed, the others are named
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "nosuchpkg123", "python3-pip"])
+        text = bytes(yum.out).decode()
+        self.assertTrue(text.startswith(self.YUM_HEAD + "No package nosuchpkg123 available.\nResolving Dependencies\n"),
+                        text[:200])
+        self.assertIn("---> Package python3-pip.", text)
+        self.assertNotIn("nosuchpkg123.", text)
+        self.assertIn("Complete!\n", text)
+
+    def test_yum_names_the_installed_packages_of_the_persona(self):
+        values = self.yum_with({"wget", "yum", "vim-enhanced", "curl"},
+                               "vim-enhanced 2:7.4.629-8.el7_9,wget 1.14-18.el7_6.1,yum 3.4.3-168.el7.centos")
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "wget", "yum.noarch", "vim-enhanced"])
+        self.assertEqual(bytes(yum.out).decode(), self.YUM_HEAD
+                         + "Package wget-1.14-18.el7_6.1.x86_64 already installed and latest version\n"
+                         "Package yum-3.4.3-168.el7.centos.noarch already installed and latest version\n"
+                         "Package 2:vim-enhanced-7.4.629-8.el7_9.x86_64 already installed and latest version\n"
+                         "Nothing to do\n")
+        self.assertEqual((yum.err, yum.code), ("", None))
 
     def test_yum_update_as_root(self):
         _, yum = self.twisted_command("yum", "Command_yum", self.YUM, ["-y", "update"])
@@ -1716,6 +1843,24 @@ class PatchTest(unittest.TestCase):
         self.assertTrue(out.startswith("Loaded plugins: fastestmirror\n"), out[:40])
         rhel = self.upstream_session("rhel-9", uid=0)
         self.assertEqual(rhel.commands["yum"].__name__, "Command_dnf_yum")
+
+    def test_package_managers_know_the_names_of_the_release(self):
+        for pid in ("debian-bookworm", "ubuntu-noble", "raspios", "debian-trixie", "ubuntu-jammy"):
+            with self.subTest(pid):
+                run = self.upstream_session(pid, uid=0)
+                for line in ("apt install -y nosuchpkg123", "apt-get install -y nosuchpkg123 tree"):
+                    out, err, code = run(line)
+                    self.assertEqual((err, code), ("E: Unable to locate package nosuchpkg123\n", 100), line)
+                    self.assertNotIn("Setting up", out)
+                out, err, code = run("apt install -y tree")
+                self.assertIn("Setting up tree (", out)
+                self.assertEqual((err, code), ("", 0))
+        run = self.upstream_session("centos-7", uid=0)
+        out, err, code = run("yum install -y nosuchpkg123")
+        self.assertEqual((out, err, code), ("Loaded plugins: fastestmirror\nLoading mirror speeds from cached hostfile\n"
+                                            "No package nosuchpkg123 available.\n", "Error: Nothing to do\n", 1))
+        self.assertIn("---> Package tree.", run("yum install -y tree")[0])
+        self.assertIn("No package htop available.\n", run("yum install -y htop")[0])
 
     def test_dnf_columns_as_dnf_computes_them(self):
         source = (self.patched() / "src/cowrie/commands/yum.py").read_text()
@@ -2465,6 +2610,8 @@ class PatchTest(unittest.TestCase):
 
     def test_fails_loudly_on_unknown_upstream(self):
         cases = (("src/cowrie/shell/protocol.py", "for x in paths if x", "for x in paths"),
+                 ("src/cowrie/commands/apt.py", 'commands["/bin/apt"] = Command_aptget\n',
+                  'commands["/bin/apt"] = Command_aptget  # apt\n'),
                  ("src/cowrie/commands/free.py", 'open("/proc/meminfo")', 'open("/proc/meminfo", "rb")'),
                  ("src/cowrie/telnet/factory.py", "Failed to load /etc/issue.net", "No /etc/issue.net"),
                  ("src/cowrie/commands/service.py", "        for line in output:", "        for row in output:"),

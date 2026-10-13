@@ -521,6 +521,9 @@ def render(persona, ident, base_tree, out_dir, runtime_dir, keys_dir, cowrie_roo
     if content.busybox_help:
         _write(out_dir / BUSYBOX_HELP, content.busybox_help)
     _write(out_dir / DF_TABLE, json.dumps(system.df_table(persona, ident, content.filesystems), indent=1, sort_keys=True) + "\n")
+    names = system.package_names(persona, ident)
+    if names is not None:
+        _write(out_dir / system.PACKAGE_NAMES, "".join(f"{line}\n" for line in names))
     if persona.kind == "server":
         _write(out_dir / system.SERVICE_STATUS, system.service_status(persona))
         for name, data in runtime_json(persona, ident, content.processes).items():

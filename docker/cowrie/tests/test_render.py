@@ -464,6 +464,47 @@ class ServerRuntimeTest(unittest.TestCase):
         self.assertIsNotNone(tree.find_node(fs_of(out), "etc/systemd/system/sshd.service"))
 
 
+class PackageNamesTest(unittest.TestCase):
+    """apt, yum 3 and opkg know the names of the release's packages (package_names)."""
+
+    def test_names_of_the_release_and_of_the_persona(self):
+        samples = {"debian-bookworm": ("htop", "raspi-config"), "debian-trixie": ("htop", "ubuntu-server"),
+                   "ubuntu-noble": ("ubuntu-server", "raspi-config"), "ubuntu-jammy": ("ubuntu-server", "dnf"),
+                   "gpu-ubuntu": ("htop", "yum"), "raspios": ("raspi-config", "ubuntu-server"),
+                   "centos-7": ("bash", "htop"), "openwrt": ("htop packages", "apt base")}
+        for persona in catalog.PERSONAS:
+            ident, out, _ = render_one(self, persona, 2)
+            path = out / system.PACKAGE_NAMES
+            server = persona.kind == "server"
+            self.assertEqual(path.is_file(), persona.id in samples, persona.id)
+            if persona.id not in samples:
+                continue
+            lines = path.read_text().splitlines()
+            self.assertEqual(lines, sorted(set(lines)), persona.id)
+            has, lacks = samples[persona.id]
+            self.assertIn(has, lines, persona.id)
+            self.assertNotIn(lacks, lines, persona.id)
+            self.assertEqual(cfg_of(out).get("shell", "package_names", fallback=None),
+                             f"{out}/{system.PACKAGE_NAMES}" if server else None, persona.id)
+            if "dpkg" in persona.package_managers:
+                apt = json.loads((out / system.APT_PACKAGES).read_text())
+                self.assertFalse((set(apt["installed"]) | set(apt["available"])) - set(lines), persona.id)
+            if persona.family == "centos":
+                self.assertFalse(set(ident.release.packages) - set(lines))
+                installed = dict(e.split(" ", 1) for e in cfg_of(out).get("shell", "yum_installed").split(","))
+                self.assertEqual(installed, ident.release.packages)
+
+    def test_name_lists_stay_small(self):
+        files = sorted(system.NAMES_DIR.glob("*.txt.gz"))
+        self.assertEqual([f.name for f in files], ["apt.txt.gz", "opkg.txt.gz", "yum.txt.gz"])
+        self.assertLess(sum(f.stat().st_size for f in files), 300_000)
+        for row in system._name_rows("apt.txt.gz"):
+            self.assertTrue(len(row) == 2 and set(row[1]) <= set("btrjn"), row)
+        for row in system._name_rows("opkg.txt.gz"):
+            self.assertTrue(len(row) == 3 and set(row[1]) <= set("ab"), row)
+            self.assertIn(row[2], ("core", "base", "luci", "packages", "routing", "telephony"), row)
+
+
 class SystemdTreeTest(unittest.TestCase):
     """The units systemctl shows are unit files of the tree, enabled ones are wanted, and
     service --status-all says the same."""

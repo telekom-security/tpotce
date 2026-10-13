@@ -5,8 +5,10 @@ libraries, Python 3.11, OpenSSH, a few systemd units, runit. A persona keeps
 only what its own system has (foreign_paths, the multiarch and Python renames
 of render.apply_to_tree) and the versions its interpreters print (tools,
 shell_keys for the patched perl.py / python.py / git.py of Cowrie)."""
+import gzip
 import re
 import time
+from pathlib import Path
 
 from .common import deb_arch
 
@@ -92,6 +94,8 @@ SERVICE_STATUS = "service-status.txt"
 SYSTEMD_UNITS = "systemd-units.json"
 SUDO_LIST = "sudo-list.json"
 APT_PACKAGES = "apt-packages.json"
+# the names of the release's packages that apt, yum 3 and opkg know (package_names, one per line)
+PACKAGE_NAMES = "package-names.txt"
 # the sudoers of each family: Defaults (name, operator, value) as the file writes them, the rule of
 #   the admin group; sudo -l prints both (unverified: the files are the defaults of the packages, shortened)
 _DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -1569,6 +1573,35 @@ def apt_packages(persona, ident):
             "unavailable": [name for name in APT_UNAVAILABLE if name not in installed and name not in available]}
 
 
+# the name lists of the releases (built by docker/cowrie/tools/build_package_names.py, sources in the
+#   README there): apt.txt.gz "name releases", yum.txt.gz "name", opkg.txt.gz "name releases feed"
+NAMES_DIR = Path(__file__).resolve().parent / "package_names"
+APT_NAME_RELEASES = {"bookworm": "b", "trixie": "t", "jammy": "j", "noble": "n"}
+OPKG_NAME_RELEASES = {"21.02": "a", "22.03": "b"}
+
+
+def _name_rows(name):
+    with gzip.open(NAMES_DIR / name, "rt", encoding="utf-8") as f:
+        return [line.split() for line in f if line.strip()]
+
+
+def package_names(persona, ident):
+    """The lines of the runtime file of the names apt (Debian, Ubuntu, Raspberry Pi OS), yum 3
+    (CentOS 7) or opkg (OpenWrt: "name feed") know on the persona's release: the names of the
+    release's indexes and the packages of the persona; None for the other personas."""
+    if persona.kind == "server" and has_dpkg(persona):
+        letter = "r" if persona.family == "raspios" else APT_NAME_RELEASES[ident.release.extra["codename"]]
+        names = {row[0] for row in _name_rows("apt.txt.gz") if letter in row[1]}
+        data = apt_packages(persona, ident)
+        return sorted(names | set(data["installed"]) | set(data["available"]))
+    if persona.family == "centos":
+        return sorted({row[0] for row in _name_rows("yum.txt.gz")} | set(ident.release.packages))
+    if persona.family == "openwrt":
+        letter = OPKG_NAME_RELEASES[".".join(ident.release.os_version.split(".")[:2])]
+        return [f"{row[0]} {row[2]}" for row in _name_rows("opkg.txt.gz") if letter in row[1]]
+    return None
+
+
 def rpm_evr(value, minor):
     """The epoch:version-release of a table entry for the minor release (9.6)."""
     return value[minor] if isinstance(value, dict) else value
@@ -1669,8 +1702,11 @@ def shell_keys(persona, ident, files, runtime_dir):
                      "apt_sources": ",".join(f"{url} {suite}" for url, suite in apt_sources(files)),
                      "apt_packages": f"{runtime_dir}/{APT_PACKAGES}",
                      "apt_fallback": "ubuntu" if persona.os_id == "ubuntu" else "debian"})
+    if has_dpkg(persona) or persona.family == "centos":
+        keys["package_names"] = f"{runtime_dir}/{PACKAGE_NAMES}"
     if persona.family == "centos":
         keys["yum_plugins"] = YUM_PLUGINS
+        keys["yum_installed"] = ",".join(f"{name} {evr}" for name, evr in sorted(ident.release.packages.items()))
     if persona.family == "rhel":
         keys["dnf_packages"] = f"{runtime_dir}/{DNF_PACKAGES}"
     return keys

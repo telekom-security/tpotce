@@ -256,7 +256,7 @@ TPOT_CODE_LIMIT = 65536
 TPOT_OUTPUT_LIMIT = 1 << 20
 TPOT_ABORTED = "Execution of -e aborted due to compilation errors.\n"
 TPOT_PERL_STOP = re.compile(r"[/`#<]|(?<![\w$@%&])(?:qq|qw|qx|qr|tr|q|m|s|y)\s*+[^\w\s,;)=]")
-TPOT_PERL_ITEM = r"""(?:"[^"\\]*+(?:\\.[^"\\]*+)*+"|'[^'\\]*+(?:\\.[^'\\]*+)*+'|-?(?:0|[1-9]\d{0,14})(?:\.\d{1,15})?|\$\w+|\$\{\w+\})"""
+TPOT_PERL_ITEM = r"""(?:"[^"\\]*+(?:\\.[^"\\]*+)*+"|'[^'\\]*+(?:\\.[^'\\]*+)*+'|-?(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,15})?|\$\w+|\$\{\w+\})"""
 # possessive quantifiers (*+): long whitespace is read once, never backtracked
 TPOT_PERL_LIST = re.compile(
     rf"\s*+(\(\s*+)?((?:{TPOT_PERL_ITEM}(?:\s*+,\s*+{TPOT_PERL_ITEM})*+\s*+,?)?)\s*+(?(1)\))\s*+", re.S
@@ -1716,7 +1716,8 @@ def patch_apt(cowrie_root):
     keys upstream's text stays."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "apt.py"
     replace_once(path, *CONFIG_IMPORT)
-    replace_once(path, "import random\n", "import functools\nimport hashlib\nimport json\nimport random\n")
+    replace_once(path, "import random\n",
+                 "import fnmatch\nimport functools\nimport hashlib\nimport json\nimport random\n")
     replace_once(path, "from typing import TYPE_CHECKING, Any\n",
                  "from pathlib import Path\nfrom typing import TYPE_CHECKING, Any\n")
     replace_once(
@@ -1765,6 +1766,42 @@ def tpot_apt_data() -> dict[str, dict[str, str]]:
     answers = data.get("answers") if isinstance(data.get("answers"), list) else []
     found["answers"] = {str(name): "" for name in answers}
     return found
+
+
+@functools.cache
+def tpot_apt_names() -> frozenset[str] | None:
+    \"\"\"T-Pot: the names of the release's packages ([shell] package_names, one per line), None
+    without the key (every name is found then).\"\"\"
+    path = tpot_apt("package_names", "")
+    try:
+        return frozenset(line.split(" ", 1)[0] for line in Path(path).read_text(encoding="utf-8").splitlines()
+                         if line) if path else None
+    except (OSError, ValueError):
+        return None
+
+
+# T-Pot: the characters that make apt try a name as a glob and (apt-get) as a regular expression
+TPOT_APT_GLOB = ".?*[]!"
+TPOT_APT_REGEX = ".?+*|[^$"
+TPOT_APT_GLOBS = 16
+TPOT_APT_GLOB_MATCHES = 64
+
+
+def tpot_apt_glob(word: str, names: frozenset[str] | None) -> list[str]:
+    \"\"\"T-Pot: the names of the release a glob (nginx*, ht?p) matches, at most TPOT_APT_GLOB_MATCHES.\"\"\"
+    if names is None or not re.fullmatch(r"[a-z0-9+.*?\\[\\]-]{1,64}", word) or not set(word) & set("*?["):
+        return []
+    return [name for name in sorted(names) if fnmatch.fnmatchcase(name, word)][:TPOT_APT_GLOB_MATCHES]
+
+
+def tpot_apt_missing(word: str, prog: str) -> str:
+    \"\"\"T-Pot: the errors of apt for a name the release does not have.\"\"\"
+    text = f"E: Unable to locate package {word}\\n"
+    if set(word) & set(TPOT_APT_GLOB):
+        text += f"E: Couldn't find any package by glob '{word}'\\n"
+    if prog == "apt-get" and set(word) & set(TPOT_APT_REGEX):
+        text += f"E: Couldn't find any package by regex '{word}'\\n"
+    return text
 
 
 def tpot_upstream(version: str) -> str:
@@ -1936,15 +1973,25 @@ def tpot_apt_size(name: str) -> int:
         self.exit()
 """,
         """        # T-Pot: package names as apt takes them (Debian's form, an architecture after the colon), a
-        # path is a .deb file; an installed package of the persona is already the newest version,
-        # another one gets a version that fits the release
+        # path is a .deb file; with the names of the release ([shell] package_names) a name it does
+        # not have is not found (nothing is installed then) and a glob takes the names it matches; an
+        # installed package of the persona is already the newest version, another one gets a version
+        # that fits the release
+        release = tpot_apt_names()
         names, errors, notes = [], [], []
+        globs = 0
         for word in self.tpot_words[1:]:
             found = re.fullmatch(r"([a-z0-9][a-z0-9+.-]+)(?::[a-z0-9-]+)?", word)
-            if "/" in word or word.endswith(".deb"):
+            matches = []
+            if "/" not in word and set(word) & set("*?[") and globs < TPOT_APT_GLOBS:
+                globs += 1
+                matches = tpot_apt_glob(word, release)
+            if "/" in word or word.endswith(".deb") or word in (".", ".."):
                 errors.append(f"E: Unsupported file {word} given on commandline\\n")
-            elif not found:
-                errors.append(f"E: Unable to locate package {word}\\n")
+            elif matches:
+                names.extend(name for name in matches if name not in names)
+            elif not found or (release is not None and found.group(1) not in release):
+                errors.append(tpot_apt_missing(word, getattr(self, "tpot_prog", "apt-get")))
             elif found.group(1) in tpot_apt_data()["unavailable"]:
                 # a package of another family the release does not have (yum)
                 notes.append(f"Package {found.group(1)} is not available, but is referred to by another package.\\n"
@@ -2007,9 +2054,13 @@ def tpot_apt_size(name: str) -> int:
             self.write(f"Setting up {p} ({self.packages[p]['version']}) ...\\n")
             # the programs of the persona's data that answer as installed ([shell] apt_packages "answers")
             # do, with Cowrie's command of their name; another one is a faked program, also where Cowrie's
-            # command of that name stays skipped (dnf, rpm, lspci, gcc on Debian)
-            for program in tpot_apt_data()["programs"].get(p) or [f"/usr/bin/{p}"]:
+            # command of that name stays skipped (dnf, rpm, lspci, gcc on Debian); a package without data
+            # leaves a program of the persona under its name as it is
+            modelled = tpot_apt_data()["programs"].get(p)
+            for program in modelled or [f"/usr/bin/{p}"]:
                 name = program.rsplit("/", 1)[-1]
+                if not modelled and self.fs.exists(program):
+                    continue
                 self.fs.mkfile(
                     program,
                     self.user["uid"],
@@ -2018,7 +2069,7 @@ def tpot_apt_size(name: str) -> int:
                     33188,
                 )
                 faked = Command_faked_package_class_factory.getCommand(name)
-                if name in tpot_apt_data()["answers"]:
+                if modelled and name in tpot_apt_data()["answers"]:
                     tpot_mark_installed(self.protocol, name, self.packages[p]["version"])
                     if name not in self.protocol.commands:
                         self.protocol.commands[program] = faked
@@ -2034,12 +2085,34 @@ def tpot_apt_size(name: str) -> int:
         self.write(f"Processing triggers for man-db ({tpot_apt_version('man-db')}) ...\\n")
         self.exit()""",
     )
+    # apt and apt-get differ in their errors for a name that is no package (tpot_apt_missing)
+    replace_once(
+        path,
+        """commands["/usr/bin/apt"] = Command_aptget
+commands["/bin/apt"] = Command_aptget
+commands["apt"] = Command_aptget
+""",
+        """
+
+class Command_apt(Command_aptget):
+    \"\"\"T-Pot: apt, apt-get under its other name.\"\"\"
+
+    tpot_prog = "apt"
+
+
+commands["/usr/bin/apt"] = Command_apt
+commands["/bin/apt"] = Command_apt
+commands["apt"] = Command_apt
+""",
+    )
 
 
 def patch_yum(cowrie_root):
     """yum 3 of CentOS 7: the plugins of the persona ([shell] yum_plugins), without
     the lines of plugins it does not load (priorities, kernel-module); -y installs
-    without asking, options are no packages; `update` as root finds nothing to do."""
+    without asking, options are no packages; `update` as root finds nothing to do.
+    install takes the names of the release ([shell] package_names): another name has
+    no package, an installed package of the persona ([shell] yum_installed) is there."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "yum.py"
     replace_once(path, *CONFIG_IMPORT)
     replace_once(
@@ -2053,6 +2126,39 @@ def tpot_yum_plugins() -> str:
     return CowrieConfig.get(
         "shell", "yum_plugins", fallback="changelog, kernel-module, ovl, priorities, tsflags, versionlock"
     )
+
+
+import functools as tpot_functools  # noqa: E402
+import pathlib as tpot_pathlib  # noqa: E402
+
+
+@tpot_functools.cache
+def tpot_yum_names() -> frozenset[str] | None:
+    \"\"\"T-Pot: the names of the release's packages ([shell] package_names, one per line), None
+    without the key (every name is found then).\"\"\"
+    path = CowrieConfig.get("shell", "package_names", fallback="")
+    try:
+        return frozenset(line.split(" ", 1)[0] for line in
+                         tpot_pathlib.Path(path).read_text(encoding="utf-8").splitlines() if line) if path else None
+    except (OSError, ValueError):
+        return None
+
+
+# the installed packages of a CentOS 7 that are not built for x86_64
+TPOT_YUM_NOARCH = frozenset({"yum"})
+
+
+def tpot_yum_installed() -> dict[str, str]:
+    \"\"\"T-Pot: the installed packages of the persona ([shell] yum_installed "name evr,..."): {name: evr}.\"\"\"
+    entries = CowrieConfig.get("shell", "yum_installed", fallback="")
+    return dict(entry.split(" ", 1) for entry in entries.split(",") if " " in entry)
+
+
+def tpot_yum_present(name: str, evr: str) -> str:
+    \"\"\"T-Pot: yum's line for a package that is installed: the epoch before the name.\"\"\"
+    epoch, _, plain = evr.rpartition(":")
+    arch = "noarch" if name in TPOT_YUM_NOARCH else "x86_64"
+    return f"Package {epoch + ':' if epoch else ''}{name}-{plain}.{arch} already installed and latest version\\n"
 """,
     )
     replace_all(
@@ -2114,7 +2220,39 @@ def tpot_yum_plugins() -> str:
         path,
         """        for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.args[1:]]:
 """,
-        """        for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.tpot_words[1:]]:
+        """        # T-Pot: names as yum takes them (an architecture after a dot); a name the release does
+        # not have has no package, an installed one of the persona is there; with nothing left yum
+        # has nothing to do (an error when a name had no package; unverified: names of both kinds)
+        release, installed = tpot_yum_names(), tpot_yum_installed()
+        self.tpot_notes, wanted, missing = [], [], False
+        for word in self.tpot_words[1:]:
+            name = re.sub(r"\\.(x86_64|noarch|i686)$", "", word)
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9+._-]{0,99}", name) or (
+                release is not None and name not in release
+            ):
+                missing = True
+                self.tpot_notes.append(f"No package {word} available.\\n")
+                if release is not None and word.lower() in release and word.lower() != word:
+                    self.tpot_notes.append(f"  * Maybe you meant: {word.lower()}\\n")
+            elif name in installed:
+                self.tpot_notes.append(tpot_yum_present(name, installed[name]))
+            elif name not in wanted:
+                wanted.append(name)
+        if not wanted:
+            yield self.sleep(1)
+            self.write(f"Loaded plugins: {tpot_yum_plugins()}\\n")
+            if "fastestmirror" in tpot_yum_plugins():
+                self.write("Loading mirror speeds from cached hostfile\\n")
+            for note in self.tpot_notes:
+                self.write(note)
+            if missing:
+                self.errorWrite("Error: Nothing to do\\n")
+                self.exit(1)
+            else:
+                self.write("Nothing to do\\n")
+                self.exit()
+            return
+        for y in wanted:
 """,
     )
     replace_once(
@@ -2123,10 +2261,14 @@ def tpot_yum_plugins() -> str:
             f"{random.randint(200, 300)} packages excluded due to repository priority protections\\n"
         )
 """,
-        """        if "priorities" in tpot_yum_plugins():
+        """        if "fastestmirror" in tpot_yum_plugins():
+            self.write("Loading mirror speeds from cached hostfile\\n")
+        if "priorities" in tpot_yum_plugins():
             self.write(
                 f"{random.randint(200, 300)} packages excluded due to repository priority protections\\n"
             )
+        for note in self.tpot_notes:
+            self.write(note)
 """,
     )
     replace_once(
