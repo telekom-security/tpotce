@@ -325,17 +325,22 @@ def _index_line(index) -> str:
 
 
 def _doomed_summary(doomed) -> str:
-    """"N indices with E events (S)": an index without counts (closed, or open without its primaries) is
-    named apart."""
+    """"N indices with E events (S)". An index without counts (closed, or open without its primaries) is
+    counted apart and never in E or S: "N indices (E events and S in the K with a known size; U more of
+    unknown size)"."""
     counted = [i for i in doomed if i.counted]
     unknown = len(doomed) - len(counted)
     closed = sum(1 for i in doomed if i.closed)
-    size = _human_size(sum(i.size for i in counted))
-    if unknown and closed == unknown:
-        size += f", not counting {_indices(closed)} that {'is' if closed == 1 else 'are'} closed, size unknown"
-    elif unknown:
-        size += f", not counting {_indices(unknown)} of unknown size" + (f", {closed} of them closed" if closed else "")
-    return f"{_indices(len(doomed))} with {sum(i.docs for i in counted)} events ({size})"
+    events, size = sum(i.docs for i in counted), _human_size(sum(i.size for i in counted))
+    if not unknown:
+        return f"{_indices(len(doomed))} with {events} events ({size})"
+    shut = "" if not closed else ("closed" if closed == unknown == 1 else
+                                  "all closed" if closed == unknown else f"{closed} of them closed")
+    if not counted:
+        return f"{_indices(len(doomed))} of unknown size" + (f" ({shut})" if shut else "")
+    known = "one" if len(counted) == 1 else str(len(counted))
+    return (f"{_indices(len(doomed))} ({events} events and {size} in the {known} with a known size; "
+            f"{unknown} more of unknown size{', ' + shut if shut else ''})")
 
 
 def _retention_preview(chosen, new: str, console) -> None:
@@ -538,7 +543,9 @@ def run_env(args) -> int:
                     waits = elastic.shortens(state.current, new)
                 else:               # missing, or Elasticsearch does not answer: the value in .env is all we know
                     waits = _shortens_env(old_retention, new)
-            if foreign is not None:
+            if not new:
+                say.hint("TPOT_ES_RETENTION is empty: T-Pot leaves the ILM policy as it is.", stream=console.file)
+            elif foreign is not None:
                 keeps = _retention_shown(foreign.current) if foreign.current else "not in days"
                 say.hint(f"TPOT_ES_RETENTION={new} is set, but the ILM policy tpot was changed outside of T-Pot "
                          f"and keeps its own retention ({keeps}). tpot elastic retention --adopt keeps it, "

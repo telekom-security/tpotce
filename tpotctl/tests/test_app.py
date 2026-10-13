@@ -967,8 +967,8 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
                                  elastic.Index("logstash-b", 0, 0, 0, True)]).plain
         self.assertIn("logstash-a  1200 events  5.0 MB", text)
         self.assertIn("logstash-b  closed, size unknown", text)
-        self.assertIn("2 indices with 1200 events (5.0 MB, not counting 1 index that is closed, size unknown) "
-                      "are deleted right away.", text)
+        self.assertIn("2 indices (1200 events and 5.0 MB in the one with a known size; 1 more of unknown size, "
+                      "closed) are deleted right away.", text)
         self.assertNotIn("closed  0", text)
 
     async def test_unreachable_longer_value_says_when_it_applies(self):

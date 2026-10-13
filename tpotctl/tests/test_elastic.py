@@ -796,8 +796,8 @@ class RunElasticTest(unittest.TestCase):
         chosen = self.plan(doomed=[self.OLD, closed], shortening=True)
         self.assertEqual(self.run_cli(["retention", "30"], plan=chosen), 0)
         text = self.out.getvalue()
-        self.assertIn("2 indices with 1200 events (4.9 KB, not counting 1 index that is closed, size unknown) "
-                      "are deleted right away:", text)
+        self.assertIn("2 indices (1200 events and 4.9 KB in the one with a known size; 1 more of unknown size, "
+                      "closed) are deleted right away:", text)
         self.assertIn("logstash-old  1200 events  4.9 KB", text)
         self.assertIn("logstash-closed  closed, size unknown", text)
         self.assertNotIn("closed  0 events", text)
@@ -808,13 +808,32 @@ class RunElasticTest(unittest.TestCase):
         chosen = self.plan(doomed=[self.OLD, red], shortening=True)
         self.assertEqual(self.run_cli(["retention", "30"], plan=chosen), 0)
         text = self.out.getvalue()
-        self.assertIn("2 indices with 1200 events (4.9 KB, not counting 1 index of unknown size) "
+        self.assertIn("2 indices (1200 events and 4.9 KB in the one with a known size; 1 more of unknown size) "
                       "are deleted right away:", text)
         self.assertIn("logstash-red  size unknown", text)
         self.assertNotIn("red  0 events", text)
-        self.assertEqual(cli._doomed_summary([self.OLD, red, closed]),
-                         "3 indices with 1200 events (4.9 KB, not counting 2 indices of unknown size, 1 of them "
-                         "closed)")
+
+    def test_the_total_names_what_its_events_and_size_count(self):
+        """The events and the size are those of the indices with a known size; the others are a count of their
+        own, never part of the events or the size."""
+        red = elastic.Index("logstash-red", 1.0, 0, 0, unknown_size=True)
+        closed = elastic.Index("logstash-closed", 1.0, 0, 0, True)
+        other = elastic.Index("logstash-other", 1.0, 300, 1024)
+        for doomed, text in (
+                ([self.OLD], "1 index with 1200 events (4.9 KB)"),
+                ([self.OLD, other], "2 indices with 1500 events (5.9 KB)"),
+                ([self.OLD, red, closed], "3 indices (1200 events and 4.9 KB in the one with a known size; "
+                                          "2 more of unknown size, 1 of them closed)"),
+                ([self.OLD, other, red], "3 indices (1500 events and 5.9 KB in the 2 with a known size; "
+                                         "1 more of unknown size)"),
+                ([self.OLD, closed, closed], "3 indices (1200 events and 4.9 KB in the one with a known size; "
+                                             "2 more of unknown size, all closed)"),
+                ([red], "1 index of unknown size"),
+                ([closed], "1 index of unknown size (closed)"),
+                ([red, closed, closed], "3 indices of unknown size (2 of them closed)"),
+                ([closed, closed], "2 indices of unknown size (all closed)")):
+            with self.subTest(text=text):
+                self.assertEqual(cli._doomed_summary(doomed), text)
 
     def test_unreachable_force_without_a_value_says_it_waits(self):
         code = self.run_cli(["retention", "--force"], retention="30", plan=self.plan("keep", reachable=False))
@@ -1111,6 +1130,15 @@ class RunEnvRetentionTest(unittest.TestCase):
         text = self.env_set("TPOT_ES_RETENTION=60", start="")
         self.assertEqual(self.status_calls, 1)
         self.assertIn(unknown, text)
+
+    def test_an_empty_value_says_the_policy_stays(self):
+        for start in ("30", ""):
+            with self.subTest(start=start):
+                text = self.env_set("TPOT_ES_RETENTION=", start=start)
+                self.assertIn("TPOT_ES_RETENTION is empty: T-Pot leaves the ILM policy as it is.", text)
+                self.assertNotIn("TPOT_ES_RETENTION= is set", text)
+                self.assertNotIn("applies it on its next start", text)
+                self.assertEqual(self.status_calls, 0)
 
     def test_a_longer_value_does_not_warn(self):
         text = self.env_set("TPOT_ES_RETENTION=365")
