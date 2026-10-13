@@ -416,7 +416,31 @@ class SummaryTest(Scripts):
         # the restart hands them over
         text = base.read("update.sh")
         restart = text[text.index('export TPOT_UPDATE_COMPOSE_CUSTOMIZED'):text.index('exec bash "$0" -y')]
-        self.assertIn("export TPOT_UPDATE_DONE", restart)
+        self.assertIn("fuDONE_EXPORT", restart)
+
+    def test_the_items_survive_the_handover_whole(self):
+        """fuDID, fuDONE_EXPORT and the read of a restarted update.sh: every item comes back as it was, a
+        newline in a text is a space (an item never splits in two); also with the bash 3.2 of macOS."""
+        items = [("ok", "The backup is /b/x.tar."), ("warn", "quotes ' \" $HOME `x` \\ and  two  spaces"),
+                 ("warn", "two\nlines"), ("info", "  leading blanks"), ("fail", "a: colon")]
+        calls = "".join(f"fuDID {shlex.quote(kind)} {shlex.quote(text)}\n" for kind, text in items)
+        shells = [shell for shell in (shutil.which("bash"), "/bin/bash") if shell and os.path.exists(shell)]
+        for shell in dict.fromkeys(shells):
+            with self.subTest(shell=shell):
+                script = (f"source {shlex.quote(UPDATE_SH)}\n{calls}fuDONE_EXPORT\n"
+                          f"TPOT_UPDATE_PREPARED=1 {shell} -c " + shlex.quote(
+                              f'source {shlex.quote(UPDATE_SH)}; printf "<%s>\\n" "${{myDONE[@]}}"') + "\n")
+                result = subprocess.run([shell, "-c", script], capture_output=True, universal_newlines=True,
+                                        env=self.env(TPOT_GUM="off"), cwd=self.tpotce, timeout=60)
+                self.assertEqual(result.stdout.splitlines(),
+                                 [f"<{kind}:{text.replace(chr(10), ' ')}>" for kind, text in items],
+                                 result.stdout + result.stderr)
+        # nothing to hand over: nothing comes back
+        script = (f"source {shlex.quote(UPDATE_SH)}\nfuDONE_EXPORT\nTPOT_UPDATE_PREPARED=1 bash -c "
+                  + shlex.quote(f'source {shlex.quote(UPDATE_SH)}; echo "n=${{#myDONE[@]}}"') + "\n")
+        result = subprocess.run(["bash", "-c", script], capture_output=True, universal_newlines=True,
+                                env=self.env(TPOT_GUM="off"), cwd=self.tpotce, timeout=60)
+        self.assertIn("n=0", result.stdout, result.stderr)
 
     def test_no_summary_for_the_help_or_without_y(self):
         for args in (("-h",), ()):

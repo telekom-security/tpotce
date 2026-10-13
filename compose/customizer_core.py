@@ -43,7 +43,7 @@ EDITION_ORDER = ["STANDARD", "SENSOR", "MINI", "LLM", "TARPIT", "MOBILE", "MAC_W
 _ENTRY_RE = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*$")
 _TOPLEVEL_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):\s*$")
 _BANNER_RE = re.compile(r"^####")
-_EDITION_RE = re.compile(r"^# T-Pot: ([A-Z_]+)\s*$")
+_EDITION_RE = re.compile(r"^# T-Pot:\s*([A-Z_]+)\s*$")      # also without the space, as update.sh
 _PORT_RE = re.compile(
     r"^(?:(?P<ip>\d{1,3}(?:\.\d{1,3}){3}):)?(?P<host>\d+):(?P<cont>\d+)(?:/(?P<proto>tcp|udp))?$")
 _XTPOT_RE = re.compile(r"^    x-tpot:")

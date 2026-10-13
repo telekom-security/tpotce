@@ -445,12 +445,14 @@ class RestoreShTest(Harness):
 # answers with HOME/current_policy.json (none: 404, curl -f exits 22), everything else answers
 CURL = ('#!/bin/sh\necho "curl $*" >> "$HOME/curl_calls"\nout=""; put=""; prev=""\n'
         'case "$*" in *64298*) [ -e "$HOME/es_down" ] && exit 7 ;; esac\n'
-        'for a in "$@"; do\n  [ "$prev" = "-o" ] && out="$a"\n'
+        'w=""\nfor a in "$@"; do\n  [ "$prev" = "-o" ] && out="$a"\n  [ "$prev" = "-w" ] && w=1\n'
         '  [ "$prev" = "-X" ] && [ "$a" = "PUT" ] && put=1\n  prev="$a"\ndone\n'
         'case "$*" in\n  *api/status*) [ -e "$HOME/kibana_down" ] && exit 7; exit 0 ;;\n  *_ilm/policy/tpot*)\n'
         '    if [ -n "$put" ]; then echo "PUT $*" >> "$HOME/puts"; exit 0; fi\n'
-        '    [ -f "$HOME/current_policy.json" ] || exit 22\n'
-        '    [ -n "$out" ] && cat "$HOME/current_policy.json" > "$out"; exit 0 ;;\nesac\nexit 0\n')
+        '    code=200; [ -f "$HOME/current_policy.json" ] || code=404; [ -e "$HOME/policy_503" ] && code=503\n'
+        '    [ "$code" = 200 ] && [ -n "$out" ] && cat "$HOME/current_policy.json" > "$out"\n'
+        '    if [ -n "$w" ]; then printf "%s" "$code"; exit 0; fi\n'
+        '    [ "$code" = 200 ] || exit 22; exit 0 ;;\nesac\nexit 0\n')
 
 
 def ilm_policy(min_age):
@@ -780,6 +782,40 @@ class RestoreRetentionTest(RestoreScriptHarness):
         self.assertEqual(self.kept(), {"1_elastic": (0o700, ["kibana_export.ndjson"]),
                                        "2_elastic": (0o700, ["ilm_policy_tpot.json"]),
                                        "3_elastic": (0o700, ["ilm_policy_tpot.json"])})
+
+    def test_a_missing_backups_folder_is_made_0700_as_well(self):
+        self.write("kibana_down", "")
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/kibana_export.ndjson": "{}\n"})
+        moved = os.path.join(self.home, "elsewhere.tar")
+        os.rename(archive, moved)                        # the archive lies outside, the folder is not there yet
+        shutil.rmtree(os.path.join(self.home, "tpot_backups"), ignore_errors=True)
+        self.bash(f"umask 022\nmyARCHIVE='{moved}' myDO_ELASTIC=1 myKIBANA_TIMEOUT=0 myDATE=1\n"
+                  "fuTMPDIR; fuTOC\nfuDO_ELASTIC\n")
+        backups = os.path.join(self.home, "tpot_backups")
+        self.assertEqual(stat.S_IMODE(os.stat(backups).st_mode), 0o700)
+        self.assertEqual(self.kept(), {"1_elastic": (0o700, ["kibana_export.ndjson"])})
+
+    def test_a_current_policy_that_cannot_be_read_is_not_called_none(self):
+        """A 503 for the policy (the cluster starts): the question says so, and it still asks."""
+        self.write("policy_503", "")
+        out = self.elastic("365d", "30d")
+        self.assertEqual(self.puts(), "", out)
+        self.assertIn("the current one could not be read (HTTP 503): putting it back deletes older events", out)
+        self.assertNotIn("has none now", out)
+        os.remove(os.path.join(self.home, "policy_503"))
+        os.remove(os.path.join(self.home, "current_policy.json"))
+        out = self.elastic(None, "30d")                  # a 404: there is none
+        self.assertIn("Elasticsearch has none now", out)
+
+    def test_the_waits_end_a_stalled_answer(self):
+        text = read("restore.sh")
+        wait = text[text.index("function fuWAIT_UP ()"):text.index("function fuKEEP_ELASTIC ()")]
+        curls = [line for line in wait.splitlines() if "curl " in line]
+        self.assertEqual(len(curls), 2, wait)
+        self.assertTrue(all("--max-time 10" in line for line in curls), curls)
+        body = text[text.index("function fuDO_ELASTIC ()"):text.index("function fuEND ()")]
+        checks = [line for line in body.splitlines() if "curl -s -f -o /dev/null" in line]
+        self.assertTrue(checks and all("--max-time 10" in line for line in checks), checks)
 
     def test_a_failed_wait_names_a_log_that_says_what_it_waited_for(self):
         self.write("kibana_down", "")
@@ -3360,7 +3396,7 @@ class UpdateRepairTest(Harness):
     def test_a_rebuild_names_the_lines_above_the_header_it_leaves_out(self):
         archive = os.path.join(self.home, "x_tpot_backup.tar")
         staging = os.path.join(self.home, "staging")
-        for preamble, warned in (("# e2e-marker\n", True), ("", False)):
+        for preamble, warned in (("# e2e-marker\n", True), ("", False), ("\n  \n", False), ("\n# mine\n", True)):
             with self.subTest(preamble=preamble):
                 self.write(os.path.join(staging, "docker-compose.yml"), self.custom_file(preamble))
                 subprocess.run(["tar", "cf", archive, "-C", staging, "docker-compose.yml"], check=True)
@@ -3393,16 +3429,25 @@ class UpdateRepairTest(Harness):
         spec.loader.exec_module(core)
         cases = ["# T-Pot: STANDARD\nservices:\n", "# e2e-marker\n# T-Pot: STANDARD\n", "\n\n# T-Pot: MINI\n",
                  "  # indented\n# T-Pot: LLM\n", "services:\n# T-Pot: STANDARD\n", "# only a comment\n", "",
-                 "# T-Pot: one\n# T-Pot: STANDARD\n", "x: 1\n", "# a\n#T-Pot: STANDARD\n# T-Pot: MINI\n"]
+                 "# T-Pot: one\n# T-Pot: STANDARD\n", "x: 1\n", "# a\n#T-Pot: STANDARD\n# T-Pot: MINI\n",
+                 "# T-Pot:STANDARD\n", "# T-Pot:   SENSOR  \n", "# T-Pot:\tMINI\r\n", "# T-Pot:\n# T-Pot: MINI\n",
+                 "# T-Pot: standard\n", "# T-Pot: CUSTOM EDITION\n"]
         path = os.path.join(self.home, "compose.yml")
         for text in cases:
             with self.subTest(text=text):
                 self.write(path, text)
                 result = self.bash(self.functions("fuEDITION_LINE") + f'fuEDITION_LINE "{path}"\n')
-                bash_line = int(result.stdout.split()[0]) - 1 if result.stdout.strip() else -1
+                bash_line = int(result.stdout.split(" ", 1)[0]) - 1 if result.stdout.strip() else -1
+                bash_name = result.stdout.split(" ", 1)[1].rstrip("\n") if result.stdout.strip() else ""
                 lines = text.split("\n")
                 self.assertEqual(ops.edition_line(lines), bash_line)
                 self.assertEqual(core.edition_line(lines), bash_line)
+                # the same name: update.sh, the T-Pot Manager (ops) and the customizer (editions in capitals)
+                self.write(os.path.join(self.home, "repo", "docker-compose.yml"), text)
+                name = ops.edition_header(os.path.join(self.home, "repo", "docker-compose.yml"))[0]
+                self.assertEqual(name, bash_name)
+                self.assertEqual(core.edition_of(lines), name if re.fullmatch(r"[A-Z_]+", name) else "")
+        self.assertEqual(core.edition_of(["# T-Pot:STANDARD"]), "STANDARD")
 
     # --- git and files always from ~/tpotce --------------------------------------------------------
 

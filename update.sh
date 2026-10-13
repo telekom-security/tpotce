@@ -98,15 +98,6 @@ myLOG="${myBACKUPDIR}/update.log"
 # fuUI_SUMMARY. myRUNNING is set once the update is confirmed, from then on every way
 # out ends with it; mySTOPPED while T-Pot is stopped.
 myDONE=()
-# a restarted update.sh (fuSELFUPDATE) goes on with the items of the first pass, one per line,
-# so that a warning of the backup still reaches the summary
-if [ -n "${TPOT_UPDATE_PREPARED}" ] && [ -n "${TPOT_UPDATE_DONE}" ];
-  then
-    while IFS= read -r myDONE_ITEM;
-      do
-        [ -z "${myDONE_ITEM}" ] || myDONE+=("${myDONE_ITEM}")
-    done <<< "${TPOT_UPDATE_DONE}"
-fi
 myEND_TITLE=""
 myRUNNING=""
 mySTOPPED=""
@@ -398,8 +389,25 @@ function fuTMPDIR () {
 
 # One item of the summary at the end, i.e. fuDID ok "The images are pulled."
 function fuDID () {   # $1 = ok | fail | warn | next | info, $2 = text
-	myDONE+=("$1:$2")
+	# one line each: a newline in the text becomes a space, so an item never splits in two
+	myDONE+=("$1:${2//$'\n'/ }")
 }
+
+# The items for a restarted update.sh (fuSELFUPDATE), one per line in TPOT_UPDATE_DONE, so that a
+# warning of the backup still reaches the summary; fuDONE_IMPORT takes them back.
+function fuDONE_EXPORT () {
+	TPOT_UPDATE_DONE="$(printf '%s\n' ${myDONE[@]+"${myDONE[@]}"})"
+	export TPOT_UPDATE_DONE
+}
+function fuDONE_IMPORT () {
+	local myITEM=""
+	[ -n "${TPOT_UPDATE_PREPARED}" ] && [ -n "${TPOT_UPDATE_DONE}" ] || return 0
+	while IFS= read -r myITEM;
+	  do
+	    [ -z "${myITEM}" ] || myDONE+=("${myITEM}")
+	done <<< "${TPOT_UPDATE_DONE}"
+}
+fuDONE_IMPORT
 
 # A loss of data is what the backup of this run cannot bring back: older backups deleted to
 # make room, an Elasticsearch data upgrade without --full, images that cannot be pulled again.
@@ -805,7 +813,7 @@ function fuEDITION_TEMPLATE () {
 # own above it keeps the edition. Prints "<line number> <EDITION>", nothing without one. The T-Pot
 # Manager reads it by the same rule (edition_line of tpotctl/ops.py and compose/customizer_core.py).
 function fuEDITION_LINE () {   # $1 = compose file
-	awk '/^[[:space:]]*$/ { next } !/^[[:space:]]*#/ { exit } /^# T-Pot:/ { sub(/^# T-Pot: */, ""); print NR " " $0; exit }' "$1" 2>/dev/null
+	awk '/^[[:space:]]*$/ { next } !/^[[:space:]]*#/ { exit } /^# T-Pot:/ { sub(/^# T-Pot:[[:space:]]*/, ""); sub(/[[:space:]]+$/, ""); print NR " " $0; exit }' "$1" 2>/dev/null
 }
 
 # Was the compose file built by compose/customizer.py (v2 or later)? Its header follows the edition line.
@@ -998,8 +1006,7 @@ function fuSELFUPDATE () {
 	    export TPOT_UPDATE_ARCHIVE="${myARCHIVE}"
 	    export TPOT_UPDATE_EDITION="${myEDITION}"
 	    export TPOT_UPDATE_COMPOSE_CUSTOMIZED="${myCOMPOSE_CUSTOMIZED}"
-	    TPOT_UPDATE_DONE="$(printf '%s\n' ${myDONE[@]+"${myDONE[@]}"})"
-	    export TPOT_UPDATE_DONE
+	    fuDONE_EXPORT
 	    # an `exec` does not fire the EXIT trap, so clean up here
 	    [ -n "${myTMPDIR}" ] && rm -rf "${myTMPDIR}"
 	    # `-y` is repeated on purpose: after a switch to an older branch the
@@ -2576,7 +2583,7 @@ function fuTPOT_SETUP () {
 # editions. Edited by hand, without a customizer that can rebuild (an older
 # checkout) or without PyYAML, the file is put back unchanged.
 function fuRESTORE_CUSTOM () {
-	local myCUSTOMIZER="$HOME/tpotce/compose/customizer.py"
+	local myCUSTOMIZER="$HOME/tpotce/compose/customizer.py" myLINE=""
 	if ! fuCOMPOSE_FROM_ARCHIVE;
 	  then
 	    fuUI_ERROR "Could not take docker-compose.yml from ${myARCHIVE}. Put it back by hand with:"
@@ -2596,7 +2603,10 @@ function fuRESTORE_CUSTOM () {
 	    if python3 "${myCUSTOMIZER}" --rebuild "${myTMPDIR}/docker-compose.yml" -o "$HOME/tpotce/docker-compose.yml" </dev/null;
 	      then
 	        # the rebuild writes the file anew from its header: lines of your own above it are not in it
-	        if [ "$(fuEDITION_LINE "${myTMPDIR}/docker-compose.yml" | cut -d " " -f1)" != "1" ];
+	        # (blank lines there are none of your own)
+	        myLINE=$(fuEDITION_LINE "${myTMPDIR}/docker-compose.yml" | cut -d " " -f1)
+	        if [ -n "${myLINE}" ] && [ "${myLINE}" -gt 1 ] \
+	           && head -n "$((myLINE - 1))" "${myTMPDIR}/docker-compose.yml" | grep -q "[^[:space:]]";
 	          then
 	            fuUI_WARN "The lines above '# T-Pot: CUSTOM' in your docker-compose.yml are not in the rebuilt one, compare it with:"
 	            fuUI_HINT "  tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml"

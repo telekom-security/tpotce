@@ -847,11 +847,11 @@ function fuWAIT_UP () {   # $1 = URL, $2 = name
 	local myWAIT=0
 	while [ "${myWAIT}" -lt "${myKIBANA_TIMEOUT}" ];
 	  do
-	    curl -s -f -o /dev/null --connect-timeout 3 "$1" && return 0
+	    curl -s -f -o /dev/null --connect-timeout 3 --max-time 10 "$1" && return 0
 	    sleep 5
 	    myWAIT=$((myWAIT+5))
 	done
-	curl -s -f -o /dev/null --connect-timeout 3 "$1" && return 0
+	curl -s -f -o /dev/null --connect-timeout 3 --max-time 10 "$1" && return 0
 	echo "$2 on $1 did not answer within ${myKIBANA_TIMEOUT}s."
 	return 1
 }
@@ -862,7 +862,9 @@ function fuWAIT_UP () {   # $1 = URL, $2 = name
 function fuKEEP_ELASTIC () {   # $@ = the files of ${myTMPDIR}/elastic to keep
 	local myFILE=""
 	myKEEP="${myBACKUPDIR}/${myDATE}_elastic"
-	{ mkdir -p "${myKEEP}" && chmod 0700 "${myKEEP}"; } 2>/dev/null || return 1
+	# the backups folder too, should it not be there yet (as fuLOG_START and update.sh keep it)
+	{ mkdir -p "${myBACKUPDIR}" && chmod 0700 "${myBACKUPDIR}" \
+	  && mkdir -p "${myKEEP}" && chmod 0700 "${myKEEP}"; } 2>/dev/null || return 1
 	for myFILE in "$@";
 	  do
 	    cp "${myTMPDIR}/elastic/${myFILE}" "${myKEEP}/${myFILE}" 2>/dev/null || return 1
@@ -901,7 +903,7 @@ print(policy["phases"]["delete"].get("min_age", ""))'
 # when it needs none: the policy deletes nothing, or it keeps the events whole days and not less
 # long than the current one (none, off or not in whole days: forever). Everything else asks.
 function fuILM_LOSS () {   # $1 = the policy of the archive
-	local myNEW="" myOLD="" myNOW="" myMINAGE="" myDELETES=0
+	local myNEW="" myOLD="" myNOW="" myMINAGE="" myDELETES=0 myCODE=""
 	myMINAGE=$(fuPOLICY_DELETES "$1") || myDELETES=$?
 	[ "${myDELETES}" -ne 1 ] || return 0
 	myNEW=$(fuPOLICY_VALUE "$1") || myNEW=""
@@ -916,17 +918,23 @@ function fuILM_LOSS () {   # $1 = the policy of the archive
 	    return 0 ;;
 	esac
 	# GET wraps the policy in its name, value-of takes it as update.sh stores it
-	if curl -s -f --connect-timeout 5 -m 30 "${myES}/_ilm/policy/tpot" -o "${myTMPDIR}/ilm_current_raw.json" 2>/dev/null;
-	  then
+	# 404: there is none; any other answer (503 while the cluster starts, no answer): it cannot be read.
+	# Both count as forever, so the question comes either way, only its text differs.
+	myCODE=$(curl -s --connect-timeout 5 -m 30 -o "${myTMPDIR}/ilm_current_raw.json" -w '%{http_code}' \
+	           "${myES}/_ilm/policy/tpot" 2>/dev/null) || myCODE="000"
+	case "${myCODE}" in
+	  200)
 	    if python3 -c 'import json, sys; json.dump({"policy": json.load(open(sys.argv[1]))["tpot"]["policy"]}, open(sys.argv[2], "w"))' \
 	         "${myTMPDIR}/ilm_current_raw.json" "${myTMPDIR}/ilm_current.json" 2>/dev/null;
 	      then
 	        myOLD=$(fuPOLICY_VALUE "${myTMPDIR}/ilm_current.json")
 	    fi
-	    myNOW="the current one $(fuRETENTION_SHOWN "${myOLD}")"
-	  else
-	    myNOW="Elasticsearch has none now"
-	fi
+	    myNOW="the current one $(fuRETENTION_SHOWN "${myOLD}")" ;;
+	  404)
+	    myNOW="Elasticsearch has none now" ;;
+	  *)
+	    myNOW="the current one could not be read (HTTP ${myCODE})" ;;
+	esac
 	fuRETENTION_SHORTER "${myOLD}" "${myNEW}" || return 0
 	echo "The ILM policy of the archive keeps the events $(fuRETENTION_SHOWN "${myNEW}"), ${myNOW}: putting it back deletes older events right away."
 }
@@ -975,7 +983,7 @@ function fuDO_ELASTIC () {
 	    fuUI_SPIN "Waiting for Kibana on ${myKIBANA} ..." "${myLOG}" fuWAIT_UP "${myKIBANA}/api/status" Kibana || myRC=$?
 	    [ "${myRC}" -ne 130 ] || fuSTOPPED "waiting for Kibana"
 	    myWAIT=$((SECONDS - mySINCE))
-	    if ! curl -s -f -o /dev/null --connect-timeout 3 "${myKIBANA}/api/status";
+	    if ! curl -s -f -o /dev/null --connect-timeout 3 --max-time 10 "${myKIBANA}/api/status";
 	      then
 	        fuUI_ERROR "Kibana does not answer, the Kibana objects are not imported."
 	        fuFAILED elastic
@@ -1028,7 +1036,7 @@ function fuDO_ELASTIC () {
 	    fuUI_SPIN "Waiting for Elasticsearch on ${myES} ..." "${myLOG}" fuWAIT_UP "${myES}" Elasticsearch || myRC=$?
 	    [ "${myRC}" -ne 130 ] || fuSTOPPED "waiting for Elasticsearch"
 	    myWAIT=$((SECONDS - mySINCE))
-	    if ! curl -s -f -o /dev/null --connect-timeout 3 "${myES}";
+	    if ! curl -s -f -o /dev/null --connect-timeout 3 --max-time 10 "${myES}";
 	      then
 	        fuUI_ERROR "Elasticsearch does not answer, the ILM policy is not put back."
 	        fuFAILED elastic

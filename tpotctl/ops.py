@@ -20,7 +20,8 @@ from tpotctl.envfile import read_values
 
 SERVICE = "tpot"
 WEB_PORT = 64297       # nginx, the one web entry point of a HIVE
-_EDITION_RE = re.compile(r"^# T-Pot: (\S.*?)\s*$")
+# "# T-Pot: STANDARD", also without the space (as update.sh fuEDITION_LINE takes it)
+_EDITION_RE = re.compile(r"^# T-Pot:\s*(\S.*?)\s*$")
 
 
 class OpsError(Exception):
