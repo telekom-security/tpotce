@@ -167,6 +167,7 @@ def generated_policies(seed=17, count=400):
     metas = [None, {}, {"managed": True, "description": elastic.LEGACY_DESCRIPTION},
              {"managed": True, "description": "own"}, {"tpot_retention": "30"}, {"tpot_retention": 30},
              {"tpot_retention": "90"}, {"tpot_retention": 90}, {"tpot_retention": "365"},
+             {"tpot_retention": 30.0}, {"tpot_retention": 90.0}, {"tpot_retention": 30.5},
              {"tpot_retention": "off"}, {"managed": True, "tpot_retention": "30", "description": "x"}, "x", []]
     for _ in range(count):
         phases = {"hot": {"min_age": "0ms", "actions": rng.choice([{}, {"rollover": {"max_age": "1d"}}])}}
@@ -188,6 +189,15 @@ def generated_policies(seed=17, count=400):
         oldest = rng.choice([None, None, NOW_EPOCH - 5 * 86400, NOW_EPOCH - 400 * 86400])
         yield (rng.choice(["", "30", "90", "365", "off"]), rng.random() < 0.35, rng.random() < 0.3, oldest,
                None if rng.random() < 0.15 else policy)
+    # the marker as a number next to a delete phase of its days: jq (1.7 on) keeps the literal 30.0 for
+    # tostring as Python's str() does, so 30 is a marker of 30 days and 30.0 is none for both
+    for mark in (30, 30.0, "30", 30.5, 3650.0):
+        for value in ("30", "60", "off"):
+            days = int(float(mark))
+            yield (value, False, False, None,
+                   {"phases": {"hot": {"min_age": "0ms", "actions": {}},
+                               "delete": {"min_age": f"{days}d", "actions": {"delete": {}}}},
+                    "_meta": {"managed": True, "tpot_retention": mark, "description": "x"}})
 
 
 @unittest.skipUnless(shutil.which("jq") and shutil.which("bash"), "needs jq and bash")
