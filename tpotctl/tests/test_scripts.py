@@ -589,6 +589,13 @@ class RestoreRetentionTest(RestoreScriptHarness):
     def test_config_from_off_to_days_says_it_waits(self):
         self.assertIn("waits", self.config("off", "30"))
 
+    def test_config_from_no_value_says_what_t_pot_did(self):
+        """An empty TPOT_ES_RETENTION leaves the policy as it was, which may delete at an age of its own."""
+        out = " ".join(self.config("", "30").split())
+        self.assertIn("than the value before (not set: T-Pot left the policy as it was (it may delete at its own "
+                      "age)): T-Pot does not shorten", out)
+        self.assertNotIn("forever", out)
+
     def test_config_with_a_longer_or_the_same_retention_says_nothing(self):
         for current, archived in (("30", "365"), ("30", "30"), ("30", "off")):
             with self.subTest(current=current, archived=archived):
@@ -675,14 +682,15 @@ class RestoreRetentionTest(RestoreScriptHarness):
         self.assertNotIn("(min_age )", out)
 
     def test_config_without_a_current_retention_key_says_it_waits(self):
-        """No TPOT_ES_RETENTION in the current .env keeps the events forever: 7 of the archive is shorter."""
+        """No TPOT_ES_RETENTION in the current .env: T-Pot left the policy as it was, 7 of the archive counts as
+        shorter."""
         with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
             out.write("TPOT_TYPE=HIVE\n")
         archive = make_backup(self.home, {"MANIFEST": MANIFEST, "env": "TPOT_TYPE=HIVE\nTPOT_ES_RETENTION=7\n"})
         result = self.bash(f"myARCHIVE='{archive}' myDO_CONFIG=1\nfuTMPDIR; fuTOC\nfuDO_CONFIG\n")
         out = result.stdout + result.stderr
         self.assertTrue(any(line.startswith("HINT: ") and "TPOT_ES_RETENTION=7" in line and "waits" in line
-                            and "forever" in line for line in out.splitlines()), out)
+                            and "T-Pot left the policy as it was" in line for line in out.splitlines()), out)
         # an archive without a shorter value, or with no key, says nothing
         for archived in ("TPOT_TYPE=HIVE\n", "TPOT_TYPE=HIVE\nTPOT_ES_RETENTION=off\n"):
             with self.subTest(archived=archived):
@@ -749,7 +757,7 @@ class RestoreRetentionTest(RestoreScriptHarness):
         self.write("confirmed", "@@tpot loss data Restoring data/ replaces the current files.\n")
         out = self.elastic("365d", "30d", extra=f"myACCEPT_FILE='{self.home}/confirmed'\n")
         self.assertEqual(self.puts(), "", out)
-        self.assertIn("--accept-data-loss-file does not confirm it", out)
+        self.assertIn("HINT: --accept-data-loss-file does not confirm it: it names no 'ilm' loss.", out)
         self.assertIn("warned=elastic:", out)
 
     def test_a_file_with_an_ilm_line_puts_it_back(self):
@@ -999,6 +1007,29 @@ class RestoreDataTest(RestoreScriptHarness):
 
 
 @unittest.skipUnless(shutil.which("bash"), "no bash")
+class LossConfirmCommentTest(unittest.TestCase):
+    """fuLOSS_CONFIRM of update.sh and restore.sh decide the same way; the comments name what differs: the
+    signature and the hint for a file that does not confirm the loss, each in the terms of its file lines."""
+
+    @staticmethod
+    def block(path):
+        text = read(path)
+        end = text.index("function fuLOSS_CONFIRM () {")
+        comment = text[text.rindex("\n\n", 0, end):end]
+        return comment, text[end:text.index("\n}\n", end)]
+
+    def test_the_comments_name_the_differences(self):
+        for path, hint in (("update.sh", "it was not shown like this before the run."),
+                           ("restore.sh", "it names no '$1' loss.")):
+            with self.subTest(path=path):
+                comment, body = self.block(path)
+                flat = " ".join(comment.replace("#", " ").split())
+                self.assertNotIn("with the same texts", flat)
+                self.assertIn("The hints for a file that does not confirm the loss differ", flat)
+                self.assertIn("what they decide is the same", flat)
+                self.assertIn(f'fuUI_HINT "--accept-data-loss-file does not confirm it: {hint}"', body)
+
+
 class LossConfirmTerminalTest(unittest.TestCase):
     """fuLOSS_CONFIRM of update.sh and of restore.sh at a real terminal (a pty), with installer/lib/ui.sh
     and with the plain fallback block of the script (TPOT_GUM=off): enter is no, y and yes are yes, n is
@@ -2360,7 +2391,8 @@ class DataLossTest(Harness):
         self.assertEqual(result.returncode, 5, out)
         self.assertEqual(self.left(), names)
         self.assertNotIn("went on", out)
-        self.assertIn("--accept-data-loss-file does not confirm it", out)
+        self.assertIn("HINT: --accept-data-loss-file does not confirm it: it was not shown like this before the run.",
+                      out)
 
     def test_a_file_with_only_images_refuses_the_elastic_upgrade(self):
         result = self.bash(self.elastic(archive_has_data=False, extra=self.accept_file(self.IMAGES_ONLY)))

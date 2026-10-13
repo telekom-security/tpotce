@@ -365,8 +365,10 @@ function fuLOSS_IN_FILE () {   # $1 = data | ilm
 # never a loss of data. rc 0 for confirmed.
 # update.sh has a function of this name too, with another signature on purpose: there it takes the
 # names of what goes (backups, images) after the text, because its file lines name them; here a loss
-# is one thing under its key, the question comes as the third argument. What they decide and say is
-# the same: accept, terminal, refusal, in the same order and with the same texts.
+# is one thing under its key, the question comes as the third argument. The hints for a file that does
+# not confirm the loss differ with that: here the file names no loss of its key, there the loss was not
+# shown like this before the run (a name is missing). Otherwise what they decide is the same: accept,
+# file, terminal, refusal, in the same order, with the same warnings (the question can be another here).
 function fuLOSS_CONFIRM () {   # $1 = data | ilm, $2 = text, $3 = the question (default: the one of update.sh)
 	if [ -n "${myACCEPT_LOSS}" ];
 	  then
@@ -676,7 +678,8 @@ function fuDO_CONFIG () {
 	fuMARK phase config Restoring the configuration
 	echo
 	fuUI_INFO "Restoring the configuration ..."
-	# no key (or an empty one) keeps the events forever: any days of the archive are shorter
+	# no key (or an empty one): T-Pot left the policy as it was, which may delete at an age of its own;
+	# any days of the archive count as shorter, the hint says they wait
 	myOLD=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_ES_RETENTION)
 	if tar xf "${myARCHIVE}" -C "${myTMPDIR}" env 2>/dev/null && cp "${myTMPDIR}/env" "${myTPOTDIR}/.env";
 	  then
@@ -685,7 +688,7 @@ function fuDO_CONFIG () {
 	    myNEW=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_ES_RETENTION)
 	    if fuRETENTION_SHORTER "${myOLD}" "${myNEW}";
 	      then
-	        myWAS="${myOLD:-not set, which keeps the events forever}"
+	        myWAS="${myOLD:-not set: T-Pot left the policy as it was (it may delete at its own age)}"
 	        fuUI_HINT "TPOT_ES_RETENTION=${myNEW} of the backup is shorter than the value before (${myWAS}): T-Pot does not shorten the ILM policy tpot on its own, the value waits." \
 	                  "'tpot elastic retention --force' or the Elastic page of the T-Pot Manager applies it, both ask first."
 	    fi

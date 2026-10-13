@@ -449,8 +449,10 @@ function fuLOSS_IN_FILE () {   # $1 = backups | elastic | images, $2... = the na
 # confirms the update, never a loss of data. rc 0 for confirmed.
 # restore.sh has a function of this name too, with another signature on purpose: there a loss is one
 # thing under its key and the question comes as the third argument; here the names of what goes
-# (backups, images) follow the text, because the lines of the file name them. What they decide and say
-# is the same: accept, terminal, refusal, in the same order and with the same texts.
+# (backups, images) follow the text, because the lines of the file name them. The hints for a file that
+# does not confirm the loss differ with that: here it was not shown like this before the run (a name is
+# missing), there the file names no loss of its key. Otherwise what they decide is the same: accept,
+# file, terminal, refusal, in the same order, with the same warnings and the same question.
 function fuLOSS_CONFIRM () {   # $1 = backups | elastic | images, $2 = text, $3... = the names it deletes
 	local myKEY="$1" myTEXT="$2"
 	shift 2
