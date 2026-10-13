@@ -469,7 +469,7 @@ class MalformedAnswerTest(unittest.TestCase):
                "date is no number": dict(self.GOOD, **{"creation.date": "abc"}),
                "date is missing": {k: v for k, v in self.GOOD.items() if k != "creation.date"},
                "date is null": dict(self.GOOD, **{"creation.date": None}),
-               "docs is null": dict(self.GOOD, **{"docs.count": None}),
+               "docs is a list": dict(self.GOOD, **{"docs.count": []}),
                "size is a list": dict(self.GOOD, **{"store.size": []}),
                "size is a bool": dict(self.GOOD, **{"store.size": True}),
                "a row that is no object": "logstash-1"}
@@ -489,6 +489,30 @@ class MalformedAnswerTest(unittest.TestCase):
         found = elastic.indices(opener=self.listing([closed, self.GOOD]))
         self.assertEqual([(i.docs, i.size, i.closed) for i in found], [(0, 0, True), (5, 100, False)])
         self.assertEqual(elastic.doomed(found, "30", 1.8e9)[0].closed, True)
+
+    def test_a_red_index_has_no_counts(self):
+        """An open index without its primaries (health red) has null counts: size unknown, never an error, and
+        it is deleted all the same once it is older than the retention."""
+        red = dict(self.GOOD, index="logstash-red", health="red", **{"docs.count": None, "store.size": None,
+                                                                     "creation.date": "1600000000000"})
+        half = dict(self.GOOD, index="logstash-half", **{"store.size": None, "creation.date": "1650000000000"})
+        found = elastic.indices(opener=self.listing([red, half, self.GOOD]))
+        self.assertEqual([(i.name, i.docs, i.size, i.closed, i.unknown_size) for i in found],
+                         [("logstash-red", 0, 0, False, True), ("logstash-half", 5, 0, False, True),
+                          ("logstash-1", 5, 100, False, False)])
+        self.assertEqual([i.name for i in elastic.doomed(found, "30", 1.8e9)],
+                         ["logstash-red", "logstash-half", "logstash-1"])
+        closed = elastic.indices(opener=self.listing([dict(self.GOOD, status="close",
+                                                           **{"docs.count": None, "store.size": None})]))
+        self.assertEqual([(i.closed, i.unknown_size) for i in closed], [(True, True)])
+
+    def test_a_red_index_is_in_the_plan(self):
+        es = FakeES({("GET", "/_ilm/policy/tpot"): (200, {"tpot": {"policy": MANAGED_90}}),
+                     ("GET", "/_cat/indices/logstash-*"): (200, [dict(self.GOOD, health="red",
+                                                                      **{"docs.count": None, "store.size": None})])})
+        chosen = elastic.plan("30", opener=es, now=NOW)
+        self.assertEqual((chosen.reachable, chosen.shortening, chosen.problem), (True, True, ""))
+        self.assertEqual([(i.name, i.unknown_size) for i in chosen.doomed], [("logstash-1", True)])
 
     def test_a_list_that_cannot_be_read_counts_as_unreachable_in_the_plan(self):
         # the safe side: no plan that shows less than it deletes, the shorter value waits
@@ -712,6 +736,20 @@ class RunElasticTest(unittest.TestCase):
         self.assertIn("logstash-old  1200 events  4.9 KB", text)
         self.assertIn("logstash-closed  closed, size unknown", text)
         self.assertNotIn("closed  0 events", text)
+
+    def test_a_red_index_is_named_size_unknown(self):
+        red = elastic.Index("logstash-red", 1.0, 0, 0, unknown_size=True)
+        closed = elastic.Index("logstash-closed", 1.0, 0, 0, True)
+        chosen = self.plan(doomed=[self.OLD, red], shortening=True)
+        self.assertEqual(self.run_cli(["retention", "30"], plan=chosen), 0)
+        text = self.out.getvalue()
+        self.assertIn("2 indices with 1200 events (4.9 KB, not counting 1 index of unknown size) "
+                      "are deleted right away:", text)
+        self.assertIn("logstash-red  size unknown", text)
+        self.assertNotIn("red  0 events", text)
+        self.assertEqual(cli._doomed_summary([self.OLD, red, closed]),
+                         "3 indices with 1200 events (4.9 KB, not counting 2 indices of unknown size, 1 of them "
+                         "closed)")
 
     def test_unreachable_force_without_a_value_says_it_waits(self):
         code = self.run_cli(["retention", "--force"], retention="30", plan=self.plan("keep", reachable=False))

@@ -317,18 +317,25 @@ def confirm_data_loss(question: str, accept: bool) -> bool:
 
 
 def _index_line(index) -> str:
-    return (f"{index.name}  closed, size unknown" if index.closed
-            else f"{index.name}  {index.docs} events  {_human_size(index.size)}")
+    if index.closed:
+        return f"{index.name}  closed, size unknown"
+    if not index.counted:
+        return f"{index.name}  size unknown"
+    return f"{index.name}  {index.docs} events  {_human_size(index.size)}"
 
 
 def _doomed_summary(doomed) -> str:
-    """"N indices with E events (S)": a closed index has no counts, it is named apart."""
-    opened = [i for i in doomed if not i.closed]
-    closed = len(doomed) - len(opened)
-    size = _human_size(sum(i.size for i in opened))
-    if closed:
+    """"N indices with E events (S)": an index without counts (closed, or open without its primaries) is
+    named apart."""
+    counted = [i for i in doomed if i.counted]
+    unknown = len(doomed) - len(counted)
+    closed = sum(1 for i in doomed if i.closed)
+    size = _human_size(sum(i.size for i in counted))
+    if unknown and closed == unknown:
         size += f", not counting {_indices(closed)} that {'is' if closed == 1 else 'are'} closed, size unknown"
-    return f"{_indices(len(doomed))} with {sum(i.docs for i in opened)} events ({size})"
+    elif unknown:
+        size += f", not counting {_indices(unknown)} of unknown size" + (f", {closed} of them closed" if closed else "")
+    return f"{_indices(len(doomed))} with {sum(i.docs for i in counted)} events ({size})"
 
 
 def _retention_preview(chosen, new: str, console) -> None:

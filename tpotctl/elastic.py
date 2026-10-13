@@ -200,13 +200,20 @@ class Index:
     docs: int
     size: int           # bytes
     closed: bool = False    # a closed index has no counts: docs and size are 0 and unknown
+    unknown_size: bool = False  # no counts (closed, or open without its primaries: health red), 0 here
+
+    @property
+    def counted(self) -> bool:
+        """docs and size are what the index holds."""
+        return not (self.closed or self.unknown_size)
 
 
-def _number(row: dict, key: str, closed: bool) -> int:
-    """A count of a row of _cat/indices: Elasticsearch gives them as strings; a closed index has none (0)."""
+def _number(row: dict, key: str, nullable: bool) -> Optional[int]:
+    """A count of a row of _cat/indices: Elasticsearch gives them as strings, null where it does not know
+    them (a closed index, an open one without its primaries); None then, if nullable."""
     value = row.get(key)
-    if value is None and closed:
-        return 0
+    if value is None and nullable:
+        return None
     if isinstance(value, bool) or not isinstance(value, (int, str)):
         raise ValueError(key)
     return int(value)
@@ -229,8 +236,9 @@ def indices(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Lis
             if not isinstance(row, dict) or not isinstance(row.get("index"), str) or not row["index"]:
                 raise ValueError("index")
             closed = row.get("status") == "close"
-            found.append(Index(row["index"], _number(row, "creation.date", False) / 1000,
-                               _number(row, "docs.count", closed), _number(row, "store.size", closed), closed))
+            docs, size = _number(row, "docs.count", True), _number(row, "store.size", True)
+            found.append(Index(row["index"], _number(row, "creation.date", False) / 1000, docs or 0, size or 0,
+                               closed, closed or docs is None or size is None))
         except ValueError:
             raise unreadable
     return sorted(found, key=lambda i: i.created)
