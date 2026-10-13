@@ -1028,7 +1028,6 @@ if not cmdoutput.get("command", {}).get("ps"):
     fail(f"{selected} cmdoutput.json has no ps process list")
 package_managers = expected_package_managers[selected]
 for command_path in (
-    "bin/df",
     "bin/dmesg",
     "bin/mount",
     "bin/ulimit",
@@ -1037,6 +1036,14 @@ for command_path in (
 ):
     if not (txtcmds_path / command_path).is_file():
         fail(f"{selected} txtcmds is missing {command_path}")
+# df and awk are commands of the patched Cowrie over the persona's file system table
+if (txtcmds_path / "bin" / "df").exists():
+    fail(f"{selected} txtcmds still has bin/df")
+df_table = Path(config.get("shell", "df_table", fallback=""))
+if not df_table.is_file() or not json.loads(df_table.read_text(encoding="utf-8")).get("filesystems"):
+    fail(f"{selected} has no df table: {df_table}")
+if config.get("shell", "awk_style", fallback="") not in ("gawk", "mawk", "busybox"):
+    fail(f"{selected} has no awk style")
 for command_path in package_manager_paths:
     should_exist = Path(command_path).name in package_managers
     exists_in_pickle = find_node(pickle_tree, command_path) is not None
