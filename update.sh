@@ -2064,7 +2064,7 @@ function fuENV_VALUE () {
 # kept. Runs again without effect once BEELZEBUB_LLM_PROVIDER is there.
 function fuMIGRATE_BEELZEBUB_ENV () {
 	local myENVFILE="$1"
-	local myOLDMODEL myOLLAMAMODEL myHOST myAPIKEY myPROVIDER myMODEL myNEWFILE
+	local myOLDMODEL myOLLAMAMODEL myHOST myAPIKEY myPROVIDER myMODEL myNEWFILE myNOTMP
 	if grep -qE "^BEELZEBUB_LLM_PROVIDER[[:space:]]*[:=]" "${myENVFILE}" \
 	   || ! grep -qE "^BEELZEBUB_LLM_MODEL[[:space:]]*[:=]" "${myENVFILE}";
 	  then
@@ -2091,10 +2091,12 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	    ;;
 	esac
 	# The new text goes to a temporary file, not to a name next to .env: files of their own under
-	# such names stay untouched
+	# such names stay untouched; without one the warning goes into the summary as well
 	if ! myNEWFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-beelzebub.XXXXXX");
 	  then
-	    fuUI_WARN "No temporary file could be made, the Beelzebub settings of .env are not migrated, set them up as in env.example."
+	    myNOTMP="No temporary file could be made, the Beelzebub settings of .env are not migrated, set them up as in env.example."
+	    fuUI_WARN "${myNOTMP}"
+	    fuDID warn "${myNOTMP}"
 	    return 0
 	fi
 	# The old comments describe the old settings, the new block replaces the old assignment
@@ -2234,14 +2236,15 @@ function fuMERGE_ENV_KEYS () {
 	shift 2
 	local myVERSION myMARKER myKEY myKEYLINE myTARGET myCOMPOSE myADDED="" myOBSOLETE="" myKEPT=""
 	local myUSERFILE mySYSTEMFILE myMERGEFILE
+	local myNOTMP="No temporary file could be made, the new settings of env.example are not merged into .env, compare them with env.example."
 	[ -f "${myEXAMPLE}" ] && [ -f "${myENVFILE}" ] || return 0
 	myVERSION=$(grep -E "^TPOT_VERSION=" "${myEXAMPLE}" | tail -1 | cut -d= -f2-)
 	myMARKER=$(grep -n "^# NEVER MAKE CHANGES" "${myEXAMPLE}" | head -1 | cut -d: -f1)
 	# Temporary files, not names next to .env (.env.user, .env.merge ...): files of their own under
-	# these names stay untouched
-	myUSERFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-user.XXXXXX") || { fuUI_WARN "No temporary file could be made, the new settings of env.example are not merged into .env, compare them with env.example."; return 0; }
-	mySYSTEMFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-system.XXXXXX") || { rm -f "${myUSERFILE}"; fuUI_WARN "No temporary file could be made, the new settings of env.example are not merged into .env, compare them with env.example."; return 0; }
-	myMERGEFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-merge.XXXXXX") || { rm -f "${myUSERFILE}" "${mySYSTEMFILE}"; fuUI_WARN "No temporary file could be made, the new settings of env.example are not merged into .env, compare them with env.example."; return 0; }
+	# these names stay untouched; without them the warning goes into the summary as well
+	myUSERFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-user.XXXXXX") || { fuUI_WARN "${myNOTMP}"; fuDID warn "${myNOTMP}"; return 0; }
+	mySYSTEMFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-system.XXXXXX") || { rm -f "${myUSERFILE}"; fuUI_WARN "${myNOTMP}"; fuDID warn "${myNOTMP}"; return 0; }
+	myMERGEFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-merge.XXXXXX") || { rm -f "${myUSERFILE}" "${mySYSTEMFILE}"; fuUI_WARN "${myNOTMP}"; fuDID warn "${myNOTMP}"; return 0; }
 	for myKEY in $(fuENV_KEYS "${myEXAMPLE}");
 	  do
 	    fuENV_KEYS "${myENVFILE}" | grep -qx "${myKEY}" && continue

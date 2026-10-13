@@ -3085,6 +3085,10 @@ class UpdateRepairTest(Harness):
         self.assertEqual(len(warns), 2, warns)
         self.assertTrue(any("Beelzebub" in line for line in warns), warns)
         self.assertTrue(any("env.example" in line for line in warns), warns)
+        # the summary at the end names them too, with the same text
+        summary = [line for line in result.stdout.splitlines() if line.startswith("DID: warn: ")]
+        self.assertEqual([line[len("DID: warn: "):] for line in summary],
+                         [line[len("WARN: "):] for line in warns], result.stdout)
         self.assertEqual(self.read(env), "TPOT_TYPE=HIVE\nBEELZEBUB_LLM_MODEL=ollama\nBEELZEBUB_OLLAMA_MODEL=m1\n")
 
     # --- the log, the edition ----------------------------------------------------------------------
@@ -3136,6 +3140,9 @@ class UpdateRepairTest(Harness):
         for number, line in enumerate(read("update.sh").splitlines(), 1):
             code = line.strip()
             if code.startswith(("#", "echo")) or "fuUI_" in code:
+                continue
+            # a text for a message (a plain string, nothing run or read in it)
+            if re.fullmatch(r'(local )?my[A-Z_]+="[^"$`]*"', code):
                 continue
             if re.search(r'(^|[\s(!&|;])git (rev-parse|remote|fetch|reset|pull|checkout|branch|describe|ls-files)\b',
                          code):
