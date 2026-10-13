@@ -520,6 +520,41 @@ class TopProcpsTest(PatchedTest):
         top = session.run("Command_top", "-bn1", "-u", "root")
         self.assertTrue(all(" root " in r for r in top.out.split("\n")[7:] if r))
 
+    def test_numbers_of_options_are_ascii_digits(self):
+        # str.isdigit and int take digits top does not (superscripts, other scripts, > 4300 digits)
+        session = Session(self, target="capture")
+        for value in ("\u00b2", "\u0663", "9" * 5000, "1_0", " 5", "2147483648"):
+            with self.subTest(value=value[:12]):
+                top = session.run("Command_top", "-b", "-n", value)
+                self.assertEqual((top.err, top.code), (f"top: bad iterations argument '{value}'\n", 1))
+        for value in ("\u00b2", "\u0663", "1_0", "9" * 5000):
+            with self.subTest(delay=value[:12]):
+                top = session.run("Command_top", "-b", "-d", value)
+                self.assertEqual((top.err, top.code), (f"top: bad delay interval '{value}'\n", 1))
+        for value in ("1.5", "0,5", ".5", "2"):
+            self.assertEqual(session.run("Command_top", "-bn1", "-d", value).code, 0, value)
+        top = session.run("Command_top", "-bn1", "-p", "\u00b2,1," + "9" * 5000)
+        self.assertEqual(top.code, 0)
+        self.assertEqual([int(r.split()[0]) for r in top.out.split("\n")[7:] if r], [1])
+        # -w takes a following word only when it is a number: another word is no option of top
+        top = session.run("Command_top", "-bn1", "-w", "\u00b2")
+        self.assertEqual(top.code, 1)
+        self.assertTrue(top.err.startswith("top: unknown option"), top.err)
+        self.assertEqual(session.run("Command_top", "-bn1", "-w", "200").code, 0)
+
+    def test_top_exits_on_an_unexpected_error(self):
+        session = Session(self, target="capture")
+
+        def fail(*args):
+            raise RuntimeError("unexpected")
+
+        session.base["Command_top"].tpot_frame = fail
+        top = session.run("Command_top", "-bn1")
+        self.assertEqual((top.exited, top.code), (True, 1))
+        session.base["Command_top"].tpot_options = fail
+        top = session.run("Command_top", "-bn1")
+        self.assertEqual((top.exited, top.code), (True, 1))
+
     def test_without_a_ps_list_or_meminfo(self):
         session = Session(self, processes=[], files={}, target="capture")
         top = session.run("Command_top", "-bn1")

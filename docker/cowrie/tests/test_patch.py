@@ -1067,6 +1067,39 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(self.systemctl("ubuntu-noble", ["status", "ssh", "-n", "many"])[1:3],
                          ("Failed to parse lines 'many'\n", 1))
 
+    def test_systemctl_lines_are_a_number_of_systemd(self):
+        # safe_atou: ASCII digits up to 2^32-1; str.isdigit and int take others or fail on them
+        for value in ("\u00b2", "\u0663", "9" * 5000, "4294967296", "1_0", "+5", " 5"):
+            with self.subTest(value=value[:12]):
+                self.assertEqual(self.systemctl("ubuntu-noble", ["status", "ssh", "-n", value])[1:3],
+                                 (f"Failed to parse lines '{value}'\n", 1))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["status", "ssh", "--lines=4294967295"])[1:3], ("", 0))
+
+    def test_systemctl_exits_on_an_unexpected_error(self):
+        _, _, _, namespace, _ = self.systemctl("ubuntu-noble", ["--version"])
+
+        def fail():
+            raise RuntimeError("unexpected")
+
+        namespace["tpot_units"] = fail
+        cmd = FakeCommand([])
+        self.assertEqual(namespace["tpot_systemctl"](cmd, ["status", "ssh"]), 1)
+        command = namespace["Command_systemctl"](["status", "ssh"])
+        command.call()
+        self.assertEqual(command.exit_code, 1)
+
+    def test_dnf_and_rpm_exit_on_an_unexpected_error(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        namespace = run.commands["rpm"].call.__globals__
+
+        def fail(*args):
+            raise RuntimeError("unexpected")
+
+        namespace["tpot_dnf_data"] = fail
+        self.assertEqual(run("rpm -q bash")[2], 1)
+        self.assertEqual(run("dnf install -y nmap")[2], 1)
+        self.assertEqual(run("dnf list installed")[2], 1)
+
     def test_systemctl_state_and_type_select_the_units(self):
         out, _, code, namespace, _ = self.systemctl("ubuntu-noble", ["list-units", "--state=running", "--no-legend"])
         rows = out.splitlines()

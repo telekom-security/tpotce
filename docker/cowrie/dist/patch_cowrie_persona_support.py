@@ -1334,8 +1334,23 @@ def tpot_list_unit_files(cmd, data: dict, legend: bool, kinds: set = frozenset()
         cmd.write(f"\n{len(units)} unit files listed.\n")
 
 
+def tpot_number(value: str, limit: int) -> int | None:
+    # an unsigned number as strtoul of C reads it in these tools: ASCII digits only, at most limit
+    if not (0 < len(value) <= len(str(limit)) and value.isascii() and value.isdigit()):
+        return None
+    number = int(value)
+    return number if number <= limit else None
+
+
 def tpot_systemctl(cmd, args: list[str]) -> int:
-    # one systemctl call on cmd (a HoneyPotCommand); returns the exit status
+    # one systemctl call on cmd (a HoneyPotCommand); returns the exit status, 1 on an unexpected error
+    try:
+        return tpot_systemctl_run(cmd, args)
+    except Exception:  # noqa: BLE001 - the command always exits
+        return 1
+
+
+def tpot_systemctl_run(cmd, args: list[str]) -> int:
     data = tpot_units()
     version = int(data.get("version", 252))
     words, every, legend, quiet = [], False, True, False
@@ -1383,7 +1398,8 @@ def tpot_systemctl(cmd, args: list[str]) -> int:
         else:
             words.append(arg)
     lines = values.get("--lines")
-    if lines is not None and not lines.isdigit():
+    # safe_atou of systemd: 0 to 2^32-1
+    if lines is not None and tpot_number(lines, 0xFFFFFFFF) is None:
         cmd.errorWrite(f"Failed to parse lines '{lines}'\n")
         return 1
     kinds = {kind for kind in values.get("--type", "").split(",") if kind}
@@ -2521,6 +2537,13 @@ class Command_dnf(HoneyPotCommand):
 
     @inlineCallbacks
     def start(self):
+        try:
+            yield self.tpot_start()
+        except Exception:  # noqa: BLE001 - the command always exits
+            self.exit(1)
+
+    @inlineCallbacks
+    def tpot_start(self):
         words = self.tpot_parse()
         opts = self.tpot_opts
         self.tpot_quiet = bool(opts & {"-q", "--quiet"})
@@ -2800,6 +2823,13 @@ class Command_dnf(HoneyPotCommand):
 
     @inlineCallbacks
     def tpot_run(self):
+        try:
+            yield self.tpot_transaction()
+        except Exception:  # noqa: BLE001 - the command always exits
+            self.exit(1)
+
+    @inlineCallbacks
+    def tpot_transaction(self):
         kind, sections = self.tpot_pending
         self.tpot_pending = None
         rows = [(title, name, entry) for title, part in sections for name, entry in part]
@@ -3026,7 +3056,10 @@ class Command_rpm(HoneyPotCommand):
     """rpm of the persona: --version, -q / -qa / -qf (and query options as -q), -i / -U / -e."""
 
     def call(self) -> None:
-        self.exit_code = self.tpot_rpm()
+        try:
+            self.exit_code = self.tpot_rpm()
+        except Exception:  # noqa: BLE001 - the command always exits
+            self.exit_code = 1
 
     def tpot_rpm(self) -> int:
         data = tpot_dnf_data()
@@ -3424,10 +3457,36 @@ def tpot_top_user(name: str) -> str:
     return name if len(name) <= 8 else name[:7] + "+"
 
 
+def tpot_top_number(value: str, limit: int) -> int | None:
+    """A number of an option of top: ASCII digits only, at most limit (int would take other digits
+    and fail on more than 4300 of them)."""
+    if not (0 < len(value) <= len(str(limit)) and value.isascii() and value.isdigit()):
+        return None
+    number = int(value)
+    return number if number <= limit else None
+
+
 class Command_top(HoneyPotCommand):
     """T-Pot: top of the persona (see TOP_COMMAND)."""
 
     def start(self) -> None:
+        try:
+            self.tpot_start()
+        except Exception:  # noqa: BLE001 - the command always exits
+            self.tpot_fail()
+
+    def tpot_fail(self) -> None:
+        scheduled = getattr(self, "scheduled", None)
+        if scheduled is not None and scheduled.active():
+            scheduled.cancel()
+        self.scheduled = None
+        try:
+            self.tpot_restore()
+        except Exception:  # noqa: BLE001 - the command always exits
+            pass
+        self.exit(1)
+
+    def tpot_start(self) -> None:
         self.style = CowrieConfig.get("shell", "top_style", fallback="procps")
         version = CowrieConfig.get("shell", "procps_version", fallback="4.0.4")
         self.version = tuple(int(x) for x in re.findall(r"\d+", version)[:3]) or (4, 0, 4)
@@ -3506,7 +3565,7 @@ class Command_top(HoneyPotCommand):
                     return False
                 value, letters = letters, ""
                 if not value:
-                    if letter == "w" and (not args or not args[0].isdigit()):
+                    if letter == "w" and (not args or tpot_top_number(args[0], 0x7FFFFFFF) is None):
                         continue
                     if not args:
                         self.tpot_usage(f"-{letter} requires argument" if self.style != "busybox"
@@ -3519,19 +3578,18 @@ class Command_top(HoneyPotCommand):
 
     def tpot_option(self, letter: str, value: str) -> bool:
         if letter == "n":
-            try:
-                count = int(value)
-            except ValueError:
-                count = -1
-            if count < 0:
+            count = tpot_top_number(value, 0x7FFFFFFF)
+            if count is None:
                 self.errorWrite(f"top: bad iterations argument '{value}'\n")
                 self.exit(1)
                 return False
             self.limit = count
         elif letter == "d":
-            try:
+            # ASCII digits, one decimal point or comma, an exponent (float would take more)
+            if len(value) <= 64 and re.fullmatch(r"(?:[0-9]+(?:[.,][0-9]*)?|[.,][0-9]+)(?:[eE][+-]?[0-9]{1,3})?",
+                                                 value):
                 delay = float(value.replace(",", "."))
-            except ValueError:
+            else:
                 delay = -1.0
             if delay < 0 or delay != delay:
                 self.errorWrite(f"top: bad delay interval '{value}'\n")
@@ -3540,8 +3598,9 @@ class Command_top(HoneyPotCommand):
             self.delay = delay
         elif letter == "p":
             for item in value.split(","):
-                if item.strip().isdigit():
-                    self.pids.add(int(item))
+                pid = tpot_top_number(item.strip(), 0x7FFFFFFF)
+                if pid is not None:
+                    self.pids.add(pid)
         elif letter in ("u", "U"):
             self.users.add(value)
         return True
@@ -3549,6 +3608,12 @@ class Command_top(HoneyPotCommand):
     # --- frames -----------------------------------------------------------------------------
 
     def tpot_tick(self) -> None:
+        try:
+            self.tpot_draw()
+        except Exception:  # noqa: BLE001 - the command always exits
+            self.tpot_fail()
+
+    def tpot_draw(self) -> None:
         self.scheduled = None
         if self.protocol is None or self.protocol.terminal is None:
             return
