@@ -5056,6 +5056,1542 @@ def patch_df(cowrie_root):
     replace_once(path, 'commands["/bin/fgrep"] = Command_grep\n', 'commands["/bin/fgrep"] = Command_grep\n' + DF_COMMAND)
 
 
+# module code of the patched commands/awk.py after its commands: awk of the persona
+AWK_COMMAND = r'''
+
+# T-Pot: awk of the persona ([shell] awk_style gawk, mawk or busybox; awk_version). A small
+# interpreter for the awk that scripts run on the output of df, free, uptime, ps or
+# /proc/cpuinfo: BEGIN and END, patterns (expressions, /regex/), print and printf, if, while,
+# for, next, exit, variables, fields and the usual operators, and length, substr, index,
+# tolower, toupper, int, sprintf, sub and gsub. The program becomes a tree of tuples that is
+# walked; nothing of it is executed. Regular expressions run on TpotGrepMatcher, the automaton
+# of grep. Program, input, output, values, steps and nesting have limits; past one, awk ends
+# with status 2. The awk this leaves out (arrays, functions, getline, system, pipes and
+# redirections) ends awk with status 2 and no output; syntax errors read as those of the
+# persona's awk.
+import math
+
+from cowrie.commands.fs import TpotGrepMatcher
+from cowrie.core.config import CowrieConfig
+
+
+class TpotAwkStop(Exception):
+    """Ends awk with a status and a text for stderr (limits, run time errors, the awk left out)."""
+
+    def __init__(self, code: int = 2, text: str = "") -> None:
+        super().__init__(text)
+        self.code, self.text = code, text
+
+
+class TpotAwkSyntax(Exception):
+    def __init__(self, token, braces: int = 0) -> None:
+        super().__init__(token[4])
+        self.token, self.braces = token, braces
+
+
+class TpotAwkJump(Exception):
+    """next, exit, break and continue."""
+
+    def __init__(self, kind: str, code: int | None = None) -> None:
+        super().__init__(kind)
+        self.kind, self.code = kind, code
+
+
+class TpotAwkStrnum(str):
+    """A string of the input (a field, $0, -v): a number in comparisons when it looks like one."""
+
+
+class TpotAwkUninit(TpotAwkStrnum):
+    """The value of an unset variable or a missing field: 0 and "" at once."""
+
+
+TPOT_AWK_UNINIT = TpotAwkUninit("")
+TPOT_AWK_KEYWORDS = frozenset({"BEGIN", "END", "if", "else", "while", "for", "break", "continue", "next", "exit",
+                               "print", "printf"})
+# name: (fewest, most arguments)
+TPOT_AWK_FUNCTIONS = {"length": (0, 1), "substr": (2, 3), "index": (2, 2), "tolower": (1, 1), "toupper": (1, 1),
+                      "int": (1, 1), "sprintf": (1, 255), "sub": (2, 3), "gsub": (2, 3)}
+# the awk left out: words of every awk, then gawk's functions (names of variables elsewhere)
+TPOT_AWK_OTHER = frozenset({"function", "func", "getline", "delete", "in", "do", "return", "nextfile", "split",
+                            "match", "system", "close", "fflush", "srand", "rand", "sin", "cos", "atan2", "exp",
+                            "log", "sqrt"})
+TPOT_AWK_GAWK = frozenset({"gensub", "strftime", "systime", "mktime", "asort", "asorti", "patsplit", "strtonum",
+                           "and", "or", "xor", "lshift", "rshift", "compl", "isarray", "typeof"})
+TPOT_AWK_PUNCT = ("&&", "||", "==", "!=", "<=", ">=", "!~", "++", "--", "+=", "-=", "*=", "/=", "%=", "^=", ">>",
+                  "{", "}", "(", ")", ";", ",", "+", "-", "*", "/", "%", "^", "!", "<", ">", "~", "?", ":", "=",
+                  "$", "[", "]", "|")
+TPOT_AWK_ASSIGN = frozenset({"=", "+=", "-=", "*=", "/=", "%=", "^="})
+TPOT_AWK_COMPARE = {"<": lambda x, y: x < y, "<=": lambda x, y: x <= y, ">": lambda x, y: x > y,
+                    ">=": lambda x, y: x >= y, "==": lambda x, y: x == y, "!=": lambda x, y: x != y}
+TPOT_AWK_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", '"': '"', "/": "/", "a": "\a", "b": "\b",
+                    "f": "\f", "v": "\v"}
+TPOT_AWK_NUMBER = re.compile(r"[ \t\n\r\f\v]*([-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?)")
+TPOT_AWK_HEX = re.compile(r"[ \t\n\r\f\v]*([-+]?)0[xX]([0-9a-fA-F]+)")
+TPOT_AWK_LOOKS = re.compile(r"[ \t\n\r\f\v]*[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?[ \t\n\r\f\v]*")
+TPOT_AWK_LITERAL = re.compile(r"(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?")
+TPOT_AWK_BLANKS = re.compile(r"[ \t\n]+")
+TPOT_AWK_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=", re.S)
+TPOT_AWK_FORMAT = re.compile(r"%([-+ #0]*)(\*|[0-9]+)?(?:\.(\*|[0-9]*))?(.?)", re.S)
+TPOT_AWK_INTERVAL = re.compile(r"\{[0-9]+(,[0-9]*)?\}")
+TPOT_AWK_CLASSES = {"alpha": "a-zA-Z", "digit": "0-9", "alnum": "0-9a-zA-Z", "upper": "A-Z", "lower": "a-z",
+                    "space": " \\t\\n\\r\\f\\v", "blank": " \\t", "punct": "!-/:-@\\[-`{-~", "xdigit": "0-9A-Fa-f",
+                    "cntrl": "\\x00-\\x1f\\x7f", "print": " -~", "graph": "!-~"}
+
+
+def tpot_awk_unescape(raw: str, gawk: bool) -> str:
+    """The escape sequences of a string literal or -v value; gawk drops the backslash of an
+    unknown one, mawk and BusyBox keep it."""
+    def one(found):
+        d = found.group(1)
+        if d[0] in "01234567":
+            return chr(int(d, 8) & 255)
+        if d == "\n":
+            return ""
+        return TPOT_AWK_ESCAPES.get(d, d if gawk else "\\" + d)
+    return re.sub(r"\\([0-7]{1,3}|.)", one, raw, flags=re.S) if "\\" in raw else raw
+
+
+def tpot_awk_bytes(text: str) -> bytes:
+    """One byte per character (255 for any that is not ASCII), so match positions are characters."""
+    if text.isascii():
+        return text.encode("ascii")
+    return bytes(ord(c) if ord(c) < 128 else 255 for c in text)
+
+
+def tpot_awk_ere(source: str, intervals: bool) -> str:
+    """An awk extended regular expression in the syntax of Python's re: bracket classes, braces as
+    literals where the awk has no intervals, * + ? as literals where nothing precedes them."""
+    out, i, n, start = [], 0, len(source), True
+    while i < n:
+        c = source[i]
+        if c == "\\" and i + 1 < n:
+            d = source[i + 1]
+            out.append("\\" + d if d in "nrtfvsSwW" else re.escape(d))
+            i, start = i + 2, False
+            continue
+        if c == "[":
+            j, body = i + 1, []
+            if source.startswith("^", j):
+                body.append("^")
+                j += 1
+            if source.startswith("]", j):
+                body.append("\\]")
+                j += 1
+            while j < n and source[j] != "]":
+                if source.startswith("[:", j):
+                    end = source.find(":]", j + 2)
+                    name = source[j + 2:end] if end > 0 else ""
+                    if name not in TPOT_AWK_CLASSES:
+                        raise re.error("class")
+                    body.append(TPOT_AWK_CLASSES[name])
+                    j = end + 2
+                elif source[j] == "\\" and j + 1 < n:
+                    body.append("\\" + source[j + 1] if source[j + 1] in "nrtfv" else re.escape(source[j + 1]))
+                    j += 2
+                else:
+                    body.append("\\" + source[j] if source[j] in "[&~|" else source[j])
+                    j += 1
+            if j >= n:
+                raise re.error("unterminated [")
+            out.append("[" + "".join(body) + "]")
+            i, start = j + 1, False
+            continue
+        if c == "{":
+            found = TPOT_AWK_INTERVAL.match(source, i) if intervals and not start else None
+            if found:
+                out.append(found.group(0))
+                i, start = found.end(), False
+                continue
+            out.append("\\{")
+        elif c in "*+?":
+            out.append("\\" + c if start else c)
+        elif c == "(" and source.startswith("(?", i):
+            out.append("(\\?")
+            i += 1
+        elif c in "^$.|()":
+            out.append(c)
+        else:
+            out.append(re.escape(c) if c.isascii() else "\\xff")
+        start = c in "(|^"
+        i += 1
+    return "".join(out)
+
+
+class TpotAwkRegex:
+    """An awk regular expression on TpotGrepMatcher, in time that grows with the text: whether a
+    text has a match, and the leftmost longest match (sub, gsub, FS)."""
+
+    def __init__(self, awk, source: str) -> None:
+        self.awk = awk
+        try:
+            pattern = tpot_awk_ere(source, awk.intervals)
+            re.compile(pattern)
+            self.matcher = TpotGrepMatcher("".join(c if c.isascii() else "\\xff" for c in pattern).encode("ascii"))
+        except (re.error, RecursionError, OverflowError, TpotGrepMatcher.TooBig):
+            raise TpotAwkStop(2) from None
+        if not self.matcher.regular:
+            raise TpotAwkStop(2)
+
+    def search(self, text: str) -> bool:
+        data = tpot_awk_bytes(text)
+        self.awk.charge(len(data) // 32 + 1)
+        found = self.matcher.search(data)
+        if self.matcher.spent:
+            raise TpotAwkStop(2)
+        return bool(found)
+
+    def find(self, data: bytes, pos: int):
+        """(start, end) of the leftmost longest match at or after pos, None for none."""
+        m = self.matcher
+        kind, arg, out1, out2, cls, holds = m.kind, m.arg, m.out1, m.out2, m.CLASS, m.holds
+        n, best_start, best_end, threads, i = len(data), -1, -1, {}, pos
+        while True:
+            prev = cls[data[i - 1]] if i > 0 else 0
+            nxt = cls[data[i]] if i < n else 0
+            seeds = list(threads.items())
+            if best_start < 0:
+                seeds.append((m.start, i))
+            seen, current = {}, {}
+            for state, start in seeds:
+                stack = [state]
+                while stack:
+                    s = stack.pop()
+                    if s in seen:
+                        continue
+                    seen[s] = start
+                    k = kind[s]
+                    if k == 0:
+                        current[s] = start
+                    elif k == 1:
+                        stack.append(out1[s])
+                        if out2[s] >= 0:
+                            stack.append(out2[s])
+                    elif k == 2:
+                        if holds(arg[s], prev, nxt):
+                            stack.append(out1[s])
+                    elif best_start < 0 or start < best_start or (start == best_start and i > best_end):
+                        best_start, best_end = start, i
+            self.awk.charge(len(seen) + 1)
+            if best_start >= 0:
+                current = {s: st for s, st in current.items() if st <= best_start}
+            if i >= n or (not current and best_start >= 0):
+                break
+            b, threads = data[i], {}
+            for s, st in current.items():
+                if arg[s][b] and out1[s] not in threads:
+                    threads[out1[s]] = st
+            i += 1
+        return (best_start, best_end) if best_start >= 0 else None
+
+
+class TpotAwkLexer:
+    """The tokens of a program: (kind, value, line, column, text); the kind is the punctuation or
+    keyword itself, num, str, ere, name, func (a function here), call (any other f(), nl or eof."""
+
+    def __init__(self, awk, text: str) -> None:
+        self.awk, self.text = awk, text
+
+    def tokens(self) -> list:
+        text, n, out = self.text, len(self.text), []
+        i, line, line_start = 0, 1, 0
+        while True:
+            while i < n:
+                if text[i] in " \t\r":
+                    i += 1
+                elif text.startswith("\\\n", i):
+                    i, line, line_start = i + 2, line + 1, i + 2
+                elif text[i] == "#":
+                    while i < n and text[i] != "\n":
+                        i += 1
+                else:
+                    break
+            col = i - line_start
+            if i >= n:
+                out.append(("eof", "", line, col, "end of file"))
+                return out
+            c = text[i]
+            if c == "\n":
+                out.append(("nl", "\n", line, col, "end of line"))
+                i, line, line_start = i + 1, line + 1, i + 1
+                continue
+            if c == '"' or (c == "/" and self.regex_allowed(out)):
+                j = i + 1
+                bracket = False
+                while j < n and text[j] != "\n" and (text[j] != c or bracket):
+                    if text[j] == "\\" and j + 1 < n:
+                        j += 1
+                    elif c == "/" and text[j] in "[]":
+                        bracket = text[j] == "["
+                    j += 1
+                if j >= n or text[j] != c:
+                    raise TpotAwkSyntax(("str", "", line, col, text[i:j]))
+                raw = text[i + 1:j]
+                if c == '"':
+                    out.append(("str", tpot_awk_unescape(raw, self.awk.style == "gawk"), line, col, text[i:j + 1]))
+                else:
+                    out.append(("ere", raw, line, col, text[i:j + 1]))
+                i = j + 1
+                continue
+            found = TPOT_AWK_LITERAL.match(text, i) if c.isdigit() or c == "." else None
+            if found:
+                out.append(("num", float(found.group(0)), line, col, found.group(0)))
+                i = found.end()
+                continue
+            if c.isascii() and (c.isalpha() or c == "_"):
+                j = i
+                while j < n and text[j].isascii() and (text[j].isalnum() or text[j] == "_"):
+                    j += 1
+                word, call = text[i:j], text.startswith("(", j)
+                if word in TPOT_AWK_OTHER or (word in TPOT_AWK_GAWK and call):
+                    raise TpotAwkStop(2)
+                kind = word if word in TPOT_AWK_KEYWORDS else "func" if word in TPOT_AWK_FUNCTIONS \
+                    else "call" if call else "name"
+                out.append((kind, word, line, col, word))
+                i = j
+                continue
+            punct = next((p for p in TPOT_AWK_PUNCT if text.startswith(p, i)), None)
+            if punct is None:
+                raise TpotAwkSyntax(("?", c, line, col, c))
+            if punct in ("[", "]", "|", ">>"):  # arrays, pipes, appending output
+                raise TpotAwkStop(2)
+            out.append((punct, punct, line, col, punct))
+            i += len(punct)
+
+    @staticmethod
+    def regex_allowed(out: list) -> bool:
+        """Whether a / starts a regular expression (not a division after an operand)."""
+        if not out:
+            return True
+        kind = out[-1][0]
+        return kind not in ("num", "str", "ere", "name", "func", ")", "++", "--", "$")
+
+
+class TpotAwkParser:
+    """Recursive descent over the tokens. Rules are (kind, pattern, action) with the kind BEGIN,
+    END or main; statements and expressions are tuples whose first item names them."""
+
+    TERMINATORS = ("nl", ";", "}", "eof")
+
+    def __init__(self, awk, tokens: list) -> None:
+        self.awk, self.tokens, self.pos = awk, tokens, 0
+        self.depth = self.braces = 0
+        self.no_gt = False  # in the arguments of print, > is a redirection
+        self.undefined = None  # the first call of a function no program here defines
+
+    def peek(self):
+        return self.tokens[self.pos]
+
+    def kind(self) -> str:
+        return self.tokens[self.pos][0]
+
+    def take(self, kind: str | None = None):
+        token = self.tokens[self.pos]
+        if kind is not None and token[0] != kind:
+            raise TpotAwkSyntax(token, self.braces)
+        if token[0] != "eof":
+            self.pos += 1
+        return token
+
+    def fail(self):
+        return TpotAwkSyntax(self.peek(), self.braces)
+
+    def newlines(self) -> None:
+        while self.kind() == "nl":
+            self.pos += 1
+
+    def terms(self) -> None:
+        while self.kind() in ("nl", ";"):
+            self.pos += 1
+
+    def nested(self, method, *args):
+        self.depth += 1
+        if self.depth > self.awk.MAX_NESTING:
+            raise TpotAwkStop(2)
+        try:
+            return method(*args)
+        finally:
+            self.depth -= 1
+
+    def program(self) -> list:
+        rules = []
+        self.terms()
+        while self.kind() != "eof":
+            kind = self.kind()
+            if kind in ("BEGIN", "END"):
+                self.take()
+                if self.kind() != "{":
+                    raise self.fail()
+                rules.append((kind, None, self.block()))
+            elif kind == "{":
+                rules.append(("main", None, self.block()))
+            else:
+                pattern = self.expr()
+                if self.kind() == ",":  # range patterns
+                    raise TpotAwkStop(2)
+                if self.kind() == "{":
+                    rules.append(("main", pattern, self.block()))
+                elif self.kind() in ("nl", ";", "eof"):
+                    rules.append(("main", pattern, None))
+                else:
+                    raise self.fail()
+            self.terms()
+        return rules
+
+    def block(self):
+        self.take("{")
+        self.braces += 1
+        statements = []
+        self.terms()
+        while self.kind() != "}":
+            if self.kind() == "eof":
+                raise self.fail()
+            statements.append(self.nested(self.statement))
+            self.terms()
+        self.take("}")
+        self.braces -= 1
+        return ("block", statements)
+
+    def statement(self):
+        kind = self.kind()
+        if kind == "{":
+            return self.block()
+        if kind == ";":
+            self.take()
+            return ("block", [])
+        if kind == "if":
+            self.take()
+            cond = self.condition()
+            then, other = self.nested(self.statement), None
+            mark = self.pos
+            self.terms()
+            if self.kind() == "else":
+                self.take()
+                self.newlines()
+                other = self.nested(self.statement)
+            else:
+                self.pos = mark
+            return ("if", cond, then, other)
+        if kind == "while":
+            self.take()
+            cond = self.condition()
+            return ("while", cond, self.nested(self.statement))
+        if kind == "for":
+            self.take()
+            self.take("(")
+            init = None if self.kind() == ";" else self.simple_expr()
+            self.take(";")
+            self.newlines()
+            cond = None if self.kind() == ";" else self.expr()
+            self.take(";")
+            self.newlines()
+            step = None if self.kind() == ")" else self.simple_expr()
+            self.take(")")
+            self.newlines()
+            return ("for", init, cond, step, self.nested(self.statement))
+        statement = self.simple()
+        if self.kind() not in self.TERMINATORS:
+            raise self.fail()
+        return statement
+
+    def condition(self):
+        self.take("(")
+        cond = self.expr()
+        self.take(")")
+        self.newlines()
+        return cond
+
+    def simple_expr(self):
+        old, self.no_gt = self.no_gt, False
+        try:
+            return self.expr()
+        finally:
+            self.no_gt = old
+
+    def simple(self):
+        kind = self.kind()
+        if kind in ("print", "printf"):
+            self.take()
+            args = self.print_args()
+            if self.kind() in (">", "|"):  # output to a file or a command
+                raise TpotAwkStop(2)
+            if kind == "printf" and not args:
+                raise self.fail()
+            return (kind, args)
+        if kind in ("next", "break", "continue"):
+            self.take()
+            return (kind,)
+        if kind == "exit":
+            self.take()
+            return ("exit", None if self.kind() in self.TERMINATORS else self.expr())
+        return ("expr", self.expr())
+
+    def print_args(self) -> list:
+        if self.kind() in self.TERMINATORS or self.kind() in (">", "|"):
+            return []
+        if self.kind() == "(":  # print (a, b) or print (a) b
+            mark = self.pos
+            self.take()
+            items = self.nested(self.expr_list, False)
+            if self.kind() == ")":
+                self.take()
+                if self.kind() in self.TERMINATORS or self.kind() in (">", "|"):
+                    return items
+            self.pos = mark
+        return self.expr_list(True)
+
+    def expr_list(self, no_gt: bool) -> list:
+        old, self.no_gt = self.no_gt, no_gt
+        try:
+            items = [self.expr()]
+            while self.kind() == ",":
+                self.take()
+                self.newlines()
+                items.append(self.expr())
+            return items
+        finally:
+            self.no_gt = old
+
+    def expr(self):
+        left = self.ternary()
+        if self.kind() in TPOT_AWK_ASSIGN:
+            if left[0] not in ("var", "field"):
+                raise self.fail()
+            op = self.take()[0]
+            return ("assign", op, left, self.nested(self.expr))
+        return left
+
+    def ternary(self):
+        cond = self.binary_or()
+        if self.kind() != "?":
+            return cond
+        self.take()
+        self.newlines()
+        then = self.nested(self.ternary)
+        self.take(":")
+        self.newlines()
+        return ("cond", cond, then, self.nested(self.ternary))
+
+    def binary_or(self):
+        left = self.binary_and()
+        while self.kind() == "||":
+            self.take()
+            self.newlines()
+            left = ("or", left, self.binary_and())
+        return left
+
+    def binary_and(self):
+        left = self.match()
+        while self.kind() == "&&":
+            self.take()
+            self.newlines()
+            left = ("and", left, self.match())
+        return left
+
+    def match(self):
+        left = self.comparison()
+        while self.kind() in ("~", "!~"):
+            negate = self.take()[0] == "!~"
+            left = ("match", negate, left, self.comparison())
+        return left
+
+    def comparison(self):
+        left = self.concat()
+        kind = self.kind()
+        if kind in TPOT_AWK_COMPARE and not (kind == ">" and self.no_gt):
+            self.take()
+            return ("cmp", kind, left, self.concat())
+        return left
+
+    def concat(self):
+        left = self.additive()
+        while self.kind() in ("num", "str", "ere", "name", "func", "call", "$", "(", "++", "--"):
+            left = ("cat", left, self.additive())
+        return left
+
+    def additive(self):
+        left = self.multiplicative()
+        while self.kind() in ("+", "-"):
+            op = self.take()[0]
+            left = ("bin", op, left, self.multiplicative())
+        return left
+
+    def multiplicative(self):
+        left = self.unary()
+        while self.kind() in ("*", "/", "%"):
+            op = self.take()[0]
+            left = ("bin", op, left, self.unary())
+        return left
+
+    def unary(self):
+        kind = self.kind()
+        if kind in ("!", "-", "+"):
+            self.take()
+            return ({"!": "not", "-": "neg", "+": "plus"}[kind], self.nested(self.unary))
+        return self.power()
+
+    def power(self):
+        base = self.postfix()
+        if self.kind() == "^":
+            self.take()
+            if self.awk.style == "busybox":  # its ^ groups from the left
+                base = ("bin", "^", base, self.postfix())
+                while self.kind() == "^":
+                    self.take()
+                    base = ("bin", "^", base, self.postfix())
+                return base
+            return ("bin", "^", base, self.nested(self.unary))
+        return base
+
+    def postfix(self):
+        node = self.primary()
+        if node[0] in ("var", "field") and self.kind() in ("++", "--"):
+            return ("incr", False, 1.0 if self.take()[0] == "++" else -1.0, node)
+        return node
+
+    def lvalue(self):
+        node = self.nested(self.primary)
+        if node[0] not in ("var", "field"):
+            raise self.fail()
+        return node
+
+    def primary(self):
+        token = self.peek()
+        kind = token[0]
+        if kind in ("num", "str", "ere"):
+            self.take()
+            return (kind, token[1])
+        if kind == "name":
+            self.take()
+            return ("var", token[1])
+        if kind == "(":
+            self.take()
+            old, self.no_gt = self.no_gt, False
+            node = self.nested(self.expr)
+            self.no_gt = old
+            self.take(")")
+            return ("group", node)
+        if kind == "$":
+            self.take()
+            if self.kind() == "-":
+                self.take()
+                return ("field", ("neg", self.nested(self.primary)))
+            return ("field", self.nested(self.primary))
+        if kind in ("++", "--"):
+            self.take()
+            return ("incr", True, 1.0 if kind == "++" else -1.0, self.lvalue())
+        if kind in ("func", "call"):
+            self.take()
+            args = self.call_args() if self.kind() == "(" else None
+            if kind == "call":
+                self.undefined = self.undefined or token
+                return ("num", 0.0)
+            if args is None and token[1] != "length":
+                raise TpotAwkSyntax(token, self.braces)
+            args = args or []
+            fewest, most = TPOT_AWK_FUNCTIONS[token[1]]
+            if not fewest <= len(args) <= most or (token[1] in ("sub", "gsub") and len(args) == 3
+                                                     and args[2][0] not in ("var", "field")):
+                raise TpotAwkSyntax(token, self.braces)
+            return ("fn", token[1], args)
+        raise self.fail()
+
+    def call_args(self) -> list:
+        self.take("(")
+        args = [] if self.kind() == ")" else self.nested(self.expr_list, False)
+        self.take(")")
+        return args
+
+
+def tpot_awk_shallow(tree, limit: int) -> bool:
+    """Whether the program tree is at most limit levels deep (walked without recursion)."""
+    stack = [(tree, 0)]
+    while stack:
+        node, depth = stack.pop()
+        if depth > limit:
+            return False
+        stack.extend((child, depth + 1) for child in node if isinstance(child, (tuple, list)))
+    return True
+
+
+class TpotAwk:
+    """One run of an awk program over the persona's files and the piped input."""
+
+    MAX_PROGRAM = 64 * 1024  # characters of program text
+    MAX_INPUT = 1024 * 1024  # bytes of input one awk reads
+    MAX_OUTPUT = 1024 * 1024  # characters of output
+    MAX_STRING = 1024 * 1024  # characters of one value
+    MAX_STEPS = 2_000_000  # evaluated nodes, records and matcher work
+    MAX_NESTING = 32  # nested blocks, parentheses and operators while parsing
+    MAX_DEPTH = 200  # levels of the program tree
+    MAX_FIELDS = 32767
+    MAX_WIDTH = 4096  # width and precision of a printf conversion
+    PRINT = ("print", [])
+
+    def __init__(self, style: str, version: str, read_file, stdin: bytes | None) -> None:
+        self.style, self.version, self.read_file, self.stdin = style, version, read_file, stdin or b""
+        new_mawk = style == "mawk" and (version.split() + ["0"])[1] >= "20230000"
+        self.intervals = style != "mawk" or (version.split() + ["0"])[1] >= "20200717"
+        self.int_limit = 2.0 ** 31 if style == "mawk" and not new_mawk else 2.0 ** 63
+        self.source_name = "cmd. line"
+        self.out, self.err = [], []
+        self.written = self.steps = self.status = 0
+        self.vars = {"FS": " ", "OFS": " ", "ORS": "\n", "OFMT": "%.6g", "CONVFMT": "%.6g", "SUBSEP": "\x1c",
+                     "NR": 0.0, "FNR": 0.0, "NF": 0.0, "FILENAME": TPOT_AWK_UNINIT, "RS": "\n"}
+        self.record, self.fields, self.regexes, self.in_begin = TPOT_AWK_UNINIT, [], {}, True
+
+    # -- limits and messages
+
+    def charge(self, steps: int) -> None:
+        self.steps += steps
+        if self.steps > self.MAX_STEPS:
+            raise TpotAwkStop(2)
+
+    def cap(self, text: str) -> str:
+        if len(text) > self.MAX_STRING:
+            raise TpotAwkStop(2)
+        self.charge(len(text) >> 8)
+        return text
+
+    def emit(self, text: str) -> None:
+        self.written += len(text)
+        if self.written > self.MAX_OUTPUT:
+            raise TpotAwkStop(2)
+        self.out.append(text)
+
+    def fatal(self, gawk: str, mawk: str, busybox: str):
+        name, fnr, nr = self.text(self.vars["FILENAME"]), int(self.num(self.vars["FNR"])), int(self.num(self.vars["NR"]))
+        if self.style == "busybox":
+            raise TpotAwkStop(1, f"awk: cmd. line:1: {busybox}\n")
+        if self.style == "mawk":
+            raise TpotAwkStop(2, f'awk: run time error: {mawk}\n\tFILENAME="{name}" FNR={fnr} NR={nr}\n')
+        where = "" if self.in_begin else f"(FILENAME={name or '-'} FNR={fnr}) "
+        raise TpotAwkStop(2, f"awk: {self.source_name}:1: {where}fatal: {gawk}\n")
+
+    def syntax_message(self, error: TpotAwkSyntax, program: str) -> tuple:
+        kind, _, line, col, text = error.token
+        if self.style == "busybox":
+            return 1, f"awk: cmd. line:{line}: Unexpected token\n"
+        if self.style == "mawk":
+            if kind == "eof" and error.braces:
+                return 2, f"awk: line {program.count(chr(10)) + 2}: missing }} near end of file\n"
+            return 2, f"awk: line {line}: syntax error at or near {text}\n"
+        source = (program.split("\n") + [""])[line - 1]
+        where = f"awk: {self.source_name}:{line}: "
+        what = "unexpected newline or end of string" if kind in ("nl", "eof") else "syntax error"
+        return 1, f"{where}{source}\n{where}{' ' * col}^ {what}\n"
+
+    def undefined_message(self, token, program: str) -> tuple:
+        if self.style == "busybox":
+            return 1, f"awk: cmd. line:{token[2]}: Call to undefined function\n"
+        if self.style == "mawk":
+            return 2, f"awk: line {program.count(chr(10)) + 2}: function {token[1]} never defined\n"
+        return 2, f"awk: {self.source_name}:{token[2]}: fatal: function `{token[1]}' not defined\n"
+
+    # -- values
+
+    def num(self, value) -> float:
+        if isinstance(value, float):
+            return value
+        if not value:
+            return 0.0
+        if self.style != "gawk":
+            found = TPOT_AWK_HEX.match(value)
+            if found:
+                digits = found.group(2)
+                number = float(int(digits, 16)) if len(digits) <= 256 else math.inf
+                return -number if found.group(1) == "-" else number
+        found = TPOT_AWK_NUMBER.match(value)
+        return float(found.group(1)) if found else 0.0
+
+    def num_text(self, x: float, fmt) -> str:
+        if x != x:
+            return ("-" if math.copysign(1.0, x) < 0 else "+" if self.style == "gawk" else "") + "nan"
+        if x in (math.inf, -math.inf):
+            return ("-" if x < 0 else "+" if self.style == "gawk" else "") + "inf"
+        if x == int(x) and abs(x) < self.int_limit:
+            return str(int(x))
+        if not isinstance(fmt, str) or fmt == "%.6g":
+            return "%.6g" % x
+        return self.format(fmt, [x])
+
+    def text(self, value) -> str:
+        if not isinstance(value, float):
+            return value
+        return self.num_text(value, "%.6g" if self.style == "busybox" else self.vars["CONVFMT"])
+
+    def out_text(self, value) -> str:
+        return self.num_text(value, self.vars["OFMT"]) if isinstance(value, float) else value
+
+    def numeric(self, value) -> bool:
+        return isinstance(value, (float, TpotAwkUninit)) or (
+            isinstance(value, TpotAwkStrnum) and TPOT_AWK_LOOKS.fullmatch(value) is not None)
+
+    def truth(self, value) -> bool:
+        if isinstance(value, TpotAwkStrnum) and self.numeric(value):
+            return self.num(value) != 0
+        return value != 0 if isinstance(value, float) else value != ""
+
+    def integer(self, value) -> int:
+        x = self.num(value)
+        return int(x) if math.isfinite(x) else 0
+
+    def regex(self, source: str) -> TpotAwkRegex:
+        found = self.regexes.get(source)
+        if found is None:
+            if len(self.regexes) >= 64:
+                self.regexes.clear()
+            self.charge(len(source) + 16)
+            found = self.regexes[source] = TpotAwkRegex(self, source)
+        return found
+
+    def regex_of(self, node) -> TpotAwkRegex:
+        return self.regex(node[1] if node[0] == "ere" else self.text(self.value(node)))
+
+    # -- records and fields
+
+    def split(self, text: str) -> list:
+        fs = self.text(self.vars["FS"])
+        if not text:
+            return []
+        if fs == " ":
+            text = text.strip(" \t\n")
+            return TPOT_AWK_BLANKS.split(text) if text else []
+        if len(fs) == 1 and fs != "\\" or not any(c in fs for c in "\\^$.[]|()*+?{}"):
+            return text.split(fs) if fs else list(text)
+        regex, data, fields, start, pos = self.regex(fs), tpot_awk_bytes(text), [], 0, 0
+        while pos <= len(text):
+            found = regex.find(data, pos)
+            if found is None:
+                break
+            if found[0] == found[1]:
+                pos = found[0] + 1
+                continue
+            fields.append(text[start:found[0]])
+            start = pos = found[1]
+        fields.append(text[start:])
+        return fields
+
+    def set_record(self, text: str) -> None:
+        self.record = TpotAwkStrnum(self.cap(text))
+        self.fields = [TpotAwkStrnum(field) for field in self.split(text)]
+        self.charge(len(self.fields) >> 4)
+        self.vars["NF"] = float(len(self.fields))
+
+    def rebuild(self) -> None:
+        self.vars["NF"] = float(len(self.fields))
+        self.record = TpotAwkStrnum(self.cap(self.text(self.vars["OFS"]).join(self.text(f) for f in self.fields)))
+
+    def field_index(self, value) -> int:
+        x = self.num(value)
+        if x < 0:
+            self.fatal(f"attempt to access field {int(x)}", f"negative field index ${int(x)}",
+                       "Access to negative field")
+        return int(min(x, 2.0 ** 31)) if x == x else 0
+
+    def field(self, index: int):
+        if index == 0:
+            return self.record
+        return self.fields[index - 1] if index <= len(self.fields) else TPOT_AWK_UNINIT
+
+    def set_field(self, index: int, value) -> None:
+        if index == 0:
+            self.set_record(self.text(value))
+            return
+        self.set_nf(float(max(index, len(self.fields))))
+        self.fields[index - 1] = value
+        self.rebuild()
+
+    def set_nf(self, value) -> None:
+        count = self.integer(value)
+        if count < 0 or count > self.MAX_FIELDS:
+            raise TpotAwkStop(2)
+        self.charge(abs(count - len(self.fields)))
+        self.fields = self.fields[:count] + [TPOT_AWK_UNINIT] * (count - len(self.fields))
+        self.rebuild()
+
+    def get(self, target):
+        if target[0] == "var":
+            return self.vars.get(target[1], TPOT_AWK_UNINIT)
+        return self.field(self.field_index(self.value(target[1])))
+
+    def set(self, target, value) -> None:
+        if target[0] == "field":
+            self.set_field(self.field_index(self.value(target[1])), value)
+        elif target[1] == "NF":
+            self.set_nf(value)
+        else:
+            self.vars[target[1]] = value
+
+    # -- expressions
+
+    def value(self, node):
+        self.steps += 1
+        if self.steps > self.MAX_STEPS:
+            raise TpotAwkStop(2)
+        op = node[0]
+        if op in ("num", "str"):
+            return node[1]
+        if op == "var":
+            return self.vars.get(node[1], TPOT_AWK_UNINIT)
+        if op == "field":
+            return self.field(self.field_index(self.value(node[1])))
+        if op == "group":
+            return self.value(node[1])
+        if op == "ere":
+            return 1.0 if self.regex(node[1]).search(self.record) else 0.0
+        if op == "cmp":
+            return 1.0 if self.compare(node[1], self.value(node[2]), self.value(node[3])) else 0.0
+        if op == "match":
+            subject = self.text(self.value(node[2]))
+            return 1.0 if self.regex_of(node[3]).search(subject) != node[1] else 0.0
+        if op == "and":
+            return 1.0 if self.truth(self.value(node[1])) and self.truth(self.value(node[2])) else 0.0
+        if op == "or":
+            return 1.0 if self.truth(self.value(node[1])) or self.truth(self.value(node[2])) else 0.0
+        if op == "not":
+            return 0.0 if self.truth(self.value(node[1])) else 1.0
+        if op == "neg":
+            return -self.num(self.value(node[1]))
+        if op == "plus":
+            return self.num(self.value(node[1]))
+        if op == "cat":
+            return self.cap(self.text(self.value(node[1])) + self.text(self.value(node[2])))
+        if op == "bin":
+            return self.arith(node[1], self.num(self.value(node[2])), self.num(self.value(node[3])))
+        if op == "cond":
+            return self.value(node[2] if self.truth(self.value(node[1])) else node[3])
+        if op == "assign":
+            _, kind, target, expr = node
+            value = self.value(expr)
+            if kind != "=":
+                value = self.arith(kind[0], self.num(self.get(target)), self.num(value))
+            self.set(target, value)
+            return value
+        if op == "incr":
+            _, pre, delta, target = node
+            old = self.num(self.get(target))
+            self.set(target, old + delta)
+            return old + delta if pre else old
+        return self.builtin(node[1], node[2])
+
+    def compare(self, op: str, a, b) -> bool:
+        if self.numeric(a) and self.numeric(b):
+            return TPOT_AWK_COMPARE[op](self.num(a), self.num(b))
+        return TPOT_AWK_COMPARE[op](self.text(a), self.text(b))
+
+    def arith(self, op: str, x: float, y: float) -> float:
+        if op == "+":
+            return x + y
+        if op == "-":
+            return x - y
+        if op == "*":
+            return x * y
+        if op == "^":
+            try:
+                return math.pow(x, y)
+            except OverflowError:
+                return math.inf
+            except ValueError:
+                return math.nan
+        if y == 0:
+            if self.style != "mawk":
+                self.fatal("division by zero attempted" + (" in `%'" if op == "%" else ""), "", "Division by zero")
+            return math.nan if op == "%" or x == 0 or x != x else math.copysign(math.inf, x)
+        try:
+            return x / y if op == "/" else math.fmod(x, y)
+        except ValueError:
+            return math.nan
+
+    def builtin(self, name: str, args: list):
+        if name == "length":
+            return float(len(self.text(self.value(args[0])) if args else self.record))
+        if name in ("sub", "gsub"):
+            return self.substitute(name == "gsub", args)
+        values = [self.value(arg) for arg in args]
+        text = self.text(values[0])
+        if name == "substr":
+            start = self.num(values[1])
+            if not math.isfinite(start):
+                return ""
+            start = max(1, int(max(min(start, 2.0 ** 31), -2.0 ** 31)))
+            if len(values) == 2:
+                return text[start - 1:]
+            length = self.num(values[2])
+            if not length > 0:
+                return ""
+            return text[start - 1:start - 1 + int(min(length, 2.0 ** 31))]
+        if name == "index":
+            return float(text.find(self.text(values[1])) + 1)
+        if name == "tolower":
+            return text.lower() if text.isascii() else "".join(c.lower() if c.isascii() else c for c in text)
+        if name == "toupper":
+            return text.upper() if text.isascii() else "".join(c.upper() if c.isascii() else c for c in text)
+        if name == "int":
+            x = self.num(values[0])
+            return float(math.trunc(x)) if math.isfinite(x) else x
+        return self.format(text, values[1:])
+
+    def substitute(self, every: bool, args: list) -> float:
+        regex = self.regex_of(args[0])
+        template = self.text(self.value(args[1]))
+        target = args[2] if len(args) == 3 else ("field", ("num", 0.0))
+        text = self.text(self.get(target))
+        data, out, size, pos, last, count = tpot_awk_bytes(text), [], 0, 0, -1, 0
+        while pos <= len(text):
+            found = regex.find(data, pos)
+            if found is None:
+                break
+            start, end = found
+            if len(template) + template.count("&") * (end - start) > self.MAX_STRING:
+                raise TpotAwkStop(2)
+            if start == end == last:  # no empty match right after a match
+                out.append(text[start:start + 1])
+                pos = start + 1
+                continue
+            piece = text[pos:start] + self.replacement(template, text[start:end])
+            out.append(piece)
+            size += len(piece)
+            if size > self.MAX_STRING:
+                raise TpotAwkStop(2)
+            count, last, pos = count + 1, end, end
+            if not every:
+                break
+            if start == end:
+                out.append(text[start:start + 1])
+                pos = start + 1
+        if count:
+            out.append(text[pos:])
+            self.set(target, self.cap("".join(out)))
+        return float(count)
+
+    @staticmethod
+    def replacement(template: str, matched: str) -> str:
+        """The replacement text of sub and gsub: & is the match, \\& a literal &, \\\\ a backslash."""
+        if "&" not in template and "\\" not in template:
+            return template
+        out, i = [], 0
+        while i < len(template):
+            c = template[i]
+            if c == "\\" and template[i + 1:i + 2] in ("&", "\\"):
+                out.append(template[i + 1])
+                i += 2
+                continue
+            out.append(matched if c == "&" else c)
+            i += 1
+        return "".join(out)
+
+    def format(self, fmt: str, args: list) -> str:
+        """printf and sprintf: the conversions of C's printf (c d i o x X u e E f F g G s %)."""
+        out, pos, used, size = [], 0, 0, 0
+        while True:
+            i = fmt.find("%", pos)
+            if i < 0:
+                out.append(fmt[pos:])
+                break
+            out.append(fmt[pos:i])
+            found = TPOT_AWK_FORMAT.match(fmt, i)
+            flags, width, precision, conv = found.groups()
+            pos = found.end()
+            if conv == "%":
+                out.append("%")
+                continue
+            if conv == "" or conv not in "cdiouxXeEfFgGs":
+                out.append(fmt[i:pos])
+                continue
+            if width == "*":
+                width, used = str(self.integer(args[used]) if used < len(args) else 0), used + 1
+            if precision == "*":
+                precision, used = str(self.integer(args[used]) if used < len(args) else 0), used + 1
+            if width and width.startswith("-"):
+                flags, width = flags + "-", width[1:]
+            if int(width or 0) > self.MAX_WIDTH or int(precision or 0) > self.MAX_WIDTH:
+                raise TpotAwkStop(2)
+            value = args[used] if used < len(args) else TPOT_AWK_UNINIT
+            used += 1
+            spec = "%" + flags + (width or "") + ("" if precision is None else "." + (precision or "0"))
+            if conv == "s":
+                piece = (spec + "s") % self.text(value)
+            elif conv == "c":
+                if isinstance(value, float) or (isinstance(value, TpotAwkStrnum) and self.numeric(value)):
+                    code = self.integer(value)
+                    char = chr(code) if 0 <= code < 256 else ""
+                else:
+                    char = value[:1]
+                piece = (spec.split(".")[0] + "s") % char
+            else:
+                x = self.num(value)
+                if conv in "eEfFgG":
+                    piece = (spec + conv) % x
+                elif not math.isfinite(x):
+                    piece = (spec.replace("0", "").split(".")[0] + "s") % self.num_text(x, "%.6g")
+                else:
+                    n = int(x)
+                    if self.style == "mawk" and self.int_limit == 2.0 ** 31:
+                        n = max(-2147483647, min(2147483647, n))
+                    if conv in "ouxX" and n < 0:
+                        n += 2 ** 64
+                    piece = (spec + ("d" if conv in "iu" else conv)) % n
+                    if conv == "o" and "#" in flags:
+                        piece = piece.replace("0o", "0", 1)
+            out.append(piece)
+            size += len(piece)
+            if size > self.MAX_STRING:
+                raise TpotAwkStop(2)
+        return self.cap("".join(out))
+
+    # -- statements and the run
+
+    def execute(self, node) -> None:
+        self.charge(1)
+        op = node[0]
+        if op == "block":
+            for statement in node[1]:
+                self.execute(statement)
+        elif op == "expr":
+            self.value(node[1])
+        elif op == "print":
+            items = [self.out_text(self.value(arg)) for arg in node[1]] if node[1] else [self.record]
+            ofs, ors = self.text(self.vars["OFS"]), self.text(self.vars["ORS"])
+            if sum(map(len, items)) + len(ofs) * len(items) + len(ors) + self.written > self.MAX_OUTPUT:
+                raise TpotAwkStop(2)
+            self.emit(ofs.join(items) + ors)
+        elif op == "printf":
+            values = [self.value(arg) for arg in node[1]]
+            self.emit(self.format(self.text(values[0]), values[1:]))
+        elif op == "if":
+            branch = node[2] if self.truth(self.value(node[1])) else node[3]
+            if branch is not None:
+                self.execute(branch)
+        elif op in ("while", "for"):
+            init, cond, step, body = (None, node[1], None, node[2]) if op == "while" else node[1:]
+            if init is not None:
+                self.value(init)
+            while cond is None or self.truth(self.value(cond)):
+                try:
+                    self.execute(body)
+                except TpotAwkJump as jump:
+                    if jump.kind == "break":
+                        break
+                    if jump.kind != "continue":
+                        raise
+                if step is not None:
+                    self.value(step)
+        elif op == "exit":
+            raise TpotAwkJump("exit", None if node[1] is None else self.integer(self.value(node[1])) & 255)
+        else:
+            raise TpotAwkJump(op)
+
+    def action(self, node) -> None:
+        """One action; next, break and continue outside of their place end it."""
+        try:
+            self.execute(node)
+        except TpotAwkJump as jump:
+            if jump.kind == "exit":
+                raise
+
+    def assign_operand(self, text: str) -> None:
+        name, _, value = text.partition("=")
+        self.set(("var", name), TpotAwkStrnum(tpot_awk_unescape(value, self.style == "gawk")))
+
+    def open(self, name: str):
+        data = self.read_file(name)
+        if data == "dir":
+            if self.style == "gawk":
+                self.err.append(f"awk: warning: command line argument `{name}' is a directory: skipped\n")
+                return None
+            if self.style == "mawk":
+                raise TpotAwkStop(2, "awk: read error (Is a directory)\n")
+            raise TpotAwkStop(1, "awk: cmd. line:1: Is a directory\n")
+        if not isinstance(data, bytes):
+            if self.style == "busybox":
+                self.err.append(f"awk: {name}: No such file or directory\n")
+                self.status = 1
+                return None
+            if self.style == "mawk":
+                raise TpotAwkStop(2, f"awk: cannot open {name} (No such file or directory)\n")
+            where = "" if self.num(self.vars["NR"]) == 0 else f"{self.source_name}:1: "
+            raise TpotAwkStop(2, f"awk: {where}fatal: cannot open file `{name}' for reading: "
+                                 "No such file or directory\n")
+        return data
+
+    def records(self, operands: list):
+        files = [name for name in operands if not TPOT_AWK_ASSIGNMENT.match(name)]
+        read = 0
+        for name in operands + ([] if files else [None]):
+            if name is not None and TPOT_AWK_ASSIGNMENT.match(name):
+                self.assign_operand(name)
+                continue
+            if name in (None, "-", "/dev/stdin"):
+                data, label = self.stdin, "-" if name or self.style == "mawk" else ""
+            else:
+                data, label = self.open(name), name
+                if data is None:
+                    continue
+            data = data[:max(0, self.MAX_INPUT - read)]
+            read += len(data)
+            self.vars["FILENAME"], self.vars["FNR"] = label, 0.0
+            lines = data.decode("utf-8", errors="replace").split("\n")
+            if lines[-1] == "":
+                lines.pop()
+            for line in lines:
+                self.charge(1)
+                self.vars["NR"] = self.num(self.vars["NR"]) + 1
+                self.vars["FNR"] = self.num(self.vars["FNR"]) + 1
+                self.set_record(line)
+                yield
+
+    def run(self, program: str, operands: list) -> int:
+        try:
+            if len(program) > self.MAX_PROGRAM:
+                raise TpotAwkStop(2)
+            try:
+                parser = TpotAwkParser(self, TpotAwkLexer(self, program).tokens())
+                rules = parser.program()
+            except TpotAwkSyntax as error:
+                raise TpotAwkStop(*self.syntax_message(error, program)) from None
+            if parser.undefined:
+                raise TpotAwkStop(*self.undefined_message(parser.undefined, program))
+            if not tpot_awk_shallow(rules, self.MAX_DEPTH):
+                raise TpotAwkStop(2)
+            return self.main(rules, operands)
+        except TpotAwkStop as stop:
+            self.err.append(stop.text)
+            return stop.code
+        except RecursionError:
+            return 2
+
+    def main(self, rules: list, operands: list) -> int:
+        code = None
+        main = [(pattern, action) for kind, pattern, action in rules if kind == "main"]
+        try:
+            for kind, _, action in rules:
+                if kind == "BEGIN":
+                    self.action(action)
+            self.in_begin = False
+            if main or any(kind == "END" for kind, _, _ in rules):
+                for _ in self.records(operands):
+                    for pattern, action in main:
+                        if pattern is None or self.truth(self.value(pattern)):
+                            try:
+                                self.execute(action or self.PRINT)
+                            except TpotAwkJump as jump:
+                                if jump.kind == "exit":
+                                    raise
+                                if jump.kind == "next":
+                                    break
+        except TpotAwkJump as jump:
+            code = jump.code
+        self.in_begin = False
+        try:
+            for kind, _, action in rules:
+                if kind == "END":
+                    self.action(action)
+        except TpotAwkJump as jump:
+            code = jump.code if jump.code is not None else code
+        return self.status if code is None else code
+
+
+TPOT_AWK_GPL = """This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see http://www.gnu.org/licenses/.
+"""
+TPOT_AWK_GAWK_VERSIONS = {
+    "5.1.0": "GNU Awk 5.1.0, API: 3.0 (GNU MPFR 4.1.0-p9, GNU MP 6.2.0)\nCopyright (C) 1989, 1991-2020 Free Software "
+             "Foundation.\n",
+    "4.1.4": "GNU Awk 4.1.4, API: 1.1 (GNU MPFR 4.0.1, GNU MP 6.1.2)\nCopyright (C) 1989, 1991-2016 Free Software "
+             "Foundation.\n",
+    "4.0.2": "GNU Awk 4.0.2\nCopyright (C) 1989, 1991-2012 Free Software Foundation.\n",
+}
+TPOT_AWK_GAWK_USAGE = """Usage: awk [POSIX or GNU style options] -f progfile [--] file ...
+Usage: awk [POSIX or GNU style options] [--] 'program' file ...
+POSIX options:\t\tGNU long options: (standard)
+\t-f progfile\t\t--file=progfile
+\t-F fs\t\t\t--field-separator=fs
+\t-v var=val\t\t--assign=var=val
+Short options:\t\tGNU long options: (extensions)
+\t-b\t\t\t--characters-as-bytes
+\t-c\t\t\t--traditional
+\t-C\t\t\t--copyright
+\t-d[file]\t\t--dump-variables[=file]
+\t-D[file]\t\t--debug[=file]
+\t-e 'program-text'\t--source='program-text'
+\t-E file\t\t\t--exec=file
+\t-g\t\t\t--gen-pot
+\t-h\t\t\t--help
+{include}{lint}{bignum}\t-N\t\t\t--use-lc-numeric
+\t-n\t\t\t--non-decimal-data
+\t-o[file]\t\t--pretty-print[=file]
+\t-O\t\t\t--optimize
+\t-p[file]\t\t--profile[=file]
+\t-P\t\t\t--posix
+\t-r\t\t\t--re-interval
+{no_optimize}\t-S\t\t\t--sandbox
+\t-t\t\t\t--lint-old
+\t-V\t\t\t--version
+
+{bugs}
+gawk is a pattern scanning and processing language.
+By default it reads standard input and writes standard output.
+
+Examples:
+\tawk '{{ sum += $1 }}; END {{ print sum }}' file
+\tawk -F: '{{ print $1 }}' /etc/passwd
+"""
+TPOT_AWK_MAWK_USAGE = """Usage: mawk [Options] [Program] [file ...]
+
+Program:
+    The -f option value is the name of a file containing program text.
+    If no -f option is given, a "--" ends option processing; the following
+    parameters are the program text.
+
+Options:
+    -f program-file  Program  text is read from file instead of from the
+                     command-line.  Multiple -f options are accepted.
+    -F value         sets the field separator, FS, to value.
+    -v var=value     assigns value to program variable var.
+    --               unambiguous end of options.
+
+    Implementation-specific options are prefixed with "-W".  They can be
+    abbreviated:
+
+    -W version       show version information and exit.
+{compat}    -W dump          show assembler-like listing of program and exit.
+    -W help          show this message and exit.
+    -W interactive   set unbuffered output, line-buffered input.
+    -W exec file     use file as program as well as last option.
+{posix}    -W random=number set initial random seed.
+    -W sprintf=number adjust size of sprintf buffer.
+{posix_space}    -W usage         show this message and exit.
+"""
+
+
+def tpot_awk_gawk_usage(version: str) -> str:
+    new, old = version.startswith("5"), version.startswith("4.0")
+    return TPOT_AWK_GAWK_USAGE.format(
+        include="" if old else "\t-i includefile\t\t--include=includefile\n\t-l library\t\t--load=library\n",
+        lint="\t-L[fatal|invalid|no-ext]\t--lint[=fatal|invalid|no-ext]\n" if new else
+        "\t-L [fatal]\t\t--lint[=fatal]\n" if old else "\t-L[fatal|invalid]\t--lint[=fatal|invalid]\n",
+        bignum="" if old else "\t-M\t\t\t--bignum\n",
+        no_optimize="\t-s\t\t\t--no-optimize\n" if new else "",
+        bugs=("To report bugs, see node `Bugs' in `gawk.info'\nwhich is section `Reporting Problems and Bugs' in "
+              "the\nprinted version.  This same information may be found at\n"
+              "https://www.gnu.org/software/gawk/manual/html_node/Bugs.html.\n"
+              "PLEASE do NOT try to report bugs by posting in comp.lang.awk,\nor by using a web forum such as "
+              "Stack Overflow.\n") if new else
+        ("To report bugs, see node `Bugs' in `gawk.info', which is\nsection `Reporting Problems and Bugs' in the "
+         "printed version.\n"))
+
+
+def tpot_awk_mawk_usage(version: str) -> str:
+    if version.startswith("1.3.3"):
+        return ("usage: mawk [-F value] [-v var=value] [--] 'program text' [file ...]\n"
+                "usage: mawk [-F value] [-v var=value] [-f program-file] [--] [file ...]\n")
+    new = (version.split() + ["0"])[1] >= "20230000"
+    return TPOT_AWK_MAWK_USAGE.format(
+        compat="    -W compat        pre-POSIX 2001.\n" if new else "",
+        posix="    -W posix         stricter POSIX checking.\n" if new else "",
+        posix_space="" if new else '    -W posix_space   do not consider "\\n" a space.\n')
+
+
+def tpot_awk_mawk_version(version: str) -> str:
+    if version.startswith("1.3.3"):
+        return "mawk 1.3.3 Nov 1996, Copyright (C) Michael D. Brennan\n\ncompiled limits:\nmax NF             32767\n" \
+               "sprintf buffer      2040\n"
+    date = (version.split() + ["20200120"])[1]
+    year, new = date[:4], date >= "20230000"
+    previous = str(int(year) - 1) if year.isdigit() else "2019"
+    return (f"mawk 1.3.4 {date}\nCopyright 2008-{previous},{year}, Thomas E. Dickey\n"
+            "Copyright 1991-1996,2014, Michael D. Brennan\n\n"
+            f"random-funcs:       {'arc4random_stir/arc4random' if new else 'srandom/random'}\n"
+            "regex-funcs:        internal\n" + ("\n" if new else "") + "compiled limits:\nsprintf buffer      8192\n"
+            f"maximum-integer     {'9223372036854775808' if new else '2147483647'}\n")
+
+
+def tpot_awk_busybox_usage(banner: str) -> str:
+    head = f"{banner} multi-call binary.\n\n" if banner else ""
+    found = re.match(r"BusyBox v(\d+)\.(\d+)", banner or "")
+    version = (int(found.group(1)), int(found.group(2))) if found else (1, 24)
+    if version < (1, 15):
+        return (f"{head}Usage: awk [OPTION]... [program-text] [FILE...]\n\nOptions:\n"
+                "\t-v var=val\tSet variable\n\t-F sep\t\tUse sep as field separator\n"
+                "\t-f file\t\tRead program from file\n")
+    text = (f"{head}Usage: awk [OPTIONS] [AWK_PROGRAM] [FILE]...\n\n\t-v VAR=VAL\tSet variable\n"
+            "\t-F SEP\t\tUse SEP as field separator\n\t-f FILE\t\tRead program from FILE\n")
+    return text + ("\t-e AWK_PROGRAM\n" if version >= (1, 26) else "")
+
+
+class Command_tpot_awk(Command_awk):
+    """awk of the persona: the options, help and version texts of its awk; TpotAwk runs the program."""
+
+    def start(self) -> None:
+        style = CowrieConfig.get("shell", "awk_style", fallback="gawk")
+        self.style = style if style in ("gawk", "mawk", "busybox") else "gawk"
+        self.version = CowrieConfig.get("shell", "awk_version", fallback="") or (
+            {"gawk": "5.1.0", "mawk": "1.3.4 20200120"}.get(self.style, ""))
+        self.tpot_out, self.tpot_err = [], []
+        try:
+            code = self.tpot_run(list(self.args))
+        except Exception:  # noqa: BLE001 - awk ends, the session goes on
+            code = 2
+        if self.tpot_out:
+            self.write("".join(self.tpot_out))
+        if self.tpot_err:
+            self.errorWrite("".join(self.tpot_err))
+        self.exit_code = code
+        self.exit()
+
+    def tpot_read(self, name: str):
+        """The contents of a file of the emulated file system, "dir" for a directory, None if missing."""
+        path = self.fs.resolve_path(name, self.cwd)
+        try:
+            return "dir" if self.fs.isdir(path) else self.fs.file_contents(path)
+        except Exception:  # noqa: BLE001 - a missing or unreadable file
+            return None
+
+    def tpot_usage(self, gawk: str = "", mawk: str = "", busybox: str = "") -> int:
+        """A wrong option or no program: the message of the persona's awk (none: its usage)."""
+        if self.style == "mawk":
+            self.tpot_err.append(f"awk: {mawk}\n" if mawk else tpot_awk_mawk_usage(self.version))
+            return 2 if mawk else 0
+        text = busybox if self.style == "busybox" else gawk
+        usage = tpot_awk_busybox_usage(self.version) if self.style == "busybox" else tpot_awk_gawk_usage(self.version)
+        self.tpot_err.append((f"awk: {text}\n" if text else "") + usage)
+        return 1
+
+    def tpot_version(self) -> int:
+        """--version, -V or -W version; mawk before 2023 writes its compiled limits to stderr."""
+        if self.style == "mawk" and (self.version.split() + ["0"])[1] < "20230000":
+            out, _, err = tpot_awk_mawk_version(self.version).partition("\n\n")
+            self.tpot_out.append(out + "\n\n")
+            self.tpot_err.append(err)
+        elif self.style == "mawk":
+            self.tpot_out.append(tpot_awk_mawk_version(self.version))
+        else:
+            self.tpot_out.append(TPOT_AWK_GAWK_VERSIONS.get(self.version, f"GNU Awk {self.version}\n") + "\n"
+                                 + TPOT_AWK_GPL)
+        return 0
+
+    def tpot_run(self, args: list) -> int:
+        style, gawk = self.style, self.style == "gawk"
+        awk = TpotAwk(style, self.version, self.tpot_read, self.input_data)
+        self.tpot_out, self.tpot_err = awk.out, awk.err
+        sources, index = [], 0
+        new_mawk = style == "mawk" and (self.version.split() + ["0"])[1] >= "20230000"
+        while index < len(args):
+            arg = args[index]
+            if arg == "--":
+                index += 1
+                break
+            if not arg.startswith("-") or arg == "-":
+                break
+            index += 1
+            if arg.startswith("--"):
+                option, eq, value = arg[2:].partition("=")
+                if (gawk or new_mawk) and option in ("version", "help", "usage"):
+                    if option == "version":
+                        return self.tpot_version()
+                    awk.out.append(tpot_awk_gawk_usage(self.version) if gawk else tpot_awk_mawk_usage(self.version))
+                    return 0
+                if not gawk or option not in ("field-separator", "assign", "file", "source"):
+                    return self.tpot_usage("", f"not an option: {arg}", f"unrecognized option '{arg}'")
+                if not eq:
+                    if index >= len(args):
+                        return self.tpot_usage(f"option '{arg}' requires an argument")
+                    value, index = args[index], index + 1
+                letters = {"field-separator": "F", "assign": "v", "file": "f", "source": "e"}
+                pairs = [(letters[option], value)]
+            else:
+                pairs, position = [], 1
+                while position < len(arg):
+                    letter = arg[position]
+                    position += 1
+                    if letter in "FvfW" or (
+                            letter == "e" and (gawk or "-e AWK_PROGRAM" in tpot_awk_busybox_usage(self.version))):
+                        value = arg[position:]
+                        if not value:
+                            if index >= len(args):
+                                return self.tpot_usage(f"option requires an argument -- {letter}",
+                                                       f"option -{letter} lacks argument",
+                                                       f"option requires an argument -- '{letter}'")
+                            value, index = args[index], index + 1
+                        pairs.append((letter, value))
+                        break
+                    if gawk and letter == "V":
+                        return self.tpot_version()
+                    if gawk and letter == "h":
+                        awk.out.append(tpot_awk_gawk_usage(self.version))
+                        return 0
+                    if not (gawk and letter in "bcCdDgMnNoOpPrsStL"):
+                        return self.tpot_usage("", f"not an option: -{letter}", f"invalid option -- '{letter}'")
+            for letter, value in pairs:
+                if letter == "F":
+                    value = tpot_awk_unescape(value, gawk)
+                    awk.vars["FS"] = "\t" if gawk and value == "t" else value
+                elif letter == "v":
+                    if not TPOT_AWK_ASSIGNMENT.match(value):
+                        return self.tpot_usage(f"`{value}' argument to `-v' not in `var=value' form\n",
+                                               f"improper assignment: -v {value}")
+                    awk.assign_operand(value)
+                elif letter == "W":
+                    word = value.split("=", 1)[0]
+                    if style == "busybox":
+                        awk.err.append("awk: warning: option -W is ignored\n")
+                    elif word and "version".startswith(word):
+                        return self.tpot_version()
+                    elif word and ("usage".startswith(word) or "help".startswith(word)):
+                        awk.out.append(tpot_awk_gawk_usage(self.version) if gawk else tpot_awk_mawk_usage(self.version))
+                        return 0
+                else:
+                    sources.append((letter, value))
+        operands = args[index:]
+        texts = []
+        for letter, value in sources:
+            if letter == "e":
+                texts.append(value)
+                continue
+            data = self.tpot_read(value)
+            if not isinstance(data, bytes):
+                if style == "busybox":
+                    awk.err.append(f"awk: can't open '{value}': No such file or directory\n")
+                    return 1
+                awk.err.append(f"awk: cannot open {value} (No such file or directory)\n" if style == "mawk" else
+                               f"awk: fatal: cannot open source file `{value}' for reading: No such file or directory\n")
+                return 2
+            texts.append(data.decode("utf-8", errors="replace"))
+            awk.source_name = value
+        if texts:
+            program = "\n".join(texts)
+        elif operands:
+            program = operands.pop(0)
+        else:
+            return self.tpot_usage()
+        return awk.run(program, operands)
+
+
+commands["/bin/awk"] = Command_tpot_awk
+commands["/usr/bin/awk"] = Command_tpot_awk
+commands["awk"] = Command_tpot_awk
+'''
+
+
+def patch_awk(cowrie_root):
+    """awk of the persona (AWK_COMMAND after the commands of awk.py): a small interpreter for
+    the awk of scripts, regular expressions on the grep automaton (TpotGrepMatcher of the
+    patched fs.py). Runs after patch_grep."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "awk.py"
+    replace_once(path, 'commands["/bin/awk"] = Command_awk\ncommands["awk"] = Command_awk\n',
+                 'commands["/bin/awk"] = Command_awk\ncommands["awk"] = Command_awk\n' + AWK_COMMAND)
+
+
 def patch_prompt(cowrie_root):
     """[shell] prompt_style = redhat gives the bash PS1 of RHEL / CentOS,
     [\\u@\\h \\W]\\$ (short host name, basename of the cwd, ~ for home); anything
@@ -5261,6 +6797,7 @@ def main():
     patch_ps_top(cowrie_root)
     patch_grep(cowrie_root)
     patch_df(cowrie_root)
+    patch_awk(cowrie_root)
     patch_prompt(cowrie_root)
     patch_shell_errors(cowrie_root)
     patch_telnet_banner(cowrie_root)

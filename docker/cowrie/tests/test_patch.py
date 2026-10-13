@@ -280,6 +280,23 @@ class PatchTest(unittest.TestCase):
         find = self.lookup({}, commands, skip="df", shipped=shipped)
         self.assertEqual(find("/bin/df"), ("txtcmd", "df of Cowrie\n"))
 
+    def test_awk_of_the_persona_follows_the_commands_of_awk_py(self):
+        root = self.patched()
+        source = (root / "src/cowrie/commands/awk.py").read_text()
+        self.assertIn('commands["/bin/awk"] = Command_awk\ncommands["awk"] = Command_awk\n\n\n# T-Pot: awk', source)
+        fs = module_all((root / "src/cowrie/commands/fs.py").read_text(),
+                        {"HoneyPotCommand": FakeCommand, "fs": object(), "CowrieConfig": FakeConfig({})})
+        config = FakeConfig({("shell", "awk_style"): "mawk", ("shell", "awk_version"): "1.3.4 20240123"})
+        namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "TpotGrepMatcher": fs["TpotGrepMatcher"],
+                                        "CowrieConfig": config})
+        commands = namespace["commands"]
+        for name in ("/bin/awk", "/usr/bin/awk", "awk"):
+            self.assertIs(commands[name], namespace["Command_tpot_awk"], name)
+        self.assertTrue(issubclass(namespace["Command_tpot_awk"], namespace["Command_awk"]))
+        command = commands["awk"](["NR==2{print $2}"], input_data=b"total used\nMem: 7834 1203\n")
+        command.start()
+        self.assertEqual((bytes(command.out), command.exit_code), (b"7834\n", 0))
+
     def test_links_resolve_from_their_directory(self):
         from tpot_personas.identity import draw
         from tpot_personas.render import apply_to_tree
@@ -2570,6 +2587,8 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/fs.py", 'commands["/bin/fgrep"] = Command_grep\n',
                   'commands["/bin/fgrep"] = Command_grep  # fgrep\n'),
                  ("src/cowrie/commands/fs.py", "import copy\nimport getopt\n", "import copy\nimport getopt as g\n"),
+                 ("src/cowrie/commands/awk.py", 'commands["awk"] = Command_awk\n',
+                  'commands["awk"] = Command_awk  # awk\n'),
                  ("src/cowrie/commands/fs.py", "from cowrie.shell import fs\n", "from cowrie.shell import fs as f\n"),
                  ("src/cowrie/commands/fs.py", "from typing import TYPE_CHECKING\n",
                   "from typing import TYPE_CHECKING, Any\n"),
