@@ -469,7 +469,7 @@ class PackageNamesTest(unittest.TestCase):
 
     def test_names_of_the_release_and_of_the_persona(self):
         samples = {"debian-bookworm": ("htop", "raspi-config"), "debian-trixie": ("htop", "ubuntu-server"),
-                   "ubuntu-noble": ("ubuntu-server", "raspi-config"), "ubuntu-jammy": ("ubuntu-server", "dnf"),
+                   "ubuntu-noble": ("ubuntu-server", "raspi-config"), "ubuntu-jammy": ("ubuntu-server", "raspi-config"),
                    "gpu-ubuntu": ("htop", "yum"), "raspios": ("raspi-config", "ubuntu-server"),
                    "centos-7": ("bash", "htop"), "openwrt": ("htop packages", "apt base")}
         for persona in catalog.PERSONAS:
@@ -480,7 +480,7 @@ class PackageNamesTest(unittest.TestCase):
             if persona.id not in samples:
                 continue
             lines = path.read_text().splitlines()
-            self.assertEqual(lines, sorted(set(lines)), persona.id)
+            self.assertEqual(len(lines), len(set(lines)), persona.id)
             has, lacks = samples[persona.id]
             self.assertIn(has, lines, persona.id)
             self.assertNotIn(lacks, lines, persona.id)
@@ -494,9 +494,40 @@ class PackageNamesTest(unittest.TestCase):
                 installed = dict(e.split(" ", 1) for e in cfg_of(out).get("shell", "yum_installed").split(","))
                 self.assertEqual(installed, ident.release.packages)
 
+    def test_names_of_the_kernel_virtual_names_and_providers(self):
+        for pid in ("debian-bookworm", "debian-trixie", "ubuntu-noble", "ubuntu-jammy", "raspios", "gpu-ubuntu"):
+            persona = catalog.by_id(pid)
+            ident = draw(persona, 2)
+            lines = system.package_names(persona, ident)
+            names = {line for line in lines if " " not in line}
+            virtuals = dict(line.split(" ") for line in lines if " " in line)
+            release = ident.release.kernel_version
+            self.assertIn(f"linux-headers-{release}", names, pid)
+            self.assertIn(f"linux-image-{release}", names, pid)
+            self.assertIn("awk", virtuals, pid)
+            self.assertFalse(set(virtuals) & names, pid)
+            for providers in virtuals.values():
+                self.assertFalse(set(providers.split(",")) - names, pid)
+            unavailable = system.apt_packages(persona, ident)["unavailable"]
+            self.assertFalse(set(unavailable) & (names | set(virtuals)), pid)
+            self.assertEqual("yum" in unavailable, ident.release.extra["codename"] in ("bookworm", "noble"), pid)
+            if pid == "gpu-ubuntu":
+                branch = ident.release.extra["nvidia_driver"].split(".")[0]
+                for name in (f"nvidia-driver-{branch}", f"nvidia-utils-{branch}", f"nvidia-driver-{branch}-server"):
+                    self.assertIn(name, names, name)
+        for pid, sample in (("ubuntu-noble", "steam-installer"), ("ubuntu-noble", "intel-microcode"),
+                            ("raspios", "firmware-misc-nonfree")):
+            persona = catalog.by_id(pid)
+            self.assertIn(sample, system.package_names(persona, draw(persona, 2)), (pid, sample))
+        persona = catalog.by_id("centos-7")
+        lines = system.package_names(persona, draw(persona, 2))
+        self.assertIn("nc nmap-ncat", lines)
+        self.assertIn("mysql mariadb", lines)
+        self.assertNotIn("nmap-ncat", {line.split(" ")[0] for line in lines if " " in line})
+
     def test_name_lists_stay_small(self):
         files = sorted(system.NAMES_DIR.glob("*.txt.gz"))
-        self.assertEqual([f.name for f in files], ["apt.txt.gz", "opkg.txt.gz", "yum.txt.gz"])
+        self.assertEqual([f.name for f in files], ["apt-virtual.txt.gz", "apt.txt.gz", "opkg.txt.gz", "yum.txt.gz"])
         self.assertLess(sum(f.stat().st_size for f in files), 300_000)
         for row in system._name_rows("apt.txt.gz"):
             self.assertTrue(len(row) == 2 and set(row[1]) <= set("btrjn"), row)

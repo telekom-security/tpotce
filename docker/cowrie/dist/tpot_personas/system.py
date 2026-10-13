@@ -1539,7 +1539,9 @@ def sudo_list(persona):
 APT_PROGRAMS = {"busybox": ("usr/bin/busybox",)}
 # packages apt knows by name but has no candidate for (Debian 12 / 13, Ubuntu 22.04 / 24.04): yum of
 #   Red Hat ("Package yum is not available, but is referred to by another package")
-APT_UNAVAILABLE = ("yum",)
+# names a release refers to but has no package of (apt: "is not available, but is referred to by another
+#   package"; checked on debian:12 and ubuntu:24.04; jammy and trixie do not know yum at all)
+APT_UNAVAILABLE = {"bookworm": ("yum",), "noble": ("yum",)}
 
 
 def apt_programs(name):
@@ -1570,7 +1572,8 @@ def apt_packages(persona, ident):
     return {"installed": installed, "available": available,
             "programs": {name: apt_programs(name) for name in available},
             "answers": session_answers(path for name in available for path in apt_programs(name)),
-            "unavailable": [name for name in APT_UNAVAILABLE if name not in installed and name not in available]}
+            "unavailable": [name for name in APT_UNAVAILABLE.get(code, ()) if name not in installed
+                            and name not in available]}
 
 
 # the name lists of the releases (built by docker/cowrie/tools/build_package_names.py, sources in the
@@ -1681,17 +1684,34 @@ def opkg_keys(persona, ident, runtime_dir):
             "opkg_help": f"{runtime_dir}/{OPKG_HELP_FILE}", "package_names": f"{runtime_dir}/{PACKAGE_NAMES}"}
 
 
+def kernel_package_names(persona, ident):
+    """The packages of the persona's running kernel (uname -r): its image and headers, on Ubuntu its
+    modules too (linux-headers-$(uname -r) installs)."""
+    release = ident.release.kernel_version
+    names = {f"linux-image-{release}", f"linux-headers-{release}"}
+    if persona.family == "ubuntu":
+        names |= {f"linux-modules-{release}", f"linux-modules-extra-{release}"}
+    return names
+
+
 def package_names(persona, ident):
     """The lines of the runtime file of the names apt (Debian, Ubuntu, Raspberry Pi OS), yum 3
     (CentOS 7) or opkg (OpenWrt: "name feed") know on the persona's release: the names of the
-    release's indexes and the packages of the persona; None for the other personas."""
+    release's indexes, of its kernel and the packages of the persona; apt adds its virtual names
+    ("name provider,..."), yum the names its packages provide ("name package"); the names apt has
+    no candidate for are none of them. None for the other personas."""
     if persona.kind == "server" and has_dpkg(persona):
         letter = "r" if persona.family == "raspios" else APT_NAME_RELEASES[ident.release.extra["codename"]]
-        names = {row[0] for row in _name_rows("apt.txt.gz") if letter in row[1]}
         data = apt_packages(persona, ident)
-        return sorted(names | set(data["installed"]) | set(data["available"]))
+        names = ({row[0] for row in _name_rows("apt.txt.gz") if letter in row[1]} | set(data["installed"])
+                 | set(data["available"]) | kernel_package_names(persona, ident)) - set(data["unavailable"])
+        virtuals = [f"{row[0]} {row[2]}" for row in _name_rows("apt-virtual.txt.gz")
+                    if letter in row[1] and row[0] not in names and row[0] not in data["unavailable"]]
+        return sorted(names) + sorted(virtuals)
     if persona.family == "centos":
-        return sorted({row[0] for row in _name_rows("yum.txt.gz")} | set(ident.release.packages))
+        rows = _name_rows("yum.txt.gz")
+        names = {row[0] for row in rows if len(row) == 1} | set(ident.release.packages)
+        return sorted(names) + sorted(f"{row[0]} {row[1]}" for row in rows if len(row) == 2 and row[0] not in names)
     if persona.family == "openwrt":
         letter = OPKG_NAME_RELEASES[opkg_branch(ident)]
         return [f"{row[0]} {row[2]}" for row in _name_rows("opkg.txt.gz") if letter in row[1]]

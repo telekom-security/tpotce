@@ -255,13 +255,13 @@ TPOT_PERL_ATTACHED = "CDFiImMdx"
 TPOT_CODE_LIMIT = 65536
 TPOT_OUTPUT_LIMIT = 1 << 20
 TPOT_ABORTED = "Execution of -e aborted due to compilation errors.\n"
-TPOT_PERL_STOP = re.compile(r"[/`#<]|(?<![\w$@%&])(?:qq|qw|qx|qr|tr|q|m|s|y)\s*+[^\w\s,;)=]")
+TPOT_PERL_STOP = re.compile(r"[/`#<]|(?<![\w$@%&])(?:qq|qw|qx|qr|tr|q|m|s|y)\s*+[^\w\s,;)=]", re.ASCII)
 TPOT_PERL_ITEM = r"""(?:"[^"\\]*+(?:\\.[^"\\]*+)*+"|'[^'\\]*+(?:\\.[^'\\]*+)*+'|-?(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,15})?|\$\w+|\$\{\w+\})"""
 # possessive quantifiers (*+): long whitespace is read once, never backtracked
 TPOT_PERL_LIST = re.compile(
-    rf"\s*+(\(\s*+)?((?:{TPOT_PERL_ITEM}(?:\s*+,\s*+{TPOT_PERL_ITEM})*+\s*+,?)?)\s*+(?(1)\))\s*+", re.S
+    rf"\s*+(\(\s*+)?((?:{TPOT_PERL_ITEM}(?:\s*+,\s*+{TPOT_PERL_ITEM})*+\s*+,?)?)\s*+(?(1)\))\s*+", re.S | re.ASCII
 )
-TPOT_PERL_ITEMS = re.compile(TPOT_PERL_ITEM, re.S)
+TPOT_PERL_ITEMS = re.compile(TPOT_PERL_ITEM, re.S | re.ASCII)
 TPOT_PERL_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "a": "\a", "e": "\x1b", "f": "\f", "0": "\0"}
 TPOT_PERL_INTERPOLATION = re.compile(r"\\x([0-9a-fA-F]{1,2})|\\(.)|\$(\w+|\{\w+\})(\[|\{|->)?|@\w", re.S)
 
@@ -1769,15 +1769,26 @@ def tpot_apt_data() -> dict[str, dict[str, str]]:
 
 
 @functools.cache
-def tpot_apt_names() -> frozenset[str] | None:
-    \"\"\"T-Pot: the names of the release's packages ([shell] package_names, one per line), None
-    without the key (every name is found then).\"\"\"
+def tpot_apt_lists() -> tuple[frozenset[str], tuple[str, ...], dict[str, list[str]]] | None:
+    \"\"\"T-Pot: what apt finds on the release ([shell] package_names): the names of its packages (one
+    per line), the same sorted for globs, and its virtual names with their providers ("name
+    provider,..."); None without the key (every name is found then).\"\"\"
     path = tpot_apt("package_names", "")
+    if not path:
+        return None
     try:
-        return frozenset(line.split(" ", 1)[0] for line in Path(path).read_text(encoding="utf-8").splitlines()
-                         if line) if path else None
+        rows = [line.split(" ") for line in Path(path).read_text(encoding="utf-8").splitlines() if line]
     except (OSError, ValueError):
         return None
+    names = frozenset(row[0] for row in rows if len(row) == 1)
+    virtuals = {row[0]: row[1].split(",") for row in rows if len(row) == 2}
+    return names, tuple(sorted(names)), virtuals
+
+
+def tpot_apt_names() -> frozenset[str] | None:
+    \"\"\"T-Pot: the names of the release's packages, None without [shell] package_names.\"\"\"
+    lists = tpot_apt_lists()
+    return lists[0] if lists else None
 
 
 # T-Pot: the characters that make apt try a name as a glob and (apt-get) as a regular expression
@@ -1785,13 +1796,26 @@ TPOT_APT_GLOB = ".?*[]!"
 TPOT_APT_REGEX = ".?+*|[^$"
 TPOT_APT_GLOBS = 16
 TPOT_APT_GLOB_MATCHES = 64
+# the lock of dpkg for a user who is not root (apt 2.4 to 3.0)
+TPOT_APT_LOCK = ("E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)\\n"
+                 "E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?\\n")
+TPOT_APT_WARNING = "\\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\\n\\n"
+# an install sleeps up to 6 s per package, all packages of one run together at most about 60 s
+TPOT_APT_PACE = 10
 
 
-def tpot_apt_glob(word: str, names: frozenset[str] | None) -> list[str]:
+def tpot_apt_glob(word: str) -> list[str]:
     \"\"\"T-Pot: the names of the release a glob (nginx*, ht?p) matches, at most TPOT_APT_GLOB_MATCHES.\"\"\"
-    if names is None or not re.fullmatch(r"[a-z0-9+.*?\\[\\]-]{1,64}", word) or not set(word) & set("*?["):
+    lists = tpot_apt_lists()
+    if lists is None or not re.fullmatch(r"[a-z0-9+.*?\\[\\]-]{1,64}", word) or not set(word) & set("*?["):
         return []
-    return [name for name in sorted(names) if fnmatch.fnmatchcase(name, word)][:TPOT_APT_GLOB_MATCHES]
+    found = []
+    for name in lists[1]:
+        if fnmatch.fnmatchcase(name, word):
+            found.append(name)
+            if len(found) == TPOT_APT_GLOB_MATCHES:
+                break
+    return found
 
 
 def tpot_apt_missing(word: str, prog: str) -> str:
@@ -1802,6 +1826,68 @@ def tpot_apt_missing(word: str, prog: str) -> str:
     if prog == "apt-get" and set(word) & set(TPOT_APT_REGEX):
         text += f"E: Couldn't find any package by regex '{word}'\\n"
     return text
+
+
+def tpot_apt_three() -> bool:
+    \"\"\"T-Pot: apt 2.9 and later (Debian 13): the apt program writes Error: and its new layout.\"\"\"
+    version = re.match(r"(\\d+)\\.(\\d+)", tpot_apt("apt_version", ""))
+    return bool(version) and (int(version.group(1)), int(version.group(2))) >= (2, 9)
+
+
+def tpot_apt_tty(cmd) -> bool:
+    \"\"\"T-Pot: stdout of the command is the terminal of an interactive session.\"\"\"
+    targets = getattr(cmd.pp, "targets", None) or {}
+    return (targets.get(1) or ("",))[0] == "terminal" and not hasattr(cmd.protocol, "execcmd")
+
+
+def tpot_apt_errors(cmd, text: str) -> str:
+    \"\"\"T-Pot: the error lines (E: ...) as the program writes them: apt on a terminal in colour,
+    apt 2.9 and later as Error:; apt-get as they are.\"\"\"
+    if getattr(cmd, "tpot_prog", "apt-get") != "apt":
+        return text
+    three, tty = tpot_apt_three(), tpot_apt_tty(cmd)
+    lines = []
+    for line in text.splitlines():
+        if not line.startswith("E: "):
+            lines.append(line)
+        elif three:
+            lines.append(f"\\x1b[1;31mError: \\x1b[0m\\x1b[1m{line[3:]}\\x1b[0m" if tty else f"Error: {line[3:]}")
+        else:
+            lines.append(f"\\x1b[1;31mE: \\x1b[0m{line[3:]}\\x1b[0m" if tty else line)
+    return "".join(line + "\\n" for line in lines)
+
+
+def tpot_apt_head(cmd) -> str:
+    \"\"\"T-Pot: the progress lines before apt's answer: "... Done" on a terminal (where apt 2.9 and
+    later clears them), without "Done" elsewhere.\"\"\"
+    if not tpot_apt("apt_version", ""):
+        return "Reading package lists... Done\\nBuilding dependency tree\\nReading state information... Done\\n"
+    if tpot_apt_tty(cmd):
+        if getattr(cmd, "tpot_prog", "apt-get") == "apt" and tpot_apt_three():
+            return ""
+        return "Reading package lists... Done\\nBuilding dependency tree... Done\\nReading state information... Done\\n"
+    return "Reading package lists...\\nBuilding dependency tree...\\nReading state information...\\n"
+
+
+def tpot_apt_bytes(size: float) -> str:
+    \"\"\"T-Pot: a size as apt writes it (SizeToStr: 57.9 kB, 173 kB, 210 GB).\"\"\"
+    for unit in ("", "k", "M", "G", "T", "P"):
+        if size < 100 and unit:
+            return f"{size:.1f} {unit}B"
+        if size < 10000:
+            return f"{size:.0f} {unit}B"
+        size /= 1000
+    return f"{size:.0f} EB"
+
+
+def tpot_apt_free() -> str:
+    \"\"\"T-Pot: the space left on / of the persona ([shell] df_table, KiB).\"\"\"
+    try:
+        table = json.loads(Path(CowrieConfig.get("shell", "df_table", fallback="")).read_text(encoding="utf-8"))
+        avail = next(row["avail"] for row in table["filesystems"] if row.get("target") == "/" and row.get("size"))
+    except (OSError, ValueError, KeyError, TypeError, StopIteration):
+        avail = 20 * 1024 * 1024
+    return tpot_apt_bytes(avail * 1024)
 
 
 def tpot_upstream(version: str) -> str:
@@ -1887,6 +1973,12 @@ def tpot_apt_size(name: str) -> int:
             self.do_help()
         elif self.args[0] in ("-v", "--version"):
             self.do_version()
+        elif self.tpot_words[:1] == ["install"] and not (self.user["uid"] == 0 or getattr(self.pp, "tpot_sudo", False)):
+            # T-Pot: dpkg's lock is root's
+            if getattr(self, "tpot_prog", "apt-get") == "apt" and not tpot_apt_tty(self) and tpot_apt("apt_version", ""):
+                self.errorWrite(TPOT_APT_WARNING)
+            self.errorWrite(tpot_apt_errors(self, TPOT_APT_LOCK))
+            self.exit(100)
         elif self.tpot_words[:1] == ["install"]:
             yield self.do_install()
         elif self.tpot_words[:1] == ["update"] and (self.user["uid"] == 0 or getattr(self.pp, "tpot_sudo", False)):
@@ -1974,62 +2066,85 @@ def tpot_apt_size(name: str) -> int:
 """,
         """        # T-Pot: package names as apt takes them (Debian's form, an architecture after the colon), a
         # path is a .deb file; with the names of the release ([shell] package_names) a name it does
-        # not have is not found (nothing is installed then) and a glob takes the names it matches; an
-        # installed package of the persona is already the newest version, another one gets a version
-        # that fits the release
+        # not have is not found (nothing is installed then), a virtual name takes its only provider
+        # or names its providers, and a glob takes the names it matches; an installed package of the
+        # persona is already the newest version, another one gets a version that fits the release
+        prog = getattr(self, "tpot_prog", "apt-get")
         release = tpot_apt_names()
-        names, errors, notes = [], [], []
+        virtuals = (tpot_apt_lists() or (None, None, {}))[2]
+        names, errors, notes = {}, [], []
         globs = 0
         for word in self.tpot_words[1:]:
             found = re.fullmatch(r"([a-z0-9][a-z0-9+.-]+)(?::[a-z0-9-]+)?", word)
+            name = found.group(1) if found else ""
             matches = []
             if "/" not in word and set(word) & set("*?[") and globs < TPOT_APT_GLOBS:
                 globs += 1
-                matches = tpot_apt_glob(word, release)
+                matches = tpot_apt_glob(word)
             if "/" in word or word.endswith(".deb") or word in (".", ".."):
                 errors.append(f"E: Unsupported file {word} given on commandline\\n")
             elif matches:
-                names.extend(name for name in matches if name not in names)
-            elif not found or (release is not None and found.group(1) not in release):
-                errors.append(tpot_apt_missing(word, getattr(self, "tpot_prog", "apt-get")))
-            elif found.group(1) in tpot_apt_data()["unavailable"]:
+                names.update(dict.fromkeys(matches))
+            elif name and name in tpot_apt_data()["unavailable"]:
                 # a package of another family the release does not have (yum)
-                notes.append(f"Package {found.group(1)} is not available, but is referred to by another package.\\n"
+                notes.append(f"Package {name} is not available, but is referred to by another package.\\n"
                              "This may mean that the package is missing, has been obsoleted, or\\n"
                              "is only available from another source\\n\\n")
-                errors.append(f"E: Package '{found.group(1)}' has no installation candidate\\n")
-            elif found.group(1) not in names:
-                names.append(found.group(1))
+                errors.append(f"E: Package '{name}' has no installation candidate\\n")
+            elif found and (release is None or name in release):
+                names[name] = None
+            elif name in virtuals and len(virtuals[name]) > 1:
+                providers = "".join(f"  {p} {tpot_apt_version(p)}\\n" for p in virtuals[name])
+                notes.append(f"Package {name} is a virtual package provided by:\\n{providers}"
+                             "You should explicitly select one to install.\\n\\n")
+                errors.append(f"E: Package '{name}' has no installation candidate\\n")
+            elif name in virtuals:
+                names[virtuals[name][0]] = None
+            else:
+                errors.append(tpot_apt_missing(word, prog))
         known = tpot_apt_known()
         for y in names:
             if y and y not in known:
                 self.packages[y] = {"version": tpot_apt_version(y), "size": tpot_apt_size(y)}
         totalsize: int = sum(self.packages[x]["size"] for x in self.packages)
+        three, tty = prog == "apt" and tpot_apt_three(), tpot_apt_tty(self)
+        pace = min(1.0, TPOT_APT_PACE / max(1, len(self.packages)))
 
-        self.write("Reading package lists... Done\\n")
-        self.write("Building dependency tree... Done\\n" if tpot_apt("apt_version", "") else "Building dependency tree\\n")
-        self.write("Reading state information... Done\\n")
+        if prog == "apt" and not tty and tpot_apt("apt_version", ""):
+            self.errorWrite(TPOT_APT_WARNING)
+        self.write(tpot_apt_head(self))
         if errors:
             for note in notes:
                 self.write(note)
-            for error in errors:
-                self.errorWrite(error)
+            self.errorWrite(tpot_apt_errors(self, "".join(errors)))
             self.exit(100)
             return
         for y in names:
             if y in known:
                 self.write(f"{y} is already the newest version ({known[y]}).\\n")
         if not self.packages:
-            self.write("0 upgraded, 0 newly installed, 0 to remove and 259 not upgraded.\\n")
+            if three:
+                self.write("Summary:\\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 259\\n")
+            else:
+                self.write("0 upgraded, 0 newly installed, 0 to remove and 259 not upgraded.\\n")
             self.exit()
             return
-        self.write("The following NEW packages will be installed:\\n")
-        self.write(f"  {' '.join(self.packages)} \\n")
-        self.write(
-            f"0 upgraded, {len(self.packages)} newly installed, 0 to remove and 259 not upgraded.\\n"
-        )
-        self.write(f"Need to get {totalsize} kB of archives.\\n")
-        self.write(f"After this operation, {int(totalsize * 2.2)} kB of additional disk space will be used.\\n")
+        if three:
+            listing = "  " + " ".join(self.packages)
+            self.write("Installing:\\n" + (f"\\x1b[32m{listing}\\n\\x1b[0m\\n" if tty else f"{listing}\\n\\n"))
+            self.write(f"Summary:\\n  Upgrading: 0, Installing: {len(self.packages)}, Removing: 0, "
+                       "Not Upgrading: 259\\n"
+                       f"  Download size: {tpot_apt_bytes(totalsize * 1000)}\\n"
+                       f"  Space needed: {tpot_apt_bytes(int(totalsize * 2.2) * 1000)} / {tpot_apt_free()} "
+                       "available\\n\\n")
+        else:
+            self.write("The following NEW packages will be installed:\\n")
+            self.write(f"  {' '.join(self.packages)} \\n")
+            self.write(
+                f"0 upgraded, {len(self.packages)} newly installed, 0 to remove and 259 not upgraded.\\n"
+            )
+            self.write(f"Need to get {totalsize} kB of archives.\\n")
+            self.write(f"After this operation, {int(totalsize * 2.2)} kB of additional disk space will be used.\\n")
         arch = tpot_apt("deb_arch", "i386")
         url, suite = tpot_apt_sources()[0]
         i = 1
@@ -2039,7 +2154,7 @@ def tpot_apt_size(name: str) -> int:
                 f"[{self.packages[p]['size']} kB]\\n"
             )
             i += 1
-            yield self.sleep(1, 2)
+            yield self.sleep(pace, 2 * pace)
         self.write(f"Fetched {totalsize} kB in 1s ({totalsize} kB/s)\\n")
         yield self.sleep(1, 2)
         for number, p in enumerate(self.packages):
@@ -2049,7 +2164,7 @@ def tpot_apt_size(name: str) -> int:
                 self.write("(Reading database ... 177887 files and directories currently installed.)\\n")
             self.write(f"Preparing to unpack .../{p}_{version.replace(':', '%3a')}_{arch}.deb ...\\n")
             self.write(f"Unpacking {p} ({version}) ...\\n")
-            yield self.sleep(1, 2)
+            yield self.sleep(pace, 2 * pace)
         for p in self.packages:
             self.write(f"Setting up {p} ({self.packages[p]['version']}) ...\\n")
             # the programs of the persona's data that answer as installed ([shell] apt_packages "answers")
@@ -2081,7 +2196,7 @@ def tpot_apt_size(name: str) -> int:
                     session[program] = faked
                 else:
                     self.protocol.commands[program] = faked
-            yield self.sleep(2)
+            yield self.sleep(2 * pace)
         self.write(f"Processing triggers for man-db ({tpot_apt_version('man-db')}) ...\\n")
         self.exit()""",
     )
@@ -2133,15 +2248,24 @@ import pathlib as tpot_pathlib  # noqa: E402
 
 
 @tpot_functools.cache
-def tpot_yum_names() -> frozenset[str] | None:
-    \"\"\"T-Pot: the names of the release's packages ([shell] package_names, one per line), None
-    without the key (every name is found then).\"\"\"
+def tpot_yum_lists() -> tuple[frozenset[str], dict[str, str]] | None:
+    \"\"\"T-Pot: the names of the release's packages ([shell] package_names, one per line) and the
+    names they provide ("name package"); None without the key (every name is found then).\"\"\"
     path = CowrieConfig.get("shell", "package_names", fallback="")
+    if not path:
+        return None
     try:
-        return frozenset(line.split(" ", 1)[0] for line in
-                         tpot_pathlib.Path(path).read_text(encoding="utf-8").splitlines() if line) if path else None
+        rows = [line.split(" ") for line in tpot_pathlib.Path(path).read_text(encoding="utf-8").splitlines() if line]
     except (OSError, ValueError):
         return None
+    return frozenset(row[0] for row in rows if len(row) == 1), {row[0]: row[1] for row in rows if len(row) == 2}
+
+
+def tpot_yum_bold(cmd, text: str) -> str:
+    \"\"\"T-Pot: yum marks a name bold where stdout is the terminal of an interactive session.\"\"\"
+    targets = getattr(cmd.pp, "targets", None) or {}
+    tty = (targets.get(1) or ("",))[0] == "terminal" and not hasattr(cmd.protocol, "execcmd")
+    return f"\\x1b[1m{text}\\x1b(B\\x1b[m" if tty else text
 
 
 # the installed packages of a CentOS 7 that are not built for x86_64
@@ -2195,6 +2319,8 @@ def tpot_yum_present(name: str, evr: str) -> str:
                 yield self.do_help()
             case ["version", *_]:
                 yield self.do_version()
+            case ["install", *_] if self.user["uid"] != 0 and not getattr(self.pp, "tpot_sudo", False):
+                self.do_locked()
             case ["install", *_]:
                 yield self.do_install()
             case ["update" | "upgrade" | "check-update", *_] if self.user["uid"] == 0 or getattr(
@@ -2211,6 +2337,20 @@ def tpot_yum_present(name: str, evr: str) -> str:
     )
     replace_once(
         path,
+        """        self.errorWrite("ovl: Error while doing RPMdb copy-up:\\n")
+        self.errorWrite("[Errno 13] Permission denied: '/var/lib/rpm/.dbenv.lock' \\n")
+        self.errorWrite("You need to be root to perform this command.\\n")
+        self.exit()
+""",
+        """        if "ovl" in tpot_yum_plugins():
+            self.errorWrite("ovl: Error while doing RPMdb copy-up:\\n")
+            self.errorWrite("[Errno 13] Permission denied: '/var/lib/rpm/.dbenv.lock' \\n")
+        self.errorWrite("You need to be root to perform this command.\\n")
+        self.exit(1)
+""",
+    )
+    replace_once(
+        path,
         """        if len(self.args) <= 1:
 """,
         """        if len(self.tpot_words) <= 1:
@@ -2220,24 +2360,28 @@ def tpot_yum_present(name: str, evr: str) -> str:
         path,
         """        for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.args[1:]]:
 """,
-        """        # T-Pot: names as yum takes them (an architecture after a dot); a name the release does
-        # not have has no package, an installed one of the persona is there; with nothing left yum
-        # has nothing to do (an error when a name had no package; unverified: names of both kinds)
-        release, installed = tpot_yum_names(), tpot_yum_installed()
-        self.tpot_notes, wanted, missing = [], [], False
+        """        # T-Pot: names as yum takes them (an architecture after a dot); a name the release does not
+        # have has no package, a name a package provides takes that package (nc: nmap-ncat), an
+        # installed one of the persona is there; with nothing left yum has nothing to do, an error
+        # only when no name was found at all
+        lists, installed = tpot_yum_lists(), tpot_yum_installed()
+        self.tpot_notes, wanted, found_any = [], {}, False
         for word in self.tpot_words[1:]:
             name = re.sub(r"\\.(x86_64|noarch|i686)$", "", word)
+            if lists is not None and name not in lists[0] and name in lists[1]:
+                name = lists[1][name]
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9+._-]{0,99}", name) or (
-                release is not None and name not in release
+                lists is not None and name not in lists[0]
             ):
-                missing = True
-                self.tpot_notes.append(f"No package {word} available.\\n")
-                if release is not None and word.lower() in release and word.lower() != word:
+                self.tpot_notes.append(f"No package {tpot_yum_bold(self, word)} available.\\n")
+                if lists is not None and word.lower() in lists[0] and word.lower() != word:
                     self.tpot_notes.append(f"  * Maybe you meant: {word.lower()}\\n")
-            elif name in installed:
+                continue
+            found_any = True
+            if name in installed:
                 self.tpot_notes.append(tpot_yum_present(name, installed[name]))
-            elif name not in wanted:
-                wanted.append(name)
+            else:
+                wanted[name] = None
         if not wanted:
             yield self.sleep(1)
             self.write(f"Loaded plugins: {tpot_yum_plugins()}\\n")
@@ -2245,12 +2389,12 @@ def tpot_yum_present(name: str, evr: str) -> str:
                 self.write("Loading mirror speeds from cached hostfile\\n")
             for note in self.tpot_notes:
                 self.write(note)
-            if missing:
-                self.errorWrite("Error: Nothing to do\\n")
-                self.exit(1)
-            else:
+            if found_any:
                 self.write("Nothing to do\\n")
                 self.exit()
+            else:
+                self.errorWrite("Error: Nothing to do\\n")
+                self.exit(1)
             return
         for y in wanted:
 """,
@@ -2325,6 +2469,9 @@ OPKG_COMMAND = r'''
 # installed packages only until `opkg update` of the session fetched the lists. Nothing is
 # downloaded or written; what the session fetched and installed ends with it.
 TPOT_OPKG_FEEDS = ("core", "base", "luci", "packages", "routing", "telephony")
+# options of opkg that take a value
+TPOT_OPKG_VALUES = frozenset({"-d", "-f", "-o", "--dest", "--conf", "--offline-root", "--add-dest", "--add-arch",
+                              "--cache", "--lists-dir"})
 # sub-commands that change or show nothing here
 TPOT_OPKG_QUIET = frozenset({"upgrade", "configure", "flag", "list-upgradable", "info", "status", "download",
                              "files", "search", "find", "compare-versions", "depends", "whatdepends",
@@ -2381,7 +2528,15 @@ class Command_opkg(HoneyPotCommand):
 
     @inlineCallbacks
     def start(self):
-        words = [arg for arg in self.args if not arg.startswith("-")]
+        # options are no sub-command and no package, nor the values of those that take one
+        words, items = [], list(self.args)
+        while items:
+            arg = items.pop(0)
+            if arg in TPOT_OPKG_VALUES:
+                if items:
+                    items.pop(0)
+            elif not arg.startswith("-"):
+                words.append(arg)
         added = getattr(self.protocol, "tpot_opkg_added", None)
         if added is None:
             added = {}
@@ -2402,7 +2557,7 @@ class Command_opkg(HoneyPotCommand):
             self.tpot_usage("opkg: the ``install'' command requires at least one argument\n")
         elif words[0] == "install":
             names = tpot_opkg_names() if getattr(self.protocol, "tpot_opkg_lists", False) else {}
-            arch, errors, new = tpot_opkg("opkg_arch"), [], []
+            arch, errors, new = tpot_opkg("opkg_arch"), {}, {}
             for name in words[1:]:
                 if name in installed:
                     self.write(f"Package {name} ({installed[name]}) installed in root is up to date.\n")
@@ -2411,10 +2566,10 @@ class Command_opkg(HoneyPotCommand):
                     self.write(f"Installing {name} ({version}) to root...\n"
                                f"Downloading {tpot_opkg_url(names[name])}/{name}_{version}_{arch}.ipk\n")
                     yield self.sleep(0.3, 0.8)
-                    new.append(name)
+                    new[name] = None
                 elif name not in new and name not in errors:
                     self.write(f"Unknown package '{name}'.\n")
-                    errors.append(name)
+                    errors[name] = None
             for name in new:
                 added[name] = tpot_opkg_version(name)
                 self.write(f"Configuring {name}.\n")

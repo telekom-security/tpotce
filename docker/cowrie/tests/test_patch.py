@@ -733,7 +733,7 @@ class PatchTest(unittest.TestCase):
         git.call()
         self.assertEqual(bytes(git.out), b"git version 2.39.5\n")
 
-    def twisted_command(self, module, cls, values, args, uid=0, commands=None, present=()):
+    def twisted_command(self, module, cls, values, args, uid=0, commands=None, present=(), tty=True, sleeps=None):
         """A command with inlineCallbacks: the generators run through at once, sleep returns."""
         def inline_callbacks(function):
             def run(*a, **k):
@@ -749,7 +749,9 @@ class PatchTest(unittest.TestCase):
                                         "Logger": lambda: type("L", (), {"info": lambda *a, **k: None})()})
         command = namespace[cls](list(args))
         command.user = {"uid": uid, "gid": uid}
-        command.sleep = lambda *a, **k: None
+        command.sleep = lambda *a, **k: (sleeps.append(a) if sleeps is not None else None)
+        # stdout is the terminal of an interactive session (tty) or a pipe
+        command.pp = type("Pipe", (), {"targets": {1: ("terminal" if tty else "pipe",)}})()
 
         class Fs:
             made = []
@@ -888,9 +890,10 @@ class PatchTest(unittest.TestCase):
         answers = system.apt_packages(persona, draw(persona, 1))["answers"]
         self.assertEqual(answers, ["dig", "ethtool", "ftpget", "git", "ifconfig", "iptables", "netstat", "php", "tftp",
                                    "unzip"])
-        for pid in ("debian-bookworm", "debian-trixie", "ubuntu-noble", "ubuntu-jammy"):
+        for pid, unavailable in (("debian-bookworm", ["yum"]), ("debian-trixie", []), ("ubuntu-noble", ["yum"]),
+                                 ("ubuntu-jammy", []), ("raspios", ["yum"])):
             persona = catalog.by_id(pid)
-            self.assertEqual(system.apt_packages(persona, draw(persona, 1))["unavailable"], ["yum"], pid)
+            self.assertEqual(system.apt_packages(persona, draw(persona, 1))["unavailable"], unavailable, pid)
 
     def test_dnf_install_marks_the_programs_for_the_session(self):
         run = self.upstream_session("rhel-9", uid=0, extra_modules=("git",))
@@ -998,16 +1001,114 @@ class PatchTest(unittest.TestCase):
                 _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", word])
                 self.assertEqual((apt.err, apt.code, apt.fs.made), (err, 100, []))
         # apt tries no regular expression
-        _, apt = self.twisted_command("apt", "Command_apt", values, ["install", "-y", "nosuch.pkg"])
-        self.assertEqual(apt.err, "E: Unable to locate package nosuch.pkg\n"
+        _, apt = self.twisted_command("apt", "Command_apt", values, ["install", "-y", "nosuch.pkg"], tty=False)
+        self.assertEqual(apt.err, "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n"
+                                  "E: Unable to locate package nosuch.pkg\n"
                                   "E: Couldn't find any package by glob 'nosuch.pkg'\n")
 
     def test_apt_glob_matches_are_bounded(self):
         names = {f"lib{n}" for n in range(500)}
         values = self.apt_with_packages({}, "debian", names=names)
         namespace, _ = self.twisted_command("apt", "Command_aptget", values, ["-v"])
-        self.assertEqual(len(namespace["tpot_apt_glob"]("lib*", frozenset(names))), 64)
-        self.assertEqual(namespace["tpot_apt_glob"]("lib*" + "x" * 80, frozenset(names)), [])
+        self.assertEqual(namespace["tpot_apt_glob"]("lib*"), sorted(names)[:64])
+        self.assertEqual(namespace["tpot_apt_glob"]("lib*" + "x" * 80), [])
+
+    def names_lines(self, lines):
+        path = tmpdir(self) / "package-names.txt"
+        path.write_text("".join(f"{line}\n" for line in lines))
+        return {("shell", "package_names"): str(path)}
+
+    def test_apt_has_no_candidate_for_a_name_the_release_refers_to(self):
+        # yum is no name of the list (a glob does not take it), apt names it as the release does
+        values = {**self.apt_with_packages({}, "debian", unavailable=["yum"]), **self.names_lines(["tree", "yumex"])}
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "yum"])
+        self.assertEqual(bytes(apt.out).decode(), self.HEAD
+                         + "Package yum is not available, but is referred to by another package.\n"
+                         "This may mean that the package is missing, has been obsoleted, or\n"
+                         "is only available from another source\n\n")
+        self.assertEqual((apt.err, apt.code), ("E: Package 'yum' has no installation candidate\n", 100))
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "yu*"])
+        self.assertIn("  yumex \n", bytes(apt.out).decode())
+
+    def test_apt_virtual_names(self):
+        values = {**self.apt_with_packages({}, "debian"),
+                  **self.names_lines(["ack", "netcat-openbsd", "netcat-traditional", "ack-grep ack",
+                                      "netcat netcat-openbsd,netcat-traditional"])}
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "netcat"])
+        namespace, _ = self.twisted_command("apt", "Command_aptget", values, ["-v"])
+        version = namespace["tpot_apt_version"]
+        self.assertEqual(bytes(apt.out).decode(), self.HEAD + "Package netcat is a virtual package provided by:\n"
+                         f"  netcat-openbsd {version('netcat-openbsd')}\n"
+                         f"  netcat-traditional {version('netcat-traditional')}\n"
+                         "You should explicitly select one to install.\n\n")
+        self.assertEqual((apt.err, apt.code, apt.fs.made), ("E: Package 'netcat' has no installation candidate\n", 100, []))
+        # one provider: apt takes it
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "ack-grep"])
+        self.assertIn("The following NEW packages will be installed:\n  ack \n", bytes(apt.out).decode())
+        self.assertEqual((apt.err, apt.code), ("", None))
+
+    def test_apt_needs_root_for_dpkg_lock(self):
+        lock = ("Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)",
+                "Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?")
+        values = self.apt_with_packages({}, "debian", names={"tree"})
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "tree"], uid=1000)
+        self.assertEqual((bytes(apt.out), apt.err, apt.code, apt.fs.made),
+                         (b"", "".join(f"E: {line}\n" for line in lock), 100, []))
+        _, apt = self.twisted_command("apt", "Command_apt", values, ["install", "-y", "tree"], uid=1000)
+        self.assertEqual(apt.err, "".join(f"\x1b[1;31mE: \x1b[0m{line}\x1b[0m\n" for line in lock))
+        _, apt = self.twisted_command("apt", "Command_apt", values, ["install", "-y", "tree"], uid=1000, tty=False)
+        self.assertEqual(apt.err, "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n"
+                         + "".join(f"E: {line}\n" for line in lock))
+        trixie = {**values, ("shell", "apt_version"): "3.0.3"}
+        _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "tree"], uid=1000)
+        self.assertEqual(apt.err, "".join(f"\x1b[1;31mError: \x1b[0m\x1b[1m{line}\x1b[0m\n" for line in lock))
+
+    def test_apt_writes_as_its_version_on_a_terminal_and_a_pipe(self):
+        values = self.apt_with_packages({"bash": "5.2.15-2+b7"}, "debian", names={"tree", "bash"})
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "nosuchpkg123"], tty=False)
+        self.assertEqual((bytes(apt.out).decode(), apt.err), (
+            "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+            "E: Unable to locate package nosuchpkg123\n"))
+        _, apt = self.twisted_command("apt", "Command_apt", values, ["install", "-y", "nosuchpkg123"])
+        self.assertEqual((bytes(apt.out).decode(), apt.err), (
+            self.HEAD, "\x1b[1;31mE: \x1b[0mUnable to locate package nosuchpkg123\x1b[0m\n"))
+        # apt 3.0 (Debian 13): the apt program clears its progress lines on a terminal, writes Error: and the
+        # Installing / Summary layout; apt-get stays as it was
+        trixie = {**values, ("shell", "apt_version"): "3.0.3"}
+        _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "nosuchpkg123"])
+        self.assertEqual((bytes(apt.out).decode(), apt.err), (
+            "", "\x1b[1;31mError: \x1b[0m\x1b[1mUnable to locate package nosuchpkg123\x1b[0m\n"))
+        _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "nosuchpkg123"], tty=False)
+        self.assertEqual((bytes(apt.out).decode(), apt.err), (
+            "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+            "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n"
+            "Error: Unable to locate package nosuchpkg123\n"))
+        _, apt = self.twisted_command("apt", "Command_aptget", trixie, ["install", "-y", "nosuchpkg123"])
+        self.assertEqual((bytes(apt.out).decode(), apt.err), (self.HEAD, "E: Unable to locate package nosuchpkg123\n"))
+        _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "tree"])
+        text = bytes(apt.out).decode()
+        self.assertTrue(text.startswith("Installing:\n\x1b[32m  tree\n\x1b[0m\nSummary:\n  Upgrading: 0, Installing: 1, "
+                                        "Removing: 0, Not Upgrading: 259\n  Download size: "), text[:160])
+        self.assertRegex(text, r"\n  Space needed: \d+(\.\d)? [kM]B / \d+(\.\d)? [kMGT]B available\n\nGet:1 ")
+        _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "tree"], tty=False)
+        self.assertIn("Reading state information...\nInstalling:\n  tree\n\nSummary:\n", bytes(apt.out).decode())
+        _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "bash"])
+        self.assertEqual(bytes(apt.out).decode(), "bash is already the newest version (5.2.15-2+b7).\n"
+                         "Summary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 259\n")
+
+    def test_apt_sizes_as_apt_writes_them(self):
+        namespace, _ = self.twisted_command("apt", "Command_aptget", self.APT, ["-v"])
+        size = namespace["tpot_apt_bytes"]
+        self.assertEqual([size(n) for n in (57, 57900, 173000, 2054000, 210e9, 9999)],
+                         ["57 B", "57.9 kB", "173 kB", "2054 kB", "210 GB", "9999 B"])
+
+    def test_apt_install_of_many_packages_stays_within_a_minute(self):
+        names = {f"pkg{n}" for n in range(200)}
+        values = self.apt_with_packages({}, "debian", names=names)
+        sleeps = []
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", *sorted(names)], sleeps=sleeps)
+        self.assertEqual(apt.code, None)
+        self.assertLessEqual(sum(max(call) for call in sleeps), 70)
 
     def test_apt_answers_by_package_not_by_program_name(self):
         # ifconfig is the program of net-tools, no package: its Cowrie command stays skipped
@@ -1091,15 +1192,15 @@ class PatchTest(unittest.TestCase):
 
     def test_yum_has_no_package_for_a_name_the_release_does_not_have(self):
         values = self.yum_with({"curl", "bash", "python3-pip"})
-        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "nosuchpkg123"])
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "nosuchpkg123"], tty=False)
         self.assertEqual(bytes(yum.out).decode(), self.YUM_HEAD + "No package nosuchpkg123 available.\n")
         self.assertEqual((yum.err, yum.code), ("Error: Nothing to do\n", 1))
-        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "BASH", "nosuch*"])
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "BASH", "nosuch*"], tty=False)
         self.assertEqual(bytes(yum.out).decode(), self.YUM_HEAD + "No package BASH available.\n"
                          "  * Maybe you meant: bash\nNo package nosuch* available.\n")
         self.assertEqual((yum.err, yum.code), ("Error: Nothing to do\n", 1))
         # the names it has are installed, the others are named
-        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "nosuchpkg123", "python3-pip"])
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "nosuchpkg123", "python3-pip"], tty=False)
         text = bytes(yum.out).decode()
         self.assertTrue(text.startswith(self.YUM_HEAD + "No package nosuchpkg123 available.\nResolving Dependencies\n"),
                         text[:200])
@@ -1174,6 +1275,41 @@ class PatchTest(unittest.TestCase):
                          ("opkg: the ``install'' command requires at least one argument\n", 1))
         self.assertEqual(self.opkg(["print-architecture"])[0], "arch all 1\narch noarch 1\narch mipsel_24kc 10\n")
         self.assertEqual(self.opkg(["info", "x"])[:3], ("", "", None))
+
+    def test_yum_has_nothing_to_do_when_the_names_it_found_are_installed(self):
+        values = self.yum_with({"wget"}, "wget 1.14-18.el7_6.1")
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "wget", "nosuch"], tty=False)
+        self.assertEqual(bytes(yum.out).decode(), self.YUM_HEAD
+                         + "Package wget-1.14-18.el7_6.1.x86_64 already installed and latest version\n"
+                         "No package nosuch available.\nNothing to do\n")
+        self.assertEqual((yum.err, yum.code), ("", None))
+
+    def test_yum_takes_the_package_that_provides_a_name(self):
+        values = {**self.yum_with(None, "mariadb 1:5.5.68-1.el7"),
+                  **self.names_lines(["mariadb", "nmap-ncat", "mysql mariadb", "nc nmap-ncat"])}
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "nc"])
+        text = bytes(yum.out).decode()
+        self.assertRegex(text, r"---> Package nmap-ncat\.x86_64 0:\S+ will be installed\n")
+        self.assertNotIn("Package nc.", text)
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "mysql"])
+        self.assertEqual(bytes(yum.out).decode(), self.YUM_HEAD
+                         + "Package 1:mariadb-5.5.68-1.el7.x86_64 already installed and latest version\nNothing to do\n")
+
+    def test_yum_needs_root(self):
+        _, yum = self.twisted_command("yum", "Command_yum", self.yum_with({"tree"}), ["install", "-y", "tree"], uid=1000)
+        self.assertEqual((bytes(yum.out), yum.err, yum.code),
+                         (b"", "Loaded plugins: fastestmirror\nYou need to be root to perform this command.\n", 1))
+
+    def test_yum_marks_the_name_bold_on_a_terminal(self):
+        values = self.yum_with({"tree"})
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "nosuch"])
+        self.assertIn("No package \x1b[1mnosuch\x1b(B\x1b[m available.\n", bytes(yum.out).decode())
+        _, yum = self.twisted_command("yum", "Command_yum", values, ["install", "-y", "nosuch"], tty=False)
+        self.assertIn("No package nosuch available.\n", bytes(yum.out).decode())
+
+    def test_opkg_skips_the_values_of_its_options(self):
+        out, err, code, _ = self.opkg(["-d", "ram", "--conf", "/etc/opkg.conf", "install", "busybox"])
+        self.assertEqual((out, code), ("Package busybox (1.35.0-5) installed in root is up to date.\n", None))
 
     def test_yum_update_as_root(self):
         _, yum = self.twisted_command("yum", "Command_yum", self.YUM, ["-y", "update"])
@@ -1907,9 +2043,11 @@ class PatchTest(unittest.TestCase):
                 run = self.upstream_session(pid, uid=0)
                 for line in ("apt install -y nosuchpkg123", "apt-get install -y nosuchpkg123 tree"):
                     out, err, code = run(line)
-                    self.assertEqual((err, code), ("E: Unable to locate package nosuchpkg123\n", 100), line)
+                    # a session without a terminal: apt warns about its interface, apt 3.0 writes Error:
+                    self.assertEqual(code, 100, line)
+                    self.assertRegex(err, r"(^|\n)(E|Error): Unable to locate package nosuchpkg123\n$", line)
                     self.assertNotIn("Setting up", out)
-                out, err, code = run("apt install -y tree")
+                out, err, code = run("apt-get install -y tree")
                 self.assertIn("Setting up tree (", out)
                 self.assertEqual((err, code), ("", 0))
         run = self.upstream_session("centos-7", uid=0)
@@ -1917,6 +2055,11 @@ class PatchTest(unittest.TestCase):
         self.assertEqual((out, err, code), ("Loaded plugins: fastestmirror\nLoading mirror speeds from cached hostfile\n"
                                             "No package nosuchpkg123 available.\n", "Error: Nothing to do\n", 1))
         self.assertIn("---> Package tree.", run("yum install -y tree")[0])
+        self.assertEqual(self.upstream_session("centos-7")("yum install -y tree")[1:],
+                         ("Loaded plugins: fastestmirror\nYou need to be root to perform this command.\n", 1))
+        out, err, code = self.upstream_session("debian-trixie")("apt-get install -y tree")
+        self.assertEqual((out, code), ("", 100))
+        self.assertIn("are you root?", err)
         self.assertIn("No package htop available.\n", run("yum install -y htop")[0])
 
     def test_opkg_of_openwrt_answers_for_its_release(self):
@@ -2684,6 +2827,8 @@ class PatchTest(unittest.TestCase):
                   "{random.randint(1, 40)}-{random.randint(1, 9)}"),
                  ("src/cowrie/commands/yum.py", "f\"  {p}.{arch} {random.randint(0, 2)}:",
                   "f\"  {p}.{arch} {random.randint(0, 3)}:"),
+                 ("src/cowrie/commands/yum.py", 'self.errorWrite("ovl: Error while doing RPMdb copy-up:\\n")',
+                  'self.errorWrite("ovl: Error while doing copy-up:\\n")'),
                  ("src/cowrie/commands/apt.py", 'commands["/bin/apt"] = Command_aptget\n',
                   'commands["/bin/apt"] = Command_aptget  # apt\n'),
                  ("src/cowrie/commands/free.py", 'open("/proc/meminfo")', 'open("/proc/meminfo", "rb")'),
