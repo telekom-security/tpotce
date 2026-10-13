@@ -97,11 +97,13 @@ for (( i = 0; i < count; i++ )); do
       want="${want} actions=$(yq -r ".cases[$i].actions | join(\",\")" "${CASES}")"
     fi
   fi
-  if [[ "${want_action}" == "update" ]]; then
-    # everything but the delete action of the delete phase and _meta stays: the warm phase and the other delete actions
-    myKEPT='[((.phases? | objects | .warm) // null), ((.phases? | objects | .delete | objects | .actions | objects | del(.delete)) // {})]'
+  # an empty policy or none that is an object gets the default hot phase, there is nothing to keep
+  if [[ "${want_action}" == "update" ]] && jq -e 'type == "object" and length > 0' <<<"${policy}" >/dev/null; then
+    # everything but the delete phase and _meta stays: every other phase (hot, warm, cold, frozen ...) as it
+    # was, and the other actions of the delete phase
+    myKEPT='[((.phases? | objects | del(.delete)) // {}), ((.phases? | objects | .delete | objects | .actions | objects | del(.delete)) // {})]'
     myBEFORE="$(jq -cS "${myKEPT}" <<<"${policy}")"; myAFTER="$(jq -cS ".policy | ${myKEPT}" <<<"${out}")"
-    if [[ "${myBEFORE}" != "${myAFTER}" ]]; then echo "FAIL ${name}: the warm phase or the other delete actions changed: ${myBEFORE} -> ${myAFTER}"; failed=1; fi
+    if [[ "${myBEFORE}" != "${myAFTER}" ]]; then echo "FAIL ${name}: a phase besides delete or another delete action changed: ${myBEFORE} -> ${myAFTER}"; failed=1; fi
   fi
   got="${got} current=$(jq -r '.current' <<<"${out}") managed=$(jq -r '.managed' <<<"${out}") held=$(jq -r '.held // ""' <<<"${out}")"
   want="${want} current=$(yq -r ".cases[$i].current" "${CASES}") managed=$(yq -r ".cases[$i].managed" "${CASES}") held=$(yq -r ".cases[$i].held // \"\"" "${CASES}")"

@@ -121,6 +121,16 @@ class RuleTest(unittest.TestCase):
                         self.assertIn("delete", delete["actions"])
                     if "actions" in case:
                         self.assertEqual(sorted(delete["actions"]), case["actions"])
+                    if case["action"] == "update" and isinstance(before, dict) and before:
+                        # every phase besides delete and the other actions of the delete phase stay as they were
+                        # (an empty policy or none that is an object gets the default hot phase)
+                        phases = before.get("phases") if isinstance(before.get("phases"), dict) else {}
+                        self.assertEqual({k: v for k, v in policy["phases"].items() if k != "delete"},
+                                         {k: v for k, v in phases.items() if k != "delete"})
+                        old = phases.get("delete") if isinstance(phases.get("delete"), dict) else {}
+                        old = old.get("actions") if isinstance(old.get("actions"), dict) else {}
+                        self.assertEqual({k: v for k, v in (delete or {}).get("actions", {}).items() if k != "delete"},
+                                         {k: v for k, v in old.items() if k != "delete"})
                     json.dumps(policy)                     # PUT-able as it is
                 else:
                     self.assertIsNone(decision.policy)
