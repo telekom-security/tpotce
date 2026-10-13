@@ -404,6 +404,8 @@ function fuLOSS_ADD () {   # $1 = backups | elastic | images, $2 = text
 # the text after the first ": ", split at ", ", each entry without its " (<n> MB)" and the full stop
 # after the last one. A name that only begins like an entry (cowrie:24.04 for cowrie:24.04.1) or
 # lacks its end (20261010_tpot_backup for 20261010_tpot_backup.tar) is not confirmed.
+# An entry with ", " in it cannot be told from two entries, it is never confirmed. No loss names
+# one: the backups are *_tpot_backup*.tar of update.sh and an image reference has no comma.
 function fuLOSS_IN_FILE () {   # $1 = backups | elastic | images, $2... = the names it deletes
 	local myKEY="$1" myLINE="" myREST="" myENTRY="" myENTRIES="" myFOUND="" myNAME="" myHIT=""
 	shift

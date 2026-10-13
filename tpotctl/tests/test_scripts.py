@@ -2280,24 +2280,24 @@ class DataLossTest(Harness):
         self.assertEqual(self.pullable("repo/x@sha256:aaa\\n", ""), "unsure")
 
     def test_without_timeout_it_cannot_tell(self):
-        # a PATH with the tools of the function but no timeout: the digests are read, then it stops at
-        # the check for timeout (the trace shows the way: the digest is there, the check returns 2)
+        # a PATH with sed, tr and grep but no timeout, a docker stub that records each call: the digest is
+        # read (docker image inspect ran), the registry is never asked, it cannot tell (rc 2)
         tools = os.path.join(self.home, "tools")
         os.makedirs(tools)
         for name in ("sed", "tr", "grep"):
             os.symlink(shutil.which(name), os.path.join(tools, name))
+        calls = os.path.join(self.home, "docker_calls")
         script = (self.functions("fuIMAGE_PULLABLE") + f'unset -f timeout\nPATH="{tools}"\n'
-                  'docker () { case "$1 $2" in "image inspect") echo "repo/x@sha256:aaa" ;; '
-                  '*) echo "REGISTRY ASKED" ;; esac; }\n'
-                  "PS4='TRACE: '; set -x\nfuIMAGE_PULLABLE repo/x:1; myRC=$?\nset +x\n"
-                  'echo "rc=${myRC}"\n')
+                  f'docker () {{ echo "$*" >> "{calls}"; case "$1 $2" in "image inspect") echo "repo/x@sha256:aaa" ;; '
+                  '*) echo "sha256:aaa" ;; esac; }\n'
+                  'fuIMAGE_PULLABLE repo/x:1; echo "rc=$?"\n')
         result = self.bash(script)
-        out, trace = result.stdout, [line for line in result.stderr.splitlines() if line.startswith("TRACE: ")]
-        self.assertEqual(out.strip().splitlines()[-1], "rc=2", out + result.stderr)
-        self.assertNotIn("REGISTRY ASKED", out)
-        self.assertIn("TRACE: myLOCAL=sha256:aaa", trace, trace)                  # sed and docker: the digest
-        steps = [line for line in trace if line.startswith(("TRACE: command -v", "TRACE: return"))]
-        self.assertEqual(steps, ["TRACE: command -v timeout", "TRACE: return 2"], trace)
+        self.assertEqual(result.stdout.strip().splitlines()[-1], "rc=2", result.stdout + result.stderr)
+        with open(calls, encoding="utf-8") as handle:
+            ran = handle.read().splitlines()
+        self.assertTrue(ran and all(line.startswith("image inspect ") and line.endswith(" repo/x:1") for line in ran),
+                        ran)
+        self.assertFalse(any("buildx" in line for line in ran), ran)
 
     def sort_images(self, deadline, buildx="echo sha256:aaa"):
         """fuSORT_IMAGES on three images with RepoDigests, each registry request logged to HOME/asked."""
@@ -2475,11 +2475,23 @@ class DataLossTest(Harness):
         self.assertEqual(self.left(), names)
 
     def confirmed(self, key, line, *names):
-        """fuLOSS_IN_FILE of the file with this line: rc 0 for confirmed."""
+        """fuLOSS_IN_FILE of the file with this line: rc 0 for confirmed. The key and the names go through a
+        file, one per line, into the arguments: no shell quoting, a name may hold any character but a newline."""
+        self.write("loss_args", "".join(f"{item}\n" for item in (key,) + names))
         result = self.bash(self.accept_file(line) + self.functions("fuLOSS_IN_FILE")
-                           + 'fuLOSS_IN_FILE "$@"; echo "rc=$?"\n'.replace('"$@"', key + " " + " ".join(
-                               f"'{name}'" for name in names)))
+                           + 'myARGS=()\nwhile IFS= read -r myA; do myARGS+=("${myA}"); done < "$HOME/loss_args"\n'
+                           + 'fuLOSS_IN_FILE "${myARGS[@]}"; echo "rc=$?"\n')
         return "rc=0" in result.stdout
+
+    def test_a_name_with_a_quote_is_matched_as_it_is(self):
+        line = (f"@@tpot loss backups Making room for the backup deletes 2 older backup(s) in {self.backups}: "
+                "it's mine_tpot_backup.tar (3 MB), \"$(x)\" `y`_tpot_backup.tar (1 MB).")
+        self.assertTrue(self.confirmed("backups", line, "it's mine_tpot_backup.tar"))
+        self.assertTrue(self.confirmed("backups", line, '"$(x)" `y`_tpot_backup.tar'))
+        self.assertTrue(self.confirmed("backups", line, "it's mine_tpot_backup.tar", '"$(x)" `y`_tpot_backup.tar'))
+        for name in ("it", "it's", "its mine_tpot_backup.tar", "it's mine_tpot_backup.tar'"):
+            with self.subTest(name):
+                self.assertFalse(self.confirmed("backups", line, name))
 
     def test_an_image_is_confirmed_as_a_whole_entry_only(self):
         line = ("@@tpot loss images 2 image(s) built here cannot be pulled again: "
