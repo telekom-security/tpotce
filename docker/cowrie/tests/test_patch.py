@@ -1063,6 +1063,22 @@ class PatchTest(unittest.TestCase):
         _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "tree"], uid=1000)
         self.assertEqual(apt.err, "".join(f"\x1b[1;31mError: \x1b[0m\x1b[1m{line}\x1b[0m\n" for line in lock))
 
+    def test_apt_1_names_the_lock_and_its_lines_as_apt_1(self):
+        old = ("E: Could not open lock file /var/lib/dpkg/lock - open (13: Permission denied)\n"
+               "E: Unable to lock the administration directory (/var/lib/dpkg/), are you root?\n")
+        for version in ("1.4.10", None):
+            values = {**self.apt_with_packages({}, "debian", names={"tree"}), ("shell", "apt_version"): version or ""}
+            _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "tree"], uid=1000)
+            self.assertEqual((bytes(apt.out), apt.err, apt.code), (b"", old, 100), version)
+        values = {**self.apt_with_packages({}, "debian", names={"tree"}), ("shell", "apt_version"): "1.4.10"}
+        _, apt = self.twisted_command("apt", "Command_apt", values, ["install", "-y", "nosuch"])
+        self.assertEqual((bytes(apt.out).decode(), apt.err), (
+            "Reading package lists... Done\nBuilding dependency tree       \nReading state information... Done\n",
+            "E: Unable to locate package nosuch\n"))
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "nosuch"], tty=False)
+        self.assertEqual(bytes(apt.out).decode(),
+                         "Reading package lists...\nBuilding dependency tree...\nReading state information...\n")
+
     def test_apt_writes_as_its_version_on_a_terminal_and_a_pipe(self):
         values = self.apt_with_packages({"bash": "5.2.15-2+b7"}, "debian", names={"tree", "bash"})
         _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "nosuchpkg123"], tty=False)
@@ -1298,7 +1314,7 @@ class PatchTest(unittest.TestCase):
     def test_yum_needs_root(self):
         _, yum = self.twisted_command("yum", "Command_yum", self.yum_with({"tree"}), ["install", "-y", "tree"], uid=1000)
         self.assertEqual((bytes(yum.out), yum.err, yum.code),
-                         (b"", "Loaded plugins: fastestmirror\nYou need to be root to perform this command.\n", 1))
+                         (b"Loaded plugins: fastestmirror\n", "You need to be root to perform this command.\n", 1))
 
     def test_yum_marks_the_name_bold_on_a_terminal(self):
         values = self.yum_with({"tree"})
@@ -1308,7 +1324,8 @@ class PatchTest(unittest.TestCase):
         self.assertIn("No package nosuch available.\n", bytes(yum.out).decode())
 
     def test_opkg_skips_the_values_of_its_options(self):
-        out, err, code, _ = self.opkg(["-d", "ram", "--conf", "/etc/opkg.conf", "install", "busybox"])
+        out, err, code, _ = self.opkg(["-d", "ram", "--conf", "/etc/opkg.conf", "--verify-program", "/usr/sbin/opkg-key",
+                                       "install", "busybox"])
         self.assertEqual((out, code), ("Package busybox (1.35.0-5) installed in root is up to date.\n", None))
 
     def test_yum_update_as_root(self):
@@ -2055,8 +2072,23 @@ class PatchTest(unittest.TestCase):
         self.assertEqual((out, err, code), ("Loaded plugins: fastestmirror\nLoading mirror speeds from cached hostfile\n"
                                             "No package nosuchpkg123 available.\n", "Error: Nothing to do\n", 1))
         self.assertIn("---> Package tree.", run("yum install -y tree")[0])
-        self.assertEqual(self.upstream_session("centos-7")("yum install -y tree")[1:],
-                         ("Loaded plugins: fastestmirror\nYou need to be root to perform this command.\n", 1))
+        self.assertEqual(self.upstream_session("centos-7")("yum install -y tree"),
+                         ("Loaded plugins: fastestmirror\n", "You need to be root to perform this command.\n", 1))
+        # EdgeOS: apt 1.4 of Debian 9 without sources
+        edge = self.upstream_session("ubiquiti-edgerouter-x")
+        self.assertEqual(edge("apt-get install -y tree"), ("", "E: Could not open lock file /var/lib/dpkg/lock - open "
+                         "(13: Permission denied)\nE: Unable to lock the administration directory (/var/lib/dpkg/), "
+                         "are you root?\n", 100))
+        edge = self.upstream_session("ubiquiti-edgerouter-x", uid=0)
+        self.assertEqual(edge("apt-get install -y tree")[1:], ("E: Unable to locate package tree\n", 100))
+        self.assertEqual(edge("apt-get -v")[0].splitlines()[0], "apt 1.4.10 (mipsel)")
+        # the running kernel of the persona is installed at the version of its build
+        bookworm = self.upstream_session("debian-bookworm", uid=0)
+        release = "6.1.0-50-amd64"
+        self.assertIn(f"linux-image-{release} is already the newest version (6.1.176-1).",
+                      bookworm(f"apt-get install -y linux-image-{release}")[0])
+        self.assertIn(f"Setting up linux-headers-{release} (6.1.176-1) ...",
+                      bookworm(f"apt-get install -y linux-headers-{release}")[0])
         out, err, code = self.upstream_session("debian-trixie")("apt-get install -y tree")
         self.assertEqual((out, code), ("", 100))
         self.assertIn("are you root?", err)

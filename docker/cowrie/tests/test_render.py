@@ -328,7 +328,9 @@ class ServerCommandTest(unittest.TestCase):
             server = persona.kind == "server"
             debian = server and "dpkg" in persona.package_managers
             rhel = persona.family == "rhel"
-            answered = {"sudo": server, "service": server, "apt": debian, "apt-get": debian,
+            # apt-get of EdgeOS is the patched apt-get too (apt 1.4 without sources)
+            answered = {"sudo": server, "service": server, "apt": debian,
+                        "apt-get": debian or persona.family == "ubiquiti",
                         "yum": persona.family in ("centos", "rhel"), "dnf": rhel, "dnf-3": rhel, "rpm": rhel}
             for name, python in answered.items():
                 self.assertEqual(name not in skip, python, (persona.id, name))
@@ -476,7 +478,11 @@ class PackageNamesTest(unittest.TestCase):
             ident, out, _ = render_one(self, persona, 2)
             path = out / system.PACKAGE_NAMES
             server = persona.kind == "server"
-            self.assertEqual(path.is_file(), persona.id in samples, persona.id)
+            self.assertEqual(path.is_file(), persona.id in samples or persona.family == "ubiquiti", persona.id)
+            if persona.family == "ubiquiti":
+                # EdgeOS names no apt sources
+                self.assertEqual(path.read_text(), "")
+                self.assertEqual(cfg_of(out).get("shell", "apt_version"), "1.4.10")
             if persona.id not in samples:
                 continue
             lines = path.read_text().splitlines()
@@ -503,6 +509,19 @@ class PackageNamesTest(unittest.TestCase):
             virtuals = dict(line.split(" ") for line in lines if " " in line)
             release = ident.release.kernel_version
             self.assertIn(f"linux-headers-{release}", names, pid)
+            apt = system.apt_packages(persona, ident)
+            installed, available = apt["installed"], apt["available"]
+            build = ident.release.kernel_build
+            version = installed[f"linux-image-{release}"]
+            if persona.family == "ubuntu":
+                # 5.15.0-164.174 for #174-Ubuntu
+                self.assertEqual(version, f"{release.rsplit('-', 1)[0]}.{build.split('-Ubuntu')[0].lstrip('#')}", pid)
+                for name in (f"linux-modules-{release}", f"linux-headers-{release}"):
+                    self.assertEqual(installed[name], version, (pid, name))
+                self.assertEqual(available[f"linux-modules-extra-{release}"], version, pid)
+            else:
+                self.assertIn(f"Debian {version} (", build, pid)
+                self.assertEqual(available[f"linux-headers-{release}"], version, pid)
             self.assertIn(f"linux-image-{release}", names, pid)
             self.assertIn("awk", virtuals, pid)
             self.assertFalse(set(virtuals) & names, pid)

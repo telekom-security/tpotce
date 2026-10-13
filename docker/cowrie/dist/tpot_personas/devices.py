@@ -578,10 +578,12 @@ BUG_REPORT_URL="https://bugs.debian.org/"
         ps_entry(persona.user, 0, "-vbash", vsz=4964, rss=3164, tty="pts/0", stat="Ss"),
     ]
     arch = x["deb_arch"]
-    return device_content(persona, ident, files, entries, cmdline, boot, processes, coreutils=True, txtcmds={
-        "usr/bin/apt-get": f"apt {r.packages['apt']} ({arch})\n",
+    content = device_content(persona, ident, files, entries, cmdline, boot, processes, coreutils=True, txtcmds={
         "usr/bin/dpkg": f"Debian 'dpkg' package management program version {r.packages['dpkg']} ({arch}).\n",
     })
+    # apt-get is Cowrie's patched apt-get (apt 1.4 without sources: system.shell_keys)
+    content.programs = (*content.programs, "usr/bin/apt-get")
+    return content
 
 
 IPCAM_RCS = """#!/bin/sh

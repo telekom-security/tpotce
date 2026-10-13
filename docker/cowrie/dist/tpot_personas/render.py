@@ -152,6 +152,8 @@ def skip_python_commands(persona, ident, content):
         commands |= set(BUSYBOX_PYTHON_COMMANDS)
     if persona.family == "openwrt":
         commands -= {"/bin/opkg", "opkg"}
+    if persona.family == "ubiquiti":
+        commands -= {"/bin/apt-get", "/usr/bin/apt-get", "apt-get"}
     return sorted(commands)
 
 

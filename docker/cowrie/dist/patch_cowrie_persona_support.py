@@ -1796,9 +1796,12 @@ TPOT_APT_GLOB = ".?*[]!"
 TPOT_APT_REGEX = ".?+*|[^$"
 TPOT_APT_GLOBS = 16
 TPOT_APT_GLOB_MATCHES = 64
-# the lock of dpkg for a user who is not root (apt 2.4 to 3.0)
+# the lock of dpkg for a user who is not root: the frontend lock of apt 1.7 and later (1.8 of Debian 10 to
+# 3.0 checked), the lock of the administration directory before (1.4 of Debian 9)
 TPOT_APT_LOCK = ("E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)\\n"
                  "E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?\\n")
+TPOT_APT_LOCK_OLD = ("E: Could not open lock file /var/lib/dpkg/lock - open (13: Permission denied)\\n"
+                     "E: Unable to lock the administration directory (/var/lib/dpkg/), are you root?\\n")
 TPOT_APT_WARNING = "\\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\\n\\n"
 # an install sleeps up to 6 s per package, all packages of one run together at most about 60 s
 TPOT_APT_PACE = 10
@@ -1828,10 +1831,20 @@ def tpot_apt_missing(word: str, prog: str) -> str:
     return text
 
 
+def tpot_apt_release() -> tuple[int, int]:
+    \"\"\"T-Pot: major and minor of the persona's apt ([shell] apt_version), (0, 0) without it.\"\"\"
+    version = re.match(r"(\\d+)\\.(\\d+)", tpot_apt("apt_version", ""))
+    return (int(version.group(1)), int(version.group(2))) if version else (0, 0)
+
+
 def tpot_apt_three() -> bool:
     \"\"\"T-Pot: apt 2.9 and later (Debian 13): the apt program writes Error: and its new layout.\"\"\"
-    version = re.match(r"(\\d+)\\.(\\d+)", tpot_apt("apt_version", ""))
-    return bool(version) and (int(version.group(1)), int(version.group(2))) >= (2, 9)
+    return tpot_apt_release() >= (2, 9)
+
+
+def tpot_apt_lock() -> str:
+    \"\"\"T-Pot: dpkg's lock as the persona's apt names it.\"\"\"
+    return TPOT_APT_LOCK if tpot_apt_release() >= (1, 7) else TPOT_APT_LOCK_OLD
 
 
 def tpot_apt_tty(cmd) -> bool:
@@ -1853,7 +1866,8 @@ def tpot_apt_errors(cmd, text: str) -> str:
         elif three:
             lines.append(f"\\x1b[1;31mError: \\x1b[0m\\x1b[1m{line[3:]}\\x1b[0m" if tty else f"Error: {line[3:]}")
         else:
-            lines.append(f"\\x1b[1;31mE: \\x1b[0m{line[3:]}\\x1b[0m" if tty else line)
+            # apt 1.x writes no colours (1.4 of Debian 9 and 1.8 of Debian 10 checked)
+            lines.append(f"\\x1b[1;31mE: \\x1b[0m{line[3:]}\\x1b[0m" if tty and tpot_apt_release() >= (2, 0) else line)
     return "".join(line + "\\n" for line in lines)
 
 
@@ -1865,6 +1879,9 @@ def tpot_apt_head(cmd) -> str:
     if tpot_apt_tty(cmd):
         if getattr(cmd, "tpot_prog", "apt-get") == "apt" and tpot_apt_three():
             return ""
+        if tpot_apt_release() < (2, 0):
+            # apt 1.x pads its tree line (1.4 of Debian 9, 1.8 of Debian 10)
+            return "Reading package lists... Done\\nBuilding dependency tree       \\nReading state information... Done\\n"
         return "Reading package lists... Done\\nBuilding dependency tree... Done\\nReading state information... Done\\n"
     return "Reading package lists...\\nBuilding dependency tree...\\nReading state information...\\n"
 
@@ -1977,7 +1994,7 @@ def tpot_apt_size(name: str) -> int:
             # T-Pot: dpkg's lock is root's
             if getattr(self, "tpot_prog", "apt-get") == "apt" and not tpot_apt_tty(self) and tpot_apt("apt_version", ""):
                 self.errorWrite(TPOT_APT_WARNING)
-            self.errorWrite(tpot_apt_errors(self, TPOT_APT_LOCK))
+            self.errorWrite(tpot_apt_errors(self, tpot_apt_lock()))
             self.exit(100)
         elif self.tpot_words[:1] == ["install"]:
             yield self.do_install()
@@ -2337,12 +2354,17 @@ def tpot_yum_present(name: str, evr: str) -> str:
     )
     replace_once(
         path,
-        """        self.errorWrite("ovl: Error while doing RPMdb copy-up:\\n")
+        """        self.errorWrite(
+            f"Loaded plugins: {tpot_yum_plugins()}\\n"
+        )
+        self.errorWrite("ovl: Error while doing RPMdb copy-up:\\n")
         self.errorWrite("[Errno 13] Permission denied: '/var/lib/rpm/.dbenv.lock' \\n")
         self.errorWrite("You need to be root to perform this command.\\n")
         self.exit()
 """,
-        """        if "ovl" in tpot_yum_plugins():
+        """        # T-Pot: the plugins line goes to stdout (centos:7 as a user)
+        self.write(f"Loaded plugins: {tpot_yum_plugins()}\\n")
+        if "ovl" in tpot_yum_plugins():
             self.errorWrite("ovl: Error while doing RPMdb copy-up:\\n")
             self.errorWrite("[Errno 13] Permission denied: '/var/lib/rpm/.dbenv.lock' \\n")
         self.errorWrite("You need to be root to perform this command.\\n")
@@ -2471,7 +2493,7 @@ OPKG_COMMAND = r'''
 TPOT_OPKG_FEEDS = ("core", "base", "luci", "packages", "routing", "telephony")
 # options of opkg that take a value
 TPOT_OPKG_VALUES = frozenset({"-d", "-f", "-o", "--dest", "--conf", "--offline-root", "--add-dest", "--add-arch",
-                              "--cache", "--lists-dir"})
+                              "--cache", "--lists-dir", "--verify-program"})
 # sub-commands that change or show nothing here
 TPOT_OPKG_QUIET = frozenset({"upgrade", "configure", "flag", "list-upgradable", "info", "status", "download",
                              "files", "search", "find", "compare-versions", "depends", "whatdepends",

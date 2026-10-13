@@ -1567,8 +1567,10 @@ def apt_packages(persona, ident):
     versions of the packages it would install (APT_AVAILABLE), their programs (those that answer then:
     session_answers) and the packages it has no candidate for (APT_UNAVAILABLE)."""
     code = ident.release.extra["codename"]
-    installed = dict(sorted({**APT_INSTALLED[code], **ident.release.packages}.items()))
-    available = {name: version for name, version in sorted(APT_AVAILABLE[code].items()) if name not in installed}
+    kernel, kernel_available = kernel_packages(persona, ident)
+    installed = dict(sorted({**APT_INSTALLED[code], **ident.release.packages, **kernel}.items()))
+    available = {name: version for name, version in sorted({**APT_AVAILABLE[code], **kernel_available}.items())
+                 if name not in installed}
     return {"installed": installed, "available": available,
             "programs": {name: apt_programs(name) for name in available},
             "answers": session_answers(path for name in available for path in apt_programs(name)),
@@ -1684,14 +1686,31 @@ def opkg_keys(persona, ident, runtime_dir):
             "opkg_help": f"{runtime_dir}/{OPKG_HELP_FILE}", "package_names": f"{runtime_dir}/{PACKAGE_NAMES}"}
 
 
-def kernel_package_names(persona, ident):
-    """The packages of the persona's running kernel (uname -r): its image and headers, on Ubuntu its
-    modules too (linux-headers-$(uname -r) installs)."""
-    release = ident.release.kernel_version
-    names = {f"linux-image-{release}", f"linux-headers-{release}"}
+def kernel_packages(persona, ident):
+    """The packages of the persona's running kernel (uname -r) at the version of its build (uname -v):
+    ({installed}, {available}). Ubuntu's cloud images have its image, modules and headers (the cloud
+    image manifests of 22.04 / 24.04), Debian and Raspberry Pi OS its image; the headers (and Ubuntu's
+    modules-extra) install at the same version."""
+    release, build = ident.release.kernel_version, ident.release.kernel_build
     if persona.family == "ubuntu":
-        names |= {f"linux-modules-{release}", f"linux-modules-extra-{release}"}
-    return names
+        abi, flavour = release.rsplit("-", 1)
+        found = re.search(r"#(\S+)-Ubuntu", build)
+        version = f"{abi}.{found.group(1) if found else '1'}"
+        installed = {f"linux-image-{release}", f"linux-modules-{release}", f"linux-headers-{release}"}
+        if flavour == "generic":
+            installed.add(f"linux-headers-{abi}")
+        available = {f"linux-modules-extra-{release}"}
+    else:
+        found = re.search(r"Debian (\S+) \(", build)
+        version = found.group(1) if found else release
+        installed, available = {f"linux-image-{release}"}, {f"linux-headers-{release}"}
+    return ({name: version for name in installed}, {name: version for name in available})
+
+
+def kernel_package_names(persona, ident):
+    """The names of the packages of the persona's running kernel (kernel_packages)."""
+    installed, available = kernel_packages(persona, ident)
+    return set(installed) | set(available)
 
 
 def package_names(persona, ident):
@@ -1715,6 +1734,9 @@ def package_names(persona, ident):
     if persona.family == "openwrt":
         letter = OPKG_NAME_RELEASES[opkg_branch(ident)]
         return [f"{row[0]} {row[2]}" for row in _name_rows("opkg.txt.gz") if letter in row[1]]
+    if persona.family == "ubiquiti":
+        # EdgeOS has no apt sources until the user sets a repository
+        return []
     return None
 
 
@@ -1807,6 +1829,10 @@ def shell_keys(persona, ident, files, runtime_dir):
         return {}
     perl, year = found["perl"]
     keys = {"perl_version": perl, "perl_archname": perl_archname(persona), "perl_copyright": year}
+    if persona.family == "ubiquiti":
+        # apt-get of EdgeOS: apt 1.4 of Debian 9 without sources (the image names none): no name is found
+        keys.update({"apt_version": ident.release.packages["apt"], "deb_arch": ident.release.extra["deb_arch"],
+                     "apt_sources": "", "package_names": f"{runtime_dir}/{PACKAGE_NAMES}"})
     if persona.kind != "server":
         return keys
     sudo = sudo_version(persona, ident)
