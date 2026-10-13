@@ -24,7 +24,9 @@ from .ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, PROFILE
 # a rendered device tree is about 1 MB (a server's more); far below it the render broke
 MIN_PICKLE_SIZE = 800_000
 PATH_DIRS = ("usr/local/sbin", "usr/local/bin", "usr/sbin", "usr/bin", "sbin", "bin")
-PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "yum", "dnf", "rpm")
+PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "yum", "dnf", "rpm", "opkg")
+# a package manager of Cowrie's Python that is a program at one path only (opkg of OpenWrt)
+PYTHON_PACKAGE_MANAGER_AT = {"opkg": "bin/opkg"}
 FORBIDDEN_MARKERS = ("phil", "2.6.26-2-686", "2.6.26-19lenny", "com/ubuntu/upstart", "dannf@debian.org",
                      "svr04", "Wed Nov 4 20:45:37")
 UBUNTU_MARKERS = ("ubuntu 22.04", "ubuntu 24.04", "id=ubuntu", "jammy jellyfish", "noble numbat")
@@ -512,7 +514,7 @@ def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out):
     markers = tuple(m.lower().encode() for m in markers)
     paths = [out_dir / "cmdoutput.json", out_dir / "cowrie.cfg", out_dir / BUSYBOX_HELP,
              out_dir / system.SERVICE_STATUS, out_dir / system.SYSTEMD_UNITS, out_dir / system.SUDO_LIST,
-             out_dir / system.APT_PACKAGES]
+             out_dir / system.APT_PACKAGES, out_dir / system.PACKAGE_NAMES, out_dir / system.OPKG_HELP_FILE]
     for root in (out_dir / "honeyfs", out_dir / "txtcmds"):
         for path in sorted(root.rglob("*")):
             if any(m in path.name.lower().encode() for m in markers):
@@ -560,7 +562,9 @@ def _check_package_managers(persona, cfg, fs, honeyfs, txtcmds, out):
     commands = {}
     for rel in PACKAGE_MANAGER_PATHS:
         real = tree.real_path(fs, rel) or rel
-        python = Path(rel).name in PYTHON_PACKAGE_MANAGERS and _answered(cfg, Path(rel).name)
+        name = Path(rel).name
+        python = (name in PYTHON_PACKAGE_MANAGERS and _answered(cfg, name)
+                  and PYTHON_PACKAGE_MANAGER_AT.get(name, rel) == rel)
         commands[real] = commands.get(real, False) or (txtcmds / rel).is_file() or python
     for rel in PACKAGE_MANAGER_PATHS:
         command = commands[tree.real_path(fs, rel) or rel]

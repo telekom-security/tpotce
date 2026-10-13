@@ -1103,7 +1103,8 @@ class PatchTest(unittest.TestCase):
         text = bytes(yum.out).decode()
         self.assertTrue(text.startswith(self.YUM_HEAD + "No package nosuchpkg123 available.\nResolving Dependencies\n"),
                         text[:200])
-        self.assertIn("---> Package python3-pip.", text)
+        self.assertRegex(text, r"---> Package python3-pip\.x86_64 0:[01]\.\d+\.\d-\d+\.el7 will be installed\n")
+        self.assertRegex(text, r"\n  python3-pip\.x86_64 0:[01]\.\d+\.\d-\d+\.el7 ")
         self.assertNotIn("nosuchpkg123.", text)
         self.assertIn("Complete!\n", text)
 
@@ -1117,6 +1118,62 @@ class PatchTest(unittest.TestCase):
                          "Package 2:vim-enhanced-7.4.629-8.el7_9.x86_64 already installed and latest version\n"
                          "Nothing to do\n")
         self.assertEqual((yum.err, yum.code), ("", None))
+
+    def opkg(self, args, protocol=None):
+        path = tmpdir(self) / "package-names.txt"
+        path.write_text("htop packages\nkmod-mt7603 core\nbusybox base\n")
+        help_path = tmpdir(self) / "opkg-help.txt"
+        help_path.write_text("opkg must have one sub-command argument\nusage: opkg [options...] sub-command\n")
+        values = {("shell", "package_names"): str(path), ("shell", "opkg_help"): str(help_path),
+                  ("shell", "opkg_release"): "22.03.7", ("shell", "opkg_target"): "ramips/mt7621",
+                  ("shell", "opkg_arch"): "mipsel_24kc", ("shell", "opkg_installed"): "busybox 1.35.0-5,opkg 2022-1"}
+        namespace, opkg = self.twisted_command("apt", "Command_opkg", values, ["-v"])
+        command = namespace["Command_opkg"](list(args))
+        command.user = {"uid": 0, "gid": 0}
+        command.sleep = lambda *a, **k: None
+        if protocol is not None:
+            command.protocol = protocol
+        command.start()
+        return bytes(command.out).decode(), command.err, command.code, command.protocol
+
+    def test_opkg_knows_only_the_installed_packages_before_an_update(self):
+        out, err, code, protocol = self.opkg(["install", "nosuchpkg123"])
+        self.assertEqual((out, err, code), ("Unknown package 'nosuchpkg123'.\n", "Collected errors:\n"
+                                            " * opkg_install_cmd: Cannot install package nosuchpkg123.\n", 255))
+        out, err, code, _ = self.opkg(["install", "htop", "busybox"])
+        self.assertEqual(out, "Unknown package 'htop'.\nPackage busybox (1.35.0-5) installed in root is up to date.\n")
+        self.assertEqual(code, 255)
+        self.assertEqual(self.opkg(["list-installed"])[0], "busybox - 1.35.0-5\nopkg - 2022-1\n")
+
+    def test_opkg_installs_names_of_the_feeds_after_an_update(self):
+        out, err, code, protocol = self.opkg(["update"])
+        self.assertTrue(out.startswith("Downloading https://downloads.openwrt.org/releases/22.03.7/targets/ramips/"
+                                       "mt7621/packages/Packages.gz\nUpdated list of available packages in "
+                                       "/var/opkg-lists/openwrt_core\n"), out[:200])
+        self.assertIn("/releases/22.03.7/packages/mipsel_24kc/telephony/Packages.sig\nSignature check passed.\n", out)
+        self.assertEqual((err, code), ("", None))
+        out, err, code, protocol = self.opkg(["install", "nosuchpkg123", "htop"], protocol)
+        version = protocol.tpot_opkg_added["htop"]
+        self.assertRegex(version, r"^\d+\.\d+(\.\d+)?-\d$")
+        self.assertEqual(out, f"Unknown package 'nosuchpkg123'.\nInstalling htop ({version}) to root...\n"
+                              f"Downloading https://downloads.openwrt.org/releases/22.03.7/packages/mipsel_24kc/"
+                              f"packages/htop_{version}_mipsel_24kc.ipk\nConfiguring htop.\n")
+        self.assertEqual((err, code), ("Collected errors:\n * opkg_install_cmd: Cannot install package nosuchpkg123.\n",
+                                       255))
+        self.assertEqual(self.opkg(["install", "htop"], protocol)[:3],
+                         (f"Package htop ({version}) installed in root is up to date.\n", "", None))
+        self.assertIn(f"htop - {version}\n", self.opkg(["list-installed"], protocol)[0])
+        self.assertEqual(self.opkg(["remove", "htop"], protocol)[0], "Removing package htop from root...\n")
+        self.assertEqual(self.opkg(["remove", "htop"], protocol)[0], "No packages removed.\n")
+
+    def test_opkg_usage(self):
+        self.assertEqual(self.opkg([])[:3], ("usage: opkg [options...] sub-command\n",
+                                             "opkg must have one sub-command argument\n", 1))
+        self.assertEqual(self.opkg(["foo"])[1:3], ("opkg: unknown sub-command foo\n", 1))
+        self.assertEqual(self.opkg(["install"])[1:3],
+                         ("opkg: the ``install'' command requires at least one argument\n", 1))
+        self.assertEqual(self.opkg(["print-architecture"])[0], "arch all 1\narch noarch 1\narch mipsel_24kc 10\n")
+        self.assertEqual(self.opkg(["info", "x"])[:3], ("", "", None))
 
     def test_yum_update_as_root(self):
         _, yum = self.twisted_command("yum", "Command_yum", self.YUM, ["-y", "update"])
@@ -1861,6 +1918,17 @@ class PatchTest(unittest.TestCase):
                                             "No package nosuchpkg123 available.\n", "Error: Nothing to do\n", 1))
         self.assertIn("---> Package tree.", run("yum install -y tree")[0])
         self.assertIn("No package htop available.\n", run("yum install -y htop")[0])
+
+    def test_opkg_of_openwrt_answers_for_its_release(self):
+        run = self.upstream_session("openwrt", uid=0)
+        self.assertEqual(run("opkg install nosuchpkg123"), ("Unknown package 'nosuchpkg123'.\n", "Collected errors:\n"
+                         " * opkg_install_cmd: Cannot install package nosuchpkg123.\n", 255))
+        self.assertEqual(run("opkg install htop")[2], 255)
+        self.assertEqual(run("opkg update")[2], 0)
+        out, err, code = run("opkg install htop")
+        self.assertIn("/packages/mipsel_24kc/packages/htop_", out)
+        self.assertEqual((err, code), ("", 0))
+        self.assertIn("busybox - 1.3", run("/bin/opkg list-installed")[0])
 
     def test_dnf_columns_as_dnf_computes_them(self):
         source = (self.patched() / "src/cowrie/commands/yum.py").read_text()
@@ -2610,6 +2678,12 @@ class PatchTest(unittest.TestCase):
 
     def test_fails_loudly_on_unknown_upstream(self):
         cases = (("src/cowrie/shell/protocol.py", "for x in paths if x", "for x in paths"),
+                 ("src/cowrie/commands/yum.py", "f\"---> Package {p}.{self.packages[p]['version']} {arch}.",
+                  "f\"---> Package {p}.{self.packages[p]['version']}  {arch}."),
+                 ("src/cowrie/commands/yum.py", "{random.randint(1, 40)}-{random.randint(1, 10)}",
+                  "{random.randint(1, 40)}-{random.randint(1, 9)}"),
+                 ("src/cowrie/commands/yum.py", "f\"  {p}.{arch} {random.randint(0, 2)}:",
+                  "f\"  {p}.{arch} {random.randint(0, 3)}:"),
                  ("src/cowrie/commands/apt.py", 'commands["/bin/apt"] = Command_aptget\n',
                   'commands["/bin/apt"] = Command_aptget  # apt\n'),
                  ("src/cowrie/commands/free.py", 'open("/proc/meminfo")', 'open("/proc/meminfo", "rb")'),

@@ -485,7 +485,7 @@ class PackageNamesTest(unittest.TestCase):
             self.assertIn(has, lines, persona.id)
             self.assertNotIn(lacks, lines, persona.id)
             self.assertEqual(cfg_of(out).get("shell", "package_names", fallback=None),
-                             f"{out}/{system.PACKAGE_NAMES}" if server else None, persona.id)
+                             f"{out}/{system.PACKAGE_NAMES}", persona.id)
             if "dpkg" in persona.package_managers:
                 apt = json.loads((out / system.APT_PACKAGES).read_text())
                 self.assertFalse((set(apt["installed"]) | set(apt["available"])) - set(lines), persona.id)

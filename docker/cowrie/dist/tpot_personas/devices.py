@@ -381,27 +381,11 @@ DISTRIB_TAINTS=''
                                "/var/run/dnsmasq/dnsmasq.cfg01411c.pid", vsz=1380, rss=896),
         ps_entry("root", 0, "-ash", vsz=1232, rss=772, tty="pts/0"),
     ]
-    return device_content(persona, ident, files, entries, cmdline, boot, processes,
-                          accounts=(OPENWRT_PASSWD, OPENWRT_GROUP, shadow),
-                          txtcmds={"bin/opkg": OPKG_HELP})
-
-
-OPKG_HELP = """opkg must have one sub-command argument
-usage: opkg [options...] sub-command [arguments...]
-where sub-command is one of:
-
-Package Manipulation:
-\tupdate\t\t\tUpdate list of available packages
-\tupgrade <pkgs>\t\tUpgrade packages
-\tinstall <pkgs>\t\tInstall package(s)
-\tremove <pkgs|regexp>\tRemove package(s)
-
-Informational Commands:
-\tlist\t\t\tList available packages
-\tlist-installed\t\tList installed packages
-\tlist-upgradable\t\tList installed and upgradable packages
-\tinfo [pkg|regexp]\tDisplay all info for <pkg>
-"""
+    content = device_content(persona, ident, files, entries, cmdline, boot, processes,
+                             accounts=(OPENWRT_PASSWD, OPENWRT_GROUP, shadow))
+    # opkg is a command of the patched Cowrie (system.opkg_keys)
+    content.programs = (*content.programs, "bin/opkg")
+    return content
 
 
 # QNAP model per CPU of the catalog's hardware

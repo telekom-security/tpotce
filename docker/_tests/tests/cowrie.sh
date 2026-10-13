@@ -1072,6 +1072,15 @@ if not df_table.is_file() or not json.loads(df_table.read_text(encoding="utf-8")
     fail(f"{selected} has no df table: {df_table}")
 if config.get("shell", "awk_style", fallback="") not in ("gawk", "mawk", "busybox"):
     fail(f"{selected} has no awk style")
+# apt, yum 3 and opkg know the package names of the release; opkg is a command of the patched Cowrie
+lists_names = (persona["kind"] == "server" and "dnf" not in package_managers
+               and bool(package_managers & {"apt-get", "yum"})) or "opkg" in package_managers
+if lists_names:
+    names_path = Path(config.get("shell", "package_names", fallback=""))
+    if not names_path.is_file() or len(names_path.read_text(encoding="utf-8").splitlines()) < 1000:
+        fail(f"{selected} has no package names: {names_path}")
+if "opkg" in package_managers and (txtcmds_path / "bin" / "opkg").exists():
+    fail(f"{selected} txtcmds still has bin/opkg")
 for command_path in package_manager_paths:
     should_exist = Path(command_path).name in package_managers
     exists_in_pickle = find_node(pickle_tree, command_path) is not None

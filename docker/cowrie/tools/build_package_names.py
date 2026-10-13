@@ -73,7 +73,12 @@ def popcon(path, limit):
     return top
 
 
+# words no persona output may carry (tpot_personas.validate.FORBIDDEN_MARKERS): names with them are left out
+MARKERS = ("phil", "svr04")
+
+
 def write(path, lines):
+    lines = [line for line in lines if not any(marker in line.split(" ", 1)[0] for marker in MARKERS)]
     data = "".join(line + "\n" for line in lines).encode()
     path.write_bytes(gzip.compress(data, 9, mtime=0))
     return len(lines), path.stat().st_size

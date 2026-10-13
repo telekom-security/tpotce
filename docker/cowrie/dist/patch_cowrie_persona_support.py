@@ -1708,7 +1708,7 @@ TPOT_SUDO_LONG_VALUES = frozenset({"--auth-type", "--close-from", "--login-class
 
 
 def patch_apt(cowrie_root):
-    """apt / apt-get of the persona: the version line ([shell] apt_version, deb_arch),
+    """apt / apt-get of the persona (and opkg of OpenWrt, OPKG_COMMAND): the version line ([shell] apt_version, deb_arch),
     `update` as root fetches the sources of the persona ([shell] apt_sources: "url suite"
     separated by commas), install takes them as its mirror and the arch of the persona,
     the versions of its packages ([shell] apt_packages) and for other packages one that
@@ -2103,7 +2103,7 @@ class Command_apt(Command_aptget):
 commands["/usr/bin/apt"] = Command_apt
 commands["/bin/apt"] = Command_apt
 commands["apt"] = Command_apt
-""",
+""" + OPKG_COMMAND,
     )
 
 
@@ -2293,6 +2293,160 @@ def tpot_yum_present(name: str, evr: str) -> str:
         # Assume 'yes'
 """,
     )
+    # the version and release of a package and its lines as yum 3 writes them (name.arch epoch:version-release)
+    replace_once(
+        path,
+        """                "version": f"{random.choice([0, 1])}.{random.randint(1, 40)}-{random.randint(1, 10)}",
+""",
+        """                "version": f"{random.choice([0, 1])}.{random.randint(1, 40)}.{random.randint(0, 9)}",
+""",
+    )
+    replace_once(
+        path,
+        """                f"---> Package {p}.{self.packages[p]['version']} {arch}.{self.packages[p]['release']} will be installed\\n"
+""",
+        """                f"---> Package {p}.{arch} 0:{self.packages[p]['version']}-{self.packages[p]['release']} will be installed\\n"
+""",
+    )
+    replace_once(
+        path,
+        """                f"  {p}.{arch} {random.randint(0, 2)}:{self.packages[p]['version']}-{self.packages[p]['release']} \\t\\t"
+""",
+        """                f"  {p}.{arch} 0:{self.packages[p]['version']}-{self.packages[p]['release']} \\t\\t"
+""",
+    )
+
+
+# module code of the patched apt.py after its commands: opkg of OpenWrt
+OPKG_COMMAND = r'''
+
+# T-Pot: opkg of OpenWrt ([shell] opkg_release, opkg_target, opkg_arch, opkg_installed, opkg_help and
+# package_names "name feed"). The lists of the feeds are empty after a boot: install knows the
+# installed packages only until `opkg update` of the session fetched the lists. Nothing is
+# downloaded or written; what the session fetched and installed ends with it.
+TPOT_OPKG_FEEDS = ("core", "base", "luci", "packages", "routing", "telephony")
+# sub-commands that change or show nothing here
+TPOT_OPKG_QUIET = frozenset({"upgrade", "configure", "flag", "list-upgradable", "info", "status", "download",
+                             "files", "search", "find", "compare-versions", "depends", "whatdepends",
+                             "whatdependsrec", "whatrecommends", "whatsuggests", "whatprovides", "whatconflicts",
+                             "whatreplaces", "list-changed-conffiles"})
+
+
+def tpot_opkg(key: str, fallback: str = "") -> str:
+    return CowrieConfig.get("shell", key, fallback=fallback)
+
+
+@functools.cache
+def tpot_opkg_names() -> dict[str, str]:
+    """T-Pot: {name: feed} of the release ([shell] package_names)."""
+    path = tpot_opkg("package_names")
+    try:
+        rows = [line.split() for line in Path(path).read_text(encoding="utf-8").splitlines()] if path else []
+    except (OSError, ValueError):
+        rows = []
+    return {row[0]: row[1] for row in rows if len(row) == 2}
+
+
+def tpot_opkg_installed() -> dict[str, str]:
+    """T-Pot: the installed packages of the persona ([shell] opkg_installed "name version,...")."""
+    return dict(entry.split(" ", 1) for entry in tpot_opkg("opkg_installed").split(",") if " " in entry)
+
+
+def tpot_opkg_url(feed: str) -> str:
+    base = f"https://downloads.openwrt.org/releases/{tpot_opkg('opkg_release')}"
+    if feed == "core":
+        return f"{base}/targets/{tpot_opkg('opkg_target')}/packages"
+    return f"{base}/packages/{tpot_opkg('opkg_arch')}/{feed}"
+
+
+def tpot_opkg_version(name: str) -> str:
+    """T-Pot: the version of a package of the lists, the same for a name on every call."""
+    d = hashlib.sha256(f"{tpot_opkg('opkg_release')} {name}".encode()).digest()
+    return f"{1 + d[0] % 9}.{d[1] % 20}" + (f".{d[2] % 10}" if d[3] % 2 else "") + f"-{1 + d[4] % 4}"
+
+
+class Command_opkg(HoneyPotCommand):
+    """T-Pot: opkg of OpenWrt."""
+
+    sleep = Command_aptget.sleep
+
+    def tpot_usage(self, first: str) -> None:
+        try:
+            text = Path(tpot_opkg("opkg_help")).read_text(encoding="utf-8")
+        except (OSError, ValueError):
+            text = "opkg must have one sub-command argument\n"
+        self.errorWrite(first)
+        self.write(text.split("\n", 1)[-1])
+        self.exit(1)
+
+    @inlineCallbacks
+    def start(self):
+        words = [arg for arg in self.args if not arg.startswith("-")]
+        added = getattr(self.protocol, "tpot_opkg_added", None)
+        if added is None:
+            added = {}
+            self.protocol.tpot_opkg_added = added
+        installed = {**tpot_opkg_installed(), **added}
+        if not words:
+            self.tpot_usage("opkg must have one sub-command argument\n")
+        elif words[0] == "update":
+            for feed in TPOT_OPKG_FEEDS:
+                url = tpot_opkg_url(feed)
+                self.write(f"Downloading {url}/Packages.gz\n")
+                yield self.sleep(0.3, 0.8)
+                self.write(f"Updated list of available packages in /var/opkg-lists/openwrt_{feed}\n"
+                           f"Downloading {url}/Packages.sig\nSignature check passed.\n")
+            self.protocol.tpot_opkg_lists = True
+            self.exit()
+        elif words[0] == "install" and len(words) == 1:
+            self.tpot_usage("opkg: the ``install'' command requires at least one argument\n")
+        elif words[0] == "install":
+            names = tpot_opkg_names() if getattr(self.protocol, "tpot_opkg_lists", False) else {}
+            arch, errors, new = tpot_opkg("opkg_arch"), [], []
+            for name in words[1:]:
+                if name in installed:
+                    self.write(f"Package {name} ({installed[name]}) installed in root is up to date.\n")
+                elif name in names and name not in new:
+                    version = tpot_opkg_version(name)
+                    self.write(f"Installing {name} ({version}) to root...\n"
+                               f"Downloading {tpot_opkg_url(names[name])}/{name}_{version}_{arch}.ipk\n")
+                    yield self.sleep(0.3, 0.8)
+                    new.append(name)
+                elif name not in new and name not in errors:
+                    self.write(f"Unknown package '{name}'.\n")
+                    errors.append(name)
+            for name in new:
+                added[name] = tpot_opkg_version(name)
+                self.write(f"Configuring {name}.\n")
+            if errors:
+                self.errorWrite("Collected errors:\n" + "".join(
+                    f" * opkg_install_cmd: Cannot install package {name}.\n" for name in errors))
+                self.exit(255)
+            else:
+                self.exit()
+        elif words[0] in ("list", "list-installed"):
+            self.write("".join(f"{name} - {version}\n" for name, version in sorted(installed.items())))
+            self.exit()
+        elif words[0] == "remove":
+            gone = [name for name in dict.fromkeys(words[1:]) if name in added]
+            for name in gone:
+                del added[name]
+                self.write(f"Removing package {name} from root...\n")
+            if not gone:
+                self.write("No packages removed.\n")
+            self.exit()
+        elif words[0] == "print-architecture":
+            self.write(f"arch all 1\narch noarch 1\narch {tpot_opkg('opkg_arch')} 10\n")
+            self.exit()
+        elif words[0] in TPOT_OPKG_QUIET:
+            self.exit()
+        else:
+            self.tpot_usage(f"opkg: unknown sub-command {words[0]}\n")
+
+
+commands["/bin/opkg"] = Command_opkg
+commands["opkg"] = Command_opkg
+'''
 
 
 # module code of the patched yum.py after Command_yum: dnf 4 and rpm of RHEL 9

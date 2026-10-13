@@ -105,6 +105,8 @@ COMMON_SKIP_PYTHON_COMMANDS = (
     "/usr/bin/sudo",
     "/usr/bin/yum",
     "/usr/sbin/service",
+    "/bin/opkg",
+    "opkg",
     "apt",
     "apt-get",
     "dnf",
@@ -148,6 +150,8 @@ def skip_python_commands(persona, ident, content):
     commands |= set(system.skipped_tools(persona, ident))
     if not content.busybox_help:
         commands |= set(BUSYBOX_PYTHON_COMMANDS)
+    if persona.family == "openwrt":
+        commands -= {"/bin/opkg", "opkg"}
     return sorted(commands)
 
 
@@ -521,6 +525,8 @@ def render(persona, ident, base_tree, out_dir, runtime_dir, keys_dir, cowrie_roo
     if content.busybox_help:
         _write(out_dir / BUSYBOX_HELP, content.busybox_help)
     _write(out_dir / DF_TABLE, json.dumps(system.df_table(persona, ident, content.filesystems), indent=1, sort_keys=True) + "\n")
+    if persona.family == "openwrt":
+        _write(out_dir / system.OPKG_HELP_FILE, system.OPKG_HELP)
     names = system.package_names(persona, ident)
     if names is not None:
         _write(out_dir / system.PACKAGE_NAMES, "".join(f"{line}\n" for line in names))

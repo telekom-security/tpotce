@@ -1585,6 +1585,102 @@ def _name_rows(name):
         return [line.split() for line in f if line.strip()]
 
 
+# opkg of OpenWrt: the installed packages ("name version", opkg list-installed of the x86-64 rootfs of the
+#   release without the packages of that target: kernel, kmods, grub, the disk tools; unverified: the
+#   wireless packages and kmods of the ramips/mt7621 images are left out); its help; the files of opkg
+OPKG_INSTALLED = {
+    "21.02": """
+    base-files 1452-r16847-f8282da11e busybox 1.33.2-2 ca-bundle 20211016-1 cgi-io 2022-08-10-901b0f04-21
+    dnsmasq 2.85-9 dropbear 2020.81-2 firewall 2021-03-23-61db17ed-1.1 fstools 2021-01-04-c53b1882-1 fwtool
+    2019-11-12-8f7fe925-1 getrandom 2020-10-25-9ef88681-2 ip6tables 1.8.7-1 iptables 1.8.7-1 jshn
+    2021-05-16-b14c4688-2 jsonfilter 2018-02-04-c7e938d6-1 libblobmsg-json20210516 2021-05-16-b14c4688-2 libc
+    1.1.24-3 libgcc1 8.4.0-3 libip4tc2 1.8.7-1 libip6tc2 1.8.7-1 libiwinfo-data 2022-08-19-0dad3e66-1
+    libiwinfo-lua 2022-08-19-0dad3e66-1 libiwinfo20210430 2022-08-19-0dad3e66-1 libjson-c5 0.15-2
+    libjson-script20210516 2021-05-16-b14c4688-2 liblua5.1.5 5.1.5-9 liblucihttp-lua 2021-06-11-3dc89af4-1
+    liblucihttp0 2021-06-11-3dc89af4-1 libnl-tiny1 2020-08-05-c291088f-2 libpthread 1.1.24-3 librt 1.1.24-3
+    libubox20210516 2021-05-16-b14c4688-2 libubus-lua 2021-06-30-4fc532c8-2 libubus20210630
+    2021-06-30-4fc532c8-2 libuci20130104 2021-04-14-4b3db117-5 libuclient20201210 2023-04-13-007d9454-1
+    libustream-wolfssl20201210 2022-01-16-868fd881-2 libwolfssl5.5.3.99a5b54a 5.5.3-stable-1 libxtables12
+    1.8.7-1 logd 2020-10-25-9ef88681-2 lua 5.1.5-9 luci git-20.074.84698-ead5e81 luci-app-firewall
+    git-22.089.67741-3856d50 luci-app-opkg git-22.273.29015-e01e38c luci-base git-23.093.57360-e98243e
+    luci-lib-base git-20.232.39649-1f6dc29 luci-lib-ip git-20.250.76529-62505bd luci-lib-jsonc
+    git-22.097.61937-bc85ba5 luci-lib-nixio git-20.234.06894-c4a4e43 luci-mod-admin-full
+    git-19.253.48496-3f93650 luci-mod-network git-22.244.54918-77c916e luci-mod-status
+    git-22.089.70019-d4f0b06 luci-mod-system git-23.013.73129-aa7938d luci-proto-ipv6 git-21.148.49484-14511e5
+    luci-proto-ppp git-21.163.64918-6c6559a luci-ssl git-20.244.36115-e10f954 luci-theme-bootstrap
+    git-22.288.45155-afd0012 mtd 26 netifd 2021-10-30-8f82742c-1 odhcp6c 2021-01-09-53f07e90-16
+    odhcpd-ipv6only 2021-07-18-bc9d317f-3 openwrt-keyring 2021-02-20-49283916-2 opkg 2021-06-13-1bf042dd-2 ppp
+    2.4.8.git-2020-10-03-3 ppp-mod-pppoe 2.4.8.git-2020-10-03-3 procd 2021-03-08-2cfc26f8-2 px5g-wolfssl 4.1
+    rpcd 2022-02-19-8d26a1ba-1 rpcd-mod-file 2022-02-19-8d26a1ba-1 rpcd-mod-iwinfo 2022-02-19-8d26a1ba-1
+    rpcd-mod-luci 20210614 rpcd-mod-rrdns 20170710 ubox 2020-10-25-9ef88681-2 ubus 2021-06-30-4fc532c8-2 ubusd
+    2021-06-30-4fc532c8-2 uci 2021-04-14-4b3db117-5 uclient-fetch 2023-04-13-007d9454-1 uhttpd
+    2021-03-21-15346de8-2 uhttpd-mod-ubus 2021-03-21-15346de8-2 urandom-seed 3 urngd 2020-01-21-c7f7b6b6-1
+    usign 2020-05-23-f1f65026-1
+""",
+    "22.03": """
+    base-files 1506-r20341-591b7e93d3 busybox 1.35.0-5 ca-bundle 20230311-1 cgi-io 2022-08-10-901b0f04-21
+    dnsmasq 2.86-16 dropbear 2022.82-4 firewall4 2022-10-18-7ae5e14b-1 fstools 2022-06-02-93369be0-2 fwtool
+    2019-11-12-8f7fe925-1 getrandom 2021-08-03-205defb5-2 jansson4 2.13.1-2 jshn 2022-05-15-d2223ef9-1
+    jsonfilter 2024-01-23-594cfa86-1 libblobmsg-json20220515 2022-05-15-d2223ef9-1 libc 1.2.3-4 libgcc1
+    11.2.0-4 libiwinfo-data 2022-12-15-8d158096-1 libiwinfo-lua 2022-12-15-8d158096-1 libiwinfo20210430
+    2022-12-15-8d158096-1 libjson-c5 0.15-2 libjson-script20220515 2022-05-15-d2223ef9-1 liblua5.1.5 5.1.5-11
+    liblucihttp-lua 2023-03-15-9b5b683f-1 liblucihttp0 2023-03-15-9b5b683f-1 libmnl0 1.0.5-1 libnftnl11
+    1.2.1-2 libnl-tiny1 2021-11-21-8e0555fb-1 libpthread 1.2.3-4 librt 1.2.3-4 libubox20220515
+    2022-05-15-d2223ef9-1 libubus-lua 2022-06-01-2bebf93c-1 libubus20220601 2022-06-01-2bebf93c-1
+    libuci20130104 2021-10-22-f84f49f0-6 libuclient20201210 2023-04-13-007d9454-1 libucode20220812
+    2022-12-02-46d93c9c-1 libustream-wolfssl20201210 2022-12-08-9217ab46-2 libwolfssl5.7.2.ee39414e
+    5.7.2-stable-1 logd 2021-08-03-205defb5-2 lua 5.1.5-11 luci git-23.093.42303-d58cd69 luci-app-firewall
+    git-24.067.02332-0337416 luci-app-opkg git-24.045.79537-9f5b5dd luci-base git-24.067.02332-4c1ddfb
+    luci-lib-base git-20.232.39649-1f6dc29 luci-lib-ip git-23.311.79310-704a335 luci-lib-jsonc
+    git-23.298.74581-7dfbbca luci-lib-nixio git-24.034.55122-b50146c luci-mod-admin-full
+    git-19.253.48496-3f93650 luci-mod-network git-24.075.44908-000d7e5 luci-mod-status
+    git-24.087.58505-279cf19 luci-mod-system git-24.067.02339-de5734b luci-proto-ipv6 git-23.355.78888-e047387
+    luci-proto-ppp git-24.135.45225-e7a8d09 luci-ssl git-20.244.36115-e10f954 luci-theme-bootstrap
+    git-24.072.69887-4219a92 mtd 26 netifd 2022-08-25-76d2d41b-1 nftables-json 1.0.2-2.1 odhcp6c
+    2022-08-05-7d21e8d8-18 odhcpd-ipv6only 2023-01-02-4a673e1c-2 openwrt-keyring 2022-03-25-62471e69-3 opkg
+    2022-02-24-d038e5b6-1 ppp 2.4.9.git-2021-01-04-3 ppp-mod-pppoe 2.4.9.git-2021-01-04-3 procd
+    2022-06-01-7a009685-3 procd-seccomp 2022-06-01-7a009685-3 procd-ujail 2022-06-01-7a009685-3 px5g-wolfssl
+    6.2 rpcd 2022-12-15-7de4820c-1 rpcd-mod-file 2022-12-15-7de4820c-1 rpcd-mod-iwinfo 2022-12-15-7de4820c-1
+    rpcd-mod-luci 20210614 rpcd-mod-rrdns 20170710 ubox 2021-08-03-205defb5-2 ubus 2022-06-01-2bebf93c-1 ubusd
+    2022-06-01-2bebf93c-1 uci 2021-10-22-f84f49f0-6 uclient-fetch 2023-04-13-007d9454-1 ucode
+    2022-12-02-46d93c9c-1 ucode-mod-fs 2022-12-02-46d93c9c-1 ucode-mod-ubus 2022-12-02-46d93c9c-1
+    ucode-mod-uci 2022-12-02-46d93c9c-1 uhttpd 2023-06-25-34a8a74d-1 uhttpd-mod-ubus 2023-06-25-34a8a74d-1
+    urandom-seed 3 urngd 2023-11-01-44365eb1-1 usign 2020-05-23-f1f65026-1
+""",
+}
+OPKG_HELP = """opkg must have one sub-command argument
+usage: opkg [options...] sub-command [arguments...]
+where sub-command is one of:
+
+Package Manipulation:
+\tupdate\t\t\tUpdate list of available packages
+\tupgrade <pkgs>\t\tUpgrade packages
+\tinstall <pkgs>\t\tInstall package(s)
+\tremove <pkgs|regexp>\tRemove package(s)
+
+Informational Commands:
+\tlist\t\t\tList available packages
+\tlist-installed\t\tList installed packages
+\tlist-upgradable\t\tList installed and upgradable packages
+\tinfo [pkg|regexp]\tDisplay all info for <pkg>
+"""
+OPKG_HELP_FILE = "opkg-help.txt"
+
+
+def opkg_branch(ident):
+    return ".".join(ident.release.os_version.split(".")[:2])
+
+
+def opkg_keys(persona, ident, runtime_dir):
+    """[shell] keys of the patched opkg of OpenWrt: the release and its download folders, the installed
+    packages, the names of the feeds (package_names) and the help."""
+    x = ident.release.extra
+    pairs = OPKG_INSTALLED[opkg_branch(ident)].split()
+    return {"opkg_release": ident.release.os_version, "opkg_target": x["target"], "opkg_arch": x["pkg_arch"],
+            "opkg_installed": ",".join(f"{name} {version}" for name, version in zip(pairs[::2], pairs[1::2])),
+            "opkg_help": f"{runtime_dir}/{OPKG_HELP_FILE}", "package_names": f"{runtime_dir}/{PACKAGE_NAMES}"}
+
+
 def package_names(persona, ident):
     """The lines of the runtime file of the names apt (Debian, Ubuntu, Raspberry Pi OS), yum 3
     (CentOS 7) or opkg (OpenWrt: "name feed") know on the persona's release: the names of the
@@ -1597,7 +1693,7 @@ def package_names(persona, ident):
     if persona.family == "centos":
         return sorted({row[0] for row in _name_rows("yum.txt.gz")} | set(ident.release.packages))
     if persona.family == "openwrt":
-        letter = OPKG_NAME_RELEASES[".".join(ident.release.os_version.split(".")[:2])]
+        letter = OPKG_NAME_RELEASES[opkg_branch(ident)]
         return [f"{row[0]} {row[2]}" for row in _name_rows("opkg.txt.gz") if letter in row[1]]
     return None
 
@@ -1685,6 +1781,8 @@ def shell_keys(persona, ident, files, runtime_dir):
     """[shell] keys of the patched perl.py, python.py, git.py, sudo.py, service.py, apt.py and
     yum.py (perl.py only on EdgeOS, {} on the other devices). files: the persona's files (its apt sources)."""
     found = tools(persona, ident)
+    if persona.family == "openwrt":
+        return opkg_keys(persona, ident, runtime_dir)
     if not found:
         return {}
     perl, year = found["perl"]
