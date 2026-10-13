@@ -309,6 +309,13 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(find("/usr/bin/top"), "top")
         self.assertIsNone(find("git"))
 
+    def test_a_faked_program_of_the_session_answers_for_a_skipped_command(self):
+        find = self.lookup({}, {"/bin/top": "top", "top": "top"}, skip="top")
+        self.protocol_obj.tpot_faked = {"/usr/bin/top": "faked"}
+        self.assertEqual(find("top"), "faked")
+        self.assertEqual(find("/bin/top"), "faked")
+        self.assertEqual(find("/usr/bin/top"), "faked")
+
     def test_skipped_python_command_stays_skipped_in_every_spelling(self):
         find = self.lookup({}, {"/bin/top": "top", "top": "top"}, skip="top")
         self.assertEqual(find("top"), ("script", "/usr/bin/top"))
@@ -752,7 +759,8 @@ class PatchTest(unittest.TestCase):
     def test_apt_install_marks_the_programs_for_the_session(self):
         values = self.apt_with_packages({}, "debian", available={"git": "1:2.39.5-0+deb12u2", "net-tools": "2.10-0.1",
                                                                  "nmap": "7.93+dfsg1-1"},
-                                        programs={"net-tools": ["/usr/bin/netstat", "/usr/sbin/ifconfig"]})
+                                        programs={"net-tools": ["/usr/bin/netstat", "/usr/sbin/ifconfig"],
+                                                  "git": ["/usr/bin/git"], "nmap": ["/usr/bin/nmap"]})
         cowrie = {"git": "Command_git", "/bin/git": "Command_git", "ifconfig": "Command_ifconfig",
                   "netstat": "Command_netstat"}
         _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "git", "net-tools", "nmap"],
@@ -764,6 +772,49 @@ class PatchTest(unittest.TestCase):
         # Cowrie's own commands answer for theirs, a program Cowrie does not have is the faked one
         self.assertEqual(set(apt.protocol.commands), set(cowrie) | {"/usr/bin/nmap"})
 
+    def test_apt_install_marks_only_the_programs_of_its_data(self):
+        # a package apt has no data for is installed as before, its program stays skipped: Cowrie's dnf,
+        # rpm and lspci do not answer on a Debian system
+        values = self.apt_with_packages({}, "debian", available={"gcc": "4:12.2.0-3"},
+                                        programs={"gcc": ["/usr/bin/gcc"]})
+        cowrie = {"dnf": "Command_dnf", "/usr/bin/dnf": "Command_dnf", "rpm": "Command_rpm", "lspci": "Command_lspci",
+                  "gcc": "Command_gcc"}
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "dnf", "rpm", "lspci", "gcc"],
+                                      commands=cowrie)
+        self.assertEqual(apt.code, None)
+        self.assertEqual(apt.protocol.tpot_installed, {"gcc": "12.2.0"})
+        self.assertEqual(apt.protocol.commands, cowrie)
+        self.assertEqual(sorted(apt.protocol.tpot_faked), ["/usr/bin/dnf", "/usr/bin/lspci", "/usr/bin/rpm"])
+        self.assertEqual(apt.fs.made, ["/usr/bin/dnf", "/usr/bin/rpm", "/usr/bin/lspci", "/usr/bin/gcc"])
+
+    def test_apt_names_a_package_the_release_does_not_have(self):
+        values = self.apt_with_packages({}, "debian", unavailable=["yum"])
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "yum", "nmap"])
+        self.assertEqual(bytes(apt.out).decode(), "Reading package lists... Done\nBuilding dependency tree... Done\n"
+                         "Reading state information... Done\n"
+                         "Package yum is not available, but is referred to by another package.\n"
+                         "This may mean that the package is missing, has been obsoleted, or\n"
+                         "is only available from another source\n\n")
+        self.assertEqual((apt.err, apt.code, apt.fs.made), ("E: Package 'yum' has no installation candidate\n", 100, []))
+
+    def test_apt_takes_the_values_of_its_options(self):
+        for args in (["-o", "Dpkg::Options::=--force-confold"], ["--option", "Dpkg::Options::=--force-confold"],
+                     ["-oAPT::Install-Recommends=0"], ["--option=APT::Install-Recommends=0"],
+                     ["-c", "/etc/apt/apt.conf"], ["-t", "bookworm-backports"],
+                     ["--target-release", "bookworm-backports"], ["-a", "arm64"]):
+            with self.subTest(args):
+                _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", *args, "nginx"])
+                self.assertEqual(apt.err, "")
+                self.assertIn("The following NEW packages will be installed:\n  nginx \n", bytes(apt.out).decode())
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["-o", "Debug::X=1", "install", "-y", "nginx"])
+        self.assertIn("  nginx \n", bytes(apt.out).decode())
+
+    def test_dnf_has_no_tools_of_debian(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        for name in ("apt", "apt-get", "dpkg"):
+            self.assertEqual(run(["dnf", "install", "-y", name])[1:], (f"Error: Unable to find a match: {name}\n", 1))
+        self.assertFalse(getattr(run.protocol, "tpot_installed", {}))
+
     def test_apt_packages_name_the_programs_of_the_available_packages(self):
         persona = catalog.by_id("debian-bookworm")
         from tpot_personas.identity import draw
@@ -773,6 +824,10 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(programs["php-cli"], ["/usr/bin/php"])
         self.assertEqual(programs["unzip"], ["/usr/bin/unzip"])
         self.assertEqual(programs["git"], ["/usr/bin/git"])
+        self.assertFalse({"yum", "dnf", "rpm"} & set(programs))
+        for pid in ("debian-bookworm", "debian-trixie", "ubuntu-noble", "ubuntu-jammy"):
+            persona = catalog.by_id(pid)
+            self.assertEqual(system.apt_packages(persona, draw(persona, 1))["unavailable"], ["yum"], pid)
 
     def test_dnf_install_marks_the_programs_for_the_session(self):
         run = self.upstream_session("rhel-9", uid=0, extra_modules=("git",))
@@ -821,9 +876,10 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(len(out.splitlines()), 3)
         self.assertLessEqual(len(reads), 1)
 
-    def apt_with_packages(self, packages, fallback="ubuntu", available=None, programs=None):
+    def apt_with_packages(self, packages, fallback="ubuntu", available=None, programs=None, unavailable=None):
         path = tmpdir(self) / "apt-packages.json"
-        path.write_text(json.dumps({"installed": packages, "available": available or {}, "programs": programs or {}}))
+        path.write_text(json.dumps({"installed": packages, "available": available or {}, "programs": programs or {},
+                                    "unavailable": unavailable or []}))
         return {**self.APT, ("shell", "apt_packages"): str(path), ("shell", "apt_fallback"): fallback}
 
     def test_apt_install_shows_the_versions_of_the_persona(self):

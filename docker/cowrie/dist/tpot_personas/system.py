@@ -1485,6 +1485,9 @@ def sudo_list(persona):
 
 # programs of an apt package besides those of TOOL_PROGRAMS
 APT_PROGRAMS = {"busybox": ("usr/bin/busybox",)}
+# packages apt knows by name but has no candidate for (Debian 12 / 13, Ubuntu 22.04 / 24.04): yum of
+#   Red Hat ("Package yum is not available, but is referred to by another package")
+APT_UNAVAILABLE = ("yum",)
 
 
 def apt_programs(name):
@@ -1496,12 +1499,14 @@ def apt_programs(name):
 
 def apt_packages(persona, ident):
     """What apt knows on a Debian server: the installed packages (the release's, APT_INSTALLED), the
-    versions of the packages it would install (APT_AVAILABLE) and their programs."""
+    versions of the packages it would install (APT_AVAILABLE), their programs and the packages it has
+    no candidate for (APT_UNAVAILABLE)."""
     code = ident.release.extra["codename"]
     installed = dict(sorted({**APT_INSTALLED[code], **ident.release.packages}.items()))
     available = {name: version for name, version in sorted(APT_AVAILABLE[code].items()) if name not in installed}
     return {"installed": installed, "available": available,
-            "programs": {name: apt_programs(name) for name in available}}
+            "programs": {name: apt_programs(name) for name in available},
+            "unavailable": [name for name in APT_UNAVAILABLE if name not in installed and name not in available]}
 
 
 def rpm_evr(value, minor):

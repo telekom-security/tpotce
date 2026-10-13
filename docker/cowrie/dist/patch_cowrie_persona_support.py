@@ -144,7 +144,12 @@ def tpot_skip_python_commands() -> frozenset[str]:
         """        if path in self.commands:
             return self.commands[path]
 """,
-        """        for spelling in spellings:
+        """        # a program apt installed in this session that Cowrie's command of its name does not answer
+        faked = getattr(self, "tpot_faked", None) or {}
+        for spelling in spellings:
+            if spelling in faked:
+                return faked[spelling]
+        for spelling in spellings:
             if spelling in self.commands and not skip_python_command(spelling):
                 return self.commands[spelling]
 """,
@@ -1751,6 +1756,8 @@ def tpot_apt_data() -> dict[str, dict[str, str]]:
     programs = data.get("programs") if isinstance(data.get("programs"), dict) else {}
     found["programs"] = {str(name): [str(path) for path in paths] for name, paths in programs.items()
                          if isinstance(paths, list)}
+    unavailable = data.get("unavailable") if isinstance(data.get("unavailable"), list) else []
+    found["unavailable"] = {str(name): "" for name in unavailable}
     return found
 
 
@@ -1821,8 +1828,18 @@ def tpot_apt_size(name: str) -> int:
             self.do_locked()
 """,
         """        self.packages = {}
-        # T-Pot: options (-y, -q, --no-install-recommends) are no command and no package
-        self.tpot_words = [arg for arg in self.args if not arg.startswith("-")]
+        # T-Pot: options (-y, -q, --no-install-recommends) and the values of -o, -c, -t, -a are no
+        # command and no package
+        self.tpot_words = []
+        items = list(self.args)
+        while items:
+            arg = items.pop(0)
+            if arg in ("-o", "-c", "-t", "-a", "--option", "--config-file", "--target-release",
+                       "--default-release", "--host-architecture"):
+                if items:
+                    items.pop(0)
+            elif not arg.startswith("-"):
+                self.tpot_words.append(arg)
         if len(self.args) == 0:
             self.do_help()
         elif self.args[0] in ("-v", "--version"):
@@ -1915,13 +1932,19 @@ def tpot_apt_size(name: str) -> int:
         """        # T-Pot: package names as apt takes them (Debian's form, an architecture after the colon), a
         # path is a .deb file; an installed package of the persona is already the newest version,
         # another one gets a version that fits the release
-        names, errors = [], []
+        names, errors, notes = [], [], []
         for word in self.tpot_words[1:]:
             found = re.fullmatch(r"([a-z0-9][a-z0-9+.-]+)(?::[a-z0-9-]+)?", word)
             if "/" in word or word.endswith(".deb"):
                 errors.append(f"E: Unsupported file {word} given on commandline\\n")
             elif not found:
                 errors.append(f"E: Unable to locate package {word}\\n")
+            elif found.group(1) in tpot_apt_data()["unavailable"]:
+                # a package of another family the release does not have (yum)
+                notes.append(f"Package {found.group(1)} is not available, but is referred to by another package.\\n"
+                             "This may mean that the package is missing, has been obsoleted, or\\n"
+                             "is only available from another source\\n\\n")
+                errors.append(f"E: Package '{found.group(1)}' has no installation candidate\\n")
             elif found.group(1) not in names:
                 names.append(found.group(1))
         known = tpot_apt_known()
@@ -1934,6 +1957,8 @@ def tpot_apt_size(name: str) -> int:
         self.write("Building dependency tree... Done\\n" if tpot_apt("apt_version", "") else "Building dependency tree\\n")
         self.write("Reading state information... Done\\n")
         if errors:
+            for note in notes:
+                self.write(note)
             for error in errors:
                 self.errorWrite(error)
             self.exit(100)
@@ -1974,8 +1999,11 @@ def tpot_apt_size(name: str) -> int:
             yield self.sleep(1, 2)
         for p in self.packages:
             self.write(f"Setting up {p} ({self.packages[p]['version']}) ...\\n")
-            # the programs of the package; one Cowrie has a command for answers with it
-            for program in tpot_apt_data()["programs"].get(p) or [f"/usr/bin/{p}"]:
+            # the programs of a package of the persona's data answer, with Cowrie's command of their
+            # name where it has one; another name is a faked program, also where Cowrie's command of
+            # that name stays skipped (yum, dnf, rpm of Red Hat on Debian)
+            listed = tpot_apt_data()["programs"].get(p)
+            for program in listed or [f"/usr/bin/{p}"]:
                 name = program.rsplit("/", 1)[-1]
                 self.fs.mkfile(
                     program,
@@ -1984,9 +2012,19 @@ def tpot_apt_size(name: str) -> int:
                     random.randint(10000, 90000),
                     33188,
                 )
-                tpot_mark_installed(self.protocol, name, self.packages[p]["version"])
-                if name not in self.protocol.commands:
-                    self.protocol.commands[program] = Command_faked_package_class_factory.getCommand(name)
+                faked = Command_faked_package_class_factory.getCommand(name)
+                if listed:
+                    tpot_mark_installed(self.protocol, name, self.packages[p]["version"])
+                    if name not in self.protocol.commands:
+                        self.protocol.commands[program] = faked
+                elif name in self.protocol.commands or program in self.protocol.commands:
+                    session = getattr(self.protocol, "tpot_faked", None)
+                    if session is None:
+                        session = {}
+                        self.protocol.tpot_faked = session
+                    session[program] = faked
+                else:
+                    self.protocol.commands[program] = faked
             yield self.sleep(2)
         self.write(f"Processing triggers for man-db ({tpot_apt_version('man-db')}) ...\\n")
         self.exit()""",
