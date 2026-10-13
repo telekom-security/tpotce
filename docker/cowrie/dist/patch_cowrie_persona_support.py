@@ -8312,16 +8312,28 @@ TEXT_COMMAND = r'''
 # BusyBox of the firmware (text_banner, text_version, text_libc glibc, uclibc or musl for the texts
 # of option errors, text_unicode). They read files of the emulated file system and the data of a pipe
 # or of the terminal; input, output, lines and keys have limits.
+import posixpath
+import time
 import unicodedata
-from decimal import Decimal, InvalidOperation
+from decimal import Context, Decimal, InvalidOperation, localcontext
+
+from twisted.python import log
 
 from cowrie.core.config import CowrieConfig
+from cowrie.shell import fs as tpot_shell_fs
 
 TPOT_TEXT_INPUT = 4 << 20
 TPOT_TEXT_OUTPUT = 1 << 20
-TPOT_SORT_BYTES = 2 << 20
-TPOT_SORT_LINES = 100_000
+# the work of one command: about 0.8 s of wall-clock time, sort's lines times keys
+TPOT_TEXT_SECONDS = 0.8
+TPOT_SORT_BYTES = 1 << 20
+TPOT_SORT_LINES = 50_000
+TPOT_SORT_WORK = 100_000
 TPOT_SORT_KEYS = 32
+TPOT_SEQ_NUMBERS = 2_000_000
+# a long double: about 1.19e4932; seq's precision and width as far as the output can reach
+TPOT_SEQ_EXPONENT = 4932
+TPOT_SEQ_DIGITS = 1 << 20
 TPOT_TEXT_DIGITS = 4096
 # white space of glibc in a UTF-8 locale (iswspace: no no-break spaces)
 TPOT_TEXT_SPACE = "[ \t\n\v\f\r\u1680\u2000-\u2006\u2008-\u200a\u2028\u2029\u205f\u3000]"
@@ -8330,7 +8342,21 @@ TPOT_TEXT_C_WORDS = re.compile(rb"[^ \t\n\v\f\r]++")
 TPOT_TEXT_C_PRINT = re.compile(rb"[!-~]")
 TPOT_TEXT_C_CONTROL_RUNS = re.compile(rb"(?<![^ \t\n\v\f\r])[\x00-\x08\x0e-\x1f\x7f]++(?![^ \t\n\v\f\r])")
 TPOT_TEXT_C_PLAIN = re.compile(rb"[ -~]*+")
-TPOT_WC_INPUT = 64 << 20
+TPOT_WC_INPUT = 8 << 20
+# beyond TPOT_WC_INPUT up to this size wc counts lines, words, characters and bytes at C speed
+TPOT_WC_TAIL = 32 << 20
+TPOT_WC_PIECE = 1 << 20
+# white space Python's str.split takes that glibc's iswspace does not, characters of no width,
+# wide characters (East Asian W and F, the main blocks)
+TPOT_TEXT_PY_SPACE = re.compile("[\x1c-\x1f\x85\xa0\u2007\u202f]")
+TPOT_TEXT_ZERO_WIDTH = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u0300-\u036f\u200b-\u200f\u20d0-\u20ff\ufe00-\ufe0f]")
+TPOT_TEXT_WIDE = re.compile("[\u1100-\u115f\u2e80-\u303e\u3041-\u33ff\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf"
+                            "\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6"
+                            "\U0001f300-\U0001f64f\U00020000-\U0003fffd]")
+TPOT_TEXT_NOT_PRINTABLE = re.compile("[\x00-\x08\x0e-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\ufff0-\uffff]")
+TPOT_TEXT_C_NO_PRINT_RUNS = re.compile(rb"(?<![^ \t\n\v\f\r])[^ \t\n\v\f\r!-~]++(?![^ \t\n\v\f\r])")
+TPOT_TEXT_CONTINUATION = bytes(range(0x80, 0xC0))
+TPOT_TEXT_NON_PRINT_BYTES = bytes(b for b in range(256) if not 0x20 <= b <= 0x7E and b != 9)
 TPOT_TEXT_LINE_ENDS = re.compile("[\n\r\f]")
 TPOT_TEXT_ASCII_PRINT = re.compile(r"[ -~]*+")
 TPOT_TEXT_MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
@@ -8394,11 +8420,15 @@ class TpotTextTool(HoneyPotCommand):
 
     def tpot_run(self, terminal: bytes | None) -> None:
         self.tpot_out, self.tpot_size, self.tpot_err = [], 0, []
+        self.tpot_deadline = time.monotonic() + TPOT_TEXT_SECONDS
         try:
             code = self.tpot_main(terminal)
         except TpotTextStop as stop:
             self.tpot_err.append(stop.text)
             code = stop.code
+        except Exception:  # noqa: BLE001 - the command ends, the session goes on; the error goes to Cowrie's log
+            log.err(None, f"{self.tool} of the persona ended on an internal error")
+            code = self.status
         if code is None:
             # standard input is the terminal: its lines until ctrl-d
             self.tpot_lines, self.tpot_read_size = [], 0
@@ -8428,7 +8458,31 @@ class TpotTextTool(HoneyPotCommand):
             self.exit()
             return
         data, self.tpot_lines = b"".join(self.tpot_lines), None
+        if not data and hasattr(self.protocol, "execcmd"):
+            # an exec channel buffers its stdin on the protocol, it does not arrive as lines
+            data = bytes(getattr(self.protocol, "input_data", b"") or b"")[:TPOT_TEXT_INPUT]
         self.tpot_run(data)
+
+    def tpot_late(self) -> bool:
+        """The time of the command is used up."""
+        return time.monotonic() > self.tpot_deadline
+
+    def tpot_write_file(self, name: str, data: bytes) -> str:
+        """Write data as a file of the emulated file system (sort -o); the error text, "" if written."""
+        path = self.fs.resolve_path(name, self.cwd)
+        if self.fs.isdir(path):
+            return "Is a directory"
+        if not self.fs.isdir(posixpath.dirname(path)):
+            return "No such file or directory"
+        try:
+            self.fs.mkfile(path, self.user["uid"], self.user["gid"], 0, 0o644)
+        except Exception:  # noqa: BLE001 - the file system refuses the path
+            return "No such file or directory"
+        node = self.fs.getfile(path)
+        if isinstance(node, list):
+            node[tpot_shell_fs.A_CONTENTS] = bytes(data[:TPOT_TEXT_INPUT])
+        self.fs.update_size(path, len(data))
+        return ""
 
     def tpot_emit(self, data) -> bool:
         """Output, at most TPOT_TEXT_OUTPUT bytes; False once the limit is reached."""
@@ -8449,18 +8503,20 @@ class TpotTextTool(HoneyPotCommand):
             return bytes(self.input_data[:limit])
         return None
 
-    def tpot_file(self, name: str):
+    def tpot_file(self, name: str, limit: int = TPOT_TEXT_INPUT, real: bool = False):
         """(kind, data, size) of a file operand: kind file, dir or missing; the size of /proc and /sys
-        files is 0, as stat gives it."""
+        files is 0, as stat gives it. real: (kind, data, size, length of the whole file)."""
         path = self.fs.resolve_path(name, self.cwd)
         try:
             if self.fs.isdir(path):
-                return "dir", b"", 0
-            data = self.fs.file_contents(path)
+                return ("dir", b"", 0, 0) if real else ("dir", b"", 0)
+            whole = self.fs.file_contents(path)
         except Exception:  # noqa: BLE001 - a missing or unreadable file of the emulated file system
-            return "missing", b"", 0
-        data = bytes(data or b"")[:TPOT_TEXT_INPUT]
-        return "file", data, 0 if path.startswith(("/proc/", "/sys/")) else len(data)
+            return ("missing", b"", 0, 0) if real else ("missing", b"", 0)
+        whole = whole or b""
+        data = bytes(whole[:limit])
+        size = 0 if path.startswith(("/proc/", "/sys/")) else len(whole)
+        return ("file", data, size, len(whole)) if real else ("file", data, size)
 
     # --- options ---------------------------------------------------------------------------
 
@@ -8629,6 +8685,8 @@ def tpot_wc_width(text: str) -> int:
     """The display width of a line (wc -L): tab stops of 8, wide characters 2, others of no width 0."""
     if TPOT_TEXT_ASCII_PRINT.fullmatch(text):
         return len(text)
+    if "\t" not in text:
+        return len(text) + len(TPOT_TEXT_WIDE.findall(text)) - len(TPOT_TEXT_ZERO_WIDTH.findall(text))
     width = 0
     for char in text:
         if char == "\t":
@@ -8653,55 +8711,73 @@ def tpot_wc_piece(data: bytes, gnu: bool, version: tuple, unicode: bool, longest
         widest = 0
         if longest:
             for part in re.split(rb"[\n\r\f]" if gnu else rb"[\n\r\f\v]", data):
-                if TPOT_TEXT_C_PLAIN.fullmatch(part):
-                    widest = max(widest, len(part))
-                    continue
-                position = 0
-                for byte in part:
-                    if 0x20 <= byte <= 0x7E:
-                        position += 1
-                    elif byte == 9:
-                        position = (position | 7) + 1
-                widest = max(widest, position)
+                widest = max(widest, len(part) if TPOT_TEXT_C_PLAIN.fullmatch(part) else tpot_wc_bb_width(part))
         return [lines, words, chars, len(data), widest]
     if gnu:
         text = data.decode("utf-8", "ignore")
-        runs = TPOT_TEXT_WORDS.findall(text)
-        if version >= (9, 5):
-            words = len(runs)
+        if TPOT_TEXT_PY_SPACE.search(text) or (version < (9, 5) and TPOT_TEXT_NOT_PRINTABLE.search(text)):
+            runs = TPOT_TEXT_WORDS.findall(text)
+            words = len(runs) if version >= (9, 5) else sum(1 for run in runs if any(c.isprintable() for c in run))
         else:
-            words = sum(1 for run in runs if any(c.isprintable() for c in run))
+            words = len(text.split())
         widest = max((tpot_wc_width(part) for part in TPOT_TEXT_LINE_ENDS.split(text)), default=0) if longest else 0
         return [lines, words, len(text), len(data), widest]
-    words = sum(1 for run in TPOT_TEXT_C_WORDS.findall(data) if TPOT_TEXT_C_PRINT.search(run))
-    chars = len(data) - sum(1 for byte in data if byte & 0xC0 == 0x80) if unicode else len(data)
+    words = len(data.split()) - len(TPOT_TEXT_C_NO_PRINT_RUNS.findall(data))
+    chars = len(data.translate(None, TPOT_TEXT_CONTINUATION)) if unicode else len(data)
     widest = 0
     if longest:
         for part in re.split(rb"[\n\r\f\v]", data):
-            position = 0
-            for byte in part:
-                if 0x20 <= byte <= 0x7E:
-                    position += 1
-                elif byte == 9:
-                    position = (position | 7) + 1
-            widest = max(widest, position)
+            widest = max(widest, tpot_wc_bb_width(part))
     return [lines, words, chars, len(data), widest]
 
 
+def tpot_wc_bb_width(part: bytes) -> int:
+    """The longest-line count of BusyBox wc for one line: printable ASCII 1, tab to the next 8."""
+    part = part.translate(None, TPOT_TEXT_NON_PRINT_BYTES)
+    if b"\t" not in part:
+        return len(part)
+    position = 0
+    for at, piece in enumerate(part.split(b"\t")):
+        if at:
+            position = (position | 7) + 1
+        position += len(piece)
+    return position
+
+
 def tpot_wc_counts(data: bytes, gnu: bool, version: tuple, unicode: bool, longest: bool = True,
-                   posix: bool = False) -> list[int]:
-    """The counts of the data, in pieces of whole lines of about 1 MiB (bounded memory); in the
-    POSIX locale GNU wc counts bytes as characters."""
+                   posix: bool = False, late=None) -> list[int]:
+    """The counts of the data in pieces of at most TPOT_WC_PIECE bytes, cut after a line end, a blank
+    or at least between characters (a word cut in two counts once); in the POSIX locale GNU wc
+    counts bytes as characters. late(): the time is used up, the rest is not counted."""
     totals, at = [0, 0, 0, 0, 0], 0
-    data = data[:TPOT_WC_INPUT]
+    tail, data = data[TPOT_WC_INPUT:TPOT_WC_TAIL], data[:TPOT_WC_INPUT]
     while at < len(data):
-        end = data.find(b"\n", at + (1 << 20))
-        end = len(data) if end < 0 else end + 1
+        end = min(len(data), at + TPOT_WC_PIECE)
+        joined = False
+        if end < len(data):
+            cut = max(data.rfind(b"\n", at, end), data.rfind(b" ", at, end), data.rfind(b"\t", at, end))
+            if cut > at:
+                end = cut + 1
+            else:
+                while end > at + 1 and 0x80 <= data[end] < 0xC0:
+                    end -= 1
+                joined = True
         piece = tpot_wc_piece(data[at:end], gnu, version, unicode, longest)
+        if joined and data[end:end + 1] not in (b" ", b"\t", b"\n", b"\v", b"\f", b"\r"):
+            piece[1] -= 1
         if posix:
             piece[2] = piece[3]
         totals = [a + b for a, b in zip(totals[:4], piece[:4])] + [max(totals[4], piece[4])]
         at = end
+        if late is not None and late():
+            return totals
+    if tail:
+        # the rest of a large input: lines, words between ASCII blanks, characters, bytes
+        if data and data[-1:] not in (b" ", b"\t", b"\n") and tail[:1] not in (b" ", b"\t", b"\n"):
+            totals[1] -= 1
+        chars = len(tail) if (posix or (not gnu and not unicode)) else len(tail.translate(None, TPOT_TEXT_CONTINUATION))
+        totals = [totals[0] + tail.count(b"\n"), totals[1] + len(tail.split()), totals[2] + chars,
+                  totals[3] + len(tail), totals[4]]
     return totals
 
 
@@ -8805,9 +8881,10 @@ class Command_tpot_wc(TpotTextTool):
         rows, code, sizes, stat_ok = [], 0, 0, []
         for name in operands:
             if name in (None, "-"):
-                kind, data, size = "stdin", self.tpot_stdin(terminal, TPOT_WC_INPUT), 0
+                kind, data, size = "stdin", self.tpot_stdin(terminal, TPOT_WC_TAIL), 0
+                length = len(data)
             else:
-                kind, data, size = self.tpot_file(name)
+                kind, data, size, length = self.tpot_file(name, TPOT_WC_TAIL, real=True)
             if kind == "missing":
                 if self.gnu:
                     shown = tpot_text_quotef(name) if self.version >= (8, 23) else name
@@ -8817,7 +8894,8 @@ class Command_tpot_wc(TpotTextTool):
                 code = 1
                 continue
             counts = tpot_wc_counts(data, self.gnu, self.version, self.unicode, "L" in order,
-                                    self.gnu and self.collate == "posix")
+                                    self.gnu and self.collate == "posix", self.tpot_late)
+            counts[3] = length
             error = ""
             if kind == "dir":
                 counts, code = [0, 0, 0, 0, 0], 1
@@ -8877,17 +8955,31 @@ def tpot_seq_operand(text: str):
     if "x" in lower or "inf" in lower or "nan" in lower:
         try:
             value = float.fromhex(word) if "x" in lower else float(word)
-        except ValueError:
+        except (ValueError, OverflowError):
             return None
         return value, None, len(word)
     mantissa, _, exponent = lower.partition("e")
     whole, dot, fraction = mantissa.partition(".")
+    sign = "-" if whole.startswith("-") else ""
+    whole = whole.lstrip("-")
+    try:
+        shift = int(exponent) if exponent else 0
+    except ValueError:  # an exponent of more digits than int() converts: far out of range
+        shift = -(10 ** 12) if exponent.startswith("-") else 10 ** 12
     precision = len(fraction) if dot else 0
-    value = Decimal(word)
-    if exponent:
-        shift = int(exponent)
-        precision = max(0, precision - shift)
-    return value, precision, len(word)
+    precision = precision - shift if shift < 0 else precision - min(precision, shift)
+    precision = min(precision, TPOT_SEQ_DIGITS)
+    significant = (whole + fraction).lstrip("0")
+    if not significant:
+        return Decimal(0), precision, len(word)
+    leading = (len(whole.lstrip("0")) - 1 if whole.lstrip("0") else -(len(fraction) - len(fraction.lstrip("0")) + 1))
+    magnitude = leading + shift
+    if magnitude > TPOT_SEQ_EXPONENT or (magnitude == TPOT_SEQ_EXPONENT and
+                                         significant[:21].ljust(21, "0") > "118973149535723176502"):
+        return None  # beyond a long double: strtold overflows
+    if magnitude < -TPOT_SEQ_EXPONENT - 30:
+        return Decimal(0), precision, len(word)  # strtold gives 0
+    return Decimal(f"{sign}{whole or '0'}.{fraction or '0'}e{shift}"), precision, len(word)
 
 
 def tpot_strtod(text: str):
@@ -9003,10 +9095,7 @@ class Command_tpot_seq(TpotTextTool):
 
         def show(value) -> str:
             if fmt is not None:
-                try:
-                    return fmt.replace("%%", "\0") % float(value) if False else self.tpot_printf(fmt, float(value))
-                except (TypeError, ValueError, OverflowError):
-                    return ""
+                return self.tpot_printf(fmt, float(value))
             if not fixed:
                 return "%g" % float(value)
             text = f"{value:.{precision}f}"
@@ -9015,14 +9104,17 @@ class Command_tpot_seq(TpotTextTool):
                 text = ("-" if negative else "") + text[1 if negative else 0:].rjust(width - negative, "0")
             return text
 
-        start, increment, end = (x[0] if fixed else float(x[0]) for x in (first, step, last))
-        index, value, wrote = 0, start, False
-        while (increment < 0 and value >= end) or (increment >= 0 and value <= end):
-            if not self.tpot_emit((sep if wrote else "") + show(value)):
-                return 0
-            wrote = True
-            index += 1
-            value = start + index * increment
+        with localcontext(Context(prec=10_000, Emax=99_999, Emin=-99_999)):
+            start, increment, end = (x[0] if fixed else float(x[0]) for x in (first, step, last))
+            index, value, wrote = 0, start, False
+            while (increment < 0 and value >= end) or (increment >= 0 and value <= end):
+                if not self.tpot_emit((sep if wrote else "") + show(value)):
+                    return 0
+                wrote = True
+                index += 1
+                if index >= TPOT_SEQ_NUMBERS or self.tpot_late():
+                    return 0
+                value = start + index * increment
         if wrote:
             self.tpot_emit("\n")
         return 0
@@ -9037,14 +9129,25 @@ class Command_tpot_seq(TpotTextTool):
             if conversion == "%":
                 out.append("%")
                 continue
-            if len(width) > 4 or (precision and len(precision) > 4):
-                raise ValueError("width")
-            spec = "%" + flags.replace("'", "") + width + ("." + precision if precision is not None else "")
+            # width and precision as far as the output can reach (printf pads beyond it alike)
+            wide = min(int(width[:8]) if width else 0, TPOT_SEQ_DIGITS)
+            digits = None if precision is None else min(int(precision[:8] or "0"), TPOT_SEQ_DIGITS)
             if conversion in "aA":
                 text = float.hex(value)
-                out.append(text.upper() if conversion == "A" else text)
+                core = text.upper() if conversion == "A" else text
             else:
-                out.append((spec + conversion) % value)
+                core = ("%" + "".join(f for f in flags if f in "+ #") + ("" if digits is None else f".{digits}")
+                        + conversion) % value
+            if wide > len(core):
+                room = wide - len(core)
+                if "-" in flags:
+                    core += " " * room
+                elif "0" in flags and value == value and abs(value) != float("inf"):
+                    head = core[:1] if core[:1] in "+- " else ""
+                    core = head + "0" * room + core[len(head):]
+                else:
+                    core = " " * room + core
+            out.append(core)
         out.append(fmt[last:])
         return "".join(out).replace("\\n", "\n")
 
@@ -9085,11 +9188,14 @@ class Command_tpot_seq(TpotTextTool):
         if not equal:
             width = 0
         count, value, prefix = 0, first, ""
+        width, fraction = min(width, TPOT_SEQ_DIGITS), min(fraction, TPOT_SEQ_DIGITS)
         while (increment >= 0 and value <= last) or (increment < 0 and value >= last):
             if not self.tpot_emit(prefix + "%0*.*f" % (width, fraction, value)):
                 return 0
             prefix = sep
             count += 1
+            if count >= TPOT_SEQ_NUMBERS or self.tpot_late():
+                return 0
             value = first + count * increment
         if count:
             self.tpot_emit("\n")
@@ -9121,6 +9227,8 @@ def tpot_en_key(text: str, old: bool = False):
     return "".join(primary), "\0".join(accents), "".join(case), tuple(last)
 
 
+TPOT_SORT_FIELDS = re.compile(rb"[ \t]*+[^ \t]*+")
+TPOT_SORT_BB_FIELDS = re.compile(rb"[ \t\n\v\f\r]*+[^ \t\n\v\f\r]*+")
 TPOT_SORT_NOT_DICTIONARY = re.compile(rb"[^ \t0-9A-Za-z]++")
 TPOT_SORT_BB_NOT_DICTIONARY = re.compile(rb"[^ \t\n\v\f\r0-9A-Za-z]++")
 TPOT_SORT_NOT_PRINTING = re.compile(rb"[^ -~]++")
@@ -9353,24 +9461,33 @@ class Command_tpot_sort(TpotTextTool):
             raise bad("stray character in field spec")
         return key
 
+    def tpot_offsets(self, line: bytes, blanks: bytes = b" \t") -> list[int]:
+        """The ends of the fields of a line (a field: blanks, then the rest) or the places of its
+        separators, once per line."""
+        cache = self.__dict__.setdefault("tpot_offset_cache", {})
+        key = (id(line), blanks)
+        if key not in cache:
+            if self.tpot_tab is not None:
+                cache[key] = [m.start() for m in re.finditer(re.escape(bytes([self.tpot_tab])), line)]
+            else:
+                pattern = TPOT_SORT_FIELDS if blanks == b" \t" else TPOT_SORT_BB_FIELDS
+                cache[key] = [m.end() for m in pattern.finditer(line) if m.end() > m.start()]
+            cache[key + ("line",)] = line
+        return cache[key]
+
     def tpot_field_text(self, line: bytes, key: TpotSortKey) -> bytes:
         """begfield and limfield of GNU sort."""
         tab, end = self.tpot_tab, len(line)
+        offsets = self.tpot_offsets(line)
 
         def skip_fields(at: int, fields: int, stop_after_tab: bool) -> int:
-            while at < end and fields > 0:
-                fields -= 1
-                if tab is not None:
-                    while at < end and line[at] != tab:
-                        at += 1
-                    if at < end and (fields or stop_after_tab):
-                        at += 1
-                else:
-                    while at < end and line[at] in (32, 9):
-                        at += 1
-                    while at < end and line[at] not in (32, 9):
-                        at += 1
-            return at
+            if fields <= 0:
+                return at
+            if fields > len(offsets):
+                return end
+            if tab is not None:
+                return offsets[fields - 1] + (1 if stop_after_tab else 0)
+            return offsets[fields - 1]
 
         start = skip_fields(0, key.sword, True)
         if "b" in key.flags:
@@ -9493,6 +9610,8 @@ class Command_tpot_sort(TpotTextTool):
                 tab = value.encode("utf-8", "surrogateescape")[0]
             elif name == "files0":
                 files0 = value
+            elif name == "o":
+                self.tpot_output = value
         self.tpot_keys_given = bool(keys)
         if not keys:
             # the whole line with the global options
@@ -9521,13 +9640,20 @@ class Command_tpot_sort(TpotTextTool):
         lines = self.tpot_inputs(names, terminal)
         if lines is None:
             return None
+        if len(lines) * len(keys) > TPOT_SORT_WORK:
+            raise TpotTextStop("sort: memory exhausted\n", 2)
         reverse = "r" in flags
         import os
         salt = os.urandom(16)
         values = []
         for key in keys:
-            values.append([self.tpot_gnu_value(self.tpot_field_text(line, key) if self.tpot_keys_given else line,
-                                               key.flags, salt) for line in lines])
+            column = []
+            for at, line in enumerate(lines):
+                if not at & 1023 and self.tpot_late():
+                    raise TpotTextStop("sort: memory exhausted\n", 2)
+                column.append(self.tpot_gnu_value(self.tpot_field_text(line, key) if self.tpot_keys_given else line,
+                                                  key.flags, salt))
+            values.append(column)
         last = None if (stable or unique) else [self.tpot_text_value(line) for line in lines]
 
         def composite(i: int):
@@ -9549,15 +9675,29 @@ class Command_tpot_sort(TpotTextTool):
         for key, column in reversed(list(zip(keys, values))):
             order.sort(key=column.__getitem__, reverse="r" in key.flags)
         end = self.tpot_end
-        previous = None
+        previous, result = None, []
         for i in order:
             if unique:
                 current = composite(i)
                 if previous is not None and current == previous:
                     continue
                 previous = current
-            if not self.tpot_emit(lines[i] + end):
-                break
+            result.append(lines[i] + end)
+        return self.tpot_result(result)
+
+    def tpot_result(self, result: list[bytes]) -> int:
+        """The sorted lines on stdout or into the file of -o."""
+        target = self.__dict__.get("tpot_output")
+        if target is None:
+            for line in result:
+                if not self.tpot_emit(line):
+                    break
+            return 0
+        error = self.tpot_write_file(target, b"".join(result))
+        if error:
+            if self.gnu:
+                raise TpotTextStop(f"sort: open failed: {tpot_text_quotef(target)}: {error}\n", 2)
+            raise TpotTextStop(f"sort: can't open '{target}': {error}\n", 2)
         return 0
 
     def tpot_compare(self, a: int, b: int, keys, values, last, reverse) -> int:
@@ -9605,27 +9745,23 @@ class Command_tpot_sort(TpotTextTool):
         if ranges == [1, 0, 0, 0] and not flags & set("bdfiB"):
             return line
         length, start, end = len(line), 0, 0
+        offsets = self.tpot_offsets(line, b" \t\n\v\f\r")
         for j in (0, 1):
             if not ranges[2 * j]:
                 end = length
             else:
-                end, separator_found = 0, False
-                for _ in range(1, ranges[2 * j] + j):
-                    if self.tpot_tab is not None:
-                        separator_found = False
-                        while end < length:
-                            ch = line[end]
-                            end += 1
-                            if ch == self.tpot_tab:
-                                separator_found = True
-                                break
-                    else:
-                        while end < length and line[end] in b" \t\n\v\f\r":
-                            end += 1
-                        while end < length and line[end] not in b" \t\n\v\f\r":
-                            end += 1
-                if j and separator_found:
-                    end -= 1
+                # the fields get_key skips (each at once; past the last one the line is used up)
+                fields = ranges[2 * j] + j - 1
+                if fields <= 0:
+                    end = 0
+                elif fields > len(offsets):
+                    end = length
+                elif self.tpot_tab is not None:
+                    end = offsets[fields - 1] + 1
+                    if j:
+                        end -= 1
+                else:
+                    end = offsets[fields - 1]
             if not j:
                 start = end
         if "b" in flags:
@@ -9681,7 +9817,9 @@ class Command_tpot_sort(TpotTextTool):
                 keys.append(value)
             elif name == "t":
                 tab = value
-            elif name not in ("o", "S", "T"):
+            elif name == "o":
+                self.tpot_output = value
+            elif name not in ("S", "T"):
                 flags.add(name)
         if "b" in flags:
             flags.add("B")
@@ -9695,11 +9833,17 @@ class Command_tpot_sort(TpotTextTool):
         lines = self.tpot_inputs(names, terminal)
         if lines is None:
             return None
+        if len(lines) * len(parsed) > TPOT_SORT_WORK:
+            raise TpotTextStop("sort: out of memory\n", 2)
         values = []
         for ranges, own in parsed:
             use = own or flags
-            values.append(([self.tpot_bb_value(self.tpot_bb_field(line, ranges, use), use) for line in lines],
-                           "r" in use))
+            column = []
+            for at, line in enumerate(lines):
+                if not at & 1023 and self.tpot_late():
+                    raise TpotTextStop("sort: out of memory\n", 2)
+                column.append(self.tpot_bb_value(self.tpot_bb_field(line, ranges, use), use))
+            values.append((column, "r" in use))
         stable = "s" in flags
         unique = "u" in flags
         reverse = "r" in flags
@@ -9722,16 +9866,15 @@ class Command_tpot_sort(TpotTextTool):
             order.sort(key=lines.__getitem__, reverse=reverse)
         for column, backwards in reversed(values):
             order.sort(key=column.__getitem__, reverse=backwards)
-        previous = None
+        previous, result = None, []
         for i in order:
             if unique:
                 current = tuple(column[i] for column, _ in values)
                 if previous is not None and current == previous:
                     continue
                 previous = current
-            if not self.tpot_emit(lines[i] + self.tpot_end):
-                break
-        return 0
+            result.append(lines[i] + self.tpot_end)
+        return self.tpot_result(result)
 
 
 commands["/usr/bin/wc"] = Command_tpot_wc

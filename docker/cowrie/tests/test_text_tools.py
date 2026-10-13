@@ -72,6 +72,24 @@ class Fs:
             raise FileNotFoundError(path)
         return self.files[path]
 
+    # the parts of Cowrie's HoneyPotFilesystem a file written by sort -o needs (as tee uses them)
+    def mkfile(self, path, uid, gid, size, mode):
+        if posixpath.dirname(path) not in self.dirs:
+            raise FileNotFoundError(path)
+        self.files[path] = b""
+        self.nodes = getattr(self, "nodes", {})
+        self.nodes[path] = [posixpath.basename(path), 2, uid, gid, size, mode, 0, [], None, None]
+        return True
+
+    def update_size(self, path, size):
+        self.nodes[path][4] = size
+
+    def getfile(self, path, follow_symlinks=True):
+        return getattr(self, "nodes", {}).get(path)
+
+    def node_size(self, path):
+        return len(self.files.get(path, b""))
+
 
 class Base:
     """The parts of HoneyPotCommand the commands use."""
@@ -80,6 +98,7 @@ class Base:
         self.args, self.input_data, self.cwd = list(args), input_data, cwd
         self.fs = fs or Fs()
         self.out, self.err, self.exit_code, self.exited = b"", "", 0, False
+        self.user = {"uid": 0, "gid": 0}
 
         class Events:
             def dispatch(self, *args, **kwargs):
@@ -103,6 +122,19 @@ class Base:
         if code is not None:
             self.exit_code = code
         self.exited = True
+
+
+class Log:
+    """twisted's log.err: an internal error of a command fails the test that did not expect it."""
+    errors = []
+
+    @classmethod
+    def err(cls, *args, **kwargs):
+        cls.errors.append(args)
+
+
+class ShellFs:
+    A_CONTENTS, A_SIZE = 7, 4
 
 
 _ROOT = None
@@ -137,7 +169,7 @@ class TextToolsTest(unittest.TestCase):
     def namespace(self, keys):
         config = FakeConfig({("shell", key): value for key, value in keys.items()})
         return module_all((patched_root() / "src/cowrie/commands/wc.py").read_text(),
-                          {"HoneyPotCommand": Base, "CowrieConfig": config})
+                          {"HoneyPotCommand": Base, "CowrieConfig": config, "log": Log, "tpot_shell_fs": ShellFs})
 
     def run_cmd(self, keys, name, args, stdin=None, fs=None):
         namespace = self.namespace(keys)
@@ -283,6 +315,106 @@ class TextToolsTest(unittest.TestCase):
         out, err, code = self.run_cmd(bb, "seq", ["1", "0", "3"])
         self.assertLess(len(out), 2 << 20)
         self.assertEqual(self.run_cmd(bb, "sort", [], big)[1:], ("sort: out of memory\n", 2))
+
+    def timed(self, keys, name, args, stdin=None, limit=1.0):
+        Log.errors.clear()
+        start = time.monotonic()
+        got = self.run_cmd(keys, name, args, stdin)
+        took = time.monotonic() - start
+        self.assertLess(took, limit, (name, args[:4], took))
+        self.assertEqual(Log.errors, [], (name, args[:4]))
+        return got
+
+    def test_every_call_ends_well_within_a_second(self):
+        gnu = {"text_style": "gnu", "text_version": "9.4", "text_year": "2023"}
+        old = {"text_style": "gnu", "text_version": "8.22", "text_year": "2013", "text_collate": "en-2.17"}
+        bb = {"text_style": "busybox", "text_banner": "BusyBox v1.33.2 (2023-04-17 13:15:36 UTC)",
+              "text_version": "1.33.2", "text_libc": "musl"}
+        lines = b"".join(b"%d word x.%d\n" % (n, n % 97) for n in range(1000))
+        for keys in (gnu, bb):
+            for args, data in ((["-k", "2147483647"], b"b a\na b\n"), (["-k", "1000000"], lines),
+                               (["-k", "1,2147483647"], b"b a\na b\n"), (["-k", "2147483647.5,2147483647.9"], lines)):
+                with self.subTest(style=keys["text_style"], args=args):
+                    self.timed(keys, "sort", args, data)
+        many = b"".join(b"%d v1.%d.%d x\n" % (n, n % 13, n % 7) for n in range(99_000))
+        self.assertEqual(self.timed(gnu, "sort", ["-k2V"] * 32, many)[1:], ("sort: memory exhausted\n", 2))
+        wide = (b"x" * 399 + b"\n") * 2600
+        self.timed(gnu, "sort", ["-k400"] * 32, wide)
+        self.timed(bb, "sort", ["-k400"] * 32, wide)
+        text = ("caf\u00e9 na\u00efve \u65e5\u672c\n" * 900_000).encode()
+        for keys in (gnu, bb):
+            for args in ([], ["-L"], ["-m"]):
+                with self.subTest(style=keys["text_style"], wc=args):
+                    self.timed(keys, "wc", args, text)
+        self.timed(gnu, "wc", ["-w"], b"x" * (16 << 20))
+        # seq: the output limit holds for an empty separator, wide formats and a zero step
+        for keys, args in ((gnu, ["-s", "", "-f", "%99999f", "1", "1000000000000"]),
+                           (old, ["-s", "", "-f", "%99999f", "1", "0", "2"]),
+                           (gnu, ["-f", "%99999f", "1", "1000000000000"]),
+                           (gnu, ["1e-999999999", "1"]), (gnu, ["-w", "1e4931", "1e4931"]),
+                           (bb, ["-s", "", "1", "0", "2"])):
+            with self.subTest(seq=args):
+                out = self.timed(keys, "seq", args)[0]
+                self.assertLess(len(out), 2 << 20)
+
+    def test_seq_formats_and_ranges_as_coreutils(self):
+        """debian:12 (9.1) and centos:7 (8.22): numbers beyond the long double range are invalid,
+        tiny ones are 0 with their precision, a format width pads."""
+        gnu = {"text_style": "gnu", "text_version": "9.1", "text_year": "2022"}
+        try_help = "Try 'seq --help' for more information.\n"
+        for arg in ("1e99999999999999999999", "0x1p99999", "1e999999999", "1e4933"):
+            with self.subTest(arg=arg):
+                self.assertEqual(self.timed(gnu, "seq", [arg]),
+                                 ("", f"seq: invalid floating point argument: \u2018{arg}\u2019\n" + try_help, 1))
+        self.assertEqual(self.timed(gnu, "seq", ["-w", "1e999999999"])[2], 1)
+        out = self.timed(gnu, "seq", ["1e-999999999", "1"])[0]
+        self.assertTrue(out.startswith("0." + "0" * 1000))
+        self.assertEqual(len(self.timed(gnu, "seq", ["-s", "", "-f", "%99999f", "1", "3"])[0]), 299998)
+        out = self.timed(gnu, "seq", ["-f", "%99999f", "1", "2"])[0]
+        self.assertEqual((len(out), out[:3], out[99991:100000]), (200000, "   ", "1.000000\n"))
+        self.assertEqual(self.timed(gnu, "seq", ["-f", "%-12f|", "1", "2"])[0], "1.000000    |\n2.000000    |\n")
+        self.assertEqual(self.timed(gnu, "seq", ["-f", "%012.3f", "1", "2"])[0], "00000001.000\n00000002.000\n")
+        self.assertEqual(len(self.timed(gnu, "seq", ["-f", "%.70000f", "1", "1"])[0]), 70003)
+
+    def test_an_internal_error_ends_the_command(self):
+        namespace = self.namespace({"text_style": "gnu", "text_version": "9.4"})
+        Log.errors.clear()
+
+        def broken(self, terminal):
+            raise RuntimeError("unexpected")
+
+        namespace["Command_tpot_wc"].tpot_main = broken
+        cmd = namespace["commands"]["wc"]([], b"a\n", Fs())
+        cmd.start()
+        self.assertEqual((cmd.exited, cmd.exit_code, len(Log.errors)), (True, 1, 1))
+
+    def test_sort_o_writes_the_file(self):
+        fs = Fs()
+        keys = {"text_style": "gnu", "text_version": "9.4"}
+        namespace = self.namespace(keys)
+        cmd = namespace["commands"]["sort"](["-o", "/tmp/sorted", "/tmp/k.txt"], None, fs)
+        cmd.start()
+        self.assertEqual((cmd.out, cmd.exit_code), (b"", 0))
+        self.assertEqual(fs.nodes["/tmp/sorted"][7], b"w:10:b\nx:3:z\ny:1:a\nz:2:m\n")
+        self.assertEqual(fs.nodes["/tmp/sorted"][4], 25)
+        cmd = namespace["commands"]["sort"](["-o", "/nosuch/dir/f", "/tmp/k.txt"], None, fs)
+        cmd.start()
+        self.assertEqual((cmd.err, cmd.exit_code), ("sort: open failed: /nosuch/dir/f: No such file or directory\n", 2))
+
+    def test_wc_of_an_exec_channel_takes_its_stdin(self):
+        namespace = self.namespace({"text_style": "gnu", "text_version": "9.4"})
+        cmd = namespace["commands"]["wc"](["-l"], None, Fs())
+        cmd.protocol.execcmd = "wc -l"
+        cmd.protocol.input_data = b"one\ntwo\nthree\n"
+        cmd.start()
+        cmd.eofReceived()
+        self.assertEqual((cmd.out, cmd.exited), (b"3\n", True))
+
+    def test_wc_c_gives_the_size_of_a_large_file(self):
+        big = b"x" * (5 << 20) + b"\n"
+        fs = Fs({"/tmp/big": big})
+        out = self.run_cmd({"text_style": "gnu", "text_version": "9.4"}, "wc", ["-c", "/tmp/big"], fs=fs)[0]
+        self.assertEqual(out, f"{len(big)} /tmp/big\n")
 
     def test_bot_one_liners_on_every_persona(self):
         for persona in catalog.PERSONAS:
