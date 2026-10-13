@@ -69,8 +69,9 @@ def at_terminal(argv, env, cwd, answers=(), timeout=60):
             if data:
                 out += data
             elif proc.poll() is not None:
-                # gone: what it wrote just before it ended is still in the pty
-                while True:
+                # gone: what it wrote just before it ended is still in the pty; a child of the child may
+                # keep it open and write on, so the reading ends with the deadline (+2 s) at the latest
+                while time.time() < deadline + 2:
                     data = chunk(0.2)
                     if not data:
                         break
@@ -1087,6 +1088,35 @@ class LossConfirmTerminalTest(unittest.TestCase):
         self.assertLess(time.time() - started, 15)
         self.assertNotEqual(code, 0)
         self.assertEqual(out, "before\n")
+
+    def test_the_helper_ends_while_a_child_of_the_child_keeps_writing(self):
+        """The child is gone, but what it started keeps the pty open and writes on: the helper reads it until
+        its deadline (+2 s) only, then returns what it has."""
+        import signal
+        import threading
+        pidfile = os.path.join(self.home, "writer.pid")
+        script = (f'(sleep 0.15; while :; do echo more; sleep 0.05; done) & echo $! > "{pidfile}"\n'
+                  'echo first\nexit 0\n')
+
+        def stop_writer():
+            try:
+                with open(pidfile, encoding="utf-8") as handle:
+                    os.kill(int(handle.read().strip()), signal.SIGKILL)
+            except (OSError, ValueError):
+                pass
+
+        self.addCleanup(stop_writer)
+        result = []
+        started = time.time()
+        reader = threading.Thread(target=lambda: result.append(at_terminal(["bash", "-c", script], dict(os.environ),
+                                                                           self.home, timeout=1)), daemon=True)
+        reader.start()
+        reader.join(20)
+        self.assertFalse(reader.is_alive(), "the helper kept reading past its deadline")
+        self.assertLess(time.time() - started, 8)
+        code, out = result[0]
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith("first\n"), out)
 
     def test_the_answer_at_a_terminal(self):
         environment = dict(os.environ, HOME=self.home, TPOT_GUM="off")
