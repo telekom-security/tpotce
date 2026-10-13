@@ -143,6 +143,11 @@ def tpot_skip_python_commands() -> frozenset[str]:
                 operator_path = Path(txtcmds_path) / spelling.lstrip("/")
                 if operator_path.is_file():
                     return self.txtcmd(operator_path.read_bytes())
+        # a Python command of one of the spellings answers before the txtcmds Cowrie ships
+        # (data/txtcmds/bin/df, usr/bin/top), as it answers the bare name
+        for spelling in spellings:
+            if spelling in self.commands and not skip_python_command(spelling):
+                return self.commands[spelling]
 """,
     )
     replace_once(
@@ -150,9 +155,7 @@ def tpot_skip_python_commands() -> frozenset[str]:
         """        if path in self.commands:
             return self.commands[path]
 """,
-        """        for spelling in spellings:
-            if spelling in self.commands and not skip_python_command(spelling):
-                return self.commands[spelling]
+        """        # (the Python commands of the spellings answered before Cowrie's txtcmds)
 """,
     )
 
@@ -4492,6 +4495,567 @@ def patch_grep(cowrie_root):
     )
 
 
+# module code of the patched commands/fs.py after grep: df of the persona
+DF_COMMAND = r'''
+
+# T-Pot: df of the persona. The file systems are those of [shell] df_table (a JSON file of the
+# runtime folder, the table mount and /proc/mounts show); the format is that of GNU coreutils
+# or of the persona's BusyBox (its version decides the options). Nothing of the host is read.
+TPOT_DF_FIELDS = ("source", "fstype", "itotal", "iused", "iavail", "ipcent", "size", "used", "avail", "pcent",
+                  "file", "target")
+TPOT_DF_LEFT = frozenset({"source", "fstype", "file", "target"})
+TPOT_DF_WIDTH = {"source": 14, "fstype": 4, "file": 4, "size": 5, "used": 5, "avail": 5, "pcent": 4,
+                 "itotal": 5, "iused": 5, "iavail": 5, "ipcent": 5, "target": 0}
+TPOT_DF_HEADER = {"source": "Filesystem", "fstype": "Type", "itotal": "Inodes", "iused": "IUsed", "iavail": "IFree",
+                  "ipcent": "IUse%", "used": "Used", "avail": "Avail", "pcent": "Use%", "file": "File",
+                  "target": "Mounted on"}
+TPOT_DF_LONG = {"all": False, "block-size": True, "human-readable": False, "si": False, "inodes": False,
+                "local": False, "no-sync": False, "sync": False, "output": None, "portability": False,
+                "total": False, "type": True, "print-type": False, "exclude-type": True, "help": False,
+                "version": False, "direct": False}
+TPOT_DF_SHORT_LONG = {"a": "all", "B": "block-size", "h": "human-readable", "H": "si", "i": "inodes", "l": "local",
+                      "P": "portability", "t": "type", "T": "print-type", "x": "exclude-type"}
+TPOT_DF_POWERS = "KMGTPEZY"
+TPOT_DF_TRY = "Try 'df --help' for more information.\n"
+
+
+@functools.cache
+def tpot_df_data(path: str) -> dict:
+    """The table of [shell] df_table; without one a GNU df of one disk."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8")) if path else None
+    except (OSError, ValueError):
+        data = None
+    if isinstance(data, dict) and isinstance(data.get("filesystems"), list):
+        return data
+    return {"style": "gnu", "coreutils": "9.1", "coreutils_year": "2022", "filesystems": [
+        {"source": "/dev/sda1", "target": "/", "fstype": "ext4", "options": "rw,relatime", "size": 20134592,
+         "used": 4180336, "avail": 14905244, "inodes": 1258291, "iused": 136754}]}
+
+
+def tpot_df_human(amount: int, base: int, suppress_zero: bool = False) -> str:
+    """human_readable of gnulib with autoscale and SI letters, rounded up (as df rounds)."""
+    if amount < base:
+        return str(amount)
+    tenths = rounding = exponent = 0
+    while base <= amount and exponent < len(TPOT_DF_POWERS):
+        r10 = (amount % base) * 10 + tenths
+        r2 = (r10 % base) * 2 + (rounding >> 1)
+        amount //= base
+        tenths = r10 // base
+        rounding = (1 if r2 else 0) if r2 < base else 2 + (base < r2)
+        exponent += 1
+    point = ""
+    if amount < 10:
+        if rounding:
+            tenths, rounding = tenths + 1, 0
+            if tenths == 10:
+                amount, tenths = amount + 1, 0
+        if amount < 10 and (tenths or not suppress_zero):
+            point, tenths, rounding = f".{tenths}", 0, 0
+    if tenths + rounding:
+        amount += 1
+        if amount == base and exponent < len(TPOT_DF_POWERS):
+            exponent += 1
+            amount, point = 1, "" if suppress_zero else ".0"
+    letter = TPOT_DF_POWERS[exponent - 1] if exponent else ""
+    if letter == "K" and base == 1000:
+        letter = "k"
+    return f"{amount}{point}{letter}"
+
+
+def tpot_df_unit_name(block: int) -> str:
+    """The unit in the size header of GNU df (1K, 1M, 1kB, 512B): in the base that divides the
+    block size more exactly, with B for powers of 1000."""
+    q1000 = q1024 = block
+    while True:
+        by1000, by1024 = q1000 % 1000 == 0, q1024 % 1024 == 0
+        q1000, q1024 = q1000 // 1000, q1024 // 1024
+        if not (by1000 and by1024):
+            break
+    binary = by1024 and not by1000
+    return tpot_df_human(block, 1024 if binary else 1000, True) + ("" if binary else "B")
+
+
+def tpot_df_block_size(text: str):
+    """(bytes, suffix of the values or "") of a GNU --block-size argument, None if invalid."""
+    match = re.fullmatch(r"([0-9]{0,18})([kKMGTPEZY]?)(iB|B)?", text)
+    if not match or not (match.group(1) or match.group(2)) or (match.group(3) and not match.group(2)):
+        return None
+    number = int(match.group(1) or "1")
+    letter = match.group(2).upper()
+    base = 1000 if match.group(3) == "B" else 1024
+    size = number * base ** (TPOT_DF_POWERS.index(letter) + 1 if letter else 0)
+    if size <= 0:
+        return None
+    suffix = "" if match.group(1) or not letter else letter + (match.group(3) or "")
+    if suffix == "K" and base == 1000:
+        suffix = "kB"
+    return size, suffix
+
+
+def tpot_df_bb_human(value: int, block_size: int, unit: int) -> str:
+    """make_human_readable_str of BusyBox: one decimal with suffixes when unit is 0, else value
+    in units, rounded to the nearest."""
+    if value == 0:
+        return "0"
+    if block_size > 1:
+        value *= block_size
+    if unit:
+        return str((value + unit // 2) // unit)
+    letters, frac, index = "KMGTPEZY", 0, 0
+    if value < 1024:
+        return str(value)
+    while value >= 1024:
+        frac = ((value % 1024) * 10 + 512) // 1024
+        value //= 1024
+        index += 1
+    if frac >= 10:
+        value, frac = value + 1, 0
+    if block_size == 0:
+        return f"{value + (frac >= 5)}{letters[index - 1]}"
+    return f"{value}.{frac}{letters[index - 1]}"
+
+
+class Command_df(HoneyPotCommand):
+    """df of the persona: GNU coreutils (servers, devices with coreutils) or BusyBox."""
+
+    def call(self) -> None:
+        self.data = tpot_df_data(CowrieConfig.get("shell", "df_table", fallback=""))
+        rows = [r for r in self.data.get("filesystems", []) if isinstance(r, dict)]
+        self.rows = [dict(r, size=int(r.get("size", 0)), used=int(r.get("used", 0)),
+                          avail=int(r.get("avail", 0)), inodes=int(r.get("inodes", 0)),
+                          iused=int(r.get("iused", 0))) for r in rows]
+        if self.data.get("style") == "busybox":
+            self.exit_code = self.busybox(list(self.args))
+        else:
+            self.exit_code = self.gnu(list(self.args))
+
+    # --- the file systems of the arguments -----------------------------------------------
+
+    def row_of(self, arg: str):
+        """The row df shows for an argument: the mounted device it names, else the mount
+        point the path lies on (the last mount of a point wins); None for a missing path."""
+        for row in reversed(self.rows):
+            if row.get("source") == arg and arg.startswith("/"):
+                return row
+        path = self.fs.resolve_path(arg, self.cwd)
+        if not self.fs.exists(path):
+            return None
+        best = None
+        for row in self.rows:
+            target = row.get("target", "")
+            if target == "/" or path == target or path.startswith(target.rstrip("/") + "/"):
+                if best is None or len(target) >= len(best.get("target", "")):
+                    best = row
+        return best
+
+    # --- GNU coreutils -----------------------------------------------------------------
+
+    def gnu_options(self, args: list[str]):
+        """(options in order, operands) as getopt_long of glibc reads them; a str is the error."""
+        options, operands = [], []
+        index = 0
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if arg == "--":
+                operands += args[index:]
+                break
+            if arg.startswith("--"):
+                name, eq, value = arg[2:].partition("=")
+                found = [n for n in TPOT_DF_LONG if n == name] or [n for n in TPOT_DF_LONG if n.startswith(name)]
+                if len(found) != 1 or not name:
+                    return f"df: unrecognized option '{arg}'\n"
+                name = found[0]
+                takes = TPOT_DF_LONG[name]
+                if takes is False and eq:
+                    return f"df: option '--{name}' doesn't allow an argument\n"
+                if takes is True and not eq:
+                    if index >= len(args):
+                        return f"df: option '--{name}' requires an argument\n"
+                    value, index = args[index], index + 1
+                options.append((name, value if (eq or takes is True) else None))
+            elif arg.startswith("-") and arg != "-":
+                position = 1
+                while position < len(arg):
+                    letter = arg[position]
+                    position += 1
+                    if letter in "kmv":
+                        options.append((letter, None))
+                        continue
+                    name = TPOT_DF_SHORT_LONG.get(letter)
+                    if name is None:
+                        return f"df: invalid option -- '{letter}'\n"
+                    if TPOT_DF_LONG[name] is True:
+                        value = arg[position:]
+                        if not value:
+                            if index >= len(args):
+                                return f"df: option requires an argument -- '{letter}'\n"
+                            value, index = args[index], index + 1
+                        options.append((name, value))
+                        break
+                    options.append((name, None))
+            else:
+                operands.append(arg)
+        return options, operands
+
+    def gnu(self, args: list[str]) -> int:
+        parsed = self.gnu_options(args)
+        if isinstance(parsed, str):
+            self.errorWrite(parsed + TPOT_DF_TRY)
+            return 1
+        options, operands = parsed
+        human, block, suffix, inodes, posix, show_type, every, total = 0, 1024, "", False, False, False, False, False
+        fields, types, excluded, given = None, set(), set(), []
+        for name, value in options:
+            if name == "direct" and not self.data.get("el"):
+                self.errorWrite("df: unrecognized option '--direct'\n" + TPOT_DF_TRY)
+                return 1
+            if name in ("help", "version"):
+                self.write(self.gnu_help() if name == "help" else self.gnu_version())
+                return 0
+            if name == "human-readable":
+                human, suffix = 1024, ""
+            elif name == "si":
+                human, suffix = 1000, ""
+            elif name == "k":
+                human, block, suffix = 0, 1024, ""
+            elif name == "m":
+                human, block, suffix = 0, 1024 * 1024, ""
+            elif name == "block-size":
+                size = tpot_df_block_size(value)
+                if size is None:
+                    self.errorWrite(f"df: invalid --block-size argument '{value}'\n")
+                    return 1
+                human, (block, suffix) = 0, size
+            elif name == "inodes":
+                inodes = True
+                given.append("-i")
+            elif name == "portability":
+                posix = True
+                given.append("-P")
+            elif name == "print-type":
+                show_type = True
+                given.append("-T")
+            elif name == "all":
+                every = True
+            elif name == "total":
+                total = True
+            elif name == "type":
+                types.add(value)
+            elif name == "exclude-type":
+                excluded.add(value)
+            elif name == "output":
+                if fields is None:
+                    fields = []
+                for field in (value.split(",") if value is not None else TPOT_DF_FIELDS):
+                    if field not in TPOT_DF_FIELDS:
+                        self.errorWrite(f"df: option --output: field '{field}' unknown\n" + TPOT_DF_TRY)
+                        return 1
+                    if field in fields:
+                        self.errorWrite(f"df: option --output: field '{field}' used more than once\n" + TPOT_DF_TRY)
+                        return 1
+                    fields.append(field)
+                given.append("--output")
+        if fields is not None:
+            other = next((option for option in given if option != "--output"), None)
+            if other:
+                self.errorWrite(f"df: options {other} and --output are mutually exclusive\n" + TPOT_DF_TRY)
+                return 1
+        both = types & excluded
+        if both:
+            self.errorWrite(f"df: file system type '{sorted(both)[0]}' both selected and excluded\n")
+            return 1
+        status = 0
+        if operands:
+            chosen = []
+            for arg in operands:
+                row = self.row_of(arg)
+                if row is None:
+                    self.errorWrite(f"df: {arg}: No such file or directory\n")
+                    status = 1
+                else:
+                    chosen.append((row, arg))
+        else:
+            chosen = [(row, "-") for row in self.rows if every or row["size"]]
+        chosen = [(row, arg) for row, arg in chosen if (not types or row.get("fstype") in types)
+                  and row.get("fstype") not in excluded]
+        if not chosen:
+            if status == 0:
+                self.errorWrite("df: no file systems processed\n")
+            return 1
+        mode = "output" if fields is not None else "inode" if inodes else "human" if human else \
+            "posix" if posix else "default"
+        if fields is None:
+            fields = ["source"] + (["fstype"] if show_type else [])
+            fields += ["itotal", "iused", "iavail", "ipcent"] if inodes else ["size", "used", "avail", "pcent"]
+            fields.append("target")
+        header = []
+        for field in fields:
+            if field == "size":
+                header.append("Size" if human else f"{block}-blocks" if mode == "posix" else
+                              f"{tpot_df_unit_name(block)}-blocks")
+            elif field == "avail" and mode in ("default", "posix"):
+                header.append("Available")
+            elif field == "pcent" and mode == "posix":
+                header.append("Capacity")
+            else:
+                header.append(TPOT_DF_HEADER[field])
+        table = [header]
+        if total:
+            sums = {key: sum(row[key] for row, _ in chosen) for key in ("size", "used", "avail", "inodes", "iused")}
+            chosen.append((dict(sums, source="total", target="-", fstype="-"), "-"))
+        for row, arg in chosen:
+            table.append([self.gnu_cell(field, row, arg, human, block, suffix, total and row.get("source") == "total"
+                                        and row.get("target") == "-") for field in fields])
+        widths = [max([TPOT_DF_WIDTH[field]] + [len(line[col]) for line in table]) for col, field in enumerate(fields)]
+        for line in table:
+            cells = []
+            for col, field in enumerate(fields):
+                if col == len(fields) - 1:
+                    cells.append(line[col] if field in TPOT_DF_LEFT else line[col].rjust(widths[col]))
+                elif field in TPOT_DF_LEFT:
+                    cells.append(line[col].ljust(widths[col]))
+                else:
+                    cells.append(line[col].rjust(widths[col]))
+            self.write(" ".join(cells) + "\n")
+        return status
+
+    def gnu_cell(self, field: str, row: dict, arg: str, human: int, block: int, suffix: str, is_total: bool) -> str:
+        if field == "source":
+            return str(row.get("source", ""))
+        if field == "fstype":
+            return str(row.get("fstype", "-"))
+        if field == "target":
+            return str(row.get("target", "-"))
+        if field == "file":
+            return arg
+        if field in ("itotal", "iused", "iavail", "ipcent"):
+            itotal, iused = row["inodes"], row["iused"]
+            values = {"itotal": itotal, "iused": iused, "iavail": itotal - iused}
+            if field == "ipcent":
+                return f"{-(-iused * 100 // itotal)}%" if itotal else "-"
+            return tpot_df_human(values[field], human) if human else str(values[field])
+        size, used, avail = row["size"], row["used"], row["avail"]
+        if field == "pcent":
+            return f"{-(-used * 100 // (used + avail))}%" if used + avail else "-"
+        value = {"size": size, "used": used, "avail": avail}[field] * 1024
+        if human:
+            return tpot_df_human(value, human)
+        return f"{-(-value // block)}{suffix}"
+
+    def gnu_help(self) -> str:
+        el = bool(self.data.get("el"))
+        nine = not str(self.data.get("coreutils", "9")).startswith("8")
+        direct = "      --direct          show statistics for a file instead of mount point\n" if el else ""
+        tail = ("      --help        display this help and exit\n"
+                "      --version     output version information and exit\n") if nine else \
+            ("      --help     display this help and exit\n"
+             "      --version  output version information and exit\n")
+        return ("Usage: df [OPTION]... [FILE]...\n"
+                "Show information about the file system on which each FILE resides,\n"
+                "or all file systems by default.\n\n"
+                "Mandatory arguments to long options are mandatory for short options too.\n"
+                "  -a, --all             include pseudo, duplicate, inaccessible file systems\n"
+                "  -B, --block-size=SIZE  scale sizes by SIZE before printing them; e.g.,\n"
+                "                           '-BM' prints sizes in units of 1,048,576 bytes;\n"
+                "                           see SIZE format below\n"
+                f"{direct}"
+                "  -h, --human-readable  print sizes in powers of 1024 (e.g., 1023M)\n"
+                "  -H, --si              print sizes in powers of 1000 (e.g., 1.1G)\n"
+                "  -i, --inodes          list inode information instead of block usage\n"
+                "  -k                    like --block-size=1K\n"
+                "  -l, --local           limit listing to local file systems\n"
+                "      --no-sync         do not invoke sync before getting usage info (default)\n"
+                "      --output[=FIELD_LIST]  use the output format defined by FIELD_LIST,\n"
+                "                               or print all fields if FIELD_LIST is omitted.\n"
+                "  -P, --portability     use the POSIX output format\n"
+                "      --sync            invoke sync before getting usage info\n"
+                "      --total           elide all entries insignificant to available space,\n"
+                "                          and produce a grand total\n"
+                "  -t, --type=TYPE       limit listing to file systems of type TYPE\n"
+                "  -T, --print-type      print file system type\n"
+                "  -x, --exclude-type=TYPE   limit listing to file systems not of type TYPE\n"
+                "  -v                    (ignored)\n"
+                f"{tail}\n"
+                "Display values are in units of the first available SIZE from --block-size,\n"
+                "and the DF_BLOCK_SIZE, BLOCK_SIZE and BLOCKSIZE environment variables.\n"
+                "Otherwise, units default to 1024 bytes (or 512 if POSIXLY_CORRECT is set).\n\n"
+                "The SIZE argument is an integer and optional unit (example: 10K is 10*1024).\n"
+                "Units are K,M,G,T,P,E,Z,Y (powers of 1024) or KB,MB,... (powers of 1000).\n"
+                "Binary prefixes can be used, too: KiB=K, MiB=M, and so on.\n\n"
+                "FIELD_LIST is a comma-separated list of columns to be included.  Valid\n"
+                "field names are: 'source', 'fstype', 'itotal', 'iused', 'iavail', 'ipcent',\n"
+                "'size', 'used', 'avail', 'pcent', 'file' and 'target' (see info page).\n\n"
+                "GNU coreutils online help: <https://www.gnu.org/software/coreutils/>\n"
+                "Report any translation bugs to <https://translationproject.org/team/>\n"
+                "Full documentation <https://www.gnu.org/software/coreutils/df>\n"
+                "or available locally via: info '(coreutils) df invocation'\n")
+
+    def gnu_version(self) -> str:
+        version = str(self.data.get("coreutils", "9.1"))
+        try:
+            old = tuple(int(x) for x in version.split(".")[:2]) < (8, 27)
+        except ValueError:
+            old = False
+        return (f"df (GNU coreutils) {version}\n"
+                f"Copyright (C) {self.data.get('coreutils_year', '2022')} Free Software Foundation, Inc.\n"
+                f"License GPLv3+: GNU GPL version 3 or later <{'http' if old else 'https'}://gnu.org/licenses/gpl.html>.\n"
+                "This is free software: you are free to change and redistribute it.\n"
+                "There is NO WARRANTY, to the extent permitted by law.\n\n"
+                "Written by Torbjorn Granlund, David MacKenzie, and Paul Eggert.\n")
+
+    # --- BusyBox -----------------------------------------------------------------------
+
+    def busybox_version(self) -> tuple:
+        try:
+            return tuple(int(x) for x in self.data.get("busybox", [1, 24, 1]))[:3]
+        except (TypeError, ValueError):
+            return (1, 24, 1)
+
+    def busybox_usage(self) -> str:
+        version = self.busybox_version()
+        banner = self.data.get("banner", "")
+        head = f"{banner} multi-call binary.\n\n" if banner else ""
+        if version < (1, 15):
+            return (f"{head}Usage: df [-Pkmhai] [-B SIZE] [FILESYSTEM...]\n\n"
+                    "Print filesystem usage statistics\n\nOptions:\n"
+                    "\t-P\tPOSIX output format\n\t-k\t1024-byte blocks (default)\n\t-m\t1M-byte blocks\n"
+                    "\t-h\tHuman readable (e.g. 1K 243M 2G)\n\t-a\tShow all filesystems\n\t-i\tInodes\n"
+                    "\t-B SIZE\tBlocksize\n")
+        flags = "PkmhTai" if version >= (1, 23) else "Pkmhai"
+        text = f"{head}Usage: df [-{flags}] [-B SIZE]{' [-t TYPE]' if version >= (1, 34) else ''} [FILESYSTEM]...\n\n"
+        text += ("Print filesystem usage statistics\n\n"
+                 "\t-P\tPOSIX output format\n\t-k\t1024-byte blocks (default)\n\t-m\t1M-byte blocks\n"
+                 "\t-h\tHuman readable (e.g. 1K 243M 2G)\n")
+        if version >= (1, 23):
+            text += "\t-T\tPrint filesystem type\n"
+        if version >= (1, 34):
+            text += "\t-t TYPE\tPrint only mounts of this type\n"
+        return text + "\t-a\tShow all filesystems\n\t-i\tInodes\n\t-B SIZE\tBlocksize\n"
+
+    def busybox(self, args: list[str]) -> int:
+        version = self.busybox_version()
+        letters = "kPaiBhm" + ("T" if version >= (1, 23) else "") + ("t" if version >= (1, 34) else "") + \
+            ("H" if version >= (1, 35) else "")
+        options, operands, index = [], [], 0
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if arg == "--":
+                operands += args[index:]
+                break
+            if arg.startswith("--"):
+                self.errorWrite(f"df: unrecognized option '{arg}'\n" + self.busybox_usage())
+                return 1
+            if arg.startswith("-") and arg != "-":
+                position = 1
+                while position < len(arg):
+                    letter = arg[position]
+                    position += 1
+                    if letter not in letters:
+                        self.errorWrite(f"df: invalid option -- '{letter}'\n" + self.busybox_usage())
+                        return 1
+                    if letter in "Bt":
+                        value = arg[position:]
+                        if not value:
+                            if index >= len(args):
+                                self.errorWrite(f"df: option requires an argument -- '{letter}'\n"
+                                                + self.busybox_usage())
+                                return 1
+                            value, index = args[index], index + 1
+                        options.append((letter, value))
+                        break
+                    options.append((letter, None))
+            else:
+                operands.append(arg)
+        unit, human, posix, inodes, show_type, every, only = 1024, False, False, False, False, False, None
+        for letter, value in options:
+            if letter == "k":
+                unit, human = 1024, False
+            elif letter == "m":
+                unit, human = 1024 * 1024, False
+            elif letter == "B":
+                size = tpot_df_block_size(value) if value else None
+                if size is None or (version < (1, 27) and not value.isdigit()):
+                    self.errorWrite(f"df: invalid number '{value}'\n")
+                    return 1
+                unit, human = size[0], False
+            elif letter in "hH":
+                human = True
+            elif letter == "P":
+                posix = True
+            elif letter == "i":
+                inodes = True
+            elif letter == "T":
+                show_type = True
+            elif letter == "a":
+                every = True
+            elif letter == "t":
+                only = value
+        if human:
+            units = "     Size"
+        elif inodes:
+            units = "   Inodes"
+        else:
+            units = f"{tpot_df_bb_human(unit, 0, 1 if posix else 0)}-blocks"
+        self.write(f"Filesystem           {'Type       ' if show_type else ''}{units:<15}Used Available "
+                   f"{'Capacity' if posix else 'Use%'} Mounted on\n")
+        status = 0
+        if operands:
+            chosen = []
+            for arg in operands:
+                row = self.row_of(arg)
+                if row is None:
+                    self.errorWrite(f"df: {arg}: can't find mount point\n")
+                    status = 1
+                else:
+                    chosen.append(row)
+        else:
+            chosen = [row for row in self.rows if (every or row["size"]) and row.get("source") != "rootfs"]
+        for row in chosen:
+            if only is not None and row.get("fstype") != only:
+                continue
+            if inodes:
+                blocks, used, avail, block_size = row["inodes"], row["iused"], row["inodes"] - row["iused"], 1
+                display = 0 if human else 1
+            else:
+                blocks, used, avail, block_size = row["size"], row["used"], row["avail"], 1024
+                display = 0 if human else unit
+            percent = (used * 100 + (used + avail) // 2) // (used + avail) if used + avail else 0
+            device = str(row.get("source", ""))
+            line = device.ljust(20)
+            if len(device) > 20 and not posix:
+                line = device + "\n" + " " * 20
+            if show_type:
+                fstype = f" {str(row.get('fstype', '')):<10}"
+                line += fstype if len(fstype) <= 11 or posix else fstype + "\n" + " " * 30
+            line += (f" {tpot_df_bb_human(blocks, block_size, display):>9} "
+                     f"{tpot_df_bb_human(used, block_size, display):>9} "
+                     f"{tpot_df_bb_human(avail, block_size, display):>9} {percent:>3}% {row.get('target', '')}\n")
+            self.write(line)
+        return status
+
+
+commands["/bin/df"] = Command_df
+commands["/usr/bin/df"] = Command_df
+commands["df"] = Command_df
+'''
+
+
+def patch_df(cowrie_root):
+    """df as a command over the persona's file system table (DF_COMMAND, in the module of grep):
+    GNU coreutils or the persona's BusyBox, the same file systems as mount and /proc/mounts.
+    Runs after patch_grep."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "fs.py"
+    replace_once(path, "import copy\nimport getopt\n", "import copy\nimport functools\nimport getopt\nimport json\n")
+    replace_once(path, "from cowrie.shell import fs\n",
+                 "from cowrie.core.config import CowrieConfig\nfrom cowrie.shell import fs\n")
+    replace_once(path, "from typing import TYPE_CHECKING\n", "from pathlib import Path\nfrom typing import TYPE_CHECKING\n")
+    replace_once(path, 'commands["/bin/fgrep"] = Command_grep\n', 'commands["/bin/fgrep"] = Command_grep\n' + DF_COMMAND)
+
+
 def patch_prompt(cowrie_root):
     """[shell] prompt_style = redhat gives the bash PS1 of RHEL / CentOS,
     [\\u@\\h \\W]\\$ (short host name, basename of the cwd, ~ for home); anything
@@ -4696,6 +5260,7 @@ def main():
     patch_uptime(cowrie_root)
     patch_ps_top(cowrie_root)
     patch_grep(cowrie_root)
+    patch_df(cowrie_root)
     patch_prompt(cowrie_root)
     patch_shell_errors(cowrie_root)
     patch_telnet_banner(cowrie_root)

@@ -208,7 +208,7 @@ class PatchTest(unittest.TestCase):
         # the smoke test looks for upstream's txtcmds_path lookup: it stays, the spellings follow it
         self.assertIn("operator_path = Path(txtcmds_path) / relpath", protocol)
 
-    def lookup(self, txtcmds, commands, skip=""):
+    def lookup(self, txtcmds, commands, skip="", shipped=None):
         """getCommand of the patched protocol.py on base_tree() (bin -> usr/bin) with these
         txtcmds files and Python commands; returns a function name -> what it found."""
         root = tmpdir(self)
@@ -218,6 +218,9 @@ class PatchTest(unittest.TestCase):
         protocol = (self.patched() / "src/cowrie/shell/protocol.py").read_text()
 
         def read_data_bytes(*parts):
+            # the txtcmds Cowrie ships (src/cowrie/data/txtcmds)
+            if parts[0] == "txtcmds" and "/".join(parts[1:]) in (shipped or {}):
+                return shipped["/".join(parts[1:])].encode()
             raise FileNotFoundError("/".join(parts))
 
         config = FakeConfig({("honeypot", "txtcmds_path"): str(root), ("shell", "skip_python_commands"): skip})
@@ -256,6 +259,26 @@ class PatchTest(unittest.TestCase):
         # a program without txtcmd or command stays Cowrie's script / binary
         self.assertEqual(find("uname"), ("script", "/usr/bin/uname"))
         self.assertIsNone(find("nothere"))
+
+    def test_python_command_answers_before_the_txtcmds_cowrie_ships(self):
+        # Cowrie ships data/txtcmds/bin/df and usr/bin/top; the patched df and top answer every spelling
+        shipped = {"bin/df": "df of Cowrie\n", "usr/bin/top": "top of Cowrie\n"}
+        commands = {"df": "Command_df", "/bin/df": "Command_df", "/usr/bin/df": "Command_df",
+                    "top": "Command_top", "/usr/bin/top": "Command_top"}
+        find = self.lookup({}, commands, shipped=shipped)
+        for name in ("df", "/bin/df", "/usr/bin/df"):
+            self.assertEqual(find(name), "Command_df", name)
+        for name in ("top", "/bin/top", "/usr/bin/top"):
+            self.assertEqual(find(name), "Command_top", name)
+        # a txtcmd of the persona at the path answers before a Python command of another spelling,
+        # Cowrie's own txtcmds after it
+        find = self.lookup({"bin/df": "df of the persona\n"}, {"/usr/bin/df": "Command_df"}, shipped=shipped)
+        self.assertEqual(find("/bin/df"), ("txtcmd", "df of the persona\n"))
+        find = self.lookup({}, {}, shipped=shipped)
+        self.assertEqual(find("/bin/df"), ("txtcmd", "df of Cowrie\n"))
+        # a skipped Python command leaves the path to the shipped txtcmd
+        find = self.lookup({}, commands, skip="df", shipped=shipped)
+        self.assertEqual(find("/bin/df"), ("txtcmd", "df of Cowrie\n"))
 
     def test_links_resolve_from_their_directory(self):
         from tpot_personas.identity import draw
@@ -2544,6 +2567,14 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/base.py", "                s = s[: self.columns()]\n",
                   "                s = s[: self.columns() - 1]\n"),
                  ("src/cowrie/commands/base.py", 'commands["ps"] = Command_ps\n', 'commands["ps"] = Command_ps  # ps\n'),
+                 ("src/cowrie/commands/fs.py", 'commands["/bin/fgrep"] = Command_grep\n',
+                  'commands["/bin/fgrep"] = Command_grep  # fgrep\n'),
+                 ("src/cowrie/commands/fs.py", "import copy\nimport getopt\n", "import copy\nimport getopt as g\n"),
+                 ("src/cowrie/commands/fs.py", "from cowrie.shell import fs\n", "from cowrie.shell import fs as f\n"),
+                 ("src/cowrie/commands/fs.py", "from typing import TYPE_CHECKING\n",
+                  "from typing import TYPE_CHECKING, Any\n"),
+                 ("src/cowrie/shell/protocol.py", "        if path in self.commands:\n            return self.commands[path]\n",
+                  "        if path in self.commands:\n            return self.commands.get(path)\n"),
                  ("src/cowrie/commands/base.py", "1 user,  load average: 0.00, 0.00, 0.00\\n\"\n        )\n",
                   "1 user, load average: 0.00, 0.00, 0.00\\n\"\n        )\n"))
         for rel, old, new in cases:
