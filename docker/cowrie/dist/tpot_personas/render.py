@@ -129,6 +129,8 @@ EMBEDDED_SKIP_PYTHON_COMMANDS = (
 BUSYBOX_PYTHON_COMMANDS = ("/bin/busybox", "busybox")
 KEY_FILES = {"ssh-rsa": "rsa", "ecdsa-sha2-nistp256": "ecdsa", "ssh-ed25519": "ed25519"}
 BUSYBOX_HELP = "busybox-help.txt"
+# the file systems of the patched df ([shell] df_table, every persona)
+DF_TABLE = "df.json"
 # what ls -l shows for a program Cowrie runs (the pickle keeps the size of one it has):
 # BusyBox of a firmware, any other program
 PROGRAM_SIZES = {"busybox": (380_000, 1_100_000), "git": (2_500_000, 4_500_000), "python2.7": (7_000, 7_400)}
@@ -406,6 +408,8 @@ def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, c
     tools = "".join(f"{key} = {value}\n"
                     for key, value in system.shell_keys(persona, ident, content.files, runtime_dir).items())
     top = "".join(f"{key} = {value}\n" for key, value in top_keys(persona, ident, content).items())
+    top += f"df_table = {runtime_dir}/{DF_TABLE}\n"
+    top += "".join(f"{key} = {value}\n" for key, value in system.awk_keys(persona, ident).items())
     profile = PROFILES[persona.ssh_profile]
     keys = "\n".join(
         f"{KEY_FILES[k]}_public_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key.pub\n"
@@ -516,6 +520,7 @@ def render(persona, ident, base_tree, out_dir, runtime_dir, keys_dir, cowrie_roo
            json.dumps({"command": {"ps": content.processes}}, indent=2, sort_keys=True) + "\n")
     if content.busybox_help:
         _write(out_dir / BUSYBOX_HELP, content.busybox_help)
+    _write(out_dir / DF_TABLE, json.dumps(system.df_table(persona, ident, content.filesystems), indent=1, sort_keys=True) + "\n")
     if persona.kind == "server":
         _write(out_dir / system.SERVICE_STATUS, system.service_status(persona))
         for name, data in runtime_json(persona, ident, content.processes).items():

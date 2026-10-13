@@ -758,47 +758,97 @@ def top_keys(persona, ident, content):
 
 # --- disks ------------------------------------------------------------------
 
-def _df_row(fs, size, used, avail, mount):
-    pct = math.ceil(used * 100 / (used + avail)) if used + avail else 0
-    # at least one space between columns, also for long device names and multi-TB disks
-    return f"{fs:<14} {size:>9} {used:>7} {avail:>9} {pct:>3}% {mount}"
+def fs_row(source, target, fstype, options, size=0, used=0, avail=None, inodes=0, iused=0):
+    """One mounted file system of the persona's table: mount, /proc/mounts and the patched df
+    (sizes in KiB; size 0 keeps it out of df without -a: proc, sysfs, ...). avail is what is
+    left to users (below size - used where the file system reserves blocks)."""
+    return {"source": source, "target": target, "fstype": fstype, "options": options, "size": size,
+            "used": used, "avail": size - used if avail is None else avail, "inodes": inodes, "iused": iused}
 
 
-def server_df(ident, root_dev="/dev/sda1", run_lock=True, boot=None):
-    """boot: (device, size kB, mount point) of a boot partition, e.g. the Pi's FAT /boot/firmware."""
+# file systems whose statfs counts no inodes (df -i shows 0 and "-")
+_NO_INODES = ("vfat", "btrfs", "ubifs", "jffs2", "overlay", "ramfs", "rootfs")
+
+
+def with_inodes(ident, row):
+    """The inode counts df -i shows, drawn once per mount point (unverified: the ratios are
+    those of the default mkfs and tmpfs options): ext2/3/4 one inode per 16 KiB, xfs a
+    quarter of the blocks in 2 KiB, tmpfs and devtmpfs half of the memory pages, squashfs
+    as many inodes as files and none free."""
+    size, used, fstype = row["size"], row["used"], row["fstype"]
+    if not size or fstype in _NO_INODES:
+        return row
+    rng = rng_for(ident, f"inodes {row['target']}")
+    if fstype in ("ext2", "ext3", "ext4"):
+        inodes = size // 16
+        iused = min(inodes, 11 + used // rng.randint(28, 40))
+    elif fstype == "xfs":
+        inodes = size // 2
+        iused = min(inodes, 3 + used // rng.randint(28, 40))
+    elif fstype == "squashfs":
+        inodes = iused = max(64, size // rng.randint(3, 6))
+    else:  # tmpfs, devtmpfs
+        inodes = max(1024, ident.hardware.mem_kb // 8)
+        iused = min(inodes, 1 + used // 4 + (rng.randint(380, 720) if row["target"] in ("/dev", "/run") else
+                                              rng.randint(0, 4)))
+    return dict(row, inodes=inodes, iused=iused)
+
+
+def mount_text(rows):
+    """What mount prints of the table (util-linux and BusyBox: the order of /proc/mounts)."""
+    return "".join(f"{r['source']} on {r['target']} type {r['fstype']} ({r['options']})\n" for r in rows)
+
+
+def proc_mounts_text(rows):
+    return "".join(f"{r['source']} {r['target']} {r['fstype']} {r['options']} 0 0\n" for r in rows)
+
+
+def server_filesystems(persona, ident, root_dev="/dev/sda1", root_type="ext4",
+                       root_options="rw,relatime,errors=remount-ro", run_lock=True, boot=()):
+    """The mounted file systems of a server in the order of /proc/mounts: the kernel's sysfs
+    and proc, /dev, the tmpfs of /run and /dev/shm (and /run/lock), cgroups, the root disk
+    and the boot partitions (device, KiB, mount point, fs type, options, share used from, to). Debian / Ubuntu name /dev
+    udev (initramfs-tools); Red Hat devtmpfs, with SELinux labels, /run of a fifth (RHEL 9) or
+    half (CentOS 7) of the memory and CentOS 7's tmpfs of cgroup v1. Unverified: the exact
+    option lists and the shares of memory per release."""
+    el = persona.family in ("rhel", "centos")
     rng = rng_for(ident, "df")
     mem, disk = ident.hardware.mem_kb, ident.hardware.disk_kb
-    udev, run, shm = int(mem * 0.4854), mem // 10, mem // 2
+    label = "seclabel," if el else ""
+    inode64 = ",inode64" if kernel_series(ident.release.kernel_version) >= (5, 9) else ""
+    run = {"rhel": mem // 5, "centos": mem // 2}.get(persona.family, mem // 10)
+    dev = 4096 if persona.family == "rhel" else int(mem * 0.4854)
+    shm = mem // 2
     run_used = rng.randint(600, 1300)
     used = int(disk * rng.uniform(0.15, 0.45))
-    avail = int(disk * 0.948) - used
-    rows = ["Filesystem     1K-blocks    Used Available Use% Mounted on",
-            _df_row("udev", udev, 0, udev, "/dev"),
-            _df_row("tmpfs", run, run_used, run - run_used, "/run"),
-            _df_row(root_dev, disk, used, avail, "/"),
-            _df_row("tmpfs", shm, 0, shm, "/dev/shm")]
+    # ext4 keeps 5 % for root (and some metadata), xfs nothing
+    avail = (disk - used) if root_type == "xfs" else int(disk * 0.948) - used
+    dev_name = "devtmpfs" if el else "udev"
+    rows = [fs_row("sysfs", "/sys", "sysfs", f"rw,{label}nosuid,nodev,noexec,relatime"),
+            fs_row("proc", "/proc", "proc", "rw,nosuid,nodev,noexec,relatime"),
+            fs_row(dev_name, "/dev", "devtmpfs",
+                   f"rw,{label}nosuid,{'' if el else 'relatime,'}size={dev}k,nr_inodes={mem // 8},mode=755{inode64}",
+                   dev, 0),
+            fs_row("devpts", "/dev/pts", "devpts", f"rw,{label}nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=000")]
+    if el:
+        rows.append(fs_row("tmpfs", "/dev/shm", "tmpfs", f"rw,{label}nosuid,nodev{inode64}", shm, 0))
+    rows.append(fs_row("tmpfs", "/run", "tmpfs",
+                       f"rw,{label}nosuid,nodev,{'' if el else 'noexec,relatime,'}size={run}k,mode=755{inode64}",
+                       run, run_used))
+    if persona.family == "centos":
+        rows.append(fs_row("tmpfs", "/sys/fs/cgroup", "tmpfs", "ro,seclabel,nosuid,nodev,noexec,mode=755", shm, 0))
+    else:
+        rows.append(fs_row("cgroup2", "/sys/fs/cgroup", "cgroup2",
+                           f"rw,{label}nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot"))
+    rows.append(fs_row(root_dev, "/", root_type, root_options, disk, used, avail))
+    if not el:
+        rows.append(fs_row("tmpfs", "/dev/shm", "tmpfs", f"rw,nosuid,nodev{inode64}", shm, 0))
     if run_lock:
-        rows.append(_df_row("tmpfs", 5120, 0, 5120, "/run/lock"))
-    if boot:
-        dev, size, mount = boot
-        boot_used = int(size * rng.uniform(0.12, 0.14))
-        rows.append(_df_row(dev, size, boot_used, size - boot_used, mount))
-    return "\n".join(rows) + "\n"
-
-
-def server_mount(ident, root_dev="/dev/sda1", run_lock=True, boot=None, root_type="ext4",
-                 root_options="rw,relatime,errors=remount-ro"):
-    run = ident.hardware.mem_kb // 10
-    text = (f"{root_dev} on / type {root_type} ({root_options})\n"
-            "proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)\n"
-            "sysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime)\n"
-            f"tmpfs on /run type tmpfs (rw,nosuid,nodev,noexec,relatime,size={run}k,mode=755)\n")
-    if run_lock:
-        text += "tmpfs on /run/lock type tmpfs (rw,nosuid,nodev,noexec,relatime,size=5120k)\n"
-    if boot:
-        text += (f"{boot[0]} on {boot[2]} type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=437,"
-                 "iocharset=ascii,shortname=mixed,errors=remount-ro)\n")
-    return text
+        rows.append(fs_row("tmpfs", "/run/lock", "tmpfs", f"rw,nosuid,nodev,noexec,relatime,size=5120k{inode64}",
+                           5120, 0))
+    for device, size, target, fstype, options, low, high in boot:
+        rows.append(fs_row(device, target, fstype, options, size, int(size * rng.uniform(low, high))))
+    return [with_inodes(ident, row) for row in rows]
 
 
 ULIMIT = """core file size          (blocks, -c) 0
@@ -895,12 +945,12 @@ def base_files(persona, ident, passwd, group, shadow, home=None):
     return files
 
 
-def base_txtcmds(persona, ident, df, mount, lscpu_text, cmdline=None):
-    """cmdline: the kernel command line of dmesg (servers build it from their root disk)."""
+def base_txtcmds(persona, ident, mount, lscpu_text, cmdline=None):
+    """cmdline: the kernel command line of dmesg (servers build it from their root disk). df is
+    the patched command of Cowrie (df_table)."""
     kernel = dmesg(ident.release, persona.hardware_platform) if cmdline is None else \
         dmesg(ident.release, persona.hardware_platform, cmdline)
     return {
-        "bin/df": df,
         "bin/dmesg": kernel,
         "bin/mount": mount,
         "bin/ulimit": ULIMIT,

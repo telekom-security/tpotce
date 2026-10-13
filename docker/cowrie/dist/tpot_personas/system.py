@@ -1047,6 +1047,54 @@ def tools(persona, ident):
     return found
 
 
+# coreutils of the releases without a coreutils package in the catalog (df --version)
+COREUTILS = {"rhel": "8.32", "centos": "8.22", "stretch": "8.26", "synology": "8.31"}
+# the year of the copyright line of `df --version` per coreutils release
+COREUTILS_YEARS = {"8.22": "2013", "8.26": "2016", "8.28": "2017", "8.30": "2018", "8.31": "2019", "8.32": "2020",
+                   "9.1": "2022", "9.4": "2023", "9.5": "2024", "9.7": "2025"}
+
+
+# the devices whose firmware has GNU coreutils (their df, procps top)
+COREUTILS_DEVICES = ("synology", "ubiquiti")
+
+
+def df_table(persona, ident, filesystems):
+    """What the patched df reads ([shell] df_table): the file system table of the persona, the
+    style of df (GNU coreutils on servers and the devices with coreutils, else BusyBox) and its
+    version (coreutils of the release, the BusyBox of the firmware; unverified: the BusyBox of
+    QNAP, which names none, and coreutils of DSM)."""
+    data = {"filesystems": filesystems}
+    if persona.kind == "server" or persona.family in COREUTILS_DEVICES:
+        code = "synology" if persona.family == "synology" else _codename(persona, ident)
+        package = {**APT_INSTALLED.get(code, {}), **ident.release.packages}.get("coreutils", "")
+        version = COREUTILS.get(code) or _upstream(package) or "9.1"
+        data.update(style="gnu", coreutils=version, coreutils_year=COREUTILS_YEARS.get(version, "2022"),
+                    el=persona.family in ("rhel", "centos"))
+    else:
+        banner = ident.release.extra.get("busybox", "")
+        found = re.match(r"BusyBox v(\d+)\.(\d+)\.(\d+)", banner)
+        data.update(style="busybox", banner=banner,
+                    busybox=[int(x) for x in found.groups()] if found else [1, 24, 1])
+    return data
+
+
+# awk of the releases (unverified: the gawk of DSM, mawk of EdgeOS 2)
+MAWK = {"noble": "1.3.4 20240123", "jammy": "1.3.4 20200120", "bookworm": "1.3.4 20200120",
+        "trixie": "1.3.4 20250131", "stretch": "1.3.3"}
+GAWK = {"rhel": "5.1.0", "centos": "4.0.2", "synology": "4.1.4"}
+
+
+def awk_keys(persona, ident):
+    """[shell] keys of the patched awk: its style (gawk on Red Hat and DSM, mawk on the Debian
+    family, BusyBox's on the other devices) and version (the BusyBox banner)."""
+    code = _codename(persona, ident)
+    if persona.family in GAWK:
+        return {"awk_style": "gawk", "awk_version": GAWK[persona.family]}
+    if persona.kind == "server" or persona.family == "ubiquiti":
+        return {"awk_style": "mawk", "awk_version": MAWK.get(code, "1.3.4 20200120")}
+    return {"awk_style": "busybox", "awk_version": ident.release.extra.get("busybox", "")}
+
+
 def python3_name(version):
     """python3.12 of 3.12.3; None for a Python 2."""
     major, minor = version.split(".")[:2]

@@ -17,7 +17,7 @@ from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import (DAY, drawn_at, host_patterns, hostname_regex, is_fresh, kernel_time, max_uptime, stale_at,
                        updated_at)
 from .model import PROMPT_STYLES
-from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS, runtime_json
+from .render import BUSYBOX_HELP, DF_TABLE, DIR_MODES, PACKAGE_MANAGER_PATHS, runtime_json
 from .ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS,
                            host_key_algorithms, key_type, server_version)
 
@@ -403,7 +403,7 @@ def _check_device_boot(honeyfs, txtcmds, out):
     it: the file system type of "VFS: Mounted root" on /dev/root or the root= device
     (/, /rom under an overlay or a mount point of the vendor), an mtdblock root on
     MTD major 31 and its minor; an initramfs (no VFS line) has no root= and a tmpfs
-    or rootfs on /. Every file system of df is mounted."""
+    or rootfs on /."""
     if _text(honeyfs / "etc/fstab"):
         return
     dmesg = _text(txtcmds / "bin/dmesg")
@@ -427,11 +427,51 @@ def _check_device_boot(honeyfs, txtcmds, out):
         mtd = re.fullmatch(r"/dev/mtdblock(\d+)", root or "")
         if mtd and (major, minor) != (31, int(mtd.group(1))):
             out.append(f"boot: root={root}, but dmesg mounted device {major}:{minor}")
-    mounted = {(dev, mp) for dev, mp, _ in mounts}
-    for line in _text(txtcmds / "bin/df").splitlines()[1:]:
-        fields = line.split()
-        if len(fields) >= 6 and (fields[0], fields[-1]) not in mounted:
-            out.append(f"df: {fields[0]} on {fields[-1]} is not in mount")
+
+
+def _top_style(cfg):
+    return cfg.get("shell", "top_style", fallback="procps")
+
+
+def _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out):
+    """df is the patched command over the persona's file system table (df.json, [shell]
+    df_table): no txtcmd answers it, the table is the persona's, and every file system of it is
+    in mount and /proc/mounts with its type; sizes fit (used and available within the size, the
+    root of a server on the disk of its hardware) and awk is the persona's."""
+    if cfg.get("shell", "df_table", fallback=None) != f"{runtime_dir}/{DF_TABLE}":
+        out.append(f"df: cfg df_table is not {runtime_dir}/{DF_TABLE}")
+    for key, value in system.awk_keys(persona, ident).items():
+        if cfg.get("shell", key, fallback=None) != value:
+            out.append(f"awk: cfg {key}: {cfg.get('shell', key, fallback=None)!r}, expected {value!r}")
+    for directory in PATH_DIRS:
+        if (txtcmds / directory / "df").is_file():
+            out.append(f"df: a txtcmd /{directory}/df answers df, the table does not")
+    try:
+        found = json.loads(_text(out_dir / DF_TABLE))
+    except ValueError:
+        found = None
+    rows = found.get("filesystems") if isinstance(found, dict) else None
+    if not isinstance(rows, list) or found != json.loads(json.dumps(system.df_table(persona, ident, rows))):
+        out.append("df: df.json is not the persona's")
+        rows = []
+    if (found or {}).get("style") != ("gnu" if _top_style(cfg) == "procps" else "busybox"):
+        out.append(f"df: the {(found or {}).get('style')} df differs from the {_top_style(cfg)} top")
+    mounted = {(dev, mp, fs) for dev, mp, fs in _MOUNT.findall(_text(txtcmds / "bin/mount"))}
+    proc = {tuple(line.split()[:3]) for line in _text(honeyfs / "proc/mounts").splitlines() if line.strip()}
+    for row in rows:
+        key = (row.get("source"), row.get("target"), row.get("fstype"))
+        if key not in mounted:
+            out.append(f"df: {key[0]} on {key[1]} ({key[2]}) is not in mount")
+        if key not in proc:
+            out.append(f"df: {key[0]} on {key[1]} ({key[2]}) is not in /proc/mounts")
+        size, used, avail = row.get("size", 0), row.get("used", 0), row.get("avail", 0)
+        if not (0 <= used <= size and 0 <= avail <= size - used):
+            out.append(f"df: {key[1]} uses {used} and leaves {avail} of {size} KiB")
+        if not 0 <= row.get("iused", 0) <= row.get("inodes", 0):
+            out.append(f"df: {key[1]} uses {row.get('iused')} of {row.get('inodes')} inodes")
+    roots = [row for row in rows if row.get("target") == "/" and row.get("size")]
+    if persona.kind == "server" and [row["size"] for row in roots] != [ident.hardware.disk_kb]:
+        out.append(f"df: the root of the server is not one disk of {ident.hardware.disk_kb} KiB")
 
 
 def _check_dates(ident, honeyfs, out):
@@ -939,6 +979,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     _check_boot(honeyfs, txtcmds, out)
     if persona.kind == "device":
         _check_device_boot(honeyfs, txtcmds, out)
+    _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out)
 
     os_release = _text(honeyfs / "etc/os-release")
     fields = dict(line.split("=", 1) for line in os_release.splitlines() if "=" in line)

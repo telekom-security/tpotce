@@ -5,8 +5,8 @@ import hashlib
 import time
 
 from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_group, el_home_files, el_hosts,
-                     el_passwd, el_shadow, gm, lscpu, pi_partuuid, ps_entry, rng_for, root_uuid, server_df,
-                     server_group, server_mount, server_passwd, server_shadow, shadow_ctime)
+                     el_passwd, el_shadow, gm, lscpu, mount_text, pi_partuuid, proc_mounts_text, ps_entry, rng_for,
+                     root_uuid, server_filesystems, server_group, server_passwd, server_shadow, shadow_ctime)
 from .identity import drawn_at, log_window, updated_at
 from . import system
 from .system import proc_modules
@@ -558,10 +558,24 @@ def _gecos(user):
     return user.replace("-", " ").title()
 
 
+def efi_partition(persona, ident, root_dev):
+    """The EFI partition of Ubuntu's cloud images (LABEL=UEFI of their fstab, partition 15 of
+    the root disk, 105 MiB of which about 6 are used), else None."""
+    if persona.family != "ubuntu" or ident.hardware.provider not in ("aws", "kvm", "do"):
+        return None
+    disk = "/dev/nvme0n1p" if root_dev == "/dev/root" else root_dev.rstrip("0123456789")
+    return (f"{disk}15", 106858, "/boot/efi", "vfat",
+            "rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro",
+            0.055, 0.06)
+
+
 def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None, home=None, extra_ps=(),
                     boot=None, ctimes=None):
     hw = ident.hardware
     root_dev, root_type, root_options = root_disk(persona, ident)
+    boots = tuple(b for b in (boot, efi_partition(persona, ident, root_dev)) if b)
+    filesystems = server_filesystems(persona, ident, root_dev=root_dev, root_type=root_type,
+                                     root_options=root_options, run_lock=run_lock, boot=boots)
     cmdline, fstab = boot_config(persona, ident)
     processes = server_processes(persona, ident, extra_ps)
     passwd, group, shadow = accounts or (
@@ -576,17 +590,16 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
     sudoers = system.sudoers_files(persona, ident)
     all_files.update(sudoers)
     all_files.update(files)
-    txtcmds = base_txtcmds(persona, ident, cmdline=cmdline,
-                           df=server_df(ident, root_dev=root_dev, run_lock=run_lock, boot=boot),
-                           mount=server_mount(ident, root_dev=root_dev, run_lock=run_lock, boot=boot,
-                                              root_type=root_type, root_options=root_options),
+    all_files["proc/mounts"] = proc_mounts_text(filesystems)
+    txtcmds = base_txtcmds(persona, ident, cmdline=cmdline, mount=mount_text(filesystems),
                            lscpu_text=lscpu(persona, hw, op_modes="32-bit, 64-bit"))
     txtcmds.update(package_manager_txtcmds(persona, ident))
     txtcmds.update(command_inventory_txtcmds(persona, ident))
     all_ctimes = {"etc/shadow": shadow_ctime(ident)}
     all_ctimes.update({rel: ident.installed_at for rel in sudoers})
     all_ctimes.update(ctimes or {})
-    return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes=all_ctimes, tasks=tasks)
+    return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes=all_ctimes, tasks=tasks,
+                   filesystems=filesystems)
 
 
 def _ubuntu_files(persona, ident):
@@ -835,7 +848,8 @@ deb http://deb.debian.org/debian {r.extra['codename']}-updates main contrib non-
         server_group(user, persona.gid, extra=pi_groups + "avahi:x:113:\n"),
         server_shadow(user, ident, extra=("avahi",)),
     )
-    boot = ("/dev/mmcblk0p1", 522232, "/boot/firmware")
+    boot = ("/dev/mmcblk0p1", 522232, "/boot/firmware", "vfat",
+            "rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=ascii,shortname=mixed,errors=remount-ro", 0.12, 0.14)
     return _server_content(persona, ident, files, tasks=172, run_lock=True, accounts=accounts,
                            boot=boot, ctimes=ctimes)
 

@@ -799,7 +799,7 @@ class RenderTest(unittest.TestCase):
         persona = catalog.by_id("debian-bookworm")
         _, first, _ = render_one(self, persona, 9)
         _, second, _ = render_one(self, persona, 9)
-        for rel in ("cmdoutput.json", "honeyfs/etc/shadow", "honeyfs/proc/meminfo", "txtcmds/bin/df"):
+        for rel in ("cmdoutput.json", "honeyfs/etc/shadow", "honeyfs/proc/meminfo", "df.json"):
             self.assertEqual((first / rel).read_text(), (second / rel).read_text(), rel)
 
     def test_restricted_directories_keep_owner_and_mode(self):
@@ -927,6 +927,65 @@ class KeptHistoryTest(unittest.TestCase):
                     self.assertEqual(self.processes(again, kept), procs)
 
 
+class FileSystemTableTest(unittest.TestCase):
+    """mount, /proc/mounts and df show one table of file systems per persona."""
+
+    def rows(self, persona_id, provider=None):
+        persona = catalog.by_id(persona_id)
+        for seed in range(400):
+            ident = draw(persona, seed, NOW)
+            if provider is None or ident.hardware.provider == provider:
+                break
+        content = persona.builder(persona, ident)
+        return ident, content, {row["target"]: row for row in content.filesystems}
+
+    def test_every_persona_mounts_what_df_lists(self):
+        for persona in catalog.PERSONAS:
+            ident = draw(persona, 3, NOW)
+            content = persona.builder(persona, ident)
+            mount = content.txtcmds["bin/mount"].splitlines()
+            proc = content.files["proc/mounts"].splitlines()
+            self.assertNotIn("bin/df", content.txtcmds, persona.id)
+            self.assertEqual(len(mount), len(content.filesystems), persona.id)
+            for row, line, entry in zip(content.filesystems, mount, proc):
+                self.assertEqual(line, f"{row['source']} on {row['target']} type {row['fstype']} ({row['options']})")
+                self.assertEqual(entry, f"{row['source']} {row['target']} {row['fstype']} {row['options']} 0 0")
+                self.assertLessEqual(row["used"] + row["avail"], row["size"], persona.id)
+                self.assertLessEqual(row["iused"], row["inodes"], persona.id)
+
+    def test_red_hat_names_devtmpfs_and_its_own_shares(self):
+        ident, _, rows = self.rows("rhel-9")
+        self.assertEqual((rows["/dev"]["source"], rows["/dev"]["size"]), ("devtmpfs", 4096))
+        self.assertEqual(rows["/run"]["size"], ident.hardware.mem_kb // 5)
+        self.assertIn("seclabel", rows["/dev/shm"]["options"])
+        self.assertEqual(rows["/"]["avail"], rows["/"]["size"] - rows["/"]["used"])  # xfs reserves nothing
+        ident, _, rows = self.rows("centos-7")
+        self.assertEqual(rows["/sys/fs/cgroup"]["fstype"], "tmpfs")
+        self.assertEqual(rows["/run"]["size"], ident.hardware.mem_kb // 2)
+        self.assertNotIn("inode64", rows["/dev/shm"]["options"])  # kernel 3.10
+
+    def test_ubuntu_cloud_images_mount_the_efi_partition_of_their_fstab(self):
+        for provider, device in (("kvm", "/dev/sda15"), ("aws", "/dev/nvme0n1p15")):
+            ident, content, rows = self.rows("ubuntu-noble", provider)
+            self.assertEqual((rows["/boot/efi"]["source"], rows["/boot/efi"]["fstype"]), (device, "vfat"))
+            self.assertIn("LABEL=UEFI\t/boot/efi", content.files["etc/fstab"])
+            self.assertEqual(rows["/"]["size"], ident.hardware.disk_kb)
+            self.assertEqual(rows["/dev"]["source"], "udev")
+        _, _, rows = self.rows("debian-bookworm")
+        self.assertNotIn("/boot/efi", rows)
+
+    def test_df_style_follows_the_userland(self):
+        for persona in catalog.PERSONAS:
+            ident = draw(persona, 2, NOW)
+            content = persona.builder(persona, ident)
+            data = system.df_table(persona, ident, content.filesystems)
+            self.assertEqual(data["style"], "gnu" if content.top_style == "procps" else "busybox", persona.id)
+            if data["style"] == "busybox":
+                self.assertEqual(len(data["busybox"]), 3)
+            else:
+                self.assertIn(data["coreutils"], system.COREUTILS_YEARS)
+
+
 class ServerContentTest(unittest.TestCase):
     def test_gpu_tokens_differ_per_seed_and_land_in_files(self):
         persona = catalog.by_id("gpu-ubuntu")
@@ -1043,7 +1102,7 @@ class ServerContentTest(unittest.TestCase):
         self.assertIn("Amazon.com, Inc. Elastic Network Adapter (ENA)", lspci)
         self.assertIn("NVMe EBS Controller", lspci)
         self.assertNotIn("Virtio", lspci)
-        self.assertIn("/dev/root", (out / "txtcmds/bin/df").read_text())
+        self.assertIn("/dev/root", [row["source"] for row in json.loads((out / "df.json").read_text())["filesystems"]])
         self.assertTrue(ident.release.kernel_version.endswith("-aws"))
         self.assertNotIn("PREEMPT_DYNAMIC", ident.release.kernel_build)
         self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [])

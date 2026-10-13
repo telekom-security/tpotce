@@ -834,8 +834,39 @@ class ValidateDeviceBootTest(unittest.TestCase):
     def test_df_names_a_file_system_mount_does_not_have(self):
         persona = catalog.by_id("synology-dsm")
         ident, out, keys = render_one(self, persona, 1)
-        _edit(self, out / "txtcmds/bin/df", "/volume1", "/volume9")
+        _edit(self, out / "df.json", "/volume1", "/volume9")
         self.assertIn("df:", _problems(persona, ident, out, keys))
+
+    def test_df_of_a_server_names_what_proc_mounts_does_not_have(self):
+        persona = catalog.by_id("ubuntu-noble")
+        ident, out, keys = render_one(self, persona, 1)
+        _edit(self, out / "honeyfs/proc/mounts", "/run/lock", "/run/lck")
+        self.assertIn("is not in /proc/mounts", _problems(persona, ident, out, keys))
+
+    def test_a_static_df_answers_instead_of_the_table(self):
+        persona = catalog.by_id("rhel-9")
+        ident, out, keys = render_one(self, persona, 1)
+        (out / "txtcmds/bin").mkdir(parents=True, exist_ok=True)
+        (out / "txtcmds/bin/df").write_text("Filesystem 1K-blocks Used Available Use% Mounted on\n")
+        self.assertIn("df: a txtcmd /bin/df answers df", _problems(persona, ident, out, keys))
+
+    def test_df_style_and_awk_follow_the_persona(self):
+        persona = catalog.by_id("openwrt")
+        ident, out, keys = render_one(self, persona, 1)
+        _edit(self, out / "df.json", '"style": "busybox"', '"style": "gnu"')
+        _edit(self, out / "cowrie.cfg", "awk_style = busybox", "awk_style = gawk")
+        found = _problems(persona, ident, out, keys)
+        self.assertIn("df: df.json is not the persona's", found)
+        self.assertIn("awk: cfg awk_style", found)
+
+    def test_df_root_of_a_server_is_its_disk(self):
+        persona = catalog.by_id("debian-bookworm")
+        ident, out, keys = render_one(self, persona, 1)
+        data = json.loads((out / "df.json").read_text())
+        root = next(row for row in data["filesystems"] if row["target"] == "/")
+        root["size"] += 1024
+        (out / "df.json").write_text(json.dumps(data))
+        self.assertIn("df: the root of the server is not one disk", _problems(persona, ident, out, keys))
 
     def test_dmesg_bogomips_differs_from_cpuinfo(self):
         persona = catalog.by_id("dlink-dir859")

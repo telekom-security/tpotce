@@ -6,9 +6,9 @@ names the root that table mounts, and the delay loop of dmesg is the BogoMIPS
 of cpuinfo."""
 import re
 
-from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, _df_row, assign_processes, base_files, bogomips,
-                     embedded_group, embedded_passwd, embedded_shadow, kernel_line, kernel_series, lscpu,
-                     nproc, ps_entry, rng_for, shadow_ctime, shadow_days)
+from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, assign_processes, base_files, bogomips,
+                     embedded_group, embedded_passwd, embedded_shadow, fs_row, kernel_line, kernel_series, lscpu,
+                     mount_text, nproc, proc_mounts_text, ps_entry, rng_for, shadow_ctime, shadow_days, with_inodes)
 from .model import Content
 from .system import proc_modules
 
@@ -63,31 +63,15 @@ def device_dmesg(persona, ident, cmdline, boot):
     return "".join(f"[{t:12.6f}] {text}\n" for t, text in lines)
 
 
-_BB_HEADER = "Filesystem           1K-blocks      Used Available Use% Mounted on"
-
-
-def _bb_row(fs, size, used, avail, mount):
-    # BusyBox: "%-20s %9llu %9llu %9llu %3u%% %s" (a wider number pushes the columns on)
-    pct = -(-used * 100 // (used + avail)) if used + avail else 0
-    return f"{fs:<20} {size:>9} {used:>9} {avail:>9} {pct:>3}% {mount}"
-
-
 def fs_entry(dev, mount, fstype, options, size=0, used=0):
     """One mounted file system; size 0 keeps it out of df (proc, sysfs, ...)."""
     return dev, mount, fstype, options, size, used
 
 
-def fs_tables(entries, coreutils=False):
-    """(mount, /proc/mounts, df) of the same file systems."""
-    mount = "".join(f"{dev} on {mp} type {fs} ({opts})\n" for dev, mp, fs, opts, _, _ in entries)
-    proc = "".join(f"{dev} {mp} {fs} {opts} 0 0\n" for dev, mp, fs, opts, _, _ in entries)
-    if coreutils:
-        rows = ["Filesystem     1K-blocks    Used Available Use% Mounted on"]
-        rows += [_df_row(dev, size, used, size - used, mp) for dev, mp, _, _, size, used in entries if size]
-    else:
-        rows = [_BB_HEADER] + [_bb_row(dev, size, used, size - used, mp)
-                               for dev, mp, _, _, size, used in entries if size]
-    return mount, proc, "\n".join(rows) + "\n"
+def fs_tables(ident, entries):
+    """(mount, /proc/mounts, the table of the patched df) of the same file systems."""
+    rows = [with_inodes(ident, fs_row(*entry)) for entry in entries]
+    return mount_text(rows), proc_mounts_text(rows), rows
 
 
 def used_kb(ident, purpose, size, low, high):
@@ -151,7 +135,7 @@ NAS_LSPCI = {
 def device_content(persona, ident, files, entries, cmdline, boot, processes, accounts=None, coreutils=False,
                    txtcmds=None):
     """The Content of a device: accounts, kernel files, the file system table
-    (mount, /proc/mounts, df), dmesg, CPU commands, the style of top (BusyBox, or procps when
+    (mount, /proc/mounts, the patched df), dmesg, CPU commands, the style of top (BusyBox, or procps when
     coreutils) and the vendor's commands (txtcmds); with extra["busybox"] Cowrie's
     busybox runs the applets and prints the help of that BusyBox."""
     hw, r = ident.hardware, ident.release
@@ -160,12 +144,11 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
                                          embedded_group(persona.user, persona.gid),
                                          embedded_shadow(persona.user, ident))
     all_files = base_files(persona, ident, passwd, group, shadow)
-    mount, proc_mounts, df = fs_tables(entries, coreutils)
+    mount, proc_mounts, filesystems = fs_tables(ident, entries)
     all_files["proc/mounts"] = proc_mounts
     all_files["proc/modules"] = proc_modules(persona, ident)
     all_files.update(files)
     commands = {
-        "bin/df": df,
         "bin/dmesg": device_dmesg(persona, ident, cmdline, boot),
         "bin/mount": mount,
         "bin/ulimit": ULIMIT,
@@ -182,7 +165,8 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
                    programs=("bin/busybox",) if banner else (),
                    busybox_help=busybox_help(banner) if banner else "",
                    # the kernel threads and helpers of a small system (top counts them, ps lists them not)
-                   tasks=len(processes) + (60 if coreutils else 40), top_style="procps" if coreutils else "busybox")
+                   tasks=len(processes) + (60 if coreutils else 40), top_style="procps" if coreutils else "busybox",
+                   filesystems=filesystems)
 
 
 # --- builders --------------------------------------------------------------------------
