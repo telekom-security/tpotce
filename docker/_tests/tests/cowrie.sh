@@ -437,7 +437,12 @@ PY_MARK = "TPOT_PY"
 AFTER_MARK = "TPOT_AFTER"
 COMMAND = (
     f"echo {BEGIN}; uname -r; hostname; nproc; grep -c ^processor /proc/cpuinfo; "
-    f"awk '/MemTotal/ {{print $2}}' /proc/meminfo; cat /etc/os-release; "
+    f"awk '/MemTotal/ {{print $2}}' /proc/meminfo; "
+    # the forms bots end a session with: df through awk (the persona's df table and awk)
+    "df -h | awk 'FNR == 2 {print \"[\" $4 \"]\"}'; "
+    "df -h | awk 'NR == 2 || NR == 3 {printf \"%s \", $0} END {print \"\"}'; "
+    "df -k | awk 'FNR == 2 {print \"[\" $4 \"]\"}'; "
+    f"cat /etc/os-release; "
     # the interpreter answers and the line goes on (a harmless stand-in, no attacker code)
     f"echo {PY_MARK}; python3 -c 'print(1)'; echo {AFTER_MARK}; echo {END}"
 )
@@ -577,6 +582,7 @@ PY
 
 read_expected_identity() {
   docker exec -i -e PYTHONDONTWRITEBYTECODE=1 "${TEST_CONTAINER_NAME}" python3 - <<'PY'
+import configparser
 import json
 import sys
 from pathlib import Path
@@ -586,7 +592,16 @@ from tpot_personas import catalog  # noqa: E402
 
 identity = json.loads(Path("/tmp/cowrie/identity.json").read_text(encoding="utf-8"))
 persona = catalog.by_id(identity["persona"])
+config = configparser.ConfigParser()
+config.read("/tmp/cowrie/runtime/cowrie.cfg")
+df = json.loads(Path(config.get("shell", "df_table")).read_text(encoding="utf-8"))
+# the first row df shows: a file system with a size
+first = [row for row in df["filesystems"] if row["size"] and row["source"] != "rootfs"][0]
 print(json.dumps({
+    "df_style": df["style"],
+    "df_source": first["source"],
+    "df_target": first["target"],
+    "df_avail": first["avail"],
     "persona": persona.id,
     "kind": persona.kind,
     "os_id": persona.os_id,
@@ -625,8 +640,20 @@ checks = (
 for name, got, want in checks:
     if got != want:
         problems.append(f"{name}: {got!r}, identity.json says {want!r}")
+# BusyBox puts a device name of more than 20 characters on a line of its own: line 2 has no $4
+wrapped = expected["df_style"] == "busybox" and len(expected["df_source"]) > 20
+row = line(6).split()
+if row[:1] != [expected["df_source"]] or row[5:6] != [expected["df_target"]]:
+    problems.append(f"df -h line 2: {line(6)!r}, the df table starts with {expected['df_source']} on "
+                    f"{expected['df_target']}")
+want = "[]" if wrapped else f"[{row[3] if len(row) > 3 else ''}]"
+if line(5) != want:
+    problems.append(f"df -h | awk 'FNR == 2 {{print $4}}': {line(5)!r}, df -h says {want!r}")
+want = "[]" if wrapped else f"[{expected['df_avail']}]"
+if line(7) != want:
+    problems.append(f"df -k | awk 'FNR == 2 {{print $4}}': {line(7)!r}, the df table says {want!r}")
 
-rest = lines[5:]
+rest = lines[8:]
 if "TPOT_PY" in rest:
     os_release, after = rest[:rest.index("TPOT_PY")], rest[rest.index("TPOT_PY") + 1:]
 else:
@@ -649,7 +676,8 @@ if problems:
     sys.exit(1)
 
 print(f"{persona}: kernel {expected['kernel_version']}, host {expected['hostname']}, "
-      f"{expected['cpus']} CPUs, MemTotal {expected['mem_kb']} kB, os-release ID {ids[0] if ids else '-'}")
+      f"{expected['cpus']} CPUs, MemTotal {expected['mem_kb']} kB, os-release ID {ids[0] if ids else '-'}, "
+      f"df {line(5)} avail on {expected['df_target']}")
 PY
 }
 
