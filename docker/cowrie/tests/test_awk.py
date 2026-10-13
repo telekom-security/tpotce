@@ -2,6 +2,7 @@
 /proc/cpuinfo, in the awk of the persona (gawk, mawk or BusyBox). The reference texts are the
 output of awk in almalinux:9 (gawk 5.1.0), debian:12 (mawk 1.3.4 20200120), ubuntu:24.04
 (mawk 1.3.4 20240123) and busybox:1.36 containers for the same programs and input."""
+import random
 import shutil
 import subprocess
 import sys
@@ -202,6 +203,65 @@ class Base:
 _MATCHER = None
 GROW = 's = "x"; while (length(s) < 1048576) s = s s; '
 LIMIT_SECONDS = 2.0  # a whole awk run on the reactor
+NON_ASCII = 's = "é"; while (length(s) < 1048576) s = s s; '
+AB = "".join(random.Random(1).choice("ab") for _ in range(524288)) + "\n"
+# programs whose work grows with the size of their values: (arguments, input, the correct
+# result if the run ends by itself); each ends with status 2 or that result within LIMIT_SECONDS
+GROWING = {
+    "sprintf of %%": (['BEGIN { f = "%%"; while (length(f) < 1048576) f = f f; while (1) t = sprintf(f) }'], None, None),
+    "sprintf of unknown": (['BEGIN { f = "%z"; while (length(f) < 1048576) f = f f; while (1) t = sprintf(f) }'], None,
+                           None),
+    "printf of %%": (['BEGIN { f = "%%"; while (length(f) < 1048576) f = f f; while (1) printf f }'], None, None),
+    "wide float": (['BEGIN { while (1) t = sprintf("%.4096f", 1e308) }'], None, None),
+    "wide e": (['BEGIN { while (1) t = sprintf("%.4096e", 1e308) }'], None, None),
+    "CONVFMT of %%": (['BEGIN { OFMT = "%%"; s = "%%"; while (length(s) < 1048576) s = s s; CONVFMT = s; '
+                       'while (1) t = (0.5 "") }'], None, None),
+    "wide CONVFMT": (['BEGIN { CONVFMT = "%.4096f"; while (1) t = (1e308 "") }'], None, None),
+    "tolower non-ASCII": (["BEGIN { " + NON_ASCII + "while (1) t = tolower(s) }"], None, None),
+    "toupper non-ASCII": (["BEGIN { " + NON_ASCII + "while (1) t = toupper(s) }"], None, None),
+    "sub on non-ASCII": (["BEGIN { " + NON_ASCII + 'while (1) { t = s; sub(/^/, "", t) } }'], None, None),
+    "gsub with many &": (['BEGIN { r = "&"; while (length(r) < 524288) r = r r; while (1) { t = "x"; gsub(/x/, r, t) } }'],
+                         None, None),
+    "gsub with many escaped &": (['BEGIN { r = "\\\\&"; while (length(r) < 524288) r = r r; '
+                                  'while (1) { t = "x"; gsub(/x/, r, t) } }'], None, None),
+    "gsub of empty matches": (["BEGIN { " + GROW + 'while (1) { t = s; gsub(/y*/, "", t) } }'], None, None),
+    "gsub of every character": (['BEGIN { s = "x"; while (length(s) < 65536) s = s s; while (1) { t = s; '
+                                 'gsub(/./, "&", t) } }'], None, None),
+    "rebuild of many fields": (['BEGIN { $32767 = "x"; while (1) $1 = "y" }'], None, None),
+    "NF of many fields": (["BEGIN { NF = 32767; while (1) NF = 32767 }"], None, None),
+    "record of many fields": (['BEGIN { s = "a "; while (length(s) < 1048576) s = s s; while (1) $0 = s }'], None, None),
+    "record by characters": (['BEGIN { FS = ""; ' + GROW + "while (1) $0 = s }"], None, None),
+    "record by commas": (['BEGIN { FS = ","; s = "a,"; while (length(s) < 1048576) s = s s; while (1) $0 = s }'], None,
+                         None),
+    "input by characters": (["-F", "", "{ n += NF } END { print n }"], "x" * (1 << 20) + "\n", "1048576\n"),
+    "input record again": (["{ while (1) $0 = $0 }"], "a " * 500000 + "\n", None),
+    "regex FS on 1 MiB": (['BEGIN { FS = "[ ]+x?" } { n = NF } END { print n }'], "a  x" * 250000 + "\n",
+                          "250001\n"),
+    "number of many digits": (['BEGIN { s = "1"; while (length(s) < 1048576) s = s s; while (1) n = s + 0 }'], None,
+                              None),
+    "fraction of many digits": (['BEGIN { s = "1"; while (length(s) < 524288) s = s s; s = "0." s; '
+                                 "while (1) n = s + 0 }"], None, None),
+    "comparing digit fields": (['BEGIN { s = "1"; while (length(s) < 1048576) s = s s; $0 = s " " s; '
+                                "while (1) n = ($1 == $2) }"], None, None),
+    "automaton of many states": (["{ while (1) n += ($0 ~ /(a|b)*a(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)"
+                                  "(a|b)(a|b)(a|b)c/) }"], AB, None),
+    "index of a long needle": (['BEGIN { s = "a"; while (length(s) < 524288) s = s s; t = substr(s, 1, 262144) "b"; '
+                                "while (1) n = index(s, t) }"], None, None),
+    "copying a large value": (["BEGIN { " + GROW + 'while (1) t = s "" }'], None, None),
+    "regex of 1 MiB": (["BEGIN { " + GROW + 'if ("a" ~ s) print 1 }'], None, ""),
+    "regex of many alternatives": (['BEGIN { s = "a|"; while (length(s) < 1048576) s = s s; s = s "b"; '
+                                    'if ("c" ~ s) print 1 }'], None, ""),
+    "regex of many groups": (['BEGIN { s = "(x)"; while (length(s) < 1000000) s = s s; if ("c" ~ s) print 1 }'], None,
+                             ""),
+    "regex of a large class": (['BEGIN { s = "a"; while (length(s) < 524288) s = s s; s = "[" s "]"; '
+                                'if ("c" ~ s) print 1 }'], None, ""),
+    "new large regex each time": (['BEGIN { s = "a|"; while (length(s) < 524288) s = s s; '
+                                   'while (1) { i++; if ("c" ~ (s i)) n++ } }'], None, None),
+    "new regex each time": (['BEGIN { s = "a|"; while (length(s) < 65536) s = s s; '
+                             'while (1) { i++; if ("c" ~ (s i)) n++ } }'], None, None),
+    "new grouped regex each time": (['BEGIN { s = "(a|b)"; while (length(s) < 300000) s = s s; '
+                                     'while (1) { i++; if ("c" ~ (s i)) n++ } }'], None, None),
+}
 
 
 class FakeLog:
@@ -346,6 +406,25 @@ class AwkTest(unittest.TestCase):
                     self.assertLessEqual(len(out), 1024 * 1024)
                     self.assertLess(time.monotonic() - started, LIMIT_SECONDS)
 
+    def test_growing_values_end_in_time(self):
+        for name, (args, data, result) in GROWING.items():
+            for style in VERSIONS:
+                with self.subTest(name, style=style):
+                    started = time.monotonic()
+                    out, _, code = awk(style, args, data)
+                    self.assertLess(time.monotonic() - started, LIMIT_SECONDS)
+                    if code != 2:
+                        self.assertEqual((out, code), (result, 0))
+
+    def test_more_fields_than_mawk_has_end_awk(self):
+        for style in VERSIONS:
+            with self.subTest(style=style):
+                self.assertEqual(awk(style, ["{ print NF }"], "a " * 32767 + "\n"), ("32767\n", "", 0))
+                self.assertEqual(awk(style, ["{ print NF }"], "a " * 32768 + "\n"), ("", "", 2))
+                self.assertEqual(awk(style, ['BEGIN { $32767 = "x"; print NF }']), ("32767\n", "", 0))
+                self.assertEqual(awk(style, ['BEGIN { $32768 = "x" }']), ("", "", 2))
+                self.assertEqual(awk(style, ["BEGIN { NF = 32768 }"]), ("", "", 2))
+
     def test_long_digit_runs_take_linear_time(self):
         program = 'BEGIN { s="1"; while (length(s) < 32768) s = s s; $0 = s "x"; if ($1 == 1) print "y"; print "z" }'
         for style in VERSIONS:
@@ -366,7 +445,8 @@ class AwkTest(unittest.TestCase):
         self.assertEqual(awk("busybox", [program]), ("", "awk: cmd. line:1: %*x formats are not supported\n", 1))
 
     def test_record_separator_is_left_out(self):
-        for program in ('BEGIN { RS = "" } { print }', "BEGIN { RS = \";\" } { print }"):
+        self.assertEqual(awk("gawk", ['BEGIN { printf "[%s][%s]", RS, SUBSEP }']), ("[\n][\x1c]", "", 0))
+        for program in ('BEGIN { RS = "" } { print }', "BEGIN { RS = \";\" } { print }", 'BEGIN { SUBSEP = ":" }'):
             for style in VERSIONS:
                 with self.subTest(program=program, style=style):
                     self.assertEqual(awk(style, [program], "a\nb\n"), ("", "", 2))

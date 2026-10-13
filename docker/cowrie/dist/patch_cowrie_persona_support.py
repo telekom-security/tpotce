@@ -5104,6 +5104,7 @@ AWK_COMMAND = r'''
 # redirections) ends awk with status 2 and no output; syntax errors read as those of the
 # persona's awk.
 import math
+import time
 
 from twisted.python import log
 
@@ -5172,6 +5173,10 @@ TPOT_AWK_BLANKS = re.compile(r"[ \t\n]++")
 TPOT_AWK_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*+=")
 TPOT_AWK_FORMAT = re.compile(r"%([-+ #0]*+)(\*|[0-9]++)?+(?:\.(\*|[0-9]*+))?+(.?)", re.S)
 TPOT_AWK_INTERVAL = re.compile(r"\{[0-9]++(?:,[0-9]*+)?+\}")
+TPOT_AWK_NON_ASCII = re.compile(r"[^\x00-\x7f]")
+TPOT_AWK_AMP = re.compile(r"\\[\\&]|&")
+TPOT_AWK_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+TPOT_AWK_UPPER = str.maketrans("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 TPOT_AWK_CLASSES = {"alpha": "a-zA-Z", "digit": "0-9", "alnum": "0-9a-zA-Z", "upper": "A-Z", "lower": "a-z",
                     "space": " \\t\\n\\r\\f\\v", "blank": " \\t", "punct": "!-/:-@\\[-`{-~", "xdigit": "0-9A-Fa-f",
                     "cntrl": "\\x00-\\x1f\\x7f", "print": " -~", "graph": "!-~"}
@@ -5194,7 +5199,7 @@ def tpot_awk_bytes(text: str) -> bytes:
     """One byte per character (255 for any that is not ASCII), so match positions are characters."""
     if text.isascii():
         return text.encode("ascii")
-    return bytes(ord(c) if ord(c) < 128 else 255 for c in text)
+    return TPOT_AWK_NON_ASCII.sub("\xff", text).encode("latin-1")
 
 
 def tpot_awk_ere(source: str, intervals: bool) -> str:
@@ -5764,7 +5769,8 @@ class TpotAwk:
     MAX_INPUT = 1024 * 1024  # bytes of input one awk reads
     MAX_OUTPUT = 1024 * 1024  # characters of output
     MAX_STRING = 1024 * 1024  # characters of one value
-    MAX_STEPS = 2_000_000  # evaluated nodes, records, characters touched and matcher work (about 1 s)
+    MAX_SECONDS = 1.0  # of one run on the reactor, checked with every charge of steps
+    MAX_STEPS = 2_000_000  # evaluated nodes, records, characters touched and matcher work
     MAX_LIVE = 32 * 1024 * 1024  # characters in all variables together
     STATE_STEPS = 32  # steps per automaton state built
     MAX_NESTING = 32  # nested blocks, parentheses and operators while parsing
@@ -5782,7 +5788,8 @@ class TpotAwk:
         self.out, self.err = [], []
         self.written = self.steps = self.status = 0
         self.vars = {"FS": " ", "OFS": " ", "ORS": "\n", "OFMT": "%.6g", "CONVFMT": "%.6g", "NR": 0.0, "FNR": 0.0,
-                     "NF": 0.0, "FILENAME": TPOT_AWK_UNINIT}
+                     "NF": 0.0, "FILENAME": TPOT_AWK_UNINIT, "RS": "\n", "SUBSEP": "\x1c"}
+        self.deadline = time.monotonic() + self.MAX_SECONDS
         self.sizes, self.live = {}, 0  # characters per variable, in all of them
         self.record, self.fields, self.regexes, self.in_begin = TPOT_AWK_UNINIT, [], {}, True
 
@@ -5790,7 +5797,7 @@ class TpotAwk:
 
     def charge(self, steps: int) -> None:
         self.steps += steps
-        if self.steps > self.MAX_STEPS:
+        if self.steps > self.MAX_STEPS or time.monotonic() > self.deadline:
             raise TpotAwkStop(2)
 
     def cap(self, text: str) -> str:
@@ -5893,7 +5900,7 @@ class TpotAwk:
         if found is None:
             if len(self.regexes) >= 64:
                 self.regexes.clear()
-            self.charge(len(source) + 16)
+            self.charge(16 * len(source) + 16)  # the build costs about that before its states
             found = self.regexes[source] = TpotAwkRegex(self, source)
         return found
 
@@ -5906,31 +5913,38 @@ class TpotAwk:
         fs = self.text(self.vars["FS"])
         if not text:
             return []
+        self.charge(len(text) >> 6)
         if fs == " ":
             text = text.strip(" \t\n")
-            return TPOT_AWK_BLANKS.split(text) if text else []
-        if len(fs) == 1 and fs != "\\" or not any(c in fs for c in "\\^$.[]|()*+?{}"):
-            return text.split(fs) if fs else list(text)
-        regex, data, fields, start, pos = self.regex(fs), tpot_awk_bytes(text), [], 0, 0
-        while pos <= len(text):
-            found = regex.find(data, pos)
-            if found is None:
-                break
-            if found[0] == found[1]:
-                pos = found[0] + 1
-                continue
-            fields.append(text[start:found[0]])
-            start = pos = found[1]
-        fields.append(text[start:])
+            fields = TPOT_AWK_BLANKS.split(text) if text else []
+        elif len(fs) == 1 and fs != "\\" or not any(c in fs for c in "\\^$.[]|()*+?{}"):
+            if (text.count(fs) if fs else len(text) - 1) >= self.MAX_FIELDS:
+                raise TpotAwkStop(2)
+            fields = text.split(fs) if fs else list(text)
+        else:
+            regex, data, fields, start, pos = self.regex(fs), tpot_awk_bytes(text), [], 0, 0
+            while pos <= len(text) and len(fields) < self.MAX_FIELDS:
+                found = regex.find(data, pos)
+                if found is None:
+                    break
+                if found[0] == found[1]:
+                    pos = found[0] + 1
+                    continue
+                fields.append(text[start:found[0]])
+                start = pos = found[1]
+            fields.append(text[start:])
+        if len(fields) > self.MAX_FIELDS:  # as mawk, which has at most 32767
+            raise TpotAwkStop(2)
+        self.charge(len(fields))
         return fields
 
     def set_record(self, text: str) -> None:
         self.record = TpotAwkStrnum(self.cap(text))
         self.fields = [TpotAwkStrnum(field) for field in self.split(text)]
-        self.charge(len(self.fields) >> 4)
         self.vars["NF"] = float(len(self.fields))
 
     def rebuild(self) -> None:
+        self.charge(len(self.fields))
         self.vars["NF"] = float(len(self.fields))
         self.record = TpotAwkStrnum(self.cap(self.text(self.vars["OFS"]).join(self.text(f) for f in self.fields)))
 
@@ -5972,7 +5986,7 @@ class TpotAwk:
             self.set_field(self.field_index(self.value(target[1])), value)
         elif target[1] == "NF":
             self.set_nf(value)
-        elif target[1] == "RS":  # records end at newlines only
+        elif target[1] in ("RS", "SUBSEP"):  # records end at newlines; there are no arrays
             raise TpotAwkStop(2)
         else:
             size = 0 if isinstance(value, float) else len(value)
@@ -5986,7 +6000,7 @@ class TpotAwk:
 
     def value(self, node):
         self.steps += 1
-        if self.steps > self.MAX_STEPS:
+        if self.steps > self.MAX_STEPS or not self.steps & 255 and time.monotonic() > self.deadline:
             raise TpotAwkStop(2)
         op = node[0]
         if op in ("num", "str"):
@@ -6083,9 +6097,9 @@ class TpotAwk:
         if name == "index":
             return float(text.find(self.touch(self.text(values[1]))) + 1)
         if name == "tolower":
-            return text.lower() if text.isascii() else "".join(c.lower() if c.isascii() else c for c in text)
+            return text.lower() if text.isascii() else text.translate(TPOT_AWK_LOWER)
         if name == "toupper":
-            return text.upper() if text.isascii() else "".join(c.upper() if c.isascii() else c for c in text)
+            return text.upper() if text.isascii() else text.translate(TPOT_AWK_UPPER)
         if name == "int":
             x = self.num(values[0])
             return float(math.trunc(x)) if math.isfinite(x) else x
@@ -6095,20 +6109,23 @@ class TpotAwk:
         regex = self.regex_of(args[0])
         template = self.text(self.value(args[1]))
         target = args[2] if len(args) == 3 else ("field", ("num", 0.0))
-        text = self.text(self.get(target))
+        text = self.touch(self.text(self.get(target)))
+        parts = self.replacement_parts(template)
+        literal = sum(map(len, parts))
         data, out, size, pos, last, count = tpot_awk_bytes(text), [], 0, 0, -1, 0
         while pos <= len(text):
             found = regex.find(data, pos)
             if found is None:
                 break
             start, end = found
-            if len(template) + template.count("&") * (end - start) > self.MAX_STRING:
+            if literal + (len(parts) - 1) * (end - start) > self.MAX_STRING:
                 raise TpotAwkStop(2)
             if start == end == last:  # no empty match right after a match
                 out.append(text[start:start + 1])
                 pos = start + 1
                 continue
-            piece = text[pos:start] + self.replacement(template, text[start:end])
+            piece = text[pos:start] + text[start:end].join(parts)
+            self.charge(len(piece) >> 6)
             out.append(piece)
             size += len(piece)
             if size > self.MAX_STRING:
@@ -6124,21 +6141,24 @@ class TpotAwk:
             self.set(target, self.cap("".join(out)))
         return float(count)
 
-    @staticmethod
-    def replacement(template: str, matched: str) -> str:
-        """The replacement text of sub and gsub: & is the match, \\& a literal &, \\\\ a backslash."""
-        if "&" not in template and "\\" not in template:
-            return template
-        out, i = [], 0
-        while i < len(template):
-            c = template[i]
-            if c == "\\" and template[i + 1:i + 2] in ("&", "\\"):
-                out.append(template[i + 1])
-                i += 2
-                continue
-            out.append(matched if c == "&" else c)
-            i += 1
-        return "".join(out)
+    def replacement_parts(self, template: str) -> list:
+        """The replacement text of sub and gsub as the pieces between its matches: & is the match,
+        \\& a literal &, \\\\ a backslash."""
+        if "\\" not in template:
+            return template.split("&")
+        parts, piece, pos = [], [], 0
+        for found in TPOT_AWK_AMP.finditer(template):
+            self.charge(1)
+            piece.append(template[pos:found.start()])
+            if found.group() == "&":
+                parts.append("".join(piece))
+                piece = []
+            else:
+                piece.append(found.group()[1])
+            pos = found.end()
+        piece.append(template[pos:])
+        parts.append("".join(piece))
+        return parts
 
     def format(self, fmt: str, args: list) -> str:
         """printf and sprintf: the conversions of C's printf (c d i o x X u e E f F g G s %)."""
@@ -6149,6 +6169,7 @@ class TpotAwk:
                 out.append(fmt[pos:])
                 break
             out.append(fmt[pos:i])
+            self.charge(8)
             found = TPOT_AWK_FORMAT.match(fmt, i)
             flags, width, precision, conv = found.groups()
             pos = found.end()
@@ -6158,7 +6179,6 @@ class TpotAwk:
             if conv == "" or conv not in "cdiouxXeEfFgGs":
                 out.append(fmt[i:pos])
                 continue
-            self.charge(8)
             if "*" in (width, precision) and self.style == "busybox":
                 self.fatal("", "", "%*x formats are not supported")
             if width == "*":
@@ -6305,6 +6325,7 @@ class TpotAwk:
                 yield
 
     def run(self, program: str, operands: list) -> int:
+        self.deadline = time.monotonic() + self.MAX_SECONDS
         try:
             if len(program) > self.MAX_PROGRAM:
                 raise TpotAwkStop(2)
