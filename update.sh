@@ -1367,14 +1367,95 @@ function fuOLD_RELEASE_BACKUP () {   # $1 = the data folder, $2 = the version th
 	  "$HOME/tpotce/"?*) myMEMBER="${1#"$HOME/tpotce/"}/elk/data" ;;
 	  *) return 1 ;;
 	esac
-	myNEWEST=$(ls -1t "$HOME"/*_tpot_backup.tgz 2>/dev/null | head -1)
-	[ -n "${myNEWEST}" ] && [ -f "${myNEWEST}" ] || return 1
-	[ -n "$(find "${myNEWEST}" -maxdepth 0 -mmin -1440 2>/dev/null)" ] || return 1
-	tar tf "${myNEWEST}" "${myMEMBER}" >/dev/null 2>&1 || return 1
-	myVER=$(tar xOf "${myNEWEST}" .env 2>/dev/null | grep -E "^TPOT_VERSION=" | tail -1 | cut -d= -f2-)
-	myVER="${myVER%$'\r'}"
+	myNEWEST=$(fuOLD_UPDATER_ARCHIVE) || return 1
+	fuOLD_UPDATER_FRESH "${myNEWEST}" || return 1
+	tar tf "${myNEWEST}" "${myMEMBER}" >/dev/null 2>&1 || tar tf "${myNEWEST}" "./${myMEMBER}" >/dev/null 2>&1 || return 1
+	myVER=$(fuARCHIVE_ENV "${myNEWEST}" TPOT_VERSION)
 	[ -n "${myVER}" ] && [ "${myVER}" == "$2" ] || return 1
 	echo "${myNEWEST}"
+}
+
+# The newest archive the update.sh of 24.04.1 wrote, $HOME/*_tpot_backup.tgz. Prints it, rc 1 for none.
+function fuOLD_UPDATER_ARCHIVE () {
+	local myNEWEST=""
+	myNEWEST=$(ls -1t "$HOME"/*_tpot_backup.tgz 2>/dev/null | head -1)
+	[ -n "${myNEWEST}" ] && [ -f "${myNEWEST}" ] || return 1
+	echo "${myNEWEST}"
+}
+
+# Is that archive from the last 24 hours, i.e. from the run that restarted into this script?
+function fuOLD_UPDATER_FRESH () {   # $1 = archive
+	[ -n "$(find "$1" -maxdepth 0 -mmin -1440 2>/dev/null)" ]
+}
+
+# The name of a file of ~/tpotce in an archive: `tar cvf <archive> * .env` names it .env, a tar of
+# `.` names it ./.env. Prints the member, rc 1 when the archive does not hold it.
+function fuARCHIVE_MEMBER () {   # $1 = archive, $2 = the file name in ~/tpotce
+	tar tf "$1" 2>/dev/null | grep -m1 -xF -e "$2" -e "./$2"
+}
+
+# A setting of the .env in an archive, read as fuENV_VALUE reads it (KEY=value or KEY: "value",
+# quotes and a CR left out). Empty when the archive holds no .env or the .env not the key.
+function fuARCHIVE_ENV () {   # $1 = archive, $2 = key
+	local myMEMBER=""
+	myMEMBER=$(fuARCHIVE_MEMBER "$1" .env) || return 1
+	tar xOf "$1" "${myMEMBER}" 2>/dev/null | fuENV_VALUE /dev/stdin "$2"
+}
+
+# The update.sh of 24.04.1 wrote its backup to $HOME/*_tpot_backup.tgz, then ran `git reset --hard`
+# and restarted into this script without a handover (myPREPARED is empty): .env and
+# docker-compose.yml are the files of the release now, your configuration is only in that archive.
+# Both come back from it before this run checks or writes anything, so its backup and fuRESTORE
+# work with your configuration and myOLDVERSION names the version that ran. Only when the archive
+# is from the last 24 hours, its .env names an older version than the checkout and the .env here
+# is the one of the checkout (unchanged against HEAD: the reset happened); docker-compose.yml only
+# if it is unchanged too. Written in place, mode and owner stay. Otherwise nothing changes; a .env
+# of the checkout without a web user gets the way to take it from the archive yourself.
+function fuOLD_UPDATER_CONFIG () {
+	local myOLD="" myVER="" myCHECKOUT="" myFILE="" myMEMBER="" myTMP="" myBACK=""
+	local myGIT=(git -C "$HOME/tpotce")
+	[ -z "${myPREPARED}" ] || return 0
+	myOLD=$(fuOLD_UPDATER_ARCHIVE) || return 0
+	myMEMBER=$(fuARCHIVE_MEMBER "${myOLD}" .env) || return 0
+	myVER=$(fuARCHIVE_ENV "${myOLD}" TPOT_VERSION)
+	myCHECKOUT=$(tr -d "[:space:]" < "$HOME/tpotce/version" 2>/dev/null)
+	if ! fuOLD_UPDATER_FRESH "${myOLD}" \
+	   || ! fuUI_VERSION_GE "${myCHECKOUT}" "${myVER}" || fuUI_VERSION_GE "${myVER}" "${myCHECKOUT}" \
+	   || ! "${myGIT[@]}" diff --quiet HEAD -- .env 2>/dev/null;
+	  then
+	    # a .env of the checkout has no web user, a SENSOR has its own .env and none either
+	    if "${myGIT[@]}" diff --quiet HEAD -- .env 2>/dev/null \
+	       && [ -z "$(fuENV_VALUE "$HOME/tpotce/.env" WEB_USER)" ] \
+	       && ! tar xOf "${myOLD}" "${myMEMBER}" 2>/dev/null | cmp -s - "$HOME/tpotce/.env";
+	      then
+	        fuUI_WARN "$HOME/tpotce/.env is the one of the checkout, without a web user. If your configuration is in ${myOLD}, put it back with: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/.env"
+	    fi
+	    return 0
+	fi
+	fuTMPDIR
+	for myFILE in .env docker-compose.yml;
+	  do
+	    myMEMBER=$(fuARCHIVE_MEMBER "${myOLD}" "${myFILE}") || continue
+	    "${myGIT[@]}" diff --quiet HEAD -- "${myFILE}" 2>/dev/null || continue
+	    myTMP=$(mktemp "${myTMPDIR}/old_updater.XXXXXX")
+	    # the file of the checkout stays until the one of the archive is read in full; `cat >` keeps
+	    # mode and owner, a failed write leaves the file of the checkout, which git brings back
+	    if ! tar xOf "${myOLD}" "${myMEMBER}" > "${myTMP}" 2>/dev/null || ! cat "${myTMP}" > "$HOME/tpotce/${myFILE}";
+	      then
+	        "${myGIT[@]}" diff --quiet HEAD -- "${myFILE}" 2>/dev/null || "${myGIT[@]}" show "HEAD:${myFILE}" > "$HOME/tpotce/${myFILE}" 2>/dev/null
+	        fuUI_ERROR "Could not put ${myFILE} back from ${myOLD}, the earlier updater had reset it."
+	        fuUI_HINT "Put it back with: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/${myFILE}"
+	        fuUI_HINT "Then run the update again. Exiting."
+	        echo
+	        fuDID fail "${myFILE} could not be put back from ${myOLD}: tar xOf ${myOLD} ${myMEMBER} > ~/tpotce/${myFILE}, then update again."
+	        exit 1
+	    fi
+	    myBACK="${myBACK:+${myBACK} and }${myFILE}"
+	  done
+	fuUI_OK "Your configuration of ${myVER} is back from ${myOLD} (the earlier updater had reset it)."
+	fuUI_HINT "Put back: ${myBACK}. Other files you changed in ~/tpotce are in that archive as well."
+	fuDID ok "Your configuration of ${myVER} is back from ${myOLD} (the earlier updater had reset it)."
+	echo
 }
 
 # Elasticsearch and Kibana upgrade their data in place on the first start of a
@@ -1863,6 +1944,9 @@ function fuRESTORE () {
 	newVERSION=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/env.example" 2>/dev/null | tail -1 | cut -d= -f2-)
 	[ -z "${newVERSION}" ] && newVERSION=$(cat "$HOME/tpotce/version")
 	myOLDVERSION=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)
+	# TPOT_VERSION="24.04.1" or the CR of a file written on Windows: the version all the same
+	myOLDVERSION="${myOLDVERSION%$'\r'}"
+	case "${myOLDVERSION}" in \"*\"|\'*\') myOLDVERSION="${myOLDVERSION:1:${#myOLDVERSION}-2}" ;; esac
 	# Digits and dots are a release tag, `24.04` as much as `24.04.1`. Only a value
 	# with something else in it - `dev`, a branch name - is a deliberate pin.
 	if echo "${myOLDVERSION}" | grep -qE "^[0-9]+(\.[0-9]+)+$";
@@ -2493,7 +2577,7 @@ function fuLOSS_TARGET () {
 # fuLOSS_ADD line each, read the way the run itself will see it. Changes nothing, a git fetch at
 # most. rc 0 for none, 3 for some, 1 when it cannot tell.
 function fuCHECK_DATA_LOSS () {
-	local myREF="" myNEW="" myOLD="" myREPO="" myNEWREPO="" myCURRENT="" myKEEP="" myIMAGE="" myDATA="" myOLDARCHIVE=""
+	local myREF="" myNEW="" myOLD="" myREPO="" myNEWREPO="" myCURRENT="" myKEEP="" myIMAGE="" myDATA=""
 	local myLOCAL=() myPULLABLE=() myBUILT=() myUNSURE=()
 	local myGIT=(git -C "$HOME/tpotce")
 	myLOSSES=0
@@ -2511,7 +2595,9 @@ function fuCHECK_DATA_LOSS () {
 	      then
 	        myREPO="${myNEWREPO}"
 	    fi
-	    # Elasticsearch, as fuCHECK_ELASTIC will see it
+	    # Elasticsearch, as fuCHECK_ELASTIC will see it. Never with the archive of the update.sh of
+	    # 24.04.1 (fuOLD_RELEASE_BACKUP): this check runs for a T-Pot that is past that release, the
+	    # data in such an archive belongs to an update before this one
 	    if fuCOMPOSE_HAS elasticsearch;
 	      then
 	        myNEW=$("${myGIT[@]}" show "${myREF}:docker/elk/elasticsearch/Dockerfile" 2>/dev/null | sed -n "s/^ARG ES_VER=//p" | head -1)
@@ -2526,9 +2612,6 @@ function fuCHECK_DATA_LOSS () {
 	          elif [ -n "${myFULL}" ] && [ -e "${myDATA}/elk/data" ];
 	            then
 	              fuUI_OK "Elasticsearch ${myOLD:-?} -> ${myNEW}, --full takes its data into the backup."
-	          elif myOLDARCHIVE=$(fuOLD_RELEASE_BACKUP "${myDATA}" "${myCURRENT}");
-	            then
-	              fuUI_OK "Elasticsearch ${myOLD:-?} -> ${myNEW}, its data is in ${myOLDARCHIVE}, the backup of the update.sh of the release before."
 	          else
 	            fuLOSS_ADD elastic "Elasticsearch ${myOLD:-?} -> ${myNEW} upgrades the data in ${myDATA}/elk on the next start. This cannot be undone and the backup of this run does not hold it (--full does)."
 	        fi
@@ -2718,6 +2801,7 @@ fuLOG_START
 if [ -n "${myBACKUP_ONLY}" ];
   then
     fuMARK phase check Checking the edition and the space
+    fuOLD_UPDATER_CONFIG
     fuCHECK_EDITION
     fuCHECK_BACKUP_SPACE
     fuMARK phase backup Writing the backup
@@ -2740,6 +2824,8 @@ if [ -n "${myBACKUP_ONLY}" ];
 fi
 
 fuMARK phase check Checking the version and the source
+# the update.sh of 24.04.1 reset .env and docker-compose.yml before it restarted into this one
+fuOLD_UPDATER_CONFIG
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
 fuCHECK_SOURCE
