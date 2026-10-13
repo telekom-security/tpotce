@@ -1266,6 +1266,35 @@ class BackupInfoTest(unittest.TestCase):
         self.assertTrue(info.es_data)                           # the restore of data/ replaces it
         self.assertEqual(info.es_size, 7)                       # the files under data/elk/data/ only
 
+    def test_a_hard_link_to_a_file_outside_counts_with_that_file(self):
+        """tar stores the second name of a file as a link to the first one: a file under data/elk/data/ whose
+        first name is outside counts with the size of that member, once; one whose first name is inside counts
+        once (as that file); a link to a member the archive does not hold counts nothing."""
+        from tpotctl import ops
+        home = tempfile.mkdtemp(prefix="tpot-backup-info-")
+        self.addCleanup(shutil.rmtree, home)
+        stage = os.path.join(home, "stage")
+        os.makedirs(os.path.join(stage, "data", "elk", "data"))
+        for name, text in (("data/outside", "0123456789"), ("data/elk/data/inside", "abc")):
+            with open(os.path.join(stage, name), "w", encoding="utf-8") as out:
+                out.write(text)
+        os.link(os.path.join(stage, "data/outside"), os.path.join(stage, "data/elk/data/a"))
+        os.link(os.path.join(stage, "data/outside"), os.path.join(stage, "data/elk/data/b"))
+        os.link(os.path.join(stage, "data/elk/data/inside"), os.path.join(stage, "data/elk/data/c"))
+        path = os.path.join(home, "20261007101010_tpot_backup_full.tar")
+        with tarfile.open(path, "w") as archive:
+            for name in ("data/outside", "data/elk/data/inside", "data/elk/data/a", "data/elk/data/b",
+                         "data/elk/data/c"):
+                archive.add(os.path.join(stage, name), arcname=name)
+            missing = tarfile.TarInfo("data/elk/data/d")
+            missing.type, missing.linkname = tarfile.LNKTYPE, "data/gone"
+            archive.addfile(missing)
+        with tarfile.open(path) as archive:
+            kinds = {entry.name: entry.islnk() for entry in archive.getmembers()}
+        self.assertEqual([name for name, link in kinds.items() if link],
+                         ["data/elk/data/a", "data/elk/data/b", "data/elk/data/c", "data/elk/data/d"])
+        self.assertEqual(ops.backup_info(path).es_size, 10 + 3)
+
     def test_truncated_compressed_archive(self):
         """tarfile raises EOFError for it, the restore page must show it, not end tpot."""
         import gzip

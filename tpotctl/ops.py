@@ -469,6 +469,19 @@ class BackupInfo:
     es_size: int = 0                # the bytes of the files under data/elk/data/ (its table of contents)
 
 
+def _es_size(entries) -> int:
+    """The bytes of the files under data/elk/data/ of a table of contents. tar stores a file with more names
+    once, the later names as hard links to the first: a link whose first name is outside data/elk/data/
+    counts with the size of that member (once per member), one to a file inside is that file (counted), one
+    to a member the archive does not hold counts nothing."""
+    inside = "data/elk/data/"
+    sizes = {entry.name: entry.size for entry in entries if entry.isfile()}
+    total = sum(size for name, size in sizes.items() if name.startswith(inside))
+    outside = {entry.linkname for entry in entries
+               if entry.islnk() and entry.name.startswith(inside) and not entry.linkname.startswith(inside)}
+    return total + sum(sizes.get(name, 0) for name in outside)
+
+
 def backup_info(path: str) -> BackupInfo:
     """What an archive of update.sh holds, read like restore.sh does."""
     import tarfile
@@ -493,5 +506,5 @@ def backup_info(path: str) -> BackupInfo:
         if any(m == member or (member.endswith("/") and m.startswith(member)) for m in members):
             groups.append(group)
     es_data = any(m == "data/elk/data" or m.startswith("data/elk/data/") for m in members)
-    es_size = sum(entry.size for entry in entries if entry.isfile() and entry.name.startswith("data/elk/data/"))
+    es_size = _es_size(entries)
     return BackupInfo(path, name, size, kind, manifest, groups, es_data=es_data, es_size=es_size)
