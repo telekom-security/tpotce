@@ -49,6 +49,28 @@ _PORT_RE = re.compile(
 _XTPOT_RE = re.compile(r"^    x-tpot:")
 
 
+def edition_line(lines: List[str]) -> int:
+    """The index of the line that names the edition: the first "# T-Pot:" line of the leading comment
+    block (the lines above the first one that is neither empty nor a comment), -1 without one. A comment
+    of your own above it keeps the edition. update.sh (fuEDITION_LINE) and tpotctl/ops.py (edition_line)
+    have the same rule."""
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        if not line.lstrip().startswith("#"):
+            break
+        if line.startswith("# T-Pot:"):
+            return index
+    return -1
+
+
+def edition_of(lines: List[str]) -> str:
+    """The edition the lines of a compose file name, "" without one."""
+    index = edition_line(lines)
+    match = _EDITION_RE.match(lines[index]) if index >= 0 else None
+    return match.group(1) if match else ""
+
+
 class CustomizerError(Exception):
     """Broken input the customizer cannot work with."""
 
@@ -119,11 +141,10 @@ def load_compose(path: str) -> ComposeFile:
     except yaml.YAMLError as err:
         raise CustomizerError(f"{path} is not valid YAML: {err}")
     lines = text.split("\n")
-    match = _EDITION_RE.match(lines[0]) if lines else None
     sections = _sections(lines)
     return ComposeFile(
         path=path,
-        edition=match.group(1) if match else "",
+        edition=edition_of(lines),
         data=data,
         service_text=_split_entries(sections.get("services", [])),
         network_text=_split_entries(sections.get("networks", [])),
@@ -141,10 +162,10 @@ class Catalog:
             if os.path.abspath(path) == os.path.abspath(self.catalog.path):
                 continue
             with open(path, encoding="utf-8") as handle:
-                match = _EDITION_RE.match(handle.readline())
+                name = edition_of(handle.read().split("\n"))
             # a left-over docker-compose-custom.yml has no edition of its own
-            if match and match.group(1) != CUSTOM_EDITION:
-                self.editions[match.group(1)] = load_compose(path)
+            if name and name != CUSTOM_EDITION:
+                self.editions[name] = load_compose(path)
         self.order = list(self.catalog.services)
         self.meta = {name: dict(svc.get("x-tpot") or {}) for name, svc in self.catalog.services.items()}
 
@@ -295,10 +316,10 @@ def _split_names(text: str) -> List[str]:
 def parse_header(text: str) -> Optional[Selection]:
     """The selection a customizer file was built from, None for any other file."""
     lines = text.split("\n")
-    if not lines or not _EDITION_RE.match(lines[0]) or _EDITION_RE.match(lines[0]).group(1) != CUSTOM_EDITION:
+    if edition_of(lines) != CUSTOM_EDITION:
         return None
     values = {}
-    for line in lines[1:]:
+    for line in lines[edition_line(lines) + 1:]:
         if not line.startswith("# customizer: "):
             break
         for token in line[len("# customizer: "):].split():
@@ -331,8 +352,7 @@ def current_edition(repo_dir: str = REPO_DIR) -> Tuple[str, Optional[Selection]]
             text = handle.read()
     except OSError:
         return "", None
-    match = _EDITION_RE.match(text.split("\n", 1)[0])
-    return (match.group(1) if match else ""), parse_header(text)
+    return edition_of(text.split("\n")), parse_header(text)
 
 
 def env_value(key: str, repo_dir: str = REPO_DIR) -> str:

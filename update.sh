@@ -276,8 +276,8 @@ myTPOT_BRANCH="${TPOT_BRANCH}"
 myTPOT_REPO_URL="${TPOT_REPO_URL}"
 myTPOT_SOURCE_GIVEN=""
 
-# The installed T-Pot edition. It only exists as the marker comment in the first
-# line of docker-compose.yml, a tracked file, so the update overwrites it with the
+# The installed T-Pot edition. It only exists as the marker comment at the top of
+# docker-compose.yml (fuEDITION_LINE), a tracked file, so the update overwrites it with the
 # STANDARD edition. Everything needed to put it back is read before the update and
 # handed over to a restarted update.sh through the environment, see fuSELFUPDATE.
 # A restarted update.sh inherits what the first pass already did, so it neither
@@ -789,9 +789,19 @@ function fuEDITION_TEMPLATE () {
 	echo "$HOME/tpotce/compose/$(echo "${myEDITION}" | tr '[:upper:]' '[:lower:]').yml"
 }
 
-# Was the compose file built by compose/customizer.py (v2 or later)?
+# The edition a compose file names: the first "# T-Pot: <EDITION>" line of its leading comment
+# block (the lines above the first one that is neither empty nor a comment), so a comment of your
+# own above it keeps the edition. Prints "<line number> <EDITION>", nothing without one. The T-Pot
+# Manager reads it by the same rule (edition_line of tpotctl/ops.py and compose/customizer_core.py).
+function fuEDITION_LINE () {   # $1 = compose file
+	awk '/^[[:space:]]*$/ { next } !/^[[:space:]]*#/ { exit } /^# T-Pot:/ { sub(/^# T-Pot: */, ""); print NR " " $0; exit }' "$1" 2>/dev/null
+}
+
+# Was the compose file built by compose/customizer.py (v2 or later)? Its header follows the edition line.
 function fuCUSTOM_FILE () {   # $1 = compose file
-	sed -n 2p "$1" 2>/dev/null | grep -q "^# customizer: version="
+	local myLINE=""
+	myLINE=$(fuEDITION_LINE "$1" | cut -d " " -f1)
+	[ -n "${myLINE}" ] && sed -n "$((myLINE + 1))p" "$1" 2>/dev/null | grep -q "^# customizer: version="
 }
 
 # The customizer hashes everything below its header, a mismatch means the file was
@@ -836,7 +846,7 @@ function fuCHECK_EDITION () {
 	    echo
 	    return
 	fi
-	myEDITION=$(head -1 "$HOME/tpotce/docker-compose.yml" | sed -n 's/^# T-Pot: *//p')
+	myEDITION=$(fuEDITION_LINE "$HOME/tpotce/docker-compose.yml" | cut -d " " -f2-)
 	# A file built with compose/customizer.py has no template, it is built again from
 	# its header instead, unless it was edited by hand since.
 	if [ "${myEDITION}" == "CUSTOM" ] && fuCUSTOM_FILE "$HOME/tpotce/docker-compose.yml";
@@ -2538,6 +2548,13 @@ function fuRESTORE_CUSTOM () {
 	    fuUI_HINT "Now rebuilding your custom docker-compose.yml from this release."
 	    if python3 "${myCUSTOMIZER}" --rebuild "${myTMPDIR}/docker-compose.yml" -o "$HOME/tpotce/docker-compose.yml" </dev/null;
 	      then
+	        # the rebuild writes the file anew from its header: lines of your own above it are not in it
+	        if [ "$(fuEDITION_LINE "${myTMPDIR}/docker-compose.yml" | cut -d " " -f1)" != "1" ];
+	          then
+	            fuUI_WARN "The lines above '# T-Pot: CUSTOM' in your docker-compose.yml are not in the rebuilt one, compare it with:"
+	            fuUI_HINT "  tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml"
+	            fuDID warn "The lines above '# T-Pot: CUSTOM' in your docker-compose.yml are not in the rebuilt one, the backup has them."
+	        fi
 	        return
 	    fi
 	    fuUI_WARN "The rebuild failed, see above."

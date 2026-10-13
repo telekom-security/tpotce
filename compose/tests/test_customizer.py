@@ -205,6 +205,28 @@ class CoreTest(unittest.TestCase):
         self.assertIsNone(core.parse_header("# T-Pot: CUSTOM EDITION\nnetworks:\n"))
         self.assertIsNone(core.parse_header("# T-Pot: STANDARD\n"))
 
+    def test_a_comment_of_your_own_above_the_header_keeps_the_edition(self):
+        """The first "# T-Pot:" line of the leading comment block names the edition (as update.sh)."""
+        text = core.render(self.catalog, self.resolve("MINI", add=["citrixhoneypot"]))
+        mine = "# e2e-marker\n\n" + text
+        selection = core.parse_header(mine)
+        self.assertEqual((selection.base, selection.add), ("MINI", ["citrixhoneypot"]))
+        self.assertTrue(core.checksum_ok(mine))                      # the checksum covers the body only
+        self.assertEqual(core.edition_of(mine.split("\n")), "CUSTOM")
+        self.assertEqual(core.edition_of("# mine\n# T-Pot: STANDARD\nservices: {}\n".split("\n")), "STANDARD")
+        # after the first line that is neither empty nor a comment it names nothing
+        late = "services: {}\n# T-Pot: STANDARD\n"
+        self.assertEqual(core.edition_of(late.split("\n")), "")
+        self.assertIsNone(core.parse_header("networks: {}\n" + text))
+        # the first "# T-Pot:" line counts, also when it names no edition
+        self.assertEqual(core.edition_of("# T-Pot: the platform\n# T-Pot: STANDARD\n".split("\n")), "")
+        with tempfile.TemporaryDirectory() as repo:
+            with open(os.path.join(repo, "docker-compose.yml"), "w", encoding="utf-8") as out:
+                out.write(mine)
+            edition, selection = core.current_edition(repo)
+            self.assertEqual((edition, selection.base), ("CUSTOM", "MINI"))
+            self.assertEqual(core.load_compose(os.path.join(repo, "docker-compose.yml")).edition, "CUSTOM")
+
     def test_checksum_matches_bash(self):
         text = core.render(self.catalog, self.resolve("MINI"))
         with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as handle:

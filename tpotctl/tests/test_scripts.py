@@ -4,6 +4,7 @@ Bash harnesses: the scripts run in a temporary HOME with a sudo that only runs t
 command, never on the real checkout.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -3196,6 +3197,104 @@ class UpdateRepairTest(Harness):
         warns = [line for line in result.stdout.splitlines() if line.startswith("WARN:")]
         self.assertTrue(any("docker-compose.yml" in line and "/b/x_tpot_backup.tar" in line for line in warns), warns)
         self.assertEqual(self.read(os.path.join(self.tpotce, "docker-compose.yml")), "# T-Pot: SENSOR\n")
+
+    # --- the edition line under a comment of your own ----------------------------------------------
+
+    EDITIONS = f'eval "$(grep "^myEDITIONS=" {REPO}/update.sh)"\n'
+    EDITION_FUNCTIONS = ("fuEDITION_TEMPLATE", "fuEDITION_LINE", "fuCUSTOM_FILE", "fuCUSTOM_CHECKSUM",
+                         "fuCHECK_EDITION", "fuCOMPOSE_FROM_ARCHIVE", "fuRESTORE_EDITION")
+    TEMPLATE = "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: new\n"
+
+    def check_edition(self, compose, then=""):
+        """fuCHECK_EDITION on HOME/tpotce/docker-compose.yml, with compose/standard.yml as the template."""
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\n")
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), compose)
+        self.write(os.path.join(self.tpotce, "compose", "standard.yml"), self.TEMPLATE)
+        script = (self.EDITIONS + self.functions(*self.EDITION_FUNCTIONS)
+                  + 'fuTMPDIR () { myTMPDIR=$(mktemp -d); }\nmyEDITION="" myCOMPOSE_CUSTOMIZED="" '
+                  'myARCHIVE=/b/x_tpot_backup.tar\nfuCHECK_EDITION\n'
+                  'echo "edition=${myEDITION} customized=${myCOMPOSE_CUSTOMIZED}"\n' + then)
+        result = self.bash(script)
+        return result.stdout + result.stderr
+
+    def test_a_comment_of_your_own_above_the_edition_line_keeps_the_edition(self):
+        out = self.check_edition("# e2e-marker\n# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: old\n",
+                                 then="fuRESTORE_EDITION\n")
+        self.assertIn("edition=STANDARD customized=1", out)
+        self.assertIn("OK: Edition STANDARD (customized).", out)
+        # a detected edition with changes against its template: the template, the warning, the diff hint
+        self.assertEqual(self.read(os.path.join(self.tpotce, "docker-compose.yml")), self.TEMPLATE)
+        self.assertIn("WARN: Your docker-compose.yml had been modified. The STANDARD edition of this release is in "
+                      "place now", out)
+        self.assertIn(f"HINT:   tar xOf /b/x_tpot_backup.tar docker-compose.yml | diff - {self.tpotce}/docker-compose.yml",
+                      out)
+        self.assertNotIn("Unable to determine", out)
+
+    def test_an_edition_line_after_the_first_yaml_line_is_not_taken(self):
+        out = self.check_edition("services:\n# T-Pot: STANDARD\n  tpotinit:\n    image: old\n")
+        self.assertIn("edition=UNKNOWN customized=", out)
+        self.assertIn("WARN: Unable to determine the edition", out)
+
+    def custom_file(self, preamble=""):
+        body = "\nservices:\n  tpotinit:\n    image: x\n"
+        header = ("# T-Pot: CUSTOM\n# customizer: version=2 base=MINI\n# customizer: add=\n# customizer: remove=\n"
+                  "# customizer: port=\n# customizer: sha256=" + hashlib.sha256(body.encode()).hexdigest() + "\n")
+        return preamble + header + body
+
+    def test_a_comment_of_your_own_above_the_customizer_header(self):
+        """fuCUSTOM_FILE finds the header under the edition line, the checksum covers the body only."""
+        out = self.check_edition(self.custom_file("# e2e-marker\n\n"))
+        self.assertIn("edition=CUSTOM customized=\n", out)
+        self.assertIn("OK: Edition CUSTOM, built by compose/customizer.py.", out)
+        out = self.check_edition(self.custom_file("# e2e-marker\n").replace("image: x", "image: mine"))
+        self.assertIn("edition=CUSTOM customized=1", out)
+
+    def test_a_rebuild_names_the_lines_above_the_header_it_leaves_out(self):
+        archive = os.path.join(self.home, "x_tpot_backup.tar")
+        staging = os.path.join(self.home, "staging")
+        for preamble, warned in (("# e2e-marker\n", True), ("", False)):
+            with self.subTest(preamble=preamble):
+                self.write(os.path.join(staging, "docker-compose.yml"), self.custom_file(preamble))
+                subprocess.run(["tar", "cf", archive, "-C", staging, "docker-compose.yml"], check=True)
+                # the customizer of the checkout: writes the file anew from its header (here: without the comment)
+                self.write(os.path.join(self.tpotce, "compose", "customizer.py"),
+                           "import sys  # --rebuild\nsrc, dst = sys.argv[2], sys.argv[4]\n"
+                           "text = open(src).read()\nopen(dst, 'w').write(text[text.index('# T-Pot:'):])\n")
+                script = (self.functions("fuEDITION_LINE", "fuCOMPOSE_FROM_ARCHIVE", "fuRESTORE_CUSTOM")
+                          + f'fuTMPDIR () {{ myTMPDIR=$(mktemp -d); }}\nmyARCHIVE="{archive}" '
+                          'myCOMPOSE_CUSTOMIZED=""\nfuRESTORE_CUSTOM\n')
+                result = self.bash(script)
+                out = result.stdout + result.stderr
+                self.assertEqual(self.read(os.path.join(self.tpotce, "docker-compose.yml")), self.custom_file(), out)
+                self.assertEqual("WARN: The lines above '# T-Pot: CUSTOM'" in out, warned, out)
+                self.assertEqual("DID: warn: The lines above '# T-Pot: CUSTOM'" in out, warned, out)
+
+    def test_update_sh_and_the_t_pot_manager_take_the_same_edition_line(self):
+        import importlib.util
+        try:
+            import yaml  # noqa: F401  (customizer_core needs it)
+        except ImportError:
+            self.skipTest("no PyYAML")
+        from tpotctl import ops
+        spec = importlib.util.spec_from_file_location("customizer_core_e1",
+                                                      os.path.join(REPO, "compose", "customizer_core.py"))
+        core = importlib.util.module_from_spec(spec)
+        import sys
+        sys.modules[spec.name] = core                    # the dataclasses look their module up there
+        self.addCleanup(sys.modules.pop, spec.name, None)
+        spec.loader.exec_module(core)
+        cases = ["# T-Pot: STANDARD\nservices:\n", "# e2e-marker\n# T-Pot: STANDARD\n", "\n\n# T-Pot: MINI\n",
+                 "  # indented\n# T-Pot: LLM\n", "services:\n# T-Pot: STANDARD\n", "# only a comment\n", "",
+                 "# T-Pot: one\n# T-Pot: STANDARD\n", "x: 1\n", "# a\n#T-Pot: STANDARD\n# T-Pot: MINI\n"]
+        path = os.path.join(self.home, "compose.yml")
+        for text in cases:
+            with self.subTest(text=text):
+                self.write(path, text)
+                result = self.bash(self.functions("fuEDITION_LINE") + f'fuEDITION_LINE "{path}"\n')
+                bash_line = int(result.stdout.split()[0]) - 1 if result.stdout.strip() else -1
+                lines = text.split("\n")
+                self.assertEqual(ops.edition_line(lines), bash_line)
+                self.assertEqual(core.edition_line(lines), bash_line)
 
     # --- git and files always from ~/tpotce --------------------------------------------------------
 

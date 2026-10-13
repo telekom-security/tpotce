@@ -118,18 +118,52 @@ def compose_path(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None)
     return os.path.normpath(os.path.join(repo_dir, path))
 
 
+def edition_line(lines: List[str]) -> int:
+    """The index of the line that names the edition: the first "# T-Pot:" line of the leading comment
+    block (the lines above the first one that is neither empty nor a comment), -1 without one. A comment
+    of your own above it keeps the edition. update.sh (fuEDITION_LINE) and compose/customizer_core.py
+    (edition_line) have the same rule."""
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        if not line.lstrip().startswith("#"):
+            break
+        if line.startswith("# T-Pot:"):
+            return index
+    return -1
+
+
+def compose_head(path: str) -> List[str]:
+    """The leading comment block of a compose file and the line after it; OSError when it cannot be read."""
+    head = []
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            head.append(line)
+            if line.strip() and not line.lstrip().startswith("#"):
+                break
+    return head
+
+
+def edition_header(path: str) -> Tuple[str, str]:
+    """(edition, the line after it) of a compose file: ("", "") without an edition line, OSError when it
+    cannot be read."""
+    head = compose_head(path)
+    index = edition_line(head)
+    match = _EDITION_RE.match(head[index]) if index >= 0 else None
+    if not match:
+        return "", ""
+    return match.group(1), head[index + 1] if index + 1 < len(head) else ""
+
+
 def edition(repo_dir: str = REPO_DIR) -> str:
     """STANDARD, SENSOR, ... or CUSTOM (from STANDARD) for a customizer file."""
     try:
-        with open(compose_path(repo_dir), encoding="utf-8") as handle:
-            head = [handle.readline() for _ in range(3)]
+        name, after = edition_header(compose_path(repo_dir))
     except OSError:
         return "none"
-    match = _EDITION_RE.match(head[0])
-    if not match:
+    if not name:
         return "unknown"
-    name = match.group(1)
-    base = re.search(r"base=(\S+)", head[1]) if head[1].startswith("# customizer:") else None
+    base = re.search(r"base=(\S+)", after) if after.startswith("# customizer:") else None
     return f"{name} (from {base.group(1)})" if base else name
 
 

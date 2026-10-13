@@ -83,6 +83,13 @@ class EditionsTest(unittest.TestCase):
         with open(self.compose(), "w", encoding="utf-8") as out:
             out.write("# T-Pot: CUSTOM\n# customizer: base=SENSOR add=x\nservices: {}\n")
         self.assertEqual(editions.current(self.repo), ("CUSTOM", "SENSOR"))
+        # a comment of your own above the edition line keeps it, after the first YAML line it names none
+        with open(self.compose(), "w", encoding="utf-8") as out:
+            out.write("# e2e-marker\n# T-Pot: CUSTOM\n# customizer: base=SENSOR add=x\nservices: {}\n")
+        self.assertEqual(editions.current(self.repo), ("CUSTOM", "SENSOR"))
+        with open(self.compose(), "w", encoding="utf-8") as out:
+            out.write("services: {}\n# T-Pot: MINI\n")
+        self.assertEqual(editions.current(self.repo), ("unknown", ""))
 
     # the plan ---------------------------------------------------------------
 

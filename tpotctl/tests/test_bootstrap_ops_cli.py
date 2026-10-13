@@ -356,6 +356,17 @@ class OpsTest(unittest.TestCase):
             with open(os.path.join(repo, "docker-compose.yml"), "w") as handle:
                 handle.write("# T-Pot: CUSTOM\n# customizer: version=2 base=MINI\n# customizer: add=\n")
             self.assertEqual(ops.edition(repo), "CUSTOM (from MINI)")
+            # a comment of your own above the edition line keeps it (update.sh reads it the same way)
+            with open(os.path.join(repo, "docker-compose.yml"), "w") as handle:
+                handle.write("# e2e-marker\n# T-Pot: STANDARD\nservices:\n")
+            self.assertEqual(ops.edition(repo), "STANDARD")
+            with open(os.path.join(repo, "docker-compose.yml"), "w") as handle:
+                handle.write("# mine\n\n# T-Pot: CUSTOM\n# customizer: version=2 base=MINI\nservices:\n")
+            self.assertEqual(ops.edition(repo), "CUSTOM (from MINI)")
+            # after the first YAML line it names no edition
+            with open(os.path.join(repo, "docker-compose.yml"), "w") as handle:
+                handle.write("services:\n# T-Pot: STANDARD\n")
+            self.assertEqual(ops.edition(repo), "unknown")
 
     def test_the_version_comes_from_one_place(self):
         """The file version of the checkout, else TPOT_VERSION of its .env, else nothing."""
