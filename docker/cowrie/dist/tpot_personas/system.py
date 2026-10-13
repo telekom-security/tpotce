@@ -1497,15 +1497,27 @@ def apt_programs(name):
     return ["/" + rel for rel in sorted(found)] if found else [f"/usr/bin/{name}"]
 
 
+# the programs whose Cowrie command answers as the installed program does once a package manager of the
+#   session installed it: the tools of TOOL_PROGRAMS and git (its version is the installed one); the
+#   others (gcc, busybox: Cowrie's own versions) stay faked programs
+SESSION_ANSWERS = COWRIE_TOOL_NAMES | {"git"}
+
+
+def session_answers(paths):
+    """The names of the programs (paths) that answer after an install in the session (SESSION_ANSWERS)."""
+    return sorted({path.rsplit("/", 1)[-1] for path in paths} & SESSION_ANSWERS)
+
+
 def apt_packages(persona, ident):
     """What apt knows on a Debian server: the installed packages (the release's, APT_INSTALLED), the
-    versions of the packages it would install (APT_AVAILABLE), their programs and the packages it has
-    no candidate for (APT_UNAVAILABLE)."""
+    versions of the packages it would install (APT_AVAILABLE), their programs (those that answer then:
+    session_answers) and the packages it has no candidate for (APT_UNAVAILABLE)."""
     code = ident.release.extra["codename"]
     installed = dict(sorted({**APT_INSTALLED[code], **ident.release.packages}.items()))
     available = {name: version for name, version in sorted(APT_AVAILABLE[code].items()) if name not in installed}
     return {"installed": installed, "available": available,
             "programs": {name: apt_programs(name) for name in available},
+            "answers": session_answers(path for name in available for path in apt_programs(name)),
             "unavailable": [name for name in APT_UNAVAILABLE if name not in installed and name not in available]}
 
 

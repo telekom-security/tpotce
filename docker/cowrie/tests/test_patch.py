@@ -310,7 +310,9 @@ class PatchTest(unittest.TestCase):
         self.assertIsNone(find("git"))
 
     def test_a_faked_program_of_the_session_answers_for_a_skipped_command(self):
-        find = self.lookup({}, {"/bin/top": "top", "top": "top"}, skip="top")
+        # also before a txtcmd of the persona for a program it does not have (lspci of its hardware)
+        find = self.lookup({"usr/bin/top": "top of the persona\n"}, {"/bin/top": "top", "top": "top"}, skip="top")
+        self.assertEqual(find("top"), ("txtcmd", "top of the persona\n"))
         self.protocol_obj.tpot_faked = {"/usr/bin/top": "faked"}
         self.assertEqual(find("top"), "faked")
         self.assertEqual(find("/bin/top"), "faked")
@@ -760,14 +762,14 @@ class PatchTest(unittest.TestCase):
         values = self.apt_with_packages({}, "debian", available={"git": "1:2.39.5-0+deb12u2", "net-tools": "2.10-0.1",
                                                                  "nmap": "7.93+dfsg1-1"},
                                         programs={"net-tools": ["/usr/bin/netstat", "/usr/sbin/ifconfig"],
-                                                  "git": ["/usr/bin/git"], "nmap": ["/usr/bin/nmap"]})
+                                                  "git": ["/usr/bin/git"], "nmap": ["/usr/bin/nmap"]},
+                                        answers=["git", "ifconfig", "netstat"])
         cowrie = {"git": "Command_git", "/bin/git": "Command_git", "ifconfig": "Command_ifconfig",
                   "netstat": "Command_netstat"}
         _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "git", "net-tools", "nmap"],
                                       commands=cowrie)
         self.assertEqual(apt.code, None)
-        self.assertEqual(apt.protocol.tpot_installed, {"git": "2.39.5", "netstat": "2.10", "ifconfig": "2.10",
-                                                       "nmap": "7.93+dfsg1"})
+        self.assertEqual(apt.protocol.tpot_installed, {"git": "2.39.5", "netstat": "2.10", "ifconfig": "2.10"})
         self.assertEqual(apt.fs.made, ["/usr/bin/git", "/usr/bin/netstat", "/usr/sbin/ifconfig", "/usr/bin/nmap"])
         # Cowrie's own commands answer for theirs, a program Cowrie does not have is the faked one
         self.assertEqual(set(apt.protocol.commands), set(cowrie) | {"/usr/bin/nmap"})
@@ -775,17 +777,21 @@ class PatchTest(unittest.TestCase):
     def test_apt_install_marks_only_the_programs_of_its_data(self):
         # a package apt has no data for is installed as before, its program stays skipped: Cowrie's dnf,
         # rpm and lspci do not answer on a Debian system
-        values = self.apt_with_packages({}, "debian", available={"gcc": "4:12.2.0-3"},
-                                        programs={"gcc": ["/usr/bin/gcc"]})
+        # nor one whose Cowrie command shows another version than the package (gcc 4.7.2 of Cowrie)
+        values = self.apt_with_packages({}, "debian", available={"gcc": "4:12.2.0-3", "net-tools": "2.10-0.1"},
+                                        programs={"gcc": ["/usr/bin/gcc"], "net-tools": ["/usr/sbin/ifconfig"]},
+                                        answers=["ifconfig"])
         cowrie = {"dnf": "Command_dnf", "/usr/bin/dnf": "Command_dnf", "rpm": "Command_rpm", "lspci": "Command_lspci",
-                  "gcc": "Command_gcc"}
-        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "dnf", "rpm", "lspci", "gcc"],
-                                      commands=cowrie)
+                  "gcc": "Command_gcc", "ifconfig": "Command_ifconfig"}
+        _, apt = self.twisted_command("apt", "Command_aptget", values,
+                                      ["install", "-y", "dnf", "rpm", "lspci", "gcc", "net-tools"], commands=cowrie)
         self.assertEqual(apt.code, None)
-        self.assertEqual(apt.protocol.tpot_installed, {"gcc": "12.2.0"})
+        self.assertEqual(apt.protocol.tpot_installed, {"ifconfig": "2.10"})
         self.assertEqual(apt.protocol.commands, cowrie)
-        self.assertEqual(sorted(apt.protocol.tpot_faked), ["/usr/bin/dnf", "/usr/bin/lspci", "/usr/bin/rpm"])
-        self.assertEqual(apt.fs.made, ["/usr/bin/dnf", "/usr/bin/rpm", "/usr/bin/lspci", "/usr/bin/gcc"])
+        self.assertEqual(sorted(apt.protocol.tpot_faked), ["/usr/bin/dnf", "/usr/bin/gcc", "/usr/bin/lspci",
+                                                           "/usr/bin/rpm"])
+        self.assertEqual(apt.fs.made, ["/usr/bin/dnf", "/usr/bin/rpm", "/usr/bin/lspci", "/usr/bin/gcc",
+                                       "/usr/sbin/ifconfig"])
 
     def test_apt_names_a_package_the_release_does_not_have(self):
         values = self.apt_with_packages({}, "debian", unavailable=["yum"])
@@ -825,6 +831,9 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(programs["unzip"], ["/usr/bin/unzip"])
         self.assertEqual(programs["git"], ["/usr/bin/git"])
         self.assertFalse({"yum", "dnf", "rpm"} & set(programs))
+        answers = system.apt_packages(persona, draw(persona, 1))["answers"]
+        self.assertEqual(answers, ["dig", "ethtool", "ftpget", "git", "ifconfig", "iptables", "netstat", "php", "tftp",
+                                   "unzip"])
         for pid in ("debian-bookworm", "debian-trixie", "ubuntu-noble", "ubuntu-jammy"):
             persona = catalog.by_id(pid)
             self.assertEqual(system.apt_packages(persona, draw(persona, 1))["unavailable"], ["yum"], pid)
@@ -838,6 +847,14 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(run("git --version"), (f"git version {evr.split(':')[-1].rsplit('-', 1)[0]}\n", "", 0))
         self.assertEqual(run("dnf remove -y git-core")[2], 0)
         self.assertNotIn("git", run.protocol.tpot_installed)
+
+    def test_dnf_answers_only_with_commands_of_the_installed_version(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        answers = self.dnf_data(run)["answers"]
+        self.assertIn("git", answers)
+        self.assertFalse({"gcc", "cc", "pip", "pip3", "nmap"} & set(answers), answers)
+        self.assertEqual(run("dnf install -y gcc")[2], 0)
+        self.assertNotIn("gcc", getattr(run.protocol, "tpot_installed", {}))
 
     def test_dnf_takes_no_path_as_a_package(self):
         run = self.upstream_session("rhel-9", uid=0)
@@ -876,10 +893,11 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(len(out.splitlines()), 3)
         self.assertLessEqual(len(reads), 1)
 
-    def apt_with_packages(self, packages, fallback="ubuntu", available=None, programs=None, unavailable=None):
+    def apt_with_packages(self, packages, fallback="ubuntu", available=None, programs=None, unavailable=None,
+                          answers=None):
         path = tmpdir(self) / "apt-packages.json"
         path.write_text(json.dumps({"installed": packages, "available": available or {}, "programs": programs or {},
-                                    "unavailable": unavailable or []}))
+                                    "unavailable": unavailable or [], "answers": answers or []}))
         return {**self.APT, ("shell", "apt_packages"): str(path), ("shell", "apt_fallback"): fallback}
 
     def test_apt_install_shows_the_versions_of_the_persona(self):

@@ -458,7 +458,8 @@ def dnf_packages(persona, ident):
     return {"version": r.packages["dnf"], "rpm_version": r.packages["rpm"], "dnf": tool("dnf"), "rpm": tool("rpm"),
             "packager": system.RHEL_PACKAGER, "repos": repos, "installed": dict(sorted(installed.items())),
             "available": dict(sorted(available.items())), "provides": dict(system.RPM_PROVIDES),
-            "owners": dict(sorted(owners.items()))}
+            "owners": dict(sorted(owners.items())),
+            "answers": system.session_answers(path for entry in available.values() for path in entry["programs"])}
 
 
 def _yum_name(name, version, arch):

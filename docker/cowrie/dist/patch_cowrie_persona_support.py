@@ -101,14 +101,7 @@ def tpot_skip_python_commands() -> frozenset[str]:
             if operator_path.is_file():
                 return self.txtcmd(operator_path.read_bytes())
 """,
-        """        relpath = path.lstrip("/")
-        txtcmds_path = CowrieConfig.get("honeypot", "txtcmds_path", fallback="")
-        if txtcmds_path:
-            operator_path = Path(txtcmds_path) / relpath
-            if operator_path.is_file():
-                return self.txtcmd(operator_path.read_bytes())
-
-        # T-Pot: the spellings of path through the directory links of the tree
+        """        # T-Pot: the spellings of path through the directory links of the tree
         # (/bin -> usr/bin): `df` finds /usr/bin/df on PATH, the txtcmd is bin/df.
         import posixpath
 
@@ -132,6 +125,19 @@ def tpot_skip_python_commands() -> frozenset[str]:
             if link[fs.A_TYPE] == fs.T_LINK and target != "/" and real.startswith(target + "/"):
                 spellings.append("/" + link[fs.A_NAME] + real[len(target):])
         spellings = list(dict.fromkeys(spellings))
+        # a program apt installed in this session that neither a txtcmd of the persona nor Cowrie's
+        # command of its name answers (the persona does not have it)
+        faked = getattr(self, "tpot_faked", None) or {}
+        for spelling in spellings:
+            if spelling in faked:
+                return faked[spelling]
+
+        relpath = path.lstrip("/")
+        txtcmds_path = CowrieConfig.get("honeypot", "txtcmds_path", fallback="")
+        if txtcmds_path:
+            operator_path = Path(txtcmds_path) / relpath
+            if operator_path.is_file():
+                return self.txtcmd(operator_path.read_bytes())
         if txtcmds_path:
             for spelling in spellings[1:]:
                 operator_path = Path(txtcmds_path) / spelling.lstrip("/")
@@ -144,12 +150,7 @@ def tpot_skip_python_commands() -> frozenset[str]:
         """        if path in self.commands:
             return self.commands[path]
 """,
-        """        # a program apt installed in this session that Cowrie's command of its name does not answer
-        faked = getattr(self, "tpot_faked", None) or {}
-        for spelling in spellings:
-            if spelling in faked:
-                return faked[spelling]
-        for spelling in spellings:
+        """        for spelling in spellings:
             if spelling in self.commands and not skip_python_command(spelling):
                 return self.commands[spelling]
 """,
@@ -1758,6 +1759,8 @@ def tpot_apt_data() -> dict[str, dict[str, str]]:
                          if isinstance(paths, list)}
     unavailable = data.get("unavailable") if isinstance(data.get("unavailable"), list) else []
     found["unavailable"] = {str(name): "" for name in unavailable}
+    answers = data.get("answers") if isinstance(data.get("answers"), list) else []
+    found["answers"] = {str(name): "" for name in answers}
     return found
 
 
@@ -1999,11 +2002,10 @@ def tpot_apt_size(name: str) -> int:
             yield self.sleep(1, 2)
         for p in self.packages:
             self.write(f"Setting up {p} ({self.packages[p]['version']}) ...\\n")
-            # the programs of a package of the persona's data answer, with Cowrie's command of their
-            # name where it has one; another name is a faked program, also where Cowrie's command of
-            # that name stays skipped (yum, dnf, rpm of Red Hat on Debian)
-            listed = tpot_apt_data()["programs"].get(p)
-            for program in listed or [f"/usr/bin/{p}"]:
+            # the programs of the persona's data that answer as installed ([shell] apt_packages "answers")
+            # do, with Cowrie's command of their name; another one is a faked program, also where Cowrie's
+            # command of that name stays skipped (dnf, rpm, lspci, gcc on Debian)
+            for program in tpot_apt_data()["programs"].get(p) or [f"/usr/bin/{p}"]:
                 name = program.rsplit("/", 1)[-1]
                 self.fs.mkfile(
                     program,
@@ -2013,7 +2015,7 @@ def tpot_apt_size(name: str) -> int:
                     33188,
                 )
                 faked = Command_faked_package_class_factory.getCommand(name)
-                if listed:
+                if name in tpot_apt_data()["answers"]:
                     tpot_mark_installed(self.protocol, name, self.packages[p]["version"])
                     if name not in self.protocol.commands:
                         self.protocol.commands[program] = faked
@@ -2289,8 +2291,9 @@ def tpot_dnf_data() -> dict:
     for part in ("installed", "available", "provides", "owners"):
         if not isinstance(data.get(part), dict):
             data[part] = {}
-    if not isinstance(data.get("repos"), list):
-        data["repos"] = []
+    for part in ("repos", "answers"):
+        if not isinstance(data.get(part), list):
+            data[part] = []
     return data
 
 
@@ -2945,16 +2948,30 @@ class Command_dnf(HoneyPotCommand):
                 session["installed"].pop(name, None)
                 session["removed"].add(name)
             elif title != "Reinstalling":
+                # the programs that answer as installed (dnf_packages "answers"); the others are faked
                 for program in entry.get("programs", []):
-                    tpot_dnf_mark(self.protocol, program.rsplit("/", 1)[-1], entry["evr"])
+                    if program.rsplit("/", 1)[-1] in tpot_dnf_data()["answers"]:
+                        tpot_dnf_mark(self.protocol, program.rsplit("/", 1)[-1], entry["evr"])
                 session["installed"][name] = {"evr": entry["evr"], "arch": entry["arch"],
                                               "from": "@" + entry["repo"], "summary": entry.get("summary", ""),
                                               "size": entry.get("size", 0), "programs": entry.get("programs", [])}
                 session["removed"].discard(name)
         for program in made:
-            # one Cowrie has a command for answers with it
-            if program.rsplit("/", 1)[-1] not in self.protocol.commands:
-                self.protocol.commands[program] = Command_faked_package_class_factory.getCommand(program.rsplit("/", 1)[-1])
+            name = program.rsplit("/", 1)[-1]
+            faked = Command_faked_package_class_factory.getCommand(name)
+            if name in tpot_dnf_data()["answers"]:
+                # Cowrie's command of its name answers for it
+                if name not in self.protocol.commands:
+                    self.protocol.commands[program] = faked
+            elif name in self.protocol.commands or program in self.protocol.commands:
+                # a faked program of the session: Cowrie's command of that name stays skipped
+                session_faked = getattr(self.protocol, "tpot_faked", None)
+                if session_faked is None:
+                    session_faked = {}
+                    self.protocol.tpot_faked = session_faked
+                session_faked[program] = faked
+            else:
+                self.protocol.commands[program] = faked
         names = sorted(tpot_dnf_nevra(name, entry) for _, name, entry in order)
         title = {"install": "Installed", "reinstall": "Reinstalled", "remove": "Removed"}[kind]
         self.tpot_out("\n".join(tpot_dnf_pto(title, names)) + "\n\nComplete!\n")
