@@ -1424,7 +1424,8 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
                 backend.retention_plan = failing
                 app, _pilot = await self.save_retention(backend, "365")
                 notes = " ".join(str(note.message) for note in app._notifications)
-                self.assertIn("TPOT_ES_RETENTION is not saved", notes)
+                self.assertIn("Nothing was saved: the check of the ILM policy failed", notes)
+                self.assertNotIn("TPOT_ES_RETENTION is not saved", notes)      # no other change was saved either
                 self.assertIn(str(error), notes)
                 self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")      # nothing written
                 self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
@@ -1477,6 +1478,21 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         await pilot.pause(0.3)
         self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")
         self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
+
+    async def test_settings_only_retention_on_a_foreign_policy_offers_no_restart(self):
+        """A restart would not change a policy changed outside of T-Pot either: the notice says what does."""
+        from tpotctl import elastic, settings
+        repo = self.retention_checkout()
+        backend = self.settings_backend(repo)
+        backend.host = True
+        backend._plan = elastic.Plan(elastic.Decision("foreign", None, "120", False), [], True)
+        app, pilot = await self.save_retention(backend, "30")
+        await pilot.pause(0.3)
+        self.assertNotIsInstance(app.screen, ConfirmDialog)
+        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "30")
+        notes = " ".join(str(note.message) for note in app._notifications)
+        self.assertIn("Take over from Kibana", notes)
+        self.assertNotIn("restart T-Pot", notes)
 
     async def test_settings_foreign_policy_off_host_names_kibana(self):
         from tpotctl import elastic

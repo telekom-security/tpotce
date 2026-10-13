@@ -921,7 +921,8 @@ class SettingsPane(Vertical):
             try:
                 chosen = await asyncio.to_thread(self.app.backend.retention_plan, new, False)
             except Exception as err:        # whatever Elasticsearch answers, the worker must not end the Manager
-                self.app.notify(f"TPOT_ES_RETENTION is not saved: the check of the ILM policy failed ({err}).",
+                # the whole save is dropped, the other changes of the page as well
+                self.app.notify(f"Nothing was saved: the check of the ILM policy failed ({err}).",
                                 title="Not saved", severity="error", timeout=10)
                 return
             if chosen.reachable and chosen.shortening:
@@ -973,7 +974,7 @@ class SettingsPane(Vertical):
         # what applies a waiting value: the Elastic page on a T-Pot host, Kibana elsewhere
         later = ("Once Elasticsearch runs, Apply .env to the policy on the Elastic page applies it (it asks first)."
                  if host else f"Once Elasticsearch runs, change the ILM policy tpot in {KIBANA_ILM}.")
-        applied = waiting = False
+        applied = waiting = foreign = False
         if chosen is not None and chosen.reachable and chosen.decision.action in ("create", "update", "keep"):
             try:
                 await asyncio.to_thread(self.app.backend.apply_retention, chosen)
@@ -984,6 +985,7 @@ class SettingsPane(Vertical):
                 self.app.notify(f"TPOT_ES_RETENTION is saved, but the ILM policy tpot was not changed ({err}). "
                                 f"{then}", title="Not applied", severity="warning", timeout=12)
         elif chosen is not None and chosen.decision.action == "foreign":
+            foreign = True
             where = ("On the Elastic page, Take over from Kibana keeps it, Apply .env to the policy applies .env "
                      "to it." if host else f"Its retention is changed in {KIBANA_ILM}.")
             self.app.notify(foreign_kept(saved["TPOT_ES_RETENTION"], where), title="Not applied", severity="warning",
@@ -1001,7 +1003,7 @@ class SettingsPane(Vertical):
             # nothing else changed and the policy has it already: no restart needed
             self.app.notify(f"Saved, Elasticsearch keeps the events "
                             f"{tcli._retention_shown(saved['TPOT_ES_RETENTION'])}.", title="Settings")
-        elif waiting and only_retention:
+        elif (waiting or foreign) and only_retention:
             return                  # a restart would not apply it either, the notice above says what does
         elif host:
             self.app.push_screen(ConfirmDialog("Saved. Restart T-Pot now, so that it uses the new settings?",
