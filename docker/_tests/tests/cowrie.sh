@@ -1072,6 +1072,12 @@ if not df_table.is_file() or not json.loads(df_table.read_text(encoding="utf-8")
     fail(f"{selected} has no df table: {df_table}")
 if config.get("shell", "awk_style", fallback="") not in ("gawk", "mawk", "busybox"):
     fail(f"{selected} has no awk style")
+# wc, sort and seq, ip, ss, netstat and ifconfig are commands of the patched Cowrie over the persona's data
+if config.get("shell", "text_style", fallback="") not in ("gnu", "busybox"):
+    fail(f"{selected} has no style of wc, sort and seq")
+network_path = Path(config.get("shell", "network", fallback=""))
+if not network_path.is_file() or not json.loads(network_path.read_text(encoding="utf-8")).get("interfaces"):
+    fail(f"{selected} has no network: {network_path}")
 # apt, yum 3 and opkg know the package names of the release; opkg is a command of the patched Cowrie
 lists_names = (persona["kind"] == "server" and "dnf" not in package_managers
                and bool(package_managers & {"apt-get", "yum"})) or "opkg" in package_managers

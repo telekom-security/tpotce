@@ -313,6 +313,23 @@ class PatchTest(unittest.TestCase):
         self.assertEqual((bytes(command.out), command.code), (b"2\n", None))
         self.assertEqual(command.exit_code, 0)
 
+    def test_net_tools_follow_the_commands_of_netstat_and_ifconfig_py(self):
+        root = self.patched()
+        source = (root / "src/cowrie/commands/netstat.py").read_text()
+        self.assertIn('commands["/bin/netstat"] = Command_netstat\ncommands["netstat"] = Command_netstat\n\n\n'
+                      "# T-Pot: ip, ss, netstat and ifconfig", source)
+        ifconfig = (root / "src/cowrie/commands/ifconfig.py").read_text()
+        self.assertIn("from cowrie.commands.netstat import Command_tpot_ifconfig", ifconfig)
+        self.assertNotIn('commands["ifconfig"] = Command_ifconfig', ifconfig)
+        namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig({}), "log": None})
+        commands = namespace["commands"]
+        for name, cls in (("ip", "Command_tpot_ip"), ("/usr/sbin/ip", "Command_tpot_ip"), ("ss", "Command_tpot_ss"),
+                          ("/bin/netstat", "Command_tpot_netstat"), ("netstat", "Command_tpot_netstat")):
+            self.assertIs(commands[name], namespace[cls], name)
+        command = commands["ip"](["-4", "a"])
+        command.start()
+        self.assertIn(b"inet 10.0.2.15/24 brd 10.0.2.255 scope global eth0", bytes(command.out))
+
     def test_links_resolve_from_their_directory(self):
         from tpot_personas.identity import draw
         from tpot_personas.render import apply_to_tree
@@ -3005,6 +3022,12 @@ class PatchTest(unittest.TestCase):
                   'commands["awk"] = Command_awk  # awk\n'),
                  ("src/cowrie/commands/wc.py", 'commands["/bin/wc"] = Command_wc\n',
                   'commands["/bin/wc"] = Command_wc  # wc\n'),
+                 ("src/cowrie/commands/netstat.py", 'commands["netstat"] = Command_netstat\n',
+                  'commands["netstat"] = Command_netstat  # netstat\n'),
+                 ("src/cowrie/commands/netstat.py", "import ipaddress\nimport socket\n",
+                  "import ipaddress\nimport socket as sock\n"),
+                 ("src/cowrie/commands/ifconfig.py", 'commands["ifconfig"] = Command_ifconfig\n',
+                  'commands["ifconfig"] = Command_ifconfig  # ifconfig\n'),
                  ("src/cowrie/commands/fs.py", "from cowrie.shell import fs\n", "from cowrie.shell import fs as f\n"),
                  ("src/cowrie/commands/fs.py", "from typing import TYPE_CHECKING\n",
                   "from typing import TYPE_CHECKING, Any\n"),

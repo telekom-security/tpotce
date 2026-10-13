@@ -123,6 +123,34 @@ class TextToolsTest(unittest.TestCase):
                 self.assertEqual(cfg.has_option("shell", "text_packager"), persona_id == "debian-trixie")
 
 
+class NetToolsTest(unittest.TestCase):
+    """ip, ss, ifconfig and netstat: iproute2 on every server, net-tools where it is installed, the
+    programs of the firmware on the devices (BusyBox applets, iproute2 of the TL-WR841N and EdgeOS)."""
+
+    def test_the_programs_and_the_answers_agree(self):
+        expected = {"debian-bookworm": {"ip", "ss"}, "ubuntu-noble": {"ip", "ss", "ifconfig", "netstat"},
+                    "rhel-9": {"ip", "ss"}, "centos-7": {"ip", "ss", "ifconfig", "netstat"},
+                    "openwrt": {"ip", "ifconfig", "netstat"}, "tplink-wr841n": {"ip", "ifconfig", "netstat"},
+                    "ubiquiti-edgerouter-x": {"ip", "ss", "ifconfig", "netstat"}, "dlink-dir859": {"ifconfig", "netstat"}}
+        paths = {"rhel-9": {"ip": "usr/sbin/ip"}, "debian-bookworm": {"ip": "usr/bin/ip"},
+                 "openwrt": {"ip": "sbin/ip"}, "tplink-wr841n": {"ip": "usr/bin/ip"}}
+        for persona_id, names in expected.items():
+            persona = catalog.by_id(persona_id)
+            ident, out, _ = render_one(self, persona, 1)
+            fs = tree.load_pickle(out / "fs.pickle")
+            cfg = cfg_of(out)
+            with self.subTest(persona=persona_id):
+                self.assertEqual(cfg.get("shell", "network"), f"{out}/network.json")
+                data = json.loads((out / "network.json").read_text())
+                self.assertEqual(set(data["tools"]), names)
+                for name in ("ip", "ss", "ifconfig", "netstat"):
+                    self.assertEqual(name not in skipped(out), name in names, name)
+                for name, rel in paths.get(persona_id, {}).items():
+                    self.assertIsNotNone(tree.find_node(fs, rel), rel)
+                if persona_id == "openwrt":
+                    self.assertEqual(tree.find_node(fs, "sbin/ip")[tree.A_TARGET], "../bin/busybox")
+
+
 class BusyboxTest(unittest.TestCase):
     def test_devices_with_busybox_run_cowries_busybox_with_their_help(self):
         with_busybox = [p for p in catalog.PERSONAS if any(r.extra.get("busybox") for r in p.releases)]
@@ -712,16 +740,17 @@ class ToolPackageTest(unittest.TestCase):
                 self.assertEqual({t for t in system.TOOL_PROGRAMS if t in apt["installed"]}, installed, persona.id)
                 self.assertFalse({t for t in system.TOOL_PROGRAMS if t not in installed} - set(apt["available"]),
                                  persona.id)
-            for tool, programs in system.TOOL_PROGRAMS.items():
-                for name, rel in programs.items():
+            for tool in system.TOOL_PROGRAMS:
+                for name, rel in system.tool_paths(persona, tool).items():
                     answered = name not in skip and name in system.COWRIE_TOOL_NAMES
                     on_path = tree.find_node(fs, rel) is not None
                     self.assertEqual(on_path, tool in installed, (persona.id, tool, name))
                     if name in system.COWRIE_TOOL_NAMES:
                         self.assertEqual(answered, tool in installed, (persona.id, tool, name))
         expected = {"ubuntu-noble": {"net-tools", "netcat-openbsd", "iptables", "ethtool", "bind9-dnsutils",
-                                     "iputils-ping"},
-                    "debian-bookworm": {"netcat-openbsd", "iputils-ping"}}
+                                     "iputils-ping", "iproute2"},
+                    "debian-bookworm": {"netcat-openbsd", "iputils-ping", "iproute2"},
+                    "rhel-9": {"ethtool", "iputils-ping", "iproute2"}}
         for pid, tools in expected.items():
             persona = catalog.by_id(pid)
             self.assertEqual(system.installed_tools(persona, draw(persona, 1, NOW)), tools, pid)

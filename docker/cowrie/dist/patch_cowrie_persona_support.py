@@ -1060,6 +1060,1110 @@ def patch_netstat(cowrie_root):
     )
 
 
+# module code of the patched commands/netstat.py after its commands: ip, ss, netstat (and ifconfig,
+# which the patched ifconfig.py takes from here) of the persona
+NET_COMMAND = r'''
+
+# T-Pot: ip, ss, netstat and ifconfig of the persona. [shell] network is a JSON file of the runtime
+# folder (tpot_personas.network): the interfaces with their MAC and address, the routes, the
+# sockets of the daemons of ps and the style of each program (iproute2, net-tools or BusyBox and
+# its version). The session's own connection is the one of the protocol. Nothing of the host is read.
+import functools
+import ipaddress
+import json
+import time
+from pathlib import Path
+
+from twisted.python import log
+
+from cowrie.core.config import CowrieConfig
+
+TPOT_NET_SERVICES = {22: "ssh", 23: "telnet", 25: "smtp", 53: "domain", 67: "bootps", 68: "bootpc", 80: "http",
+                     137: "netbios-ns", 138: "netbios-dgm", 139: "netbios-ssn", 443: "https", 445: "microsoft-ds",
+                     547: "dhcpv6-server", 554: "rtsp", 5353: "mdns", 8080: "http-alt"}
+TPOT_NET_OBJECTS = ("address", "addrlabel", "maddress", "route", "rule", "neighbor", "neighbour", "ntable", "ntbl",
+                    "link", "l2tp", "fou", "ila", "macsec", "tunnel", "tunl", "tuntap", "tap", "token",
+                    "tcpmetrics", "tcp_metrics", "monitor", "xfrm", "mroute", "mrule", "netns", "netconf", "vrf",
+                    "sr", "nexthop", "mptcp", "ioam", "help", "stats")
+TPOT_IP_USAGE = {
+    '4.11': 'Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n       ip [ -force ] -batch filename\nwhere  OBJECT := { link | address | addrlabel | route | rule | neigh | ntable |\n                   tunnel | tuntap | maddress | mroute | mrule | monitor | xfrm |\n                   netns | l2tp | fou | macsec | tcp_metrics | token | netconf | ila |\n                   vrf }\n       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n                    -h[uman-readable] | -iec |\n                    -f[amily] { inet | inet6 | ipx | dnet | mpls | bridge | link } |\n                    -4 | -6 | -I | -D | -B | -0 |\n                    -l[oops] { maximum-addr-flush-attempts } | -br[ief] |\n                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n                    -rc[vbuf] [size] | -n[etns] name | -a[ll] |\xa0-c[olor]}\n',
+    '5.15': 'Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n       ip [ -force ] -batch filename\nwhere  OBJECT := { address | addrlabel | fou | help | ila | ioam | l2tp | link |\n                   macsec | maddress | monitor | mptcp | mroute | mrule |\n                   neighbor | neighbour | netconf | netns | nexthop | ntable |\n                   ntbl | route | rule | sr | tap | tcpmetrics |\n                   token | tunnel | tuntap | vrf | xfrm }\n       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n                    -h[uman-readable] | -iec | -j[son] | -p[retty] |\n                    -f[amily] { inet | inet6 | mpls | bridge | link } |\n                    -4 | -6 | -M | -B | -0 |\n                    -l[oops] { maximum-addr-flush-attempts } | -br[ief] |\n                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n                    -rc[vbuf] [size] | -n[etns] name | -N[umeric] | -a[ll] |\n                    -c[olor]}\n',
+    '6.1': 'Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n       ip [ -force ] -batch filename\nwhere  OBJECT := { address | addrlabel | amt | fou | help | ila | ioam | l2tp |\n                   link | macsec | maddress | monitor | mptcp | mroute | mrule |\n                   neighbor | neighbour | netconf | netns | nexthop | ntable |\n                   ntbl | route | rule | sr | tap | tcpmetrics |\n                   token | tunnel | tuntap | vrf | xfrm }\n       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n                    -h[uman-readable] | -iec | -j[son] | -p[retty] |\n                    -f[amily] { inet | inet6 | mpls | bridge | link } |\n                    -4 | -6 | -M | -B | -0 |\n                    -l[oops] { maximum-addr-flush-attempts } | -br[ief] |\n                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n                    -rc[vbuf] [size] | -n[etns] name | -N[umeric] | -a[ll] |\n                    -c[olor]}\n',
+    '6.15': 'Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n       ip [ -force ] -batch filename\nwhere  OBJECT := { address | addrlabel | fou | help | ila | ioam | l2tp | link |\n                   macsec | maddress | monitor | mptcp | mroute | mrule |\n                   neighbor | neighbour | netconf | netns | nexthop | ntable |\n                   ntbl | route | rule | sr | stats | tap | tcpmetrics |\n                   token | tunnel | tuntap | vrf | xfrm }\n       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n                    -h[uman-readable] | -iec | -j[son] | -p[retty] |\n                    -f[amily] { inet | inet6 | mpls | bridge | link } |\n                    -4 | -6 | -M | -B | -0 |\n                    -l[oops] { maximum-addr-flush-attempts } | -echo | -br[ief] |\n                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n                    -rc[vbuf] [size] | -n[etns] name | -N[umeric] | -a[ll] |\n                    -c[olor]}\n',
+}
+
+TPOT_SS_HELP = {
+    '4.11': "Usage: ss [ OPTIONS ]\n       ss [ OPTIONS ] [ FILTER ]\n   -h, --help          this message\n   -V, --version       output version information\n   -n, --numeric       don't resolve service names\n   -r, --resolve       resolve host names\n   -a, --all           display all sockets\n   -l, --listening     display listening sockets\n   -o, --options       show timer information\n   -e, --extended      show detailed socket information\n   -m, --memory        show socket memory usage\n   -p, --processes     show process using socket\n   -i, --info          show internal TCP information\n   -s, --summary       show socket usage summary\n   -b, --bpf           show bpf filter socket information\n   -E, --events        continually display sockets as they are destroyed\n   -Z, --context       display process SELinux security contexts\n   -z, --contexts      display process and socket SELinux security contexts\n   -N, --net           switch to the specified network namespace name\n\n   -4, --ipv4          display only IP version 4 sockets\n   -6, --ipv6          display only IP version 6 sockets\n   -0, --packet        display PACKET sockets\n   -t, --tcp           display only TCP sockets\n   -S, --sctp          display only SCTP sockets\n   -u, --udp           display only UDP sockets\n   -d, --dccp          display only DCCP sockets\n   -w, --raw           display only RAW sockets\n   -x, --unix          display only Unix domain sockets\n       --vsock         display only vsock sockets\n   -f, --family=FAMILY display sockets of type FAMILY\n       FAMILY := {inet|inet6|link|unix|netlink|vsock|help}\n\n   -K, --kill          forcibly close sockets, display what was closed\n   -H, --no-header     Suppress header line\n\n   -A, --query=QUERY, --socket=QUERY\n       QUERY := {all|inet|tcp|udp|raw|unix|unix_dgram|unix_stream|unix_seqpacket|packet|netlink|vsock_stream|vsock_dgram}[,QUERY]\n\n   -D, --diag=FILE     Dump raw information about TCP sockets to FILE\n   -F, --filter=FILE   read filter information from FILE\n       FILTER := [ state STATE-FILTER ] [ EXPRESSION ]\n       STATE-FILTER := {all|connected|synchronized|bucket|big|TCP-STATES}\n         TCP-STATES := {established|syn-sent|syn-recv|fin-wait-{1,2}|time-wait|closed|close-wait|last-ack|listen|closing}\n          connected := {established|syn-sent|syn-recv|fin-wait-{1,2}|time-wait|close-wait|last-ack|closing}\n       synchronized := {established|syn-recv|fin-wait-{1,2}|time-wait|close-wait|last-ack|closing}\n             bucket := {syn-recv|time-wait}\n                big := {established|syn-sent|fin-wait-{1,2}|closed|close-wait|last-ack|listen|closing}\n",
+    '5.15': "Usage: ss [ OPTIONS ]\n       ss [ OPTIONS ] [ FILTER ]\n   -h, --help          this message\n   -V, --version       output version information\n   -n, --numeric       don't resolve service names\n   -r, --resolve       resolve host names\n   -a, --all           display all sockets\n   -l, --listening     display listening sockets\n   -o, --options       show timer information\n   -e, --extended      show detailed socket information\n   -m, --memory        show socket memory usage\n   -p, --processes     show process using socket\n   -i, --info          show internal TCP information\n       --tipcinfo      show internal tipc socket information\n   -s, --summary       show socket usage summary\n       --tos           show tos and priority information\n       --cgroup        show cgroup information\n   -b, --bpf           show bpf filter socket information\n   -E, --events        continually display sockets as they are destroyed\n   -Z, --context       display process SELinux security contexts\n   -z, --contexts      display process and socket SELinux security contexts\n   -N, --net           switch to the specified network namespace name\n\n   -4, --ipv4          display only IP version 4 sockets\n   -6, --ipv6          display only IP version 6 sockets\n   -0, --packet        display PACKET sockets\n   -t, --tcp           display only TCP sockets\n   -M, --mptcp         display only MPTCP sockets\n   -S, --sctp          display only SCTP sockets\n   -u, --udp           display only UDP sockets\n   -d, --dccp          display only DCCP sockets\n   -w, --raw           display only RAW sockets\n   -x, --unix          display only Unix domain sockets\n       --tipc          display only TIPC sockets\n       --vsock         display only vsock sockets\n   -f, --family=FAMILY display sockets of type FAMILY\n       FAMILY := {inet|inet6|link|unix|netlink|vsock|tipc|xdp|help}\n\n   -K, --kill          forcibly close sockets, display what was closed\n   -H, --no-header     Suppress header line\n   -O, --oneline       socket's data printed on a single line\n       --inet-sockopt  show various inet socket options\n\n   -A, --query=QUERY, --socket=QUERY\n       QUERY := {all|inet|tcp|mptcp|udp|raw|unix|unix_dgram|unix_stream|unix_seqpacket|packet|netlink|vsock_stream|vsock_dgram|tipc}[,QUERY]\n\n   -D, --diag=FILE     Dump raw information about TCP sockets to FILE\n   -F, --filter=FILE   read filter information from FILE\n       FILTER := [ state STATE-FILTER ] [ EXPRESSION ]\n       STATE-FILTER := {all|connected|synchronized|bucket|big|TCP-STATES}\n         TCP-STATES := {established|syn-sent|syn-recv|fin-wait-{1,2}|time-wait|closed|close-wait|last-ack|listening|closing}\n          connected := {established|syn-sent|syn-recv|fin-wait-{1,2}|time-wait|close-wait|last-ack|closing}\n       synchronized := {established|syn-recv|fin-wait-{1,2}|time-wait|close-wait|last-ack|closing}\n             bucket := {syn-recv|time-wait}\n                big := {established|syn-sent|fin-wait-{1,2}|closed|close-wait|last-ack|listening|closing}\n",
+    '6.1': "Usage: ss [ OPTIONS ]\n       ss [ OPTIONS ] [ FILTER ]\n   -h, --help          this message\n   -V, --version       output version information\n   -n, --numeric       don't resolve service names\n   -r, --resolve       resolve host names\n   -a, --all           display all sockets\n   -l, --listening     display listening sockets\n   -o, --options       show timer information\n   -e, --extended      show detailed socket information\n   -m, --memory        show socket memory usage\n   -p, --processes     show process using socket\n   -T, --threads       show thread using socket\n   -i, --info          show internal TCP information\n       --tipcinfo      show internal tipc socket information\n   -s, --summary       show socket usage summary\n       --tos           show tos and priority information\n       --cgroup        show cgroup information\n   -b, --bpf           show bpf filter socket information\n   -E, --events        continually display sockets as they are destroyed\n   -Z, --context       display task SELinux security contexts\n   -z, --contexts      display task and socket SELinux security contexts\n   -N, --net           switch to the specified network namespace name\n\n   -4, --ipv4          display only IP version 4 sockets\n   -6, --ipv6          display only IP version 6 sockets\n   -0, --packet        display PACKET sockets\n   -t, --tcp           display only TCP sockets\n   -M, --mptcp         display only MPTCP sockets\n   -S, --sctp          display only SCTP sockets\n   -u, --udp           display only UDP sockets\n   -d, --dccp          display only DCCP sockets\n   -w, --raw           display only RAW sockets\n   -x, --unix          display only Unix domain sockets\n       --tipc          display only TIPC sockets\n       --vsock         display only vsock sockets\n       --xdp           display only XDP sockets\n   -f, --family=FAMILY display sockets of type FAMILY\n       FAMILY := {inet|inet6|link|unix|netlink|vsock|tipc|xdp|help}\n\n   -K, --kill          forcibly close sockets, display what was closed\n   -H, --no-header     Suppress header line\n   -O, --oneline       socket's data printed on a single line\n       --inet-sockopt  show various inet socket options\n\n   -A, --query=QUERY, --socket=QUERY\n       QUERY := {all|inet|tcp|mptcp|udp|raw|unix|unix_dgram|unix_stream|unix_seqpacket|packet|packet_raw|packet_dgram|netlink|dccp|sctp|vsock_stream|vsock_dgram|tipc|xdp}[,QUERY]\n\n   -D, --diag=FILE     Dump raw information about TCP sockets to FILE\n   -F, --filter=FILE   read filter information from FILE\n       FILTER := [ state STATE-FILTER ] [ EXPRESSION ]\n       STATE-FILTER := {all|connected|synchronized|bucket|big|TCP-STATES}\n         TCP-STATES := {established|syn-sent|syn-recv|fin-wait-{1,2}|time-wait|closed|close-wait|last-ack|listening|closing}\n          connected := {established|syn-sent|syn-recv|fin-wait-{1,2}|time-wait|close-wait|last-ack|closing}\n       synchronized := {established|syn-recv|fin-wait-{1,2}|time-wait|close-wait|last-ack|closing}\n             bucket := {syn-recv|time-wait}\n                big := {established|syn-sent|fin-wait-{1,2}|closed|close-wait|last-ack|listening|closing}\n",
+    '6.15': "Usage: ss [ OPTIONS ]\n       ss [ OPTIONS ] [ FILTER ]\n   -h, --help          this message\n   -V, --version       output version information\n   -n, --numeric       don't resolve service names\n   -r, --resolve       resolve host names\n   -a, --all           display all sockets\n   -l, --listening     display listening sockets\n   -B, --bound-inactive display TCP bound but inactive sockets\n   -o, --options       show timer information\n   -e, --extended      show detailed socket information\n   -m, --memory        show socket memory usage\n   -p, --processes     show process using socket\n   -T, --threads       show thread using socket\n   -i, --info          show internal TCP information\n       --tipcinfo      show internal tipc socket information\n   -s, --summary       show socket usage summary\n       --tos           show tos and priority information\n       --cgroup        show cgroup information\n   -b, --bpf           show bpf filter socket information\n       --bpf-maps      show all BPF socket-local storage maps\n       --bpf-map-id=MAP-ID    show a BPF socket-local storage map\n   -E, --events        continually display sockets as they are destroyed\n   -Z, --context       display task SELinux security contexts\n   -z, --contexts      display task and socket SELinux security contexts\n   -N, --net           switch to the specified network namespace name\n\n   -4, --ipv4          display only IP version 4 sockets\n   -6, --ipv6          display only IP version 6 sockets\n   -0, --packet        display PACKET sockets\n   -t, --tcp           display only TCP sockets\n   -M, --mptcp         display only MPTCP sockets\n   -S, --sctp          display only SCTP sockets\n   -u, --udp           display only UDP sockets\n   -d, --dccp          display only DCCP sockets\n   -w, --raw           display only RAW sockets\n   -x, --unix          display only Unix domain sockets\n       --tipc          display only TIPC sockets\n       --vsock         display only vsock sockets\n       --xdp           display only XDP sockets\n   -f, --family=FAMILY display sockets of type FAMILY\n       FAMILY := {inet|inet6|link|unix|netlink|vsock|tipc|xdp|help}\n\n   -K, --kill          forcibly close sockets, display what was closed\n   -H, --no-header     Suppress header line\n   -Q, --no-queues     Suppress sending and receiving queue columns\n   -O, --oneline       socket's data printed on a single line\n       --inet-sockopt  show various inet socket options\n\n   -A, --query=QUERY, --socket=QUERY\n       QUERY := {all|inet|tcp|mptcp|udp|raw|unix|unix_dgram|unix_stream|unix_seqpacket|packet|packet_raw|packet_dgram|netlink|dccp|sctp|vsock_stream|vsock_dgram|tipc|xdp}[,QUERY]\n\n   -D, --diag=FILE     Dump raw information about TCP sockets to FILE\n   -F, --filter=FILE   read filter information from FILE\n       FILTER := [ state STATE-FILTER ] [ EXPRESSION ]\n       STATE-FILTER := {all|connected|synchronized|bucket|big|TCP-STATES}\n         TCP-STATES := {established|syn-sent|syn-recv|fin-wait-{1,2}|time-wait|closed|close-wait|last-ack|listening|closing}\n          connected := {established|syn-sent|syn-recv|fin-wait-{1,2}|time-wait|close-wait|last-ack|closing}\n       synchronized := {established|syn-recv|fin-wait-{1,2}|time-wait|close-wait|last-ack|closing}\n             bucket := {syn-recv|time-wait}\n                big := {established|syn-sent|fin-wait-{1,2}|closed|close-wait|last-ack|listening|closing}\n",
+}
+
+TPOT_NETSTAT_HELP = {
+    '2.0': ('', "usage: netstat [-vWeenNcCF] [<Af>] -r         netstat {-V|--version|-h|--help}\n       netstat [-vWnNcaeol] [<Socket> ...]\n       netstat { [-vWeenNac] -I[<Iface>] | [-veenNac] -i | [-cnNe] -M | -s [-6tuw] } [delay]\n\n        -r, --route              display routing table\n        -I, --interfaces=<Iface> display interface table for <Iface>\n        -i, --interfaces         display interface table\n        -g, --groups             display multicast group memberships\n        -s, --statistics         display networking statistics (like SNMP)\n        -M, --masquerade         display masqueraded connections\n\n        -v, --verbose            be verbose\n        -W, --wide               don't truncate IP addresses\n        -n, --numeric            don't resolve names\n        --numeric-hosts          don't resolve host names\n        --numeric-ports          don't resolve port names\n        --numeric-users          don't resolve user names\n        -N, --symbolic           resolve hardware names\n        -e, --extend             display other/more information\n        -p, --programs           display PID/Program name for sockets\n        -o, --timers             display timers\n        -c, --continuous         continuous listing\n\n        -l, --listening          display listening server sockets\n        -a, --all                display all sockets (default: connected)\n        -F, --fib                display Forwarding Information Base (default)\n        -C, --cache              display routing cache instead of FIB\n        -Z, --context            display SELinux security context for sockets\n\n  <Socket>={-t|--tcp} {-u|--udp} {-U|--udplite} {-S|--sctp} {-w|--raw}\n           {-x|--unix} --ax25 --ipx --netrom\n  <AF>=Use '-6|-4' or '-A <af>' or '--<af>'; default: inet\n  List of possible address families (which support routing):\n    inet (DARPA Internet) inet6 (IPv6) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) ipx (Novell IPX) ddp (Appletalk DDP) \n    x25 (CCITT X.25) \n"),
+    '1.60': ("usage: netstat [-vWeenNcCF] [<Af>] -r         netstat {-V|--version|-h|--help}\n       netstat [-vWnNcaeol] [<Socket> ...]\n       netstat { [-vWeenNac] -i | [-cnNe] -M | -s [-6tuw] }\n\n        -r, --route              display routing table\n        -i, --interfaces         display interface table\n        -g, --groups             display multicast group memberships\n        -s, --statistics         display networking statistics (like SNMP)\n        -M, --masquerade         display masqueraded connections\n\n        -v, --verbose            be verbose\n        -W, --wide               don't truncate IP addresses\n        -n, --numeric            don't resolve names\n        --numeric-hosts          don't resolve host names\n        --numeric-ports          don't resolve port names\n        --numeric-users          don't resolve user names\n        -N, --symbolic           resolve hardware names\n        -e, --extend             display other/more information\n        -p, --programs           display PID/Program name for sockets\n        -o, --timers             display timers\n        -c, --continuous         continuous listing\n\n        -l, --listening          display listening server sockets\n        -a, --all                display all sockets (default: connected)\n        -F, --fib                display Forwarding Information Base (default)\n        -C, --cache              display routing cache instead of FIB\n        -Z, --context            display SELinux security context for sockets\n\n  <Socket>={-t|--tcp} {-u|--udp} {-U|--udplite} {-S|--sctp} {-w|--raw}\n           {-x|--unix} --ax25 --ipx --netrom\n  <AF>=Use '-6|-4' or '-A <af>' or '--<af>'; default: inet\n  List of possible address families (which support routing):\n", '    inet (DARPA Internet) inet6 (IPv6) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) ipx (Novell IPX) ddp (Appletalk DDP) \n    x25 (CCITT X.25) \n'),
+    '2.10': ("usage: netstat [-vWeenNcCF] [<Af>] -r         netstat {-V|--version|-h|--help}\n       netstat [-vWnNcaeol] [<Socket> ...]\n       netstat { [-vWeenNac] -i | [-cnNe] -M | -s [-6tuw] }\n\n        -r, --route              display routing table\n        -i, --interfaces         display interface table\n        -g, --groups             display multicast group memberships\n        -s, --statistics         display networking statistics (like SNMP)\n        -M, --masquerade         display masqueraded connections\n\n        -v, --verbose            be verbose\n        -W, --wide               don't truncate IP addresses\n        -n, --numeric            don't resolve names\n        --numeric-hosts          don't resolve host names\n        --numeric-ports          don't resolve port names\n        --numeric-users          don't resolve user names\n        -N, --symbolic           resolve hardware names\n        -e, --extend             display other/more information\n        -p, --programs           display PID/Program name for sockets\n        -o, --timers             display timers\n        -c, --continuous         continuous listing\n\n        -l, --listening          display listening server sockets\n        -a, --all                display all sockets (default: connected)\n        -F, --fib                display Forwarding Information Base (default)\n        -C, --cache              display routing cache instead of FIB\n        -Z, --context            display SELinux security context for sockets\n\n  <Socket>={-t|--tcp} {-u|--udp} {-U|--udplite} {-S|--sctp} {-w|--raw}\n           {-x|--unix} --ax25 --ipx --netrom\n  <AF>=Use '-6|-4' or '-A <af>' or '--<af>'; default: inet\n  List of possible address families (which support routing):\n", '    inet (DARPA Internet) inet6 (IPv6) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) rose (AMPR ROSE) ipx (Novell IPX) \n    ddp (Appletalk DDP) x25 (CCITT X.25) \n'),
+}
+
+TPOT_IFCONFIG_HELP = {
+    '2.0': ('', 'Usage:\n  ifconfig [-a] [-v] [-s] <interface> [[<AF>] <address>]\n  [add <address>[/<prefixlen>]]\n  [del <address>[/<prefixlen>]]\n  [[-]broadcast [<address>]]  [[-]pointopoint [<address>]]\n  [netmask <address>]  [dstaddr <address>]  [tunnel <address>]\n  [outfill <NN>] [keepalive <NN>]\n  [hw <HW> <address>]  [mtu <NN>]\n  [[-]trailers]  [[-]arp]  [[-]allmulti]\n  [multicast]  [[-]promisc]\n  [mem_start <NN>]  [io_addr <NN>]  [irq <NN>]  [media <type>]\n  [txqueuelen <NN>]\n  [[-]dynamic]\n  [up|down] ...\n\n  <HW>=Hardware Type.\n  List of possible hardware types:\n    loop (Local Loopback) slip (Serial Line IP) cslip (VJ Serial Line IP) \n    slip6 (6-bit Serial Line IP) cslip6 (VJ 6-bit Serial Line IP) adaptive (Adaptive Serial Line IP) \n    ash (Ash) ether (Ethernet) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) rose (AMPR ROSE) tunnel (IPIP Tunnel) \n    ppp (Point-to-Point Protocol) hdlc ((Cisco)-HDLC) lapb (LAPB) \n    arcnet (ARCnet) dlci (Frame Relay DLCI) frad (Frame Relay Access Device) \n    sit (IPv6-in-IPv4) fddi (Fiber Distributed Data Interface) hippi (HIPPI) \n    irda (IrLAP) ec (Econet) x25 (generic X.25) \n    infiniband (InfiniBand) eui64 (Generic EUI-64) \n  <AF>=Address family. Default: inet\n  List of possible address families:\n    unix (UNIX Domain) inet (DARPA Internet) inet6 (IPv6) \n    ax25 (AMPR AX.25) netrom (AMPR NET/ROM) rose (AMPR ROSE) \n    ipx (Novell IPX) ddp (Appletalk DDP) ec (Econet) \n    ash (Ash) x25 (CCITT X.25) \n'),
+    '1.60': ('Usage:\n  ifconfig [-a] [-v] [-s] <interface> [[<AF>] <address>]\n  [add <address>[/<prefixlen>]]\n  [del <address>[/<prefixlen>]]\n  [[-]broadcast [<address>]]  [[-]pointopoint [<address>]]\n  [netmask <address>]  [dstaddr <address>]  [tunnel <address>]\n  [outfill <NN>] [keepalive <NN>]\n  [hw <HW> <address>]  [mtu <NN>]\n  [[-]trailers]  [[-]arp]  [[-]allmulti]\n  [multicast]  [[-]promisc]\n  [mem_start <NN>]  [io_addr <NN>]  [irq <NN>]  [media <type>]\n  [txqueuelen <NN>]\n  [[-]dynamic]\n  [up|down] ...\n\n  <HW>=Hardware Type.\n  List of possible hardware types:\n  <AF>=Address family. Default: inet\n  List of possible address families:\n', '    loop (Local Loopback) slip (Serial Line IP) cslip (VJ Serial Line IP) \n    slip6 (6-bit Serial Line IP) cslip6 (VJ 6-bit Serial Line IP) adaptive (Adaptive Serial Line IP) \n    ash (Ash) ether (Ethernet) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) rose (AMPR ROSE) tunnel (IPIP Tunnel) \n    ppp (Point-to-Point Protocol) hdlc ((Cisco)-HDLC) lapb (LAPB) \n    arcnet (ARCnet) dlci (Frame Relay DLCI) frad (Frame Relay Access Device) \n    sit (IPv6-in-IPv4) fddi (Fiber Distributed Data Interface) hippi (HIPPI) \n    irda (IrLAP) ec (Econet) x25 (generic X.25) \n    eui64 (Generic EUI-64) \n    unix (UNIX Domain) inet (DARPA Internet) inet6 (IPv6) \n    ax25 (AMPR AX.25) netrom (AMPR NET/ROM) rose (AMPR ROSE) \n    ipx (Novell IPX) ddp (Appletalk DDP) ec (Econet) \n    ash (Ash) x25 (CCITT X.25) \n'),
+    '2.10': ('Usage:\n  ifconfig [-a] [-v] [-s] <interface> [[<AF>] <address>]\n  [add <address>[/<prefixlen>]]\n  [del <address>[/<prefixlen>]]\n  [[-]broadcast [<address>]]  [[-]pointopoint [<address>]]\n  [netmask <address>]  [dstaddr <address>]  [tunnel <address>]\n  [outfill <NN>] [keepalive <NN>]\n  [hw <HW> <address>]  [mtu <NN>]\n  [[-]trailers]  [[-]arp]  [[-]allmulti]\n  [multicast]  [[-]promisc]\n  [mem_start <NN>]  [io_addr <NN>]  [irq <NN>]  [media <type>]\n  [txqueuelen <NN>]\n  [name <newname>]\n  [[-]dynamic]\n  [up|down] ...\n\n  <HW>=Hardware Type.\n  List of possible hardware types:\n  <AF>=Address family. Default: inet\n  List of possible address families:\n', '    loop (Local Loopback) slip (Serial Line IP) cslip (VJ Serial Line IP) \n    slip6 (6-bit Serial Line IP) cslip6 (VJ 6-bit Serial Line IP) adaptive (Adaptive Serial Line IP) \n    ash (Ash) ether (Ethernet) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) rose (AMPR ROSE) tunnel (IPIP Tunnel) \n    ppp (Point-to-Point Protocol) hdlc ((Cisco)-HDLC) lapb (LAPB) \n    arcnet (ARCnet) dlci (Frame Relay DLCI) frad (Frame Relay Access Device) \n    sit (IPv6-in-IPv4) fddi (Fiber Distributed Data Interface) hippi (HIPPI) \n    irda (IrLAP) ec (Econet) x25 (generic X.25) \n    eui64 (Generic EUI-64) \n    unix (UNIX Domain) inet (DARPA Internet) inet6 (IPv6) \n    ax25 (AMPR AX.25) netrom (AMPR NET/ROM) rose (AMPR ROSE) \n    ipx (Novell IPX) ddp (Appletalk DDP) ec (Econet) \n    ash (Ash) x25 (CCITT X.25) \n'),
+}
+
+# (the name list without the one the earlier rounds keep out of netstat's texts)
+TPOT_NETSTAT_VERSION = {
+    '2.10': 'net-tools 2.10\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n',
+    '2.10-alpha': 'net-tools 2.10-alpha\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n',
+}
+TPOT_NET_XFRM = "Usage: ip xfrm XFRM-OBJECT { COMMAND | help }\nwhere  XFRM-OBJECT := state | policy | monitor\n"
+TPOT_NET_DEFAULT = {
+    "tools": {"ip": {"style": "iproute2", "version": "6.1.0", "libbpf": ""},
+              "ss": {"style": "iproute2", "version": "6.1.0", "libbpf": ""},
+              "ifconfig": {"style": "net-tools", "version": "2.10", "si": False, "narrow": False, "basename": False},
+              "netstat": {"style": "net-tools", "version": "2.10", "si": False, "narrow": False, "basename": False}},
+    "interfaces": [{"name": "eth0", "mac": "52:54:00:4a:1c:7e", "inet": "10.0.2.15", "prefix": 24,
+                    "broadcast": "10.0.2.255", "network": "10.0.2.0", "netmask": "255.255.255.0",
+                    "inet6": "fe80::5054:ff:fe4a:1c7e", "mtu": 1500, "qdisc": "fq_codel", "state": "UP",
+                    "dynamic": False, "rates": [1200, 400]}],
+    "gateway": "10.0.2.2", "gateway_mac": "52:55:0a:00:02:02", "manager": "static", "kernel": [6, 1],
+    "booted_at": 0, "sockets": [], "family": "debian", "resolved": False, "gateway_name": ""}
+
+
+@functools.cache
+def tpot_net_data(path: str) -> dict:
+    """The network of [shell] network; without one a host with one interface."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8")) if path else None
+    except (OSError, ValueError):
+        data = None
+    return data if isinstance(data, dict) and isinstance(data.get("interfaces"), list) else TPOT_NET_DEFAULT
+
+
+def tpot_net_version(text: str) -> tuple:
+    """(major, minor) of an iproute2 version: 6.1.0 -> (6, 1), ss170501 -> (4, 11), ss110629 -> (3, 0)."""
+    snapshots = {"ss110629": (3, 0), "ss130716": (3, 10), "ss170501": (4, 11), "ss171113": (4, 14)}
+    if text in snapshots:
+        return snapshots[text]
+    found = re.findall(r"\d+", text)
+    return tuple(int(x) for x in found[:2]) if found else (6, 1)
+
+
+class TpotNetTool(HoneyPotCommand):
+    """What ip, ss, netstat and ifconfig share: the persona's network, its interfaces with their
+    traffic since boot, the sockets and the session's connection."""
+
+    tool = ""
+
+    def start(self) -> None:
+        self.net = tpot_net_data(CowrieConfig.get("shell", "network", fallback=""))
+        self.style = self.net["tools"].get(self.tool) or {"style": "iproute2", "version": "6.1.0"}
+        self.tpot_out, self.tpot_err = [], []
+        try:
+            code = self.tpot_main(list(self.args))
+        except Exception:  # noqa: BLE001 - the command ends, the session goes on; the error goes to Cowrie's log
+            log.err(None, f"{self.tool} of the persona ended on an internal error")
+            code = 1
+        if self.tpot_out:
+            self.write("".join(self.tpot_out))
+        if self.tpot_err:
+            self.errorWrite("".join(self.tpot_err))
+        self.exit_code = code
+        self.exit()
+
+    def tpot_main(self, args: list[str]) -> int:
+        raise NotImplementedError
+
+    def put(self, text: str) -> None:
+        self.tpot_out.append(text)
+
+    def warn(self, text: str) -> None:
+        self.tpot_err.append(text)
+
+    # --- the persona's network -------------------------------------------------------------
+
+    def interfaces(self) -> list[dict]:
+        """lo and the persona's interfaces, with their index and their traffic since boot."""
+        up = max(60.0, time.time() - float(self.net.get("booted_at") or 0)) if self.net.get("booted_at") else 3600.0
+        found = [{"name": "lo", "loopback": True, "mac": "00:00:00:00:00:00", "inet": "127.0.0.1", "prefix": 8,
+                  "inet6": "::1", "mtu": 16436 if self.net["kernel"] < [3, 6] else 65536, "qdisc": "noqueue",
+                  "state": "UNKNOWN", "network": "127.0.0.0", "netmask": "255.0.0.0", "dynamic": False}]
+        found += [dict(iface) for iface in self.net["interfaces"]]
+        total = [0, 0]
+        for index, iface in enumerate(found, 1):
+            iface["index"] = index
+            rates = iface.get("rates")
+            if rates:
+                rx = int(rates[0] * up)
+                rxp = rx // max(64, int(rates[1]))
+                iface["rx"], iface["tx"] = (rx, rxp), (int(rx * 0.37), int(rxp * 0.71))
+                total = [total[0] + rx // 50, total[1] + rxp // 60]
+            else:
+                iface["rx"] = iface["tx"] = (0, 0)
+        found[0]["rx"] = found[0]["tx"] = (total[0], total[1])
+        return found
+
+    def find_iface(self, name: str):
+        return next((i for i in self.interfaces() if i["name"] == name), None)
+
+    def session(self):
+        """(local port, peer address, peer port) of the session's connection."""
+        local, peer, port = 22, "", 0
+        try:
+            peer = str(getattr(self.protocol, "clientIP", "") or getattr(self.protocol, "realClientIP", ""))
+            port = int(getattr(self.protocol, "realClientPort", 0) or 0)
+            transport = self.protocol.getProtoTransport()
+            local = int(transport.transport.getHost().port)
+        except Exception:  # noqa: BLE001 - a protocol without a transport (tests, exec): the SSH port
+            pass
+        if local not in (22, 23):
+            local = 23 if "telnet" in type(self.protocol).__name__.lower() else 22
+        return local, peer, port
+
+    def sockets(self) -> list[dict]:
+        """The daemons' sockets and the session's connection (tcp, established)."""
+        found = [dict(s, state="LISTEN" if s["proto"] == "tcp" else "UNCONN") for s in self.net.get("sockets", [])]
+        local, peer, port = self.session()
+        if peer and port:
+            try:
+                family = ipaddress.ip_address(peer).version
+            except ValueError:
+                family = 4
+            listener = next((s for s in found if s["proto"] == "tcp" and s["port"] == local), None)
+            address = self.net["interfaces"][0]["inet"]
+            if family == 6:
+                address = "::ffff:" + address
+                peer = peer if ":" in peer else "::ffff:" + peer
+            found.append({"proto": "tcp", "family": family, "address": address, "port": local, "peer": peer,
+                          "peer_port": port, "state": "ESTAB", "pid": listener["pid"] if listener else 0,
+                          "comm": listener["comm"] if listener else "", "cmdline": listener["cmdline"] if listener
+                          else "", "fd": 4, "backlog": 36})
+        return found
+
+    def routes(self) -> list[dict]:
+        main = self.net["interfaces"][0]
+        found = [{"dst": "0.0.0.0", "mask": "0.0.0.0", "gateway": self.net["gateway"], "iface": main["name"],
+                  "flags": "UG"},
+                 {"dst": main["network"], "mask": main["netmask"], "gateway": "0.0.0.0", "iface": main["name"],
+                  "flags": "U"}]
+        if self.net["manager"] == "networkd":
+            found.append({"dst": self.net["gateway"], "mask": "255.255.255.255", "gateway": "0.0.0.0",
+                          "iface": main["name"], "flags": "UH"})
+        for iface in self.net["interfaces"][1:]:
+            if iface.get("inet"):
+                found.append({"dst": iface["network"], "mask": iface["netmask"], "gateway": "0.0.0.0",
+                              "iface": iface["name"], "flags": "U"})
+        if len(self.net["interfaces"]) > 1 and self.net["interfaces"][1].get("inet") and \
+                self.net["gateway"].rsplit(".", 1)[0] == self.net["interfaces"][1]["inet"].rsplit(".", 1)[0]:
+            # a router: the default route is the one of its WAN
+            found[0]["iface"] = self.net["interfaces"][1]["name"]
+            found[1], found[-1] = found[-1], found[1]
+            found[1:] = sorted(found[1:], key=lambda r: r["iface"] != self.net["interfaces"][1]["name"])
+        return found
+
+    def lease(self, iface: dict) -> int:
+        lease = int(iface.get("lease") or 86400)
+        up = int(time.time() - float(self.net.get("booted_at") or time.time() - 3600))
+        return lease - (up % max(1, lease // 2))
+
+
+# --- ip ---------------------------------------------------------------------------------------
+
+class Command_tpot_ip(TpotNetTool):
+    """ip of iproute2 (its version) or of BusyBox."""
+
+    tool = "ip"
+
+    def tpot_main(self, args: list[str]) -> int:
+        self.busybox = self.style["style"] == "busybox"
+        self.version = tpot_net_version(self.style.get("version", "6.1.0"))
+        self.family, self.brief, self.oneline, self.stats = 0, False, False, False
+        while args and args[0].startswith("-") and args[0] != "-":
+            opt = args.pop(0)
+            word = opt.lstrip("-")
+            if word in ("4",):
+                self.family = 4
+            elif word in ("6",):
+                self.family = 6
+            elif word in ("0",):
+                self.family = -1
+            elif not self.busybox and word and "brief".startswith(word) and len(word) >= 2:
+                self.brief = True
+            elif word and "oneline".startswith(word):
+                self.oneline = True
+            elif not self.busybox and word and "statistics".startswith(word):
+                self.stats = True
+            elif word and "family".startswith(word) and args:
+                fam = args.pop(0)
+                self.family = {"inet": 4, "inet6": 6, "link": -1}.get(fam, 0)
+            elif not self.busybox and word and "Version".startswith(word) and word[0] == "V":
+                libbpf = self.style.get("libbpf")
+                self.put(f"ip utility, iproute2-{self.style.get('version')}" + (f", libbpf {libbpf}" if libbpf else "")
+                         + "\n")
+                return 0
+            elif not self.busybox and word and ("details".startswith(word) or "resolve".startswith(word)
+                                               or "human-readable".startswith(word) or "color".startswith(word)
+                                               or "Numeric".startswith(word) or word in ("iec", "all")):
+                continue
+            else:
+                if self.busybox:
+                    return self.bb_usage()
+                self.warn(f'Option "{opt}" is unknown, try "ip -help".\n')
+                return 255
+        if not args:
+            return self.bb_usage() if self.busybox else self.usage()
+        word = args.pop(0)
+        if self.busybox:
+            objects = {"address": self.address, "route": self.route, "link": self.link, "neigh": self.neigh,
+                       "rule": self.rule, "tunnel": lambda a: 0}
+            found = next((f for name, f in objects.items() if name.startswith(word)), None)
+            return found(args) if found else self.bb_usage()
+        name = next((n for n in TPOT_NET_OBJECTS if n.startswith(word)), None)
+        if name is None:
+            self.warn(f'Object "{word}" is unknown, try "ip help".\n')
+            return 1
+        handler = {"address": self.address, "route": self.route, "link": self.link, "neighbor": self.neigh,
+                   "neighbour": self.neigh, "rule": self.rule, "help": lambda a: self.usage(),
+                   "xfrm": lambda a: self.xfrm(a)}.get(name)
+        return handler(args) if handler else 0
+
+    def usage(self) -> int:
+        v = self.version
+        key = "4.11" if v < (5, 0) else "5.15" if v < (6, 0) else "6.1" if v < (6, 10) else "6.15"
+        self.warn(TPOT_IP_USAGE[key])
+        return 255
+
+    def bb_usage(self) -> int:
+        banner = CowrieConfig.get("shell", "text_banner", fallback="") or self.style.get("version", "")
+        numbers = tuple(int(x) for x in re.findall(r"\d+", banner)[:2]) or (1, 33)
+        if numbers < (1, 28):
+            self.warn(f"{banner} multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [COMMAND]\n\n"
+                      "OPTIONS := -f[amily] inet|inet6|link | -o[neline]\nCOMMAND :=\n"
+                      "ip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\n"
+                      "ip route list|flush|add|del|change|append|replace|test ROUTE\n"
+                      "ip link set IFACE [up|down] [arp on|off] | show [IFACE]\n"
+                      "ip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit]\n\t[remote ADDR] [local ADDR] [ttl TTL]\n"
+                      "ip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n")
+            return 1
+        if numbers >= (1, 36):
+            link = ("ip link set IFACE [up|down] [arp on|off] [multicast on|off]\n\t[promisc on|off] [mtu NUM] "
+                    "[name NAME] [qlen NUM] [address MAC]\n\t[master IFACE | nomaster] [netns PID]\n")
+        else:
+            link = ("ip link set IFACE [up|down] [arp on|off] [multicast on|off]\n\t[promisc on|off] [mtu NUM] "
+                    "[name NAME] [qlen NUM] [address MAC]\n\t[master IFACE | nomaster]\n")
+        self.warn(f"{banner} multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [ARGS]\n\n"
+                 "OPTIONS := -f[amily] inet|inet6|link | -o[neline]\n\n"
+                 "ip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\n"
+                 "ip route list|flush|add|del|change|append|replace|test ROUTE\n" + link
+                 + "ip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit] [remote ADDR] [local ADDR] [ttl TTL]\n"
+                 "ip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n")
+        return 1
+
+    def xfrm(self, args: list[str]) -> int:
+        if not args:
+            self.warn(TPOT_NET_XFRM)
+            return 255
+        return 0
+
+    def command_and_device(self, args: list[str], object_name: str):
+        """(command, device or None, error status or None) of `show [dev] IFACE`."""
+        command = "show"
+        if args and not args[0].startswith("dev"):
+            word = args[0]
+            if word in ("show", "list", "lst", "sh", "ls") or "show".startswith(word):
+                args = args[1:]
+            elif word in ("add", "del", "delete", "change", "replace", "flush", "set", "append", "test", "get",
+                          "save", "restore"):
+                return word, None, None
+            elif not self.busybox and self.find_iface(word) is None:
+                self.warn(f'Command "{word}" is unknown, try "ip {object_name} help".\n')
+                return command, None, 255
+        device = None
+        if args:
+            device = args[1] if args[0] == "dev" and len(args) > 1 else args[0]
+            if self.find_iface(device) is None:
+                if self.busybox:
+                    self.warn(f"ip: can't find device '{device}'\n")
+                else:
+                    self.warn(f'Device "{device}" does not exist.\n')
+                return command, None, 1
+        return command, device, None
+
+    def privileged(self) -> bool:
+        try:
+            return int(self.protocol.user.uid) == 0
+        except Exception:  # noqa: BLE001
+            return True
+
+    def change(self, command: str) -> int:
+        if command in ("save", "test"):
+            return 0
+        if not self.privileged():
+            self.warn("RTNETLINK answers: Operation not permitted\n")
+            return 2
+        return 0
+
+    def flags(self, iface: dict) -> str:
+        if iface.get("loopback"):
+            return "<LOOPBACK,UP,LOWER_UP>"
+        if iface.get("nocarrier"):
+            return "<NO-CARRIER,BROADCAST,MULTICAST,UP>"
+        if iface.get("state") == "DOWN":
+            return "<BROADCAST,MULTICAST>"
+        return "<BROADCAST,MULTICAST,UP,LOWER_UP>"
+
+    def header(self, iface: dict, link: bool = False) -> str:
+        """The first line of an interface (ip link / ip address)."""
+        qlen = 1000
+        if self.busybox:
+            # the BusyBox of a uClibc build prints no state (its headers have no IFF_DORMANT)
+            libc = CowrieConfig.get("shell", "text_libc", fallback="glibc")
+            state = "" if libc == "uclibc" else f"state {iface['state']} "
+            return (f"{iface['index']}: {iface['name']}: {self.flags(iface)} mtu {iface['mtu']} qdisc {iface['qdisc']} "
+                    f"{state}qlen {qlen}")
+        if self.version < (3, 2):
+            return (f"{iface['index']}: {iface['name']}: {self.flags(iface)} mtu {iface['mtu']} qdisc {iface['qdisc']} "
+                    f"state {iface['state']} " + ("" if iface.get("loopback") else f"qlen {qlen}"))
+        if self.family == 6 and not link:
+            return f"{iface['index']}: {iface['name']}: {self.flags(iface)} mtu {iface['mtu']} state {iface['state']} qlen {qlen}"
+        return (f"{iface['index']}: {iface['name']}: {self.flags(iface)} mtu {iface['mtu']} qdisc {iface['qdisc']} "
+                f"state {iface['state']} " + ("mode DEFAULT " if link else "") + f"group default qlen {qlen}")
+
+    def link_lines(self, iface: dict) -> list[str]:
+        if iface.get("loopback"):
+            lines = ["    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00"]
+        else:
+            lines = [f"    link/ether {iface['mac']} brd ff:ff:ff:ff:ff:ff"]
+        if iface.get("altname") and not self.busybox and self.version >= (5, 4):
+            lines.append(f"    altname {iface['altname']}")
+        return lines
+
+    def address_lines(self, iface: dict) -> list[tuple[int, str, str]]:
+        """(family, the address line, the lifetime line) of an interface."""
+        kernel = tuple(self.net.get("kernel", [6, 1]))
+        proto = not self.busybox and self.version >= (6, 3) and kernel >= (6, 3)
+        lines = []
+        if iface.get("inet"):
+            if iface.get("loopback"):
+                text = "    inet 127.0.0.1/8 scope host lo"
+                lft = "       valid_lft forever preferred_lft forever"
+            else:
+                metric = " metric 100" if (self.net["manager"] == "networkd" and iface.get("dynamic")
+                                           and not self.busybox) else ""
+                flags = ("dynamic " if iface.get("dynamic") else "") + ("noprefixroute " if iface.get("noprefixroute")
+                                                                         else "")
+                text = (f"    inet {iface['inet']}/{iface['prefix']}{metric} brd {iface['broadcast']} scope global "
+                        f"{flags}{iface['name']}")
+                if iface.get("dynamic"):
+                    left = self.lease(iface)
+                    lft = f"       valid_lft {left}sec preferred_lft {left}sec"
+                else:
+                    lft = "       valid_lft forever preferred_lft forever"
+            lines.append((4, text, lft))
+        if iface.get("inet6"):
+            if iface.get("loopback"):
+                text = "    inet6 ::1/128 scope host " + ("proto kernel_lo " if proto else "")
+            else:
+                text = (f"    inet6 {iface['inet6']}/64 scope link " + ("noprefixroute " if iface.get("noprefixroute")
+                                                                         else "")
+                        + ("proto kernel_ll " if proto else ""))
+            lines.append((6, text, "       valid_lft forever preferred_lft forever"))
+        return lines
+
+    def address(self, args: list[str]) -> int:
+        command, device, error = self.command_and_device(args, "address")
+        if error is not None:
+            return error
+        if command != "show":
+            return self.change(command)
+        for iface in self.interfaces():
+            if device and iface["name"] != device:
+                continue
+            addresses = [a for a in self.address_lines(iface) if not self.family or self.family == a[0]]
+            if self.brief:
+                state = iface["state"]
+                shown = "".join(f"{iface['inet']}/{iface['prefix']} " if fam == 4 else
+                                ("::1/128 " if iface.get("loopback") else f"{iface['inet6']}/64 ")
+                                for fam, _, _ in addresses)
+                self.put(f"{iface['name']:<16} {state:<14} {shown}\n")
+                continue
+            if self.oneline:
+                for fam, text, lft in addresses:
+                    self.put(f"{iface['index']}: {iface['name']}    {text.strip()}\\{lft}\n")
+                continue
+            if self.family and not addresses:
+                continue
+            self.put(self.header(iface) + "\n")
+            if not self.family or self.family == -1:
+                self.put("\n".join(self.link_lines(iface)) + "\n")
+            for _, text, lft in addresses:
+                self.put(f"{text}\n{lft}\n")
+        return 0
+
+    def link(self, args: list[str]) -> int:
+        command, device, error = self.command_and_device(args, "link")
+        if error is not None:
+            return error
+        if command != "show":
+            return self.change(command)
+        for iface in self.interfaces():
+            if device and iface["name"] != device:
+                continue
+            if self.brief:
+                self.put(f"{iface['name']:<16} {iface['state']:<14} {iface['mac']} {self.flags(iface)} \n")
+                continue
+            self.put(self.header(iface, link=True) + "\n" + "\n".join(self.link_lines(iface)) + "\n")
+            if self.stats:
+                self.put(self.stats_lines(iface))
+        return 0
+
+    def stats_lines(self, iface: dict) -> str:
+        rx, tx = iface["rx"], iface["tx"]
+        if self.version < (5, 0):
+            return (f"    RX: bytes  packets  errors  dropped overrun mcast   \n    {rx[0]:<10} {rx[1]:<8} {0:<7} {0:<7} "
+                    f"{0:<7} {0:<7} \n    TX: bytes  packets  errors  dropped carrier collsns \n    {tx[0]:<10} {tx[1]:<8} "
+                    f"{0:<7} {0:<7} {0:<7} {0:<7} \n")
+        return ("    RX:  bytes packets errors dropped  missed   mcast           \n"
+                f"    {rx[0]:>10} {rx[1]:>7} {0:>6} {0:>7} {0:>7} {0:>7} \n"
+                "    TX:  bytes packets errors dropped carrier collsns           \n"
+                f"    {tx[0]:>10} {tx[1]:>7} {0:>6} {0:>7} {0:>7} {0:>7} \n")
+
+    def route(self, args: list[str]) -> int:
+        if args and args[0] not in ("show", "list", "ls", "lst") and not "show".startswith(args[0]):
+            if args[0] == "get" and len(args) > 1:
+                main = self.net["interfaces"][0]
+                self.put(f"{args[1]} via {self.net['gateway']} dev {main['name']} src {main['inet']} uid 0 \n"
+                         "    cache \n")
+                return 0
+            if self.busybox:
+                return self.change(args[0])
+            if args[0] in ("add", "del", "delete", "change", "replace", "append", "flush"):
+                return self.change(args[0])
+            self.warn(f'Command "{args[0]}" is unknown, try "ip route help".\n')
+            return 255
+        if self.family == 6:
+            if not self.busybox:
+                tail = " pref medium " if self.version >= (4, 0) else " "
+                self.put(f"::1 dev lo proto kernel metric 256{tail}\n")
+                for iface in self.net["interfaces"]:
+                    if iface.get("inet6") and iface.get("state") == "UP":
+                        self.put(f"fe80::/64 dev {iface['name']} proto kernel metric 256{tail}\n")
+            return 0
+        manager = self.net["manager"]
+        main = self.net["interfaces"][0]
+        for entry in self.routes():
+            dst, iface = entry["dst"], entry["iface"]
+            src = next((i["inet"] for i in self.net["interfaces"] if i["name"] == iface), main["inet"])
+            prefix = ipaddress.IPv4Network(f"{dst}/{entry['mask']}").prefixlen
+            if self.busybox or manager == "device":
+                if entry["flags"] == "UG":
+                    line = f"default via {entry['gateway']} dev {iface} "
+                elif self.version < (3, 2) and not self.busybox:
+                    line = f"{dst}/{prefix} dev {iface}  proto kernel  scope link  src {src} "
+                elif self.busybox:
+                    line = f"{dst}/{prefix} dev {iface} scope link  src {src} "
+                else:
+                    line = f"{dst}/{prefix} dev {iface} proto kernel scope link src {src} "
+            elif manager == "networkd":
+                if entry["flags"] == "UG":
+                    line = f"default via {entry['gateway']} dev {iface} proto dhcp src {src} metric 100 "
+                elif entry["flags"] == "UH":
+                    line = f"{dst} dev {iface} proto dhcp scope link src {src} metric 100 "
+                else:
+                    line = f"{dst}/{prefix} dev {iface} proto kernel scope link src {src} metric 100 "
+            elif manager in ("nm", "nm-old"):
+                if entry["flags"] == "UG":
+                    line = f"default via {entry['gateway']} dev {iface} proto dhcp " + \
+                        ("" if manager == "nm-old" else f"src {src} ") + "metric 100 "
+                else:
+                    line = f"{dst}/{prefix} dev {iface} proto kernel scope link src {src} metric 100 "
+            else:
+                if entry["flags"] == "UG":
+                    line = f"default via {entry['gateway']} dev {iface} proto static "
+                else:
+                    line = f"{dst}/{prefix} dev {iface} proto kernel scope link src {src} "
+            self.put(line + "\n")
+        return 0
+
+    def neigh(self, args: list[str]) -> int:
+        if args and args[0] not in ("show", "list", "ls") and not "show".startswith(args[0]):
+            return self.change(args[0])
+        iface = next((r["iface"] for r in self.routes() if r["flags"] == "UG"), self.net["interfaces"][0]["name"])
+        tail = " " if (not self.busybox and self.version >= (6, 0)) else ""
+        if self.family != 6:
+            self.put(f"{self.net['gateway']} dev {iface} lladdr {self.net['gateway_mac']} REACHABLE{tail}\n")
+        return 0
+
+    def rule(self, args: list[str]) -> int:
+        if args and args[0] not in ("show", "list", "ls"):
+            return self.change(args[0])
+        tail = " " if (not self.busybox and self.version < (5, 0)) else ""
+        self.put(f"0:\tfrom all lookup local{tail}\n32766:\tfrom all lookup main{tail}\n"
+                 f"32767:\tfrom all lookup default{tail}\n")
+        return 0
+
+
+# --- ss ---------------------------------------------------------------------------------------
+
+class Command_tpot_ss(TpotNetTool):
+    """ss of iproute2: the columns of 4.15 and later (widths of their content), the fixed widths
+    of older releases."""
+
+    tool = "ss"
+
+    def tpot_main(self, args: list[str]) -> int:
+        self.version = tpot_net_version(self.style.get("version", "6.1.0"))
+        kinds, listen, every, numeric, processes, family, header, summary = set(), False, False, False, False, 0, True, False
+        for arg in args:
+            if arg.startswith("--"):
+                word = arg[2:]
+                table = {"tcp": "t", "udp": "u", "unix": "x", "raw": "w", "listening": "l", "all": "a",
+                         "numeric": "n", "processes": "p", "ipv4": "4", "ipv6": "6", "no-header": "H",
+                         "summary": "s", "version": "V", "help": "h", "extended": "e", "options": "o",
+                         "memory": "m", "info": "i", "resolve": "r"}
+                letter = table.get(word) or next((v for k, v in table.items() if k.startswith(word)), None)
+                if letter is None:
+                    self.warn(f"ss: unrecognized option '{arg}'\n" + self.help_text())
+                    return 1
+                letters = letter
+            elif arg.startswith("-") and len(arg) > 1:
+                letters = arg[1:]
+            else:
+                break  # a filter: shown as without it
+            for letter in letters:
+                if letter == "t":
+                    kinds.add("tcp")
+                elif letter == "u":
+                    kinds.add("udp")
+                elif letter == "x":
+                    kinds.add("unix")
+                elif letter == "w":
+                    kinds.add("raw")
+                elif letter == "l":
+                    listen = True
+                elif letter == "a":
+                    every = True
+                elif letter == "n":
+                    numeric = True
+                elif letter == "p":
+                    processes = True
+                elif letter == "4":
+                    family = 4
+                elif letter == "6":
+                    family = 6
+                elif letter == "H":
+                    header = False
+                elif letter == "s":
+                    summary = True
+                elif letter == "V":
+                    self.put(f"ss utility, iproute2-{self.style.get('version')}\n")
+                    return 0
+                elif letter == "h":
+                    self.put(self.help_text())
+                    return 0
+                elif letter == "Z" or letter == "z":
+                    self.warn("ss: SELinux is not enabled.\n")
+                    return 1
+                elif letter in "eomirEKSdAfNbDFTMy0":
+                    continue
+                else:
+                    self.warn(f"ss: invalid option -- '{letter}'\n" + self.help_text())
+                    return 1
+        sockets = self.sockets()
+        if summary:
+            return self.summary(sockets)
+        many_kinds = len(kinds) != 1
+        shown = []
+        for s in sockets:
+            if kinds and s["proto"] not in kinds:
+                continue
+            if family and s["family"] != family:
+                continue
+            listening = s["state"] in ("LISTEN", "UNCONN")
+            if listen and not listening:
+                continue
+            if not listen and not every and listening:
+                continue
+            shown.append(s)
+        shown.sort(key=lambda s: (s["proto"] != "udp", s["state"] != "LISTEN" and s["state"] != "UNCONN"))
+        rows = [self.row(s, numeric, processes, many_kinds) for s in shown]
+        if self.version < (4, 15):
+            self.render_old(rows, header, many_kinds, len({"LISTEN"} if listen and not every else {1, 2}) > 1,
+                            processes)
+        else:
+            self.render(rows, header, many_kinds, processes)
+        return 0
+
+    def help_text(self) -> str:
+        v = self.version
+        return TPOT_SS_HELP["4.11" if v < (5, 0) else "5.15" if v < (6, 0) else "6.1" if v < (6, 10) else "6.15"]
+
+    def endpoint(self, address: str, port, numeric: bool, old: bool):
+        host, _, ifname = address.partition("%")
+        if ":" in host:
+            shown = f"[{host}]" if (host != "::" or True) else "*"
+        elif old and host == "0.0.0.0":
+            shown = "*"
+        else:
+            shown = host
+        if ifname:
+            shown += "%" + ifname
+        if port == "*":
+            service = "*"
+        else:
+            service = str(port) if numeric else TPOT_NET_SERVICES.get(int(port), str(port))
+        return shown, service
+
+    def row(self, s: dict, numeric: bool, processes: bool, many: bool):
+        old = self.version < (4, 15)
+        local = self.endpoint(s["address"], s["port"], numeric, old)
+        if s.get("peer"):
+            peer = self.endpoint(s["peer"], s["peer_port"], True, old)
+        else:
+            peer = ("[::]" if s["family"] == 6 else ("*" if old else "0.0.0.0")), "*"
+        state = {"ESTAB": "ESTAB", "LISTEN": "LISTEN", "UNCONN": "UNCONN"}[s["state"]]
+        recv = 0
+        send = s.get("backlog", 0) if s["state"] == "LISTEN" else (36 if s["state"] == "ESTAB" else 0)
+        process = f' users:(("{s["comm"][:15]}",pid={s["pid"]},fd={s["fd"]}))' if processes and s.get("pid") else ""
+        return {"netid": s["proto"], "state": state, "recv": str(recv), "send": str(send), "local": local,
+                "peer": peer, "process": process}
+
+    def render(self, rows: list[dict], header: bool, netid: bool, processes: bool) -> None:
+        """The column renderer of ss (no terminal: every column as wide as its widest field)."""
+        columns = [("netid", "Netid", "", "left")] if netid else []
+        columns += [("state", "State", " ", "left"), ("recv", "Recv-Q", " ", "left"), ("send", "Send-Q", " ", "left"),
+                    ("laddr", "Local Address:", " ", "right"), ("lport", "Port", "", "left"),
+                    ("paddr", "Peer Address:", " ", "right"), ("pport", "Port", "", "left")]
+        with_process = processes or self.version < (6, 10)
+        if with_process:
+            columns.append(("process", "Process", "", "left"))
+        table = []
+        for row in rows:
+            fields = dict(row)
+            fields["laddr"], fields["lport"] = row["local"][0] + ":", row["local"][1]
+            fields["paddr"], fields["pport"] = row["peer"][0] + ":", row["peer"][1]
+            table.append(fields)
+        lines = ([{key: title for key, title, _, _ in columns}] if header else []) + table
+        widths = {}
+        for at, (key, title, delim, _) in enumerate(columns):
+            longest = max([len(line.get(key, "")) for line in lines] + [len(title) if header else 0])
+            widths[key] = longest + (len(delim) if at and longest else 0)
+        for line in lines:
+            out = []
+            for at, (key, title, delim, align) in enumerate(columns):
+                value = line.get(key, "")
+                printed = delim if at else ""
+                if align == "right":
+                    out.append(printed + " " * max(0, widths[key] - len(printed) - len(value)) + value)
+                else:
+                    out.append(printed + value + " " * max(0, widths[key] - len(printed) - len(value)))
+            self.put("".join(out) + "\n")
+
+    def render_old(self, rows: list[dict], header: bool, netid: bool, states: bool, processes: bool) -> None:
+        """The fixed widths of ss before 4.15 (screen width 80)."""
+        netid_width = 5 if netid else 0
+        state_width = 10
+        width = 80
+        if self.version < (4, 14):
+            width -= netid_width + 1
+            width -= state_width + 1
+        else:
+            if netid_width:
+                width -= netid_width + 1
+            width -= state_width + 1
+        width -= 14
+        if width & 1:
+            if netid_width:
+                netid_width += 1
+            else:
+                state_width += 1
+        width = width // 2 - 1
+        serv_width = 5
+        if width < 15 + serv_width + 1:
+            width = 15 + serv_width + 1
+        addr_width = width - serv_width - 1 - 13
+        serv_width += 13
+        if header:
+            text = (f"{'Netid':<{netid_width}} " if netid_width else "") + f"{'State':<{state_width}} "
+            text += f"{'Recv-Q':<6} {'Send-Q':<6} "
+            text += f"{'Local Address':>{addr_width}}:{'Port':<{serv_width}} {'Peer Address':>{addr_width}}:{'Port':<{serv_width}}\n"
+            self.put(text)
+        for row in rows:
+            text = (f"{row['netid']:<{netid_width}} " if netid_width else "") + f"{row['state']:<{state_width}} "
+            text += f"{row['recv']:<6} {row['send']:<6} "
+            for host, service in (row["local"], row["peer"]):
+                est = addr_width
+                if ":" in host and len(host) > addr_width:
+                    est = addr_width + ((len(host) - addr_width + 3) // 4) * 4
+                text += f"{host:>{est}}:{service:<{serv_width}} "
+            self.put(text + row["process"] + "\n")
+
+    def summary(self, sockets: list[dict]) -> int:
+        tcp = [s for s in sockets if s["proto"] == "tcp"]
+        udp = [s for s in sockets if s["proto"] == "udp"]
+        estab = sum(1 for s in tcp if s["state"] == "ESTAB")
+        tcp4, tcp6 = sum(1 for s in tcp if s["family"] == 4), sum(1 for s in tcp if s["family"] == 6)
+        udp4, udp6 = sum(1 for s in udp if s["family"] == 4), sum(1 for s in udp if s["family"] == 6)
+        total = 120 + len(sockets)
+        self.put(f"Total: {total}\nTCP:   {len(tcp)} (estab {estab}, closed 0, orphaned 0, timewait 0)\n\n"
+                 "Transport Total     IP        IPv6\n"
+                 f"RAW\t  {0:<9} {0:<9} {0:<9}\nUDP\t  {len(udp):<9} {udp4:<9} {udp6:<9}\n"
+                 f"TCP\t  {len(tcp):<9} {tcp4:<9} {tcp6:<9}\nINET\t  {len(tcp) + len(udp):<9} {tcp4 + udp4:<9} "
+                 f"{tcp6 + udp6:<9}\nFRAG\t  {0:<9} {0:<9} {0:<9}\n\n")
+        return 0
+
+
+# --- netstat ----------------------------------------------------------------------------------
+
+class Command_tpot_netstat(TpotNetTool):
+    """netstat of net-tools or of BusyBox."""
+
+    tool = "netstat"
+
+    def tpot_main(self, args: list[str]) -> int:
+        busybox = self.style["style"] == "busybox"
+        opts = set()
+        longs = {"tcp": "t", "udp": "u", "raw": "w", "unix": "x", "listening": "l", "all": "a", "numeric": "n",
+                 "programs": "p", "route": "r", "interfaces": "i", "version": "V", "help": "h", "wide": "W",
+                 "extend": "e", "statistics": "s", "verbose": "v", "continuous": "c", "groups": "g",
+                 "numeric-hosts": "n", "numeric-ports": "n", "numeric-users": "n", "timers": "o"}
+        for arg in args:
+            if arg.startswith("--") and len(arg) > 2:
+                word = arg[2:]
+                letter = longs.get(word) or next((v for k, v in longs.items() if k.startswith(word)), None)
+                if letter is None or busybox:
+                    return self.bad_option(arg, True, busybox)
+                opts.add(letter)
+            elif arg.startswith("-") and len(arg) > 1:
+                for letter in arg[1:]:
+                    allowed = "raltuwxenWp" if busybox else "AaCcdeFgGhiIlMnNoprsStTuUvVwWxZ46"
+                    if letter not in allowed:
+                        return self.bad_option(letter, False, busybox)
+                    opts.add(letter)
+            else:
+                continue
+        if "V" in opts:
+            self.put(TPOT_NETSTAT_VERSION.get(self.style.get("version", "2.10"), TPOT_NETSTAT_VERSION["2.10"]))
+            return 0
+        if "h" in opts:
+            out, err = self.help_text()
+            self.put(out)
+            self.warn(err)
+            return 0
+        if "r" in opts:
+            return self.route_table("n" in opts)
+        if "i" in opts:
+            return self.interface_table()
+        if "s" in opts:
+            return 0
+        return self.connections(opts, busybox)
+
+    def help_text(self) -> str:
+        if self.style.get("basename"):
+            return TPOT_NETSTAT_HELP["2.0"]
+        return TPOT_NETSTAT_HELP["1.60" if self.style.get("narrow") else "2.10"]
+
+    def bad_option(self, opt: str, long: bool, busybox: bool) -> int:
+        if busybox:
+            self.warn(self.bb_usage(opt, long))
+            return 1
+        self.warn((f"netstat: unrecognized option '{opt}'\n" if long else f"netstat: invalid option -- '{opt}'\n")
+                 + "".join(self.help_text()))
+        return 3
+
+    def bb_usage(self, opt: str, long: bool) -> str:
+        banner = CowrieConfig.get("shell", "text_banner", fallback="") or self.style.get("version", "")
+        libc = CowrieConfig.get("shell", "text_libc", fallback="glibc")
+        word = opt[2:] if long else opt
+        if libc == "musl":
+            text = f"netstat: unrecognized option: {word}\n"
+        elif libc == "uclibc":
+            text = f"netstat: unrecognized option `{opt}'\n" if long else f"netstat: invalid option -- {opt}\n"
+        else:
+            text = f"netstat: unrecognized option '{opt}'\n" if long else f"netstat: invalid option -- '{opt}'\n"
+        return (text + f"{banner} multi-call binary.\n\nUsage: netstat [-ral] [-tuwx] [-enWp]\n\n"
+                "Display networking information\n\n\t-r\tRouting table\n\t-a\tAll sockets\n\t-l\tListening sockets\n"
+                "\t\tElse: connected sockets\n\t-t\tTCP sockets\n\t-u\tUDP sockets\n\t-w\tRaw sockets\n\t-x\tUnix sockets\n"
+                "\t\tElse: all socket types\n\t-e\tOther/more information\n\t-n\tDon't resolve names\n\t-W\tWide display\n"
+                "\t-p\tShow PID/program name for sockets\n")
+
+    def name_of(self, address: str, numeric: bool) -> str:
+        host = address.partition("%")[0]
+        if numeric:
+            return host
+        names = {"127.0.0.1": "localhost", "::1": "ip6-localhost" if self.net.get("family") not in ("rhel", "centos")
+                 else "localhost", "127.0.0.53": "_localdnsstub" if self.net.get("resolved") else "127.0.0.53",
+                 "0.0.0.0": "0.0.0.0", "::": "[::]"}
+        if host == self.net["interfaces"][0].get("inet") and self.net.get("gateway_name"):
+            try:
+                return str(self.protocol.hostname)
+            except Exception:  # noqa: BLE001
+                return host
+        return names.get(host, host)
+
+    def endpoint(self, address: str, port, numeric: bool, wide: bool, v6: bool) -> str:
+        if v6 and numeric:
+            host = address.partition("%")[0]
+            if host == "::":
+                host = "::"
+        else:
+            host = self.name_of(address, numeric)
+        service = "*" if port == "*" else (str(port) if numeric else TPOT_NET_SERVICES.get(int(port), str(port)))
+        if v6 and numeric and host == "::":
+            text = f":::{service}"
+        elif v6 and numeric:
+            text = f"{host}:{service}"
+        else:
+            text = f"{host}:{service}"
+        if not wide and len(text) > 23:
+            room = 22 - len(service)
+            text = f"{host[:room]}:{service}"
+        return text
+
+    def connections(self, opts: set, busybox: bool) -> int:
+        listen, every, numeric, programs, wide = "l" in opts, "a" in opts, "n" in opts, "p" in opts, "W" in opts
+        kinds = {k for k, letter in (("tcp", "t"), ("udp", "u"), ("raw", "w"), ("unix", "x")) if letter in opts}
+        if not kinds:
+            kinds = {"tcp", "udp", "raw", "unix"}
+        title = "(servers and established)" if every else "(only servers)" if listen else "(w/o servers)"
+        inet = kinds & {"tcp", "udp", "raw"}
+        privileged = True
+        try:
+            privileged = int(self.protocol.user.uid) == 0
+        except Exception:  # noqa: BLE001
+            pass
+        if programs and not privileged and not busybox:
+            self.warn("(Not all processes could be identified, non-owned process info\n"
+                     " will not be shown, you would have to be root to see it all.)\n")
+        if inet:
+            self.put(f"Active Internet connections {title}\n")
+            head = "Proto Recv-Q Send-Q Local Address           Foreign Address         State      "
+            if busybox:
+                self.put(head + " " + ("PID/Program name    " if programs else "") + "\n")
+            else:
+                self.put(head + (" PID/Program name    " if programs else "") + "\n")
+            rows = []
+            for s in self.sockets():
+                if s["proto"] not in inet:
+                    continue
+                listening = s["state"] in ("LISTEN", "UNCONN")
+                if (listen and not listening) or (not listen and not every and listening):
+                    continue
+                rows.append(s)
+            rows.sort(key=lambda s: (s["proto"] != "tcp", s["family"] if not busybox else 0))
+            for s in rows:
+                v6 = s["family"] == 6
+                proto = s["proto"] + ("6" if v6 and not busybox else "")
+                local = self.endpoint(s["address"], s["port"], numeric, wide, v6)
+                if s.get("peer"):
+                    peer = self.endpoint(s["peer"], s["peer_port"], True if not numeric else numeric, wide, v6)
+                else:
+                    peer = ":::*" if v6 and (numeric or busybox) else ("[::]:*" if v6 else "0.0.0.0:*")
+                state = {"LISTEN": "LISTEN", "ESTAB": "ESTABLISHED", "UNCONN": ""}[s["state"]]
+                send = 0 if s["state"] != "ESTAB" else 36
+                line = f"{proto:<5} {0:>6} {send:>6} {local:<23} {peer:<23} "
+                if busybox:
+                    line += f"{state:<12}"
+                    if programs:
+                        line += f"{s['pid']}/{s['comm']}" if s.get("pid") else "-"
+                else:
+                    line += f"{state:<11}"
+                    if programs:
+                        name = s.get("cmdline") or s["comm"]
+                        if name.startswith("/") or self.style.get("basename"):
+                            name = name.split()[0].rsplit("/", 1)[-1] if self.style.get("basename") else \
+                                name.rsplit("/", 1)[-1]
+                        prog = f"{s['pid']}/{name}"[:19] if (s.get("pid") and privileged) else "-"
+                        line += f" {prog:<20}"
+                self.put(line + "\n")
+        if "unix" in kinds:
+            self.put(f"Active UNIX domain sockets {title}\n")
+            self.put("Proto RefCnt Flags       Type       State         I-Node" + (" Path\n" if busybox else "   Path\n"))
+        return 0
+
+    def route_table(self, numeric: bool) -> int:
+        self.put("Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n")
+        for entry in self.routes():
+            dst, gateway = entry["dst"], entry["gateway"]
+            if not numeric:
+                dst = "default" if dst == "0.0.0.0" else dst
+                if gateway != "0.0.0.0" and self.net.get("gateway_name"):
+                    gateway = self.net["gateway_name"]
+            self.put(f"{dst:<15} {gateway:<15} {entry['mask']:<15} {entry['flags']:<5} {0:>5} {0:<6} {0:>5} "
+                     f"{entry['iface']}\n")
+        return 0
+
+    def interface_table(self) -> int:
+        narrow = self.style.get("narrow")
+        width = 8 if narrow else 15
+        self.put("Kernel Interface table\n" + f"{'Iface':<{width}} {'MTU':>5} {'RX-OK':>8} RX-ERR RX-DRP RX-OVR "
+                 f"{'TX-OK':>8} TX-ERR TX-DRP TX-OVR Flg\n")
+        for iface in sorted(self.interfaces(), key=lambda i: i["name"]):
+            if iface.get("state") == "DOWN":
+                continue
+            flags = "LRU" if iface.get("loopback") else "BMRU"
+            self.put(f"{iface['name']:<{width}} {iface['mtu']:>5} {iface['rx'][1]:>8} {0:>6} {0:>6} {0:<6} "
+                     f"{iface['tx'][1]:>8} {0:>6} {0:>6} {0:>6} {flags}\n")
+        return 0
+
+
+# --- ifconfig ---------------------------------------------------------------------------------
+
+def tpot_net_scaled(value: int, si: bool, busybox: bool) -> str:
+    """The size in brackets of ifconfig (one decimal, cut, as net-tools prints it)."""
+    if busybox:
+        units, base = ("B", "KiB", "MiB", "GiB", "TiB"), 1024
+    elif si:
+        units, base = ("B", "KB", "MB", "GB", "TB"), 1000
+    else:
+        units, base = ("B", "KiB", "MiB", "GiB", "TiB"), 1024
+    unit = 0
+    scaled = value
+    while scaled >= base and unit < len(units) - 1:
+        scaled /= base
+        unit += 1
+    whole = int(scaled)
+    tenth = int((scaled - whole) * 10)
+    return f"{whole}.{tenth} {units[unit]}"
+
+
+class Command_tpot_ifconfig(TpotNetTool):
+    """ifconfig of net-tools (the format of 2.10) or of BusyBox (the format of net-tools 1.60)."""
+
+    tool = "ifconfig"
+
+    def tpot_main(self, args: list[str]) -> int:
+        busybox = self.style["style"] == "busybox"
+        show_all, short = False, False
+        names = []
+        for arg in args:
+            if arg in ("-a",):
+                show_all = True
+            elif arg == "-s" and not busybox:
+                short = True
+            elif arg in ("-v",):
+                continue
+            elif arg in ("-h", "--help"):
+                if not busybox:
+                    out, err = self.help_text()
+                    self.put(out)
+                    self.warn(err)
+                    return 0
+                if busybox:
+                    self.warn(f"{CowrieConfig.get('shell', 'text_banner', fallback='BusyBox')} multi-call binary.\n\n"
+                             "Usage: ifconfig [-a] interface [address]\n\nConfigure a network interface\n\n")
+                    return 1
+                self.warn(self.help_text())
+                return 0
+            elif arg.startswith("-"):
+                if busybox:
+                    names.append(arg)
+                    continue
+                self.warn(f"ifconfig: option `{arg}' not recognised.\nifconfig: `--help' gives usage information.\n")
+                return 1
+            else:
+                names.append(arg)
+        interfaces = sorted(self.interfaces(), key=lambda i: i["name"])
+        if names:
+            iface = next((i for i in interfaces if i["name"] == names[0]), None)
+            if iface is None:
+                self.warn(f"{'ifconfig: ' if busybox else ''}{names[0]}: error fetching interface information: "
+                         "Device not found\n")
+                return 1
+            if len(names) > 1:
+                # a change of the interface: root only
+                try:
+                    if int(self.protocol.user.uid) != 0:
+                        self.warn("SIOCSIFFLAGS: Operation not permitted\n" if names[1] in ("up", "down") else
+                                 "SIOCSIFADDR: Operation not permitted\n")
+                        return 255 if not busybox else 1
+                except Exception:  # noqa: BLE001
+                    pass
+                return 0
+            interfaces = [iface]
+        elif not show_all:
+            interfaces = [i for i in interfaces if i.get("state") != "DOWN" or i.get("nocarrier")]
+        if short:
+            self.put("Iface      MTU    RX-OK RX-ERR RX-DRP RX-OVR    TX-OK TX-ERR TX-DRP TX-OVR Flg\n")
+            for iface in interfaces:
+                flags = "LRU" if iface.get("loopback") else "BMRU"
+                self.put(f"{iface['name']:<15} {iface['mtu']:>5} {iface['rx'][1]:>8} {0:>6} {0:>6} {0:<6} "
+                         f"{iface['tx'][1]:>8} {0:>6} {0:>6} {0:>6} {flags}\n")
+            return 0
+        for iface in interfaces:
+            self.put(self.busybox_block(iface) if busybox else self.block(iface))
+        return 0
+
+    def help_text(self) -> str:
+        if self.style.get("basename"):
+            return TPOT_IFCONFIG_HELP["2.0"]
+        return TPOT_IFCONFIG_HELP["1.60" if self.style.get("narrow") else "2.10"]
+
+    def block(self, iface: dict) -> str:
+        si = self.style.get("si")
+        if iface.get("loopback"):
+            text = (f"lo: flags=73<UP,LOOPBACK,RUNNING>  mtu {iface['mtu']}\n        inet 127.0.0.1  netmask 255.0.0.0\n"
+                    "        inet6 ::1  prefixlen 128  scopeid 0x10<host>\n        loop  txqueuelen 1000  (Local Loopback)\n")
+        else:
+            flags = "4099<UP,BROADCAST,MULTICAST>" if iface.get("nocarrier") else \
+                "4098<BROADCAST,MULTICAST>" if iface.get("state") == "DOWN" else "4163<UP,BROADCAST,RUNNING,MULTICAST>"
+            text = f"{iface['name']}: flags={flags}  mtu {iface['mtu']}\n"
+            if iface.get("inet"):
+                text += f"        inet {iface['inet']}  netmask {iface['netmask']}  broadcast {iface['broadcast']}\n"
+            if iface.get("inet6") and iface.get("state") == "UP":
+                text += f"        inet6 {iface['inet6']}  prefixlen 64  scopeid 0x20<link>\n"
+            text += f"        ether {iface['mac']}  txqueuelen 1000  (Ethernet)\n"
+        rx, tx = iface["rx"], iface["tx"]
+        return (text + f"        RX packets {rx[1]}  bytes {rx[0]} ({tpot_net_scaled(rx[0], si, False)})\n"
+                "        RX errors 0  dropped 0  overruns 0  frame 0\n"
+                f"        TX packets {tx[1]}  bytes {tx[0]} ({tpot_net_scaled(tx[0], si, False)})\n"
+                "        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n")
+
+    def busybox_block(self, iface: dict) -> str:
+        rx, tx = iface["rx"], iface["tx"]
+        if iface.get("loopback"):
+            text = (f"{'lo':<10}Link encap:Local Loopback  \n          inet addr:127.0.0.1  Mask:255.0.0.0\n"
+                    "          inet6 addr: ::1/128 Scope:Host\n"
+                    f"          UP LOOPBACK RUNNING  MTU:{iface['mtu']}  Metric:1\n")
+            queue = 1000
+        else:
+            text = f"{iface['name']:<10}Link encap:Ethernet  HWaddr {iface['mac'].upper()}  \n"
+            if iface.get("inet"):
+                text += f"          inet addr:{iface['inet']}  Bcast:{iface['broadcast']}  Mask:{iface['netmask']}\n"
+            if iface.get("inet6"):
+                text += f"          inet6 addr: {iface['inet6']}/64 Scope:Link\n"
+            text += f"          UP BROADCAST RUNNING MULTICAST  MTU:{iface['mtu']}  Metric:1\n"
+            queue = 1000
+        return (text + f"          RX packets:{rx[1]} errors:0 dropped:0 overruns:0 frame:0\n"
+                f"          TX packets:{tx[1]} errors:0 dropped:0 overruns:0 carrier:0\n"
+                f"          collisions:0 txqueuelen:{queue} \n"
+                f"          RX bytes:{rx[0]} ({tpot_net_scaled(rx[0], False, True)})  "
+                f"TX bytes:{tx[0]} ({tpot_net_scaled(tx[0], False, True)})\n\n")
+
+
+for _name in ("ip", "/sbin/ip", "/bin/ip", "/usr/sbin/ip", "/usr/bin/ip"):
+    commands[_name] = Command_tpot_ip
+for _name in ("ss", "/sbin/ss", "/bin/ss", "/usr/sbin/ss", "/usr/bin/ss"):
+    commands[_name] = Command_tpot_ss
+for _name in ("netstat", "/bin/netstat", "/usr/bin/netstat", "/sbin/netstat", "/usr/sbin/netstat"):
+    commands[_name] = Command_tpot_netstat
+'''
+
+
+def patch_net_tools(cowrie_root):
+    """ip, ss, netstat and ifconfig of the persona (NET_COMMAND after the commands of netstat.py; ifconfig.py
+    registers its ifconfig): the interfaces, routes and sockets of [shell] network. Runs after patch_netstat."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "netstat.py"
+    replace_once(path, 'commands["/bin/netstat"] = Command_netstat\ncommands["netstat"] = Command_netstat\n',
+                 'commands["/bin/netstat"] = Command_netstat\ncommands["netstat"] = Command_netstat\n' + NET_COMMAND)
+    replace_once(path, "import ipaddress\nimport socket\n", "import ipaddress\nimport re\nimport socket\n")
+    path = cowrie_root / "src" / "cowrie" / "commands" / "ifconfig.py"
+    replace_once(path, 'commands["/sbin/ifconfig"] = Command_ifconfig\ncommands["ifconfig"] = Command_ifconfig\n',
+                 'from cowrie.commands.netstat import Command_tpot_ifconfig  # noqa: E402\n\n'
+                 'for _name in ("ifconfig", "/sbin/ifconfig", "/usr/sbin/ifconfig", "/bin/ifconfig"):\n'
+                 '    commands[_name] = Command_tpot_ifconfig\n')
+
+
 def patch_service(cowrie_root):
     """service --status-all lists the init scripts of the persona ([shell]
     service_status_all, a file of the runtime folder); without it a short
@@ -8849,6 +9953,7 @@ def main():
     patch_ssh(cowrie_root)
     patch_ssh_factory(cowrie_root)
     patch_netstat(cowrie_root)
+    patch_net_tools(cowrie_root)
     patch_service(cowrie_root)
     patch_systemctl(cowrie_root)
     patch_free(cowrie_root)

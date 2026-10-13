@@ -445,7 +445,7 @@ def dnf_packages(persona, ident):
     for package, files in system.RPM_OWNED_FILES.items():
         owners.update({"/" + rel: package for rel in files})
     for tool in system.installed_tools(persona, ident):
-        for rel in system.TOOL_PROGRAMS[tool].values():
+        for rel in system.tool_paths(persona, tool).values():
             owners["/" + rel] = system.RPM_TOOLS[tool]
     rng = rng_for(ident, "dnf-version")
     built = updated_at(r) or ident.installed_at

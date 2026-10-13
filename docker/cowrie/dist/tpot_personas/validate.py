@@ -12,7 +12,7 @@ import re
 import time
 from pathlib import Path
 
-from . import PersonaError, servers, system, tree
+from . import PersonaError, network, servers, system, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import (DAY, drawn_at, host_patterns, hostname_regex, is_fresh, kernel_time, max_uptime, stale_at,
                        updated_at)
@@ -548,6 +548,46 @@ def _skipped(cfg):
     return {e.strip() for e in cfg.get("shell", "skip_python_commands", fallback="").split(",") if e.strip()}
 
 
+def _check_network(persona, ident, cfg, out_dir, runtime_dir, fs, out):
+    """ip, ss, ifconfig and netstat read the persona's network ([shell] network): every program
+    the network names answers and is on PATH, the others do neither; the interfaces have one MAC and
+    one address each, the sockets belong to processes of ps, the AWS address is the host name's and
+    QNAP's MAC ends in the host name."""
+    if cfg.get("shell", "network", fallback=None) != f"{runtime_dir}/{network.NETWORK_FILE}":
+        out.append(f"network: cfg network is not {runtime_dir}/{network.NETWORK_FILE}")
+    try:
+        data = json.loads(_text(out_dir / network.NETWORK_FILE))
+        processes = json.loads(_text(out_dir / "cmdoutput.json"))["command"]["ps"]
+    except (ValueError, KeyError, TypeError):
+        out.append(f"network: {network.NETWORK_FILE} is no network")
+        return
+    tools = data.get("tools", {})
+    for name in network.NET_TOOLS:
+        if _answered(cfg, name) != (name in tools):
+            out.append(f"network: {name} {'answers' if _answered(cfg, name) else 'does not answer'}, the network "
+                       f"{'names' if name in tools else 'does not name'} it")
+        if _answered(cfg, name) != _on_path(fs, name):
+            out.append(f"network: {name} {'answers' if _answered(cfg, name) else 'does not answer'}, it is "
+                       f"{'' if _on_path(fs, name) else 'not '}on PATH")
+    macs = [i["mac"] for i in data.get("interfaces", [])]
+    if len(set(macs)) != len(macs):
+        out.append("network: two interfaces have one MAC")
+    for iface in data.get("interfaces", []):
+        if int(iface["mac"].split(":")[0], 16) & 1:
+            out.append(f"network: the MAC of {iface['name']} is a multicast address")
+        if iface.get("inet6") and iface["inet6"] != network.link_local(iface["mac"]):
+            out.append(f"network: the link-local address of {iface['name']} is not that of its MAC")
+    pids = {p["PID"] for p in processes}
+    for sock in data.get("sockets", []):
+        if sock["pid"] not in pids:
+            out.append(f"network: the socket {sock['proto']} {sock['port']} belongs to no process of ps")
+    main = data["interfaces"][0]
+    if ident.hardware.provider == "aws" and main["inet"] != ident.hostname[3:].replace("-", "."):
+        out.append(f"network: {main['inet']} is not the address of the host name {ident.hostname}")
+    if persona.family == "qnap" and main["mac"].replace(":", "")[-6:] != ident.hostname[3:].lower():
+        out.append(f"network: the MAC {main['mac']} does not end in the host name {ident.hostname}")
+
+
 def _check_text_tools(persona, ident, cfg, fs, txtcmds, out):
     """wc, sort and seq are the patched commands of the persona's coreutils or BusyBox ([shell]
     text_*): they answer exactly where they are programs on PATH, no txtcmd answers them."""
@@ -1004,6 +1044,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         _check_device_boot(honeyfs, txtcmds, out)
     _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out)
     _check_text_tools(persona, ident, cfg, fs, txtcmds, out)
+    _check_network(persona, ident, cfg, out_dir, runtime_dir, fs, out)
 
     os_release = _text(honeyfs / "etc/os-release")
     fields = dict(line.split("=", 1) for line in os_release.splitlines() if "=" in line)

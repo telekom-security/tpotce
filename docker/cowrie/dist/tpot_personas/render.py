@@ -9,7 +9,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import servers, system, tree
+from . import network, servers, system, tree
 from .common import home_dir, rng_for, top_keys
 from .identity import DAY, to_json
 from .ssh_profiles import PROFILES, host_key_algorithms
@@ -152,6 +152,11 @@ def skip_python_commands(persona, ident, content):
     present = system.text_programs(persona, ident)
     commands |= {spelling for name in system.TEXT_TOOLS if name not in present
                  for spelling in (name, f"/bin/{name}", f"/usr/bin/{name}")}
+    # ip, ss, ifconfig and netstat where the firmware has no such program
+    if persona.kind == "device":
+        tools = network.tool_styles(persona, ident)
+        commands |= {spelling for name in network.NET_TOOLS if name not in tools
+                     for spelling in (name, f"/bin/{name}", f"/sbin/{name}", f"/usr/bin/{name}", f"/usr/sbin/{name}")}
     if not content.busybox_help:
         commands |= set(BUSYBOX_PYTHON_COMMANDS)
     if persona.family == "openwrt":
@@ -396,6 +401,18 @@ def apply_to_tree(base_tree, persona, ident, content):
         for name in system.TEXT_TOOLS:
             for folder in ("bin", "sbin", "usr/bin", "usr/sbin"):
                 tree.remove_node(t, f"{folder}/{name}")
+    if persona.kind == "device":
+        # ip, ss, ifconfig and netstat as the firmware has them
+        for name in network.NET_TOOLS:
+            for folder in ("bin", "sbin", "usr/bin", "usr/sbin"):
+                tree.remove_node(t, f"{folder}/{name}")
+        for rel, target in network.tool_paths(persona, ident).values():
+            if target:
+                tree.ensure_link(t, rel, target, ctime=ident.installed_at)
+            else:
+                tree.ensure_executable(t, rel, program_size(ident, rel, sizes), ctime=ident.installed_at)
+        if persona.family == "ubiquiti":
+            tree.ensure_link(t, "bin/ip", "/sbin/ip", ctime=ident.installed_at)
     for rel, target in system.text_programs(persona, ident).values():
         if target:
             tree.ensure_link(t, rel, target, ctime=ident.installed_at)
@@ -432,6 +449,7 @@ def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, c
     top += f"df_table = {runtime_dir}/{DF_TABLE}\n"
     top += "".join(f"{key} = {value}\n" for key, value in system.awk_keys(persona, ident).items())
     top += "".join(f"{key} = {value}\n" for key, value in system.text_keys(persona, ident).items())
+    top += f"network = {runtime_dir}/{network.NETWORK_FILE}\n"
     profile = PROFILES[persona.ssh_profile]
     keys = "\n".join(
         f"{KEY_FILES[k]}_public_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key.pub\n"
@@ -542,6 +560,8 @@ def render(persona, ident, base_tree, out_dir, runtime_dir, keys_dir, cowrie_roo
            json.dumps({"command": {"ps": content.processes}}, indent=2, sort_keys=True) + "\n")
     if content.busybox_help:
         _write(out_dir / BUSYBOX_HELP, content.busybox_help)
+    _write(out_dir / network.NETWORK_FILE,
+           json.dumps(network.network(persona, ident, content.processes), indent=1, sort_keys=True) + "\n")
     _write(out_dir / DF_TABLE, json.dumps(system.df_table(persona, ident, content.filesystems), indent=1, sort_keys=True) + "\n")
     if persona.family == "openwrt":
         _write(out_dir / system.OPKG_HELP_FILE, system.OPKG_HELP)
