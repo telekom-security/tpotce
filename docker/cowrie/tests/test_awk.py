@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tracemalloc
 import unittest
 from pathlib import Path
 
@@ -259,6 +260,15 @@ GROWING = {
                                    'while (1) { i++; if ("c" ~ (s i)) n++ } }'], None, None),
     "new regex each time": (['BEGIN { s = "a|"; while (length(s) < 65536) s = s s; '
                              'while (1) { i++; if ("c" ~ (s i)) n++ } }'], None, None),
+    "OFS join of many fields": (["BEGIN { " + NON_ASCII + "while (i++ < 26) t = tolower(s); "
+                                 'o = "x"; while (length(o) < 262144) o = o o; OFS = o; NF = 32767; print "never" }'],
+                                None, None),
+    "NF with a large OFS": (['BEGIN { o = "x"; while (length(o) < 32768) o = o o; OFS = o; while (1) NF = 32767 }'],
+                            None, None),
+    "$1 = $1 with a large OFS": (['BEGIN { o = "x"; while (length(o) < 262144) o = o o; OFS = o; '
+                                  '$0 = "a b c d e f"; while (1) $1 = $1 }'], None, None),
+    "$N with a large OFS": (['BEGIN { o = "x"; while (length(o) < 1048576) o = o o; OFS = o; $3 = "z"; '
+                             'print "never" }'], None, None),
     "new grouped regex each time": (['BEGIN { s = "(a|b)"; while (length(s) < 300000) s = s s; '
                                      'while (1) { i++; if ("c" ~ (s i)) n++ } }'], None, None),
 }
@@ -415,6 +425,32 @@ class AwkTest(unittest.TestCase):
                     self.assertLess(time.monotonic() - started, LIMIT_SECONDS)
                     if code != 2:
                         self.assertEqual((out, code), (result, 0))
+
+    def test_printf_widths_of_many_digits_end_awk(self):
+        for program in ('BEGIN { w = "1"; while (length(w) < 5000) w = w w; printf "%" w "d", 1 }',
+                        'BEGIN { w = "1"; while (length(w) < 5000) w = w w; printf "%." w "f", 1 }',
+                        'BEGIN { printf "%1234567890d|", 1 }'):
+            for style in VERSIONS:
+                with self.subTest(program=program, style=style):
+                    log = FakeLog()
+                    self.assertEqual(awk(style, [program], log=log), ("", "", 2))
+                    self.assertEqual(log.errors, [])
+        self.assertEqual(awk("gawk", ['BEGIN { printf "%000000004d|", 1 }']), ("0001|", "", 0))
+
+    def test_records_are_sized_before_they_are_built(self):
+        """A record of fields and OFS past the value limit ends awk before it is joined."""
+        programs = ['BEGIN { o = "x"; while (length(o) < 32768) o = o o; OFS = o; NF = 32767; print "never" }',
+                    'BEGIN { o = "x"; while (length(o) < 32768) o = o o; OFS = o; $32767 = "z"; print "never" }',
+                    'BEGIN { o = "x"; while (length(o) < 32768) o = o o; OFS = o; NF = 100; $1 = $1; print "never" }']
+        for program in programs:
+            with self.subTest(program=program):
+                tracemalloc.start()
+                try:
+                    self.assertEqual(awk("gawk", [program]), ("", "", 2))
+                    peak = tracemalloc.get_traced_memory()[1]
+                finally:
+                    tracemalloc.stop()
+                self.assertLess(peak, 64 * 1024 * 1024)
 
     def test_more_fields_than_mawk_has_end_awk(self):
         for style in VERSIONS:

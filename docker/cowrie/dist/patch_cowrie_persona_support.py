@@ -5946,7 +5946,10 @@ class TpotAwk:
     def rebuild(self) -> None:
         self.charge(len(self.fields))
         self.vars["NF"] = float(len(self.fields))
-        self.record = TpotAwkStrnum(self.cap(self.text(self.vars["OFS"]).join(self.text(f) for f in self.fields)))
+        ofs, texts = self.text(self.vars["OFS"]), [self.text(f) for f in self.fields]
+        if len(ofs) * max(0, len(texts) - 1) + sum(map(len, texts)) > self.MAX_STRING:  # sized before it is built
+            raise TpotAwkStop(2)
+        self.record = TpotAwkStrnum(self.cap(ofs.join(texts)))
 
     def field_index(self, value) -> int:
         x = self.num(value)
@@ -6029,7 +6032,10 @@ class TpotAwk:
         if op == "plus":
             return self.num(self.value(node[1]))
         if op == "cat":
-            return self.cap(self.text(self.value(node[1])) + self.text(self.value(node[2])))
+            left, right = self.text(self.value(node[1])), self.text(self.value(node[2]))
+            if len(left) + len(right) > self.MAX_STRING:
+                raise TpotAwkStop(2)
+            return self.cap(left + right)
         if op == "bin":
             return self.arith(node[1], self.num(self.value(node[2])), self.num(self.value(node[3])))
         if op == "cond":
@@ -6188,6 +6194,8 @@ class TpotAwk:
                 precision = None if precision.startswith("-") else precision  # as if omitted
             if width and width.startswith("-"):
                 flags, width = flags + "-", width[1:]
+            if len(width or "") > 9 or len(precision or "") > 9:  # more than any awk can print
+                raise TpotAwkStop(2)
             if int(width or 0) > self.MAX_WIDTH or int(precision or 0) > self.MAX_WIDTH:
                 raise TpotAwkStop(2)
             value = args[used] if used < len(args) else TPOT_AWK_UNINIT
