@@ -1824,8 +1824,10 @@ def opkg_keys(persona, ident, runtime_dir):
 def kernel_packages(persona, ident):
     """The packages of the persona's running kernel (uname -r) at the version of its build (uname -v):
     ({installed}, {available}). Ubuntu's cloud images have its image, modules and headers (the cloud
-    image manifests of 22.04 / 24.04), Debian and Raspberry Pi OS its image; the headers (and Ubuntu's
-    modules-extra) install at the same version."""
+    image manifests of 22.04 / 24.04), Debian its image; the headers (and Ubuntu's modules-extra)
+    install at the same version. Raspberry Pi OS has the kernels of both boards (rpi-v8 of the Pi 4,
+    rpi-2712 of the Pi 5) with their headers, meta-packages, common headers and kbuild, as the
+    package lists of its images (*.info) name them."""
     release, build = ident.release.kernel_version, ident.release.kernel_build
     if persona.family == "ubuntu":
         abi, flavour = release.rsplit("-", 1)
@@ -1835,6 +1837,15 @@ def kernel_packages(persona, ident):
         if flavour == "generic":
             installed.add(f"linux-headers-{abi}")
         available = {f"linux-modules-extra-{release}"}
+    elif persona.family == "raspios":
+        found = re.search(r"Debian (\S+) \(", build)
+        version = found.group(1) if found else release
+        base = release.rsplit("-rpi-", 1)[0]
+        installed = {f"linux-headers-{base}-common-rpi", f"linux-kbuild-{base}"}
+        for flavor in sorted(set(ident.release.extra.get("flavors", {}).values()) or {"v8", "2712"}):
+            installed |= {f"linux-image-{base}-rpi-{flavor}", f"linux-headers-{base}-rpi-{flavor}",
+                          f"linux-image-rpi-{flavor}", f"linux-headers-rpi-{flavor}"}
+        available = set()
     else:
         found = re.search(r"Debian (\S+) \(", build)
         version = found.group(1) if found else release

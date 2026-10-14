@@ -619,6 +619,9 @@ class PackageNamesTest(unittest.TestCase):
                 for name in (f"linux-modules-{release}", f"linux-headers-{release}"):
                     self.assertEqual(installed[name], version, (pid, name))
                 self.assertEqual(available[f"linux-modules-extra-{release}"], version, pid)
+            elif persona.family == "raspios":
+                self.assertIn(f"Debian {version} (", build, pid)
+                self.assertEqual(installed[f"linux-headers-{release}"], version, pid)
             else:
                 self.assertIn(f"Debian {version} (", build, pid)
                 self.assertEqual(available[f"linux-headers-{release}"], version, pid)
@@ -643,6 +646,27 @@ class PackageNamesTest(unittest.TestCase):
         self.assertIn("nc nmap-ncat", lines)
         self.assertIn("mysql mariadb", lines)
         self.assertNotIn("nmap-ncat", {line.split(" ")[0] for line in lines if " " in line})
+
+    def test_raspios_has_the_kernels_of_both_boards(self):
+        """The image installs the kernel of the Pi 4 (rpi-v8) and of the Pi 5 (rpi-2712) with their
+        headers, meta-packages, common headers and kbuild, at one version (the package lists of the
+        2024-10-22, 2024-11-19 and 2025-05-13 Lite images, *.info beside the images); the board runs one."""
+        persona = catalog.by_id("raspios")
+        for seed in range(6):
+            ident = draw(persona, seed)
+            release = ident.release.kernel_version
+            base, flavor = release.rsplit("-rpi-", 1)
+            installed = system.apt_packages(persona, ident)["installed"]
+            version = installed[f"linux-image-{release}"]
+            want = {f"linux-image-{base}-rpi-v8", f"linux-image-{base}-rpi-2712", "linux-image-rpi-v8",
+                    "linux-image-rpi-2712", f"linux-headers-{base}-rpi-v8", f"linux-headers-{base}-rpi-2712",
+                    "linux-headers-rpi-v8", "linux-headers-rpi-2712", f"linux-headers-{base}-common-rpi",
+                    f"linux-kbuild-{base}"}
+            with self.subTest(seed=seed, release=release):
+                self.assertIn(flavor, ("v8", "2712"))
+                self.assertEqual({name: installed.get(name) for name in want}, dict.fromkeys(want, version))
+                self.assertFalse([name for name in system.apt_packages(persona, ident)["available"]
+                                  if name.startswith(("linux-image", "linux-headers"))])
 
     def test_name_lists_stay_small(self):
         files = sorted(system.NAMES_DIR.glob("*.txt.gz"))
