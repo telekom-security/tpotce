@@ -207,6 +207,28 @@ class AuthTest(unittest.TestCase):
                 self.assertEqual(self.state(our_dir), self.state(up_dir))
                 self.assertIn("warn", {level for level, _ in ours["_log"].lines})
 
+    def test_the_value_is_parsed_once_and_a_bad_one_warned_once(self):
+        """The list is read and parsed on the first attempt only (functools.cache, as the shell's
+        history size); a value of another form gives one warning, not one per attempt."""
+        for refused, warnings in ((refused_logins_value(), 0), ("[1]", 1)):
+            with self.subTest(refused=refused):
+                module = self.auth_module(self.patched, tmpdir(self), refused)
+                reads = []
+                config = module["CowrieConfig"]
+                original = config.get
+
+                def counting(section, option, *args, **kwargs):
+                    if option == "auth_refused_pairs":
+                        reads.append(option)
+                    return original(section, option, *args, **kwargs)
+
+                config.get = counting
+                for n in range(20):
+                    self.check(module, "admin", f"x{n}", f"198.51.100.{n % 4}")
+                    self.check(module, *REFUSED_LOGINS[n % len(REFUSED_LOGINS)], "198.51.100.200")
+                self.assertEqual(len(reads), 1)
+                self.assertEqual(sum(1 for level, _ in module["_log"].lines if level == "warn"), warnings)
+
     # -- the login events of checkers.py
 
     def checker(self, auth_module, events):

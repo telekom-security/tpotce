@@ -10659,19 +10659,27 @@ def tpot_refused_pairs(value: str) -> frozenset[tuple[bytes, bytes]]:
     return frozenset((login.encode("utf-8"), password.encode("utf-8")) for login, password in pairs)
 
 
+import functools  # noqa: E402 - T-Pot: tpot_refused_logins
+
+
+@functools.cache
+def tpot_refused_logins() -> frozenset[tuple[bytes, bytes]]:
+    """T-Pot: the pairs of [honeypot] auth_refused_pairs, read and parsed once (the configuration
+    does not change while Cowrie runs, as with the shell's history size). A value of another form
+    is logged once and ignored: AuthRandom then works as upstream."""
+    try:
+        return tpot_refused_pairs(CowrieConfig.get("honeypot", "auth_refused_pairs", fallback=""))
+    except ValueError:
+        Logger().warn("[honeypot] auth_refused_pairs is not a list of [login, password], ignored")
+        return frozenset()
+
+
 class AuthRandom:
 '''
 
 AUTH_CHECK = '''        # T-Pot: a pair of [honeypot] auth_refused_pairs never logs in; it is matched exactly and
         # leaves the state (source addresses, tries, cache) as it is, so it changes no other login
-        try:
-            refused = tpot_refused_pairs(
-                CowrieConfig.get("honeypot", "auth_refused_pairs", fallback="")
-            )
-        except ValueError:
-            self._log.warn("[honeypot] auth_refused_pairs is not a list of [login, password], ignored")
-            refused = frozenset()
-        if (thelogin, thepasswd) in refused:
+        if (thelogin, thepasswd) in tpot_refused_logins():
             self._log.info("login pair of auth_refused_pairs, refused")
             return False
 
@@ -10682,8 +10690,10 @@ AUTH_CHECK = '''        # T-Pot: a pair of [honeypot] auth_refused_pairs never l
 
 def patch_auth(cowrie_root):
     """AuthRandom refuses the pairs of [honeypot] auth_refused_pairs (rendered by tpot_personas,
-    render.REFUSED_LOGINS) on every attempt, before it reads or writes its state; every other pair
-    takes upstream's path. The login events stay those of core/checkers.py."""
+    render.REFUSED_LOGINS; parsed once) on every attempt, before it changes its state; every other
+    pair takes upstream's path. The login events stay those of core/checkers.py. Only AuthRandom
+    checks the list: render.py writes auth_class = AuthRandom for every persona and the validator
+    expects it."""
     path = cowrie_root / "src" / "cowrie" / "core" / "auth.py"
     replace_once(path, "\n\nclass AuthRandom:\n", AUTH_REFUSED)
     replace_once(

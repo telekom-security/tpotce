@@ -109,6 +109,11 @@ class ValidateNegativeTest(unittest.TestCase):
         self.edit("cowrie.cfg", "auth_refused_pairs = ", "auth_refused_pairs_x = ")
         self.assertIn("cfg auth_refused_pairs", self.problems())
 
+    def test_auth_class_is_auth_random(self):
+        """Only AuthRandom checks auth_refused_pairs: another auth_class is a problem."""
+        self.edit("cowrie.cfg", "auth_class = AuthRandom", "auth_class = UserDB")
+        self.assertIn("cfg auth_class", self.problems())
+
     def test_prompt_style_mismatch(self):
         self.edit("cowrie.cfg", "prompt_style = debian", "prompt_style = redhat")
         self.assertIn("cfg prompt_style", self.problems())

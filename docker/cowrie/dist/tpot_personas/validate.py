@@ -59,6 +59,8 @@ def _check_cfg(persona, ident, cfg, runtime_dir, keys_dir, out):
         ("honeypot", "txtcmds_path"): f"{runtime_dir}/txtcmds",
         ("honeypot", "etc_path"): str(keys_dir),
         ("honeypot", "auth_refused_pairs"): refused_logins_value(),
+        # only AuthRandom checks auth_refused_pairs (patch_auth)
+        ("honeypot", "auth_class"): "AuthRandom",
         ("shell", "filesystem"): f"{runtime_dir}/fs.pickle",
         ("shell", "processes"): f"{runtime_dir}/cmdoutput.json",
         ("shell", "kernel_version"): r.kernel_version,
