@@ -3087,7 +3087,12 @@ class PatchTest(unittest.TestCase):
                   "class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLine):\n",
                   "class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLine):  # shell\n"),
                  ("src/cowrie/shell/protocol.py", "            self.lineBuffer.insert(self.lineBufferIndex, ch)\n",
-                  "            self.lineBuffer.insert(self.lineBufferIndex, ch)  # insert\n"))
+                  "            self.lineBuffer.insert(self.lineBufferIndex, ch)  # insert\n"),
+                 ("src/cowrie/shell/protocol.py",
+                  "                self.historyLines.append(b\"\".join(self.lineBuffer))\n"
+                  "            self.historyPosition = len(self.historyLines)\n",
+                  "                self.historyLines.append(b\"\".join(self.lineBuffer))\n"
+                  "            self.historyPosition = len(self.historyLines)  # history\n"))
         for rel, old, new in cases:
             with self.subTest(rel=rel, needle=old):
                 root = tmpdir(self) / "cowrie"

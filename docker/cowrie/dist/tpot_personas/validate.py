@@ -68,6 +68,8 @@ def _check_cfg(persona, ident, cfg, runtime_dir, keys_dir, out):
         ("shell", "prompt_style"): persona.prompt_style,
         ("shell", "shell_name"): system.shell_style(persona)[0],
         ("shell", "not_found_style"): system.shell_style(persona)[1],
+        ("shell", "history_size"): str(system.history_sizes(persona, r)[1]),
+        ("shell", "history_size_root"): str(system.history_sizes(persona, r)[0]),
         ("ssh", "version"): r.ssh_banner,
     }
     if persona.prompt_style not in PROMPT_STYLES:

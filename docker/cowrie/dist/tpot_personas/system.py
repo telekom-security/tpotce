@@ -1498,6 +1498,26 @@ def shell_style(persona):
     return persona.shell.rsplit("/", 1)[-1], "ash" if persona.family in ASH_FAMILIES else "bash"
 
 
+def history_sizes(persona, release):
+    """(root, other users): the lines the login shell keeps in its history (HISTSIZE).
+    Ubuntu's /root/.bashrc (base-files) and /etc/skel/.bashrc set 1000; Debian's /root/.bashrc sets
+    none (bash's 500), its /etc/skel/.bashrc 1000 (Raspberry Pi OS and EdgeOS as Debian, unverified for
+    EdgeOS); RHEL and CentOS set 1000 in /etc/profile; DSM is taken as bash's 500 (unverified).
+    BusyBox ash keeps FEATURE_EDITING_HISTORY lines: 15 up to 1.16, 255 from 1.17 (the defaults of
+    libbb/Config.in / Config.src; the vendors' configs are unverified), OpenWrt's build 256."""
+    if persona.family in ("ubuntu", "rhel", "centos"):
+        return 1000, 1000
+    if persona.family in ("debian", "raspios", "ubiquiti"):
+        return 500, 1000
+    if persona.family == "openwrt":
+        return 256, 256
+    if persona.family in ASH_FAMILIES:
+        found = re.search(r"BusyBox v(\d+)\.(\d+)", release.extra.get("busybox", ""))
+        size = 15 if found and (int(found.group(1)), int(found.group(2))) < (1, 17) else 255
+        return size, size
+    return 500, 500
+
+
 def login_program(persona, ident):
     """The program of the login shell (/proc/self/exe of the shell): BusyBox of a firmware with it,
     else bash."""

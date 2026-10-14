@@ -508,6 +508,8 @@ operating_system = {persona.operating_system}
 prompt_style = {persona.prompt_style}
 shell_name = {system.shell_style(persona)[0]}
 not_found_style = {system.shell_style(persona)[1]}
+history_size = {system.history_sizes(persona, r)[1]}
+history_size_root = {system.history_sizes(persona, r)[0]}
 ssh_version = {r.ssh_version}
 skip_python_commands = {",".join(skip_python_commands(persona, ident, content))}
 {top}{busybox}{tools}

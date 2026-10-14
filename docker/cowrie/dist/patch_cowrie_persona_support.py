@@ -10490,7 +10490,9 @@ def patch_ttylog(cowrie_root):
         sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
         f.write(struct.pack(TTYSTRUCT, OP_OPEN, 0, 0, 0, sec, usec))
 """,
-        """    f = open(logfile, "ab")  # noqa: SIM115 - T-Pot: open up to ttylog_close
+        """    # T-Pot: open up to ttylog_close, with a buffer of 8 KiB (Python 3.14 would take the 128 KiB of
+    # the file system's block size for every open session)
+    f = open(logfile, "ab", buffering=8192)  # noqa: SIM115
     try:
         sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
         f.write(struct.pack(TTYSTRUCT, OP_OPEN, 0, 0, 0, sec, usec))
@@ -10552,13 +10554,28 @@ def patch_ttylog(cowrie_root):
 def patch_line_input(cowrie_root):
     """A line of the interactive shell holds at most TPOT_LINE_MAX (64 KiB) bytes. A key beyond it is
     echoed as bash echoes it but not kept: the session goes on, the line runs and is logged
-    (cowrie.command.input) cut to the bound. Below it, characterReceived acts as upstream.
-    Runs after patch_protocol_load."""
+    (cowrie.command.input) cut to the bound. Past the bound the screen holds more than the buffer:
+    backspace, HOME, ctrl-U, the history and tab completion work only on the kept 64 KiB. Below it,
+    characterReceived acts as upstream.
+    The history keeps the last [shell] history_size lines (history_size_root for uid 0), the persona's
+    HISTSIZE (tpot_personas.system.history_sizes); without a size it grows as upstream. Below the cap,
+    up / down and `history` act as upstream. Runs after patch_protocol_load."""
     path = cowrie_root / "src" / "cowrie" / "shell" / "protocol.py"
     replace_once(
         path,
         "class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLine):\n",
-        """class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLine):
+        """@functools.cache
+def tpot_history_size(root: bool) -> int:
+    \"\"\"T-Pot: the lines the shell's history keeps ([shell] history_size, history_size_root for
+    root; parsed once), 0 for no limit.\"\"\"
+    value = CowrieConfig.get("shell", "history_size_root" if root else "history_size", fallback="")
+    try:
+        return max(int(value), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLine):
     # T-Pot: the longest line the line editor keeps (bytes)
     TPOT_LINE_MAX = 65536
 
@@ -10582,6 +10599,19 @@ def patch_line_input(cowrie_root):
             else:
                 self.lineBuffer[self.lineBufferIndex : self.lineBufferIndex + 1] = [ch]
             self.lineBufferIndex += 1
+""",
+    )
+    replace_once(
+        path,
+        """                self.historyLines.append(b"".join(self.lineBuffer))
+            self.historyPosition = len(self.historyLines)
+""",
+        """                self.historyLines.append(b"".join(self.lineBuffer))
+                # T-Pot: the history keeps the last HISTSIZE lines of the persona's shell
+                size = tpot_history_size(getattr(self.user, "uid", None) == 0)
+                if size and len(self.historyLines) > size:
+                    del self.historyLines[: len(self.historyLines) - size]
+            self.historyPosition = len(self.historyLines)
 """,
     )
 

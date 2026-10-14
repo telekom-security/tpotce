@@ -20,13 +20,19 @@ import types
 import unittest
 from pathlib import Path
 
-from tests.test_patch import FIXTURE, PATCH, method
+from tests.test_patch import FIXTURE, PATCH, FakeConfig, method, module_parts
+from tpot_personas import catalog, system
 
 TTYLOG = "src/cowrie/core/ttylog.py"
 PROTOCOL = "src/cowrie/shell/protocol.py"
 LINE_MAX = 65536
 # the open and close of a file on a Docker Desktop bind mount (log/tty of the smoke test), measured
 SLOW_OPEN_SECONDS = 0.002
+# input records of the input hash test (and four times as many); the largest ratio of their times
+HASH_KEYS = 25000
+HASH_RATIO_MAX = 8.0
+# the buffer of an open tty log (Python 3.14 would take 128 KiB from the file system)
+TTYLOG_BUFFER = 8192
 
 
 def load_ttylog(root):
@@ -48,9 +54,11 @@ def run_turns(module):
 def counting_open(module, delay=0.0):
     """Counts (and delays) every open() of the module."""
     calls = []
+    module.open_kwargs = []
 
     def opener(*args, **kwargs):
         calls.append(args[0])
+        module.open_kwargs.append(kwargs)
         if delay:
             time.sleep(delay)
         return open(*args, **kwargs)
@@ -194,6 +202,15 @@ class LineInputTest(unittest.TestCase):
         ttylog.ttylog_close(path, time.time())
         self.assertEqual(opens, [path])
 
+    def test_the_tty_log_has_a_buffer_of_8_kib(self):
+        ttylog, _, terminal, path, opens = self.session(self.patched)
+        self.assertEqual(ttylog.open_kwargs, [{"buffering": TTYLOG_BUFFER}])
+        # a record of twice the buffer is on disk before the reactor turn ends
+        terminal.write(b"b" * (2 * TTYLOG_BUFFER))
+        self.assertEqual(records(path)[-1][4], b"b" * (2 * TTYLOG_BUFFER))
+        ttylog.ttylog_close(path, time.time())
+        run_turns(ttylog)
+
     def test_echo_line_and_tty_log_records_stay_upstream(self):
         rng = random.Random(7)
         line = bytes(rng.choice(b"abcdefghijklmnopqrstuvwxyz0123456789 -./|;$") for _ in range(600))
@@ -268,21 +285,32 @@ class LineInputTest(unittest.TestCase):
         upstream.ttylog_close(path, time.time())
         self.assertEqual(load_ttylog(self.patched).ttylog_inputhash(path), upstream.ttylog_inputhash(path))
 
-    def test_input_hash_reads_many_records_in_linear_time(self):
-        # 100,000 keys of 64 bytes each and their echo
-        path = str(self.dir / "many.log")
+    def hash_seconds(self, ttylog, keys):
+        """The best of three times ttylog_inputhash takes for `keys` keys of 64 bytes and their echo."""
+        path = str(self.dir / f"many-{keys}.log")
         key = bytes(range(64))
         head_in = struct.pack("<iLiiLL", 3, 0, len(key), 1, 0, 0)
         head_out = struct.pack("<iLiiLL", 3, 0, len(key), 2, 0, 0)
         with open(path, "wb") as handle:
             handle.write(struct.pack("<iLiiLL", 1, 0, 0, 0, 0, 0))
-            handle.write((head_in + key + head_out + key) * 100000)
+            handle.write((head_in + key + head_out + key) * keys)
             handle.write(struct.pack("<iLiiLL", 2, 0, 0, 0, 0, 0))
+        best = None
+        for _ in range(3):
+            started = time.perf_counter()
+            digest = ttylog.ttylog_inputhash(path)
+            elapsed = time.perf_counter() - started
+            best = elapsed if best is None else min(best, elapsed)
+        self.assertEqual(digest, hashlib.sha256(key * keys).hexdigest())
+        return best
+
+    def test_input_hash_reads_many_records_in_linear_time(self):
+        # four times the records take about four times as long (a linear read); building the input
+        # by concatenation takes about sixteen times as long
         ttylog = load_ttylog(self.patched)
-        started = time.perf_counter()
-        digest = ttylog.ttylog_inputhash(path)
-        self.assertLess(time.perf_counter() - started, 1.0)
-        self.assertEqual(digest, hashlib.sha256(key * 100000).hexdigest())
+        small = self.hash_seconds(ttylog, HASH_KEYS)
+        large = self.hash_seconds(ttylog, 4 * HASH_KEYS)
+        self.assertLess(large / small, HASH_RATIO_MAX, (small, large))
 
     def test_input_hash_of_a_log_still_open_has_every_record(self):
         ttylog, _, _, path, _ = self.session(self.patched)
@@ -383,12 +411,104 @@ class LineInputTest(unittest.TestCase):
             results.append((bytes(terminal.out), list(protocol.lineBuffer), protocol.lineBufferIndex))
         self.assertEqual(results[0], results[1])
 
+    # -- the history of the shell -----------------------------------------------------------------
+
+    def history_protocol(self, root, values, uid=0):
+        """HoneyPotInteractiveProtocol.handle_RETURN of root on a stand-in; recvline's RETURN takes the
+        line (lineReceived) and empties it."""
+        source = (root / PROTOCOL).read_text()
+        namespace = {"CowrieConfig": FakeConfig(values)}
+        if root != FIXTURE:
+            module_parts(source, ["tpot_history_size"], namespace)
+
+        class RecvLine:
+            @staticmethod
+            def handle_RETURN(protocol):
+                protocol.received.append(b"".join(protocol.lineBuffer))
+                protocol.lineBuffer = []
+                protocol.lineBufferIndex = 0
+
+        namespace["recvline"] = types.SimpleNamespace(RecvLine=RecvLine)
+        handle_return = method(source, "HoneyPotInteractiveProtocol", "handle_RETURN", namespace)
+
+        class Protocol:
+            def __init__(self):
+                self.cmdstack = [object()]
+                self.historyLines = []
+                self.historyPosition = 0
+                self.lineBuffer = []
+                self.lineBufferIndex = 0
+                self.received = []
+                self.user = types.SimpleNamespace(uid=uid, username="root" if uid == 0 else "user")
+
+            def enter(self, line):
+                self.lineBuffer = [bytes([value]) for value in line]
+                self.lineBufferIndex = len(line)
+                handle_return(self)
+
+        return Protocol()
+
+    def test_the_history_keeps_the_last_histsize_lines(self):
+        values = {("shell", "history_size"): "1000", ("shell", "history_size_root"): "500"}
+        for uid, size in ((0, 500), (1000, 1000)):
+            with self.subTest(uid=uid):
+                protocol = self.history_protocol(self.patched, values, uid)
+                lines = [f"echo {n}".encode() for n in range(1, 1201)]
+                for line in lines:
+                    protocol.enter(line)
+                self.assertEqual(protocol.historyLines, lines[-size:])
+                self.assertEqual(protocol.historyPosition, size)
+                self.assertEqual(protocol.received, lines)
+
+    def test_below_the_cap_the_history_is_upstream(self):
+        rng = random.Random(5)
+        lines = [b"" if rng.random() < 0.1 else f"ls {rng.randrange(50)}".encode() for _ in range(300)]
+        states = []
+        for root in (FIXTURE, self.patched):
+            protocol = self.history_protocol(root, {("shell", "history_size"): "1000",
+                                                    ("shell", "history_size_root"): "500"})
+            for index, line in enumerate(lines):
+                # a command that reads the terminal (two shells on the stack) keeps its lines out
+                protocol.cmdstack = [object()] * (2 if index % 37 == 5 else 1)
+                protocol.enter(line)
+                states.append((root.name, index, list(protocol.historyLines), protocol.historyPosition))
+        half = len(states) // 2
+        self.assertEqual([s[1:] for s in states[:half]], [s[1:] for s in states[half:]])
+
+    def test_without_a_size_the_history_is_upstream(self):
+        for values in ({}, {("shell", "history_size"): "0", ("shell", "history_size_root"): "0"},
+                       {("shell", "history_size"): "x", ("shell", "history_size_root"): "-3"}):
+            with self.subTest(values=values):
+                protocol = self.history_protocol(self.patched, values)
+                for n in range(700):
+                    protocol.enter(b"a%d" % n)
+                self.assertEqual(len(protocol.historyLines), 700)
+
+    def test_history_sizes_of_the_personas(self):
+        """HISTSIZE of the login shell, (root, other users): Ubuntu's /root/.bashrc and /etc/skel/.bashrc
+        set 1000; Debian's /root/.bashrc sets none (bash's 500), its /etc/skel/.bashrc 1000; RHEL and
+        CentOS set 1000 in /etc/profile; BusyBox keeps FEATURE_EDITING_HISTORY lines (15 up to 1.16,
+        255 from 1.17, OpenWrt's build 256)."""
+        expected = {"ubuntu-noble": (1000, 1000), "ubuntu-jammy": (1000, 1000), "gpu-ubuntu": (1000, 1000),
+                    "debian-trixie": (500, 1000), "debian-bookworm": (500, 1000), "raspios": (500, 1000),
+                    "ubiquiti-edgerouter-x": (500, 1000), "rhel-9": (1000, 1000), "centos-7": (1000, 1000),
+                    "synology-dsm": (500, 500), "dlink-dir859": (15, 15), "tplink-wr841n": (255, 255),
+                    "zyxel-nas326": (255, 255), "qnap-qts": (255, 255), "ipcam": (255, 255),
+                    "openwrt": (256, 256)}
+        self.assertEqual(set(expected), set(catalog.ids()))
+        for pid, sizes in expected.items():
+            persona = catalog.by_id(pid)
+            for release in persona.releases:
+                with self.subTest(persona=pid, release=release.label):
+                    self.assertEqual(system.history_sizes(persona, release), sizes)
+
     def test_the_other_keys_of_the_line_editor_stay_upstream(self):
         upstream = class_methods((FIXTURE / PROTOCOL).read_text(), "HoneyPotInteractiveProtocol")
         patched = class_methods((self.patched / PROTOCOL).read_text(), "HoneyPotInteractiveProtocol")
         self.assertEqual(set(upstream), set(patched))
-        # characterReceived: the bound (and top's keys); timeoutConnection: top gives the cursor back
-        for name in sorted(set(upstream) - {"characterReceived", "timeoutConnection"}):
+        # characterReceived: the bound (and top's keys); timeoutConnection: top gives the cursor back;
+        # handle_RETURN: the history keeps HISTSIZE lines
+        for name in sorted(set(upstream) - {"characterReceived", "timeoutConnection", "handle_RETURN"}):
             with self.subTest(name=name):
                 self.assertEqual(patched[name], upstream[name])
 
