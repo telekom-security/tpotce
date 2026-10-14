@@ -430,12 +430,13 @@ def read_until(sock, needles, deadline):
         for needle in needles:
             if text.endswith(needle):
                 return needle
-    if time.monotonic() >= deadline:
+    # the time of the whole probe is over: a timeout; the end of a shorter wait only: no such needle
+    if time.monotonic() >= END:
         raise Deadline(f"telnet: none of {needles} within {TIMEOUT} s, received {bytes(data)[-120:]!r}")
     raise RuntimeError(f"telnet: none of {needles} in {bytes(data)[-120:]!r}")
 
 
-deadline = time.monotonic() + TIMEOUT
+deadline = END = time.monotonic() + TIMEOUT
 try:
     for login, password in PAIRS:
         with socket.create_connection(("127.0.0.1", 23), timeout=TIMEOUT) as sock:
