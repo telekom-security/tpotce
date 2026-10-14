@@ -292,6 +292,22 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
                                                     "@@tpot loss backups 2 older backups go to make room.\n")])
         self.assertIn("--accept-data-loss-file", shown[0])
 
+    async def test_update_with_the_elastic_step_names_it_and_passes_its_key(self):
+        update = os.path.join(cli.REPO_DIR, "update.sh")
+        step = ("The data of Elasticsearch 8.18.2 cannot be read by 9.5.4: the update first runs Elasticsearch and "
+                "Kibana 8.19.23 once on it (in /d/elk), then the new release.")
+        loss = (True, [("elastic-step", step)], "")
+        shown, seen, _calls = await self.update_with(loss, "no")
+        self.assertIn("cannot be read by 9.5.4", shown[0])
+        self.assertIn("Yes lets update.sh take the step through Elasticsearch 8.19", shown[0])   # the step named
+        self.assertIn("-g data", shown[0])
+        self.assertEqual(shown[1], "no")
+        self.assertEqual(seen, [])
+        FakeEngine.files.clear()
+        shown, seen, _calls = await self.update_with(loss, "yes")
+        self.assertEqual(seen, [[update, "-y", "--accept-data-loss-file", "FILE"]])
+        self.assertEqual(FakeEngine.files, [(0o600, f"@@tpot loss elastic-step {step}\n")])
+
     async def test_update_without_findings_runs_as_before(self):
         shown, seen, calls = await self.update_with((True, [], ""), "yes")
         self.assertIsNone(shown)

@@ -1806,13 +1806,23 @@ def retention_unknown(value: str, host: bool = True) -> str:
             f"the events less long; {then}")
 
 
+# What a yes does for a finding beyond its line (ops.LOSS_KEYS)
+LOSS_NOTES = {
+    "elastic-step": "Yes lets update.sh take the step through Elasticsearch 8.19: the data goes into the backup "
+                    "of the update first, then Elasticsearch and Kibana 8.19 run once on it, then the new release. "
+                    "'./restore.sh -f <that backup> -g data' puts the data from before back.",
+}
+
+
 def data_loss_text(items) -> Text:
     """The body of the question before an update that loses data: one line per finding of
-    update.sh --check-data-loss, then what yes means."""
+    update.sh --check-data-loss (with what yes does where LOSS_NOTES says more), then what yes means."""
     text = Text()
-    for _key, line in items:
+    for key, line in items:
         text.append(f"{glyphs.g('fail')} ", style=theme.color("error"))
         text.append(f"{line}\n", style=theme.color("mist"))
+        if key in LOSS_NOTES:
+            text.append(f"  {LOSS_NOTES[key]}\n", style=theme.color("ash"))
     text.append("\nThe backup of the update cannot bring this back. Yes confirms these and nothing else "
                 "(update.sh --accept-data-loss-file): a loss the run finds beyond them is refused.",
                 style=f"bold {theme.color('wax')}")

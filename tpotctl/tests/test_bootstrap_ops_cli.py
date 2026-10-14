@@ -427,6 +427,26 @@ class OpsTest(unittest.TestCase):
         self.assertEqual(ops.check_data_loss([], run=run(0, error=OSError("gone")), repo_dir="/r"),
                          (False, [], "gone"))
 
+    def test_check_data_loss_takes_the_elastic_step(self):
+        """The step of an Elasticsearch before 8.19 through 8.19 has a key of its own, with a dash."""
+        def run(command, **kwargs):
+            return subprocess.CompletedProcess(command, 3, (
+                "@@tpot loss elastic-step The data of Elasticsearch 8.18.2 cannot be read by 9.5.4: the update "
+                "first runs Elasticsearch and Kibana 8.19.23 once on it.\n"
+                "@@tpot loss elastic Elasticsearch 8 -> 9 upgrades the data.\n"), "")
+        self.assertIn("elastic-step", ops.LOSS_KEYS)
+        self.assertIn("elastic", ops.LOSS_KEYS)
+        self.assertEqual(ops.check_data_loss([], run=run, repo_dir="/r"),
+                         (True, [("elastic-step", "The data of Elasticsearch 8.18.2 cannot be read by 9.5.4: the "
+                                                  "update first runs Elasticsearch and Kibana 8.19.23 once on it."),
+                                 ("elastic", "Elasticsearch 8 -> 9 upgrades the data.")], ""))
+
+    def test_the_loss_keys_are_the_ones_of_update_sh(self):
+        with open(os.path.join(ops.REPO_DIR, "update.sh"), encoding="utf-8") as handle:
+            code = "\n".join(line for line in handle.read().splitlines() if not line.lstrip().startswith("#"))
+        keys = set(re.findall(r"fuLOSS_(?:ADD|CONFIRM) ([a-z-]+) ", code))
+        self.assertEqual(keys, set(ops.LOSS_KEYS))
+
     def test_backups_newest_first(self):
         with tempfile.TemporaryDirectory() as home:
             folder = os.path.join(home, "tpot_backups")

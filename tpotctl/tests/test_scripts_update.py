@@ -933,13 +933,9 @@ SYSTEMCTL = ('#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\n'
 LOGGED = '#!/bin/sh\necho "{name} $*" >> "$HOME/calls"\n'
 
 
-class EsDataAppendTest(base.Harness):
-    """fuCHECK_ELASTIC puts the Elasticsearch data into the archive of the run by itself where there is
-    room, also into the one an update.sh of the release before (branch master) hands over: no question,
-    the archive gets the name of a full one. The fresh .tgz of the tag 24.04.1 (no handover) needs no
-    copy. Without room, or with a data/elk/data of another folder in the archive, the old way: the
-    question, or without a terminal the refusal, the rollback and T-Pot started again where
-    tpot.service is enabled, with the ways on that fit the reason and never --full."""
+class EsHarness(base.Harness):
+    """fuCHECK_ELASTIC with stubs for df, du, sudo, tar and systemctl, a checkout of its own and the
+    archive an update.sh of the release before hands over. No tests here, they are in the classes below."""
 
     HELPERS = base.DataLossTest.HELPERS + 'fuDID () { myDONE+=("$1:$2"); echo "DID: $1: $2"; }\n'
     functions = staticmethod(base.DataLossTest.functions)
@@ -1010,9 +1006,12 @@ class EsDataAppendTest(base.Harness):
             archive.add(os.path.join(source, ".env"), arcname=".env")
         return path
 
-    def run_check(self, archive, prepared="1", env="", signal_when=None, send=None):
+    # the Elasticsearch version of the images that ran so far
+    DOCKER = """docker () { [ "$1 $2" = "image inspect" ] && printf 'PATH=/bin\\nES_VER=9.3.5\\n'; }\n"""
+
+    def run_check(self, archive, prepared="1", env="", signal_when=None, send=None, extra="", late=""):
         """fuCHECK_ELASTIC after the handover (prepared) or in the first pass; with signal_when the signal
-        send goes to the whole run once that file exists."""
+        send goes to the whole run once that file exists. extra: shell code before the functions, late after."""
         with open(os.path.join(self.tpotce, ".env"), "w") as out:
             out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n" + env)
         script = textwrap.dedent(f"""
@@ -1020,14 +1019,13 @@ class EsDataAppendTest(base.Harness):
             myBACKUP_RETAIN=10 myBACKUP_RETAIN_FULL=2
             export TPOT_UPDATE_ARCHIVE="{archive}"
             myDONE=("ok:The backup is {archive}.")
-            docker () {{ [ "$1 $2" = "image inspect" ] && printf 'PATH=/bin\\nES_VER=9.3.5\\n'; }}
             trap '[ -z "${{myTMPDIR}}" ] || rm -rf "${{myTMPDIR}}"; printf "ITEM %s\\n" "${{myDONE[@]}}"; echo "HANDOVER $TPOT_UPDATE_ARCHIVE"' EXIT
-        """) + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS",
+        """) + self.DOCKER + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS",
                               "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuCAN_ROLLBACK", "fuROLLBACK_CHECKOUT",
                               "fuSTART_TPOT", "fuELASTIC_REFUSED", "fuOLD_RELEASE_BACKUP", "fuTMPDIR",
                               "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
                               "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV", *base.ES_APPEND,
-                              "fuCHECK_ELASTIC") + 'fuCHECK_ELASTIC\necho "went on"\n'
+                              "fuCHECK_ELASTIC") + late + 'fuCHECK_ELASTIC\necho "went on"\n'
         proc = subprocess.Popen(["bash", "-c", self.HELPERS + script], cwd=REPO, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, universal_newlines=True, env=self.environment(),
                                 stdin=subprocess.DEVNULL, start_new_session=True)
@@ -1066,6 +1064,15 @@ class EsDataAppendTest(base.Harness):
         self.assertNotIn("--full", flat)
         self.assertNotIn("24.04.1", flat.replace("TPOT_VERSION: 24.04.1", ""))
         return flat
+
+
+class EsDataAppendTest(EsHarness):
+    """fuCHECK_ELASTIC puts the Elasticsearch data into the archive of the run by itself where there is
+    room, also into the one an update.sh of the release before (branch master) hands over: no question,
+    the archive gets the name of a full one. The fresh .tgz of the tag 24.04.1 (no handover) needs no
+    copy. Without room, or with a data/elk/data of another folder in the archive, the old way: the
+    question, or without a terminal the refusal, the rollback and T-Pot started again where
+    tpot.service is enabled, with the ways on that fit the reason and never --full."""
 
     def test_handover_without_es_data_appends_and_renames_without_asking(self):
         self.data(os.path.join(self.tpotce, "data"))
@@ -1308,6 +1315,387 @@ class EsDataAppendTest(base.Harness):
         self.assertNotIn("systemctl start", calls)
         self.assertNotIn("T-Pot runs again", out)
         self.assertIn("DID: next: Copy ", out)                                 # T-Pot stays stopped
+
+
+# curl of the step: _cluster/health answers with the status of HOME/es_health (green without it, no
+# answer for "none"), /api/status with the code of HOME/kb_code (200 without it); HOME/health_asked once
+# the health was asked for. Every call goes into HOME/calls
+STEP_CURL = ('#!/bin/sh\necho "curl $*" >> "$HOME/calls"\nfor a; do u="$a"; done\ncase "$u" in\n'
+             '  *_cluster/health*) : > "$HOME/health_asked"; s=$(cat "$HOME/es_health" 2>/dev/null || echo green)\n'
+             '    [ "$s" = none ] && exit 7\n'
+             '    printf \'{"cluster_name":"tpotcluster","status":"%s","timed_out":false}\' "$s" ;;\n'
+             '  *api/status*) printf "%s" "$(cat "$HOME/kb_code" 2>/dev/null || echo 200)" ;;\nesac\n')
+# uname -m says what HOME/arch holds (x86_64 without it), -s Linux
+STEP_UNAME = ('#!/bin/sh\ncase "$*" in\n  -m) cat "$HOME/arch" 2>/dev/null || echo x86_64; exit 0 ;;\n'
+              '  -s|"") echo Linux; exit 0 ;;\nesac\n' f'exec {base.REAL_UNAME} "$@"\n')
+# chown logs and does nothing (the step hands the data to 1000:0 and back to 2000:2000)
+STEP_CHOWN = '#!/bin/sh\necho "chown $*" >> "$HOME/calls"\n[ ! -f "$HOME/chown_fail" ]\n'
+# df of the Docker root (docker info says $HOME/docker-root): HOME/docker_avail, 9 GB without it; the
+# rest as base.DF
+STEP_DF = ('#!/bin/sh\nfor a; do l="$a"; done\ncase "$l" in\n  "$HOME/docker-root")\n'
+           '    echo Avail; cat "$HOME/docker_avail" 2>/dev/null || echo 9000000000; exit 0 ;;\nesac\n'
+           + base.DF[len("#!/bin/sh\n"):])
+
+
+class EsStepTest(EsHarness):
+    """The data of an Elasticsearch before 8.19 cannot be read by 9: fuCHECK_ELASTIC takes it through the
+    official images of 8.19 first (fuES_STEP_819), after a yes (elastic-step, never -y) and with the data in
+    the backup of this run. A no, no room for the data or the images, or a step that does not go through is a
+    refusal; once Elasticsearch 8.19 ran on the data, T-Pot stays stopped and the way back is the restore of
+    that backup. Everything of the step goes on every way out, and the data belongs to 2000:2000 again."""
+
+    # the constants of update.sh, a short wait; docker records its calls (run with every word in [])
+    DOCKER = textwrap.dedent("""
+        eval "$(sed -nE '/^my(ES|KB)_STEP_[A-Z_]*=/p' update.sh)"
+        myES_STEP_WAIT=2 myES_STEP_PAUSE=0.1
+        timeout () { [ "$1" != "--foreground" ] || shift; shift; "$@"; }
+        docker () {
+          local myA=""
+          echo "docker $*" >> "$HOME/calls"
+          case "$1" in
+            image)
+              [ "$2" = inspect ] || return 0
+              printf 'PATH=/bin\\nES_VER=%s\\n' "$(cat "$HOME/es_old")" ;;
+            info) echo "$HOME/docker-root" ;;
+            pull) [ ! -f "$HOME/pull_fail" ] || return 1 ;;
+            run)
+              { printf 'RUN'; printf ' [%s]' "$@"; echo; } >> "$HOME/calls"
+              [ ! -f "$HOME/run_fail" ] || return 125
+              echo 0123abcd ;;
+            inspect)
+              for myA; do :; done
+              if [ -f "$HOME/dead_${myA}" ]; then echo false; else echo true; fi ;;
+          esac
+          return 0
+        }
+    """)
+    ACCEPT = "myACCEPT_LOSS=1\n"
+
+    def setUp(self):
+        super().setUp()
+        for name, text in (("curl", STEP_CURL), ("uname", STEP_UNAME), ("chown", STEP_CHOWN), ("df", STEP_DF)):
+            path = os.path.join(self.bin, name)
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(text)
+            os.chmod(path, 0o755)
+        self.write("es_old", "8.18.2\n")
+        self.version = re.search(r'^myES_STEP_VERSION="([0-9.]+)"$', base.read("update.sh"), re.M).group(1)
+        self.es_image = f"docker.elastic.co/elasticsearch/elasticsearch:{self.version}"
+        self.kb_image = f"docker.elastic.co/kibana/kibana:{self.version}"
+        self.full = os.path.join(self.backups, "20261014120000_tpot_backup_full.tar")
+
+    def runs(self):
+        """The docker run of the step, each a list of its words."""
+        return [re.findall(r"\[([^\]]*)\]", line) for line in self.calls().splitlines() if line.startswith("RUN ")]
+
+    def order(self, *texts):
+        """Each text is in the calls, in this order."""
+        calls = self.calls()
+        at = -1
+        for text in texts:
+            found = calls.find(text, at + 1)
+            self.assertGreater(found, at, f"{text!r} not after the one before in:\n{calls}")
+            at = found
+
+    def assert_cleaned_up(self, data, chowned=True):
+        calls = self.calls()
+        self.assertIn("docker stop -t 60 tpot_kb_step", calls)
+        self.assertIn("docker stop -t 120 tpot_es_step", calls)
+        self.assertIn("docker rm -f tpot_kb_step tpot_es_step", calls)
+        self.assertIn("docker network rm tpot_es_step", calls)
+        self.assertIn(f"docker rmi {self.es_image} {self.kb_image}", calls)
+        if chowned:
+            self.order("sudo chown -R 1000:0 " + data + "/elk/data", "docker rmi",
+                       "sudo chown -R 2000:2000 " + data + "/elk/data")
+        else:
+            self.assertNotIn("chown", calls)
+
+    def assert_manual(self, out, data):
+        flat = " ".join(out.split())
+        self.assertIn("To take the step by hand instead, with T-Pot stopped (sudo systemctl stop tpot):", flat)
+        self.assertIn(f"sudo cp -a {data}/elk/data {self.backups}/elk_data_8.18.2", flat)
+        self.assertIn("docker network create tpot_es_step", flat)
+        self.assertIn(f"sudo chown -R 1000:0 {data}/elk/data", flat)
+        self.assertIn("docker run -d --name tpot_es_step --network tpot_es_step -p 127.0.0.1:64398:9200 "
+                      f"-v {data}/elk/data:/usr/share/elasticsearch/data -e discovery.type=single-node "
+                      "-e xpack.security.enabled=false -e cluster.routing.allocation.disk.threshold_enabled=false",
+                      flat)
+        self.assertIn(f'-e "ES_JAVA_OPTS=-Xms1g -Xmx1g" {self.es_image}', flat)
+        self.assertIn("docker run -d --name tpot_kb_step --network tpot_es_step -p 127.0.0.1:64396:5601 "
+                      f"-e ELASTICSEARCH_HOSTS=http://tpot_es_step:9200 -e TELEMETRY_OPTIN=false {self.kb_image}",
+                      flat)
+        self.assertIn(f"sudo chown -R 2000:2000 {data}/elk/data", flat)
+        self.assertIn("then run the update again", flat)
+        return flat
+
+    def test_old_818_without_confirmation_refuses_before_any_step(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        self.write("enabled", "")
+        archive = self.master_archive()
+        before = self.read_bytes(archive)
+        code, out = self.run_check(archive)
+        self.assertEqual(code, 5, out)
+        self.assertNotIn("went on", out)
+        flat = self.assert_ways_on(out)
+        self.assertIn(f"WARN: The data of Elasticsearch 8.18.2 cannot be read by 9.5.4: the update first runs "
+                      f"Elasticsearch and Kibana {self.version} once on it (in {data}/elk), then the new release. "
+                      "Both steps change the data for good, only the backup of this run brings it back.", flat)
+        self.assertIn("Not confirmed: no terminal.", flat)
+        self.assert_manual(out, data)
+        calls = self.calls()
+        for step in ("RUN", "docker pull", "docker network create", "chown", "tar rf", "docker info"):
+            self.assertNotIn(step, calls)
+        self.assertEqual(self.read_bytes(archive), before)                    # no backup before the yes
+        self.order(f"restore.sh -f {archive} -c", "systemctl start tpot.service")
+        self.assertIn("DID: fail: Not updated: the step through Elasticsearch 8.19 was not confirmed, the checkout "
+                      "and the configuration are back.", flat)
+        self.assertIn("DID: next: To take the step without a terminal: ./update.sh -y -- --accept-data-loss", flat)
+
+    def test_a_no_at_the_terminal_refuses(self):
+        """At a terminal it asks, default no (fuLOSS_CONFIRM as at a terminal, the stub of fuUI_CONFIRM says
+        no)."""
+        data = self.data(os.path.join(self.tpotce, "data"))
+        archive = self.master_archive()
+        terminal = """eval "$(declare -f fuLOSS_CONFIRM | sed 's/\\[ -t 0 \\]/true/')"\n"""
+        code, out = self.run_check(archive, late=terminal)
+        self.assertEqual(code, 5, out)
+        self.assertIn("ASKED: --default no Accept this loss of data?", out)
+        self.assertNotIn("Not confirmed: no terminal", out)
+        self.assert_manual(out, data)
+        self.assertNotIn("RUN", self.calls())
+        self.assertIn("DID: fail: Not updated: the step through Elasticsearch 8.19 was not confirmed", out)
+
+    def test_y_is_no_confirmation_and_only_its_key_confirms_it(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        found = os.path.join(self.home, "found")
+        for line, confirmed in (("@@tpot loss elastic Elasticsearch 8.18.2 -> 9.5.4 upgrades the data.", False),
+                                ("@@tpot loss elastic-step The data of Elasticsearch 8.18.2 ...", True)):
+            with self.subTest(line=line):
+                shutil.rmtree(self.backups, ignore_errors=True)
+                self.forget_calls()
+                self.write("found", line + "\n")
+                code, out = self.run_check(self.master_archive(), extra=f'myCONFIRMED=y myACCEPT_FILE="{found}"\n')
+                self.assertEqual(code, 0 if confirmed else 5, out)
+                self.assertEqual(bool(self.runs()), confirmed, out)
+                if confirmed:
+                    self.assertIn("(confirmed with --accept-data-loss-file)", out)
+                else:
+                    self.assert_manual(out, data)
+
+    def test_old_818_confirmed_backup_fails_refuses(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        self.write("es_need", "900000000\n")                                  # no room for it in the backup
+        self.write("enabled", "")
+        archive = self.master_archive()
+        before = self.read_bytes(archive)
+        code, out = self.run_check(archive, extra=self.ACCEPT)
+        self.assertEqual(code, 5, out)
+        self.assertIn("(confirmed with --accept-data-loss)", out)
+        flat = self.assert_ways_on(out)
+        self.assert_manual(out, data)
+        calls = self.calls()
+        for step in ("RUN", "docker pull", "docker network create", "chown", "tar rf"):
+            self.assertNotIn(step, calls)
+        self.assertEqual(self.read_bytes(archive), before)
+        self.order(f"restore.sh -f {archive} -c", "systemctl start tpot.service")
+        self.assertIn("DID: fail: Not updated: the Elasticsearch data did not go into the backup of this run, the "
+                      "step through 8.19 needs it there, the checkout and the configuration are back.", flat)
+        self.assertIn("DID: info: The Elasticsearch data did not go into the backup: no room for it in the backup:",
+                      flat)
+        self.assertIn(f"DID: next: Make room in {self.backups}", flat)
+        self.assertNotIn("accept-data-loss (", flat.replace("(confirmed with --accept-data-loss)", ""))
+
+    def test_old_818_confirmed_runs_the_step_then_goes_on(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        archive = self.master_archive()
+        code, out = self.run_check(archive, extra=self.ACCEPT)
+        self.assertEqual(code, 0, out)
+        self.assertIn("went on", out)                                          # on to the pull of the release
+        self.assertIn("data/elk/data/nodes/0/live", self.members(self.full))   # the backup first, then the step
+        self.order("tar rf", "docker info --format {{.DockerRootDir}}", f"docker pull {self.es_image}",
+                   f"docker pull {self.kb_image}", "docker network create tpot_es_step",
+                   f"sudo chown -R 1000:0 {data}/elk/data", "RUN [run] [-d] [--name] [tpot_es_step]",
+                   "RUN [run] [-d] [--name] [tpot_kb_step]",
+                   "curl -s -m 40 http://127.0.0.1:64398/_cluster/health?wait_for_status=yellow&timeout=30s",
+                   "http://127.0.0.1:64396/api/status", "docker stop -t 60 tpot_kb_step",
+                   "docker stop -t 120 tpot_es_step", "docker network rm tpot_es_step",
+                   f"docker rmi {self.es_image} {self.kb_image}", f"sudo chown -R 2000:2000 {data}/elk/data")
+        es, kb = self.runs()
+        self.assertEqual(es, ["run", "-d", "--name", "tpot_es_step", "--network", "tpot_es_step",
+                              "-p", "127.0.0.1:64398:9200", "-v", f"{data}/elk/data:/usr/share/elasticsearch/data",
+                              "-e", "discovery.type=single-node", "-e", "xpack.security.enabled=false",
+                              "-e", "cluster.routing.allocation.disk.threshold_enabled=false",
+                              "-e", "cluster.name=tpotcluster", "-e", "node.name=tpotcluster-node-01",
+                              "-e", "xpack.ml.enabled=false", "-e", "ES_JAVA_OPTS=-Xms1g -Xmx1g", self.es_image])
+        self.assertEqual(kb, ["run", "-d", "--name", "tpot_kb_step", "--network", "tpot_es_step",
+                              "-p", "127.0.0.1:64396:5601", "-e", "ELASTICSEARCH_HOSTS=http://tpot_es_step:9200",
+                              "-e", "TELEMETRY_OPTIN=false", self.kb_image])
+        self.assert_cleaned_up(data)
+        self.assertIn("DID: ok: Elasticsearch data upgraded to 8.19 for the step to 9.5.4.", out)
+        self.assertIn(f"ITEM ok:The Elasticsearch data is now in {self.full}.", out)
+        self.assertNotIn("restore.sh", self.calls())
+        self.assertNotIn("systemctl", self.calls())
+
+    def test_master_full_archive_counts_and_the_step_runs(self):
+        """master's --full archive holds data/elk/data of ~/tpotce/data already: no append, the step runs."""
+        self.data(os.path.join(self.tpotce, "data"))
+        archive = self.master_archive({"data/elk/data/nodes/0/live": "live\n"},
+                                      name="20261005101010_tpot_backup_full.tar")
+        code, out = self.run_check(archive, extra=self.ACCEPT)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("tar rf", self.calls())
+        self.assertEqual(len(self.runs()), 2)
+        self.assertTrue(os.path.exists(archive))
+
+    def test_step_sets_usesve_only_on_aarch64(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        for arch, sve in (("aarch64", True), ("arm64", True), ("x86_64", False)):
+            with self.subTest(arch=arch):
+                shutil.rmtree(self.backups, ignore_errors=True)
+                self.forget_calls()
+                self.write("arch", arch + "\n")
+                code, out = self.run_check(self.master_archive(), extra=self.ACCEPT)
+                self.assertEqual(code, 0, out)
+                es, kb = self.runs()
+                if sve:
+                    self.assertIn("ES_JAVA_OPTS=-Xms1g -Xmx1g -XX:UseSVE=0", es)
+                    self.assertEqual(es[-3:], ["-e", "CLI_JAVA_OPTS=-XX:UseSVE=0", self.es_image])
+                else:
+                    self.assertIn("ES_JAVA_OPTS=-Xms1g -Xmx1g", es)
+                    self.assertFalse([word for word in es + kb if "SVE" in word], es)
+                self.assertFalse([word for word in kb if "JAVA" in word], kb)
+                self.assertIn(f"{data}/elk/data:/usr/share/elasticsearch/data", es)
+
+    def test_step_timeout_cleans_up_and_refuses(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        self.write("enabled", "")
+        for health, why in (("red", "the cluster of Elasticsearch 8.19.23 stayed red"),
+                            ("none", "Elasticsearch 8.19.23 did not answer within")):
+            with self.subTest(health=health):
+                shutil.rmtree(self.backups, ignore_errors=True)
+                self.forget_calls()
+                self.write("es_health", health + "\n")
+                archive = self.master_archive()
+                code, out = self.run_check(archive, extra=self.ACCEPT)
+                self.assertEqual(code, 5, out)
+                flat = " ".join(out.split())
+                self.assertIn(f"ERROR: The step through Elasticsearch 8.19 did not go through: "
+                              f"{why.replace('8.19.23', self.version)}", flat)
+                self.assertIn(f"./restore.sh -f {self.full} -g data puts the data from before the step back.", flat)
+                self.assert_cleaned_up(data)
+                calls = self.calls()
+                self.assertIn(f"restore.sh -f {self.full} -c", calls)              # the checkout goes back
+                self.assertNotIn("systemctl start", calls)                         # not on the changed data
+                self.assertNotIn("api/status", calls)
+                self.assertIn("DID: warn: T-Pot stays stopped: the release before may not start on the data the "
+                              "step through Elasticsearch 8.19 changed.", flat)
+                # the restore.sh of the release before knows no -g: by hand
+                self.assertIn(f"DID: next: Put the Elasticsearch data from before the step back: sudo mv "
+                              f"{data}/elk/data {data}/elk/data.step, then sudo tar xpf {self.full} --numeric-owner "
+                              f"-C {data} --strip-components=1 data/elk/data", flat)
+                self.assertNotIn("went on", out)
+                self.assertNotIn("To take the step by hand", flat)
+
+    def test_the_restore_hint_takes_g_where_restore_sh_knows_it(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        with open(os.path.join(self.tpotce, "restore.sh"), "a") as out:
+            out.write('# while getopts ":lf:ycg:B:h" opt; do\n')
+        self.write("dead_tpot_es_step", "")                                    # it ends on the data
+        code, out = self.run_check(self.master_archive(), extra=self.ACCEPT)
+        self.assertEqual(code, 5, out)
+        flat = " ".join(out.split())
+        self.assertIn(f"Elasticsearch {self.version} ended on the data", flat)
+        self.assertIn(f"DID: next: Put the Elasticsearch data from before the step back: ./restore.sh -f {self.full} "
+                      "-g data", flat)
+        self.assert_cleaned_up(data)
+
+    def test_a_failed_pull_touches_nothing_and_starts_tpot_again(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        self.write("enabled", "")
+        self.write("pull_fail", "")
+        code, out = self.run_check(self.master_archive(), extra=self.ACCEPT)
+        self.assertEqual(code, 5, out)
+        flat = self.assert_manual(out, data)
+        self.assertIn("could not be pulled", flat)
+        self.assertIn("The data was not touched.", flat)
+        calls = self.calls()
+        self.assertNotIn("RUN", calls)
+        self.assertNotIn("chown", calls)
+        self.assertIn(f"docker rmi {self.es_image} {self.kb_image}", calls)
+        self.order(f"restore.sh -f {self.full} -c", "systemctl start tpot.service")
+
+    def test_no_room_for_the_images_refuses_before_the_pull(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        self.write("enabled", "")
+        self.write("docker_avail", "1000000000\n")
+        code, out = self.run_check(self.master_archive(), extra=self.ACCEPT)
+        self.assertEqual(code, 5, out)
+        flat = self.assert_manual(out, data)
+        self.assertIn(f"The images of the step need about 4096 MB free in {self.home}/docker-root, it has 953 MB.",
+                      flat)
+        self.assertIn(f"DID: next: Make room in {self.home}/docker-root (about 4096 MB free for the images of the "
+                      "step), then run the update again.", flat)
+        calls = self.calls()
+        for step in ("RUN", "docker pull", "chown"):
+            self.assertNotIn(step, calls)
+        self.order(f"restore.sh -f {self.full} -c", "systemctl start tpot.service")
+
+    def test_a_signal_during_the_step_cleans_up(self):
+        import signal
+        data = self.data(os.path.join(self.tpotce, "data"))
+        self.write("es_health", "none\n")
+        for send in (signal.SIGINT, signal.SIGTERM):
+            with self.subTest(signal=send):
+                shutil.rmtree(self.backups, ignore_errors=True)
+                self.forget_calls()
+                asked = os.path.join(self.home, "health_asked")
+                if os.path.exists(asked):
+                    os.remove(asked)
+                code, out = self.run_check(self.master_archive(), extra=self.ACCEPT + "myES_STEP_WAIT=60\n",
+                                           signal_when=asked, send=send)
+                self.assertEqual(code, 5, out)
+                self.assertIn("did not go through: it was stopped", out)
+                self.assert_cleaned_up(data)
+                self.assertNotIn("systemctl start", self.calls())
+
+    def test_check_data_loss_reports_the_step(self):
+        self.CHECK = base.DataLossTest.CHECK.replace("ES_VER=8.19.0", "ES_VER=8.18.2")
+        for need, hint in (("1000000", False), ("900000000", True)):
+            with self.subTest(need=need):
+                shutil.rmtree(os.path.join(self.home, "origin"), ignore_errors=True)
+                self.target()
+                self.write("es_need", need + "\n")
+                out, lines = self.check(extra=self.DOCKER.split("timeout ()")[0])
+                keys = [line.split()[2] for line in lines]
+                self.assertIn("elastic-step", keys, out)
+                self.assertNotIn("elastic", keys, out)
+                line = [line for line in lines if line.split()[2] == "elastic-step"][0]
+                self.assertTrue(line.startswith(
+                    f"@@tpot loss elastic-step The data of Elasticsearch 8.18.2 cannot be read by 9.1.0: the update "
+                    f"first runs Elasticsearch and Kibana {self.version} once on it"), line)
+                self.assertEqual("the run refuses the step then" in out, hint, out)
+                self.assertIn("rc=3", out)
+
+    def test_819_and_9x_take_no_step(self):
+        self.data(os.path.join(self.tpotce, "data"))
+        dockerfile = os.path.join(self.tpotce, "docker", "elk", "elasticsearch", "Dockerfile")
+        for old, new in (("8.19.0", "9.5.4"), ("9.3.5", "9.5.4"), ("8.18.2", "8.19.5"), ("7.17.9", "9.5.4")):
+            with self.subTest(old=old, new=new):
+                shutil.rmtree(self.backups, ignore_errors=True)
+                self.forget_calls()
+                self.write("es_old", old + "\n")
+                with open(dockerfile, "w") as out:
+                    out.write(f"FROM alpine\nARG ES_VER={new}\n")
+                code, out = self.run_check(self.master_archive())
+                self.assertEqual(code, 0, out)                                 # A1: into the backup, no question
+                self.assertIn("went on", out)
+                self.assertEqual(self.runs(), [])
+                self.assertNotIn("docker pull", self.calls())
+                self.assertNotIn("elastic-step", out)
+        self.CHECK = base.DataLossTest.CHECK
+        self.target()
+        out, lines = self.check(extra=self.DOCKER.split("timeout ()")[0])
+        self.assertEqual([line.split()[2] for line in lines if "elastic" in line.split()[2]], [], out)
 
 
 class StopTest(Scripts):

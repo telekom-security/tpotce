@@ -438,13 +438,18 @@ def script_command(name: str, args: List[str], repo_dir: str = REPO_DIR) -> List
 
 # update.sh --check-data-loss: one line per loss of data, exit 0 none, 3 some, anything else unknown
 LOSS_MARK = "@@tpot loss "
+# its keys (fuLOSS_ADD): older backups deleted to make room, the Elasticsearch data an upgrade changes
+# without a copy in the backup, the step of the data of an Elasticsearch before 8.19 through 8.19 on the
+# way to 9, images that cannot be pulled again. A key not in here is passed on all the same: update.sh
+# refuses what it does not find confirmed.
+LOSS_KEYS = ("backups", "elastic", "elastic-step", "images")
 
 
 def check_data_loss(args: List[str], timeout: int = 180, run: Callable = subprocess.run,
                     repo_dir: str = REPO_DIR) -> Tuple[bool, List[Tuple[str, str]], str]:
     """What an update (args as for update.sh: --full, --backup-only, -b, -r) would lose for good, read
     with update.sh --check-data-loss, which changes nothing and asks nothing. (True, [(key, text), ...], "")
-    when it could tell, (False, [], why) when it could not (another exit code, a timeout, no script): why is
+    when it could tell (key one of LOSS_KEYS, e.g. elastic-step; a key with a dash is one word), (False, [], why) when it could not (another exit code, a timeout, no script): why is
     the last line update.sh wrote to stderr, without its marks."""
     try:
         proc = run(script_command("update.sh", ["--check-data-loss"] + list(args), repo_dir), cwd=repo_dir,

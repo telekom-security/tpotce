@@ -81,6 +81,20 @@ myES="http://127.0.0.1:64298"
 # right after a reboot would otherwise walk away without the saved objects.
 myELASTIC_GRACE="${TPOT_ELASTIC_GRACE:-120}"
 
+# Elasticsearch 9 reads only the data of 8.19, the last minor of 8: the data of an older 8 goes
+# through the official images of this version once (fuES_STEP_819), Kibana migrates its saved
+# objects there. Their containers and network, the ports on the loopback interface (free while
+# T-Pot is stopped), the room the images need in the Docker root, how long the step may take
+# (seconds) and the pause between two looks.
+myES_STEP_VERSION="8.19.23"
+myES_STEP_NAME="tpot_es_step"
+myKB_STEP_NAME="tpot_kb_step"
+myES_STEP_ES="http://127.0.0.1:64398"
+myES_STEP_KB="http://127.0.0.1:64396"
+myES_STEP_SPACE=4294967296
+myES_STEP_WAIT="${TPOT_ES_STEP_WAIT:-1200}"
+myES_STEP_PAUSE=5
+
 # Working directory, cleaned up when the script ends
 myTMPDIR=""
 # The archive of the update.sh of the tag 24.04.1 as read in this run (fuOLD_UPDATER_READ) and the folder in
@@ -327,8 +341,9 @@ fetch at most). Exit 0: nothing found, 3: found, 1: it cannot tell." \
 ask (for the command line and cron, where you typed it)" \
 	  --opt "--accept-data-loss-file <file>" "Confirm only the losses of this file: the '@@tpot loss' lines
 of --check-data-loss that were confirmed (the T-Pot Manager
-hands one over). A loss it does not name, or older backups it
-does not all name, is not confirmed." \
+hands one over), keys backups, elastic, elastic-step, images.
+A loss it does not name, or older backups it does not all
+name, is not confirmed." \
 	  --opt "-h" "Show this help message" \
 	  --example "./update.sh -y" "Update from the branch of ~/tpotce, T-Pot stays stopped afterwards" \
 	  --example "./update.sh -y -s --full" "Update with all of data/ in the backup and start T-Pot again" \
@@ -338,7 +353,8 @@ does not all name, is not confirmed." \
 	  --note "restore.sh brings a backup back, tpot update hands every option on to update.sh." \
 	  --note "A loss of data is what the backup of the run cannot bring back: older backups deleted to
 make room, an Elasticsearch data upgrade whose data the backup has no room for (without --full
-the run adds that data to its backup by itself where there is room), images built here or not
+the run adds that data to its backup by itself where there is room), the step of the data of an
+Elasticsearch before 8.19 through 8.19 on the way to 9, images built here or not
 confirmed as pullable again. Each one asks at a terminal (default no); without one only
 --accept-data-loss (every loss) or --accept-data-loss-file (the losses it names) confirms it.
 Not confirmed, the run keeps the images and goes on, or stops with exit 5 (T-Pot keeps running,
@@ -412,10 +428,12 @@ fuDONE_IMPORT
 
 # A loss of data is what the backup of this run cannot bring back: older backups deleted to
 # make room, an Elasticsearch data upgrade whose data the backup has no room for (fuAPPEND_ES_DATA),
-# images that cannot be pulled again.
+# the step of the data of an Elasticsearch older than 8.19 through 8.19 (elastic-step, fuES_STEP_819:
+# it changes the data for good, only the backup of the run brings it back), images that cannot be
+# pulled again.
 # --check-data-loss only lists them, one line each for the T-Pot Manager, which asks before it
 # starts the update with --accept-data-loss-file and the lines that were confirmed.
-function fuLOSS_ADD () {   # $1 = backups | elastic | images, $2 = text
+function fuLOSS_ADD () {   # $1 = backups | elastic | elastic-step | images, $2 = text
 	myLOSSES=$((myLOSSES + 1))
 	echo "@@tpot loss $1 $2"
 }
@@ -427,7 +445,7 @@ function fuLOSS_ADD () {   # $1 = backups | elastic | images, $2 = text
 # lacks its end (20261010_tpot_backup for 20261010_tpot_backup.tar) is not confirmed.
 # An entry with ", " in it cannot be told from two entries, it is never confirmed. No loss names
 # one: the backups are *_tpot_backup*.tar of update.sh and an image reference has no comma.
-function fuLOSS_IN_FILE () {   # $1 = backups | elastic | images, $2... = the names it deletes
+function fuLOSS_IN_FILE () {   # $1 = backups | elastic | elastic-step | images, $2... = the names it deletes
 	local myKEY="$1" myLINE="" myREST="" myENTRY="" myENTRIES="" myFOUND="" myNAME="" myHIT=""
 	shift
 	[ -n "${myACCEPT_FILE}" ] && [ -r "${myACCEPT_FILE}" ] || return 1
@@ -480,7 +498,7 @@ function fuLOSS_IN_FILE () {   # $1 = backups | elastic | images, $2... = the na
 # does not confirm the loss differ with that: here it was not shown like this before the run (a name is
 # missing), there the file names no loss of its key. Otherwise what they decide is the same: accept,
 # file, terminal, refusal, in the same order, with the same warnings and the same question.
-function fuLOSS_CONFIRM () {   # $1 = backups | elastic | images, $2 = text, $3... = the names it deletes
+function fuLOSS_CONFIRM () {   # $1 = backups | elastic | elastic-step | images, $2 = text, $3... = the names it deletes
 	local myKEY="$1" myTEXT="$2"
 	shift 2
 	if [ -n "${myACCEPT_LOSS}" ];
@@ -1372,22 +1390,68 @@ function fuES_ACCEPT_TEXT () {
 	fi
 }
 
+# The ways on after the step through 8.19 (fuES_STEP_819) was refused before it touched the data:
+# the reason the data did not go into the backup, the room it needs, the way by hand (the lines of
+# fuES_STEP_MANUAL above) and, where the step was not confirmed, the flag that confirms it
+function fuES_STEP_REFUSED_ITEMS () {
+	[ -z "${myES_APPEND_WHY}" ] || fuDID info "The Elasticsearch data did not go into the backup: ${myES_APPEND_WHY}"
+	[ "${myES_APPEND_KIND}" != "room" ] || fuDID next "$(fuES_ROOM_TEXT)"
+	[ -z "${myES_STEP_NEXT}" ] || fuDID next "${myES_STEP_NEXT}"
+	fuDID next "Or take the step by hand with T-Pot stopped, as the lines above show (a copy of ${myDATA}/elk/data first), then run the update again."
+	[ -n "${myES_STEP_NOT_CONFIRMED}" ] || return 0
+	if [ -n "${myPREPARED}" ];
+	  then fuDID next "To take the step without a terminal: ./update.sh -y -- --accept-data-loss (an older update.sh rejects --accept-data-loss alone, after -- every one takes it)."
+	  else fuDID next "To take the step without a terminal: ./update.sh -y --accept-data-loss."
+	fi
+}
+
+# The ways on after the step had started Elasticsearch 8.19 on the data (myES_STEP_TOUCHED): the
+# backup of this run puts the data from before the step back, with the restore.sh that is in
+# ~/tpotce now (the one of the release before after a rollback: without -g, by hand then)
+function fuES_STEP_RESTORE_ITEMS () {
+	if grep -q 'getopts ":[^"]*g:' "$HOME/tpotce/restore.sh" 2>/dev/null;
+	  then
+	    fuDID next "Put the Elasticsearch data from before the step back: ./restore.sh -f ${myARCHIVE} -g data"
+	  else
+	    fuDID next "Put the Elasticsearch data from before the step back: sudo mv ${myDATA}/elk/data ${myDATA}/elk/data.step, then sudo tar xpf ${myARCHIVE} --numeric-owner -C ${myDATA} --strip-components=1 data/elk/data"
+	fi
+	fuDID next "Then start T-Pot (sudo systemctl start tpot), see ${myLOG} for why the step did not go through and run the update again."
+}
+
 # The Elasticsearch upgrade of fuCHECK_ELASTIC was not confirmed (a no, no terminal, Ctrl+C at
-# the question or while its data went into the backup): the checkout and the configuration go
-# back to the release T-Pot ran so far, and T-Pot starts again on it where it ran before
-# (fuRESTART_AFTER_REFUSAL). Where no rollback is possible (myROLLBACK empty, see
+# the question or while its data went into the backup), or its step through 8.19 did not go
+# through (myES_STEP, myES_REFUSED_WHY says why, fuES_STEP_819): the checkout and the
+# configuration go back to the release T-Pot ran so far, and T-Pot starts again on it where it ran
+# before (fuRESTART_AFTER_REFUSAL). Where no rollback is possible (myROLLBACK empty, see
 # fuCHECK_ELASTIC) T-Pot stays stopped: its next start upgrades the data. myDATA and myOLD are
 # the ones of fuCHECK_ELASTIC. The summary says what kept the data out of the backup
-# (myES_APPEND_WHY of fuAPPEND_ES_DATA) and the ways on that fit it.
+# (myES_APPEND_WHY of fuAPPEND_ES_DATA) and the ways on that fit it. Once the step had started
+# Elasticsearch 8.19 on the data (myES_STEP_TOUCHED) the release before may not read it any more:
+# T-Pot stays stopped, and the summary says how the backup of this run puts the data back.
 function fuELASTIC_REFUSED () {
 	trap - INT
+	local myWHY="${myES_REFUSED_WHY:-the Elasticsearch upgrade was not confirmed}"
 	echo
-	fuUI_HINT "Nothing was pulled and no image was removed."
+	if [ -n "${myES_STEP_PULLED}" ];
+	  then fuUI_HINT "The images of the release were not pulled, no image of T-Pot was removed."
+	  else fuUI_HINT "Nothing was pulled and no image was removed."
+	fi
 	if [ -z "${myROLLBACK}" ];
 	  then
 	    fuUI_HINT "T-Pot stays stopped. Exiting."
 	    echo
-	    fuDID fail "Not updated: the Elasticsearch upgrade was not confirmed. The checkout is already the new release, the next start of T-Pot upgrades the data: T-Pot stays stopped."
+	    if [ -n "${myES_STEP_TOUCHED}" ];
+	      then
+	        fuDID fail "Not updated: ${myWHY}. The checkout is already the new release: T-Pot stays stopped."
+	        fuES_STEP_RESTORE_ITEMS
+	        exit 5
+	    fi
+	    fuDID fail "Not updated: ${myWHY}. The checkout is already the new release, the next start of T-Pot upgrades the data: T-Pot stays stopped."
+	    if [ -n "${myES_STEP}" ];
+	      then
+	        fuES_STEP_REFUSED_ITEMS
+	        exit 5
+	    fi
 	    [ -z "${myES_APPEND_WHY}" ] || fuDID info "The Elasticsearch data did not go into the backup: ${myES_APPEND_WHY}"
 	    fuDID next "Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}), then run the update again."
 	    exit 5
@@ -1400,28 +1464,46 @@ function fuELASTIC_REFUSED () {
 	trap - INT
 	if [ "${myRC}" -eq 0 ];
 	  then
-	    fuDID fail "Not updated: the Elasticsearch upgrade was not confirmed, the checkout and the configuration are back."
-	    # T-Pot runs again, on the release and the data it had before this run
-	    fuRESTART_AFTER_REFUSAL && myRUNS="1"
+	    fuDID fail "Not updated: ${myWHY}, the checkout and the configuration are back."
+	    # T-Pot runs again, on the release and the data it had before this run; not on data the
+	    # step may have changed
+	    if [ -n "${myES_STEP_TOUCHED}" ];
+	      then
+	        fuUI_HINT "T-Pot stays stopped: the release before may not start on data the step changed."
+	        fuDID warn "T-Pot stays stopped: the release before may not start on the data the step through Elasticsearch ${myES_STEP_VERSION%.*} changed."
+	      else
+	        fuRESTART_AFTER_REFUSAL && myRUNS="1"
+	    fi
 	    fuUI_HINT "Exiting."
 	    echo
 	  else
 	    fuUI_HINT "Exiting."
 	    echo
-	    fuDID fail "Not updated: the Elasticsearch upgrade was not confirmed, but the checkout could not be put back: the next start of T-Pot upgrades the data."
+	    if [ -n "${myES_STEP_TOUCHED}" ];
+	      then fuDID fail "Not updated: ${myWHY}, and the checkout could not be put back: T-Pot stays stopped."
+	      else fuDID fail "Not updated: ${myWHY}, but the checkout could not be put back: the next start of T-Pot upgrades the data."
+	    fi
 	fi
-	[ -z "${myES_APPEND_WHY}" ] || fuDID info "The Elasticsearch data did not go into the backup: ${myES_APPEND_WHY}"
-	# while T-Pot is stopped its data can be copied by hand; a data/elk/data of another folder in the
-	# archive leaves no other way to a copy
-	if [ -z "${myRUNS}" ] || [ "${myES_APPEND_KIND}" == "stale" ];
+	if [ -n "${myES_STEP_TOUCHED}" ];
 	  then
-	    fuDID next "Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}, with T-Pot stopped), then run the update again and confirm the upgrade."
+	    fuES_STEP_RESTORE_ITEMS
+	elif [ -n "${myES_STEP}" ];
+	  then
+	    fuES_STEP_REFUSED_ITEMS
+	else
+	    [ -z "${myES_APPEND_WHY}" ] || fuDID info "The Elasticsearch data did not go into the backup: ${myES_APPEND_WHY}"
+	    # while T-Pot is stopped its data can be copied by hand; a data/elk/data of another folder in the
+	    # archive leaves no other way to a copy
+	    if [ -z "${myRUNS}" ] || [ "${myES_APPEND_KIND}" == "stale" ];
+	      then
+	        fuDID next "Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}, with T-Pot stopped), then run the update again and confirm the upgrade."
+	    fi
+	    case "${myES_APPEND_KIND}" in
+	      room) fuDID next "$(fuES_ROOM_TEXT)" ;;
+	      tar)  fuDID next "Or see why tar could not add the data (${myLOG}), then run the update again." ;;
+	    esac
+	    fuDID next "$(fuES_ACCEPT_TEXT)"
 	fi
-	case "${myES_APPEND_KIND}" in
-	  room) fuDID next "$(fuES_ROOM_TEXT)" ;;
-	  tar)  fuDID next "Or see why tar could not add the data (${myLOG}), then run the update again." ;;
-	esac
-	fuDID next "$(fuES_ACCEPT_TEXT)"
 	if [ -n "${myPREPARED}" ];
 	  then
 	    fuUI_HINT "Each run of the update.sh that started this run writes a backup to ${myBACKUPDIR} before it gets here, a cron job as well: fix the cause or answer at a terminal."
@@ -1881,6 +1963,270 @@ function fuAPPEND_ES_DATA () {   # $1 = the data folder
 	return 0
 }
 
+# Does the data of Elasticsearch $1 need the step through 8.19 before $2 reads it? An 8 before 8.19
+# on the way to 9 or later: Elasticsearch 9 reads only the data of 8.19. rc 0 when it does.
+function fuES_NEEDS_STEP () {   # $1 = the version that ran so far, $2 = the version of the release
+	local myMAJOR="${2%%.*}" myMINOR=""
+	[[ "$1" =~ ^8\.([0-9]+)\.[0-9]+ ]] || return 1
+	myMINOR="${BASH_REMATCH[1]}"
+	[[ "${myMAJOR}" =~ ^[0-9]+$ ]] && [ "${myMAJOR}" -ge 9 ] && [ "$(( 10#${myMINOR} ))" -lt 19 ]
+}
+
+# The loss of the step through 8.19, for fuLOSS_CONFIRM and fuLOSS_ADD: the same text in the run
+# and in --check-data-loss
+function fuES_STEP_TEXT () {   # $1 = the version that ran so far, $2 = the version of the release, $3 = the data folder
+	echo "The data of Elasticsearch $1 cannot be read by $2: the update first runs Elasticsearch and Kibana ${myES_STEP_VERSION} once on it (in $3/elk), then the new release. Both steps change the data for good, only the backup of this run brings it back. A backup with the data is attempted first."
+}
+
+# The two docker run of the step, as arrays, for the step and for the lines by hand
+# (fuES_STEP_MANUAL): the official images, the settings of T-Pot's elasticsearch.yml that matter for
+# its data (cluster and node name, no machine learning) and no disk watermarks: the step only reads
+# the data in. The JDK of the official images can stop on aarch64 hosts without -XX:UseSVE=0 (it did with
+# 8.16 on real data), it is set there only.
+function fuES_STEP_COMMANDS () {   # $1 = the data folder
+	local mySVE=""
+	case "$(uname -m 2>/dev/null)" in
+	  aarch64|arm64) mySVE=" -XX:UseSVE=0" ;;
+	esac
+	myES_STEP_ES_IMAGE="docker.elastic.co/elasticsearch/elasticsearch:${myES_STEP_VERSION}"
+	myES_STEP_KB_IMAGE="docker.elastic.co/kibana/kibana:${myES_STEP_VERSION}"
+	myES_STEP_ES_RUN=(docker run -d --name "${myES_STEP_NAME}" --network "${myES_STEP_NAME}"
+	  -p "127.0.0.1:${myES_STEP_ES##*:}:9200" -v "$1/elk/data:/usr/share/elasticsearch/data"
+	  -e discovery.type=single-node -e xpack.security.enabled=false
+	  -e cluster.routing.allocation.disk.threshold_enabled=false
+	  -e cluster.name=tpotcluster -e node.name=tpotcluster-node-01 -e xpack.ml.enabled=false
+	  -e "ES_JAVA_OPTS=-Xms1g -Xmx1g${mySVE}")
+	[ -z "${mySVE}" ] || myES_STEP_ES_RUN+=(-e CLI_JAVA_OPTS=-XX:UseSVE=0)
+	myES_STEP_ES_RUN+=("${myES_STEP_ES_IMAGE}")
+	myES_STEP_KB_RUN=(docker run -d --name "${myKB_STEP_NAME}" --network "${myES_STEP_NAME}"
+	  -p "127.0.0.1:${myES_STEP_KB##*:}:5601" -e "ELASTICSEARCH_HOSTS=http://${myES_STEP_NAME}:9200"
+	  -e TELEMETRY_OPTIN=false "${myES_STEP_KB_IMAGE}")
+}
+
+# A command as one line to type: words with a space in quotes
+function fuES_STEP_LINE () {   # $@ = the words
+	local myWORD="" myLINE=""
+	for myWORD in "$@";
+	  do
+	    case "${myWORD}" in
+	      *" "*) myLINE="${myLINE} \"${myWORD}\"" ;;
+	      *)     myLINE="${myLINE} ${myWORD}" ;;
+	    esac
+	  done
+	echo "${myLINE# }"
+}
+
+# The step by hand, for a refusal before it touched the data: the same commands as fuES_STEP_819
+function fuES_STEP_MANUAL () {   # $1 = the data folder
+	fuES_STEP_COMMANDS "$1"
+	fuUI_HINT "To take the step by hand instead, with T-Pot stopped (sudo systemctl stop tpot):"
+	fuUI_HINT "  sudo cp -a $1/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}"
+	fuUI_HINT "  docker network create ${myES_STEP_NAME}"
+	fuUI_HINT "  sudo chown -R 1000:0 $1/elk/data"
+	fuUI_HINT "  $(fuES_STEP_LINE "${myES_STEP_ES_RUN[@]}")"
+	fuUI_HINT "  $(fuES_STEP_LINE "${myES_STEP_KB_RUN[@]}")"
+	fuUI_HINT "  wait until curl -s -o /dev/null -w '%{http_code}' ${myES_STEP_KB}/api/status says 200 (Kibana migrated its objects)"
+	fuUI_HINT "  docker stop -t 120 ${myKB_STEP_NAME} ${myES_STEP_NAME}; docker rm ${myKB_STEP_NAME} ${myES_STEP_NAME}; docker network rm ${myES_STEP_NAME}"
+	fuUI_HINT "  sudo chown -R 2000:2000 $1/elk/data"
+	fuUI_HINT "then run the update again (it takes the step once more, on data of 8.19 that goes quickly)."
+}
+
+# The step was refused before it touched the data (a no, no room for the data in the backup or for
+# the images in the Docker root): the way by hand, then the refusal of fuELASTIC_REFUSED
+function fuES_STEP_REFUSED () {
+	trap - INT
+	echo
+	fuES_STEP_MANUAL "${myDATA}"
+	fuELASTIC_REFUSED
+}
+
+# Room for the images of the step in the Docker root (docker info): myES_STEP_SPACE bytes, the
+# images unpacked and the layers while they come in. rc 0 when there is room; otherwise
+# myES_REFUSED_WHY and myES_STEP_NEXT say why and what to do.
+function fuES_STEP_ROOM () {
+	local myROOT="" myFREE=""
+	myROOT=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null)
+	[ -n "${myROOT}" ] || myROOT="/var/lib/docker"
+	myFREE=$(df -B1 --output=avail "${myROOT}" 2>/dev/null | tail -1 | tr -d " ")
+	[[ "${myFREE}" =~ ^[0-9]+$ ]] || myFREE=$(sudo df -B1 --output=avail "${myROOT}" 2>/dev/null | tail -1 | tr -d " ")
+	if ! [[ "${myFREE}" =~ ^[0-9]+$ ]];
+	  then
+	    myES_REFUSED_WHY="the free space of the Docker root ${myROOT} could not be read for the images of the step through Elasticsearch ${myES_STEP_VERSION%.*}"
+	    myES_STEP_NEXT="Check that df can read ${myROOT} (docker info names it), then run the update again."
+	    fuUI_ERROR "The free space of the Docker root ${myROOT} could not be read."
+	    return 1
+	fi
+	if [ "${myFREE}" -lt "${myES_STEP_SPACE}" ];
+	  then
+	    myES_REFUSED_WHY="the step through Elasticsearch ${myES_STEP_VERSION%.*} needs about $(( myES_STEP_SPACE / 1048576 )) MB free in the Docker root ${myROOT} for its images, it has $(( myFREE / 1048576 )) MB"
+	    myES_STEP_NEXT="Make room in ${myROOT} (about $(( myES_STEP_SPACE / 1048576 )) MB free for the images of the step), then run the update again."
+	    fuUI_ERROR "The images of the step need about $(( myES_STEP_SPACE / 1048576 )) MB free in ${myROOT}, it has $(( myFREE / 1048576 )) MB."
+	    return 1
+	fi
+	fuUI_OK "Room for the images of the step in ${myROOT}, $(( myFREE / 1048576 )) MB free."
+}
+
+# Under the spinner: Elasticsearch of the step yellow or green (its shards are in), then Kibana
+# answering /api/status with 200 (its saved objects are migrated), no longer than myES_STEP_WAIT
+# seconds for both. rc 0 when both are there; 2 Elasticsearch did not answer in time, 3 it stayed
+# red, 4 it ended, 5 Kibana did not answer in time, 6 it ended, 130 stopped (fuES_STEP_819).
+function fuES_STEP_WAIT () {
+	local myEND=$(( SECONDS + myES_STEP_WAIT )) myHEALTH="" myCODE=""
+	while :;
+	  do
+	    [ -z "${myES_STEP_STOPPED}" ] || return 130
+	    if [ "$(docker inspect -f '{{.State.Running}}' "${myES_STEP_NAME}" 2>/dev/null)" != "true" ];
+	      then
+	        echo "Elasticsearch ${myES_STEP_VERSION} is not running any more, the end of its log:"
+	        docker logs --tail 40 "${myES_STEP_NAME}" 2>&1
+	        return 4
+	    fi
+	    myHEALTH=$(curl -s -m 40 "${myES_STEP_ES}/_cluster/health?wait_for_status=yellow&timeout=30s" 2>/dev/null \
+	      | grep -o '"status" *: *"[a-z]*"' | head -1 | sed 's/.*"\([a-z]*\)"$/\1/')
+	    echo "Elasticsearch ${myES_STEP_VERSION}: ${myHEALTH:-no answer yet}"
+	    case "${myHEALTH}" in
+	      yellow|green) break ;;
+	    esac
+	    if [ "${SECONDS}" -ge "${myEND}" ];
+	      then
+	        [ "${myHEALTH}" != "red" ] || return 3
+	        return 2
+	    fi
+	    sleep "${myES_STEP_PAUSE}"
+	  done
+	while :;
+	  do
+	    [ -z "${myES_STEP_STOPPED}" ] || return 130
+	    if [ "$(docker inspect -f '{{.State.Running}}' "${myKB_STEP_NAME}" 2>/dev/null)" != "true" ];
+	      then
+	        echo "Kibana ${myES_STEP_VERSION} is not running any more, the end of its log:"
+	        docker logs --tail 40 "${myKB_STEP_NAME}" 2>&1
+	        return 6
+	    fi
+	    myCODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "${myES_STEP_KB}/api/status" 2>/dev/null)
+	    echo "Kibana ${myES_STEP_VERSION}: ${myCODE:-no answer yet}"
+	    [ "${myCODE}" != "200" ] || return 0
+	    [ "${SECONDS}" -lt "${myEND}" ] || return 5
+	    sleep "${myES_STEP_PAUSE}"
+	  done
+}
+
+# After the step, whatever happened: its containers (Elasticsearch stopped with time to write its
+# state), its network and its images go, the data belongs to the uid of T-Pot again where the step
+# had handed it over. Not to be stopped: runs with INT and TERM ignored (fuES_STEP_819), and
+# without a spinner, which would end on a Ctrl+C.
+function fuES_STEP_CLEANUP () {   # $1 = the data folder
+	fuUI_INFO "Removing the containers, the network and the images of the step ..."
+	{
+	  docker stop -t 60 "${myKB_STEP_NAME}"
+	  docker stop -t 120 "${myES_STEP_NAME}"
+	  docker rm -f "${myKB_STEP_NAME}" "${myES_STEP_NAME}"
+	  docker network rm "${myES_STEP_NAME}"
+	  [ -z "${myES_STEP_PULLED}" ] || docker rmi "${myES_STEP_ES_IMAGE}" "${myES_STEP_KB_IMAGE}"
+	} >> "${myLOG}" 2>&1
+	[ -n "${myES_STEP_OWNER}" ] || return 0
+	fuUI_INFO "Handing $1/elk/data back to T-Pot (2000:2000) ..."
+	if sudo chown -R 2000:2000 "$1/elk/data" >> "${myLOG}" 2>&1;
+	  then
+	    myES_STEP_OWNER=""
+	  else
+	    fuUI_ERROR "The owner of $1/elk/data could not be set back: sudo chown -R 2000:2000 $1/elk/data"
+	    fuDID warn "The owner of $1/elk/data could not be set back after the step: sudo chown -R 2000:2000 $1/elk/data"
+	fi
+}
+
+# The step of the data of an Elasticsearch before 8.19 through 8.19, after its yes and its backup
+# (fuCHECK_ELASTIC), with T-Pot stopped: the official images of Elasticsearch and Kibana
+# myES_STEP_VERSION, one network, the data handed to the uid of those images (1000:0), both
+# started on it until Elasticsearch is yellow or green and Kibana has migrated its saved objects
+# (fuES_STEP_WAIT), then everything of the step removed again and the data handed back
+# (fuES_STEP_CLEANUP), on every way out. INT and TERM only end the step: the cleanup runs then as
+# well. rc 0 when it went through; 1 otherwise, with myES_REFUSED_WHY, and myES_STEP_TOUCHED set
+# once Elasticsearch 8.19 ran on the data.
+function fuES_STEP_819 () {   # $1 = the data folder
+	local myWHY="" myRC=0 myTRAP_INT="" myTRAP_TERM=""
+	myES_STEP_STOPPED="" myES_STEP_TOUCHED="" myES_STEP_PULLED="" myES_STEP_OWNER=""
+	fuES_STEP_COMMANDS "$1"
+	echo
+	fuUI_INFO "Taking the step through Elasticsearch ${myES_STEP_VERSION} ..."
+	# under the spinner sudo cannot ask
+	sudo -v
+	myTRAP_INT=$(trap -p INT)
+	myTRAP_TERM=$(trap -p TERM)
+	trap 'myES_STEP_STOPPED="1"' INT TERM
+	# what a step that was ended the hard way left behind
+	{
+	  docker rm -f "${myKB_STEP_NAME}" "${myES_STEP_NAME}"
+	  docker network rm "${myES_STEP_NAME}"
+	} >> "${myLOG}" 2>&1
+	myES_STEP_PULLED="1"
+	fuUI_SPIN "Pulling Elasticsearch ${myES_STEP_VERSION} for the step ..." "${myLOG}" \
+	  timeout --foreground 1800 docker pull "${myES_STEP_ES_IMAGE}" || myRC=$?
+	[ "${myRC}" -ne 130 ] || myES_STEP_STOPPED="1"
+	if [ "${myRC}" -eq 0 ] && [ -z "${myES_STEP_STOPPED}" ];
+	  then
+	    fuUI_SPIN "Pulling Kibana ${myES_STEP_VERSION} for the step ..." "${myLOG}" \
+	      timeout --foreground 1800 docker pull "${myES_STEP_KB_IMAGE}" || myRC=$?
+	    [ "${myRC}" -ne 130 ] || myES_STEP_STOPPED="1"
+	fi
+	[ "${myRC}" -eq 0 ] || myWHY="the images of Elasticsearch and Kibana ${myES_STEP_VERSION} could not be pulled (see ${myLOG})"
+	if [ -z "${myWHY}${myES_STEP_STOPPED}" ] && ! docker network create "${myES_STEP_NAME}" >> "${myLOG}" 2>&1;
+	  then
+	    myWHY="its network ${myES_STEP_NAME} could not be created (see ${myLOG})"
+	fi
+	if [ -z "${myWHY}${myES_STEP_STOPPED}" ];
+	  then
+	    myES_STEP_OWNER="1"
+	    myRC=0
+	    fuUI_SPIN "Handing $1/elk/data to the user of the official image (1000:0) ..." "${myLOG}" \
+	      sudo chown -R 1000:0 "$1/elk/data" || myRC=$?
+	    [ "${myRC}" -ne 130 ] || myES_STEP_STOPPED="1"
+	    [ "${myRC}" -eq 0 ] || myWHY="the owner of $1/elk/data could not be changed (see ${myLOG})"
+	fi
+	if [ -z "${myWHY}${myES_STEP_STOPPED}" ];
+	  then
+	    if "${myES_STEP_ES_RUN[@]}" >> "${myLOG}" 2>&1;
+	      then
+	        myES_STEP_TOUCHED="1"
+	      else
+	        myWHY="Elasticsearch ${myES_STEP_VERSION} did not start (see ${myLOG})"
+	    fi
+	fi
+	if [ -z "${myWHY}${myES_STEP_STOPPED}" ] && ! "${myES_STEP_KB_RUN[@]}" >> "${myLOG}" 2>&1;
+	  then
+	    myWHY="Kibana ${myES_STEP_VERSION} did not start (see ${myLOG})"
+	fi
+	if [ -z "${myWHY}${myES_STEP_STOPPED}" ];
+	  then
+	    myRC=0
+	    fuUI_SPIN "Waiting for Elasticsearch and Kibana ${myES_STEP_VERSION} (up to $(( myES_STEP_WAIT / 60 )) min) ..." "${myLOG}" \
+	      fuES_STEP_WAIT || myRC=$?
+	    [ "${myRC}" -ne 130 ] || myES_STEP_STOPPED="1"
+	    case "${myRC}" in
+	      0|130) ;;
+	      2)   myWHY="Elasticsearch ${myES_STEP_VERSION} did not answer within $(( myES_STEP_WAIT / 60 )) min (TPOT_ES_STEP_WAIT=<seconds> waits longer)" ;;
+	      3)   myWHY="the cluster of Elasticsearch ${myES_STEP_VERSION} stayed red for $(( myES_STEP_WAIT / 60 )) min (see ${myLOG})" ;;
+	      4)   myWHY="Elasticsearch ${myES_STEP_VERSION} ended on the data (see ${myLOG})" ;;
+	      5)   myWHY="Kibana ${myES_STEP_VERSION} did not answer within $(( myES_STEP_WAIT / 60 )) min (TPOT_ES_STEP_WAIT=<seconds> waits longer)" ;;
+	      6)   myWHY="Kibana ${myES_STEP_VERSION} ended (see ${myLOG})" ;;
+	      *)   myWHY="the wait for Elasticsearch and Kibana ${myES_STEP_VERSION} ended with ${myRC} (see ${myLOG})" ;;
+	    esac
+	fi
+	# from here on nothing stops it
+	trap '' INT TERM
+	fuES_STEP_CLEANUP "$1"
+	eval "${myTRAP_INT:-trap - INT}"
+	eval "${myTRAP_TERM:-trap - TERM}"
+	[ -z "${myES_STEP_STOPPED}" ] || myWHY="it was stopped"
+	if [ -n "${myWHY}" ];
+	  then
+	    myES_REFUSED_WHY="the step through Elasticsearch ${myES_STEP_VERSION%.*} did not go through: ${myWHY}"
+	    return 1
+	fi
+	fuUI_OK "The Elasticsearch data is upgraded to ${myES_STEP_VERSION}."
+	return 0
+}
+
 # Elasticsearch and Kibana upgrade their data in place on the first start of a
 # newer version, and there is no way back to the older one. Runs after the pull of
 # the repository and before the pull of the images, in the restarted script as
@@ -1888,6 +2234,9 @@ function fuAPPEND_ES_DATA () {   # $1 = the data folder
 # which may be an older one. T-Pot is stopped at this point.
 function fuCHECK_ELASTIC () {
 	local myNEW="" myOLD="" myDATA="" myUSED=0 myOLDARCHIVE="" myTEXT="" myROLLBACK=""
+	# the step through 8.19 and what its refusal says (fuES_STEP_819, fuELASTIC_REFUSED)
+	myES_STEP="" myES_STEP_NOT_CONFIRMED="" myES_REFUSED_WHY="" myES_STEP_NEXT="" myES_STEP_TOUCHED=""
+	myES_STEP_PULLED=""
 	fuCOMPOSE_HAS elasticsearch || return
 	echo
 	fuUI_INFO "Checking the Elastic Stack update ..."
@@ -1939,6 +2288,46 @@ function fuCHECK_ELASTIC () {
 	  then
 	    fuUI_WARN "${myDATA} is ${myUSED}% full, Elasticsearch starts to complain at 85%."
 	    fuDID warn "${myDATA} is ${myUSED}% full, Elasticsearch starts to complain at 85%."
+	fi
+	# Elasticsearch 9 reads only the data of 8.19: the data of an older 8 takes the step through
+	# 8.19 first (fuES_STEP_819), after a yes (elastic-step) and with the data in the backup of this
+	# run, also where an older backup holds it already: the way back names this archive. A no, no
+	# room for the data or the images, or a step that does not go through is a refusal
+	# (fuES_STEP_REFUSED before the step touched the data, fuELASTIC_REFUSED after).
+	if fuES_NEEDS_STEP "${myOLD}" "${myNEW}";
+	  then
+	    myES_STEP="1"
+	    fuUI_HINT "Elasticsearch ${myNEW} reads only the data of ${myES_STEP_VERSION%.*}: the data of ${myOLD} takes a step through ${myES_STEP_VERSION} first."
+	    myROLLBACK=""
+	    fuCAN_ROLLBACK && myROLLBACK="1"
+	    myTEXT=$(fuES_STEP_TEXT "${myOLD}" "${myNEW}" "${myDATA}")
+	    # Ctrl+C at the question is a no as well
+	    myES_STEP_NOT_CONFIRMED="1"
+	    myES_REFUSED_WHY="the step through Elasticsearch ${myES_STEP_VERSION%.*} was not confirmed"
+	    trap fuES_STEP_REFUSED INT
+	    fuLOSS_CONFIRM elastic-step "${myTEXT}" || fuES_STEP_REFUSED
+	    trap - INT
+	    myES_STEP_NOT_CONFIRMED=""
+	    fuTMPDIR
+	    if ! fuAPPEND_ES_DATA "${myDATA}";
+	      then
+	        myES_REFUSED_WHY="the Elasticsearch data did not go into the backup of this run, the step through ${myES_STEP_VERSION%.*} needs it there"
+	        fuES_STEP_REFUSED
+	    fi
+	    fuES_STEP_ROOM || fuES_STEP_REFUSED
+	    if ! fuES_STEP_819 "${myDATA}";
+	      then
+	        if [ -z "${myES_STEP_TOUCHED}" ];
+	          then
+	            fuUI_ERROR "The ${myES_REFUSED_WHY#the }. The data was not touched."
+	            fuES_STEP_REFUSED
+	        fi
+	        fuUI_ERROR "The ${myES_REFUSED_WHY#the }. The data in ${myDATA}/elk may be changed already: ./restore.sh -f ${myARCHIVE} -g data puts the data from before the step back."
+	        fuELASTIC_REFUSED
+	    fi
+	    fuDID ok "Elasticsearch data upgraded to ${myES_STEP_VERSION%.*} for the step to ${myNEW}."
+	    echo
+	    return
 	fi
 	# A backup with the data is the only way back to the old version: the archive of this run when
 	# its data/elk/data is the folder that runs (the `--full` one of this run, fuARCHIVE_HAS_ES_DATA)
@@ -3096,6 +3485,15 @@ function fuCHECK_DATA_LOSS () {
 	          elif [ "${myOLD}" == "${myNEW}" ];
 	            then
 	              fuUI_OK "Elasticsearch stays on ${myNEW}."
+	          # the step through 8.19 changes the data for good with any backup: it always asks; without
+	          # room for the data in the backup the run refuses it then
+	          elif fuES_NEEDS_STEP "${myOLD}" "${myNEW}";
+	            then
+	              if [ -z "${myFULL}" ] && ! fuES_DATA_FITS "${myDATA}" "$(fuBACKUP_SIZE)";
+	                then
+	                  fuUI_HINT "The backup of the run cannot take the Elasticsearch data, the run refuses the step then: ${myES_FITS_WHY}"
+	              fi
+	              fuLOSS_ADD elastic-step "$(fuES_STEP_TEXT "${myOLD}" "${myNEW}" "${myDATA}")"
 	          elif [ -n "${myFULL}" ] && [ -e "${myDATA}/elk/data" ];
 	            then
 	              fuUI_OK "Elasticsearch ${myOLD:-?} -> ${myNEW}, --full takes its data into the backup."

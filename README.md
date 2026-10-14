@@ -951,7 +951,7 @@ code 5, leaving T-Pot up and running rather than filling the disk. That includes
 never quietly swapped for the regular backup.
 
 ### Loss of Data
-`update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade that the backup has no room for (without `--full` the run adds that data to its backup by itself where there is room, the archive then has the name of a full one), older backups that are deleted to make room for the new one, and images that cannot be pulled again or that the registry does not confirm in time. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout and the rewrite of `.env` and the compose file are no loss of data, they are only mentioned.
+`update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade that the backup has no room for (without `--full` the run adds that data to its backup by itself where there is room, the archive then has the name of a full one), the step of the data of an Elasticsearch before 8.19 through 8.19 on the way to 9 (key `elastic-step`, see [Elastic Stack Upgrades](#elastic-stack-upgrades)), older backups that are deleted to make room for the new one, and images that cannot be pulled again or that the registry does not confirm in time. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout and the rewrite of `.env` and the compose file are no loss of data, they are only mentioned.
 
 `-y` confirms the update, it does not confirm a loss of data. Without a terminal `--accept-data-loss` confirms every loss (for the command line and cron, where you typed it), `--accept-data-loss-file <file>` only the losses its lines name:
 ```
@@ -964,6 +964,7 @@ The file holds the `@@tpot loss <key> <text>` lines of `--check-data-loss` that 
 If you decline (or cannot answer):
  - older backups stay where they are, the update stops before it touches anything with exit code 5 and T-Pot keeps running. Free some space, or confirm.
  - the Elasticsearch upgrade does not happen: the checkout and your configuration are rolled back, the Elasticsearch data was never touched and the run ends with exit code 5. T-Pot starts again on the release it ran before when `tpot.service` is enabled (or with `-s`). Make room in `~/tpot_backups` and run the update again: the data then goes into the backup by itself.
+ - the step through Elasticsearch 8.19 does not happen: as for the upgrade, the checkout and your configuration go back, the data was never touched, exit code 5, and the run names the `docker run` lines to take the step by hand.
  - images that cannot be pulled again are kept, and the update goes on. An image the registry can supply again (it has an image with the same digest) is removed without a question. One built here (no digest, or another one) and one the registry does not confirm within 90 seconds for all images together (not reachable, too slow) are kept unless you confirm their removal.
 
 `update.sh --check-data-loss` lists what the run would lose and changes nothing (a `git fetch` at most); exit code 0 means nothing found, 3 found, 1 it cannot tell. The T-Pot Manager runs this check before an update from its menu and asks first; a yes there confirms the findings it showed and nothing else (`--accept-data-loss-file`), if the check cannot tell it says why.
@@ -980,6 +981,19 @@ the one of the release and, if they differ,
    then. The checkout and your configuration are put back to the state before the update, nothing
    was pulled, and T-Pot starts again when `tpot.service` is enabled (or with `-s`).
  - warns at 85% and more.
+ - takes the data of an Elasticsearch before 8.19 through 8.19 first when the release ships 9 or
+   later: Elasticsearch 9 reads only the data of 8.19. The run says so and asks (default no; without
+   a terminal `--accept-data-loss`, or an `elastic-step` line in `--accept-data-loss-file`), puts
+   `data/elk/data` into its backup (also when the archive holds it already), checks that the Docker
+   root has about 4 GB free for the official images, and then runs Elasticsearch and Kibana 8.19 once
+   on the data until Elasticsearch is yellow or green and Kibana has migrated its saved objects (20
+   minutes at most, `TPOT_ES_STEP_WAIT=<seconds>` waits longer). Its containers, network and images
+   are removed afterwards, the data belongs to `2000:2000` again, then the update goes on with the
+   new release. A no, no room for the data or the images, or a failed pull is a refusal as below,
+   with the commands to take the step by hand. A step that does not go through after Elasticsearch
+   8.19 started on the data (a timeout, a red cluster, a stop) puts the checkout back but leaves
+   T-Pot stopped: `restore.sh -f <archive> -g data` with the backup of that run puts the data from
+   before the step back (the summary names the way that fits the `restore.sh` in `~/tpotce`).
  - adds `data/elk/data` of the data folder in use (`TPOT_DATA_PATH`) to the backup of the run when
    it is not in it yet (with `--full` it is). That needs room in `~/tpot_backups`: the size of the
    data plus 10 %, the reserve of every backup kept free, and, where the backups share the
