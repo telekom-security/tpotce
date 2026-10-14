@@ -44,6 +44,9 @@ Options:
   --bind-ip IP         Host IP to bind. Default: 127.0.0.1.
   --keep-artifacts     Keep temporary compose file and logs for debugging.
   -h, --help           Show this help message.
+
+Environment:
+  TEST_LONG_LINE_SECONDS  Seconds the echo of a 10,000-character line may take. Default: 1.
 EOF
 }
 
@@ -136,6 +139,9 @@ validate_args() {
   fi
   if [[ "${ALL_PERSONAS}" == "true" && -n "${PERSONA}" ]]; then
     test_die "--persona and --all-personas cannot be used together"
+  fi
+  if [[ ! "${LONG_LINE_SECONDS}" =~ ^[0-9]+([.][0-9]+)?$ || "${LONG_LINE_SECONDS}" =~ ^0+([.]0+)?$ ]]; then
+    test_die "TEST_LONG_LINE_SECONDS must be a number of seconds greater than 0"
   fi
 }
 
@@ -770,8 +776,12 @@ PY
 # the clients in a container in the honeypot's network: the echo of the whole line is back within
 # LONG_LINE_SECONDS, the shell answers both commands and gives the prompt back. Then a pasted line of
 # 70,000 characters over Telnet: the shell keeps 64 KiB of it and takes the next line.
+# Cowrie's wget (also the applet of the BusyBox personas) refuses an address that is not global before
+# it connects, with this answer and no download event; cowrie.command.input logs the line.
 LONG_LINE_LENGTH=10000
-LONG_LINE_SECONDS=1
+# the seconds the echo of the line may take (TEST_LONG_LINE_SECONDS for a slow host)
+LONG_LINE_SECONDS="${TEST_LONG_LINE_SECONDS:-1}"
+LONG_LINE_WGET="wget: unable to resolve host address ‘127.0.0.1’"
 LONG_LINE_MAX=65536
 LONG_LINE_OVER=70000
 
@@ -782,7 +792,7 @@ long_line() {
 run_long_line_probe() {
   docker run --rm -i --network "container:${TEST_CONTAINER_NAME}" --read-only --user 2000:2000 \
     --entrypoint python3 "${IMAGE}" - "$(long_line)" "${LONG_LINE_SECONDS}" "${LONG_LINE_OVER}" \
-    "${TEST_TIMEOUT}" <<'PY'
+    "${TEST_TIMEOUT}" "${LONG_LINE_WGET}" <<'PY'
 import json
 import re
 import socket
@@ -794,6 +804,7 @@ LINE = sys.argv[1].encode()
 SECONDS = float(sys.argv[2])
 OVER = int(sys.argv[3])
 TIMEOUT = int(sys.argv[4])
+WGET = sys.argv[5]
 LENGTH = LINE.count(b"a")
 # AuthRandom accepts after 2 to 5 different attempts per source IP and keeps the pair it accepted
 PASSWORDS = [f"tpot-long-{n}" for n in range(1, 13)]
@@ -991,10 +1002,11 @@ try:
             lines = output.split("\n")
             result = {"protocol": name, "typed": typed, "echo_seconds": round(echo, 3),
                       "echo_line": any(line.strip() == "a" * LENGTH for line in lines),
-                      "wget": [line for line in lines if "wget" in line][-1:]}
+                      "wget": [line for line in lines if "wget" in line][-1:],
+                      "wget_answer": WGET in (line.strip() for line in lines)}
             results.append(result)
             session.close()
-            if echo >= SECONDS or not result["echo_line"] or not result["wget"]:
+            if echo >= SECONDS or not result["echo_line"] or not result["wget_answer"]:
                 raise RuntimeError(f"long line: {result}")
     # beyond the bound: 64 KiB are kept, the shell takes the next line
     session = telnet_shell(deadline)
