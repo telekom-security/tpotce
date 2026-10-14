@@ -71,6 +71,16 @@ myACCEPT_LOSS=""
 myACCEPT_FILE=""
 myLOSSES=0
 
+# --adapt-compose: a docker-compose.yml of your own (no edition, not built by compose/customizer.py) is
+# backed up and adapted to the release without a question (fuADOPT_COMPOSE); at a terminal the run asks,
+# the choice "adapt" sets it as well, so a restarted update.sh gets it (fuRESTART_ARGS). -y never does.
+myADAPT_COMPOSE=""
+# the report lines of the last compose/customizer.py --adopt (fuADOPT_RUN), set once the question was
+# answered in this run (fuADOPT_COMPOSE), and a Ctrl+C at that question (a no)
+myADOPT_LINES=()
+myADOPT_DECIDED=""
+myADOPT_INT=""
+
 # Both are published on the loopback interface by every edition that ships them,
 # so neither needs a detour through a container.
 myKIBANA="http://127.0.0.1:64296"
@@ -147,6 +157,45 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
         myANSWER="${myANSWER%"${myANSWER##*[![:space:]]}"}"
         [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT}"
         case "${myANSWER}" in [yY]|[yY][eE][sS]) return 0 ;; [nN]|[nN][oO]) return 1 ;; esac
+      done
+    }
+    fuUI_CHOOSE () {
+      local myI=1 myITEM myPICK myDEFAULT="" myVALUE=""
+      if [ "${1:-}" = "--selected" ]; then
+        myVALUE="${2-}" myDEFAULT=0
+        shift $(( $# < 2 ? $# : 2 ))
+      fi
+      local myHEADER="${1:-}"
+      [ "$#" -eq 0 ] || shift
+      if [ -n "${myDEFAULT}" ]; then
+        myDEFAULT=""
+        for myITEM in "$@"; do
+          if [ "${myITEM##*:}" = "${myVALUE}" ]; then myDEFAULT="${myI}"; break; fi
+          myI=$((myI + 1))
+        done
+        myI=1
+      fi
+      echo "### ${myHEADER}" >&2
+      for myITEM in "$@"; do
+        echo "###   ${myI}) ${myITEM%:*}" >&2
+        myI=$((myI + 1))
+      done
+      while true; do
+        if [ -n "${myDEFAULT}" ];
+          then read -rp "### Choice (1-$#, enter = ${myDEFAULT}): " myPICK || return 1
+          else read -rp "### Choice (1-$#): " myPICK || return 1
+        fi
+        # the spaces around it go, ones in it make it no number (1 2 is not 12)
+        myPICK="${myPICK#"${myPICK%%[![:space:]]*}"}"
+        myPICK="${myPICK%"${myPICK##*[![:space:]]}"}"
+        [ -n "${myPICK}" ] || myPICK="${myDEFAULT}"
+        [[ "${myPICK}" =~ ^[0-9]{1,9}$ ]] && myPICK=$((10#${myPICK})) || myPICK=0
+        if [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
+          then
+            myITEM="${!myPICK}"
+            echo "${myITEM##*:}"
+            return 0
+        fi
       done
     }
     fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
@@ -341,7 +390,7 @@ function fuSTEP_WAIT_WARN () {
 
 function fuPRINT_HELP () {
 	# the help only, without the T-Pot logo (that is for a run)
-	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>]"$'\n'"          [-B <file>] [--accept-data-loss]"$'\n'"          [--accept-data-loss-file <file>]"$'\n'"update.sh --check-data-loss [--full] [--backup-only] [-b <branch>]"$'\n'"          [-r <url>] [-B <file>]" \
+	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>]"$'\n'"          [-B <file>] [--accept-data-loss]"$'\n'"          [--accept-data-loss-file <file>] [--adapt-compose]"$'\n'"update.sh --check-data-loss [--full] [--backup-only] [-b <branch>]"$'\n'"          [-r <url>] [-B <file>]" \
 	  --about "Updates T-Pot to the latest version of its branch: a backup to ~/tpot_backups first, then the
 checkout, your configuration and edition put back, the images of the release pulled." \
 	  --opt "-y" "Confirm the update, required. It does not confirm a loss of data, see --accept-data-loss" \
@@ -373,6 +422,11 @@ of --check-data-loss that were confirmed (the T-Pot Manager
 hands one over), keys backups, elastic, elastic-step, images.
 A loss it does not name, or older backups it does not all
 name, is not confirmed." \
+	  --opt "--adapt-compose" "For a docker-compose.yml of your own (no edition, not built by
+compose/customizer.py): back up your compose file and adapt it to
+this release without a question; what the run lists as kept-out
+is not carried over. At a terminal the run asks (default: cancel),
+-y does not choose." \
 	  --opt "-h" "Show this help message" \
 	  --example "./update.sh -y" "Update from the branch of ~/tpotce, T-Pot stays stopped afterwards" \
 	  --example "./update.sh -y -s --full" "Update with all of data/ in the backup and start T-Pot again" \
@@ -388,6 +442,11 @@ confirmed as pullable again. Each one asks at a terminal (default no); without o
 --accept-data-loss (every loss) or --accept-data-loss-file (the losses it names) confirms it.
 Not confirmed, the run keeps the images and goes on, or stops with exit 5 (T-Pot keeps running,
 or the checkout goes back where it can and T-Pot starts again where tpot.service is enabled)." \
+	  --note "A docker-compose.yml of your own does not get the changes of a release. The run adapts it
+(compose/customizer.py --adopt, the backup keeps your file) only after a yes at a terminal or with
+--adapt-compose; otherwise it stops with exit 1 before it changes anything (after a handover the
+checkout goes back and T-Pot starts again where tpot.service is enabled). A file of the customizer
+before v2 (# T-Pot: CUSTOM EDITION) is rebuilt without a question." \
 	  --note "Exit 5 is every refusal of the Elasticsearch checks, also one that loses nothing (no room
 for the step's images, a failed pull, a step that did not go through). The step waits up to
 20 min, TPOT_ES_STEP_WAIT=<seconds> (60 to 86400) sets another bound."
@@ -462,10 +521,12 @@ fuDONE_IMPORT
 # make room, an Elasticsearch data upgrade whose data the backup has no room for (fuAPPEND_ES_DATA),
 # the step of the data of an Elasticsearch older than 8.19 through 8.19 (elastic-step, fuES_STEP_819:
 # it changes the data for good, only the backup of the run brings it back), images that cannot be
-# pulled again.
+# pulled again; and a compose file of your own (compose): adapted to the release it may lose changes of
+# yours (the backup keeps the file), only --adapt-compose or the choice at a terminal adapts it, never
+# --accept-data-loss[-file] (fuADOPT_CHOICE).
 # --check-data-loss only lists them, one line each for the T-Pot Manager, which asks before it
 # starts the update with --accept-data-loss-file and the lines that were confirmed.
-function fuLOSS_ADD () {   # $1 = backups | elastic | elastic-step | images, $2 = text
+function fuLOSS_ADD () {   # $1 = backups | compose | elastic | elastic-step | images, $2 = text
 	myLOSSES=$((myLOSSES + 1))
 	echo "@@tpot loss $1 $2"
 }
@@ -947,10 +1008,15 @@ function fuCHECK_EDITION () {
 	[ -n "${myKNOWN}" ] || myEDITION="UNKNOWN"
 	# No separate copy is kept here: fuBACKUP puts docker-compose.yml into the archive
 	# before the checkout is reset, and that is the copy everything below works from.
-	if [ "${myEDITION}" == "UNKNOWN" ];
+	if [ "${myEDITION}" == "UNKNOWN" ] && [ -n "${myBACKUP_ONLY}" ];
 	  then
-	    fuUI_WARN "Unable to determine the edition, docker-compose.yml is restored as it is."
+	    fuUI_WARN "Unable to determine the edition, the backup keeps docker-compose.yml as it is."
 	    fuDID warn "The edition of docker-compose.yml could not be determined."
+	elif [ "${myEDITION}" == "UNKNOWN" ];
+	  then
+	    # a file of the customizer before v2 is rebuilt after the pull, a compose file of your own only
+	    # after a yes: the question comes here, before anything is stopped, backed up or pulled
+	    fuADOPT_COMPOSE "$HOME/tpotce/docker-compose.yml" check
 	  else
 	    # A compose file that differs from its own template was edited by the user.
 	    # The update cannot merge that, so it has to be handed back manually.
@@ -1105,6 +1171,10 @@ function fuRESTART_ARGS () {   # $1 = the script that restarts, then the options
 	        continue
 	    fi
 	    if [ "${myARG}" = "--accept-data-loss" ] && ! grep -q -- '--accept-data-loss' "${myTARGET}";
+	      then
+	        continue
+	    fi
+	    if [ "${myARG}" = "--adapt-compose" ] && ! grep -q -- '--adapt-compose' "${myTARGET}";
 	      then
 	        continue
 	    fi
@@ -3272,6 +3342,420 @@ function fuCOMPOSE_FROM_ARCHIVE () {
 	  && [ -s "${myTMPDIR}/docker-compose.yml" ]
 }
 
+# What kind of compose file is it? An edition of myEDITIONS (its name), CUSTOM (built by
+# compose/customizer.py from v2 on, fuCUSTOM_FILE), V1 (written by the customizer before v2: its edition
+# line is '# T-Pot: CUSTOM EDITION') or OWN: none of these, a compose file of your own.
+function fuCOMPOSE_KIND () {   # $1 = compose file
+	local myNAME="" i=""
+	myNAME=$(fuEDITION_LINE "$1" | cut -d " " -f2-)
+	if [ "${myNAME}" == "CUSTOM" ] && fuCUSTOM_FILE "$1";
+	  then
+	    echo "CUSTOM"
+	    return
+	fi
+	if [ "${myNAME}" == "CUSTOM EDITION" ];
+	  then
+	    echo "V1"
+	    return
+	fi
+	for i in ${myEDITIONS};
+	  do
+	    if [ "${myNAME}" == "$i" ];
+	      then
+	        echo "$i"
+	        return
+	    fi
+	  done
+	echo "OWN"
+}
+
+# The Python for compose/customizer.py: the one of the venv of the T-Pot Manager (PyYAML is in it),
+# else python3 with the PyYAML of the distribution (fuCUSTOMIZER_DEPS).
+function fuCUSTOMIZER_PYTHON () {
+	local myVENV="${XDG_DATA_HOME:-$HOME/.local/share}/tpotce/venv/bin/python3"
+	if [ -x "${myVENV}" ];
+	  then
+	    echo "${myVENV}"
+	  else
+	    echo "python3"
+	fi
+}
+
+# The customizer that adopts: after the pull (restore) the one of the checkout, with the catalogue of
+# the release; before it (check) that one too, unless it cannot adopt yet, then the one next to this
+# update.sh.
+function fuADOPT_CUSTOMIZER () {   # $1 = check | restore
+	local myCUSTOMIZER="$HOME/tpotce/compose/customizer.py"
+	if [ "$1" == "check" ] && ! grep -q -- "--adopt" "${myCUSTOMIZER}" 2>/dev/null;
+	  then
+	    myCUSTOMIZER="${myHERE}/compose/customizer.py"
+	fi
+	echo "${myCUSTOMIZER}"
+}
+
+# compose/customizer.py --adopt: the compose file as a selection of the release, with the report of what
+# it does not carry over (stdout of --report, one item per line) in myADOPT_LINES. The type is the one of
+# the .env in effect (after a handover the env of the archive, the .env here may be the reset one), the
+# host ports are judged against the catalogue of the commit that ran: rollback.txt of the archive, before
+# the backup HEAD; without one none. rc of the customizer: 0 adopted (with --dry-run only rendered), 2 not
+# readable or not written, 3 conflicts, any other one as well: not adopted; 2 for a customizer that
+# cannot adopt.
+function fuADOPT_RUN () {   # $1 = compose file, $2 = output, $3 = customizer, $4 = --dry-run (optional)
+	local myTYPE="" myCOMMIT="" myCATALOG="" myREPORT="" myLINE="" myRC=0
+	local myARGS=()
+	myADOPT_LINES=()
+	grep -q -- "--adopt" "$3" 2>/dev/null || return 2
+	fuTMPDIR
+	if [ -n "${myPREPARED}" ] && [ -n "${myARCHIVE}" ];
+	  then
+	    myTYPE=$(fuARCHIVE_ENV "${myARCHIVE}" TPOT_TYPE)
+	  else
+	    myTYPE=$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_TYPE)
+	fi
+	case "${myTYPE}" in
+	  HIVE|SENSOR) myARGS+=(--tpot-type "${myTYPE}") ;;
+	esac
+	if [ -n "${myARCHIVE}" ];
+	  then
+	    myCOMMIT=$(tar xOf "${myARCHIVE}" rollback.txt 2>/dev/null | tr -d "[:space:]")
+	  else
+	    myCOMMIT=$(git -C "$HOME/tpotce" rev-parse HEAD 2>/dev/null)
+	fi
+	myCATALOG="${myTMPDIR}/old_tpot_services.yml"
+	if [ -n "${myCOMMIT}" ] \
+	   && git -C "$HOME/tpotce" show "${myCOMMIT}:compose/tpot_services.yml" > "${myCATALOG}" 2>/dev/null \
+	   && [ -s "${myCATALOG}" ];
+	  then
+	    myARGS+=(--old-catalog "${myCATALOG}")
+	fi
+	myREPORT="${myTMPDIR}/adopt_report"
+	"$(fuCUSTOMIZER_PYTHON)" "$3" --adopt "$1" -o "$2" --report ${4:+"$4"} ${myARGS[@]+"${myARGS[@]}"} \
+	  < /dev/null > "${myREPORT}" || myRC=$?
+	while IFS= read -r myLINE || [ -n "${myLINE}" ];
+	  do
+	    [ -z "${myLINE}" ] || myADOPT_LINES+=("${myLINE}")
+	  done < "${myREPORT}"
+	return "${myRC}"
+}
+
+# The report lines of the adaptation, one hint each: what goes (dropped), what it keeps of yours (port),
+# what the release changes (moved), what is new in it (new), and last what it does not carry over
+# (kept-out). $1 = before (the question: says so where nothing is left out) | after (the adaptation)
+function fuADOPT_REPORT () {
+	local myLINE="" myFOUND=""
+	for myLINE in ${myADOPT_LINES[@]+"${myADOPT_LINES[@]}"};
+	  do
+	    case "${myLINE}" in
+	      "dropped: "*) fuUI_HINT "  dropped: ${myLINE#dropped: }" ;;
+	      "port: "*) fuUI_HINT "  your host port, kept: ${myLINE#port: }" ;;
+	      "moved: "*) fuUI_HINT "  changed by the release: ${myLINE#moved: }" ;;
+	      "new: "*) fuUI_HINT "  new in this release: ${myLINE#new: }" ;;
+	    esac
+	  done
+	for myLINE in ${myADOPT_LINES[@]+"${myADOPT_LINES[@]}"};
+	  do
+	    case "${myLINE}" in
+	      "kept-out: "*) fuUI_HINT "  not carried over: ${myLINE#kept-out: }"; myFOUND="1" ;;
+	    esac
+	  done
+	if [ -z "${myFOUND}" ] && [ "$1" == "before" ];
+	  then
+	    fuUI_HINT "  nothing, every setting of your file is carried over."
+	fi
+}
+
+# The ways to adapt a compose file of your own yourself, for the cancel: an edition, the customizer, or
+# your file edited along the diff and the points the adaptation leaves out.
+function fuADOPT_WAYS () {
+	local myLINE="" myBASE="standard"
+	if [ -n "${myPREPARED}" ] && [ -n "${myARCHIVE}" ];
+	  then
+	    [ "$(fuARCHIVE_ENV "${myARCHIVE}" TPOT_TYPE)" != "SENSOR" ] || myBASE="sensor"
+	  else
+	    [ "$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_TYPE)" != "SENSOR" ] || myBASE="sensor"
+	fi
+	fuUI_HINT "Adapt it yourself, then run the update again:"
+	fuUI_HINT "  an edition of the release: tpot edition set <edition>, or cp compose/<edition>.yml docker-compose.yml"
+	fuUI_HINT "  your selection of services: compose/customizer.py"
+	fuUI_HINT "  your own file, edited: diff -u docker-compose.yml compose/${myBASE}.yml"
+	for myLINE in ${myADOPT_LINES[@]+"${myADOPT_LINES[@]}"};
+	  do
+	    case "${myLINE}" in
+	      "kept-out: "*) fuUI_HINT "    and keep: ${myLINE#kept-out: }" ;;
+	    esac
+	  done
+	fuUI_HINT "Or answer at a terminal, or update with --adapt-compose (also without one)."
+	fuDID next "Adapt your docker-compose.yml yourself (tpot edition set <edition>, compose/customizer.py, or by hand along diff -u docker-compose.yml compose/${myBASE}.yml), then update again; or update with --adapt-compose."
+}
+
+# Not adapted: the update stops. Before the stop (check) nothing was changed; after the pull (restore)
+# the checkout and the configuration go back (fuROLLBACK_CHECKOUT) and T-Pot starts again where
+# tpot.service is enabled; where the archive names no earlier commit your file is put back as it was
+# and T-Pot stays stopped. Exit 1.
+function fuADOPT_CANCEL () {   # $1 = check | restore
+	local myRC=0
+	trap - INT
+	echo
+	if [ "$1" == "check" ];
+	  then
+	    fuUI_HINT "Not updated, nothing was changed."
+	    fuADOPT_WAYS
+	    echo
+	    fuDID fail "Not updated: your docker-compose.yml is a compose file of your own and was not adapted, nothing was changed."
+	    exit 1
+	fi
+	fuUI_HINT "Nothing was pulled and no image was removed."
+	if fuCAN_ROLLBACK;
+	  then
+	    # a Ctrl+C now would leave the checkout half way back: the rollback finishes
+	    trap '' INT
+	    fuROLLBACK_CHECKOUT || myRC=$?
+	    trap - INT
+	    if [ "${myRC}" -eq 0 ];
+	      then
+	        fuDID fail "Not updated: your docker-compose.yml is a compose file of your own and was not adapted, the checkout and the configuration are back."
+	        fuRESTART_AFTER_REFUSAL
+	      else
+	        fuDID fail "Not updated: your docker-compose.yml was not adapted, and the checkout could not be put back: T-Pot stays stopped. restore.sh -f ${myARCHIVE} -c puts it back."
+	    fi
+	  else
+	    fuUI_WARN "The archive holds no earlier commit to go back to, the checkout stays on this release."
+	    if fuCOMPOSE_FROM_ARCHIVE && cp "${myTMPDIR}/docker-compose.yml" "$HOME/tpotce/docker-compose.yml";
+	      then
+	        fuDID fail "Not updated: your docker-compose.yml was not adapted. It is back as it was, on the checkout of this release: T-Pot stays stopped."
+	      else
+	        fuDID fail "Not updated: your docker-compose.yml was not adapted and could not be put back (tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml): T-Pot stays stopped."
+	    fi
+	fi
+	fuADOPT_WAYS
+	if [ -n "${myPREPARED}" ];
+	  then
+	    fuUI_HINT "Each run of the update.sh that started this run writes a backup to ${myBACKUPDIR} before it gets here, a cron job as well: adapt the file, answer at a terminal or add --adapt-compose."
+	    fuDID info "Each run of the update.sh that started this run writes a backup to ${myBACKUPDIR} before it gets here, a cron job as well: adapt the file, answer at a terminal or add --adapt-compose."
+	fi
+	fuUI_HINT "Exiting."
+	echo
+	exit 1
+}
+
+# Adapt the compose file of your own? --adapt-compose says yes, at a terminal the choice (default:
+# cancel), a Ctrl+C there is a no; without a terminal no. -y never chooses. rc 0 for adapt.
+function fuADOPT_CHOICE () {
+	local myPICK="" myTRAP=""
+	if [ -n "${myADAPT_COMPOSE}" ];
+	  then
+	    fuUI_HINT "--adapt-compose: back up your compose file and adapt it to this release; the kept-out list above is not carried over."
+	    return 0
+	fi
+	if [ ! -t 0 ];
+	  then
+	    fuUI_HINT "Not adapted: no terminal. --adapt-compose adapts it, -y does not."
+	    return 1
+	fi
+	myTRAP=$(trap -p INT)
+	myADOPT_INT=""
+	trap 'myADOPT_INT="1"' INT
+	myPICK=$(fuUI_CHOOSE --selected cancel "What should the update do with your compose file?" \
+	  "Back up and adapt automatically:adapt" "Cancel and adapt it myself:cancel") || myPICK=""
+	eval "${myTRAP:-trap - INT}"
+	if [ "${myPICK}" != "adapt" ] || [ -n "${myADOPT_INT}" ];
+	  then
+	    return 1
+	fi
+	myADAPT_COMPOSE="1"
+	fuUI_HINT "Adapting: the backup of the update keeps your file."
+}
+
+# The adopted file in place of ~/tpotce/docker-compose.yml, with what it did: the report, the diff against
+# your file in the archive, each item it did not carry over and each service it dropped in the summary.
+# rc 1 when it could not be copied.
+function fuADOPT_WRITE () {   # $1 = v1 | own
+	local myLINE="" myWHAT="Your docker-compose.yml is adapted to this release"
+	[ "$1" != "v1" ] || myWHAT="Your docker-compose.yml of the customizer before v2 is rebuilt for this release"
+	if ! cp "${myTMPDIR}/adopted.yml" "$HOME/tpotce/docker-compose.yml";
+	  then
+	    fuUI_ERROR "The adapted docker-compose.yml could not be put in place."
+	    return 1
+	fi
+	fuUI_WARN "${myWHAT} (compose/customizer.py --adopt), the backup keeps your file. What changed:"
+	fuADOPT_REPORT after
+	fuUI_HINT "Compare it with: tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml"
+	fuDID ok "${myWHAT} (compose/customizer.py --adopt), the backup ${myARCHIVE} keeps your file."
+	for myLINE in ${myADOPT_LINES[@]+"${myADOPT_LINES[@]}"};
+	  do
+	    case "${myLINE}" in
+	      "kept-out: "*) fuDID warn "Not carried over from your docker-compose.yml: ${myLINE#kept-out: }" ;;
+	      "dropped: "*) fuDID warn "Dropped from your docker-compose.yml: ${myLINE#dropped: }" ;;
+	    esac
+	  done
+}
+
+# A compose file that is no edition and not built by compose/customizer.py from v2 on (fuCOMPOSE_KIND):
+# - V1, a file of the customizer before v2, is rebuilt for the release (compose/customizer.py --adopt)
+#   without a question; one it cannot adopt (exit 2, 3 or another) counts as one of your own;
+# - OWN, a compose file of your own, gets none of the changes of a release: it is adapted only after a
+#   yes (fuADOPT_CHOICE), with the list of what the adaptation does not carry over before the choice.
+#   A no or a failed adaptation stops the update (fuADOPT_CANCEL).
+# check: fuCHECK_EDITION before the stop, the backup and the pull, on ~/tpotce/docker-compose.yml: it only
+# decides. restore: fuRESTORE_EDITION after the pull, on the file of the archive: it writes
+# ~/tpotce/docker-compose.yml; the question comes here when it was not asked before the pull (a handover).
+function fuADOPT_COMPOSE () {   # $1 = the compose file before the update, $2 = check | restore
+	local myKIND="" myCUSTOMIZER="" myRC=0
+	fuTMPDIR
+	myKIND=$(fuCOMPOSE_KIND "$1")
+	myCUSTOMIZER=$(fuADOPT_CUSTOMIZER "$2")
+	if [ "${myKIND}" == "V1" ];
+	  then
+	    if [ "$2" == "check" ];
+	      then
+	        fuADOPT_RUN "$1" "${myTMPDIR}/adopted.yml" "${myCUSTOMIZER}" --dry-run || myRC=$?
+	        if [ "${myRC}" -eq 0 ];
+	          then
+	            fuUI_OK "docker-compose.yml was written by the customizer before v2 (# T-Pot: CUSTOM EDITION), the update rebuilds it for this release."
+	            return 0
+	        fi
+	      else
+	        fuUI_HINT "Now rebuilding your docker-compose.yml of the customizer before v2 for this release."
+	        fuADOPT_RUN "$1" "${myTMPDIR}/adopted.yml" "${myCUSTOMIZER}" || myRC=$?
+	        if [ "${myRC}" -eq 0 ] && fuADOPT_WRITE v1;
+	          then
+	            return 0
+	        fi
+	    fi
+	    fuUI_WARN "compose/customizer.py cannot rebuild your docker-compose.yml of the customizer before v2 (--adopt ended with ${myRC}), it counts as a compose file of your own."
+	fi
+	# a compose file of your own: the question, unless it was answered before the pull
+	if [ "$2" == "check" ] || [ -z "${myADOPT_DECIDED}" ];
+	  then
+	    myRC=0
+	    fuADOPT_RUN "$1" "${myTMPDIR}/adopted.yml" "${myCUSTOMIZER}" --dry-run || myRC=$?
+	    fuUI_WARN "Your docker-compose.yml is a compose file of your own: the changes of this release do not reach it (mem_limit, volumes, new and removed services), T-Pot may not run properly with it."
+	    if [ "${myRC}" -ne 0 ];
+	      then
+	        fuUI_HINT "It cannot be adapted automatically: compose/customizer.py --adopt ended with ${myRC}, see above."
+	        fuADOPT_CANCEL "$2"
+	    fi
+	    fuUI_HINT "Back up and adapt automatically: your file goes into the backup of the update, compose/customizer.py builds it anew from your services for this release. This may lose changes of yours, the list below is not carried over."
+	    fuADOPT_REPORT before
+	    fuADOPT_CHOICE || fuADOPT_CANCEL "$2"
+	    myADOPT_DECIDED="1"
+	    [ "$2" != "check" ] || return 0
+	fi
+	myRC=0
+	fuUI_HINT "Now adapting your docker-compose.yml to this release."
+	fuADOPT_RUN "$1" "${myTMPDIR}/adopted.yml" "${myCUSTOMIZER}" || myRC=$?
+	if [ "${myRC}" -ne 0 ] || ! fuADOPT_WRITE own;
+	  then
+	    fuUI_ERROR "Your docker-compose.yml could not be adapted (compose/customizer.py --adopt ended with ${myRC}), see above."
+	    fuADOPT_CANCEL restore
+	fi
+	return 0
+}
+
+# myEDITION is UNKNOWN in fuRESTORE_EDITION: the compose file of the archive decides. After a handover
+# without an edition (TPOT_UPDATE_EDITION empty) the env of the archive tells first: a TPOT_DOCKER_COMPOSE
+# of another file leaves the one here as it is, an archive without a docker-compose.yml gets the edition
+# of its TPOT_TYPE. rc 0 when it is done (adapted, rebuilt, left, or not readable), rc 1 when it found
+# the edition (myEDITION) and fuRESTORE_EDITION goes on with it.
+function fuRESTORE_UNKNOWN () {
+	local myCOMPOSE="" myTYPE="" myKIND="" myCOMMIT="" myTEMPLATE=""
+	fuTMPDIR
+	if [ -n "${myPREPARED}" ];
+	  then
+	    myCOMPOSE=$(fuARCHIVE_ENV "${myARCHIVE}" TPOT_DOCKER_COMPOSE)
+	    if [ -n "${myCOMPOSE}" ] && [ "$(basename "${myCOMPOSE}")" != "docker-compose.yml" ];
+	      then
+	        fuUI_OK "Your compose file is ${myCOMPOSE} (TPOT_DOCKER_COMPOSE), it is not touched."
+	        fuDID info "Your compose file is ${myCOMPOSE} (TPOT_DOCKER_COMPOSE), it is not touched."
+	        myEDITION=""
+	        return 0
+	    fi
+	    if fuOLD_UPDATER_READ "${myARCHIVE}" && ! fuARCHIVE_MEMBER "${myARCHIVE}" docker-compose.yml > /dev/null;
+	      then
+	        myTYPE=$(fuARCHIVE_ENV "${myARCHIVE}" TPOT_TYPE)
+	        myEDITION="STANDARD"
+	        [ "${myTYPE}" != "SENSOR" ] || myEDITION="SENSOR"
+	        fuUI_WARN "There was no docker-compose.yml before the update, the ${myEDITION} edition of this release is put in place (TPOT_TYPE ${myTYPE:-HIVE})."
+	        fuDID warn "There was no docker-compose.yml before the update, the ${myEDITION} edition of this release is put in place (TPOT_TYPE ${myTYPE:-HIVE})."
+	        return 1
+	    fi
+	fi
+	if ! fuCOMPOSE_FROM_ARCHIVE;
+	  then
+	    fuUI_ERROR "Your own docker-compose.yml could not be taken from ${myARCHIVE}. Put it back by hand with:"
+	    fuUI_HINT "  tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
+	    fuDID warn "Your own docker-compose.yml could not be put back: tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
+	    myEDITION_MISSING="1"
+	    return 0
+	fi
+	myKIND=$(fuCOMPOSE_KIND "${myTMPDIR}/docker-compose.yml")
+	case "${myKIND}" in
+	  V1|OWN)
+	    fuADOPT_COMPOSE "${myTMPDIR}/docker-compose.yml" restore
+	    return 0 ;;
+	  CUSTOM)
+	    myEDITION="CUSTOM"
+	    fuCUSTOM_CHECKSUM "${myTMPDIR}/docker-compose.yml" || myCOMPOSE_CUSTOMIZED="1"
+	    ;;
+	  *)
+	    # an edition the handover did not name (the update.sh before reads the first line only): yours
+	    # unless it is the template of the commit that ran
+	    myEDITION="${myKIND}"
+	    myCOMMIT=$(tar xOf "${myARCHIVE}" rollback.txt 2>/dev/null | tr -d "[:space:]")
+	    myTEMPLATE="${myTMPDIR}/old_template.yml"
+	    if [ -z "${myCOMMIT}" ] \
+	       || ! git -C "$HOME/tpotce" show "${myCOMMIT}:compose/$(echo "${myEDITION}" | tr '[:upper:]' '[:lower:]').yml" > "${myTEMPLATE}" 2>/dev/null \
+	       || ! cmp -s "${myTEMPLATE}" "${myTMPDIR}/docker-compose.yml";
+	      then
+	        myCOMPOSE_CUSTOMIZED="1"
+	    fi
+	    ;;
+	esac
+	fuUI_OK "Edition ${myEDITION}${myCOMPOSE_CUSTOMIZED:+ (customized)}, from the docker-compose.yml of the backup."
+	return 1
+}
+
+# A compose file of your own, for --check-data-loss: the update adapts it only after a yes
+# (--adapt-compose without a terminal), and the adaptation may lose what it lists as kept-out (a dry
+# --adopt, as the run will show it before the choice). A file of the customizer before v2 is rebuilt
+# without a question, it is no finding.
+function fuCOMPOSE_LOSS () {
+	local myCOMPOSE="" myKIND="" myLINE="" myITEMS="" myRC=0
+	local myFILE="$HOME/tpotce/docker-compose.yml"
+	myCOMPOSE=$(grep -E "^TPOT_DOCKER_COMPOSE=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d "=" -f2-)
+	[ "$(basename "${myCOMPOSE:-./docker-compose.yml}")" == "docker-compose.yml" ] && [ -f "${myFILE}" ] || return 0
+	myKIND=$(fuCOMPOSE_KIND "${myFILE}")
+	fuTMPDIR
+	if [ "${myKIND}" == "V1" ];
+	  then
+	    if fuADOPT_RUN "${myFILE}" "${myTMPDIR}/adopted.yml" "$(fuADOPT_CUSTOMIZER check)" --dry-run;
+	      then
+	        fuUI_OK "docker-compose.yml was written by the customizer before v2, the update rebuilds it for this release."
+	        return 0
+	    fi
+	    myKIND="OWN"
+	fi
+	[ "${myKIND}" == "OWN" ] || return 0
+	fuADOPT_RUN "${myFILE}" "${myTMPDIR}/adopted.yml" "$(fuADOPT_CUSTOMIZER check)" --dry-run || myRC=$?
+	if [ "${myRC}" -ne 0 ];
+	  then
+	    fuLOSS_ADD compose "Your docker-compose.yml is a compose file of your own and cannot be adapted to the release automatically (compose/customizer.py --adopt ended with ${myRC}): the update stops before it changes anything."
+	    return 0
+	fi
+	for myLINE in ${myADOPT_LINES[@]+"${myADOPT_LINES[@]}"};
+	  do
+	    case "${myLINE}" in
+	      "kept-out: "*) myITEMS="${myITEMS:+${myITEMS}; }${myLINE#kept-out: }" ;;
+	    esac
+	  done
+	if [ -n "${myITEMS}" ];
+	  then
+	    fuLOSS_ADD compose "Your docker-compose.yml is a compose file of your own: the update adapts it to the release only after a yes (--adapt-compose), the backup keeps your file. Not carried over: ${myITEMS}."
+	  else
+	    fuLOSS_ADD compose "Your docker-compose.yml is a compose file of your own: the update adapts it to the release only after a yes (--adapt-compose), the backup keeps your file. Every setting of it is carried over."
+	fi
+}
+
 # Put the edition back that fuCHECK_EDITION found, using this release's template so
 # that the update brings its new service definitions along. Has to run before the
 # images are pulled, as every edition needs a different set of them.
@@ -3285,6 +3769,16 @@ function fuRESTORE_EDITION () {
 	    echo
 	    return
 	fi
+	# No edition: the compose file before the update decides, the one of the archive (the one here is
+	# the reset one of the release by now). Not on an older checkout, which puts your file back as it is.
+	if [ "${myEDITION}" == "UNKNOWN" ] && [ -z "${myOLDER_CHECKOUT}" ];
+	  then
+	    if fuRESTORE_UNKNOWN;
+	      then
+	        echo
+	        return
+	    fi
+	fi
 	if [ "${myEDITION}" == "CUSTOM" ];
 	  then
 	    fuRESTORE_CUSTOM
@@ -3294,17 +3788,11 @@ function fuRESTORE_EDITION () {
 	# An update.sh from before this function existed reset docker-compose.yml to
 	# the STANDARD edition without remembering anything, in which case TPOT_TYPE in
 	# the restored .env is the only hint that is left.
-	if [ "${myEDITION}" == "STANDARD" ] || [ "${myEDITION}" == "UNKNOWN" ];
+	if [ "${myEDITION}" == "STANDARD" ];
 	  then
 	    if grep -qE "^TPOT_TYPE=SENSOR" "$HOME/tpotce/.env" 2>/dev/null;
 	      then
 	        fuUI_WARN "TPOT_TYPE is SENSOR, restoring the SENSOR edition instead of ${myEDITION}."
-	        # A compose file that matched no edition may be one of your own, and the template replaces it
-	        if [ "${myEDITION}" == "UNKNOWN" ];
-	          then
-	            fuUI_WARN "$HOME/tpotce/docker-compose.yml matched no edition and is replaced by the SENSOR edition. Your file is in the backup ${myARCHIVE}: tar xOf ${myARCHIVE} docker-compose.yml"
-	            fuDID warn "Your docker-compose.yml matched no edition and is replaced by the SENSOR edition, the backup has it."
-	        fi
 	        myEDITION="SENSOR"
 	    fi
 	fi
@@ -3627,6 +4115,8 @@ function fuCHECK_DATA_LOSS () {
 	    fuUI_INFO "Checking what the update brings ..."
 	    myREF=$(fuLOSS_TARGET) || return 1
 	    fuUI_HINT "The update goes to $("${myGIT[@]}" rev-parse --short "${myREF}" 2>/dev/null) (${myREF})."
+	    # a compose file of your own, as fuCHECK_EDITION will see it before the stop
+	    fuCOMPOSE_LOSS
 	    myCURRENT=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2-)
 	    myREPO=$(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2-)
 	    # as fuRESTORE: the old default dtagdevsec moves to the registry of env.example
@@ -3730,6 +4220,7 @@ for myARG in "$@";
       --check-data-loss) myCHECK_LOSS=1 ;;
       --accept-data-loss) myACCEPT_LOSS=1 ;;
       --accept-data-loss-file) myACCEPT_FILE_NEXT=1 ;;
+      --adapt-compose) myADAPT_COMPOSE=1 ;;
       --help)  myARGV+=("-h") ;;
       --?*)    fuUI_USAGE_ERROR "Unknown option ${myARG}." update.sh; exit 1 ;;
       *)      myARGV+=("${myARG}") ;;
@@ -3899,7 +4390,8 @@ fuEXPORT_ELASTIC
 fuSTOP_TPOT
 fuBACKUP
 fuMARK phase selfupdate Updating the checkout
-fuSELFUPDATE "$@" ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"}
+# --adapt-compose also when the answer at the terminal was "adapt" (fuADOPT_CHOICE): the restarted script does not ask again
+fuSELFUPDATE "$@" ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"} ${myADAPT_COMPOSE:+--adapt-compose}
 # The config and the edition have to be back in place before the images are
 # pulled, `docker compose pull` reads both.
 fuMARK phase restore Putting your configuration back

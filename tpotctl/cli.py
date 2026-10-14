@@ -32,7 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     for action in ("start", "stop", "restart"):
         sub.add_parser(action, help=f"{action} T-Pot (sudo systemctl {action} tpot.service)")
     sub.add_parser("update", help="update T-Pot, runs update.sh with your options (it asks before a loss of "
-                                  "data, without a terminal --accept-data-loss confirms one)")
+                                  "data, without a terminal --accept-data-loss confirms one; a compose file of "
+                                  "your own it adapts after a yes, without a terminal with --adapt-compose)")
     sub.add_parser("restore", help="restore a backup, runs restore.sh with your options")
     sub.add_parser("customize", help="choose edition, services and ports, runs compose/customizer.py")
     install = sub.add_parser("install", help="install T-Pot on this host with the assistant (install.sh -s does it "

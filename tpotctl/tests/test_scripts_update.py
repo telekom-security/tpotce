@@ -19,6 +19,7 @@ import textwrap
 import time
 import unittest
 
+from tpotctl.tests import ptyhelper
 from tpotctl.tests import test_scripts as base
 from tpotctl.tests import test_ui as ui
 
@@ -371,30 +372,24 @@ class SummaryTest(Scripts):
         self.assertEqual(self.source_update("exit 3").stdout, "")         # not confirmed: no summary
 
     def test_the_warnings_of_a_run_are_in_its_summary(self):
-        """An unknown edition and a Kibana that does not answer: both warnings are in the summary too."""
-        import tarfile
+        """A changed edition and a Kibana that does not answer: both warnings are in the summary too."""
         self.stub("docker", "#!/bin/sh\necho kibana\n")                  # the container runs, curl fails
-        compose = "services:\n  kibana:\n    image: mine\n"
+        compose = "# T-Pot: STANDARD\nservices:\n  kibana:\n    image: mine\n"
         for name, text in ((".env", "TPOT_TYPE=HIVE\n"), ("docker-compose.yml", compose)):
             with open(os.path.join(self.tpotce, name), "w", encoding="utf-8") as out:
                 out.write(text)
-        staging = os.path.join(self.home, "staging")
-        os.makedirs(staging)
-        with open(os.path.join(staging, "docker-compose.yml"), "w", encoding="utf-8") as out:
-            out.write(compose)
-        archive = os.path.join(self.home, "x_tpot_backup.tar")
-        with tarfile.open(archive, "w") as tar:
-            tar.add(os.path.join(staging, "docker-compose.yml"), arcname="docker-compose.yml")
+        os.makedirs(os.path.join(self.tpotce, "compose"))
+        with open(os.path.join(self.tpotce, "compose", "standard.yml"), "w", encoding="utf-8") as out:
+            out.write("# T-Pot: STANDARD\nservices: {}\n")
         result = self.source_update(
-            f'myRUNNING=1 myELASTIC_GRACE=0 myARCHIVE="{archive}"\nfuCHECK_EDITION\n'
+            'myRUNNING=1 myELASTIC_GRACE=0 myARCHIVE=/b/x.tar\nfuCHECK_EDITION\n'
             'fuELASTIC_READY kibana kibana "${myKIBANA}/api/status" Kibana\nfuRESTORE_EDITION\nexit 0\n')
         out = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, out[-800:])
         tail = result.stdout[result.stdout.index("### T-Pot is updated"):]
         self.assertIn("### [WARNING] - Kibana did not answer within 0s, it is NOT in the backup.", tail)
-        self.assertIn("### [WARNING] - The edition of docker-compose.yml could not be determined.", tail)
-        self.assertIn("### [WARNING] - Your docker-compose.yml matches no edition, the changes of this release "
-                      "are not in it.", tail)
+        self.assertIn("### [WARNING] - Your docker-compose.yml had been modified, the STANDARD edition of this "
+                      "release replaces it", tail)
 
     def test_a_changed_edition_is_in_the_summary(self):
         with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
@@ -1925,6 +1920,418 @@ class HandoverTest(Scripts):
         self.assertIn("TPOT_ES_STEP_WAIT=59 is no whole number of seconds from 60 to 86400.", out)
         self.assertNotIn("### The update did not finish", out)
         self.assertEqual(self.calls(), "")
+
+
+# compose/customizer.py of the checkout for the tests of --adopt: every call goes into HOME/calls (with the
+# file it adopts in HOME/adopted_input), the report on stdout from HOME/adopt_report, the exit code from
+# HOME/adopt_rc (HOME/adopt_rc_dry for --dry-run); without --dry-run and with 0 it writes -o with the text
+# of HOME/adopt_out
+ADOPT_STUB = textwrap.dedent('''\
+    # a stub of compose/customizer.py --adopt
+    import os, shutil, sys
+    home = os.environ["HOME"]
+    args = sys.argv[1:]
+    with open(os.path.join(home, "calls"), "a") as out:
+        out.write("customizer " + " ".join(args) + "\\n")
+    def read(name, default=""):
+        try:
+            with open(os.path.join(home, name)) as handle:
+                return handle.read()
+        except OSError:
+            return default
+    dry = "--dry-run" in args
+    shutil.copy(args[args.index("--adopt") + 1], os.path.join(home, "adopted_input"))
+    rc = int((read("adopt_rc_dry" if dry else "adopt_rc", "0") or "0").strip() or "0")
+    sys.stdout.write(read("adopt_report", "kept-out: kibana: mem_limit 1g (the release has 2g)\\n"))
+    if rc == 0 and not dry:
+        with open(args[args.index("-o") + 1], "w") as out:
+            out.write(read("adopt_out", ADOPTED))
+    sys.exit(rc)
+''').replace("ADOPTED", repr("# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\nservices: {}\n"))
+
+
+class ComposeAdoptTest(Scripts):
+    """A compose file that is no edition: one of the customizer before v2 ('# T-Pot: CUSTOM EDITION') is
+    rebuilt with compose/customizer.py --adopt without a question; one of your own is adapted only after a
+    yes at a terminal (default: cancel) or with --adapt-compose, before the stop in the first pass, after
+    the pull (from the file of the archive) after a handover. A no stops the update: before the stop
+    nothing changed, after the handover the checkout goes back and T-Pot starts again."""
+
+    V1 = "# T-Pot: CUSTOM EDITION\n# Generated on: 2025-03-01 12:00:00\nservices:\n  cowrie:\n    image: x\n"
+    OWN = "services:\n  kibana:\n    image: mine\n    mem_limit: 1g\n"
+    STANDARD = "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: release\n"
+    ADOPTED = "# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\nservices: {}\n"
+
+    def setUp(self):
+        super().setUp()
+        os.makedirs(os.path.join(self.tpotce, "compose"))
+        self.write(os.path.join(self.tpotce, "compose", "customizer.py"), ADOPT_STUB)
+        self.write(os.path.join(self.tpotce, "compose", "standard.yml"), self.STANDARD)
+        self.write(os.path.join(self.tpotce, "compose", "sensor.yml"), "# T-Pot: SENSOR\nservices: {}\n")
+        self.write(os.path.join(self.tpotce, "compose", "tpot_services.yml"), "services: {}\n")
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\n")
+        restore = os.path.join(self.tpotce, "restore.sh")
+        self.write(restore, '#!/bin/sh\necho "restore.sh $*" >> "$HOME/calls"\n')
+        os.chmod(restore, 0o755)
+        # systemctl: is-enabled says enabled, every call is logged
+        self.stub("systemctl", '#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\n'
+                               '[ "$1" = "is-enabled" ] && echo enabled\nexit 0\n')
+        git = ["git", "-C", self.tpotce, "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(["git", "init", "-q", self.tpotce], check=True)
+        subprocess.run(git + ["checkout", "-q", "-b", "master"], check=True)
+        subprocess.run(git + ["add", "-A"], check=True)
+        subprocess.run(git + ["commit", "-q", "-m", "before"], check=True)
+        self.before = subprocess.run(["git", "-C", self.tpotce, "rev-parse", "HEAD"], capture_output=True,
+                                     universal_newlines=True, check=True).stdout.strip()
+        subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "release"], check=True)
+
+    def write(self, path, text):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(text)
+
+    def read(self, path):
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+
+    def archive(self, compose=None, env="TPOT_TYPE=HIVE\n"):
+        members = {"MANIFEST": "T-Pot backup\n", "rollback.txt": self.before + "\n", "env": env}
+        if compose is not None:
+            members["docker-compose.yml"] = compose
+        return base.make_backup(self.home, members)
+
+    def compose(self):
+        return self.read(os.path.join(self.tpotce, "docker-compose.yml"))
+
+    def summary(self, out):
+        return [line for line in out.splitlines() if line.startswith("### [")]
+
+    # --- a file of the customizer before v2 ---------------------------------------------------------
+
+    def test_v1_is_rebuilt_without_a_question(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.V1)
+        archive = self.archive(self.V1)
+        self.write(os.path.join(self.home, "adopt_report"),
+                   "dropped: spiderfoot (removed in this release)\nport: cowrie:2222/tcp=22\n"
+                   "new: conpot_x (in this release, not in your file: compose/customizer.py --add conpot_x)\n"
+                   "kept-out: cowrie: environment COWRIE_X=1\n")
+        result = self.source_update(f'myRUNNING=1 myARCHIVE=""\nfuCHECK_EDITION\nmyARCHIVE="{archive}"\n'
+                                    'fuRESTORE_EDITION\necho "went on"\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertNotIn("Choice", out)
+        self.assertNotIn("compose file of your own", out)
+        self.assertEqual(self.compose(), self.ADOPTED)
+        calls = [line for line in self.calls().splitlines() if line.startswith("customizer ")]
+        self.assertEqual(len(calls), 2, calls)
+        self.assertIn("--dry-run", calls[0])                                # before the stop: only a check
+        self.assertNotIn("--dry-run", calls[1])
+        self.assertIn("--report", calls[1])
+        self.assertIn("--tpot-type HIVE", calls[1])
+        self.assertIn("--old-catalog", calls[1])                            # the catalogue that ran
+        self.assertEqual(self.read(os.path.join(self.home, "adopted_input")), self.V1)
+        self.assertIn(f"tar xOf {archive} docker-compose.yml | diff - {self.tpotce}/docker-compose.yml", out)
+        self.assertIn("dropped: spiderfoot (removed in this release)", out)
+        self.assertIn("your host port, kept: cowrie:2222/tcp=22", out)
+        self.assertIn("compose/customizer.py --add conpot_x", out)
+        summary = self.summary(result.stdout)
+        self.assertIn("### [WARNING] - Not carried over from your docker-compose.yml: cowrie: environment "
+                      "COWRIE_X=1", summary)
+        self.assertIn("### [WARNING] - Dropped from your docker-compose.yml: spiderfoot (removed in this release)",
+                      summary)
+        self.assertFalse([line for line in summary if "conpot_x" in line or "2222" in line], summary)
+
+    def test_v1_rebuild_failure_falls_back_to_own(self):
+        """--adopt ends with 3 (conflicts): the file counts as one of your own, it cannot be adapted either,
+        so the update stops before anything changed."""
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.V1)
+        for rc in ("3", "2"):
+            with self.subTest(rc=rc):
+                self.write(os.path.join(self.home, "adopt_rc_dry"), rc + "\n")
+                result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\necho "went on"\n')
+                out = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 1, out)
+                self.assertNotIn("went on", out)
+                self.assertIn(f"cannot rebuild your docker-compose.yml of the customizer before v2 (--adopt ended "
+                              f"with {rc}), it counts as a compose file of your own.", out)
+                self.assertIn("is a compose file of your own", out)
+                self.assertIn(f"It cannot be adapted automatically: compose/customizer.py --adopt ended with {rc}",
+                              out)
+                self.assertEqual(self.compose(), self.V1)
+        # after the pull: the rebuild fails, the file counts as yours, without a terminal the update goes back
+        self.write(os.path.join(self.home, "adopt_rc_dry"), "0\n")
+        self.write(os.path.join(self.home, "adopt_rc"), "2\n")
+        archive = self.archive(self.V1)
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.STANDARD)
+        result = self.source_update(f'myRUNNING=1 mySTOPPED=1 myEDITION=UNKNOWN myARCHIVE="{archive}"\n'
+                                    'fuRESTORE_EDITION\necho "went on"\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertIn("it counts as a compose file of your own", out)
+        self.assertIn(f"restore.sh -f {archive} -c", self.calls())
+
+    # --- a compose file of your own -----------------------------------------------------------------
+
+    def first_pass(self, *args, **extra):
+        """update.sh -y of this checkout up to its edition check: the version of the release, the internet
+        check answers, a branch to update from."""
+        with open(os.path.join(REPO, "version"), encoding="utf-8") as handle:
+            self.write(os.path.join(self.tpotce, "version"), handle.read())
+        self.stub("curl", '#!/bin/sh\necho "curl $*" >> "$HOME/calls"\nexit 0\n')
+        return self.run_plain(UPDATE_SH, "-y", *args, cwd=self.tpotce, TPOT_UPDATE_PREPARED=None, **extra)
+
+    def test_own_without_tty_cancels_before_stop_and_backup(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        result = self.first_pass()
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out[-1500:])
+        calls = self.calls()
+        self.assertIn("--dry-run", calls)
+        self.assertNotIn("systemctl stop", calls)
+        self.assertFalse([c for c in calls.splitlines() if c.startswith("docker ")], calls)   # no export, stop, pull
+        backups = os.path.join(self.home, "tpot_backups")
+        self.assertEqual([n for n in os.listdir(backups) if n.endswith(".tar")] if os.path.isdir(backups) else [], [])
+        self.assertEqual(self.compose(), self.OWN)
+        self.assertIn("Not adapted: no terminal. --adapt-compose adapts it, -y does not.", out)
+        self.assertIn("not carried over: kibana: mem_limit 1g (the release has 2g)", out)
+        flat = " ".join(out.split())
+        self.assertIn("tpot edition set <edition>, or cp compose/<edition>.yml docker-compose.yml", flat)
+        self.assertIn("your selection of services: compose/customizer.py", flat)
+        self.assertIn("diff -u docker-compose.yml compose/standard.yml", flat)
+        self.assertIn("and keep: kibana: mem_limit 1g (the release has 2g)", flat)
+        tail = result.stdout[result.stdout.index("### The update did not finish"):]
+        self.assertIn("### [FAILED] - Not updated: your docker-compose.yml is a compose file of your own and was "
+                      "not adapted, nothing was changed.", tail)
+        self.assertIn("T-Pot was left running.", tail)
+        self.assertNotIn("Each run of the update.sh that started this run", out)   # no backup was written
+
+    def pty(self, script, answer):
+        """The script (update.sh sourced, gum off) in a pty, the answer typed at the choice."""
+        line = f'source {shlex.quote(UPDATE_SH)}\n{script}'
+        _code, out, _piped = ptyhelper.run(["bash", "-c", line], self.env(TPOT_GUM="off"), cwd=self.tpotce,
+                                           size=(120, 49), answers=(("Choice (1-2", answer),), timeout=30)
+        return out.decode("utf-8", "replace").replace("\r\n", "\n")
+
+    def test_own_at_tty_lists_kept_out_before_the_choice_and_cancel_is_default(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        out = self.pty('myRUNNING=1\nfuCHECK_EDITION\necho "went on"\n', b"\r")
+        self.assertIn("Choice (1-2, enter = 2)", out)                       # Cancel is the default
+        self.assertIn("1) Back up and adapt automatically", out)
+        self.assertIn("2) Cancel and adapt it myself", out)
+        self.assertLess(out.index("is a compose file of your own"), out.index("Choice (1-2"))
+        self.assertLess(out.index("not carried over: kibana: mem_limit 1g"), out.index("Choice (1-2"))
+        self.assertNotIn("went on", out)
+        self.assertIn("Not updated: your docker-compose.yml is a compose file of your own and was not adapted", out)
+        self.assertEqual(self.compose(), self.OWN)
+        self.assertNotIn("systemctl", self.calls())
+
+    def test_own_adapt_rebuilds_and_warns(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        archive = self.archive(self.OWN)
+        out = self.pty('myRUNNING=1\nfuCHECK_EDITION\necho "adapt=${myADAPT_COMPOSE}"\n'
+                       f'myARCHIVE="{archive}"\nfuRESTORE_EDITION\nexit 0\n', b"1\r")
+        self.assertIn("adapt=1", out)                       # a restarted update.sh gets --adapt-compose
+        self.assertEqual(out.count("Choice (1-2"), 1, out)                  # asked once, before the stop
+        self.assertEqual(self.compose(), self.ADOPTED)
+        self.assertIn(f"tar xOf {archive} docker-compose.yml | diff - {self.tpotce}/docker-compose.yml", out)
+        self.assertIn("### [WARNING] - Not carried over from your docker-compose.yml: kibana: mem_limit 1g (the "
+                      "release has 2g)", out)
+        self.assertIn("### [OK] - Your docker-compose.yml is adapted to this release", out)
+        self.assertIn("### T-Pot is updated", out)
+
+    def test_adapt_compose_flag_without_tty_adapts(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        archive = self.archive(self.OWN)
+        result = self.source_update(f'myRUNNING=1 myADAPT_COMPOSE=1\nfuCHECK_EDITION\nmyARCHIVE="{archive}"\n'
+                                    'fuRESTORE_EDITION\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("--adapt-compose: back up your compose file and adapt it to this release; the kept-out list "
+                      "above is not carried over.", out)
+        self.assertLess(out.index("not carried over: kibana"), out.index("--adapt-compose: back up"))
+        self.assertEqual(self.compose(), self.ADOPTED)
+        self.assertIn("Not carried over from your docker-compose.yml: kibana: mem_limit 1g", result.stdout)
+        # the option: read before getopts, handed on to a restarted update.sh that knows it
+        text = base.read("update.sh")
+        main = text.split("################\n# Main section #\n################", 1)[1]
+        self.assertIn("--adapt-compose) myADAPT_COMPOSE=1 ;;", main)
+        self.assertIn('fuSELFUPDATE "$@" ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"} ${myADAPT_COMPOSE:+--adapt-compose}',
+                      main)
+        y = re.search(r"\n    y\)\n(.*?);;", main, re.S).group(1)
+        self.assertNotIn("myADAPT_COMPOSE", y)                               # -y does not choose
+        restart = self.source_update(f'fuRESTART_ARGS {shlex.quote(UPDATE_SH)} -F --adapt-compose -s\n')
+        self.assertEqual(restart.stdout.split(), ["-F", "--adapt-compose", "-s"], restart.stderr)
+        older = os.path.join(self.home, "older.sh")
+        self.write(older, 'while getopts ":yFsob:r:B:h" opt; do\n')
+        restart = self.source_update(f'fuRESTART_ARGS {shlex.quote(older)} -F --adapt-compose -s\n')
+        self.assertEqual(restart.stdout.split(), ["-F", "-s"], restart.stderr)
+        # the whole run: the option is taken, the question is not asked
+        self.write(os.path.join(self.home, "adopt_rc_dry"), "3\n")           # stops right after the check
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        result = self.first_pass("--adapt-compose")
+        out = result.stdout + result.stderr
+        self.assertNotIn("Unknown option", out)
+        self.assertIn("It cannot be adapted automatically", out)
+
+    # --- after the handover of the update.sh of the release before ------------------------------------
+
+    def handover(self, call, edition="UNKNOWN", **extra):
+        return self.source_update(call, TPOT_UPDATE_PREPARED="1", TPOT_UPDATE_EDITION=edition, **extra)
+
+    def test_handover_own_cancel_rolls_back_and_starts_tpot(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.STANDARD)     # reset by the pull
+        archive = self.archive(self.OWN)
+        result = self.handover(f'myRUNNING=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\nfuRESTORE_EDITION\n'
+                               'echo "went on"\n', TPOT_UPDATE_ARCHIVE=archive)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertNotIn("went on", out)
+        calls = self.calls()
+        self.assertIn(f"restore.sh -f {archive} -c", calls)
+        self.assertIn("systemctl start tpot", calls)
+        self.assertLess(calls.index("restore.sh"), calls.index("systemctl start"))
+        self.assertIn("not carried over: kibana: mem_limit 1g", out)
+        self.assertIn("Not adapted: no terminal.", out)
+        tail = result.stdout[result.stdout.index("### The update did not finish"):]
+        self.assertIn("### [FAILED] - Not updated: your docker-compose.yml is a compose file of your own and was "
+                      "not adapted, the checkout and the configuration are back.", tail)
+        self.assertIn("T-Pot runs again, on the release from before this update.", tail)
+        # the update.sh before wrote its backup already, and does so on every run
+        self.assertIn("Each run of the update.sh that started this run writes a backup", tail)
+        self.assertNotIn("T-Pot is stopped", tail)
+        # without an earlier commit in the archive: your file back as it was, T-Pot stays stopped
+        self.forget()
+        archive = base.make_backup(self.home, {"MANIFEST": "x\n", "env": "TPOT_TYPE=HIVE\n",
+                                               "docker-compose.yml": self.OWN}, name="20261006101010_tpot_backup.tar")
+        result = self.handover(f'myRUNNING=1 mySTOPPED=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\nfuRESTORE_EDITION\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertNotIn("restore.sh", self.calls())
+        self.assertNotIn("systemctl start", self.calls())
+        self.assertEqual(self.compose(), self.OWN)
+        self.assertIn("T-Pot is stopped, 'sudo systemctl start tpot' brings it back.", result.stdout)
+
+    def forget(self):
+        if os.path.exists(os.path.join(self.home, "calls")):
+            os.remove(os.path.join(self.home, "calls"))
+
+    def test_handover_reads_the_archive_compose_not_the_reset_one(self):
+        """The checkout is reset already: the compose file of the archive is the one adapted, as the type of
+        the env of the archive says (the .env here may be the one of the release)."""
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.STANDARD)
+        archive = self.archive(self.OWN, env="TPOT_TYPE=SENSOR\n")
+        for edition in ("UNKNOWN", ""):
+            with self.subTest(edition=edition):
+                self.forget()
+                self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.STANDARD)
+                result = self.handover(f'myRUNNING=1 myADAPT_COMPOSE=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\n'
+                                       'fuRESTORE_EDITION\nexit 0\n', edition=edition)
+                out = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 0, out)
+                self.assertEqual(self.read(os.path.join(self.home, "adopted_input")), self.OWN)
+                self.assertEqual(self.compose(), self.ADOPTED)
+                calls = [line for line in self.calls().splitlines() if line.startswith("customizer ")]
+                self.assertTrue(calls and all("--tpot-type SENSOR" in line for line in calls), calls)
+                self.assertTrue(all("--old-catalog" in line for line in calls), calls)
+                self.assertNotIn("Edition STANDARD", out)
+
+    def test_handover_with_another_compose_file_leaves_it(self):
+        """No edition handed over because TPOT_DOCKER_COMPOSE names another file: the tracked one stays as
+        the release has it, no warning about an edition it does not match."""
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.STANDARD)
+        archive = self.archive(self.OWN, env="TPOT_TYPE=HIVE\nTPOT_DOCKER_COMPOSE=./mine.yml\n")
+        result = self.handover(f'myRUNNING=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\nfuRESTORE_EDITION\nexit 0\n',
+                               edition="")
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("Your compose file is ./mine.yml (TPOT_DOCKER_COMPOSE), it is not touched.", out)
+        self.assertNotIn("matches no edition", out)
+        self.assertNotIn("compose file of your own", out)
+        self.assertNotIn("customizer", self.calls())
+        self.assertEqual(self.compose(), self.STANDARD)
+
+    def test_handover_without_a_compose_file_puts_the_edition_of_tpot_type(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.STANDARD)
+        for env, edition, template in (("TPOT_TYPE=SENSOR\n", "SENSOR", "# T-Pot: SENSOR\nservices: {}\n"),
+                                       ("TPOT_TYPE=HIVE\n", "STANDARD", self.STANDARD)):
+            with self.subTest(edition=edition):
+                archive = self.archive(None, env=env)
+                result = self.handover(f'myRUNNING=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\nfuRESTORE_EDITION\n'
+                                       'exit 0\n', edition="")
+                out = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 0, out)
+                self.assertNotIn("[ERROR]", out)
+                self.assertIn(f"There was no docker-compose.yml before the update, the {edition} edition of this "
+                              "release is put in place", out)
+                self.assertIn(f"### [WARNING] - There was no docker-compose.yml before the update", result.stdout)
+                self.assertEqual(self.compose(), template)
+                self.assertNotIn("customizer", self.calls())
+
+    # --- --check-data-loss ----------------------------------------------------------------------------
+
+    def test_check_data_loss_reports_own_compose(self):
+        cases = ((self.OWN, "", True), (self.V1, "", False), (self.STANDARD, "", False),
+                 (self.OWN, "TPOT_DOCKER_COMPOSE=./mine.yml\n", False))
+        for compose, env, found in cases:
+            with self.subTest(compose=compose[:20], env=env):
+                self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\n" + env)
+                self.write(os.path.join(self.tpotce, "docker-compose.yml"), compose)
+                result = self.source_update('myCHECK_LOSS=1 myLOSSES=0\nfuCOMPOSE_LOSS\necho "losses=${myLOSSES}"\n')
+                out = result.stdout + result.stderr
+                lines = [line for line in result.stdout.splitlines() if line.startswith("@@tpot loss ")]
+                self.assertEqual(len(lines), 1 if found else 0, out)
+                self.assertIn(f"losses={1 if found else 0}", out)
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\n")
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        self.write(os.path.join(self.home, "adopt_report"),
+                   "kept-out: kibana: mem_limit 1g (the release has 2g)\nkept-out: volumes: mine\n")
+        result = self.source_update('fuCOMPOSE_LOSS\n')
+        self.assertIn("@@tpot loss compose Your docker-compose.yml is a compose file of your own: the update adapts "
+                      "it to the release only after a yes (--adapt-compose), the backup keeps your file. Not carried "
+                      "over: kibana: mem_limit 1g (the release has 2g); volumes: mine.\n", result.stdout)
+        self.assertEqual(self.compose(), self.OWN)                             # a dry --adopt, nothing written
+        self.assertIn("--dry-run", self.calls())
+        self.write(os.path.join(self.home, "adopt_rc_dry"), "3\n")
+        result = self.source_update('fuCOMPOSE_LOSS\n')
+        self.assertIn("@@tpot loss compose Your docker-compose.yml is a compose file of your own and cannot be adapted "
+                      "to the release automatically (compose/customizer.py --adopt ended with 3)", result.stdout)
+        # the check runs it for an update, not for --backup-only
+        check = re.search(r"function fuCHECK_DATA_LOSS \(\) \{.*?\n\}", base.read("update.sh"), re.S).group(0)
+        block = check[check.index('if [ -z "${myBACKUP_ONLY}" ];'):check.index("if fuCOMPOSE_HAS elasticsearch")]
+        self.assertIn("fuCOMPOSE_LOSS", block)
+
+    def test_backup_only_does_not_ask(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        result = self.source_update('myRUNNING=1 myBACKUP_ONLY=1\nfuCHECK_EDITION\necho "went on"\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertNotIn("customizer", self.calls())
+        self.assertIn("Unable to determine the edition, the backup keeps docker-compose.yml as it is.", out)
+
+    def test_with_the_real_customizer(self):
+        """The plumbing against compose/customizer.py of this checkout and the venv of the T-Pot Manager:
+        a v1 file of the MINI services is rebuilt into a file of the customizer v2."""
+        venv = os.path.join(os.path.expanduser("~"), ".local", "share", "tpotce", "venv")
+        if not os.path.exists(os.path.join(venv, "bin", "python3")):
+            self.skipTest("no venv of the T-Pot Manager")
+        shutil.rmtree(os.path.join(self.tpotce, "compose"))
+        os.symlink(os.path.join(REPO, "compose"), os.path.join(self.tpotce, "compose"))
+        os.symlink(os.path.join(REPO, "tpotctl"), os.path.join(self.tpotce, "tpotctl"))
+        os.makedirs(os.path.join(self.home, "data", "tpotce"))
+        os.symlink(venv, os.path.join(self.home, "data", "tpotce", "venv"))
+        v1 = self.read(os.path.join(REPO, "compose", "mini.yml")).replace("# T-Pot: MINI\n",
+                                                                         "# T-Pot: CUSTOM EDITION\n", 1)
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), v1)
+        archive = self.archive(v1)
+        result = self.source_update(f'myRUNNING=1 myARCHIVE=""\nfuCHECK_EDITION\nmyARCHIVE="{archive}"\n'
+                                    'fuRESTORE_EDITION\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-2000:])
+        self.assertTrue(self.compose().startswith("# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\n"),
+                        self.compose()[:200])
+        self.assertIn("rebuilt for this release", out)
 
 
 class StopTest(Scripts):

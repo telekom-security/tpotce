@@ -440,9 +440,10 @@ def script_command(name: str, args: List[str], repo_dir: str = REPO_DIR) -> List
 LOSS_MARK = "@@tpot loss "
 # its keys (fuLOSS_ADD): older backups deleted to make room, the Elasticsearch data an upgrade changes
 # without a copy in the backup, the step of the data of an Elasticsearch before 8.19 through 8.19 on the
-# way to 9, images that cannot be pulled again. A key not in here is passed on all the same: update.sh
-# refuses what it does not find confirmed.
-LOSS_KEYS = ("backups", "elastic", "elastic-step", "images")
+# way to 9, images that cannot be pulled again, a compose file of your own that the update adapts only
+# after a yes (compose: confirmed with --adapt-compose, never with the file). A key not in here is passed
+# on all the same: update.sh refuses what it does not find confirmed.
+LOSS_KEYS = ("backups", "compose", "elastic", "elastic-step", "images")
 
 
 def check_data_loss(args: List[str], timeout: int = 180, run: Callable = subprocess.run,

@@ -251,7 +251,15 @@ class UpdateShTest(Harness):
         self.assertTrue(block, text[-900:])
         self.assertEqual(re.findall(r"trap .*INT", block.group(0)), ["trap fuES_STEP_REFUSED INT", "trap - INT"])
         self.assertTrue(re.search(r"function fuES_STEP_REFUSED \(\) \{\n\ttrap - INT\n", read("update.sh")))
-        rest = read("update.sh").replace(append, "").replace(step, "")
+        # the question about a compose file of your own: Ctrl+C there is a no, the trap it found comes back;
+        # its cancel lets the rollback finish
+        choice = re.search(r"function fuADOPT_CHOICE \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        self.assertEqual(re.findall(r"trap .*INT", choice), ["trap -p INT", "trap 'myADOPT_INT=\"1\"' INT",
+                                                             "trap - INT"])
+        self.assertIn('eval "${myTRAP:-trap - INT}"', choice)
+        cancel = re.search(r"function fuADOPT_CANCEL \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        self.assertTrue(re.search(r"trap '' INT\n\s*fuROLLBACK_CHECKOUT \|\| myRC=\$\?\n\s*trap - INT\n", cancel), cancel)
+        rest = read("update.sh").replace(append, "").replace(step, "").replace(choice, "").replace(cancel, "")
         self.assertEqual(len(re.findall(r"trap .*INT", rest)), 8)
 
     def test_the_refusal_never_names_full(self):
@@ -2218,6 +2226,7 @@ class DataLossTest(Harness):
         return origin
 
     CHECK = textwrap.dedent("""
+        fuCOMPOSE_LOSS () { :; }
         docker () {
           local myA=""
           case "$1 $2" in
@@ -2379,6 +2388,30 @@ class DataLossTest(Harness):
         self.assertIn("exit 5", flat)
         # the exit codes of the check: found, nothing found, cannot tell
         self.assertIn("Exit 0: nothing found, 3: found, 1: it cannot tell.", flat)
+
+    def test_help_and_menu_name_adapt_compose(self):
+        """--adapt-compose of update.sh: its help, tpot update -h and the question of the T-Pot Manager say
+        the same: a compose file of your own is adapted after a yes, without a terminal with the option."""
+        result = self.run_script(os.path.join(REPO, "update.sh"), "-h")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(re.search(r"^  --adapt-compose  ", result.stdout, re.M), result.stdout)
+        flat = " ".join(result.stdout.split())
+        self.assertIn("[--accept-data-loss-file <file>] [--adapt-compose]", flat)
+        self.assertIn("For a docker-compose.yml of your own (no edition, not built by compose/customizer.py): back "
+                      "up your compose file and adapt it to this release without a question; what the run lists "
+                      "as kept-out is not carried over. At a terminal the run asks (default: cancel), -y does not "
+                      "choose.", flat)
+        self.assertIn("A file of the customizer before v2 (# T-Pot: CUSTOM EDITION) is rebuilt without a question.",
+                      flat)
+        cli = " ".join(read("tpotctl/cli.py").split())
+        self.assertIn('"your own it adapts after a yes, without a terminal with --adapt-compose)"', cli)
+        app = " ".join(read("tpotctl/app.py").split())
+        self.assertIn("Adapt lets update.sh back up your compose file and adapt it to this release (update.sh "
+                      '" "--adapt-compose)', app)
+        self.assertIn('args = list(args) + ["--adapt-compose"]', app)
+        # the text of the run where the option (or the choice) takes it
+        self.assertIn('"--adapt-compose: back up your compose file and adapt it to this release; the kept-out list '
+                      'above is not carried over."', read("update.sh"))
 
     # --- one data path, the old Elasticsearch under every registry ---------------------------------
 
@@ -3488,16 +3521,22 @@ class UpdateRepairTest(Harness):
         self.assertEqual(self.read(os.path.join(backups, "update.log")), "the last run\n")
         self.assertFalse(os.path.exists(os.path.join(backups, "update.log.1")))
 
-    def test_unknown_sensor_edition_warns(self):
+    def test_unknown_edition_on_a_sensor_is_not_replaced_by_the_template(self):
+        """A compose file of your own on a SENSOR is adapted as a SENSOR (ComposeAdoptTest); on an older
+        checkout, which is no update, it goes back as it was, never replaced by the SENSOR template."""
+        own = "services: {own: {}}\n"
         self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=SENSOR\n")
-        self.write(os.path.join(self.tpotce, "docker-compose.yml"), "services: {own: {}}\n")
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), "# T-Pot: STANDARD\n")
         self.write(os.path.join(self.tpotce, "compose", "sensor.yml"), "# T-Pot: SENSOR\n")
-        script = (self.functions("fuEDITION_TEMPLATE", "fuRESTORE_EDITION")
-                  + 'myEDITION=UNKNOWN myCOMPOSE_CUSTOMIZED="" myARCHIVE=/b/x_tpot_backup.tar\nfuRESTORE_EDITION\n')
+        archive = make_backup(self.home, {"docker-compose.yml": own})
+        script = (self.functions("fuEDITION_TEMPLATE", "fuCOMPOSE_FROM_ARCHIVE", "fuRESTORE_EDITION")
+                  + 'fuTMPDIR () { [ -n "${myTMPDIR}" ] || myTMPDIR=$(mktemp -d); }\n'
+                  + f'myEDITION=UNKNOWN myCOMPOSE_CUSTOMIZED="" myOLDER_CHECKOUT=1 myARCHIVE="{archive}"\n'
+                  'fuRESTORE_EDITION\n')
         result = self.bash(script)
-        warns = [line for line in result.stdout.splitlines() if line.startswith("WARN:")]
-        self.assertTrue(any("docker-compose.yml" in line and "/b/x_tpot_backup.tar" in line for line in warns), warns)
-        self.assertEqual(self.read(os.path.join(self.tpotce, "docker-compose.yml")), "# T-Pot: SENSOR\n")
+        self.assertEqual(self.read(os.path.join(self.tpotce, "docker-compose.yml")), own, result.stdout)
+        self.assertIn("OK: Your own docker-compose.yml is restored from the backup.", result.stdout)
+        self.assertNotIn("SENSOR edition", result.stdout)
 
     # --- the edition line under a comment of your own ----------------------------------------------
 
@@ -3506,12 +3545,12 @@ class UpdateRepairTest(Harness):
                          "fuCHECK_EDITION", "fuCOMPOSE_FROM_ARCHIVE", "fuRESTORE_EDITION")
     TEMPLATE = "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: new\n"
 
-    def check_edition(self, compose, then=""):
+    def check_edition(self, compose, then="", before=""):
         """fuCHECK_EDITION on HOME/tpotce/docker-compose.yml, with compose/standard.yml as the template."""
         self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\n")
         self.write(os.path.join(self.tpotce, "docker-compose.yml"), compose)
         self.write(os.path.join(self.tpotce, "compose", "standard.yml"), self.TEMPLATE)
-        script = (self.EDITIONS + self.functions(*self.EDITION_FUNCTIONS)
+        script = (self.EDITIONS + self.functions(*self.EDITION_FUNCTIONS) + before
                   + 'fuTMPDIR () { myTMPDIR=$(mktemp -d); }\nmyEDITION="" myCOMPOSE_CUSTOMIZED="" '
                   'myARCHIVE=/b/x_tpot_backup.tar\nfuCHECK_EDITION\n'
                   'echo "edition=${myEDITION} customized=${myCOMPOSE_CUSTOMIZED}"\n' + then)
@@ -3532,9 +3571,11 @@ class UpdateRepairTest(Harness):
         self.assertNotIn("Unable to determine", out)
 
     def test_an_edition_line_after_the_first_yaml_line_is_not_taken(self):
-        out = self.check_edition("services:\n# T-Pot: STANDARD\n  tpotinit:\n    image: old\n")
+        # no edition: a compose file of your own, the adaptation decides (ComposeAdoptTest)
+        out = self.check_edition("services:\n# T-Pot: STANDARD\n  tpotinit:\n    image: old\n",
+                                 before='fuADOPT_COMPOSE () { echo "ADOPT: $*"; }\n')
         self.assertIn("edition=UNKNOWN customized=", out)
-        self.assertIn("WARN: Unable to determine the edition", out)
+        self.assertIn(f"ADOPT: {self.tpotce}/docker-compose.yml check", out)
 
     def custom_file(self, preamble=""):
         body = "\nservices:\n  tpotinit:\n    image: x\n"

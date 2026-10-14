@@ -920,7 +920,19 @@ The update script will ...
  - remove docker images of earlier versions, keeping the tag your `.env` now names
  - detect the installed T-Pot edition (i.e. `SENSOR`, `MINI`, `LLM`, `TARPIT`, `MOBILE`) and restore it, using this release's `~/tpotce/compose/<edition>.yml` so that new honeypots and changes of the release are included.
  - rebuild a `docker-compose.yml` made with `~/tpotce/compose/customizer.py` from this release,
-   with the edition and the changes the customizer noted in its header.
+   with the edition and the changes the customizer noted in its header. A file of the customizer
+   before v2 (`# T-Pot: CUSTOM EDITION`) is rebuilt from its services with
+   `compose/customizer.py --adopt`, without a question; the run lists what it did not carry over.
+ - ask about a `docker-compose.yml` of your own (no edition, not from the customizer): the changes of
+   a release do not reach it. Before anything is stopped the run lists what an automatic adaptation
+   (`compose/customizer.py --adopt`, your file stays in the backup) would not carry over, then asks:
+   back up and adapt, or cancel (the default) and adapt it yourself (`tpot edition set <edition>`,
+   the customizer, or by hand along `diff -u docker-compose.yml compose/standard.yml`). Without a
+   terminal only `--adapt-compose` adapts it, `-y` does not; otherwise the run stops with exit code 1
+   and nothing changed. After the update.sh of an earlier release restarted into this one the
+   question comes after its pull: a cancel puts the checkout back and starts T-Pot again where
+   `tpot.service` is enabled. `--check-data-loss` reports it as `@@tpot loss compose`, the T-Pot
+   Manager offers *Adapt* or *Back*.
  - keep your previous `docker-compose.yml` in the backup archive. If you made changes to it by hand
    (i.e. removing the `ewsposter` section) you need to add them again - the run tells you how to
    compare the two.
