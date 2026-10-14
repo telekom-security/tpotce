@@ -1064,6 +1064,24 @@ folder and its `.env` names the version that ran before this update (`TPOT_VERSI
 an update before that one holds the data of an older release and does not count, and
 `update.sh --check-data-loss` (run by the T-Pot Manager on a T-Pot past 24.04.1) never counts it.
 Otherwise it says that a no cannot stop the upgrade and how to copy the data first.
+The `update.sh` of `master` of 2026-08-24 restarted the same way, without handing anything over,
+after it wrote its backup to `~/tpot_backups/*_tpot_backup*.tar` (there `.env` is the member `env`):
+the new script takes `.env` and `docker-compose.yml` from the newer of that archive and
+`~/*_tpot_backup.tgz`, under the same conditions.
+
+Hosts that run the `update.sh` of `master` (what installed T-Pots of 24.04.1 run) hand over to the
+new one: that script stops T-Pot, writes its backup, resets the checkout and pulls, then starts the
+new `update.sh`, which goes on from there and restores from that backup. Its archive in
+`~/tpot_backups` holds `MANIFEST`, `rollback.txt`, `tracked.patch`, `env`, `docker-compose.yml`,
+`untracked/` and the Kibana objects and ILM policy in `elastic/` where there are any, and the files of `data/` that
+T-Pot keeps, always from `~/tpotce/data`, whatever `TPOT_DATA_PATH` says; `data/elk/data` only with
+`--full` (the new script adds it where there is room, see above). Its `tracked.patch` has no binary
+changes: a changed binary file in `~/tpotce` is not in it, copy it yourself first. The warnings of
+that first pass are not in the summary of the new script, read them in its output above. If it
+handed over no edition (`TPOT_DOCKER_COMPOSE` names another file, or there was no
+`docker-compose.yml`), the edition counts as unknown: it is not read from the reset checkout. The
+old script rejects the options it does not know; give the options of this release after `--`, it
+passes them on, e.g. `./update.sh -y -- --accept-data-loss`.
 
 To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
 

@@ -1024,7 +1024,7 @@ class EsHarness(base.Harness):
                               "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuCAN_ROLLBACK", "fuROLLBACK_CHECKOUT",
                               "fuSTART_TPOT", "fuELASTIC_REFUSED", "fuOLD_RELEASE_BACKUP", "fuTMPDIR",
                               "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
-                              "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV", *base.ES_APPEND,
+                              "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_MEMBER_NAME", "fuARCHIVE_ENV", *base.ES_APPEND,
                               "fuCHECK_ELASTIC") + late + 'fuCHECK_ELASTIC\necho "went on"\n'
         proc = subprocess.Popen(["bash", "-c", self.HELPERS + script], cwd=REPO, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, universal_newlines=True, env=self.environment(),
@@ -1866,6 +1866,64 @@ class EsStepTest(EsHarness):
                               env=environment, stdin=subprocess.DEVNULL, timeout=60)
         self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
         self.assertIn("TPOT_ES_STEP_WAIT=30m is no whole number of seconds from 60 to 86400.", done.stdout + done.stderr)
+        self.assertEqual(self.calls(), "")
+
+
+class HandoverTest(Scripts):
+    """The handover of an earlier update.sh (TPOT_UPDATE_PREPARED): it has stopped T-Pot, written its
+    backup and reset the checkout already. What it handed over counts, never the files of the reset
+    checkout, and a wrong setting of this run no longer ends it with T-Pot stopped."""
+
+    STANDARD = "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: x\n"
+
+    def test_handover_with_empty_edition_is_unknown_not_standard(self):
+        """master hands over an empty edition for another TPOT_DOCKER_COMPOSE or no compose file: the
+        docker-compose.yml here is the reset one of the release, it says nothing about the edition."""
+        for name, text in ((".env", "TPOT_TYPE=HIVE\n"), ("docker-compose.yml", self.STANDARD)):
+            with open(os.path.join(self.tpotce, name), "w", encoding="utf-8") as out:
+                out.write(text)
+        call = 'fuCHECK_EDITION\necho "EDITION=${myEDITION} CUSTOMIZED=${myCOMPOSE_CUSTOMIZED}"\n'
+        result = self.source_update(call, TPOT_UPDATE_PREPARED="1", TPOT_UPDATE_EDITION="",
+                                    TPOT_UPDATE_ARCHIVE="/b/x.tar")
+        out = result.stdout + result.stderr
+        self.assertIn("EDITION=UNKNOWN CUSTOMIZED=\n", out)
+        self.assertNotIn("Edition STANDARD", out)
+        self.assertIn("handed over no edition", out)
+        # the first pass still reads the file
+        result = self.source_update(call, TPOT_UPDATE_PREPARED=None, TPOT_UPDATE_EDITION=None)
+        self.assertIn("EDITION=STANDARD", result.stdout, result.stdout + result.stderr)
+        # an edition that was handed over stays as it is
+        result = self.source_update(call, TPOT_UPDATE_PREPARED="1", TPOT_UPDATE_EDITION="MINI")
+        self.assertIn("EDITION=MINI", result.stdout, result.stdout + result.stderr)
+
+    def test_a_wrong_step_wait_in_a_handover_falls_back_to_1200(self):
+        """T-Pot is stopped and the checkout pulled when the handover starts this script: a usage error
+        would leave it so. The run goes on with 1200 s and says so, in the summary too."""
+        result = self.source_update('fuCHECK_STEP_WAIT; echo "rc=$? wait=${myES_STEP_WAIT}"\n',
+                                    TPOT_UPDATE_PREPARED="1", TPOT_ES_STEP_WAIT="30m")
+        self.assertIn("rc=0 wait=1200\n", result.stdout, result.stdout + result.stderr)
+        self.assertNotIn("USAGE", result.stdout + result.stderr)
+        # the whole run: no usage error, the warning after the start of the run and in its summary
+        with open(os.path.join(self.tpotce, "version"), "w", encoding="utf-8") as out:
+            out.write("20.06.0\n")
+        result = self.run_plain(UPDATE_SH, "-y", cwd=self.tpotce, TPOT_UPDATE_PREPARED="1",
+                                TPOT_ES_STEP_WAIT="30m")
+        out = result.stdout + result.stderr
+        self.assertNotIn("is no whole number of seconds from 60 to 86400.", out)
+        text = ("TPOT_ES_STEP_WAIT=30m is no whole number of seconds from 60 to 86400, the step through "
+                "Elasticsearch 8.19 waits 20 min (1200 s) instead.")
+        self.assertIn(text, out)
+        tail = result.stdout[result.stdout.index("### The update did not finish"):]
+        self.assertIn(f"### [WARNING] - {text}", tail)
+        self.assertIn("20.06.0 cannot be upgraded automatically", tail)        # it went on to the checks
+
+    def test_a_wrong_step_wait_outside_a_handover_is_a_usage_error(self):
+        result = self.run_plain(UPDATE_SH, "-y", cwd=self.tpotce, TPOT_UPDATE_PREPARED=None,
+                                TPOT_ES_STEP_WAIT="59")
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertIn("TPOT_ES_STEP_WAIT=59 is no whole number of seconds from 60 to 86400.", out)
+        self.assertNotIn("### The update did not finish", out)
         self.assertEqual(self.calls(), "")
 
 

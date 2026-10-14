@@ -99,7 +99,7 @@ myES_STEP_PAUSE=5
 
 # Working directory, cleaned up when the script ends
 myTMPDIR=""
-# The archive of the update.sh of the tag 24.04.1 as read in this run (fuOLD_UPDATER_READ) and the folder in
+# The archive of an earlier updater (the tag 24.04.1, master of 2026-08-24) as read in this run (fuOLD_UPDATER_READ) and the folder in
 # myTMPDIR with its list of members, its .env and its docker-compose.yml
 myOLD_READ=""
 myOLD_DIR=""
@@ -313,13 +313,30 @@ myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
 myDROPPED_SERVICES="spiderfoot fatt tanner_redis tanner_phpox tanner_api tanner snare"
 
 # Is TPOT_ES_STEP_WAIT (myES_STEP_WAIT) whole seconds from 60 to 86400? The step through
-# Elasticsearch 8.19 computes with it; anything else is a usage error, rc 1
+# Elasticsearch 8.19 computes with it; anything else is a usage error, rc 1. Not after a handover
+# (myPREPARED): the update.sh that started this run has stopped T-Pot and pulled already, a usage
+# error would leave it so. The run goes on with 1200 s, the value given is kept in
+# myES_STEP_WAIT_GIVEN for the warning once the run has started (fuSTEP_WAIT_WARN)
+myES_STEP_WAIT_GIVEN=""
 function fuCHECK_STEP_WAIT () {
 	if [[ "${myES_STEP_WAIT}" =~ ^[1-9][0-9]{1,4}$ ]] && [ "${myES_STEP_WAIT}" -ge 60 ] && [ "${myES_STEP_WAIT}" -le 86400 ];
 	  then
 	    return 0
 	fi
+	if [ -n "${myPREPARED}" ];
+	  then
+	    myES_STEP_WAIT_GIVEN="${myES_STEP_WAIT}"
+	    myES_STEP_WAIT=1200
+	    return 0
+	fi
 	fuUI_USAGE_ERROR "TPOT_ES_STEP_WAIT=${myES_STEP_WAIT} is no whole number of seconds from 60 to 86400." update.sh
+}
+function fuSTEP_WAIT_WARN () {
+	local myTEXT=""
+	[ -n "${myES_STEP_WAIT_GIVEN}" ] || return 0
+	myTEXT="TPOT_ES_STEP_WAIT=${myES_STEP_WAIT_GIVEN} is no whole number of seconds from 60 to 86400, the step through Elasticsearch ${myES_STEP_VERSION%.*} waits $(( myES_STEP_WAIT / 60 )) min (${myES_STEP_WAIT} s) instead."
+	fuUI_WARN "${myTEXT}"
+	fuDID warn "${myTEXT}"
 }
 
 function fuPRINT_HELP () {
@@ -881,6 +898,16 @@ function fuCHECK_EDITION () {
 	if [ -n "${myEDITION}" ];
 	  then
 	    fuUI_OK "Edition ${myEDITION} was detected before the restart."
+	    echo
+	    return
+	fi
+	# An empty one after a handover (another TPOT_DOCKER_COMPOSE, or no docker-compose.yml before
+	# the reset) is no edition: the files here are the reset ones of the release, read again they
+	# would say STANDARD
+	if [ -n "${myPREPARED}" ];
+	  then
+	    myEDITION="UNKNOWN"
+	    fuUI_HINT "The update.sh that started this run handed over no edition, and the checkout is reset already: the edition is unknown, it is not read from the files of the release."
 	    echo
 	    return
 	fi
@@ -1618,6 +1645,21 @@ function fuOLD_UPDATER_ARCHIVE () {
 	echo "${myNEWEST}"
 }
 
+# The archive an updater wrote before it reset the checkout and restarted into this script without
+# a handover, for fuOLD_UPDATER_CONFIG: the newer of that $HOME/*_tpot_backup.tgz and the newest
+# ~/tpot_backups/*_tpot_backup*.tar, the archive of the update.sh of the branch master of 2026-08-24
+# (one tar of MANIFEST rollback.txt env tracked.patch docker-compose.yml and some files of data/,
+# .env is its member env). That folder also holds the archives of this and of later releases:
+# fuOLD_UPDATER_CONFIG takes nothing from one whose .env names the version of the checkout or a
+# newer one. It runs before the backup of this run, which is never the one found. Prints it, rc 1
+# for none.
+function fuOLD_UPDATER_NEWEST () {
+	local myNEWEST=""
+	myNEWEST=$(ls -1t "$HOME"/*_tpot_backup.tgz "${myBACKUPDIR}"/*_tpot_backup*.tar 2>/dev/null | head -1)
+	[ -n "${myNEWEST}" ] && [ -f "${myNEWEST}" ] || return 1
+	echo "${myNEWEST}"
+}
+
 # Is that archive from the last 24 hours, i.e. from the run that restarted into this script?
 function fuOLD_UPDATER_FRESH () {   # $1 = archive
 	[ -n "$(find "$1" -maxdepth 0 -mmin -1440 2>/dev/null)" ]
@@ -1637,9 +1679,14 @@ function fuOLD_UPDATER_READ () {   # $1 = archive
 	mkdir "${myDIR}/files" && tar tf "$1" > "${myDIR}/toc" 2>/dev/null || return 1
 	for myFILE in .env docker-compose.yml;
 	  do
-	    myMEMBER=$(grep -m1 -xF -e "${myFILE}" -e "./${myFILE}" "${myDIR}/toc") && myMEMBERS+=("${myMEMBER}")
+	    myMEMBER=$(fuARCHIVE_MEMBER_NAME "$1" "${myFILE}")
+	    myMEMBER=$(grep -m1 -xF -e "${myMEMBER}" -e "./${myMEMBER}" "${myDIR}/toc") && myMEMBERS+=("${myMEMBER}")
 	  done
-	if [ "${#myMEMBERS[@]}" -gt 0 ] && ! tar xf "$1" -C "${myDIR}/files" "${myMEMBERS[@]}" 2>/dev/null;
+	# the member env of a .tar is the .env of ~/tpotce (a link stays one, fuOLD_UPDATER_FILE refuses it)
+	if [ "${#myMEMBERS[@]}" -gt 0 ] \
+	   && { ! tar xf "$1" -C "${myDIR}/files" "${myMEMBERS[@]}" 2>/dev/null \
+	        || { { [ -e "${myDIR}/files/env" ] || [ -L "${myDIR}/files/env" ]; } \
+	             && ! mv -f "${myDIR}/files/env" "${myDIR}/files/.env" 2>/dev/null; }; };
 	  then
 	    rm -rf "${myDIR}/files"
 	    mkdir "${myDIR}/files"
@@ -1669,10 +1716,19 @@ function fuOLD_UPDATER_UNREADABLE () {   # $1 = archive, $2 = the file name in ~
 }
 
 # The name of a file of ~/tpotce in that archive: `tar cvf <archive> * .env` names it .env, a tar of
-# `.` names it ./.env. Prints the member, rc 1 when the archive does not hold it.
+# `.` names it ./.env, the .tar of the update.sh of 2026-08-24 env (fuARCHIVE_MEMBER_NAME). Prints
+# the member, rc 1 when the archive does not hold it.
 function fuARCHIVE_MEMBER () {   # $1 = archive, $2 = the file name in ~/tpotce
+	local myNAME=""
 	fuOLD_UPDATER_READ "$1" || return 1
-	grep -m1 -xF -e "$2" -e "./$2" "${myOLD_DIR}/toc"
+	myNAME=$(fuARCHIVE_MEMBER_NAME "$1" "$2")
+	grep -m1 -xF -e "${myNAME}" -e "./${myNAME}" "${myOLD_DIR}/toc"
+}
+function fuARCHIVE_MEMBER_NAME () {   # $1 = archive, $2 = the file name in ~/tpotce
+	case "$1:$2" in
+	  *.tar:.env) echo "env" ;;
+	  *) echo "$2" ;;
+	esac
 }
 
 # A setting of the .env in that archive, read as fuENV_VALUE reads it (KEY=value or KEY: "value",
@@ -1684,9 +1740,11 @@ function fuARCHIVE_ENV () {   # $1 = archive, $2 = key
 	fuENV_VALUE "${myFILE}" "$2"
 }
 
-# The update.sh of the tag 24.04.1 wrote its backup to $HOME/*_tpot_backup.tgz, then ran `git reset
-# --hard` and restarted into this script without a handover (myPREPARED is empty): .env and
-# docker-compose.yml are the files of the release now, your configuration is only in that archive.
+# The update.sh of the tag 24.04.1 wrote its backup to $HOME/*_tpot_backup.tgz, the update.sh of the
+# branch master of 2026-08-24 to ~/tpot_backups/*_tpot_backup*.tar (fuOLD_UPDATER_NEWEST takes the
+# newer of both), then ran `git reset --hard` and restarted into this script without a handover
+# (myPREPARED is empty): .env and docker-compose.yml are the files of the release now, your
+# configuration is only in that archive.
 # Both come back from it before this run checks or writes anything, so its backup and fuRESTORE
 # work with your configuration and myOLDVERSION names the version that ran. Only when the archive
 # is from the last 24 hours, its .env names an older version than the checkout and the .env here
@@ -1695,7 +1753,7 @@ function fuARCHIVE_ENV () {   # $1 = archive, $2 = key
 # HEAD. Both are read from the archive before either is written, in place (mode and owner stay); a
 # write that fails puts back the files of the checkout (git show HEAD:<file>) and stops the run.
 # Otherwise nothing changes; a .env of the checkout without a web user gets the way to take it
-# from the archive yourself. The update.sh of the release before on the branch master (what the
+# from the archive yourself. The update.sh of the branch master from 2026-08-25 on (what the
 # installed hosts run) needs none of this: it hands over (myPREPARED) and fuRESTORE takes your
 # configuration from the archive it hands over.
 function fuOLD_UPDATER_CONFIG () {
@@ -1703,7 +1761,7 @@ function fuOLD_UPDATER_CONFIG () {
 	local myTAKE=() myWRITTEN=() myAGAIN=() myLEFT=()
 	local myGIT=(git -C "$HOME/tpotce")
 	[ -z "${myPREPARED}" ] || return 0
-	myOLD=$(fuOLD_UPDATER_ARCHIVE) || return 0
+	myOLD=$(fuOLD_UPDATER_NEWEST) || return 0
 	fuTMPDIR
 	fuOLD_UPDATER_READ "${myOLD}" || return 0
 	myMEMBER=$(fuARCHIVE_MEMBER "${myOLD}" .env) || return 0
@@ -3714,7 +3772,8 @@ while getopts ":yFsob:r:B:h" opt; do
 done
 
 # TPOT_ES_STEP_WAIT: whole seconds, 60 to 86400 (the step through Elasticsearch 8.19 computes with
-# it); anything else stops here, before anything changes, as a wrong option does
+# it); anything else stops here, before anything changes, as a wrong option does. After a handover
+# T-Pot is stopped already: 1200 s then, with a warning
 fuCHECK_STEP_WAIT || exit 1
 
 # A T-Pot host is Linux (WSL2 too): elsewhere nothing of this works, it stops before any
@@ -3789,6 +3848,8 @@ if ! sudo true;
     exit 1
 fi
 fuLOG_START
+# a TPOT_ES_STEP_WAIT that fuCHECK_STEP_WAIT replaced after a handover
+fuSTEP_WAIT_WARN
 
 # --backup-only: the backup of an update, nothing else (i.e. before tpot uninstall)
 if [ -n "${myBACKUP_ONLY}" ];
