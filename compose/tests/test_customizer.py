@@ -347,16 +347,21 @@ def own_file(catalog, names, extra=None, edition="STANDARD"):
         {"networks": {n: None for n in catalog.catalog.networks}, "services": services}, sort_keys=False)
 
 
+def without_new(out):
+    """The report lines but the new: ones (the base's services a small file does not have)."""
+    return [line for line in out.splitlines() if not line.startswith("new: ")]
+
+
 class AdoptTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         cls.catalog = core.Catalog()
 
-    def run_cli(self, *args):
+    def run_cli(self, *args, path="/usr/bin:/bin"):           # no docker: no compose check
         proc = subprocess.run([sys.executable, CUSTOMIZER] + list(args), stdin=subprocess.DEVNULL,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
-                              env=dict(os.environ, PATH="/usr/bin:/bin"))   # no docker: no compose check
+                              env=dict(os.environ, PATH=path))
         return proc.returncode, proc.stdout, proc.stderr
 
     def write(self, tmp, text, name="old.yml"):
@@ -379,7 +384,7 @@ class AdoptTest(unittest.TestCase):
             self.assertEqual(code, 0, out + err)
             self.assertIn("dropped: spiderfoot (removed in this release)", out.splitlines())
             for line in out.splitlines():
-                self.assertTrue(line.startswith(("dropped: ", "port: ", "kept-out: ")), line)
+                self.assertTrue(line.startswith(("dropped: ", "port: ", "moved: ", "new: ", "kept-out: ")), line)
             with open(new, encoding="utf-8") as handle:
                 text = handle.read()
             self.assertTrue(text.startswith("# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\n"))
@@ -429,7 +434,7 @@ class AdoptTest(unittest.TestCase):
             code, out, err = self.run_cli("--adopt", old, "-o", new, "--dry-run", "--tpot-type", "HIVE",
                                           "--old-catalog", catalog)
             self.assertEqual(code, 0, out + err)
-            self.assertEqual(out.splitlines(), ["moved: wordpot: 80/tcp host 80 -> 8080 (changed by the release)"])
+            self.assertEqual(without_new(out), ["moved: wordpot: 80/tcp host 80 -> 8080 (changed by the release)"])
 
     def test_without_an_old_catalog_no_host_port_is_carried(self):
         text = v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie", "wordpot"],
@@ -441,7 +446,7 @@ class AdoptTest(unittest.TestCase):
                     extra = ("--old-catalog", self.write(tmp, old_catalog, "cat.yml")) if old_catalog else ()
                     code, out, err = self.run_cli("--adopt", old, "--dry-run", "--tpot-type", "HIVE", *extra)
                 self.assertEqual(code, 0, out + err)
-                self.assertEqual(out.splitlines(), [
+                self.assertEqual(without_new(out), [
                     "kept-out: cowrie: host port 2222 for 22/tcp (the release has 22)",
                     "kept-out: wordpot: host port 80 for 80/tcp (the release has 8080)",
                 ])
@@ -528,7 +533,7 @@ class AdoptTest(unittest.TestCase):
             old, new = self.write(tmp, text), os.path.join(tmp, "new.yml")
             code, out, err = self.run_cli("--adopt", old, "-o", new, "--dry-run", "--tpot-type", "HIVE")
             self.assertEqual(code, 0, out + err)
-            self.assertEqual(out.splitlines(), ["dropped: mytool (not a T-Pot service)",
+            self.assertEqual(without_new(out), ["dropped: mytool (not a T-Pot service)",
                                                 "kept-out: cowrie: environment COWRIE_X=1",
                                                 "kept-out: cowrie: volume /srv/cowrie/etc:/home/cowrie/cowrie/etc/extra:ro",
                                                 "kept-out: cowrie: network mynet"])
@@ -589,6 +594,7 @@ class AdoptTest(unittest.TestCase):
                     self.assertFalse(os.path.exists(new))
             code, out, err = self.run_cli("--adopt", os.path.join(tmp, "missing.yml"), "-o", new, "--report")
             self.assertEqual(code, 2, out + err)
+            self.assertEqual(out, "")
 
     def test_conflict_exits_3_and_writes_nothing(self):
         text = own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch", "glutton", "honeytrap"])
@@ -600,6 +606,85 @@ class AdoptTest(unittest.TestCase):
                 self.assertEqual(code, 3, out + err)
                 self.assertIn("glutton and honeytrap cannot run at the same time", err)
                 self.assertFalse(os.path.exists(new))
+
+    def test_unquoted_ports_are_text_not_base_60(self):
+        # YAML 1.1 reads an unquoted 22:22 as 1342; compose and --adopt read the text
+        text = ("# T-Pot: STANDARD\nservices:\n"
+                "  tpotinit:\n    image: ${TPOT_REPO}/tpotinit:${TPOT_VERSION}\n"
+                "  cowrie:\n    image: ${TPOT_REPO}/cowrie:${TPOT_VERSION}\n    ports:\n"
+                "      - 2222:22\n      - 23:23\n")
+        old_catalog = core.old_catalog_ports("services:\n  cowrie:\n    ports:\n      - 22:22\n      - 23:23\n")
+        self.assertEqual([p.raw for p in old_catalog["cowrie"]], ["22:22", "23:23"])
+        adoption = core.adopt(self.catalog, text, "HIVE", old_catalog)
+        self.assertEqual(adoption.selection.ports, {("cowrie", 22, "tcp"): 2222})
+        self.assertEqual([line for line in adoption.not_carried if "port" in line], [])
+        self.assertEqual(core.load_text_ports("a: [22:22, 1.5, 12, 0x1f]"), {"a": ["22:22", 1.5, 12, 31]})
+
+    def test_settings_of_a_network_the_release_gives_up_are_named(self):
+        text = v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"])
+        tuned = text.replace("  cowrie_local: null\n",
+                             "  cowrie_local:\n    driver_opts:\n      com.docker.network.driver.mtu: 1400\n", 1)
+        self.assertNotEqual(tuned, text)
+        self.assertEqual(core.adopt(self.catalog, tuned, "HIVE").not_carried, [
+            "network cowrie_local: driver_opts com.docker.network.driver.mtu=1400 "
+            "(the release puts cowrie on honeypot_local)"])
+        self.assertEqual(core.adopt(self.catalog, text, "HIVE").not_carried, [])   # a plain network: no line
+        # settings of a network no kept service was on stay quiet
+        lonely = text.replace("  cowrie_local: null\n", "  cowrie_local: null\n  spare:\n    external: true\n", 1)
+        self.assertEqual(core.adopt(self.catalog, lonely, "HIVE").not_carried, [])
+
+    def test_services_of_the_base_the_file_lacks_are_new_not_added(self):
+        adoption = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"]), "HIVE")
+        for name in ("conpot_beckhoff_cx", "conpot_building_automation", "conpot_hart_gateway",
+                     "conpot_iccp", "conpot_plc_modbus", "dionaea"):
+            self.assertIn(name, adoption.selection.remove)
+            self.assertIn(f"{name} (in this release, not in your file: compose/customizer.py --add {name})",
+                          adoption.new)
+        named = [line.split()[0] for line in adoption.new]
+        for name in ("cowrie", "tpotinit", "logstash", "elasticsearch"):
+            self.assertNotIn(name, named)
+        hidden = [n for n in adoption.selection.remove if self.catalog.flag(n, "hidden")]
+        for name in hidden:
+            self.assertNotIn(name, named)
+        result = core.resolve(self.catalog, adoption.selection)
+        self.assertNotIn("conpot_iccp", result.services)
+        with tempfile.TemporaryDirectory() as tmp:
+            old = self.write(tmp, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"]))
+            code, out, err = self.run_cli("--adopt", old, "--dry-run", "--tpot-type", "HIVE")
+            self.assertEqual(code, 0, out + err)
+            self.assertIn("new: conpot_iccp (in this release, not in your file: compose/customizer.py --add conpot_iccp)",
+                          out.splitlines())
+
+    def test_a_failed_write_exits_2_with_one_line_and_leaves_no_file(self):
+        text = v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"])
+        with tempfile.TemporaryDirectory() as tmp:
+            old = self.write(tmp, text)
+            missing = os.path.join(tmp, "nowhere", "new.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", missing, "--report", "--tpot-type", "HIVE")
+            self.assertEqual(code, 2, out + err)
+            self.assertEqual([line for line in err.splitlines() if "is not written" in line], [err.strip()])
+            self.assertFalse(os.path.exists(os.path.dirname(missing)))
+            # docker compose rejects the result: one line, nothing left behind
+            bindir = os.path.join(tmp, "bin")
+            os.mkdir(bindir)
+            with open(os.path.join(bindir, "docker"), "w", encoding="utf-8") as out_file:
+                out_file.write("#!/bin/sh\necho 'service cowrie: bad' >&2\necho 'second line' >&2\nexit 1\n")
+            os.chmod(os.path.join(bindir, "docker"), 0o755)
+            new = os.path.join(tmp, "new.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", new, "--report", "--tpot-type", "HIVE",
+                                          path=bindir + ":/usr/bin:/bin")
+            self.assertEqual(code, 2, out + err)
+            self.assertEqual(len(err.strip().splitlines()), 1, err)
+            self.assertIn("is not written: docker compose rejects the result: service cowrie: bad second line", err)
+            self.assertEqual(sorted(os.listdir(tmp)), ["bin", "old.yml"])
+
+    def test_type_without_tpot_type(self):
+        sensor = core.render(self.catalog, core.resolve(self.catalog, core.Selection("SENSOR")))
+        self.assertEqual(core.adopt_type(sensor), "SENSOR")                    # v2 file built from SENSOR
+        self.assertEqual(core.adopt_type("# T-Pot: SENSOR\nservices: {}\n"), "SENSOR")
+        self.assertEqual(core.adopt_type(v1_file(["tpotinit"])), "HIVE")
+        self.assertEqual(core.adopt_type(sensor, "hive"), "HIVE")              # .env wins
+        self.assertEqual(core.adopt_type("", "SENSOR"), "SENSOR")
 
     def test_dropped_services_match_update_sh(self):
         with open(os.path.join(core.REPO_DIR, "update.sh"), encoding="utf-8") as handle:

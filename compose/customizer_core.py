@@ -770,6 +770,35 @@ _TPOT_REPOS = ("${TPOT_REPO}", "dtagdevsec", "docker.io/dtagdevsec", "ghcr.io/te
 _SHOW_MAX = 80
 
 
+class TextPortLoader(yaml.SafeLoader):
+    """YAML 1.1 without its base-60 numbers: an unquoted 22:22 stays the text "22:22", as
+    docker compose (YAML 1.2) reads it; safe_load would make it 1342."""
+
+
+TextPortLoader.yaml_implicit_resolvers = {
+    first: [(tag, regexp) for tag, regexp in resolvers
+            if tag not in ("tag:yaml.org,2002:int", "tag:yaml.org,2002:float")]
+    for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()}
+TextPortLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:int",
+    re.compile(r"""^(?:[-+]?0b[0-1_]+
+                |[-+]?0[0-7_]+
+                |[-+]?(?:0|[1-9][0-9_]*)
+                |[-+]?0x[0-9a-fA-F_]+)$""", re.X),
+    list("-+0123456789"))
+TextPortLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:float",
+    re.compile(r"""^(?:[-+]?(?:[0-9][0-9_]*)\.[0-9_]*(?:[eE][-+][0-9]+)?
+                |\.[0-9][0-9_]*(?:[eE][-+][0-9]+)?
+                |[-+]?\.(?:inf|Inf|INF)
+                |\.(?:nan|NaN|NAN))$""", re.X),
+    list("-+0123456789."))
+
+
+def load_text_ports(text: str):
+    return yaml.load(text, Loader=TextPortLoader)
+
+
 @dataclass
 class Adoption:
     selection: Selection
@@ -777,6 +806,7 @@ class Adoption:
     not_carried: List[str]             # "service: what", what the new file leaves out beyond host ports
     v1: bool                           # built by the customizer of an earlier release
     moved: List[str] = field(default_factory=list)   # host ports the release moved, "svc: C/PROTO host A -> B"
+    new: List[str] = field(default_factory=list)     # services of the base the file does not have
 
 
 def _show(value) -> str:
@@ -882,7 +912,7 @@ def old_catalog_ports(text: str) -> Optional[OldPorts]:
     """The host ports of every service of the catalogue an old file was built from (only
     services.*.ports, no x-tpot needed); None if it cannot be read."""
     try:
-        data = yaml.safe_load(text)
+        data = load_text_ports(text)
     except yaml.YAMLError:
         return None
     if not isinstance(data, dict) or not isinstance(data.get("services"), dict) or not data["services"]:
@@ -975,6 +1005,20 @@ def _adopt_ports(name: str, old: dict, new: dict, lost: List[str], moved: List[s
     return overrides
 
 
+def _file_networks(definition: dict) -> List[str]:
+    networks = definition.get("networks")
+    if isinstance(networks, dict):
+        return [str(n) for n in networks]
+    return [str(n) for n in networks or []]
+
+
+def _flat(value) -> str:
+    """driver_opts {a: 1} as a=1, anything else as _show does."""
+    if isinstance(value, dict) and all(not isinstance(v, (dict, list)) for v in value.values()):
+        return _show(",".join(f"{k}={_show(v)}" for k, v in value.items()))
+    return _show(value)
+
+
 def _own_network(service: str, network: str) -> bool:
     """A network an earlier release gave this service (cowrie_local, conpot_local_IEC104)."""
     return network in EARLIER_NETWORKS and network.startswith(service.split("_", 1)[0] + "_")
@@ -1051,7 +1095,7 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optio
     HIVE, SENSOR for a SENSOR. old_ports (old_catalog_ports) tells host ports of your own from
     the defaults of the catalogue the file was built from; without it no host port is carried."""
     try:
-        data = yaml.safe_load(text)
+        data = load_text_ports(text)
     except yaml.YAMLError as err:
         raise CustomizerError(f"the file is not valid YAML: {err}")
     if not isinstance(data, dict) or not isinstance(data.get("services"), dict) or not data["services"]:
@@ -1103,7 +1147,21 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optio
     used = {n for name in wanted for n in service_networks(catalog.source(base, name).services.get(name) or {})}
     for network, settings in networks.items():
         settings = _canon(settings) or None
-        if network not in used or not settings:
+        if not settings:
+            continue                                   # a plain network: nothing to lose
+        if network not in used:
+            sat = [n for n in kept if network in _file_networks(data["services"][n] or {})]
+            if not sat:
+                continue                               # no service the new file keeps was on it
+            now = []
+            for name in sat:
+                for other in service_networks(catalog.source(base, name).services.get(name) or {}):
+                    if other not in now:
+                        now.append(other)
+            where = f"puts {', '.join(sat)} on {', '.join(now)}" if now else \
+                f"gives {', '.join(sat)} no network of its own"
+            for key, value in settings.items() if isinstance(settings, dict) else [("settings", settings)]:
+                not_carried.append(f"network {network}: {key} {_flat(value)} (the release {where})")
             continue
         release = None
         for compose in (edition, catalog.catalog):
@@ -1117,8 +1175,21 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optio
         if key not in ("services", "networks", "version"):
             not_carried.append(f"{key}: {_show(data[key])}")
 
+    new = [f"{n} (in this release, not in your file: compose/customizer.py --add {n})"
+           for n in remove if not catalog.flag(n, "hidden")]
     selection = normalize(catalog, Selection(base, add, remove, ports))
-    return Adoption(selection, dropped, not_carried, v1, moved)
+    return Adoption(selection, dropped, not_carried, v1, moved, new)
+
+
+def adopt_type(text: str, env_type: str = "") -> str:
+    """HIVE or SENSOR for --adopt without --tpot-type: TPOT_TYPE of .env, else the edition of
+    the file (a SENSOR, or a customizer file built from SENSOR), else HIVE."""
+    if env_type.strip():
+        return "SENSOR" if env_type.strip().upper() == "SENSOR" else "HIVE"
+    selection = parse_header(text)
+    if edition_of(text.split("\n")) == "SENSOR" or (selection and selection.base == "SENSOR"):
+        return "SENSOR"
+    return "HIVE"
 
 
 def compose_check(path: str, repo_dir: str = REPO_DIR) -> Optional[str]:

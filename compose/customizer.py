@@ -88,7 +88,7 @@ def parse_args(argv):
                              "differs from it is yours and carried, without it no host port is carried")
     parser.add_argument("--report", action="store_true",
                         help="with --adopt: the report as plain lines on stdout "
-                             "(dropped:, port:, moved:, kept-out:)")
+                             "(dropped:, port:, moved:, new:, kept-out:)")
     parser.add_argument("--dry-run", action="store_true",
                         help="with --adopt: print the report only, write nothing")
     parser.add_argument("-o", "--output", metavar="FILE",
@@ -128,6 +128,7 @@ def adoption_lines(adoption):
     return ([f"dropped: {item}" for item in adoption.dropped]
             + [f"port: {item}" for item in core.override_items(adoption.selection.ports)]
             + [f"moved: {item}" for item in adoption.moved]
+            + [f"new: {item}" for item in adoption.new]
             + [f"kept-out: {item}" for item in adoption.not_carried])
 
 
@@ -140,8 +141,7 @@ def adopt(catalog, args):
     except UnicodeDecodeError as err:
         say.error(f"{args.adopt} is no text: {err}")
         return 2
-    tpot_type = args.tpot_type or core.env_value("TPOT_TYPE").upper() or (
-        "SENSOR" if core.edition_of(text.split("\n")) == "SENSOR" else "HIVE")
+    tpot_type = args.tpot_type or core.adopt_type(text, core.env_value("TPOT_TYPE"))
     old_ports = None
     if args.old_catalog:
         try:
@@ -167,6 +167,8 @@ def adopt(catalog, args):
             say.info(f"Host port: {item}")
         for item in adoption.moved:
             say.info(f"Moved by the release: {item}")
+        for item in adoption.new:
+            say.info(f"New: {item}")
         for item in adoption.not_carried:
             say.warn(f"Left out: {item}")
     report(result)
@@ -177,7 +179,11 @@ def adopt(catalog, args):
     if args.dry_run:
         return 0
     output = args.output or os.path.join(core.REPO_DIR, "docker-compose-custom.yml")
-    core.write_output(text, output)
+    try:
+        core.write_output(text, output)        # a temp file and os.replace: all or nothing
+    except (OSError, core.CustomizerError) as err:
+        say.error(f"{output} is not written: {' '.join(str(err).split())}")
+        return 2
     say.ok(f"{output} is written from the {result.selection.base} edition.", sys.stderr if plain else None)
     return 0
 
