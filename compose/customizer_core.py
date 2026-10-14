@@ -12,6 +12,7 @@ import glob
 import hashlib
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -289,11 +290,14 @@ class Selection:
         return Selection(self.base, list(self.add), list(self.remove), dict(self.ports))
 
 
+def override_items(ports: PortOverrides) -> List[str]:
+    """One SERVICE:HOST/PROTO=NEW|- per override, sorted."""
+    return [f"{service}:{host}/{proto}={'-' if new is None else new}"
+            for (service, host, proto), new in sorted(ports.items())]
+
+
 def format_overrides(ports: PortOverrides) -> str:
-    items = []
-    for (service, host, proto), new in sorted(ports.items()):
-        items.append(f"{service}:{host}/{proto}={'-' if new is None else new}")
-    return ",".join(items)
+    return ",".join(override_items(ports))
 
 
 def parse_overrides(text: str) -> PortOverrides:
@@ -738,6 +742,305 @@ def _check_rendered(text: str, result: Result) -> None:
     named = [n for n in result.networks if n != "default"]
     if sorted((data.get("networks") or {})) != sorted(named):
         raise CustomizerError("rendered networks differ from the selection")
+
+
+# ---------------------------------------------------------------------------
+# Adoption: any compose file becomes a selection of this release
+# ---------------------------------------------------------------------------
+
+# Services of earlier releases that this one no longer has; update.sh names the same
+# in myDROPPED_SERVICES (compose/tests/test_customizer.py keeps both alike).
+DROPPED_SERVICES = ["spiderfoot", "fatt", "tanner_redis", "tanner_phpox", "tanner_api", "tanner", "snare"]
+# The networks of earlier releases (24.04.0 to 24.04.1) and of this one. A service that sat on
+# a network of its own there (cowrie_local) sits on the one of this release now, which is no
+# loss; any other network a service of the file is on is named.
+EARLIER_NETWORKS = [
+    "adbhoney_local", "beelzebub_local", "ciscoasa_local", "citrixhoneypot_local", "conpot_local_IEC104",
+    "conpot_local_guardian_ast", "conpot_local_ipmi", "conpot_local_kamstrup_382", "cowrie_local",
+    "ddospot_local", "dicompot_local", "dionaea_local", "elasticpot_local", "endlessh_local",
+    "ewsposter_local", "galah_local", "go-pot_local", "h0neytr4p_local", "hellpot_local", "heralding_local",
+    "honeyaml_local", "honeypot_local", "honeypots_local", "ipphoney_local", "log4pot_local",
+    "mailoney_local", "medpot_local", "miniprint_local", "nginx_local", "rdphoneypot_local",
+    "redishoneypot_local", "sentrypeer_local", "spiderfoot_local", "suricata_local", "tanner_local",
+    "tpotinit_local", "wordpot_local",
+]
+V1_EDITION_LINE = "# T-Pot: CUSTOM EDITION"           # the customizer of 24.04.1 and earlier
+# where the images of T-Pot come from; repository and tag of these are the release's business
+_TPOT_REPOS = ("${TPOT_REPO}", "dtagdevsec", "docker.io/dtagdevsec", "ghcr.io/telekom-security")
+_SHOW_MAX = 80
+
+
+@dataclass
+class Adoption:
+    selection: Selection
+    dropped: List[str]                 # "name (why)", services the new file does not have
+    not_carried: List[str]             # "service: what", what the new file leaves out beyond host ports
+    v1: bool                           # built by the customizer of an earlier release
+
+
+def _show(value) -> str:
+    if value is None:
+        text = "none"
+    elif isinstance(value, bool):
+        text = "true" if value else "false"
+    elif isinstance(value, (dict, list)):
+        text = yaml.safe_dump(value, default_flow_style=True, width=10000).strip()
+    else:
+        text = str(value)
+    text = " ".join(text.split())
+    return text if len(text) <= _SHOW_MAX else text[:_SHOW_MAX - 3] + "..."
+
+
+def _canon(value):
+    """A value as compose means it: numbers and booleans as text, mappings without order."""
+    if isinstance(value, dict):
+        return {str(k): _canon(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_canon(v) for v in value]
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return None
+    return str(value).strip()
+
+
+def _items(value) -> list:
+    """A list key that may also be one string (env_file, tmpfs)."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [_canon(v) for v in value]
+    return [_canon(value)]
+
+
+def _environment(value) -> Dict[str, Optional[str]]:
+    if isinstance(value, dict):
+        return {str(k): (None if v is None else _canon(v)) for k, v in value.items()}
+    out: Dict[str, Optional[str]] = {}
+    for item in _items(value):
+        key, sep, val = str(item).partition("=")
+        out[key.strip()] = val if sep else None
+    return out
+
+
+def _same_value(mine: Optional[str], theirs: Optional[str]) -> bool:
+    """Equal, or the release only gives a variable of the file a default (${X} -> ${X:-y})."""
+    if mine == theirs or mine is None or theirs is None:
+        return mine == theirs
+    return mine == re.sub(r"\$\{(\w+):?[-?+][^}]*\}", r"${\1}", theirs)
+
+
+def _depends(value) -> Dict[str, Optional[dict]]:
+    if isinstance(value, dict):
+        return {str(k): _canon(v) if v else None for k, v in value.items()}
+    return {str(k): None for k in (value or [])}
+
+
+def _image_key(value) -> Tuple[str, str]:
+    text = re.sub(r"\$\{TPOT_REPO[^}]*\}|\$TPOT_REPO\b", "${TPOT_REPO}", str(value or "").strip())
+    repo, _, rest = text.rpartition("/")
+    if repo in _TPOT_REPOS:
+        return ("tpot", re.split(r"[:@]", rest, maxsplit=1)[0])
+    return ("other", text)
+
+
+def _command(value):
+    if isinstance(value, list):
+        return [str(v) for v in value]
+    if value is None:
+        return None
+    try:
+        return shlex.split(str(value))
+    except ValueError:
+        return str(value).split()
+
+
+def _release_has(new: dict, key: str, shown: Optional[str] = None) -> str:
+    if key not in new:
+        return " (the release has none)"
+    return f" (the release has {shown if shown is not None else _show(new[key])})"
+
+
+def _ports_of_file(name: str, old: dict, lost: List[str]) -> List[Port]:
+    ports = []
+    for value in old.get("ports") or []:
+        try:
+            port = parse_port(value)
+        except CustomizerError:
+            lost.append(f"{name}: port {_show(value)} (only [IP:]HOST:CONTAINER[/udp] can be carried)")
+            continue
+        if port:
+            ports.append(port)
+    return ports
+
+
+def _adopt_ports(name: str, old: dict, new: dict, lost: List[str]) -> PortOverrides:
+    """Host port overrides that turn the release's ports into those of the file; ports the
+    release has no counterpart for are named in lost."""
+    mine = _ports_of_file(name, old, lost)
+    release = service_ports(new)
+    overrides = _variant_overrides(name, release, mine)
+    result = []
+    for port in release:
+        key = (name, port.host, port.proto)
+        if key not in overrides:
+            result.append(port)
+        elif overrides[key] is not None:
+            result.append(port.with_host(overrides[key]))
+    have = {(p.ip, p.host, p.container, p.proto) for p in result}
+    for port in mine:
+        if (port.ip, port.host, port.container, port.proto) not in have:
+            lost.append(f"{name}: port {port.raw} (the release has no such port)")
+    container_only = {str(v).strip() for v in new.get("ports") or [] if re.match(r"^\d+(/(tcp|udp))?$", str(v).strip())}
+    for value in old.get("ports") or []:
+        raw = str(value).strip()
+        if re.match(r"^\d+(/(tcp|udp))?$", raw) and raw not in container_only:
+            lost.append(f"{name}: port {raw} (the release has no such port)")
+    return overrides
+
+
+def _own_network(service: str, network: str) -> bool:
+    """A network an earlier release gave this service (cowrie_local, conpot_local_IEC104)."""
+    return network in EARLIER_NETWORKS and network.startswith(service.split("_", 1)[0] + "_")
+
+
+_ADOPT_KEYS = ("image", "command", "entrypoint", "environment", "env_file", "volumes", "tmpfs", "networks",
+               "mem_limit", "cpus", "cap_add", "network_mode", "restart", "read_only", "depends_on")
+_LIST_LABELS = {"env_file": "env_file", "volumes": "volume", "tmpfs": "tmpfs", "cap_add": "cap_add"}
+
+
+def _not_carried(name: str, old: dict, new: dict) -> List[str]:
+    """One line per thing of the file's definition the release's definition does not have."""
+    lost: List[str] = []
+    for key in list(_ADOPT_KEYS) + [k for k in old if k not in _ADOPT_KEYS]:
+        if key not in old or key in ("ports", "x-tpot"):
+            continue
+        mine, theirs = old[key], new.get(key)
+        if key == "image":
+            if _image_key(mine) != _image_key(theirs):
+                lost.append(f"{name}: image {_show(mine)}" + _release_has(new, key))
+        elif key in ("command", "entrypoint"):
+            if _command(mine) != _command(theirs):
+                lost.append(f"{name}: {key} {_show(mine)}" + _release_has(new, key))
+        elif key == "environment":
+            have = _environment(theirs)
+            for var, val in _environment(mine).items():
+                shown = var if val is None else f"{var}={val}"
+                if var not in have:
+                    lost.append(f"{name}: environment {shown}")
+                elif not _same_value(val, have[var]):
+                    other = var if have[var] is None else f"{var}={have[var]}"
+                    lost.append(f"{name}: environment {_show(shown)} (the release has {_show(other)})")
+        elif key in _LIST_LABELS:
+            have = _items(theirs)
+            for item in _items(mine):
+                if item not in have:
+                    lost.append(f"{name}: {_LIST_LABELS[key]} {_show(item)}")
+        elif key == "networks":
+            have = theirs if isinstance(theirs, dict) else {n: None for n in (theirs or [])}
+            entries = mine if isinstance(mine, dict) else {n: None for n in (mine or [])}
+            for network, settings in entries.items():
+                settings = _canon(settings) or None
+                if network in have:
+                    if settings and settings != (_canon(have[network]) or None):
+                        lost.append(f"{name}: network {network} {_show(settings)}")
+                elif settings or not _own_network(name, network):
+                    lost.append(f"{name}: network {network}" + (f" {_show(settings)}" if settings else ""))
+        elif key == "depends_on":
+            have = _depends(theirs)
+            for dep, cond in _depends(mine).items():
+                if dep not in have:
+                    lost.append(f"{name}: depends_on {dep}")
+                elif cond and cond != have[dep]:
+                    lost.append(f"{name}: depends_on {dep} {_show(cond)}"
+                                f" (the release has {_show(have[dep])})")
+        elif key == "cpus":
+            try:
+                same = theirs is not None and float(mine) == float(theirs)
+            except (TypeError, ValueError):
+                same = _canon(mine) == _canon(theirs)
+            if not same:
+                lost.append(f"{name}: cpus {_show(mine)}" + _release_has(new, key))
+        elif key == "mem_limit":
+            if theirs is None or str(mine).strip().lower() != str(theirs).strip().lower():
+                lost.append(f"{name}: mem_limit {_show(mine)}" + _release_has(new, key))
+        elif _canon(mine) != _canon(theirs):
+            lost.append(f"{name}: {key} {_show(mine)}" + _release_has(new, key))
+    return lost
+
+
+def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE") -> Adoption:
+    """The selection of this release closest to a compose file of any origin, what it drops
+    and what it does not carry. The base is the edition of the T-Pot type: STANDARD for a
+    HIVE, SENSOR for a SENSOR."""
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as err:
+        raise CustomizerError(f"the file is not valid YAML: {err}")
+    if not isinstance(data, dict) or not isinstance(data.get("services"), dict) or not data["services"]:
+        raise CustomizerError("the file has no services")
+    lines = text.split("\n")
+    index = edition_line(lines)
+    v1 = index >= 0 and lines[index].strip() == V1_EDITION_LINE
+    base = "SENSOR" if str(tpot_type).strip().upper() == "SENSOR" else "STANDARD"
+    edition = catalog.editions[base]
+
+    dropped: List[str] = []
+    kept: List[str] = []
+    for name in data["services"]:
+        if name in DROPPED_SERVICES:
+            dropped.append(f"{name} (removed in this release)")
+        elif name not in catalog.catalog.services and name not in edition.services:
+            dropped.append(f"{name} (not a T-Pot service)")
+        elif not catalog.offered(base, name):
+            dropped.append(f"{name} (a {base} has no {name})")
+        else:
+            kept.append(name)
+
+    # everything the kept services need comes along, the base keeps only that
+    wanted: List[str] = []
+    queue = kept + [n for n in catalog.order if catalog.flag(n, "required")]
+    while queue:
+        name = queue.pop(0)
+        if name in wanted:
+            continue
+        wanted.append(name)
+        definition = catalog.source(base, name).services.get(name) or {}
+        queue += [d for d in service_depends(definition) + catalog.listed(name, "requires") if d not in wanted]
+    add = [n for n in catalog.order if n in kept and n not in edition.services]
+    remove = [n for n in catalog.order if n in edition.services and n not in wanted]
+
+    not_carried: List[str] = []
+    ports: PortOverrides = {}
+    for name in kept:
+        old = data["services"][name] or {}
+        if not isinstance(old, dict):
+            raise CustomizerError(f"service {name} is no mapping")
+        new = catalog.source(base, name).services.get(name) or {}
+        ports.update(_adopt_ports(name, old, new, not_carried))
+        not_carried += _not_carried(name, old, new)
+
+    # top level: settings of a network the new file has, anything besides services and networks
+    networks = data.get("networks") if isinstance(data.get("networks"), dict) else {}
+    used = {n for name in wanted for n in service_networks(catalog.source(base, name).services.get(name) or {})}
+    for network, settings in networks.items():
+        settings = _canon(settings) or None
+        if network not in used or not settings:
+            continue
+        release = None
+        for compose in (edition, catalog.catalog):
+            if network in compose.networks:
+                release = _canon(compose.networks[network]) or None
+                break
+        if settings != release:
+            not_carried.append(f"network {network}: {_show(settings)}"
+                               f" (the release has {_show(release)})")
+    for key in data:
+        if key not in ("services", "networks", "version"):
+            not_carried.append(f"{key}: {_show(data[key])}")
+
+    selection = normalize(catalog, Selection(base, add, remove, ports))
+    return Adoption(selection, dropped, not_carried, v1)
 
 
 def compose_check(path: str, repo_dir: str = REPO_DIR) -> Optional[str]:

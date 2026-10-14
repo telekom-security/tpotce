@@ -4,6 +4,7 @@
 Interactive:   python3 customizer.py
 Headless:      python3 customizer.py --base standard --add glutton --remove honeytrap
 Rebuild:       python3 customizer.py --rebuild ~/tpotce/docker-compose.yml
+Adopt:         python3 customizer.py --adopt ~/tpotce/docker-compose.yml -o new.yml --report
 """
 
 import argparse
@@ -19,7 +20,8 @@ sys.path.insert(0, os.path.dirname(COMPOSE_DIR))
 # which needs Textual from the venv of tpot (tpotctl/bootstrap.py).
 from tpotctl import bootstrap, prefs, say  # noqa: E402
 
-HEADLESS = ("--base", "--add", "--remove", "--port", "--rebuild", "--setup", "-h", "--help", "--text")
+HEADLESS = ("--base", "--add", "--remove", "--port", "--rebuild", "--adopt", "--dry-run", "--report",
+            "--tpot-type", "--setup", "-h", "--help", "--text")
 
 
 def wants_ui(argv):
@@ -75,6 +77,16 @@ def parse_args(argv):
                              "comma separated, e.g. wordpot:80=8080")
     parser.add_argument("--rebuild", metavar="FILE",
                         help="build a customizer file again from this release's catalog and editions")
+    parser.add_argument("--adopt", metavar="FILE",
+                        help="turn any compose file (an earlier customizer's, one of your own) into a selection "
+                             "of this release and write it; names what it drops and what it leaves out")
+    parser.add_argument("--tpot-type", choices=["HIVE", "SENSOR"], type=str.upper,
+                        help="with --adopt: the edition to start from, STANDARD for HIVE, SENSOR for SENSOR "
+                             "(default: TPOT_TYPE of ~/tpotce/.env)")
+    parser.add_argument("--report", action="store_true",
+                        help="with --adopt: the report as plain lines on stdout (dropped:, port:, kept-out:)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="with --adopt: print the report only, write nothing")
     parser.add_argument("-o", "--output", metavar="FILE",
                         help="where to write (default: ~/tpotce/docker-compose-custom.yml, "
                              "with --rebuild the file itself)")
@@ -107,6 +119,53 @@ def write(catalog, result, path):
     core.write_output(text, path)
 
 
+def adoption_lines(adoption):
+    """The report of --adopt, one item per line, made for update.sh to read."""
+    return ([f"dropped: {item}" for item in adoption.dropped]
+            + [f"port: {item}" for item in core.override_items(adoption.selection.ports)]
+            + [f"kept-out: {item}" for item in adoption.not_carried])
+
+
+def adopt(catalog, args):
+    """--adopt: 0 written (or, with --dry-run, would be), 2 not a compose file, 3 conflicts."""
+    plain = args.report or args.dry_run
+    try:
+        with open(args.adopt, encoding="utf-8") as handle:
+            text = handle.read()
+    except UnicodeDecodeError as err:
+        say.error(f"{args.adopt} is no text: {err}")
+        return 2
+    tpot_type = args.tpot_type or core.env_value("TPOT_TYPE").upper() or (
+        "SENSOR" if core.edition_of(text.split("\n")) == "SENSOR" else "HIVE")
+    try:
+        adoption = core.adopt(catalog, text, tpot_type)
+    except core.CustomizerError as err:
+        say.error(f"{args.adopt}: {err}")
+        return 2
+    result = core.resolve(catalog, adoption.selection, args.max_networks, strict=True)
+    if plain:
+        for line in adoption_lines(adoption):
+            print(line, flush=True)
+    else:
+        for item in adoption.dropped:
+            say.warn(f"Dropped: {item}")
+        for item in core.override_items(adoption.selection.ports):
+            say.info(f"Host port: {item}")
+        for item in adoption.not_carried:
+            say.warn(f"Left out: {item}")
+    report(result)
+    if result.errors:
+        say.error(f"The selection of {args.adopt} has conflicts, nothing written.")
+        return 3
+    text = core.render(catalog, result)
+    if args.dry_run:
+        return 0
+    output = args.output or os.path.join(core.REPO_DIR, "docker-compose-custom.yml")
+    core.write_output(text, output)
+    say.ok(f"{output} is written from the {result.selection.base} edition.", sys.stderr if plain else None)
+    return 0
+
+
 def next_steps(path):
     name = os.path.basename(path)
     say.ok(f"{path} is written.")
@@ -127,6 +186,8 @@ def main(argv=None):
         return 0
     try:
         catalog = core.Catalog()
+        if args.adopt:
+            return adopt(catalog, args)
         if args.rebuild:
             with open(args.rebuild, encoding="utf-8") as handle:
                 selection = core.parse_header(handle.read())
