@@ -1982,7 +1982,9 @@ class ComposeAdoptTest(Scripts):
         os.chmod(restore, 0o755)
         # systemctl: is-enabled says enabled, every call is logged
         self.stub("systemctl", '#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\n'
-                               '[ "$1" = "is-enabled" ] && echo enabled\nexit 0\n')
+                               '[ "$1" = "is-enabled" ] && echo enabled\n'
+                               'if [ "$1" = "is-active" ]; then [ -f "$HOME/tpot_inactive" ] && echo inactive || echo active; fi\n'
+                               'exit 0\n')
         git = ["git", "-C", self.tpotce, "-c", "user.email=t@t", "-c", "user.name=t"]
         subprocess.run(["git", "init", "-q", self.tpotce], check=True)
         subprocess.run(git + ["checkout", "-q", "-b", "master"], check=True)
@@ -2140,7 +2142,7 @@ class ComposeAdoptTest(Scripts):
         self.assertNotIn("went on", out)
         self.assertIn("Not updated: your docker-compose.yml is a compose file of your own and was not adapted", out)
         self.assertEqual(self.compose(), self.OWN)
-        self.assertNotIn("systemctl", self.calls())
+        self.assertFalse(re.search(r"systemctl (stop|start)", self.calls()), self.calls())
 
     def test_own_adapt_rebuilds_and_warns(self):
         self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
@@ -2432,6 +2434,59 @@ class ComposeAdoptTest(Scripts):
         self.assertIn("It cannot be adapted automatically: compose/customizer.py needs PyYAML, which is missing here",
                       out)
         self.assertNotIn("customizer --adopt", self.calls())              # no run, no venv built on the way
+
+    # --- a cancel after an updater without a handover ---------------------------------------------------
+
+    def test_a_cancel_after_an_updater_without_a_handover_says_so_and_starts_tpot(self):
+        """The update.sh of the tag 24.04.1 (or of master of 2026-08-24) stopped T-Pot, wrote its backup,
+        pulled and restarted into this one without a handover: fuOLD_UPDATER_CONFIG puts your configuration
+        back from its archive, the cancel of the compose file of your own then starts T-Pot again and says
+        what happened, never that nothing changed."""
+        self.write(os.path.join(self.tpotce, "version"), "24.04.2\n")
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.STANDARD)          # reset by it
+        self.write(os.path.join(self.home, "tpot_inactive"), "")
+        tgz = os.path.join(self.home, "20261014090000_tpot_backup.tgz")
+        stage = os.path.join(self.home, "stage")
+        for name, text in ((".env", "TPOT_VERSION=24.04.1\nTPOT_TYPE=HIVE\n"), ("docker-compose.yml", self.OWN)):
+            self.write(os.path.join(stage, name), text)
+        with tarfile.open(tgz, "w") as archive:
+            for name in (".env", "docker-compose.yml"):
+                archive.add(os.path.join(stage, name), arcname=name)
+        result = self.source_update('myRUNNING=1\nfuOLD_UPDATER_CONFIG\nfuCHECK_EDITION\necho "went on"\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertNotIn("went on", out)
+        self.assertEqual(self.compose(), self.OWN)                       # yours, back from that archive
+        self.assertIn(f"has pulled the new release already, your configuration and your docker-compose.yml are back "
+                      f"from its backup {tgz}", out)
+        self.assertNotIn("nothing was changed", out)
+        self.assertNotIn("T-Pot was left running", out)
+        self.assertIn("systemctl start tpot", self.calls())
+        tail = result.stdout[result.stdout.index("### The update did not finish"):]
+        self.assertIn("The update finishes once you adapt the file: ./update.sh -y --adapt-compose", " ".join(tail.split()))
+        self.assertIn("T-Pot runs again, on the release from before this update.", tail)
+
+    def test_a_cancel_while_tpot_does_not_run_starts_it_again(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        self.write(os.path.join(self.home, "tpot_inactive"), "")
+        result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertNotIn("nothing was changed.", out.replace("nothing of this run was changed", ""))
+        self.assertNotIn("T-Pot was left running", out)
+        self.assertIn("T-Pot does not run at the moment", out)
+        self.assertIn("systemctl start tpot", self.calls())
+        tail = result.stdout[result.stdout.index("### The update did not finish"):]
+        self.assertIn("T-Pot did not run, it starts again with your file where tpot.service is enabled.", tail)
+        self.assertIn("T-Pot runs again", tail)
+        # not enabled: it stays stopped, and the summary says so
+        self.forget()
+        self.stub("systemctl", '#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\n'
+                               '[ "$1" = "is-active" ] && echo inactive\nexit 0\n')
+        result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\n')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertNotIn("systemctl start", self.calls())
+        self.assertIn("T-Pot is stopped, 'sudo systemctl start tpot' brings it back.", result.stdout)
 
     # --- --check-data-loss ----------------------------------------------------------------------------
 

@@ -115,6 +115,9 @@ myTMPDIR=""
 # myTMPDIR with its list of members, its .env and its docker-compose.yml
 myOLD_READ=""
 myOLD_DIR=""
+# The archive of that updater when fuOLD_UPDATER_CONFIG found your configuration back from it in this run:
+# that updater has stopped T-Pot and pulled the new release already (fuADOPT_CANCEL)
+myOLD_UPDATER_RAN=""
 # The sudo password from -B, empty: sudo asks itself (or needs none)
 myBECOME_FILE=""
 
@@ -1430,9 +1433,9 @@ function fuDATA_PATH () {
 }
 
 # Can fuROLLBACK_CHECKOUT go back at all? Only if the archive of this run points at an older
-# commit than the checkout has now and restore.sh is there. It is not after the update.sh of the
-# tag 24.04.1 restarted into this one without a handover: its pull came before the backup of this
-# run. The update.sh of the release before on the branch master (what the installed hosts run) hands
+# commit than the checkout has now and restore.sh is there. It is not after an updater restarted into
+# this one without a handover (the tag 24.04.1, the branch master of 2026-08-24): its pull came before
+# the backup of this run. The update.sh of the release before on the branch master (what the installed hosts run) hands
 # its archive over (myPREPARED): written before its pull, its rollback.txt names the commit that ran.
 function fuCAN_ROLLBACK () {
 	local myCOMMIT=""
@@ -1890,6 +1893,8 @@ function fuOLD_UPDATER_CONFIG () {
 	    fuOLD_UPDATER_FILE "${myFILE}" >/dev/null || fuOLD_UPDATER_UNREADABLE "${myOLD}" "${myFILE}" "${myMEMBER}"
 	    myTAKE+=("${myFILE}")
 	  done
+	# that updater has stopped T-Pot and pulled already: a cancel later in this run says so (fuADOPT_CANCEL)
+	myOLD_UPDATER_RAN="${myOLD}"
 	if [ "${#myTAKE[@]}" -eq 0 ];
 	  then
 	    if [ -n "${myKEPT}" ];
@@ -3465,7 +3470,8 @@ function fuADOPT_LOSSES () {
 
 # The command that adapts without a question, for the hints: after a handover the next run starts with
 # the update.sh that started this one, which takes the option only after `--` (it stops with its usage on
-# the option alone, after `--` every one hands it on).
+# the option alone, after `--` every one hands it on). After a restart of this script into a newer one
+# myPREPARED is set as well: `--` works there too, the option reaches this script either way.
 function fuADAPT_COMMAND () {
 	if [ -n "${myPREPARED}" ];
 	  then
@@ -3544,6 +3550,28 @@ function fuADOPT_CANCEL () {   # $1 = check | restore
 	echo
 	if [ "$1" == "check" ];
 	  then
+	    # an updater without a handover has stopped T-Pot and pulled already (fuOLD_UPDATER_CONFIG put your
+	    # configuration back from its backup), or T-Pot does not run for another reason: it starts again
+	    if [ -n "${myOLD_UPDATER_RAN}" ];
+	      then
+	        mySTOPPED="1"
+	        fuUI_HINT "The update.sh that started this run has pulled the new release already, your configuration and your docker-compose.yml are back from its backup ${myOLD_UPDATER_RAN}."
+	        fuDID fail "Not updated: your docker-compose.yml is a compose file of your own and was not adapted. The update.sh that started this run has pulled the new release already, your configuration and your docker-compose.yml are back from its backup ${myOLD_UPDATER_RAN}; T-Pot runs again with your file where tpot.service is enabled. The update finishes once you adapt the file: $(fuADAPT_COMMAND), or adapt it yourself."
+	        fuADOPT_WAYS
+	        fuRESTART_AFTER_REFUSAL
+	        echo
+	        exit 1
+	    fi
+	    if [ "$(systemctl is-active tpot 2>/dev/null)" != "active" ];
+	      then
+	        mySTOPPED="1"
+	        fuUI_HINT "Not updated. T-Pot does not run at the moment (an earlier update.sh may have stopped it), nothing of this run was changed."
+	        fuDID fail "Not updated: your docker-compose.yml is a compose file of your own and was not adapted. T-Pot did not run, it starts again with your file where tpot.service is enabled."
+	        fuADOPT_WAYS
+	        fuRESTART_AFTER_REFUSAL
+	        echo
+	        exit 1
+	    fi
 	    fuUI_HINT "Not updated, nothing was changed."
 	    fuADOPT_WAYS
 	    echo
@@ -4472,7 +4500,8 @@ if [ -n "${myBACKUP_ONLY}" ];
 fi
 
 fuMARK phase check Checking the version and the source
-# the update.sh of the tag 24.04.1 reset .env and docker-compose.yml before it restarted into this one
+# the update.sh of the tag 24.04.1 and the one of the branch master of 2026-08-24 reset .env and
+# docker-compose.yml before they restarted into this one without a handover
 fuOLD_UPDATER_CONFIG
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
@@ -4491,6 +4520,9 @@ fuSELFUPDATE "$@" ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"} ${myADAPT_COMPOSE:+--ada
 # pulled, `docker compose pull` reads both.
 fuMARK phase restore Putting your configuration back
 fuRESTORE
+# PyYAML and the venv module before the compose file is adapted (fuRESTORE_EDITION): installed also when
+# the run is refused later on (a cancel of the compose file, the Elasticsearch checks), the release needs
+# them either way
 fuCUSTOMIZER_DEPS
 fuRESTORE_EDITION
 fuREMOVE_DROPPED_SERVICES
