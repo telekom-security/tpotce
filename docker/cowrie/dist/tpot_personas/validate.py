@@ -17,7 +17,7 @@ from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import (DAY, drawn_at, host_patterns, hostname_regex, is_fresh, kernel_time, max_uptime, stale_at,
                        updated_at)
 from .model import PROMPT_STYLES
-from .render import BUSYBOX_HELP, DF_TABLE, DIR_MODES, PACKAGE_MANAGER_PATHS, runtime_json
+from .render import BUSYBOX_HELP, DF_TABLE, DIR_MODES, PACKAGE_MANAGER_PATHS, refused_logins_value, runtime_json
 from .ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS,
                            host_key_algorithms, key_type, server_version)
 
@@ -58,6 +58,7 @@ def _check_cfg(persona, ident, cfg, runtime_dir, keys_dir, out):
         ("honeypot", "contents_path"): f"{runtime_dir}/honeyfs",
         ("honeypot", "txtcmds_path"): f"{runtime_dir}/txtcmds",
         ("honeypot", "etc_path"): str(keys_dir),
+        ("honeypot", "auth_refused_pairs"): refused_logins_value(),
         ("shell", "filesystem"): f"{runtime_dir}/fs.pickle",
         ("shell", "processes"): f"{runtime_dir}/cmdoutput.json",
         ("shell", "kernel_version"): r.kernel_version,

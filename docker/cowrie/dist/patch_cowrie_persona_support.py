@@ -10379,6 +10379,54 @@ def patch_ssh_userauth(cowrie_root):
     )
 
 
+AUTH_REFUSED = '''
+
+def tpot_refused_pairs(value: str) -> frozenset[tuple[bytes, bytes]]:
+    """T-Pot: the login pairs of [honeypot] auth_refused_pairs, a JSON list of [login, password]
+    (empty: none). These never log in. ValueError for a value of another form."""
+    pairs = json.loads(value) if value.strip() else []
+    if not isinstance(pairs, list) or not all(
+        isinstance(pair, list) and len(pair) == 2 and all(isinstance(part, str) for part in pair)
+        for pair in pairs
+    ):
+        raise ValueError("auth_refused_pairs is not a list of [login, password]")
+    return frozenset((login.encode("utf-8"), password.encode("utf-8")) for login, password in pairs)
+
+
+class AuthRandom:
+'''
+
+AUTH_CHECK = '''        # T-Pot: a pair of [honeypot] auth_refused_pairs never logs in; it is matched exactly and
+        # leaves the state (source addresses, tries, cache) as it is, so it changes no other login
+        try:
+            refused = tpot_refused_pairs(
+                CowrieConfig.get("honeypot", "auth_refused_pairs", fallback="")
+            )
+        except ValueError:
+            self._log.warn("[honeypot] auth_refused_pairs is not a list of [login, password], ignored")
+            refused = frozenset()
+        if (thelogin, thepasswd) in refused:
+            self._log.info("login pair of auth_refused_pairs, refused")
+            return False
+
+        auth: bool = False
+        # Decode once and store/compare the text form everywhere, so an
+'''
+
+
+def patch_auth(cowrie_root):
+    """AuthRandom refuses the pairs of [honeypot] auth_refused_pairs (rendered by tpot_personas,
+    render.REFUSED_LOGINS) on every attempt, before it reads or writes its state; every other pair
+    takes upstream's path. The login events stay those of core/checkers.py."""
+    path = cowrie_root / "src" / "cowrie" / "core" / "auth.py"
+    replace_once(path, "\n\nclass AuthRandom:\n", AUTH_REFUSED)
+    replace_once(
+        path,
+        "        auth: bool = False\n        # Decode once and store/compare the text form everywhere, so an\n",
+        AUTH_CHECK,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Patch Cowrie v3.1 persona command support.")
     parser.add_argument("--cowrie-root", required=True, type=Path)
@@ -10419,6 +10467,7 @@ def main():
     patch_shell_errors(cowrie_root)
     patch_telnet_banner(cowrie_root)
     patch_ssh_userauth(cowrie_root)
+    patch_auth(cowrie_root)
 
 
 if __name__ == "__main__":

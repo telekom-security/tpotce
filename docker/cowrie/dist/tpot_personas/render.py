@@ -36,6 +36,27 @@ COMMON_REMOVE_PATHS = system.CONTAINER_PATHS + (
     "firmware/mnt/info/fwversion",
 )
 
+# Login pairs that never log in, for every persona: [honeypot] auth_refused_pairs, which the AuthRandom
+# of the patch script (patch_auth) reads. A pair matches exactly (login and password, case and bytes as
+# sent); a refused attempt is logged as cowrie.login.failed and leaves AuthRandom's state as it is.
+# AuthRandom decides every other pair, a near one too (admin with another password). Keep the list to
+# exact pairs.
+REFUSED_LOGINS = (
+    ("admin", "definitely_not_valid_creds"),
+    ("honeypot", "indexer"),
+    ("honeypotter", "imaginegettingindexed"),
+    ("xXhoneypotXx", "P@ssw0rd1337!"),
+    ("youjustgotindexed", "getindexedretard"),
+    ("notachancethisisreal", "nopasswordforme73baby"),
+)
+
+
+def refused_logins_value(pairs=REFUSED_LOGINS) -> str:
+    """The value of [honeypot] auth_refused_pairs: one line of JSON, a list of [login, password]; a $ is
+    written as $$ for Cowrie's ExtendedInterpolation."""
+    return json.dumps([list(pair) for pair in pairs]).replace("$", "$$")
+
+
 # Only the package manager of the persona may exist (as a txtcmd).
 PACKAGE_MANAGER_PATHS = (
     "bin/apt",
@@ -474,6 +495,7 @@ backend = shell
 timezone = UTC
 auth_class = AuthRandom
 auth_class_parameters = 2, 5, 10
+auth_refused_pairs = {refused_logins_value()}
 
 [shell]
 filesystem = {runtime_dir}/fs.pickle

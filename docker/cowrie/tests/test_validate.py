@@ -103,6 +103,12 @@ class ValidateNegativeTest(unittest.TestCase):
         self.edit("cowrie.cfg", f"boot_offset = {self.ident.boot_offset}", "boot_offset = 1")
         self.assertIn("cfg boot_offset", self.problems())
 
+    def test_refused_pairs_differ_from_the_list(self):
+        self.edit("cowrie.cfg", '[["admin", "definitely_not_valid_creds"], ', "[")
+        self.assertIn("cfg auth_refused_pairs", self.problems())
+        self.edit("cowrie.cfg", "auth_refused_pairs = ", "auth_refused_pairs_x = ")
+        self.assertIn("cfg auth_refused_pairs", self.problems())
+
     def test_prompt_style_mismatch(self):
         self.edit("cowrie.cfg", "prompt_style = debian", "prompt_style = redhat")
         self.assertIn("cfg prompt_style", self.problems())
