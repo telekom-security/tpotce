@@ -1,9 +1,10 @@
 """One row of the Settings page per .env key, with the control that fits the key.
 
-The schema says which: widget switch / choice / interface / timezone / llm_model / llm_url,
-else the type (enum -> Select, int / number -> Input for numbers, secret -> masked
-Input with a button to show it). Every control is #set-<KEY>; whatever it is, a
-change arrives as SettingRow.Changed(key, value) with the text written to .env.
+The schema says which: widget switch / choice / choice_many (a list setting, ticked in a
+ManyPicker) / interface / timezone / llm_model / llm_url, else the type (enum -> Select,
+int / number -> Input for numbers, secret -> masked Input with a button to show it).
+Every control is #set-<KEY>; whatever it is, a change arrives as
+SettingRow.Changed(key, value) with the text written to .env.
 """
 
 from typing import Dict, Optional
@@ -129,6 +130,10 @@ class SettingRow(Vertical):
             current = value if value in rule.values else Select.NULL
             yield TpotSelect([(v, v) for v in rule.values], value=current, id=f"set-{key}",
                          allow_blank=rule.optional or current is Select.NULL, compact=True)
+        elif rule.widget == "choice_many":
+            # the value as text (it can be typed too), the list to tick behind Choose; empty is all
+            yield NavInput(value, id=f"set-{key}", placeholder=f"empty = all {len(rule.values)}", compact=True)
+            yield Button("Choose", id=f"pick-{key}", classes="small", compact=True)
         elif rule.widget in ("interface", "timezone", "llm_model", "llm_url"):
             placeholder = {"interface": "automatic", "timezone": rule.default or "UTC"}.get(rule.widget, rule.default)
             yield NavInput(value, id=f"set-{key}", placeholder=placeholder, compact=True)

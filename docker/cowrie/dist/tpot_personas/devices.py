@@ -6,10 +6,11 @@ names the root that table mounts, and the delay loop of dmesg is the BogoMIPS
 of cpuinfo."""
 import re
 
-from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, _df_row, assign_processes, base_files, bogomips,
-                     device_top, embedded_group, embedded_passwd, embedded_shadow, kernel_line, kernel_series, lscpu,
-                     nproc, ps_entry, rng_for, server_top, shadow_ctime, shadow_days)
+from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, assign_processes, base_files, bogomips,
+                     embedded_group, embedded_passwd, embedded_shadow, fs_row, kernel_line, kernel_series, lscpu,
+                     mount_text, nproc, proc_mounts_text, ps_entry, rng_for, shadow_ctime, shadow_days, with_inodes)
 from .model import Content
+from .system import busybox_applets, proc_modules
 
 
 # --- shared parts of the device builders -------------------------------------------
@@ -62,31 +63,15 @@ def device_dmesg(persona, ident, cmdline, boot):
     return "".join(f"[{t:12.6f}] {text}\n" for t, text in lines)
 
 
-_BB_HEADER = "Filesystem           1K-blocks      Used Available Use% Mounted on"
-
-
-def _bb_row(fs, size, used, avail, mount):
-    # BusyBox: "%-20s %9llu %9llu %9llu %3u%% %s" (a wider number pushes the columns on)
-    pct = -(-used * 100 // (used + avail)) if used + avail else 0
-    return f"{fs:<20} {size:>9} {used:>9} {avail:>9} {pct:>3}% {mount}"
-
-
 def fs_entry(dev, mount, fstype, options, size=0, used=0):
     """One mounted file system; size 0 keeps it out of df (proc, sysfs, ...)."""
     return dev, mount, fstype, options, size, used
 
 
-def fs_tables(entries, coreutils=False):
-    """(mount, /proc/mounts, df) of the same file systems."""
-    mount = "".join(f"{dev} on {mp} type {fs} ({opts})\n" for dev, mp, fs, opts, _, _ in entries)
-    proc = "".join(f"{dev} {mp} {fs} {opts} 0 0\n" for dev, mp, fs, opts, _, _ in entries)
-    if coreutils:
-        rows = ["Filesystem     1K-blocks    Used Available Use% Mounted on"]
-        rows += [_df_row(dev, size, used, size - used, mp) for dev, mp, _, _, size, used in entries if size]
-    else:
-        rows = [_BB_HEADER] + [_bb_row(dev, size, used, size - used, mp)
-                               for dev, mp, _, _, size, used in entries if size]
-    return mount, proc, "\n".join(rows) + "\n"
+def fs_tables(ident, entries):
+    """(mount, /proc/mounts, the table of the patched df) of the same file systems."""
+    rows = [with_inodes(ident, fs_row(*entry)) for entry in entries]
+    return mount_text(rows), proc_mounts_text(rows), rows
 
 
 def used_kb(ident, purpose, size, low, high):
@@ -96,14 +81,11 @@ def used_kb(ident, purpose, size, low, high):
 # BusyBox 1.14-1.20 print the copyright of their year, 1.21 and later one text
 # (unverified: the exact wording per release)
 _BB_YEARS = {(1, 14): "2008", (1, 19): "2011"}
-_BB_APPLETS = ("[, [[, ash, awk, basename, cat, chmod, chown, cp, cut, date, dd, df, dmesg, echo, egrep, env, "
-               "false, free, grep, gunzip, gzip, head, hostname, ifconfig, kill, killall, ln, login, ls, mkdir, "
-               "mknod, mount, mv, netstat, ping, ps, pwd, reboot, rm, route, sed, sh, sleep, sync, tail, tar, "
-               "telnetd, test, top, touch, tr, true, udhcpc, umount, uname, uptime, vi, wc, wget")
 
 
-def busybox_help(banner):
-    """What `busybox` without arguments prints, for "BusyBox v1.19.2 (2025-03-28 14:13:40 CST)"."""
+def busybox_help(banner, applets):
+    """What `busybox` without arguments prints, for "BusyBox v1.19.2 (2025-03-28 14:13:40 CST)" and the
+    applets of system.busybox_applets."""
     major, minor = (int(x) for x in re.match(r"BusyBox v(\d+)\.(\d+)", banner).groups())
     if (major, minor) < (1, 21):
         year = _BB_YEARS.get((major, minor), "2012")
@@ -112,7 +94,7 @@ def busybox_help(banner):
     else:
         notice = ("BusyBox is copyrighted by many authors between 1998-2015.\n"
                   "Licensed under GPLv2. See source distribution for detailed\ncopyright notices.\n")
-    applets = "\n".join("\t" + line.strip() for line in re.findall(r".{1,64}(?:, |$)", _BB_APPLETS))
+    applets = "\n".join("\t" + line.strip() for line in re.findall(r".{1,64}(?:, |$)", ", ".join(applets)))
     return (f"{banner} multi-call binary.\n{notice}\n"
             "Usage: busybox [function] [arguments]...\n"
             "   or: busybox --list\n"
@@ -150,7 +132,7 @@ NAS_LSPCI = {
 def device_content(persona, ident, files, entries, cmdline, boot, processes, accounts=None, coreutils=False,
                    txtcmds=None):
     """The Content of a device: accounts, kernel files, the file system table
-    (mount, /proc/mounts, df), dmesg, CPU commands, top (BusyBox, or procps when
+    (mount, /proc/mounts, the patched df), dmesg, CPU commands, the style of top (BusyBox, or procps when
     coreutils) and the vendor's commands (txtcmds); with extra["busybox"] Cowrie's
     busybox runs the applets and prints the help of that BusyBox."""
     hw, r = ident.hardware, ident.release
@@ -159,18 +141,16 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
                                          embedded_group(persona.user, persona.gid),
                                          embedded_shadow(persona.user, ident))
     all_files = base_files(persona, ident, passwd, group, shadow)
-    mount, proc_mounts, df = fs_tables(entries, coreutils)
+    mount, proc_mounts, filesystems = fs_tables(ident, entries)
     all_files["proc/mounts"] = proc_mounts
+    all_files["proc/modules"] = proc_modules(persona, ident)
     all_files.update(files)
-    top = server_top(ident, processes, len(processes) + 60) if coreutils else device_top(ident, processes)
     commands = {
-        "bin/df": df,
         "bin/dmesg": device_dmesg(persona, ident, cmdline, boot),
         "bin/mount": mount,
         "bin/ulimit": ULIMIT,
         "usr/bin/lscpu": lscpu(persona, hw, with_bogomips=persona.hardware_platform != "x86_64"),
         "usr/bin/nproc": nproc(hw),
-        "usr/bin/top": top,
     }
     if hw.cpu_model in NAS_LSPCI:
         commands["usr/bin/lspci"] = NAS_LSPCI[hw.cpu_model]
@@ -180,7 +160,10 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
     return Content(files=all_files, txtcmds=commands, processes=processes,
                    ctimes={"etc/shadow": shadow_ctime(ident)},
                    programs=("bin/busybox",) if banner else (),
-                   busybox_help=busybox_help(banner) if banner else "")
+                   busybox_help=busybox_help(banner, busybox_applets(persona, ident)) if banner else "",
+                   # the kernel threads and helpers of a small system (top counts them, ps lists them not)
+                   tasks=len(processes) + (60 if coreutils else 40), top_style="procps" if coreutils else "busybox",
+                   filesystems=filesystems)
 
 
 # --- builders --------------------------------------------------------------------------
@@ -395,27 +378,11 @@ DISTRIB_TAINTS=''
                                "/var/run/dnsmasq/dnsmasq.cfg01411c.pid", vsz=1380, rss=896),
         ps_entry("root", 0, "-ash", vsz=1232, rss=772, tty="pts/0"),
     ]
-    return device_content(persona, ident, files, entries, cmdline, boot, processes,
-                          accounts=(OPENWRT_PASSWD, OPENWRT_GROUP, shadow),
-                          txtcmds={"bin/opkg": OPKG_HELP})
-
-
-OPKG_HELP = """opkg must have one sub-command argument
-usage: opkg [options...] sub-command [arguments...]
-where sub-command is one of:
-
-Package Manipulation:
-\tupdate\t\t\tUpdate list of available packages
-\tupgrade <pkgs>\t\tUpgrade packages
-\tinstall <pkgs>\t\tInstall package(s)
-\tremove <pkgs|regexp>\tRemove package(s)
-
-Informational Commands:
-\tlist\t\t\tList available packages
-\tlist-installed\t\tList installed packages
-\tlist-upgradable\t\tList installed and upgradable packages
-\tinfo [pkg|regexp]\tDisplay all info for <pkg>
-"""
+    content = device_content(persona, ident, files, entries, cmdline, boot, processes,
+                             accounts=(OPENWRT_PASSWD, OPENWRT_GROUP, shadow))
+    # opkg is a command of the patched Cowrie (system.opkg_keys)
+    content.programs = (*content.programs, "bin/opkg")
+    return content
 
 
 # QNAP model per CPU of the catalog's hardware
@@ -608,10 +575,12 @@ BUG_REPORT_URL="https://bugs.debian.org/"
         ps_entry(persona.user, 0, "-vbash", vsz=4964, rss=3164, tty="pts/0", stat="Ss"),
     ]
     arch = x["deb_arch"]
-    return device_content(persona, ident, files, entries, cmdline, boot, processes, coreutils=True, txtcmds={
-        "usr/bin/apt-get": f"apt {r.packages['apt']} ({arch})\n",
+    content = device_content(persona, ident, files, entries, cmdline, boot, processes, coreutils=True, txtcmds={
         "usr/bin/dpkg": f"Debian 'dpkg' package management program version {r.packages['dpkg']} ({arch}).\n",
     })
+    # apt-get is Cowrie's patched apt-get (apt 1.4 without sources: system.shell_keys)
+    content.programs = (*content.programs, "usr/bin/apt-get")
+    return content
 
 
 IPCAM_RCS = """#!/bin/sh

@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 
 from tests.helpers import DIST  # noqa: F401
-from tpot_personas import PersonaError, catalog
-from tpot_personas.identity import first_install, fits, kernel_time
+from tpot_personas import PersonaError, catalog, identity
+from tpot_personas.identity import DAY, draw, first_install, fits, kernel_time
 from tpot_personas.ssh_profiles import PROFILES
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -315,6 +315,35 @@ class DeviceCatalogTest(unittest.TestCase):
                     continue
                 year = int(re.search(r"(\d{4})\.\d+", r.ssh_version).group(1))
                 self.assertEqual(p.ssh_profile, "dropbear-openwrt" if year >= 2019 else "dropbear", (pid, r.label))
+
+
+class HorizonTest(unittest.TestCase):
+    """A catalog that is not touched for half a year still draws real levels."""
+
+    def horizon_problems(self, later):
+        """What the catalog lacks at later: a persona that draws fewer than 3 (servers) / 2 ready levels,
+        or one whose draw falls back to levels that are not ready then (draw takes any fitting level)."""
+        problems = []
+        for p in catalog.PERSONAS:
+            minimum = 3 if p.kind == "server" else 2
+            max_age = getattr(p, "max_install_days", 900) * DAY
+            ready = {r.label for r in p.releases if identity._ready(r, later, max_age)}
+            labels = {draw(p, seed, later).release.label for seed in range(600)}
+            if labels - ready:
+                problems.append(f"{p.id} draws levels that are not ready then: {sorted(labels - ready)}")
+            if len(labels & ready) < minimum:
+                problems.append(f"{p.id} draws {len(labels & ready)} ready release levels, {minimum} are needed "
+                                f"({sorted(labels & ready)})")
+        return problems
+
+    def test_catalog_has_levels_for_six_months(self):
+        problems = self.horizon_problems(int(time.time()) + 182 * DAY)
+        self.assertEqual(problems, [], "182 days from now: refresh the catalog")
+
+    def test_a_catalog_without_ready_levels_is_found(self):
+        # far beyond the pool draw falls back to any fitting level: those are no ready levels
+        problems = self.horizon_problems(int(time.time()) + 20 * 365 * DAY)
+        self.assertTrue(any("not ready then" in problem for problem in problems), problems)
 
 
 class SchemaTest(unittest.TestCase):

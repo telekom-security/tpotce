@@ -148,7 +148,10 @@ def load(repo_dir: str = REPO_DIR, schema_path: str = envschema.SCHEMA_PATH,
         env = EnvFile(path)
     except OSError as err:
         raise SettingsError(f"cannot read {path}: {err}")
-    schema = envschema.load_schema(schema_path)
+    try:
+        schema = envschema.load_schema(schema_path)
+    except envschema.SchemaError as err:
+        raise SettingsError(f"{schema_path}: {err}")
     services = envschema.compose_services(ops.compose_path(repo_dir, env.values()))
     return Settings(path, env, schema, services, host_ostype)
 

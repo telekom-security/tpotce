@@ -1,0 +1,385 @@
+{
+ "_source": "outputs in containers of these images (2026-10-14) with sshd listening, a connection of two nc on 127.0.0.1, eth0 with the MAC 52:54:00:12:34:56 and a queue length of 1000 (docker run --cap-add NET_ADMIN --mac-address ...); eth0 is a veth: its peer (@ifN) and link-netnsid are no part of a real network card",
+ "images": {
+  "centos_7": {
+   "cases": {
+    "ifconfig eth0": [
+     "eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n        inet 172.17.0.2  netmask 255.255.0.0  broadcast 172.17.255.255\n        ether 52:54:00:12:34:56  txqueuelen 1000  (Ethernet)\n        RX packets 6886  bytes 13412922 (12.7 MiB)\n        RX errors 0  dropped 0  overruns 0  frame 0\n        TX packets 3094  bytes 215153 (210.1 KiB)\n        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n",
+     "",
+     0
+    ],
+    "ip -br a show dev eth0": [
+     "eth0@if1542      UP             172.17.0.2/16 \n",
+     "",
+     0
+    ],
+    "ip -br link show dev eth0": [
+     "eth0@if1542      UP             52:54:00:12:34:56 <BROADCAST,MULTICAST,UP,LOWER_UP> \n",
+     "",
+     0
+    ],
+    "ip -j a show dev lo": [
+     "",
+     "Option \"-j\" is unknown, try \"ip -help\".\n",
+     255
+    ],
+    "ip -o a show dev eth0": [
+     "11: eth0    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\\       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -o link show dev eth0": [
+     "11: eth0@if1542: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\\    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n",
+     "",
+     0
+    ],
+    "ip -p a show dev lo": [
+     "",
+     "Option \"-p\" is unknown, try \"ip -help\".\n",
+     255
+    ],
+    "ip -s link show dev eth0": [
+     "11: eth0@if1542: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    RX: bytes  packets  errors  dropped overrun mcast   \n    13412922   6886     0       0       0       0       \n    TX: bytes  packets  errors  dropped carrier collsns \n    215153     3094     0       0       0       0       \n",
+     "",
+     0
+    ],
+    "ip a l dev eth0": [
+     "11: eth0@if1542: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip a show dev eth0": [
+     "11: eth0@if1542: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip link show dev eth0": [
+     "11: eth0@if1542: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n",
+     "",
+     0
+    ],
+    "ip r s": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2 \n",
+     "",
+     0
+    ],
+    "netstat -i": [
+     "Kernel Interface table\nIface             MTU    RX-OK RX-ERR RX-DRP RX-OVR    TX-OK TX-ERR TX-DRP TX-OVR Flg\neth0             1500     6886      0      0 0          3094      0      0      0 BMRU\nlo              65536        5      0      0 0             5      0      0      0 LRU\n",
+     "",
+     0
+    ],
+    "netstat -tn": [
+     "Active Internet connections (w/o servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State      \ntcp        0      0 172.17.0.2:32878        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 172.17.0.2:35294        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 172.17.0.2:35296        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 172.17.0.2:35298        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 172.17.0.2:38414        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 172.17.0.2:38416        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 172.17.0.2:38422        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 172.17.0.2:38438        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 172.17.0.2:42384        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 172.17.0.2:42392        13.224.68.2:443         TIME_WAIT  \ntcp        0      0 127.0.0.1:2222          127.0.0.1:36140         FIN_WAIT2  \ntcp        0      0 127.0.0.1:36140         127.0.0.1:2222          CLOSE_WAIT \ntcp        0      0 172.17.0.2:39096        13.224.68.2:80          TIME_WAIT  \ntcp        0      0 172.17.0.2:39108        13.224.68.2:80          TIME_WAIT  \ntcp        0      0 172.17.0.2:45334        13.224.68.2:80          TIME_WAIT  \ntcp        0      0 172.17.0.2:45336        13.224.68.2:80          TIME_WAIT  \ntcp        0      0 172.17.0.2:45338        13.224.68.2:80          TIME_WAIT  \ntcp        0      0 172.17.0.2:45340        13.224.68.2:80          TIME_WAIT  \ntcp        0      0 172.17.0.2:49768        13.224.68.2:80          TIME_WAIT  \ntcp        0      0 172.17.0.2:49886        13.224.68.2:80          TIME_WAIT  \ntcp        0      0 172.17.0.2:49898        13.224.68.2:80          TIME_WAIT  \ntcp        0      0 172.17.0.2:49906        13.224.68.2:80          TIME_WAIT  \n",
+     "",
+     0
+    ],
+    "netstat -tnp": [
+     "Active Internet connections (w/o servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 172.17.0.2:32878        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:35294        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:35296        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:35298        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:38414        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:38416        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:38422        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:38438        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:42384        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:42392        13.224.68.2:443         TIME_WAIT   -                   \ntcp        0      0 127.0.0.1:2222          127.0.0.1:36140         FIN_WAIT2   77/nc               \ntcp        0      0 127.0.0.1:36140         127.0.0.1:2222          CLOSE_WAIT  81/nc               \ntcp        0      0 172.17.0.2:39096        13.224.68.2:80          TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:39108        13.224.68.2:80          TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:45334        13.224.68.2:80          TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:45336        13.224.68.2:80          TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:45338        13.224.68.2:80          TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:45340        13.224.68.2:80          TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:49768        13.224.68.2:80          TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:49886        13.224.68.2:80          TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:49898        13.224.68.2:80          TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:49906        13.224.68.2:80          TIME_WAIT   -                   \n",
+     "",
+     0
+    ],
+    "ss -s": [
+     "Total: 6 (kernel 1064)\nTCP:   113 (estab 1, closed 109, orphaned 1, synrecv 0, timewait 20/0), ports 0\n\nTransport Total     IP        IPv6\n*\t  1064      -         -        \nRAW\t  0         0         0        \nUDP\t  0         0         0        \nTCP\t  4         3         1        \nINET\t  4         3         1        \nFRAG\t  0         0         0        \n\n",
+     "",
+     0
+    ],
+    "ss -tn": [
+     "State      Recv-Q Send-Q Local Address:Port               Peer Address:Port              \nFIN-WAIT-2 0      0      127.0.0.1:2222               127.0.0.1:36140              \nCLOSE-WAIT 0      0      127.0.0.1:36140              127.0.0.1:2222               \n",
+     "",
+     0
+    ],
+    "ss -tnp": [
+     "State      Recv-Q Send-Q Local Address:Port               Peer Address:Port              \nFIN-WAIT-2 0      0      127.0.0.1:2222               127.0.0.1:36140               users:((\"nc\",pid=77,fd=5))\nCLOSE-WAIT 0      0      127.0.0.1:36140              127.0.0.1:2222                users:((\"nc\",pid=81,fd=3))\n",
+     "",
+     0
+    ]
+   },
+   "iproute2": "ss170501"
+  },
+  "debian_13": {
+   "cases": {
+    "ifconfig eth0": [
+     "eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n        inet 172.17.0.2  netmask 255.255.0.0  broadcast 172.17.255.255\n        ether 52:54:00:12:34:56  txqueuelen 1000  (Ethernet)\n        RX packets 19624  bytes 26360106 (25.1 MiB)\n        RX errors 0  dropped 0  overruns 0  frame 0\n        TX packets 12165  bytes 813748 (794.6 KiB)\n        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n",
+     "",
+     0
+    ],
+    "ip -br a show dev eth0": [
+     "eth0@if1540      UP             172.17.0.2/16 \n",
+     "",
+     0
+    ],
+    "ip -br link show dev eth0": [
+     "eth0@if1540      UP             52:54:00:12:34:56 <BROADCAST,MULTICAST,UP,LOWER_UP> \n",
+     "",
+     0
+    ],
+    "ip -j a show dev lo": [
+     "[{\"ifindex\":1,\"ifname\":\"lo\",\"flags\":[\"LOOPBACK\",\"UP\",\"LOWER_UP\"],\"mtu\":65536,\"qdisc\":\"noqueue\",\"operstate\":\"UNKNOWN\",\"group\":\"default\",\"txqlen\":1000,\"link_type\":\"loopback\",\"address\":\"00:00:00:00:00:00\",\"broadcast\":\"00:00:00:00:00:00\",\"addr_info\":[{\"family\":\"inet\",\"local\":\"127.0.0.1\",\"prefixlen\":8,\"scope\":\"host\",\"label\":\"lo\",\"valid_life_time\":4294967295,\"preferred_life_time\":4294967295},{\"family\":\"inet6\",\"local\":\"::1\",\"prefixlen\":128,\"scope\":\"host\",\"protocol\":\"kernel_lo\",\"valid_life_time\":4294967295,\"preferred_life_time\":4294967295}]}]\n",
+     "",
+     0
+    ],
+    "ip -o a show dev eth0": [
+     "11: eth0    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\\       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -o link show dev eth0": [
+     "11: eth0@if1540: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\\    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n",
+     "",
+     0
+    ],
+    "ip -p a show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host proto kernel_lo \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -s link show dev eth0": [
+     "11: eth0@if1540: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    RX:  bytes packets errors dropped  missed   mcast           \n      26360106   19624      0       0       0       0 \n    TX:  bytes packets errors dropped carrier collsns           \n        813748   12165      0       0       0       0 \n",
+     "",
+     0
+    ],
+    "ip a l dev eth0": [
+     "11: eth0@if1540: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip a show dev eth0": [
+     "11: eth0@if1540: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip link show dev eth0": [
+     "11: eth0@if1540: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n",
+     "",
+     0
+    ],
+    "ip r s": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2 \n",
+     "",
+     0
+    ],
+    "netstat -i": [
+     "Kernel Interface table\nIface             MTU    RX-OK RX-ERR RX-DRP RX-OVR    TX-OK TX-ERR TX-DRP TX-OVR Flg\neth0             1500    19624      0      0 0         12165      0      0      0 BMRU\nlo              65536        3      0      0 0             3      0      0      0 LRU\n",
+     "",
+     0
+    ],
+    "netstat -tn": [
+     "Active Internet connections (w/o servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State      \ntcp        0      0 172.17.0.2:33698        140.248.142.132:80      TIME_WAIT  \ntcp        0      0 172.17.0.2:33710        140.248.142.132:80      TIME_WAIT  \ntcp        0      0 127.0.0.1:51364         127.0.0.1:2222          ESTABLISHED\ntcp        0      0 127.0.0.1:2222          127.0.0.1:51364         ESTABLISHED\n",
+     "",
+     0
+    ],
+    "netstat -tnp": [
+     "Active Internet connections (w/o servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 172.17.0.2:33698        140.248.142.132:80      TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:33710        140.248.142.132:80      TIME_WAIT   -                   \ntcp        0      0 127.0.0.1:51364         127.0.0.1:2222          ESTABLISHED 1148/nc             \ntcp        0      0 127.0.0.1:2222          127.0.0.1:51364         ESTABLISHED 1144/nc             \n",
+     "",
+     0
+    ],
+    "ss -s": [
+     "Total: 7\nTCP:   96 (estab 2, closed 91, orphaned 0, timewait 2)\n\nTransport Total     IP        IPv6\nRAW\t  0         0         0        \nUDP\t  0         0         0        \nTCP\t  5         4         1        \nINET\t  5         4         1        \nFRAG\t  0         0         0        \n\n",
+     "",
+     0
+    ],
+    "ss -tn": [
+     "State Recv-Q Send-Q Local Address:Port  Peer Address:Port \nESTAB 0      0          127.0.0.1:51364    127.0.0.1:2222 \nESTAB 0      0          127.0.0.1:2222     127.0.0.1:51364\n",
+     "",
+     0
+    ],
+    "ss -tnp": [
+     "State Recv-Q Send-Q Local Address:Port  Peer Address:Port Process                      \nESTAB 0      0          127.0.0.1:51364    127.0.0.1:2222  users:((\"nc\",pid=1148,fd=3))\nESTAB 0      0          127.0.0.1:2222     127.0.0.1:51364 users:((\"nc\",pid=1144,fd=4))\n",
+     "",
+     0
+    ]
+   },
+   "iproute2": "6.15.0"
+  },
+  "ubuntu_22.04": {
+   "cases": {
+    "ifconfig eth0": [
+     "eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n        inet 172.17.0.2  netmask 255.255.0.0  broadcast 172.17.255.255\n        ether 52:54:00:12:34:56  txqueuelen 1000  (Ethernet)\n        RX packets 63082  bytes 85027207 (85.0 MB)\n        RX errors 0  dropped 0  overruns 0  frame 0\n        TX packets 35965  bytes 2389938 (2.3 MB)\n        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n",
+     "",
+     0
+    ],
+    "ip -br a show dev eth0": [
+     "eth0@if1538      UP             172.17.0.2/16 \n",
+     "",
+     0
+    ],
+    "ip -br link show dev eth0": [
+     "eth0@if1538      UP             52:54:00:12:34:56 <BROADCAST,MULTICAST,UP,LOWER_UP> \n",
+     "",
+     0
+    ],
+    "ip -j a show dev lo": [
+     "[{\"ifindex\":1,\"ifname\":\"lo\",\"flags\":[\"LOOPBACK\",\"UP\",\"LOWER_UP\"],\"mtu\":65536,\"qdisc\":\"noqueue\",\"operstate\":\"UNKNOWN\",\"group\":\"default\",\"txqlen\":1000,\"link_type\":\"loopback\",\"address\":\"00:00:00:00:00:00\",\"broadcast\":\"00:00:00:00:00:00\",\"addr_info\":[{\"family\":\"inet\",\"local\":\"127.0.0.1\",\"prefixlen\":8,\"scope\":\"host\",\"label\":\"lo\",\"valid_life_time\":4294967295,\"preferred_life_time\":4294967295},{\"family\":\"inet6\",\"local\":\"::1\",\"prefixlen\":128,\"scope\":\"host\",\"valid_life_time\":4294967295,\"preferred_life_time\":4294967295}]}]\n",
+     "",
+     0
+    ],
+    "ip -o a show dev eth0": [
+     "11: eth0    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\\       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -o link show dev eth0": [
+     "11: eth0@if1538: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\\    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n",
+     "",
+     0
+    ],
+    "ip -p a show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -s link show dev eth0": [
+     "11: eth0@if1538: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    RX:  bytes packets errors dropped  missed   mcast           \n      85027207   63082      0       0       0       0 \n    TX:  bytes packets errors dropped carrier collsns           \n       2389938   35965      0       0       0       0 \n",
+     "",
+     0
+    ],
+    "ip a l dev eth0": [
+     "11: eth0@if1538: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip a show dev eth0": [
+     "11: eth0@if1538: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip link show dev eth0": [
+     "11: eth0@if1538: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n",
+     "",
+     0
+    ],
+    "ip r s": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2 \n",
+     "",
+     0
+    ],
+    "netstat -i": [
+     "Kernel Interface table\nIface      MTU    RX-OK RX-ERR RX-DRP RX-OVR    TX-OK TX-ERR TX-DRP TX-OVR Flg\neth0      1500    63082      0      0 0         35965      0      0      0 BMRU\nlo       65536        3      0      0 0             3      0      0      0 LRU\n",
+     "",
+     0
+    ],
+    "netstat -tn": [
+     "Active Internet connections (w/o servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State      \ntcp        0      0 127.0.0.1:2222          127.0.0.1:56958         ESTABLISHED\ntcp        0      0 127.0.0.1:56958         127.0.0.1:2222          ESTABLISHED\ntcp        0      0 172.17.0.2:42068        91.189.92.19:80         TIME_WAIT  \ntcp        0      0 172.17.0.2:46986        91.189.92.19:80         TIME_WAIT  \n",
+     "",
+     0
+    ],
+    "netstat -tnp": [
+     "Active Internet connections (w/o servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 127.0.0.1:2222          127.0.0.1:56958         ESTABLISHED 3587/nc             \ntcp        0      0 127.0.0.1:56958         127.0.0.1:2222          ESTABLISHED 3591/nc             \ntcp        0      0 172.17.0.2:42068        91.189.92.19:80         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:46986        91.189.92.19:80         TIME_WAIT   -                   \n",
+     "",
+     0
+    ],
+    "ss -s": [
+     "Total: 8\nTCP:   94 (estab 2, closed 89, orphaned 0, timewait 2)\n\nTransport Total     IP        IPv6\nRAW\t  0         0         0        \nUDP\t  0         0         0        \nTCP\t  5         4         1        \nINET\t  5         4         1        \nFRAG\t  0         0         0        \n\n",
+     "",
+     0
+    ],
+    "ss -tn": [
+     "State Recv-Q Send-Q Local Address:Port  Peer Address:Port Process\nESTAB 0      0          127.0.0.1:2222     127.0.0.1:56958       \nESTAB 0      0          127.0.0.1:56958    127.0.0.1:2222        \n",
+     "",
+     0
+    ],
+    "ss -tnp": [
+     "State Recv-Q Send-Q Local Address:Port  Peer Address:Port Process                      \nESTAB 0      0          127.0.0.1:2222     127.0.0.1:56958 users:((\"nc\",pid=3587,fd=4))\nESTAB 0      0          127.0.0.1:56958    127.0.0.1:2222  users:((\"nc\",pid=3591,fd=3))\n",
+     "",
+     0
+    ]
+   },
+   "iproute2": "5.15.0"
+  },
+  "ubuntu_24.04": {
+   "cases": {
+    "ifconfig eth0": [
+     "eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n        inet 172.17.0.2  netmask 255.255.0.0  broadcast 172.17.255.255\n        ether 52:54:00:12:34:56  txqueuelen 1000  (Ethernet)\n        RX packets 58919  bytes 78954705 (78.9 MB)\n        RX errors 0  dropped 0  overruns 0  frame 0\n        TX packets 45602  bytes 3031536 (3.0 MB)\n        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n",
+     "",
+     0
+    ],
+    "ip -br a show dev eth0": [
+     "eth0@if1536      UP             172.17.0.2/16 \n",
+     "",
+     0
+    ],
+    "ip -br link show dev eth0": [
+     "eth0@if1536      UP             52:54:00:12:34:56 <BROADCAST,MULTICAST,UP,LOWER_UP> \n",
+     "",
+     0
+    ],
+    "ip -j a show dev lo": [
+     "[{\"ifindex\":1,\"ifname\":\"lo\",\"flags\":[\"LOOPBACK\",\"UP\",\"LOWER_UP\"],\"mtu\":65536,\"qdisc\":\"noqueue\",\"operstate\":\"UNKNOWN\",\"group\":\"default\",\"txqlen\":1000,\"link_type\":\"loopback\",\"address\":\"00:00:00:00:00:00\",\"broadcast\":\"00:00:00:00:00:00\",\"addr_info\":[{\"family\":\"inet\",\"local\":\"127.0.0.1\",\"prefixlen\":8,\"scope\":\"host\",\"label\":\"lo\",\"valid_life_time\":4294967295,\"preferred_life_time\":4294967295},{\"family\":\"inet6\",\"local\":\"::1\",\"prefixlen\":128,\"scope\":\"host\",\"valid_life_time\":4294967295,\"preferred_life_time\":4294967295}]}]\n",
+     "",
+     0
+    ],
+    "ip -o a show dev eth0": [
+     "11: eth0    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\\       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -o link show dev eth0": [
+     "11: eth0@if1536: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\\    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n",
+     "",
+     0
+    ],
+    "ip -p a show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -s link show dev eth0": [
+     "11: eth0@if1536: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    RX:  bytes packets errors dropped  missed   mcast           \n      78954705   58919      0       0       0       0 \n    TX:  bytes packets errors dropped carrier collsns           \n       3031536   45602      0       0       0       0 \n",
+     "",
+     0
+    ],
+    "ip a l dev eth0": [
+     "11: eth0@if1536: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip a show dev eth0": [
+     "11: eth0@if1536: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip link show dev eth0": [
+     "11: eth0@if1536: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n",
+     "",
+     0
+    ],
+    "ip r s": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2 \n",
+     "",
+     0
+    ],
+    "netstat -i": [
+     "Kernel Interface table\nIface             MTU    RX-OK RX-ERR RX-DRP RX-OVR    TX-OK TX-ERR TX-DRP TX-OVR Flg\neth0             1500    58919      0      0 0         45602      0      0      0 BMRU\nlo              65536        3      0      0 0             3      0      0      0 LRU\n",
+     "",
+     0
+    ],
+    "netstat -tn": [
+     "Active Internet connections (w/o servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State      \ntcp        0      0 127.0.0.1:39104         127.0.0.1:2222          ESTABLISHED\ntcp        0      0 172.17.0.2:41608        91.189.92.19:80         TIME_WAIT  \ntcp        0      0 172.17.0.2:60034        91.189.92.19:80         TIME_WAIT  \ntcp        0      0 127.0.0.1:2222          127.0.0.1:39104         ESTABLISHED\n",
+     "",
+     0
+    ],
+    "netstat -tnp": [
+     "Active Internet connections (w/o servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 127.0.0.1:39104         127.0.0.1:2222          ESTABLISHED 3738/nc             \ntcp        0      0 172.17.0.2:41608        91.189.92.19:80         TIME_WAIT   -                   \ntcp        0      0 172.17.0.2:60034        91.189.92.19:80         TIME_WAIT   -                   \ntcp        0      0 127.0.0.1:2222          127.0.0.1:39104         ESTABLISHED 3734/nc             \n",
+     "",
+     0
+    ],
+    "ss -s": [
+     "Total: 8\nTCP:   94 (estab 2, closed 89, orphaned 0, timewait 2)\n\nTransport Total     IP        IPv6\nRAW\t  0         0         0        \nUDP\t  0         0         0        \nTCP\t  5         4         1        \nINET\t  5         4         1        \nFRAG\t  0         0         0        \n\n",
+     "",
+     0
+    ],
+    "ss -tn": [
+     "State Recv-Q Send-Q Local Address:Port  Peer Address:Port Process\nESTAB 0      0          127.0.0.1:39104    127.0.0.1:2222        \nESTAB 0      0          127.0.0.1:2222     127.0.0.1:39104       \n",
+     "",
+     0
+    ],
+    "ss -tnp": [
+     "State Recv-Q Send-Q Local Address:Port  Peer Address:Port Process                      \nESTAB 0      0          127.0.0.1:39104    127.0.0.1:2222  users:((\"nc\",pid=3738,fd=3))\nESTAB 0      0          127.0.0.1:2222     127.0.0.1:39104 users:((\"nc\",pid=3734,fd=4))\n",
+     "",
+     0
+    ]
+   },
+   "iproute2": "6.1.0"
+  }
+ }
+}

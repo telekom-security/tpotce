@@ -12,16 +12,21 @@ import re
 import time
 from pathlib import Path
 
-from . import PersonaError, system, tree
+from . import PersonaError, network, servers, system, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
-from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
+from .identity import (DAY, drawn_at, host_patterns, hostname_regex, is_fresh, kernel_time, max_uptime, stale_at,
+                       updated_at)
 from .model import PROMPT_STYLES
-from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS
-from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
+from .render import BUSYBOX_HELP, DF_TABLE, DIR_MODES, PACKAGE_MANAGER_PATHS, refused_logins_value, runtime_json
+from .ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS,
+                           host_key_algorithms, key_type, server_version)
 
-MIN_PICKLE_SIZE = 1_000_000
+# a rendered device tree is about 1 MB (a server's more); far below it the render broke
+MIN_PICKLE_SIZE = 800_000
 PATH_DIRS = ("usr/local/sbin", "usr/local/bin", "usr/sbin", "usr/bin", "sbin", "bin")
-PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "yum")
+PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "yum", "dnf", "rpm", "opkg")
+# a package manager of Cowrie's Python that is a program at one path only (opkg of OpenWrt)
+PYTHON_PACKAGE_MANAGER_AT = {"opkg": "bin/opkg"}
 FORBIDDEN_MARKERS = ("phil", "2.6.26-2-686", "2.6.26-19lenny", "com/ubuntu/upstart", "dannf@debian.org",
                      "svr04", "Wed Nov 4 20:45:37")
 UBUNTU_MARKERS = ("ubuntu 22.04", "ubuntu 24.04", "id=ubuntu", "jammy jellyfish", "noble numbat")
@@ -53,6 +58,9 @@ def _check_cfg(persona, ident, cfg, runtime_dir, keys_dir, out):
         ("honeypot", "contents_path"): f"{runtime_dir}/honeyfs",
         ("honeypot", "txtcmds_path"): f"{runtime_dir}/txtcmds",
         ("honeypot", "etc_path"): str(keys_dir),
+        ("honeypot", "auth_refused_pairs"): refused_logins_value(),
+        # only AuthRandom checks auth_refused_pairs (patch_auth)
+        ("honeypot", "auth_class"): "AuthRandom",
         ("shell", "filesystem"): f"{runtime_dir}/fs.pickle",
         ("shell", "processes"): f"{runtime_dir}/cmdoutput.json",
         ("shell", "kernel_version"): r.kernel_version,
@@ -60,6 +68,10 @@ def _check_cfg(persona, ident, cfg, runtime_dir, keys_dir, out):
         ("shell", "arch"): persona.arch,
         ("shell", "hardware_platform"): persona.hardware_platform,
         ("shell", "prompt_style"): persona.prompt_style,
+        ("shell", "shell_name"): system.shell_style(persona)[0],
+        ("shell", "not_found_style"): system.shell_style(persona)[1],
+        ("shell", "history_size"): str(system.history_sizes(persona, r)[1]),
+        ("shell", "history_size_root"): str(system.history_sizes(persona, r)[0]),
         ("ssh", "version"): r.ssh_banner,
     }
     if persona.prompt_style not in PROMPT_STYLES:
@@ -91,6 +103,7 @@ def _check_ssh(persona, ident, cfg, out):
         if entries != tuple(wanted):
             out.append(f"{word} list {','.join(entries)} differs from profile {profile.name}")
 
+    _check_host_key_algorithms(profile, ident.release, cfg, out)
     banner = ident.release.ssh_banner
     ssh_version = cfg.get("shell", "ssh_version", fallback="")
     product = banner[len("SSH-2.0-"):].split(" ", 1)[0] if banner.startswith("SSH-2.0-") else ""
@@ -108,6 +121,67 @@ def _check_ssh(persona, ident, cfg, out):
             out.append(f"ssh_version {ssh_version!r} does not name {product} of the banner")
     else:
         out.append(f"ssh_version: banner {banner!r} names no known product")
+
+
+def _check_host_key_algorithms(profile, release, cfg, out):
+    """[ssh] host_key_algorithms: what the server of the banner offers for the loaded keys. Each one
+    signs with a key of public_key_auth, every key is offered; OpenSSH 8.8 and later offer no
+    ssh-rsa, OpenSSH before 7.2 and dropbear before 2020.79 no rsa-sha2-*, dropbear no
+    rsa-sha2-512, OpenSSH 7.2 and later both rsa-sha2-512 and rsa-sha2-256 (unless its policy has
+    no SHA-1, also ssh-rsa)."""
+    names = tuple(e.strip() for e in cfg.get("ssh", "host_key_algorithms", fallback="").split(",") if e.strip())
+    keys = {e.strip() for e in cfg.get("ssh", "public_key_auth", fallback="").split(",") if e.strip()}
+    for name in names:
+        if name not in HOST_KEY_ALGORITHMS:
+            out.append(f"host key algorithm not supported: {name}")
+        elif key_type(name) not in keys:
+            out.append(f"host key algorithm {name} has no {key_type(name)} key")
+    for key in sorted(keys - {key_type(name) for name in names}):
+        out.append(f"host key {key} is not offered in host_key_algorithms")
+    try:
+        product, version = server_version(release)
+    except ValueError:
+        return
+    rsa = [name for name in names if key_type(name) == "ssh-rsa"]
+    sha2 = {"rsa-sha2-512", "rsa-sha2-256"}
+    if product == "openssh" and version >= (8, 8) and "ssh-rsa" in rsa:
+        out.append(f"host key algorithms: OpenSSH {version[0]}.{version[1]} offers no ssh-rsa")
+    if ((product == "openssh" and version < (7, 2)) or (product == "dropbear" and version < (2020, 79))) \
+            and sha2 & set(rsa):
+        out.append(f"host key algorithms: {product} {version[0]}.{version[1]} has no rsa-sha2")
+    if product == "dropbear" and "rsa-sha2-512" in rsa:
+        out.append("host key algorithms: dropbear has no rsa-sha2-512")
+    if product == "openssh" and version >= (7, 2) and rsa and not sha2 <= set(rsa):
+        out.append(f"host key algorithms: OpenSSH {version[0]}.{version[1]} offers rsa-sha2-512 and rsa-sha2-256")
+    if product == "openssh" and version < (8, 8) and rsa and "ssh-rsa" not in rsa \
+            and release.extra.get("ssh_rsa_sha1", True):
+        out.append(f"host key algorithms: OpenSSH {version[0]}.{version[1]} still offers ssh-rsa")
+    if names != host_key_algorithms(profile, release):
+        out.append(f"host key algorithms {','.join(names)} differ from {profile.name} of {release.ssh_banner}")
+
+
+def _check_top(persona, cfg, txtcmds, out):
+    """The patched top answers (it reads /proc/meminfo, the ps list and these keys): no static
+    top, a style the persona's system has, procps-ng's version, a plausible count of kernel
+    threads and base load."""
+    if (txtcmds / "usr/bin/top").exists():
+        out.append("top: a static txtcmd usr/bin/top shadows the live top")
+    style = cfg.get("shell", "top_style", fallback="")
+    if style not in ("procps", "busybox") or (style == "busybox" and persona.kind != "device"):
+        out.append(f"top_style {style!r} does not fit {persona.kind} {persona.id}")
+    version = cfg.get("shell", "procps_version", fallback="")
+    if style == "procps" and not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        out.append(f"procps_version {version!r} is no procps-ng version")
+    try:
+        threads = int(cfg.get("shell", "kernel_threads", fallback=""))
+        base = float(cfg.get("shell", "load_base", fallback=""))
+    except ValueError:
+        out.append("top: kernel_threads or load_base is no number")
+        return
+    if not 20 <= threads <= 600:
+        out.append(f"top: {threads} kernel threads")
+    if not 0.0 <= base <= 1.0:
+        out.append(f"top: load_base {base} of an idle system")
 
 
 def _check_hardware(persona, ident, honeyfs, txtcmds, out):
@@ -141,15 +215,6 @@ def _check_hardware(persona, ident, honeyfs, txtcmds, out):
     match = re.search(r"^MemTotal:\s+(\d+) kB", meminfo, re.M)
     if not match or int(match.group(1)) != hw.mem_kb:
         out.append(f"meminfo MemTotal is not {hw.mem_kb} kB")
-    top = _text(txtcmds / "usr/bin/top")
-    procps = re.search(r"MiB Mem :\s+([\d.]+) total", top)
-    busybox = re.search(r"Mem: (\d+)K used, (\d+)K free", top)
-    if not procps and not busybox:
-        out.append("top shows no memory")
-    if procps and procps.group(1) != f"{hw.mem_kb / 1024:.1f}":
-        out.append(f"top MiB Mem {procps.group(1)} is not {hw.mem_kb / 1024:.1f}")
-    if busybox and int(busybox.group(1)) + int(busybox.group(2)) != hw.mem_kb:
-        out.append(f"top Mem used + free is not {hw.mem_kb}K")
 
     flags = re.findall(r"^flags\s*: (.*)$", cpuinfo, re.M)
     if any("hypervisor" in line.split() for line in flags) and hw.provider not in VM_PROVIDERS:
@@ -187,6 +252,18 @@ def _check_processes(persona, ident, path, out):
         out.append(f"PID of {processes[0]['COMMAND']!r} is {pids[0]}, not 1")
     if len(set(pids)) != len(pids):
         out.append("PID used twice in ps")
+
+
+def _check_clock(persona, ident, out):
+    """Installed before the boot, booted before now; a fresh draw boots one day
+    to max_uptime ago, a restored identity (COWRIE_PERSONA_ROTATION) keeps its
+    boot, so its uptime may have grown beyond that."""
+    if ident.booted_at > ident.now:
+        out.append("uptime: booted after now")
+    if ident.installed_at > ident.booted_at:
+        out.append("uptime: installed after the boot")
+    if is_fresh(ident) and not DAY <= ident.boot_offset <= max_uptime(persona):
+        out.append(f"uptime: {ident.boot_offset // DAY} days, a fresh draw has 1 to {max_uptime(persona) // DAY}")
 
 
 def _start_between(start, low, now):
@@ -230,7 +307,8 @@ def _iso_ts(match):
 def _log_events(ident, honeyfs):
     """(path, time, text) of every dated entry of the logs under var/log: apt
     history blocks (by End-Date), dnf.log lines and yum.log lines (the year
-    from the rotation name yum.log-<year>0101, else that of now)."""
+    from the rotation name yum.log-<year>0101, else that of the draw: the
+    history of a kept identity ends there)."""
     events = []
     for path in sorted((honeyfs / "var/log").rglob("*")):
         if not path.is_file():
@@ -238,7 +316,7 @@ def _log_events(ident, honeyfs):
         rel, text = str(path.relative_to(honeyfs)), _text(path)
         if path.name.startswith("yum.log"):
             rotated = re.search(r"-(\d{4})0101$", path.name)
-            year = int(rotated.group(1)) - 1 if rotated else time.gmtime(ident.now).tm_year
+            year = int(rotated.group(1)) - 1 if rotated else time.gmtime(drawn_at(ident)).tm_year
             for mon, day, hh, mm, ss, verb, name in _YUM_LINE.findall(text):
                 stamp = calendar.timegm(time.strptime(f"{year} {mon} {day} {hh}:{mm}:{ss}", "%Y %b %d %H:%M:%S"))
                 events.append((rel, stamp, f"{verb}: {name}"))
@@ -332,7 +410,7 @@ def _check_device_boot(honeyfs, txtcmds, out):
     it: the file system type of "VFS: Mounted root" on /dev/root or the root= device
     (/, /rom under an overlay or a mount point of the vendor), an mtdblock root on
     MTD major 31 and its minor; an initramfs (no VFS line) has no root= and a tmpfs
-    or rootfs on /. Every file system of df is mounted."""
+    or rootfs on /."""
     if _text(honeyfs / "etc/fstab"):
         return
     dmesg = _text(txtcmds / "bin/dmesg")
@@ -356,11 +434,60 @@ def _check_device_boot(honeyfs, txtcmds, out):
         mtd = re.fullmatch(r"/dev/mtdblock(\d+)", root or "")
         if mtd and (major, minor) != (31, int(mtd.group(1))):
             out.append(f"boot: root={root}, but dmesg mounted device {major}:{minor}")
-    mounted = {(dev, mp) for dev, mp, _ in mounts}
-    for line in _text(txtcmds / "bin/df").splitlines()[1:]:
-        fields = line.split()
-        if len(fields) >= 6 and (fields[0], fields[-1]) not in mounted:
-            out.append(f"df: {fields[0]} on {fields[-1]} is not in mount")
+
+
+def _top_style(cfg):
+    return cfg.get("shell", "top_style", fallback="procps")
+
+
+def _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out):
+    """df is the patched command over the persona's file system table (df.json, [shell]
+    df_table): no txtcmd answers it, the table is the persona's, and every file system of it is
+    in mount and /proc/mounts with its type; sizes fit (used and available within the size, the
+    root of a server on the disk of its hardware) and awk is the persona's."""
+    if cfg.get("shell", "df_table", fallback=None) != f"{runtime_dir}/{DF_TABLE}":
+        out.append(f"df: cfg df_table is not {runtime_dir}/{DF_TABLE}")
+    for key, value in system.awk_keys(persona, ident).items():
+        if cfg.get("shell", key, fallback=None) != value:
+            out.append(f"awk: cfg {key}: {cfg.get('shell', key, fallback=None)!r}, expected {value!r}")
+    for directory in PATH_DIRS:
+        if (txtcmds / directory / "df").is_file():
+            out.append(f"df: a txtcmd /{directory}/df answers df, the table does not")
+    try:
+        found = json.loads(_text(out_dir / DF_TABLE))
+    except ValueError:
+        found = None
+    rows = found.get("filesystems") if isinstance(found, dict) else None
+    # the table of the persona's mount data (the file systems its builder mounts), not of its own rows;
+    # an identity the builder cannot take (the uptime checks name it) keeps the check of the rows
+    try:
+        mounted_rows = persona.builder(persona, ident).filesystems
+    except ValueError:
+        mounted_rows = rows
+    expected = system.df_table(persona, ident, mounted_rows)
+    if not isinstance(rows, list) or found != json.loads(json.dumps(expected)):
+        out.append("df: df.json is not the persona's")
+        rows = rows if isinstance(rows, list) else []
+    # df is a program of the coreutils or the BusyBox that wc, sort and seq are
+    if (found or {}).get("style") != system.text_keys(persona, ident)["text_style"]:
+        out.append(f"df: the {(found or {}).get('style')} df differs from the {system.text_keys(persona, ident)['text_style']} "
+                   "wc, sort and seq")
+    mounted = {(dev, mp, fs) for dev, mp, fs in _MOUNT.findall(_text(txtcmds / "bin/mount"))}
+    proc = {tuple(line.split()[:3]) for line in _text(honeyfs / "proc/mounts").splitlines() if line.strip()}
+    for row in rows:
+        key = (row.get("source"), row.get("target"), row.get("fstype"))
+        if key not in mounted:
+            out.append(f"df: {key[0]} on {key[1]} ({key[2]}) is not in mount")
+        if key not in proc:
+            out.append(f"df: {key[0]} on {key[1]} ({key[2]}) is not in /proc/mounts")
+        size, used, avail = row.get("size", 0), row.get("used", 0), row.get("avail", 0)
+        if not (0 <= used <= size and 0 <= avail <= size - used):
+            out.append(f"df: {key[1]} uses {used} and leaves {avail} of {size} KiB")
+        if not 0 <= row.get("iused", 0) <= row.get("inodes", 0):
+            out.append(f"df: {key[1]} uses {row.get('iused')} of {row.get('inodes')} inodes")
+    roots = [row for row in rows if row.get("target") == "/" and row.get("size")]
+    if persona.kind == "server" and [row["size"] for row in roots] != [ident.hardware.disk_kb]:
+        out.append(f"df: the root of the server is not one disk of {ident.hardware.disk_kb} KiB")
 
 
 def _check_dates(ident, honeyfs, out):
@@ -400,7 +527,8 @@ def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out):
     markers = FORBIDDEN_MARKERS + (UBUNTU_MARKERS if persona.os_id != "ubuntu" else ())
     markers = tuple(m.lower().encode() for m in markers)
     paths = [out_dir / "cmdoutput.json", out_dir / "cowrie.cfg", out_dir / BUSYBOX_HELP,
-             out_dir / system.SERVICE_STATUS]
+             out_dir / system.SERVICE_STATUS, out_dir / system.SYSTEMD_UNITS, out_dir / system.SUDO_LIST,
+             out_dir / system.APT_PACKAGES, out_dir / system.PACKAGE_NAMES, out_dir / system.OPKG_HELP_FILE]
     for root in (out_dir / "honeyfs", out_dir / "txtcmds"):
         for path in sorted(root.rglob("*")):
             if any(m in path.name.lower().encode() for m in markers):
@@ -434,6 +562,65 @@ def _skipped(cfg):
     return {e.strip() for e in cfg.get("shell", "skip_python_commands", fallback="").split(",") if e.strip()}
 
 
+def _check_network(persona, ident, cfg, out_dir, runtime_dir, fs, out):
+    """ip, ss, ifconfig and netstat read the persona's network ([shell] network): every program
+    the network names answers and is on PATH, the others do neither; the interfaces have one MAC and
+    one address each, the sockets belong to processes of ps, the AWS address is the host name's and
+    QNAP's MAC ends in the host name."""
+    if cfg.get("shell", "network", fallback=None) != f"{runtime_dir}/{network.NETWORK_FILE}":
+        out.append(f"network: cfg network is not {runtime_dir}/{network.NETWORK_FILE}")
+    try:
+        data = json.loads(_text(out_dir / network.NETWORK_FILE))
+        processes = json.loads(_text(out_dir / "cmdoutput.json"))["command"]["ps"]
+    except (ValueError, KeyError, TypeError):
+        out.append(f"network: {network.NETWORK_FILE} is no network")
+        return
+    tools = data.get("tools", {})
+    for name in network.NET_TOOLS:
+        if _answered(cfg, name) != (name in tools):
+            out.append(f"network: {name} {'answers' if _answered(cfg, name) else 'does not answer'}, the network "
+                       f"{'names' if name in tools else 'does not name'} it")
+        if _answered(cfg, name) != _on_path(fs, name):
+            out.append(f"network: {name} {'answers' if _answered(cfg, name) else 'does not answer'}, it is "
+                       f"{'' if _on_path(fs, name) else 'not '}on PATH")
+    macs = [i["mac"] for i in data.get("interfaces", [])]
+    if len(set(macs)) != len(macs):
+        out.append("network: two interfaces have one MAC")
+    for iface in data.get("interfaces", []):
+        if int(iface["mac"].split(":")[0], 16) & 1:
+            out.append(f"network: the MAC of {iface['name']} is a multicast address")
+        if iface.get("inet6") and iface["inet6"] != network.link_local(iface["mac"]):
+            out.append(f"network: the link-local address of {iface['name']} is not that of its MAC")
+    pids = {p["PID"] for p in processes}
+    for sock in data.get("sockets", []):
+        if sock["pid"] not in pids:
+            out.append(f"network: the socket {sock['proto']} {sock['port']} belongs to no process of ps")
+    main = data["interfaces"][0]
+    if ident.hardware.provider == "aws" and main["inet"] != ident.hostname[3:].replace("-", "."):
+        out.append(f"network: {main['inet']} is not the address of the host name {ident.hostname}")
+    if persona.family == "qnap" and main["mac"].replace(":", "")[-6:] != ident.hostname[3:].lower():
+        out.append(f"network: the MAC {main['mac']} does not end in the host name {ident.hostname}")
+
+
+def _check_text_tools(persona, ident, cfg, fs, txtcmds, out):
+    """wc, sort and seq are the patched commands of the persona's coreutils or BusyBox ([shell]
+    text_*): they answer exactly where they are programs on PATH, no txtcmd answers them."""
+    for key, value in system.text_keys(persona, ident).items():
+        if cfg.get("shell", key, fallback=None) != value:
+            out.append(f"text tools: cfg {key}: {cfg.get('shell', key, fallback=None)!r}, expected {value!r}")
+    present = system.text_programs(persona, ident)
+    for name in system.TEXT_TOOLS:
+        if _answered(cfg, name) != _on_path(fs, name):
+            out.append(f"text tools: {name} {'answers' if _answered(cfg, name) else 'does not answer'}, "
+                       f"it is {'' if _on_path(fs, name) else 'not '}on PATH")
+        if _answered(cfg, name) != (name in present):
+            out.append(f"text tools: {name} {'answers' if _answered(cfg, name) else 'does not answer'}, the "
+                       f"system {'has' if name in present else 'has no'} {name}")
+        for directory in PATH_DIRS:
+            if (txtcmds / directory / name).is_file():
+                out.append(f"text tools: a txtcmd /{directory}/{name} answers {name}")
+
+
 def _answered(cfg, name):
     """Cowrie's Python answers the command (it is not in skip_python_commands)."""
     skipped = _skipped(cfg)
@@ -448,7 +635,9 @@ def _check_package_managers(persona, cfg, fs, honeyfs, txtcmds, out):
     commands = {}
     for rel in PACKAGE_MANAGER_PATHS:
         real = tree.real_path(fs, rel) or rel
-        python = Path(rel).name in PYTHON_PACKAGE_MANAGERS and _answered(cfg, Path(rel).name)
+        name = Path(rel).name
+        python = (name in PYTHON_PACKAGE_MANAGERS and _answered(cfg, name)
+                  and PYTHON_PACKAGE_MANAGER_AT.get(name, rel) == rel)
         commands[real] = commands.get(real, False) or (txtcmds / rel).is_file() or python
     for rel in PACKAGE_MANAGER_PATHS:
         command = commands[tree.real_path(fs, rel) or rel]
@@ -461,6 +650,10 @@ def _check_package_managers(persona, cfg, fs, honeyfs, txtcmds, out):
             names.add(Path(rel).name)
     if names != set(persona.package_managers):
         out.append(f"package manager set {sorted(names)} is not {sorted(persona.package_managers)}")
+
+
+def _is_file(node):
+    return node is not None and tree.node_get(node, tree.A_TYPE) == tree.T_FILE
 
 
 def _is_program(node):
@@ -508,7 +701,8 @@ def _check_busybox(ident, cfg, out_dir, runtime_dir, fs, out):
 
 
 # the commands of Cowrie's Python whose program differs per system (which and the command agree)
-COMMANDS = ("perl", "git", "python", "python3", "sudo", "service", "apt", "apt-get", "yum")
+COMMANDS = ("perl", "git", "python", "python3", "sudo", "service", "systemctl", "apt", "apt-get", "yum",
+            "dnf", "rpm")
 
 
 def _matches(fs, rel):
@@ -523,43 +717,198 @@ def _matches(fs, rel):
 
 def _on_path(fs, name):
     for directory in PATH_DIRS:
-        node = tree.find_node(fs, f"{directory}/{name}")
+        path = f"{directory}/{name}"
+        node = tree.find_node(fs, path)
         for _ in range(5):
             if node is None or tree.node_get(node, tree.A_TYPE) != tree.T_LINK:
                 break
-            node = tree.find_node(fs, tree.node_get(node, tree.A_TARGET) or "")
+            path = tree.target_path(fs, path)
+            node = tree.find_node(fs, path) if path is not None else None
         if _is_program(node):
             return True
     return False
 
 
+def _check_links(fs, out):
+    """Every link of the tree names a node (the links of its directories followed) and has the length
+    of its target as its size: ls -l and cd find what a link points to."""
+    dangling, sized = [], []
+    for path, node in tree.iter_nodes(fs):
+        if tree.node_get(node, tree.A_TYPE) != tree.T_LINK:
+            continue
+        target = tree.node_get(node, tree.A_TARGET) or ""
+        resolved = tree.target_path(fs, path) if target else None
+        if resolved is None or tree.find_node(fs, resolved) is None:
+            dangling.append(f"{path} -> {target}")
+        # ls -l shows the length of the target as the size of a link
+        if tree.node_get(node, tree.A_SIZE) != len(target):
+            sized.append(f"{path} -> {target} ({tree.node_get(node, tree.A_SIZE)})")
+    if dangling:
+        out.append(f"link: {len(dangling)} links name nothing: {', '.join(dangling[:4])}")
+    if sized:
+        out.append(f"link: {len(sized)} links show a size other than the length of their target: "
+                   f"{', '.join(sized[:4])}")
+
+
+_LSB_LEVELS = re.compile(r"^# Default-(Start|Stop):[ \t]*(.*)$", re.M)
+_CHKCONFIG = re.compile(r"^# chkconfig:[ \t]+(-|\d+)[ \t]", re.M)
+_RC_LINK = re.compile(r"([SK])\d\d(.+)")
+
+
+def _run_levels(name, text):
+    """(start levels, stop levels) of an init script: chkconfig's line (Red Hat), the LSB header,
+    else those of Cowrie's own scripts; None if it names none."""
+    text = text.decode("utf-8", "replace") if isinstance(text, bytes) else ""
+    match = _CHKCONFIG.search(text)
+    if match:
+        start = "" if match.group(1) == "-" else match.group(1)
+        return set(start), set("0123456") - set(start)
+    header = dict(_LSB_LEVELS.findall(text))
+    if header:
+        return set(header.get("Start", "").split()), set(header.get("Stop", "").split())
+    levels = system.TREE_INIT_LEVELS.get(name)
+    return None if levels is None else (set(levels[0].split()), set(levels[1].split()))
+
+
+def _check_init_links(persona, fs, out):
+    """The run level links of a server are those of its init scripts: S<nn><name> in every level of
+    Default-Start (chkconfig's levels on Red Hat), K<nn><name> in every level of Default-Stop, each
+    naming its script (update-rc.d / chkconfig)."""
+    init = tree.find_dir(fs, "etc/init.d")
+    if persona.kind != "server" or init is None:
+        return
+    expected = {}
+    for node in tree.node_children(init):
+        name = tree.node_get(node, tree.A_NAME)
+        if name in ("README", "functions") or not _is_file(node):
+            continue
+        levels = _run_levels(name, tree.node_get(node, tree.A_CONTENTS))
+        if levels is None:
+            out.append(f"init: /etc/init.d/{name} names no run levels")
+            continue
+        expected.update({(level, sign, name): None for sign, part in zip("SK", levels) for level in part})
+    found = set()
+    for level in "0123456S":
+        directory = tree.find_dir(fs, f"etc/rc{level}.d")
+        for node in tree.node_children(directory) if directory is not None else ():
+            match = _RC_LINK.fullmatch(tree.node_get(node, tree.A_NAME))
+            if match is None:
+                continue
+            link = f"etc/rc{level}.d/{tree.node_get(node, tree.A_NAME)}"
+            sign, name = match.groups()
+            target = tree.target_path(fs, link) if tree.node_get(node, tree.A_TYPE) == tree.T_LINK else None
+            if target is None or target != tree.real_path(fs, f"etc/init.d/{name}"):
+                out.append(f"init: /{link} names {'/' + target if target else 'nothing'}, not /etc/init.d/{name}")
+            elif (level, sign, name) not in expected:
+                out.append(f"init: /{link}, /etc/init.d/{name} does not {'start' if sign == 'S' else 'stop'} "
+                           f"in run level {level}")
+            found.add((level, sign, name))
+    for level, sign, name in sorted(set(expected) - found):
+        out.append(f"init: /etc/init.d/{name} {'starts' if sign == 'S' else 'stops'} in run level {level}, "
+                   f"/etc/rc{level}.d has no {sign} link to it")
+
+
+_DNF_LOG_LINE = re.compile(r"SUBDEBUG (Installed|Upgrade): (\S+)$", re.M)
+
+
+def _upstream(evr):
+    return evr.split(":", 1)[-1].split("-", 1)[0]
+
+
+def _check_dnf(persona, ident, out_dir, fs, out):
+    """dnf / rpm of RHEL 9 (dnf-packages.json) and the system agree: a program on PATH is from an installed
+    package, a tool runs exactly where its package is installed, the packages of the persona have the
+    versions the system shows (uname, ssh -V, sudo -V, perl, python3, systemctl, cloud-init's sudoers rule),
+    dnf.log installed what is installed, redhat.repo has the repositories dnf lists."""
+    try:
+        data = json.loads(_text(out_dir / system.DNF_PACKAGES))
+        installed, available = data["installed"], data["available"]
+    except (ValueError, KeyError, TypeError):
+        out.append(f"dnf: {system.DNF_PACKAGES} is no package list")
+        return
+    for program, package in sorted(system.RPM_PROGRAMS.items()):
+        if _on_path(fs, program) and package not in installed:
+            out.append(f"dnf: {program} is on PATH, rpm does not have {package} installed")
+        elif package in installed and not _on_path(fs, program):
+            out.append(f"dnf: {package} is installed, its program {program} is not on PATH")
+    tools = system.installed_tools(persona, ident)
+    for tool, package in sorted(system.RPM_TOOLS.items()):
+        if (tool in tools) != (package in installed):
+            out.append(f"dnf: {tool} is {'' if tool in tools else 'not '}installed, rpm has "
+                       f"{'' if package in installed else 'no '}{package}")
+    for name, entry in sorted(available.items()):
+        for path in entry.get("programs", []):
+            if tree.find_node(fs, path.lstrip("/")) is not None:
+                out.append(f"dnf: {path} is in fs.pickle, rpm does not have {name} installed")
+    for name in sorted(set(installed) & set(available)):
+        out.append(f"dnf: {name} is installed and available")
+    for name, entry in sorted(available.items()):
+        for dep in entry.get("requires", []):
+            if dep not in available and dep not in installed:
+                out.append(f"dnf: {name} requires {dep}, which dnf does not know")
+    r = ident.release
+    found = system.tools(persona, ident)
+    expected = {"kernel": r.kernel_version.rsplit(".", 1)[0], "openssh-server": r.packages["openssh-server"],
+                "sudo": system.sudo_version(persona, ident), "python3": found["python"],
+                "perl-interpreter": found["perl"][0], "dnf": r.packages["dnf"], "rpm": r.packages["rpm"],
+                "systemd": str(servers.systemd_version(persona, ident)[0]),
+                "openssl": r.ssh_version.split("OpenSSL ", 1)[-1].split()[0],
+                "cloud-init": system.cloud_init_version(persona, ident)[0],
+                "redhat-release": r.os_version_id}
+    for name, version in expected.items():
+        evr = installed.get(name, {}).get("evr", "")
+        shown = evr.split(":", 1)[-1] if name in ("kernel", "openssh-server", "cloud-init") else _upstream(evr)
+        if shown != version:
+            out.append(f"dnf: {name} is {evr or 'not installed'}, the system shows {version}")
+    if (data.get("version"), data.get("rpm_version")) != (r.packages["dnf"], r.packages["rpm"]):
+        out.append("dnf: the versions of dnf and rpm are not the persona's")
+    for kind, nevra in _DNF_LOG_LINE.findall(_text(out_dir / "honeyfs/var/log/dnf.log")):
+        if not any(nevra == f"{name}-{entry['evr']}.{entry['arch']}" for name, entry in installed.items()):
+            out.append(f"dnf: dnf.log names {kind} {nevra}, rpm does not have it installed")
+    text = _text(out_dir / "honeyfs/etc/yum.repos.d/redhat.repo")
+    enabled = re.findall(r"^\[([^\]]+)\]\n(?:[^\[]*?\n)?enabled = 1$", text, re.M)
+    if sorted(enabled) != sorted(repo["id"] for repo in data.get("repos", []) if repo.get("enabled")):
+        out.append(f"dnf: redhat.repo enables {sorted(enabled)}, dnf lists others")
+    owners = data.get("owners", {})
+    for path, package in sorted(owners.items()):
+        if package not in installed:
+            out.append(f"dnf: rpm names {package} the owner of {path}, rpm does not have it installed")
+    # every program on PATH is from a package rpm names
+    for directory in ("usr/bin", "usr/sbin"):
+        for node in tree.node_children(tree.find_dir(fs, directory) or []):
+            name = tree.node_get(node, tree.A_NAME)
+            if (tree.node_get(node, tree.A_TYPE) == tree.T_LINK or _is_program(node)) \
+                    and f"/{directory}/{name}" not in owners:
+                out.append(f"dnf: /{directory}/{name} is on PATH, rpm names no owner of it")
+
+
 def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
     """Cowrie's Debian 12 x86_64 container tree is the persona's system (tpot_personas.system):
-    no foreign paths, no x86_64 names on another architecture, /proc/modules of the persona
-    (none on a device), the commands of Cowrie's Python (interpreters, sudo, service, apt / yum)
-    on PATH exactly where Cowrie or a txtcmd answers them, with their versions."""
+    no foreign paths, no x86_64 names on another architecture and no names of Debian's own
+    packages without dpkg, /proc/modules of the persona, the commands of Cowrie's Python
+    (interpreters, sudo, service, apt / yum) on PATH exactly where Cowrie or a txtcmd answers
+    them, with their versions."""
     honeyfs, txtcmds = out_dir / "honeyfs", out_dir / "txtcmds"
-    found = [hit for rel in system.CONTAINER_PATHS + system.foreign_paths(persona) for hit in _matches(fs, rel)]
+    own = {"/" + rel for rel, _ in system.links(persona)}
+    found = [hit for rel in system.CONTAINER_PATHS + system.foreign_paths(persona) for hit in _matches(fs, rel)
+             if "/" + hit not in own]
     if found:
         out.append(f"foreign: {', '.join('/' + rel for rel in found[:6])} on {persona.id}")
-    if persona.hardware_platform != "x86_64":
-        x86 = [path for path, node in tree.iter_nodes(fs)
-               if any(isinstance(v, str) and ("x86_64" in v or "x86-64" in v)
-                      for v in (tree.node_get(node, tree.A_NAME), tree.node_get(node, tree.A_TARGET)))]
-        if x86:
-            out.append(f"foreign: x86_64 names on {persona.hardware_platform}: {', '.join(x86[:4])}")
+    for word in system.foreign_words(persona):
+        named = [path for path, node in tree.iter_nodes(fs) if path not in own
+                 and any(isinstance(v, str) and word in v
+                         for v in (tree.node_get(node, tree.A_NAME), tree.node_get(node, tree.A_TARGET)))]
+        if named:
+            out.append(f"foreign: {word} names on {persona.id}: {', '.join(named[:4])}")
     triplet = system.triplet(persona)
     if triplet and tree.find_dir(fs, f"usr/lib/{triplet}") is None:
         out.append(f"foreign: no multiarch directory /usr/lib/{triplet}")
     node = tree.find_node(fs, system.PROC_MODULES)
     modules = _text(honeyfs / system.PROC_MODULES)
-    if persona.kind == "device":
-        if node is not None:
-            out.append("modules: /proc/modules of Cowrie's tree on a device")
-    elif not modules or tree.node_get(node or [], tree.A_CONTENTS) != modules.encode():
+    if not modules or tree.node_get(node or [], tree.A_CONTENTS) != modules.encode() \
+            or modules != system.proc_modules(persona, ident):
         out.append("modules: /proc/modules is not the persona's")
-    else:
-        out += system.modules_problems(modules)
+    out += system.modules_problems(modules, system.address_width(persona))
     for name in COMMANDS:
         answered = _answered(cfg, name)
         txtcmd = any((txtcmds / d / name).is_file() for d in PATH_DIRS)
@@ -578,6 +927,74 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
             out.append(f"cfg {key}: {cfg.get('shell', key, fallback=None)!r}, expected {value!r}")
     if persona.kind == "server" and _text(out_dir / system.SERVICE_STATUS) != system.service_status(persona):
         out.append("service: service-status.txt is not the persona's")
+    if persona.kind == "server":
+        try:
+            processes = json.loads(_text(out_dir / "cmdoutput.json"))["command"]["ps"]
+            expected = runtime_json(persona, ident, processes)
+        except (ValueError, KeyError, TypeError):
+            expected = {}
+        for name, data in expected.items():
+            try:
+                found = json.loads(_text(out_dir / name))
+            except ValueError:
+                found = None
+            if found != json.loads(json.dumps(data)):
+                out.append(f"runtime: {name} is not the persona's")
+        for rel, text in system.sudoers_files(persona, ident).items():
+            node = tree.find_node(fs, rel)
+            if _text(honeyfs / rel) != text or node is None or tree.node_get(node, tree.A_CONTENTS) != text.encode() \
+                    or (tree.node_get(node, tree.A_MODE) or 0) & 0o7777 != 0o440:
+                out.append(f"sudoers: /{rel} is not the persona's")
+        if system.has_dpkg(persona):
+            try:
+                installed = json.loads(_text(out_dir / system.APT_PACKAGES)).get("installed", {})
+            except (ValueError, AttributeError):
+                installed = {}
+            for package, program in sorted(system.PACKAGE_PROGRAMS.items()):
+                if _on_path(fs, program) and package not in installed:
+                    out.append(f"apt: {program} is on PATH, apt does not have it installed")
+                elif package in installed and not _on_path(fs, program):
+                    out.append(f"apt: {package} is installed, its program {program} is not on PATH")
+        if persona.family == "rhel":
+            _check_dnf(persona, ident, out_dir, fs, out)
+        tools = system.installed_tools(persona, ident)
+        for tool, programs in sorted(system.TOOL_PROGRAMS.items()):
+            for name in programs:
+                answers = (name in system.COWRIE_TOOL_NAMES and _answered(cfg, name)) or _on_path(fs, name)
+                if answers and system.has_dpkg(persona) and tool not in installed:
+                    out.append(f"tools: {name} of {tool} answers, apt does not have {tool} installed")
+                elif answers != (tool in tools):
+                    out.append(f"tools: {name} of {tool} {'answers' if answers else 'does not answer'}, "
+                               f"{tool} is {'' if tool in tools else 'not '}installed")
+                if name in system.COWRIE_TOOL_NAMES and _answered(cfg, name) != _on_path(fs, name):
+                    out.append(f"which: {name} is {'not ' if _answered(cfg, name) else ''}on PATH, "
+                               f"{'Cowrie answers it' if _answered(cfg, name) else 'nothing answers it'}")
+        units = {u["name"]: u for u in expected.get(system.SYSTEMD_UNITS, {}).get("units", [])}
+        for name, unit in sorted(units.items()):
+            node = tree.find_node(fs, unit["path"])
+            if node is None:
+                out.append(f"systemctl: {unit['path']} of {name} is not in fs.pickle")
+                continue
+            text = tree.node_get(node, tree.A_CONTENTS)
+            if unit["path"].startswith("/etc/"):
+                continue
+            if not isinstance(text, bytes):
+                out.append(f"systemctl: {unit['path']} of {name} has no text, systemctl cat prints nothing of it")
+                continue
+            for line in text.decode("utf-8", "replace").splitlines():
+                program = system.exec_program(line) if line.startswith("ExecStart=") else ""
+                node = system.program_node(fs, program) if program else None
+                if program and node is None:
+                    out.append(f"systemctl: ExecStart of {name} names {program}, which is not in fs.pickle")
+                elif program in servers.SCRIPT_PROGRAMS and not isinstance(tree.node_get(node, tree.A_CONTENTS), bytes):
+                    out.append(f"systemctl: {program} of {name} is a script, fs.pickle has no text of it")
+        for line in _text(out_dir / system.SERVICE_STATUS).splitlines():
+            if line.startswith(" [ ") and not _is_file(tree.find_node(fs, f"etc/init.d/{line.split()[-1]}")):
+                out.append(f"service: --status-all names {line.split()[-1]}, /etc/init.d/{line.split()[-1]} is missing")
+            script = line.split()[-1] if line.startswith(" [ + ]") else None
+            if script and not any(name.startswith(script + ".") or name in system.INIT_UNITS.get(script, ())
+                                  for name in units):
+                out.append(f"service: {script} runs, systemctl has no unit of it")
 
 
 def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICKLE_SIZE):
@@ -624,6 +1041,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     built = kernel_time(r)
     if built is not None and built > ident.booted_at:
         out.append(f"kernel: built {time.strftime('%Y-%m-%d', time.gmtime(built))}, after the boot")
+    _check_clock(persona, ident, out)
 
     patterns = host_patterns(persona, ident.hardware)
     if not any(re.fullmatch(hostname_regex(p, ident.hardware), ident.hostname) for p in patterns):
@@ -634,9 +1052,13 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         out.append(f"hostname: etc/hosts does not name {ident.hostname}")
 
     _check_hardware(persona, ident, honeyfs, txtcmds, out)
+    _check_top(persona, cfg, txtcmds, out)
     _check_boot(honeyfs, txtcmds, out)
     if persona.kind == "device":
         _check_device_boot(honeyfs, txtcmds, out)
+    _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out)
+    _check_text_tools(persona, ident, cfg, fs, txtcmds, out)
+    _check_network(persona, ident, cfg, out_dir, runtime_dir, fs, out)
 
     os_release = _text(honeyfs / "etc/os-release")
     fields = dict(line.split("=", 1) for line in os_release.splitlines() if "=" in line)
@@ -656,6 +1078,8 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         _check_package_managers(persona, cfg, fs, honeyfs, txtcmds, out)
         _check_programs(fs, txtcmds, out)
         _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out)
+        _check_links(fs, out)
+        _check_init_links(persona, fs, out)
     return out
 
 

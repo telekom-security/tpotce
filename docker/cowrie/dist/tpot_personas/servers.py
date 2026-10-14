@@ -1,27 +1,68 @@
 """Server personas (bash, systemd): package managers, command inventory,
 processes, package logs and one builder per family."""
 import calendar
+import hashlib
 import time
 
 from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_group, el_home_files, el_hosts,
-                     el_passwd, el_shadow, gm, lscpu, pi_partuuid, ps_entry, rng_for, root_uuid, server_df,
-                     server_group, server_mount, server_passwd, server_shadow, server_top, shadow_ctime)
-from .identity import log_window
+                     el_passwd, el_shadow, gm, lscpu, mount_text, pi_partuuid, proc_mounts_text, ps_entry, rng_for,
+                     root_uuid, server_filesystems, server_group, server_passwd, server_shadow, shadow_ctime)
+from .identity import drawn_at, log_window, updated_at
+from . import system
 from .system import proc_modules
 from .model import Content
 
 # Package names of the tools themselves: versions for --version output, not for the logs.
 TOOL_PACKAGES = frozenset({"apt", "dpkg", "dnf", "rpm", "yum"})
 
-_DNF_HELP = """dnf {version}
-usage: dnf [options] COMMAND
+# /usr/bin/dnf-3 of dnf 4 (unverified: the script of dnf 4.14, its licence header shortened)
+DNF_SCRIPT = """#!/usr/bin/python3
+# The dnf executable script.
+#
+# Copyright (C) 2012-2016 Red Hat, Inc.
+#
+# This copyrighted material is made available to anyone wishing to use,
+# modify, copy, or redistribute it subject to the terms and conditions of
+# the GNU General Public License v.2, or (at your option) any later version.
+#
 
-List of Main Commands:
-install                 install a package or packages on your system
-remove                  remove a package or packages from your system
-upgrade                 upgrade a package or packages on your system
-repolist                display the configured software repositories
-module                  interact with modular content
+import sys
+
+
+def suppress_keyboard_interrupt_message():
+    \"\"\"Prevent unsightly KeyboardInterrupt tracebacks.
+
+    Nothing will be printed to the terminal after an uncaught
+    :class:`exceptions.KeyboardInterrupt`.
+
+    \"\"\"
+    old_excepthook = sys.excepthook
+
+    def new_hook(type, value, traceback):
+        if type != KeyboardInterrupt:
+            old_excepthook(type, value, traceback)
+        else:
+            pass
+
+    sys.excepthook = new_hook
+
+
+# do this ASAP to prevent tracebacks after ^C during imports
+suppress_keyboard_interrupt_message()
+
+if __name__ != "__main__":
+    sys.stderr.write('The executable DNF module must not be imported.')
+    sys.exit(1)
+
+here = sys.path[0]
+if here != '/usr/bin':
+    # git checkout
+    import os
+    dnf_toplevel = os.path.dirname(here)
+    sys.path[0] = dnf_toplevel
+
+from dnf.cli import main
+main.user_main(sys.argv[1:], exit_code=True)
 """
 
 _LSPCI_KVM = ("00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)\n"
@@ -73,17 +114,14 @@ GPU_BUSES = ("07", "0f", "47", "4e", "87", "90", "b7", "bd")
 
 
 def package_manager_txtcmds(persona, ident):
-    """The package managers Cowrie does not emulate: dpkg, rpm and RHEL 9's dnf (its yum is
-    dnf 4). apt / apt-get of Debian and yum 3 of CentOS 7 are Cowrie's (system.python_answers)."""
+    """The package managers Cowrie does not emulate: dpkg and the rpm of CentOS 7. apt / apt-get
+    of Debian, yum 3 of CentOS 7 and dnf 4 / rpm of RHEL 9 are Cowrie's (system.python_answers)."""
     p = ident.release.packages
     if persona.family in ("ubuntu", "debian", "raspios"):
         arch = deb_arch(persona)
         return {
             "usr/bin/dpkg": f"Debian 'dpkg' package management program version {p['dpkg']} ({arch}).\n",
         }
-    if persona.family == "rhel":
-        dnf = _DNF_HELP.format(version=p["dnf"])
-        return {"usr/bin/dnf": dnf, "usr/bin/yum": dnf, "usr/bin/rpm": f"RPM version {p['rpm']}\n"}
     if persona.family == "centos":
         return {"usr/bin/rpm": f"RPM version {p['rpm']}\n"}
     return {}
@@ -237,6 +275,8 @@ def server_processes(persona, ident, extra=()):
             ps_entry("root", 0, "/sbin/wpa_supplicant -u -s -O DIR=/run/wpa_supplicant GROUP=netdev", mem=0.2, vsz=16752, rss=8576, stat="Ss"),
             ps_entry("root", 0, "/usr/sbin/ModemManager", mem=0.2, vsz=239500, rss=9984, stat="Ssl"),
             ps_entry("root", 0, "/usr/libexec/bluetooth/bluetoothd", mem=0.1, vsz=9616, rss=5504, stat="Ss"),
+            ps_entry("nobody", 0, "/usr/sbin/thd --triggers /etc/triggerhappy/triggers.d/ --socket /run/thd.socket "
+                               "--user nobody --deviceglob /dev/input/event*", mem=0.0, vsz=3316, rss=1536, stat="Ss"),
             ps_entry("root", 0, "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups", mem=0.2, vsz=15492, rss=8448, stat="Ss"),
         ]
     elif family == "ubuntu":
@@ -253,6 +293,7 @@ def server_processes(persona, ident, extra=()):
             ps_entry("root", 0, "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups", mem=0.2, vsz=15492, rss=4980, stat="Ss"),
             ps_entry("root", 0, "/usr/lib/snapd/snapd", mem=1.6, vsz=1986784, rss=31672, stat="Ssl"),
             ps_entry("root", 0, "/usr/bin/python3 /usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal", mem=0.2, vsz=27520, rss=6420, stat="Ssl"),
+            ps_entry("root", 0, "/usr/sbin/irqbalance --foreground", mem=0.1, vsz=82840, rss=3840, stat="Ssl"),
         ]
     else:  # debian
         entries = [
@@ -351,6 +392,76 @@ def dnf_log(persona, ident):
     return ("\n".join(lines) + "\n") if lines else "", _newest(ident, entries)
 
 
+def _rpm_size(name, kb):
+    """Bytes of a package of about kb kB (the same for a name on every render)."""
+    return kb * 1024 - int.from_bytes(hashlib.sha256(name.encode()).digest()[:2], "big") % 1024
+
+
+def dnf_packages(persona, ident):
+    """What dnf 4 and rpm know on RHEL 9 ([shell] dnf_packages): dnf and rpm (with their install and build
+    times for dnf --version), the installed packages (from: @System for those of the image, the repository
+    for those dnf.log installed or upgraded), the packages the repositories have besides and the
+    repositories (system.rhel_repos)."""
+    r = ident.release
+    minor = r.os_version_id
+    repos = system.rhel_repos(ident)
+    repo_id = {repo["id"].split("-")[4]: repo["id"] for repo in repos if repo["enabled"]}
+    kernel = r.kernel_version.rsplit(".", 1)[0]
+    openssh = r.packages["openssh-server"]
+    versions = {"cloud-init": system.cloud_init_version(persona, ident)[0], "dnf": system.RHEL_DNF[minor],
+                "kernel": kernel, "kernel-core": kernel, "openssh": openssh, "openssh-clients": openssh,
+                "openssl": system.RHEL_OPENSSL[minor], "perl-interpreter": system.RHEL_PERL,
+                "python3": system.RHEL_PYTHON_RPM[minor], "rpm": system.RHEL_RPM[minor], "sudo": system.RHEL_SUDO,
+                "systemd": systemd_version(persona, ident)[1], "yum": system.RHEL_DNF[minor],
+                "systemd-udev": systemd_version(persona, ident)[1], "redhat-release": system.RHEL_RELEASE_RPM[minor],
+                **{name: version for name, version in r.packages.items() if name not in TOOL_PACKAGES}}
+    logged = {name for _, names, _, _ in _log_entries(ident, "dnf-log") for name in names}
+    installed = {}
+    for name, (arch, repo, summary, evr) in system.RPM_INSTALLED.items():
+        installed[name] = {"evr": system.rpm_evr(evr, minor), "arch": arch, "repo": repo, "summary": summary}
+    versions["glibc-common"] = system.rpm_evr(system.RPM_INSTALLED["glibc"][3], minor)
+    versions["vim-minimal"] = versions["vim-enhanced"]
+    for name, evr in versions.items():
+        arch, repo, summary = system.RPM_PERSONA[name]
+        installed[name] = {"evr": evr, "arch": arch, "repo": repo, "summary": summary}
+    for name, entry in installed.items():
+        repo = entry.pop("repo")
+        entry["from"] = f"@{repo_id[repo]}" if name in logged else "@System"
+        entry["size"] = _rpm_size(name, 200 + int.from_bytes(hashlib.sha256(name.encode()).digest()[2:4], "big")
+                                  % 4000)
+    available = {}
+    for name, (arch, repo, summary, evr, (size, unpacked), requires) in system.RPM_AVAILABLE.items():
+        evr = system.rpm_evr(evr, minor)
+        if evr.startswith("="):
+            evr = installed[evr[1:]]["evr"]
+        available[name] = {"evr": evr, "arch": arch, "repo": repo_id[repo], "summary": summary,
+                           "download": _rpm_size(name, size), "size": _rpm_size(name + "/", unpacked),
+                           "requires": list(requires),
+                           "programs": ["/" + rel for rel in system.RPM_AVAILABLE_PROGRAMS.get(name, ())]}
+    owners = {}
+    for package, (programs, sbin) in system.RPM_OWNED.items():
+        owners.update({f"/usr/bin/{name}": package for name in programs.split()})
+        owners.update({f"/usr/sbin/{name}": package for name in sbin.split()})
+    for package, files in system.RPM_OWNED_FILES.items():
+        owners.update({"/" + rel: package for rel in files})
+    for tool in system.installed_tools(persona, ident):
+        for rel in system.tool_paths(persona, tool).values():
+            owners["/" + rel] = system.RPM_TOOLS[tool]
+    rng = rng_for(ident, "dnf-version")
+    built = updated_at(r) or ident.installed_at
+
+    def tool(name):
+        return {"nevra": f"{name}-0:{installed[name]['evr']}.{installed[name]['arch']}",
+                "installed": max(ident.installed_at, min(built + rng.randint(28_800, 72_000), ident.booted_at)),
+                "built": built - rng.randint(10, 40) * 86400 - rng.randint(0, 86399)}
+
+    return {"version": r.packages["dnf"], "rpm_version": r.packages["rpm"], "dnf": tool("dnf"), "rpm": tool("rpm"),
+            "packager": system.RHEL_PACKAGER, "repos": repos, "installed": dict(sorted(installed.items())),
+            "available": dict(sorted(available.items())), "provides": dict(system.RPM_PROVIDES),
+            "owners": dict(sorted(owners.items())),
+            "answers": system.session_answers(path for entry in available.values() for path in entry["programs"])}
+
+
 def _yum_name(name, version, arch):
     """yum.log writes the epoch in front: 2:vim-enhanced-7.4.629-8.el7_9.x86_64."""
     epoch, _, plain = version.rpartition(":")
@@ -370,7 +481,7 @@ def yum_logs(persona, ident):
             verb, version = ("Installed", r.packages[n]) if kind == "install" else ("Updated", r.packages[n])
             line = f"{gm(ts + took, '%b %d %H:%M:%S')} {verb}: {_yum_name(n, version, arch)}"
             by_year.setdefault(time.gmtime(ts + took).tm_year, []).append((ts + took, line))
-    this_year = time.gmtime(ident.now).tm_year
+    this_year = time.gmtime(drawn_at(ident)).tm_year
     files, ctimes = {"var/log/yum.log": ""}, {}
     for year, rows in sorted(by_year.items()):
         text = "".join(line + "\n" for _, line in rows)
@@ -381,7 +492,7 @@ def yum_logs(persona, ident):
             # logrotate runs from cron.daily in the first hours of the new year
             rotated = calendar.timegm((year + 1, 1, 1, 0, 0, 0)) + rng.randint(3 * 3600, 4 * 3600)
             files[f"var/log/yum.log-{year + 1}0101"] = text
-            ctimes[f"var/log/yum.log-{year + 1}0101"] = min(rotated, ident.now)
+            ctimes[f"var/log/yum.log-{year + 1}0101"] = min(rotated, drawn_at(ident))
     if "var/log/yum.log" not in ctimes:
         ctimes["var/log/yum.log"] = max(ctimes.values(), default=ident.installed_at)
     return files, ctimes
@@ -447,10 +558,24 @@ def _gecos(user):
     return user.replace("-", " ").title()
 
 
+def efi_partition(persona, ident, root_dev):
+    """The EFI partition of Ubuntu's cloud images (LABEL=UEFI of their fstab, partition 15 of
+    the root disk, 105 MiB of which about 6 are used), else None."""
+    if persona.family != "ubuntu" or ident.hardware.provider not in ("aws", "kvm", "do"):
+        return None
+    disk = "/dev/nvme0n1p" if root_dev == "/dev/root" else root_dev.rstrip("0123456789")
+    return (f"{disk}15", 106858, "/boot/efi", "vfat",
+            "rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro",
+            0.055, 0.06)
+
+
 def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None, home=None, extra_ps=(),
                     boot=None, ctimes=None):
     hw = ident.hardware
     root_dev, root_type, root_options = root_disk(persona, ident)
+    boots = tuple(b for b in (boot, efi_partition(persona, ident, root_dev)) if b)
+    filesystems = server_filesystems(persona, ident, root_dev=root_dev, root_type=root_type,
+                                     root_options=root_options, run_lock=run_lock, boot=boots)
     cmdline, fstab = boot_config(persona, ident)
     processes = server_processes(persona, ident, extra_ps)
     passwd, group, shadow = accounts or (
@@ -460,18 +585,21 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
     all_files = base_files(persona, ident, passwd, group, shadow, home=home)
     all_files["etc/fstab"] = fstab
     all_files["proc/modules"] = proc_modules(persona, ident)
+    all_files.update(system.files(persona))
+    all_files.update(system.init_scripts(persona))
+    sudoers = system.sudoers_files(persona, ident)
+    all_files.update(sudoers)
     all_files.update(files)
-    txtcmds = base_txtcmds(persona, ident, cmdline=cmdline,
-                           df=server_df(ident, root_dev=root_dev, run_lock=run_lock, boot=boot),
-                           mount=server_mount(ident, root_dev=root_dev, run_lock=run_lock, boot=boot,
-                                              root_type=root_type, root_options=root_options),
-                           lscpu_text=lscpu(persona, hw, op_modes="32-bit, 64-bit"),
-                           top=server_top(ident, processes, tasks))
+    all_files["proc/mounts"] = proc_mounts_text(filesystems)
+    txtcmds = base_txtcmds(persona, ident, cmdline=cmdline, mount=mount_text(filesystems),
+                           lscpu_text=lscpu(persona, hw, op_modes="32-bit, 64-bit"))
     txtcmds.update(package_manager_txtcmds(persona, ident))
     txtcmds.update(command_inventory_txtcmds(persona, ident))
     all_ctimes = {"etc/shadow": shadow_ctime(ident)}
+    all_ctimes.update({rel: ident.installed_at for rel in sudoers})
     all_ctimes.update(ctimes or {})
-    return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes=all_ctimes)
+    return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes=all_ctimes, tasks=tasks,
+                   filesystems=filesystems)
 
 
 def _ubuntu_files(persona, ident):
@@ -720,7 +848,8 @@ deb http://deb.debian.org/debian {r.extra['codename']}-updates main contrib non-
         server_group(user, persona.gid, extra=pi_groups + "avahi:x:113:\n"),
         server_shadow(user, ident, extra=("avahi",)),
     )
-    boot = ("/dev/mmcblk0p1", 522232, "/boot/firmware")
+    boot = ("/dev/mmcblk0p1", 522232, "/boot/firmware", "vfat",
+            "rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=ascii,shortname=mixed,errors=remount-ro", 0.12, 0.14)
     return _server_content(persona, ident, files, tasks=172, run_lock=True, accounts=accounts,
                            boot=boot, ctimes=ctimes)
 
@@ -756,6 +885,9 @@ REDHAT_SUPPORT_PRODUCT_VERSION="{r.os_version_id}"
         "etc/issue.net": "\\S\nKernel \\r on an \\m\n",
         "etc/motd": "Activate the web console with: systemctl enable --now cockpit.socket\n\n",
         "var/log/dnf.log": dnf,
+        "usr/bin/dnf-3": DNF_SCRIPT,
+        "etc/yum.repos.d/redhat.repo": system.redhat_repo(ident, rng_for(ident, "entitlement").randrange(
+            10 ** 18, 10 ** 19)),
     }
     accounts = (el_passwd("rhel", persona.user, persona.uid, persona.gid),
                 el_group("rhel", persona.user, persona.gid),
@@ -833,3 +965,353 @@ REDHAT_SUPPORT_PRODUCT_VERSION="7"
     return _server_content(persona, ident, files, tasks=98, accounts=accounts,
                            home=el_home_files("centos", persona.user),
                            ctimes=log_ctimes)
+
+
+# --- systemd ------------------------------------------------------------------------
+# systemd of the releases: (version, package version for --version) and its compile features
+#   (unverified: the package version of each patch level, the feature lists)
+SYSTEMD = {"noble": (255, "255.4-1ubuntu8.10"), "jammy": (249, "249.11-0ubuntu3.16"),
+           "trixie": (257, "257.9-1~deb13u1"), "bookworm": (252, "252.39-1~deb12u1"), "centos": (219, "")}
+RHEL_SYSTEMD = {"9.4": "252-32.el9_4.7", "9.5": "252-46.el9_5.3", "9.6": "252-51.el9_6.1"}
+_FEATURES_DEBIAN = ("+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL "
+                    "+ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT "
+                    "+QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK -XKBCOMMON +UTMP +SYSVINIT "
+                    "default-hierarchy=unified")
+SYSTEMD_FEATURES = {
+    "jammy": ("+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT +GNUTLS +OPENSSL +ACL +BLKID +CURL "
+              "+ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP -LIBFDISK +PCRE2 -PWQUALITY -P11KIT -QRENCODE "
+              "+BZIP2 +LZ4 +XZ +ZLIB +ZSTD -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified"),
+    "rhel": ("+PAM +AUDIT +SELINUX -APPARMOR +IMA +SMACK +SECCOMP +GCRYPT +GNUTLS +OPENSSL +ACL +BLKID +CURL "
+             "+ELFUTILS -FIDO2 +IDN2 -IDN -IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT -QRENCODE "
+             "+TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK +XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified"),
+    "centos": ("+PAM +AUDIT +SELINUX +IMA -APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ "
+               "+LZ4 -SECCOMP +BLKID +ELFUTILS +KMOD +IDN"),
+}
+SSH_LOG = ("Server listening on 0.0.0.0 port 22.", "Server listening on :: port 22.")
+
+# the services of a booted cloud image, as list-units --type=service shows them: (unit, description,
+#   the text of its process in ps (None: a oneshot that has exited), unit file state); unverified: the
+#   exact lists and the descriptions of each systemd version
+_CORE = (
+    ("kmod-static-nodes.service", "Create List of Static Device Nodes", None, "static"),
+    ("systemd-journal-flush.service", "Flush Journal to Persistent Storage", None, "static"),
+    ("systemd-journald.service", "Journal Service", "systemd-journald", "static"),
+    ("systemd-logind.service", "User Login Management", "systemd-logind", "static"),
+    ("systemd-random-seed.service", "Load/Save Random Seed", None, "static"),
+    ("systemd-remount-fs.service", "Remount Root and Kernel File Systems", None, "static"),
+    ("systemd-sysctl.service", "Apply Kernel Variables", None, "static"),
+    ("systemd-tmpfiles-setup-dev.service", "Create Static Device Nodes in /dev", None, "static"),
+    ("systemd-tmpfiles-setup.service", "Create Volatile Files and Directories", None, "static"),
+    ("systemd-udev-trigger.service", "Coldplug All udev Devices", None, "static"),
+    ("systemd-udevd.service", "Rule-based Manager for Device Events and Files", "systemd-udevd", "static"),
+    ("systemd-update-utmp.service", "Record System Boot/Shutdown in UTMP", None, "static"),
+    ("systemd-user-sessions.service", "Permit User Sessions", None, "static"),
+)
+# systemd 219 of CentOS 7 names them as it did then
+_CORE_219 = {"kmod-static-nodes.service": "Create list of required static device nodes for the current kernel",
+             "systemd-logind.service": "Login Service", "systemd-udev-trigger.service": "udev Coldplug all Devices",
+             "systemd-udevd.service": "udev Kernel Device Manager",
+             "systemd-update-utmp.service": "Update UTMP about System Boot/Shutdown"}
+_CLOUD = (("cloud-config.service", "Cloud-init: Config Stage", None, "enabled"),
+          ("cloud-final.service", "Cloud-init: Final Stage", None, "enabled"),
+          ("cloud-init-local.service", "Cloud-init: Local Stage (pre-network)", None, "enabled"),
+          ("cloud-init.service", "Cloud-init: Network Stage", None, "enabled"))
+_CLOUD_EL7 = (("cloud-config.service", "Apply the settings specified in cloud-config", None, "enabled"),
+              ("cloud-final.service", "Execute cloud user/final scripts", None, "enabled"),
+              ("cloud-init-local.service", "Initial cloud-init job (pre-networking)", None, "enabled"),
+              ("cloud-init.service", "Initial cloud-init job (metadata service crawler)", None, "enabled"))
+_CRON = ("cron.service", "Regular background program processing daemon", "/usr/sbin/cron", "enabled")
+_DBUS = ("dbus.service", "D-Bus System Message Bus", "dbus-daemon", "static")
+_SSH = ("ssh.service", "OpenBSD Secure Shell server", "sshd: ", "enabled")
+_NETWORKD = ("systemd-networkd.service", "Network Configuration", "systemd-networkd", "enabled")
+_E2SCRUB = ("e2scrub_reap.service", "Remove Stale Online ext4 Metadata Check Snapshots", None, "enabled")
+_NM = (("NetworkManager-wait-online.service", "Network Manager Wait Online", None, "enabled"),
+       ("NetworkManager.service", "Network Manager", "/usr/sbin/NetworkManager", "enabled"))
+_EL = (("auditd.service", "Security Auditing Service", "/sbin/auditd", "enabled"),
+       ("chronyd.service", "NTP client/server", "/usr/sbin/chronyd", "enabled"),
+       ("crond.service", "Command Scheduler", "/usr/sbin/crond", "enabled"),
+       ("kdump.service", "Crash recovery kernel arming", None, "enabled"),
+       ("rsyslog.service", "System Logging Service", "/usr/sbin/rsyslogd", "enabled")) + _NM
+SERVICE_UNITS = {
+    "ubuntu": _CLOUD + (("apparmor.service", "Load AppArmor profiles", None, "enabled"),
+                        ("apport.service", "LSB: automatic crash report generation", None, "enabled"), _CRON, _DBUS,
+                        ("irqbalance.service", "irqbalance daemon", "/usr/sbin/irqbalance", "enabled"),
+                        ("rsyslog.service", "System Logging Service", "/usr/sbin/rsyslogd", "enabled"),
+                        ("snapd.service", "Snap Daemon", "/usr/lib/snapd/snapd", "enabled"), _SSH, _NETWORKD,
+                        ("systemd-resolved.service", "Network Name Resolution", "systemd-resolved", "enabled"),
+                        ("ufw.service", "Uncomplicated firewall", None, "enabled"),
+                        ("unattended-upgrades.service", "Unattended Upgrades Shutdown", "unattended-upgrade-shutdown",
+                         "enabled")),
+    "debian": _CLOUD + (_CRON, _DBUS, _E2SCRUB, _SSH, _NETWORKD),
+    "raspios": (("avahi-daemon.service", "Avahi mDNS/DNS-SD Stack", "avahi-daemon: running", "enabled"),
+                ("bluetooth.service", "Bluetooth service", "bluetoothd", "enabled"), _CRON, _DBUS,
+                ("dphys-swapfile.service", "dphys-swapfile - set up, mount/unmount, and delete a swap file", None,
+                 "enabled"), _E2SCRUB,
+                ("fake-hwclock.service", "Restore / save the current clock", None, "enabled"),
+                ("ModemManager.service", "Modem Manager", "/usr/sbin/ModemManager", "enabled")) + _NM + (
+                ("rpi-eeprom-update.service", "Check for Raspberry Pi EEPROM updates", None, "enabled"), _SSH,
+                ("triggerhappy.service", "triggerhappy global hotkey daemon", "/usr/sbin/thd", "enabled"),
+                ("wpa_supplicant.service", "WPA supplicant", "/sbin/wpa_supplicant", "enabled")),
+    "rhel": _CLOUD + _EL + (
+        ("dbus-broker.service", "D-Bus System Message Bus", "dbus-broker-launch", "enabled"),
+        ("dracut-shutdown.service", "Restore /run/initramfs on shutdown", None, "static"),
+        ("import-state.service", "Import network configuration from initramfs", None, "enabled"),
+        ("selinux-autorelabel-mark.service", "Mark the need to relabel after reboot", None, "enabled"),
+        ("sshd.service", "OpenSSH server daemon", "sshd: ", "enabled")),
+    "centos": _CLOUD_EL7 + _EL + (
+        _DBUS, ("network.service", "LSB: Bring up/down networking", None, "bad"),
+        ("polkit.service", "Authorization Manager", "polkitd", "static"),
+        ("postfix.service", "Postfix Mail Transport Agent", "postfix/master", "enabled"),
+        ("rhel-dmesg.service", "Dump dmesg to /var/log/dmesg", None, "enabled"),
+        ("rhel-domainname.service", "Read and set NIS domainname from /etc/sysconfig/network", None, "enabled"),
+        ("rhel-import-state.service", "Import network configuration from initramfs", None, "enabled"),
+        ("rhel-readonly.service", "Configure read-only root support", None, "enabled"),
+        ("sshd.service", "OpenSSH server daemon", "/usr/sbin/sshd -D", "enabled"),
+        ("systemd-vconsole-setup.service", "Setup Virtual Console", None, "static")),
+}
+# the sockets of systemd and D-Bus, and ssh.socket on 24.04: (unit, description, the service it starts,
+#   what it listens on)
+SOCKETS = (("dbus.socket", "D-Bus System Message Bus Socket", "dbus.service", ("/run/dbus/system_bus_socket (Stream)",)),
+           ("systemd-journald-dev-log.socket", "Journal Socket (/dev/log)", "systemd-journald.service",
+            ("/run/systemd/journal/dev-log (Datagram)",)),
+           ("systemd-journald.socket", "Journal Socket", "systemd-journald.service",
+            ("/run/systemd/journal/socket (Datagram)", "/run/systemd/journal/stdout (Stream)")),
+           ("systemd-udevd-control.socket", "udev Control Socket", "systemd-udevd.service",
+            ("/run/udev/control (SequentialPacket)",)),
+           ("systemd-udevd-kernel.socket", "udev Kernel Socket", "systemd-udevd.service", ("kobject-uevent 1 (Netlink)",)))
+SSH_SOCKET = ("ssh.socket", "OpenBSD Secure Shell server socket", "ssh.service", ("[::]:22 (Stream)",))
+# the ExecStart= of each unit file of the image ({sd}: systemd's directory); unverified: the command
+#   lines of each release
+UNIT_EXEC = {
+    "kmod-static-nodes.service": "/bin/kmod static-nodes --format=tmpfiles --output=/run/tmpfiles.d/static-nodes.conf",
+    "systemd-journal-flush.service": "journalctl --smart-relinquish-var",
+    "systemd-random-seed.service": "{sd}/systemd-random-seed load",
+    "systemd-remount-fs.service": "{sd}/systemd-remount-fs",
+    "systemd-sysctl.service": "{sd}/systemd-sysctl",
+    "systemd-tmpfiles-setup-dev.service": "systemd-tmpfiles --prefix=/dev --create --boot",
+    "systemd-tmpfiles-setup.service": "systemd-tmpfiles --create --remove --boot --exclude-prefix=/dev",
+    "systemd-udev-trigger.service": "-udevadm trigger --type=all --action=add",
+    "systemd-update-utmp.service": "{sd}/systemd-update-utmp reboot",
+    "systemd-user-sessions.service": "{sd}/systemd-user-sessions start",
+    "systemd-vconsole-setup.service": "{sd}/systemd-vconsole-setup",
+    "systemd-journald.service": "{sd}/systemd-journald",
+    "systemd-logind.service": "{sd}/systemd-logind",
+    "systemd-udevd.service": "{sd}/systemd-udevd",
+    "systemd-networkd.service": "{sd}/systemd-networkd",
+    "systemd-resolved.service": "{sd}/systemd-resolved",
+    "cloud-init-local.service": "/usr/bin/cloud-init init --local",
+    "cloud-init.service": "/usr/bin/cloud-init init",
+    "cloud-config.service": "/usr/bin/cloud-init modules --mode=config",
+    "cloud-final.service": "/usr/bin/cloud-init modules --mode=final",
+    "apparmor.service": "/lib/apparmor/apparmor.systemd reload",
+    "apport.service": "/usr/share/apport/apport --start",
+    "ufw.service": "/lib/ufw/ufw-init start quiet",
+    "e2scrub_reap.service": "/sbin/e2scrub_all -A -r",
+    "dphys-swapfile.service": "/sbin/dphys-swapfile setup",
+    "fake-hwclock.service": "/sbin/fake-hwclock load",
+    "NetworkManager-wait-online.service": "/usr/bin/nm-online -s -q",
+    "rpi-eeprom-update.service": "/usr/bin/rpi-eeprom-update -s -a",
+    "kdump.service": "/usr/bin/kdumpctl start",
+    "dracut-shutdown.service": "/bin/true",
+    "import-state.service": "/usr/libexec/import-state",
+    "selinux-autorelabel-mark.service": "/usr/libexec/selinux/selinux-autorelabel-mark.sh",
+    "rhel-dmesg.service": "/usr/lib/systemd/rhel-dmesg",
+    "rhel-domainname.service": "/usr/lib/systemd/rhel-domainname",
+    "rhel-import-state.service": "/usr/lib/systemd/rhel-import-state",
+    "rhel-readonly.service": "/usr/lib/systemd/rhel-readonly",
+    "cron.service": "/usr/sbin/cron -f $EXTRA_OPTS",
+    "dbus.service": "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation "
+                    "--syslog-only",
+    "rsyslog.service": "/usr/sbin/rsyslogd -n -iNONE",
+    "snapd.service": "/usr/lib/snapd/snapd",
+    "ssh.service": "/usr/sbin/sshd -D $SSHD_OPTS",
+    "unattended-upgrades.service": "/usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal",
+    "irqbalance.service": "/usr/sbin/irqbalance --foreground $IRQBALANCE_ARGS",
+    "avahi-daemon.service": "/usr/sbin/avahi-daemon -s",
+    "bluetooth.service": "/usr/libexec/bluetooth/bluetoothd",
+    "ModemManager.service": "/usr/sbin/ModemManager",
+    "NetworkManager.service": "/usr/sbin/NetworkManager --no-daemon",
+    "wpa_supplicant.service": '/sbin/wpa_supplicant -u -s -O "DIR=/run/wpa_supplicant GROUP=netdev"',
+    "triggerhappy.service": "/usr/sbin/thd --triggers /etc/triggerhappy/triggers.d/ --socket /run/thd.socket "
+                            "--user nobody --deviceglob /dev/input/event*",
+    "auditd.service": "/sbin/auditd",
+    "chronyd.service": "/usr/sbin/chronyd $OPTIONS",
+    "crond.service": "/usr/sbin/crond -n $CRONDARGS",
+    "dbus-broker.service": "/usr/bin/dbus-broker-launch --scope system --audit",
+    "polkit.service": "/usr/lib/polkit-1/polkitd --no-debug",
+    "postfix.service": "/usr/sbin/postfix start",
+    "nvidia-persistenced.service": "/usr/bin/nvidia-persistenced --user nvidia-persistenced --no-persistence-mode "
+                                   "--verbose",
+    "ollama.service": "/usr/local/bin/ollama serve",
+}
+# the Type= of a running unit other than simple (unverified: the units of each release)
+UNIT_TYPE = {"systemd-journald.service": "notify", "systemd-logind.service": "notify", "systemd-udevd.service": "notify",
+             "systemd-networkd.service": "notify", "systemd-resolved.service": "notify", "rsyslog.service": "notify",
+             "snapd.service": "notify", "dbus-broker.service": "notify", "NetworkManager.service": "dbus",
+             "ModemManager.service": "dbus", "avahi-daemon.service": "dbus", "bluetooth.service": "dbus",
+             "wpa_supplicant.service": "dbus", "polkit.service": "dbus", "auditd.service": "forking",
+             "chronyd.service": "forking", "postfix.service": "forking", "nvidia-persistenced.service": "forking",
+             "ssh.service": "notify"}
+# the programs of the units that are scripts on a real system: shortened text (unverified)
+_SH_SCRIPT = "#!/bin/sh\n# {what}\n\nset -e\n\ncase \"$1\" in\n    *)\n        exit 0\n        ;;\nesac\n"
+_PY_SCRIPT = "#!/usr/bin/python3\n# {what}\n\nimport sys\n\nfrom {module} import main\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n"
+SCRIPT_PROGRAMS = {
+    "/usr/share/apport/apport": _PY_SCRIPT.format(what="Collect information about a crash and create a report.",
+                                                  module="apport.cli"),
+    "/usr/share/unattended-upgrades/unattended-upgrade-shutdown": _PY_SCRIPT.format(
+        what="Wait for unattended-upgrades to finish before shutdown.", module="unattended_upgrades.shutdown"),
+    "/usr/bin/cloud-init": "#!/usr/bin/python3\n# -*- coding: utf-8 -*-\nimport re\nimport sys\n"
+                           "from cloudinit.cmd.main import main\nif __name__ == '__main__':\n"
+                           "    sys.argv[0] = re.sub(r'(-script\\.pyw|\\.exe)?$', '', sys.argv[0])\n"
+                           "    sys.exit(main())\n",
+    "/lib/apparmor/apparmor.systemd": _SH_SCRIPT.format(what="Load the AppArmor profiles of the system."),
+    "/lib/ufw/ufw-init": _SH_SCRIPT.format(what="Start, stop and reload the firewall rules of ufw."),
+    "/sbin/dphys-swapfile": _SH_SCRIPT.format(what="Set up, mount/unmount, and delete a swap file."),
+    "/sbin/fake-hwclock": _SH_SCRIPT.format(what="Save or restore the system clock from a file."),
+    "/usr/bin/rpi-eeprom-update": _SH_SCRIPT.format(what="Check and update the bootloader EEPROM of the Raspberry Pi."),
+    "/usr/bin/kdumpctl": _SH_SCRIPT.format(what="Arm the crash kernel of kdump."),
+    "/usr/libexec/import-state": _SH_SCRIPT.format(what="Import the network configuration of the initramfs."),
+    "/sbin/e2scrub_all": _SH_SCRIPT.replace("/bin/sh", "/bin/bash", 1).format(
+        what="Check all mounted ext4 file systems on LVM, remove stale snapshots (-r)."),
+    "/usr/libexec/selinux/selinux-autorelabel-mark.sh": _SH_SCRIPT.format(
+        what="Mark the need to relabel after reboot."),
+    "/usr/lib/systemd/rhel-dmesg": _SH_SCRIPT.format(what="Dump dmesg to /var/log/dmesg."),
+    "/usr/lib/systemd/rhel-domainname": _SH_SCRIPT.format(what="Set the NIS domain name of /etc/sysconfig/network."),
+    "/usr/lib/systemd/rhel-import-state": _SH_SCRIPT.format(what="Import the network configuration of the initramfs."),
+    "/usr/lib/systemd/rhel-readonly": _SH_SCRIPT.format(what="Configure read-only root support."),
+}
+# the ExecStart= of a family where it differs
+UNIT_EXEC_FAMILY = {
+    "ubuntu": {"cron.service": "/usr/sbin/cron -f -P $EXTRA_OPTS"},
+    "centos": {"dbus.service": "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile "
+                               "--systemd-activation", "rsyslog.service": "/usr/sbin/rsyslogd -n $SYSLOGD_OPTIONS"},
+    "rhel": {"rsyslog.service": "/usr/sbin/rsyslogd -n $SYSLOGD_OPTIONS"},
+}
+
+
+def wants_target(name):
+    """The target an enabled unit is wanted by (the directory of its link in /etc/systemd/system)."""
+    if name.endswith(".socket"):
+        return "sockets.target"
+    if name.startswith("cloud-"):
+        return "cloud-init.target"
+    if name.endswith("-wait-online.service"):
+        return "network-online.target"
+    return "multi-user.target"
+
+
+def unit_file(persona, ident, unit):
+    """The text of a unit file the image has (shortened to what systemctl shows of it; unverified)."""
+    name, sd = unit["name"], unit_dir(persona, ident).rsplit("/system", 1)[0]
+    if name.endswith(".socket"):
+        listen = "".join(f"Listen{'Stream' if 'Stream' in entry else 'Datagram' if 'Datagram' in entry else 'Netlink'}="
+                         f"{entry.rsplit(' (', 1)[0]}\n" for entry in unit["listen"])
+        body = f"[Socket]\n{listen}"
+    else:
+        command = UNIT_EXEC_FAMILY.get(persona.family, {}).get(name, UNIT_EXEC[name]).format(sd=sd)
+        kind = (f"Type={UNIT_TYPE[name]}\n" if name in UNIT_TYPE else "") if unit["sub"] == "running" \
+            else "Type=oneshot\nRemainAfterExit=yes\n"
+        body = f"[Service]\n{kind}ExecStart={command}\n"
+    install = f"\n[Install]\nWantedBy={wants_target(name)}\n" if unit["state"] == "enabled" else ""
+    return f"[Unit]\nDescription={unit['description']}\n\n{body}{install}"
+
+
+GPU_UNITS = (("nvidia-persistenced.service", "NVIDIA Persistence Daemon", "nvidia-persistenced", "enabled"),
+             ("ollama.service", "Ollama Service", "ollama serve", "enabled"))
+
+
+def systemd_version(persona, ident):
+    """(version, package version) of systemd."""
+    if persona.family == "rhel":
+        return 252, RHEL_SYSTEMD.get(ident.release.os_version_id, "252-51.el9_6.1")
+    code = "centos" if persona.family == "centos" else ident.release.extra["codename"]
+    return SYSTEMD[code]
+
+
+def unit_dir(persona, ident):
+    """Where the unit files are: /usr/lib/systemd/system after the /usr merge (EL, noble, trixie)."""
+    return "/usr" + _systemd_paths(ident) + "/system" if persona.family in ("rhel", "centos") \
+        else _systemd_paths(ident) + "/system"
+
+
+def process_name(command):
+    """The process name systemd shows (comm): the script of an interpreter, else the program."""
+    words = command.split()
+    if len(words) > 1 and words[0].rsplit("/", 1)[-1].startswith("python"):
+        return words[1].rsplit("/", 1)[-1][:15]
+    return words[0].rstrip(":").rsplit("/", 1)[-1][:15]
+
+
+def systemd_units(persona, ident, processes):
+    """What the patched systemctl shows of a server ([shell] systemctl_units): the version of systemd
+    and the services of the image, each daemon with its process of ps."""
+    version, full = systemd_version(persona, ident)
+    family = persona.family
+    entries = SERVICE_UNITS[family] + (GPU_UNITS if ident.hardware.gpus else ())
+    core = tuple((name, _CORE_219.get(name, text) if version < 220 else
+                  ("Load/Save OS Random Seed" if name == "systemd-random-seed.service" and version >= 254 else text),
+                  match, state) for name, text, match, state in _CORE)
+    if version < 250:
+        entries = tuple(e if e[0] != "systemd-networkd.service" else (e[0], "Network Service") + e[2:]
+                        for e in entries)
+    if version >= 255:
+        # apport of 24.04 is a native unit
+        entries = tuple(e if e[0] != "apport.service" else (e[0], "automatic crash report generation") + e[2:]
+                        for e in entries)
+    rng = rng_for(ident, "systemd")
+    pids = {p["PID"] for p in processes}
+    directory = unit_dir(persona, ident)
+    noble = ident.release.extra.get("codename") == "noble"
+    units = []
+    for name, description, match, state in sorted(core + entries, key=lambda e: e[0].lower()):
+        unit = {"name": name, "description": description, "state": state, "preset": "enabled",
+                "path": f"{directory}/{name}"}
+        if name == "apport.service" and version < 255:
+            # before 24.04 apport is an LSB script, the SysV generator makes its unit
+            unit.update({"path": "/etc/init.d/apport", "state": "generated"})
+        if name == "network.service":
+            # CentOS 7 runs the network init script through systemd's SysV generator
+            unit.update({"path": "/etc/rc.d/init.d/network", "preset": "disabled"})
+        process = next((p for p in processes if match and match in p["COMMAND"]), None)
+        if match and process is None:
+            raise ValueError(f"{persona.id}: no process of {name} in ps")
+        if process is None:
+            pid = rng.randint(150, 700)
+            while pid in pids:
+                pid += 1
+            unit.update({"sub": "exited", "start": round(rng.uniform(0.8, 4.0), 3), "pid": pid,
+                         "cpu_ms": rng.randint(4, 420)})
+        else:
+            memory = int(process["RSS"] * 1024 * rng.uniform(1.1, 1.5))
+            unit.update({"sub": "running", "start": round(rng.uniform(2.0, 9.0), 3), "pid": process["PID"],
+                         "comm": process_name(process["COMMAND"]), "command": process["COMMAND"],
+                         "tasks": rng.randint(2, 12) if "l" in process["STAT"] else 1, "memory": memory,
+                         "peak": int(memory * rng.uniform(1.05, 1.4)),
+                         "cpu_ms": rng.randint(30, 900) + int(ident.boot_offset / 3600 * rng.uniform(2, 60))})
+        if name in ("ssh.service", "sshd.service"):
+            unit["log"] = list(SSH_LOG)
+            if noble:
+                # 24.04 starts sshd from ssh.socket; ssh.service itself is disabled
+                unit.update({"state": "disabled", "triggered_by": "ssh.socket"})
+        units.append(unit)
+    services = {u["name"] for u in units}
+    dbus = "dbus-broker.service" if "dbus-broker.service" in services else "dbus.service"
+    for name, description, triggers, listen in SOCKETS + ((SSH_SOCKET,) if noble else ()):
+        triggers = dbus if name == "dbus.socket" else triggers
+        static = name != "ssh.socket"
+        units.append({"name": name, "description": description, "state": "static" if static else "enabled",
+                      "preset": "enabled", "path": f"{directory}/{name}", "sub": "listening",
+                      "start": round(rng.uniform(0.3, 1.5), 3), "triggers": triggers, "listen": list(listen),
+                      "memory": rng.choice((4096, 8192, 12288)), "peak": rng.choice((262144, 393216, 524288)),
+                      "cpu_ms": rng.randint(1, 9)})
+    units.sort(key=lambda u: (u["name"].rsplit(".", 1)[-1], u["name"].lower()))
+    data = {"version": version, "full": full, "features": SYSTEMD_FEATURES.get(
+                "centos" if family == "centos" else "rhel" if family == "rhel" else ident.release.extra["codename"],
+                _FEATURES_DEBIAN),
+            "unit_dir": directory, "tasks_max": int(ident.hardware.mem_kb / 128 * 0.15),
+            "init": processes[0]["COMMAND"], "units": units}
+    if family in ("ubuntu", "debian", "raspios") and not noble:
+        data["aliases"] = {"sshd.service": "ssh.service"}
+    if family in ("rhel", "centos"):
+        data["redirect"] = True
+    return data

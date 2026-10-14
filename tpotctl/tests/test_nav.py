@@ -363,6 +363,28 @@ class SettingsNavTest(SettingsHelpersBase):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class ListSettingNavTest(unittest.IsolatedAsyncioTestCase):
+    """The honeypot tab of a standard checkout, with the list setting COWRIE_PERSONA and its Choose."""
+
+    async def test_honeypot_tab_every_control_reachable(self):
+        from textual.widgets import Tabs
+        from tpotctl.tests.test_settings import make_checkout, standard_backend
+        app = tapp.TpotApp(backend=standard_backend(make_checkout(self)), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("settings")
+            await pilot.pause(0.4)
+            pane = app.query_one("#settings")
+            pane.query_one("#settings-tabs").active = "tab-honeypots"
+            await pilot.pause(0.4)
+            graph = await edges(pilot, app, root=pane)
+            check(self, graph, pane.query_one("#settings-tabs").query_one(Tabs), "honeypots")
+            field, choose = pane.query_one("#set-COWRIE_PERSONA"), pane.query_one("#pick-COWRIE_PERSONA")
+            self.assertIs(graph[field]["right"], choose)
+            self.assertIs(graph[choose]["left"], field)
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
 class ScreensTest(unittest.IsolatedAsyncioTestCase):
     """Every dialog and screen of tpotctl/screens, on top of the menu as in tpot."""
 
@@ -387,6 +409,9 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
             "sensor-edit": lambda: dialogs.SensorEditDialog(sensors.Sensor("s1", host="192.0.2.9", ssh_user="t")),
             "picker": lambda: pickers.Picker("Choose a time zone", lambda: times, current="UTC",
                                              detect=lambda: "UTC"),
+            "many": lambda: pickers.ManyPicker("Cowrie personas", ["a", "b", "c", "d"],
+                                               {"One": ["a", "b"], "Two": ["c", "d"]}, current="b",
+                                               note="Enter or space ticks a line."),
             "task": lambda: task.TaskScreen(task.Task("Update T-Pot", ["/x/update.sh", "-y"], become="-B"),
                                             engine=FakeEngine, sudo_mode="password",
                                             password_ok=lambda password: True),

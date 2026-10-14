@@ -96,6 +96,7 @@ services:
       - /tmp/cowrie/data:uid=2000,gid=2000
     environment:
      - COWRIE_PERSONA=${COWRIE_PERSONA:-}
+     - COWRIE_PERSONA_ROTATION=${COWRIE_PERSONA_ROTATION:-0}
     networks:
       - honeypot_local
     ports:

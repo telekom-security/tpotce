@@ -9,7 +9,7 @@ import random
 import re
 import time
 
-from .identity import DAY
+from .identity import DAY, drawn_at
 
 TTY_PREFIXES = ("pts/", "tty")
 
@@ -36,7 +36,7 @@ def shadow_days(ident):
     accounts were made at installation, the passwords changed since."""
     rng = rng_for(ident, "shadow")
     system = ident.installed_at // DAY
-    last = ident.now // DAY
+    last = drawn_at(ident) // DAY
     return system, rng.randint(system, last), rng.randint(system, last)
 
 
@@ -45,7 +45,7 @@ def shadow_ctime(ident):
     _, root, own = shadow_days(ident)
     day = max(root, own) * DAY
     low = max(day, ident.installed_at)
-    return rng_for(ident, "shadow-ctime").randint(low, max(low, min(ident.now, day + DAY - 1)))
+    return rng_for(ident, "shadow-ctime").randint(low, max(low, min(drawn_at(ident), day + DAY - 1)))
 
 
 def server_passwd(user, uid, gid, gecos=None, shell="/bin/bash", extra=""):
@@ -399,15 +399,6 @@ def dmesg(release, hardware_platform, cmdline="console=ttyS0 root=/dev/sda1 ro q
     )
 
 
-def uptime_text(seconds):
-    """The `up` part of procps top/uptime: "8 days,  4:22" or "1 day, 17 min"."""
-    days, rest = divmod(int(seconds), DAY)
-    hours, rest = divmod(rest, 3600)
-    minutes = rest // 60
-    text = f"{days} day{'s' if days != 1 else ''}, " if days else ""
-    return text + (f"{hours:2d}:{minutes:02d}" if hours else f"{minutes} min")
-
-
 # x86 model name -> family, model, stepping, cache size, MHz, address sizes as a guest sees them.
 # Models not listed keep the generic Haswell values of the generator before the persona library.
 X86_CPUS = {
@@ -734,103 +725,130 @@ def nproc(hw):
     return f"{hw.cpus}\n"
 
 
-def comm(command):
-    """The process name top shows: "/usr/sbin/cron -f" -> cron, "-bash" -> bash."""
-    return command.split()[0].rstrip(":").rsplit("/", 1)[-1].lstrip("-")[:15]
+# procps-ng of each system (top -v; patched top: KiB and the old columns before 3.3.13): Ubuntu, Debian
+#   and Raspberry Pi OS per release, RHEL 9 3.3.17 (as its dnf data), CentOS 7 3.3.10, EdgeOS (Debian 9)
+#   3.3.12; unverified: DSM 7.2 (3.3.17 here)
+PROCPS_VERSIONS = {"noble": "4.0.4", "jammy": "3.3.17", "trixie": "4.0.4", "bookworm": "4.0.2"}
+PROCPS_FAMILIES = {"rhel": "3.3.17", "centos": "3.3.10", "ubiquiti": "3.3.12", "synology": "3.3.17"}
 
 
-def _load(rng):
-    return [rng.uniform(0.0, 0.12) for _ in range(3)]
+def procps_version(persona, ident):
+    if persona.family in PROCPS_FAMILIES:
+        return PROCPS_FAMILIES[persona.family]
+    return PROCPS_VERSIONS[ident.release.extra.get("codename", "bookworm")]
 
 
-def server_top(ident, processes, tasks):
-    rng = rng_for(ident, "top")
-    m = mem_stats(ident)
-    mib = lambda kb: kb / 1024  # noqa: E731
-    used = m["total"] - m["free"] - m["buffers"] - m["cached"]
-    l1, l5, l15 = _load(rng)
-    idle = rng.uniform(98.0, 99.6)
-    lines = [
-        f"top - {gm(ident.now, '%H:%M:%S')} up {uptime_text(ident.boot_offset)},  1 user,  "
-        f"load average: {l1:.2f}, {l5:.2f}, {l15:.2f}",
-        f"Tasks: {tasks:3d} total,   1 running, {tasks - 1:3d} sleeping,   0 stopped,   0 zombie",
-        f"%Cpu(s): {(100 - idle) / 2:4.1f} us, {(100 - idle) / 2:4.1f} sy,  0.0 ni, {idle:4.1f} id,  "
-        "0.0 wa,  0.0 hi,  0.0 si,  0.0 st",
-        f"MiB Mem : {mib(m['total']):8.1f} total, {mib(m['free']):8.1f} free, {mib(used):8.1f} used, "
-        f"{mib(m['buffers'] + m['cached']):8.1f} buff/cache",
-        f"MiB Swap: {mib(m['swap_total']):8.1f} total, {mib(m['swap_free']):8.1f} free, "
-        f"{0.0:8.1f} used. {mib(m['available']):8.1f} avail Mem",
-        "",
-        "    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND",
-    ]
-    for p in processes:
-        lines.append(f"{p['PID']:7d} {p['USER']:<8}  20   0 {p['VSZ']:7d} {p['RSS']:6d} {p['RSS'] // 2:6d} "
-                     f"{p['STAT'][0]} {p['CPU']:5.1f} {p['MEM']:5.1f}   0:00.00 {comm(p['COMMAND'])}")
-    return "\n".join(lines) + "\n"
+def load_base(ident):
+    """The load of an idle system the live load average of top, uptime and /proc/loadavg drifts
+    around (patched protocol.py, [shell] load_base)."""
+    return round(rng_for(ident, "top").uniform(0.0, 0.12), 2)
 
 
-def device_top(ident, processes):
-    """BusyBox top: used + free is MemTotal."""
-    rng = rng_for(ident, "top")
-    m = mem_stats(ident)
-    used = m["total"] - m["free"]
-    l1, l5, l15 = _load(rng)
-    lines = [
-        f"Mem: {used}K used, {m['free']}K free, 0K shrd, {m['buffers']}K buff, {m['cached']}K cached",
-        "CPU:   1% usr   2% sys   0% nic  96% idle   0% io   0% irq   1% sirq",
-        f"Load average: {l1:.2f} {l5:.2f} {l15:.2f} 1/{len(processes) + 40} {processes[-1]['PID']}",
-        "  PID USER     STATUS   VSZ %VSZ %CPU COMMAND",
-    ]
-    for p in processes:
-        share = round(p["VSZ"] * 100 / m["total"])
-        lines.append(f"{p['PID']:5d} {p['USER']:<8} {p['STAT'][0]:<6} {p['VSZ']:5d} {share:3d}%   0% "
-                     f"{p['COMMAND']}")
-    return "\n".join(lines) + "\n"
+def top_keys(persona, ident, content):
+    """[shell] keys of the patched top: its style (BusyBox without coreutils), procps-ng's version,
+    the kernel threads ps does not list (the tasks of the system less the ps list, the session's
+    server process and top itself) and the base load."""
+    keys = {"top_style": content.top_style}
+    if content.top_style == "procps":
+        keys["procps_version"] = procps_version(persona, ident)
+    keys["kernel_threads"] = max(0, content.tasks - len(content.processes) - 2)
+    keys["load_base"] = f"{load_base(ident):.2f}"
+    return keys
 
 
 # --- disks ------------------------------------------------------------------
 
-def _df_row(fs, size, used, avail, mount):
-    pct = math.ceil(used * 100 / (used + avail)) if used + avail else 0
-    # at least one space between columns, also for long device names and multi-TB disks
-    return f"{fs:<14} {size:>9} {used:>7} {avail:>9} {pct:>3}% {mount}"
+def fs_row(source, target, fstype, options, size=0, used=0, avail=None, inodes=0, iused=0):
+    """One mounted file system of the persona's table: mount, /proc/mounts and the patched df
+    (sizes in KiB; size 0 keeps it out of df without -a: proc, sysfs, ...). avail is what is
+    left to users (below size - used where the file system reserves blocks)."""
+    return {"source": source, "target": target, "fstype": fstype, "options": options, "size": size,
+            "used": used, "avail": size - used if avail is None else avail, "inodes": inodes, "iused": iused}
 
 
-def server_df(ident, root_dev="/dev/sda1", run_lock=True, boot=None):
-    """boot: (device, size kB, mount point) of a boot partition, e.g. the Pi's FAT /boot/firmware."""
+# file systems whose statfs counts no inodes (df -i shows 0 and "-")
+_NO_INODES = ("vfat", "btrfs", "ubifs", "jffs2", "overlay", "ramfs", "rootfs")
+
+
+def with_inodes(ident, row):
+    """The inode counts df -i shows, drawn once per mount point (unverified: the ratios are
+    those of the default mkfs and tmpfs options): ext2/3/4 one inode per 16 KiB, xfs a
+    quarter of the blocks in 2 KiB, tmpfs and devtmpfs half of the memory pages, squashfs
+    as many inodes as files and none free."""
+    size, used, fstype = row["size"], row["used"], row["fstype"]
+    if not size or fstype in _NO_INODES:
+        return row
+    rng = rng_for(ident, f"inodes {row['target']}")
+    if fstype in ("ext2", "ext3", "ext4"):
+        inodes = size // 16
+        iused = min(inodes, 11 + used // rng.randint(28, 40))
+    elif fstype == "xfs":
+        inodes = size // 2
+        iused = min(inodes, 3 + used // rng.randint(28, 40))
+    elif fstype == "squashfs":
+        inodes = iused = max(64, size // rng.randint(3, 6))
+    else:  # tmpfs, devtmpfs
+        inodes = max(1024, ident.hardware.mem_kb // 8)
+        iused = min(inodes, 1 + used // 4 + (rng.randint(380, 720) if row["target"] in ("/dev", "/run") else
+                                              rng.randint(0, 4)))
+    return dict(row, inodes=inodes, iused=iused)
+
+
+def mount_text(rows):
+    """What mount prints of the table (util-linux and BusyBox: the order of /proc/mounts)."""
+    return "".join(f"{r['source']} on {r['target']} type {r['fstype']} ({r['options']})\n" for r in rows)
+
+
+def proc_mounts_text(rows):
+    return "".join(f"{r['source']} {r['target']} {r['fstype']} {r['options']} 0 0\n" for r in rows)
+
+
+def server_filesystems(persona, ident, root_dev="/dev/sda1", root_type="ext4",
+                       root_options="rw,relatime,errors=remount-ro", run_lock=True, boot=()):
+    """The mounted file systems of a server in the order of /proc/mounts: the kernel's sysfs
+    and proc, /dev, the tmpfs of /run and /dev/shm (and /run/lock), cgroups, the root disk
+    and the boot partitions (device, KiB, mount point, fs type, options, share used from, to). Debian / Ubuntu name /dev
+    udev (initramfs-tools); Red Hat devtmpfs, with SELinux labels, /run of a fifth (RHEL 9) or
+    half (CentOS 7) of the memory and CentOS 7's tmpfs of cgroup v1. Unverified: the exact
+    option lists and the shares of memory per release."""
+    el = persona.family in ("rhel", "centos")
     rng = rng_for(ident, "df")
     mem, disk = ident.hardware.mem_kb, ident.hardware.disk_kb
-    udev, run, shm = int(mem * 0.4854), mem // 10, mem // 2
+    label = "seclabel," if el else ""
+    inode64 = ",inode64" if kernel_series(ident.release.kernel_version) >= (5, 9) else ""
+    run = {"rhel": mem // 5, "centos": mem // 2}.get(persona.family, mem // 10)
+    dev = 4096 if persona.family == "rhel" else int(mem * 0.4854)
+    shm = mem // 2
     run_used = rng.randint(600, 1300)
     used = int(disk * rng.uniform(0.15, 0.45))
-    avail = int(disk * 0.948) - used
-    rows = ["Filesystem     1K-blocks    Used Available Use% Mounted on",
-            _df_row("udev", udev, 0, udev, "/dev"),
-            _df_row("tmpfs", run, run_used, run - run_used, "/run"),
-            _df_row(root_dev, disk, used, avail, "/"),
-            _df_row("tmpfs", shm, 0, shm, "/dev/shm")]
+    # ext4 keeps 5 % for root (and some metadata), xfs nothing
+    avail = (disk - used) if root_type == "xfs" else int(disk * 0.948) - used
+    dev_name = "devtmpfs" if el else "udev"
+    rows = [fs_row("sysfs", "/sys", "sysfs", f"rw,{label}nosuid,nodev,noexec,relatime"),
+            fs_row("proc", "/proc", "proc", "rw,nosuid,nodev,noexec,relatime"),
+            fs_row(dev_name, "/dev", "devtmpfs",
+                   f"rw,{label}nosuid,{'' if el else 'relatime,'}size={dev}k,nr_inodes={mem // 8},mode=755{inode64}",
+                   dev, 0),
+            fs_row("devpts", "/dev/pts", "devpts", f"rw,{label}nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=000")]
+    if el:
+        rows.append(fs_row("tmpfs", "/dev/shm", "tmpfs", f"rw,{label}nosuid,nodev{inode64}", shm, 0))
+    rows.append(fs_row("tmpfs", "/run", "tmpfs",
+                       f"rw,{label}nosuid,nodev,{'' if el else 'noexec,relatime,'}size={run}k,mode=755{inode64}",
+                       run, run_used))
+    if persona.family == "centos":
+        rows.append(fs_row("tmpfs", "/sys/fs/cgroup", "tmpfs", "ro,seclabel,nosuid,nodev,noexec,mode=755", shm, 0))
+    else:
+        rows.append(fs_row("cgroup2", "/sys/fs/cgroup", "cgroup2",
+                           f"rw,{label}nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot"))
+    rows.append(fs_row(root_dev, "/", root_type, root_options, disk, used, avail))
+    if not el:
+        rows.append(fs_row("tmpfs", "/dev/shm", "tmpfs", f"rw,nosuid,nodev{inode64}", shm, 0))
     if run_lock:
-        rows.append(_df_row("tmpfs", 5120, 0, 5120, "/run/lock"))
-    if boot:
-        dev, size, mount = boot
-        boot_used = int(size * rng.uniform(0.12, 0.14))
-        rows.append(_df_row(dev, size, boot_used, size - boot_used, mount))
-    return "\n".join(rows) + "\n"
-
-
-def server_mount(ident, root_dev="/dev/sda1", run_lock=True, boot=None, root_type="ext4",
-                 root_options="rw,relatime,errors=remount-ro"):
-    run = ident.hardware.mem_kb // 10
-    text = (f"{root_dev} on / type {root_type} ({root_options})\n"
-            "proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)\n"
-            "sysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime)\n"
-            f"tmpfs on /run type tmpfs (rw,nosuid,nodev,noexec,relatime,size={run}k,mode=755)\n")
-    if run_lock:
-        text += "tmpfs on /run/lock type tmpfs (rw,nosuid,nodev,noexec,relatime,size=5120k)\n"
-    if boot:
-        text += (f"{boot[0]} on {boot[2]} type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=437,"
-                 "iocharset=ascii,shortname=mixed,errors=remount-ro)\n")
-    return text
+        rows.append(fs_row("tmpfs", "/run/lock", "tmpfs", f"rw,nosuid,nodev,noexec,relatime,size=5120k{inode64}",
+                           5120, 0))
+    for device, size, target, fstype, options, low, high in boot:
+        rows.append(fs_row(device, target, fstype, options, size, int(size * rng.uniform(low, high))))
+    return [with_inodes(ident, row) for row in rows]
 
 
 ULIMIT = """core file size          (blocks, -c) 0
@@ -887,8 +905,8 @@ def ps_start(ts, now):
 
 def assign_processes(ident, entries):
     """PID 1 first, increasing PIDs drawn from pid_seed. Everything started at
-    boot; a login shell (on a tty) at some time between boot and now. %MEM is
-    RSS over MemTotal, as ps computes it."""
+    boot; a login shell (on a tty) at some time between boot and the draw. %MEM
+    is RSS over MemTotal, as ps computes it."""
     rng = random.Random(ident.pid_seed)
     boot = ps_start(ident.booted_at, ident.now)
     pid = 0
@@ -897,7 +915,7 @@ def assign_processes(ident, entries):
             entry["MEM"] = round(entry["RSS"] * 100 / ident.hardware.mem_kb, 1)
         if is_login_shell(entry):
             pid += rng.randint(200, 20000)
-            entry["START"] = ps_start(rng.randint(ident.booted_at, ident.now), ident.now)
+            entry["START"] = ps_start(rng.randint(ident.booted_at, drawn_at(ident)), ident.now)
         else:
             pid = 1 if pid == 0 else pid + (rng.randint(150, 450) if pid == 1 else rng.randint(8, 220))
             entry["START"] = boot
@@ -927,16 +945,15 @@ def base_files(persona, ident, passwd, group, shadow, home=None):
     return files
 
 
-def base_txtcmds(persona, ident, df, mount, lscpu_text, top, cmdline=None):
-    """cmdline: the kernel command line of dmesg (servers build it from their root disk)."""
+def base_txtcmds(persona, ident, mount, lscpu_text, cmdline=None):
+    """cmdline: the kernel command line of dmesg (servers build it from their root disk). df is
+    the patched command of Cowrie (df_table)."""
     kernel = dmesg(ident.release, persona.hardware_platform) if cmdline is None else \
         dmesg(ident.release, persona.hardware_platform, cmdline)
     return {
-        "bin/df": df,
         "bin/dmesg": kernel,
         "bin/mount": mount,
         "bin/ulimit": ULIMIT,
         "usr/bin/lscpu": lscpu_text,
         "usr/bin/nproc": nproc(ident.hardware),
-        "usr/bin/top": top,
     }
