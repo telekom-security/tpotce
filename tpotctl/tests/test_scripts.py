@@ -239,15 +239,17 @@ class UpdateShTest(Harness):
         # on both of its ways out, the rest of update.sh has the five above
         append = re.search(r"function fuAPPEND_ES_DATA \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
         self.assertEqual(len(re.findall(r'eval "\$\{myTRAP:-trap - INT\}"', append)), 2)
-        # the step through 8.19: INT and TERM only end it, its cleanup cannot be stopped, the traps it found
-        # come back; Ctrl+C at its question is a no
+        # the step through 8.19: INT, TERM and HUP only end it, its cleanup cannot be stopped, the traps it
+        # found come back; Ctrl+C from its question up to the step is a refusal, after it the trap goes
         step = re.search(r"function fuES_STEP_819 \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
-        self.assertIn("trap 'myES_STEP_STOPPED=\"1\"' INT TERM", step)
-        self.assertTrue(re.search(r"trap '' INT TERM\n\tfuES_STEP_CLEANUP \"\$1\"\n"
-                                  r"\teval \"\$\{myTRAP_INT:-trap - INT\}\"\n\teval \"\$\{myTRAP_TERM:-trap - TERM\}\"",
-                                  step), step)
-        self.assertTrue(re.search(r"trap fuES_STEP_REFUSED INT\n\s*fuLOSS_CONFIRM elastic-step .*\n\s*trap - INT\n",
-                                  text), text[-900:])
+        self.assertIn("trap 'myES_STEP_STOPPED=\"1\"' INT TERM HUP", step)
+        self.assertTrue(re.search(r"trap '' INT TERM HUP\n\tfuES_STEP_CLEANUP \"\$1\"\n"
+                                  r"\teval \"\$\{myTRAP_INT:-trap - INT\}\"\n\teval \"\$\{myTRAP_TERM:-trap - TERM\}\"\n"
+                                  r"\teval \"\$\{myTRAP_HUP:-trap - HUP\}\"", step), step)
+        block = re.search(r"trap fuES_STEP_REFUSED INT\n\s*fuLOSS_CONFIRM elastic-step .*?\n\s*trap - INT\n"
+                          r"\s*fuDID ok \"Elasticsearch data upgraded", text, re.S)
+        self.assertTrue(block, text[-900:])
+        self.assertEqual(re.findall(r"trap .*INT", block.group(0)), ["trap fuES_STEP_REFUSED INT", "trap - INT"])
         self.assertTrue(re.search(r"function fuES_STEP_REFUSED \(\) \{\n\ttrap - INT\n", read("update.sh")))
         rest = read("update.sh").replace(append, "").replace(step, "")
         self.assertEqual(len(re.findall(r"trap .*INT", rest)), 8)
@@ -258,7 +260,7 @@ class UpdateShTest(Harness):
         text = read("update.sh")
         for name in ("fuCHECK_ELASTIC", "fuELASTIC_REFUSED", "fuES_ROOM_TEXT", "fuES_ACCEPT_TEXT",
                      "fuAPPEND_ES_DATA", "fuRESTART_AFTER_REFUSAL", "fuES_STEP_REFUSED_ITEMS", "fuES_STEP_RESTORE_ITEMS",
-                     "fuES_STEP_MANUAL", "fuES_STEP_ROOM", "fuES_STEP_819"):
+                     "fuES_STEP_MANUAL", "fuES_STEP_ROOM", "fuES_STEP_819", "fuES_STEP_RESTORE_TEXT"):
             body = re.search(rf"function {name} \(\) \{{.*?\n\}}", text, re.S).group(0)
             said = [line for line in body.splitlines()
                     if re.search(r"fuUI_(HINT|WARN|ERROR|OK)|fuDID|echo \"|myTEXT=|myES_APPEND_WHY=", line)]
@@ -1735,7 +1737,8 @@ ES_APPEND = ("fuSAME_DIR", "fuSAME_FS", "fuES_DATA_FITS", "fuARCHIVE_HAS_ES_DATA
              "fuARCHIVE_LIST", "fuROTATE", "fuARCHIVE_RENAMED", "fuAPPEND_ES_DATA", "fuRESTART_AFTER_REFUSAL",
              "fuES_ROOM_TEXT", "fuES_ACCEPT_TEXT", "fuES_STEP_REFUSED_ITEMS", "fuES_STEP_RESTORE_ITEMS",
              # the step of the data of an Elasticsearch before 8.19 through 8.19
-             "fuES_NEEDS_STEP", "fuES_STEP_TEXT", "fuES_STEP_COMMANDS", "fuES_STEP_LINE", "fuES_STEP_MANUAL",
+             "fuES_NEEDS_STEP", "fuES_STEP_WHAT", "fuES_STEP_RESTORE_TEXT", "fuES_STEP_TEXT", "fuES_STEP_COMMANDS",
+             "fuES_STEP_LINE", "fuES_STEP_MANUAL",
              "fuES_STEP_REFUSED", "fuES_STEP_ROOM", "fuES_STEP_WAIT", "fuES_STEP_CLEANUP", "fuES_STEP_819")
 
 
@@ -2231,7 +2234,7 @@ class DataLossTest(Harness):
         }
     """)
     CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
-                       "fuCHECK_BACKUP_SPACE", "fuES_DATA_FITS", "fuSAME_FS", "fuES_NEEDS_STEP", "fuES_STEP_TEXT",
+                       "fuCHECK_BACKUP_SPACE", "fuES_DATA_FITS", "fuSAME_FS", "fuES_NEEDS_STEP", "fuES_STEP_WHAT", "fuES_STEP_TEXT",
                        "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuIMAGE_PULLABLE", "fuSORT_IMAGES",
                        # the archive of 24.04.1 is there to be found, the check must not take it
                        "fuOLD_RELEASE_BACKUP", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",

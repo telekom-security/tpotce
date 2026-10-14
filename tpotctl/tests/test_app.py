@@ -300,7 +300,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         shown, seen, _calls = await self.update_with(loss, "no")
         self.assertIn("cannot be read by 9.5.4", shown[0])
         self.assertIn("Yes lets update.sh take the step through Elasticsearch 8.19", shown[0])   # the step named
-        self.assertIn("-g data", shown[0])
+        self.assertIn("Kibana 8.19 where the edition has it", shown[0])
         self.assertEqual(shown[1], "no")
         self.assertEqual(seen, [])
         FakeEngine.files.clear()

@@ -1809,8 +1809,9 @@ def retention_unknown(value: str, host: bool = True) -> str:
 # What a yes does for a finding beyond its line (ops.LOSS_KEYS)
 LOSS_NOTES = {
     "elastic-step": "Yes lets update.sh take the step through Elasticsearch 8.19: the data goes into the backup "
-                    "of the update first, then Elasticsearch and Kibana 8.19 run once on it, then the new release. "
-                    "'./restore.sh -f <that backup> -g data' puts the data from before back.",
+                    "of the update first, then Elasticsearch 8.19 (and Kibana 8.19 where the edition has it) runs "
+                    "once on it, then the new release. Should the step not go through, the update says how that "
+                    "backup puts the data from before back.",
 }
 
 

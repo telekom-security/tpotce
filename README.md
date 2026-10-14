@@ -985,15 +985,22 @@ the one of the release and, if they differ,
    later: Elasticsearch 9 reads only the data of 8.19. The run says so and asks (default no; without
    a terminal `--accept-data-loss`, or an `elastic-step` line in `--accept-data-loss-file`), puts
    `data/elk/data` into its backup (also when the archive holds it already), checks that the Docker
-   root has about 4 GB free for the official images, and then runs Elasticsearch and Kibana 8.19 once
-   on the data until Elasticsearch is yellow or green and Kibana has migrated its saved objects (20
-   minutes at most, `TPOT_ES_STEP_WAIT=<seconds>` waits longer). Its containers, network and images
-   are removed afterwards, the data belongs to `2000:2000` again, then the update goes on with the
-   new release. A no, no room for the data or the images, or a failed pull is a refusal as below,
-   with the commands to take the step by hand. A step that does not go through after Elasticsearch
-   8.19 started on the data (a timeout, a red cluster, a stop) puts the checkout back but leaves
-   T-Pot stopped: `restore.sh -f <archive> -g data` with the backup of that run puts the data from
-   before the step back (the summary names the way that fits the `restore.sh` in `~/tpotce`).
+   root has about 4 GB free for the official images, and then runs Elasticsearch 8.19 once on the
+   data until it is yellow or green; where the edition has Kibana, Kibana 8.19 runs as well until it
+   has migrated its saved objects (MOBILE gets no Kibana). That takes 20 minutes at most
+   (`TPOT_ES_STEP_WAIT=<seconds>`, 60 to 86400, sets another bound; any other value stops the run
+   at once), a cluster that answers red for more than two minutes in a row ends it earlier. Its
+   containers, its network and the images it pulled are removed afterwards, the data belongs to
+   `2000:2000` again, then the update goes on with the new release. A no, Ctrl+C before the step
+   begins, no room for the data or the images, or a failed pull is a refusal as below, with the
+   commands to take the step by hand. A step that does not go through after Elasticsearch 8.19
+   started on the data (a timeout, a red cluster, a stop) puts the checkout back but leaves T-Pot
+   stopped; the summary says how the backup of that run puts the data from before the step back
+   (`restore.sh -f <archive> -g data`, or by hand with the `restore.sh` of the release before) and
+   what to start then. Where the checkout could not go back, the new release cannot read that data:
+   put the checkout back as well, or run the update again, it takes the step again. Copy that
+   archive elsewhere before you run the update again: the rotation of the full backups may remove
+   it. Every refusal of these checks ends with exit code 5, also one that loses nothing.
  - adds `data/elk/data` of the data folder in use (`TPOT_DATA_PATH`) to the backup of the run when
    it is not in it yet (with `--full` it is). That needs room in `~/tpot_backups`: the size of the
    data plus 10 %, the reserve of every backup kept free, and, where the backups share the

@@ -1329,10 +1329,12 @@ STEP_CURL = ('#!/bin/sh\necho "curl $*" >> "$HOME/calls"\nfor a; do u="$a"; done
 STEP_UNAME = ('#!/bin/sh\ncase "$*" in\n  -m) cat "$HOME/arch" 2>/dev/null || echo x86_64; exit 0 ;;\n'
               '  -s|"") echo Linux; exit 0 ;;\nesac\n' f'exec {base.REAL_UNAME} "$@"\n')
 # chown logs and does nothing (the step hands the data to 1000:0 and back to 2000:2000)
-STEP_CHOWN = '#!/bin/sh\necho "chown $*" >> "$HOME/calls"\n[ ! -f "$HOME/chown_fail" ]\n'
+STEP_CHOWN = ('#!/bin/sh\necho "chown $*" >> "$HOME/calls"\n[ ! -f "$HOME/chown_fail" ] || exit 1\n'
+              'case "$*" in *2000:2000*) [ ! -f "$HOME/chown_back_fail" ] ;; esac\n')
 # df of the Docker root (docker info says $HOME/docker-root): HOME/docker_avail, 9 GB without it; the
 # rest as base.DF
 STEP_DF = ('#!/bin/sh\nfor a; do l="$a"; done\ncase "$l" in\n  "$HOME/docker-root")\n'
+           '    if [ -f "$HOME/df_slow" ]; then : > "$HOME/df_started"; sleep 30; fi\n'
            '    echo Avail; cat "$HOME/docker_avail" 2>/dev/null || echo 9000000000; exit 0 ;;\nesac\n'
            + base.DF[len("#!/bin/sh\n"):])
 
@@ -1355,6 +1357,8 @@ class EsStepTest(EsHarness):
           case "$1" in
             image)
               [ "$2" = inspect ] || return 0
+              # the image of the release before (--format), or one of the step that is there already
+              [ "$3" = --format ] || { [ -f "$HOME/have_${3##*/}" ]; return; }
               printf 'PATH=/bin\\nES_VER=%s\\n' "$(cat "$HOME/es_old")" ;;
             info) echo "$HOME/docker-root" ;;
             pull) [ ! -f "$HOME/pull_fail" ] || return 1 ;;
@@ -1379,10 +1383,16 @@ class EsStepTest(EsHarness):
                 out.write(text)
             os.chmod(path, 0o755)
         self.write("es_old", "8.18.2\n")
+        self.edition(kibana=True)
         self.version = re.search(r'^myES_STEP_VERSION="([0-9.]+)"$', base.read("update.sh"), re.M).group(1)
         self.es_image = f"docker.elastic.co/elasticsearch/elasticsearch:{self.version}"
         self.kb_image = f"docker.elastic.co/kibana/kibana:{self.version}"
         self.full = os.path.join(self.backups, "20261014120000_tpot_backup_full.tar")
+
+    def edition(self, kibana):
+        """The compose file: Elasticsearch, with Kibana (STANDARD) or without it (MOBILE)."""
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), "w") as out:
+            out.write("services:\n  elasticsearch:\n    image: x\n" + ("  kibana:\n    image: y\n" if kibana else ""))
 
     def runs(self):
         """The docker run of the step, each a list of its words."""
@@ -1397,13 +1407,16 @@ class EsStepTest(EsHarness):
             self.assertGreater(found, at, f"{text!r} not after the one before in:\n{calls}")
             at = found
 
-    def assert_cleaned_up(self, data, chowned=True):
+    def assert_cleaned_up(self, data, chowned=True, kibana=True):
         calls = self.calls()
-        self.assertIn("docker stop -t 60 tpot_kb_step", calls)
-        self.assertIn("docker stop -t 120 tpot_es_step", calls)
-        self.assertIn("docker rm -f tpot_kb_step tpot_es_step", calls)
+        lines = calls.splitlines()
+        self.assertEqual("docker stop -t 60 tpot_kb_step" in lines, kibana)
+        self.assertEqual("docker rm -f tpot_kb_step" in lines, kibana)
+        self.assertIn("docker stop -t 120 tpot_es_step", lines)
+        self.assertIn("docker rm -f tpot_es_step", lines)
         self.assertIn("docker network rm tpot_es_step", calls)
-        self.assertIn(f"docker rmi {self.es_image} {self.kb_image}", calls)
+        self.assertIn(f"docker rmi {self.es_image} {self.kb_image}" if kibana else f"docker rmi {self.es_image}",
+                      lines)
         if chowned:
             self.order("sudo chown -R 1000:0 " + data + "/elk/data", "docker rmi",
                        "sudo chown -R 2000:2000 " + data + "/elk/data")
@@ -1581,7 +1594,8 @@ class EsStepTest(EsHarness):
                 flat = " ".join(out.split())
                 self.assertIn(f"ERROR: The step through Elasticsearch 8.19 did not go through: "
                               f"{why.replace('8.19.23', self.version)}", flat)
-                self.assertIn(f"./restore.sh -f {self.full} -g data puts the data from before the step back.", flat)
+                self.assertIn(f"may be changed already: the backup {self.full} puts the data from before the step "
+                              "back, the summary says how.", flat)
                 self.assert_cleaned_up(data)
                 calls = self.calls()
                 self.assertIn(f"restore.sh -f {self.full} -c", calls)              # the checkout goes back
@@ -1589,10 +1603,17 @@ class EsStepTest(EsHarness):
                 self.assertNotIn("api/status", calls)
                 self.assertIn("DID: warn: T-Pot stays stopped: the release before may not start on the data the "
                               "step through Elasticsearch 8.19 changed.", flat)
-                # the restore.sh of the release before knows no -g: by hand
-                self.assertIn(f"DID: next: Put the Elasticsearch data from before the step back: sudo mv "
-                              f"{data}/elk/data {data}/elk/data.step, then sudo tar xpf {self.full} --numeric-owner "
-                              f"-C {data} --strip-components=1 data/elk/data", flat)
+                # the restore.sh of the release before knows no -g: by hand, the changed data aside until the
+                # archive's is back; the same way on the output and in the summary
+                how = (f"sudo mv {data}/elk/data {data}/elk/data.step && sudo tar xpf {self.full} --numeric-owner "
+                       f"-C {data} --strip-components=1 data/elk/data && sudo rm -rf {data}/elk/data.step (should the "
+                       f"tar fail: sudo rm -rf {data}/elk/data; sudo mv {data}/elk/data.step {data}/elk/data)")
+                self.assertIn(f"To put the data from before the step back: {how}", flat)
+                self.assertIn(f"DID: next: Put the Elasticsearch data from before the step back: {how}", flat)
+                self.assertIn("DID: next: Then start T-Pot (sudo systemctl start tpot): the release from before this "
+                              "update reads that data again.", flat)
+                self.assertIn("DID: info: tpot.service is enabled: a reboot before the data is back", flat)
+                self.assertIn(f"Copy {self.full} out of {self.backups} before the update runs again", flat)
                 self.assertNotIn("went on", out)
                 self.assertNotIn("To take the step by hand", flat)
 
@@ -1621,7 +1642,8 @@ class EsStepTest(EsHarness):
         calls = self.calls()
         self.assertNotIn("RUN", calls)
         self.assertNotIn("chown", calls)
-        self.assertIn(f"docker rmi {self.es_image} {self.kb_image}", calls)
+        self.assertNotIn(f"docker pull {self.kb_image}", calls)               # it stops at the first
+        self.assertIn(f"docker rmi {self.es_image}", calls.splitlines())
         self.order(f"restore.sh -f {self.full} -c", "systemctl start tpot.service")
 
     def test_no_room_for_the_images_refuses_before_the_pull(self):
@@ -1644,7 +1666,7 @@ class EsStepTest(EsHarness):
         import signal
         data = self.data(os.path.join(self.tpotce, "data"))
         self.write("es_health", "none\n")
-        for send in (signal.SIGINT, signal.SIGTERM):
+        for send in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
             with self.subTest(signal=send):
                 shutil.rmtree(self.backups, ignore_errors=True)
                 self.forget_calls()
@@ -1672,7 +1694,7 @@ class EsStepTest(EsHarness):
                 line = [line for line in lines if line.split()[2] == "elastic-step"][0]
                 self.assertTrue(line.startswith(
                     f"@@tpot loss elastic-step The data of Elasticsearch 8.18.2 cannot be read by 9.1.0: the update "
-                    f"first runs Elasticsearch and Kibana {self.version} once on it"), line)
+                    f"first runs Elasticsearch {self.version} once on it"), line)      # its edition has no Kibana
                 self.assertEqual("the run refuses the step then" in out, hint, out)
                 self.assertIn("rc=3", out)
 
@@ -1696,6 +1718,155 @@ class EsStepTest(EsHarness):
         self.target()
         out, lines = self.check(extra=self.DOCKER.split("timeout ()")[0])
         self.assertEqual([line.split()[2] for line in lines if "elastic" in line.split()[2]], [], out)
+
+    def test_without_kibana_the_step_runs_elasticsearch_only(self):
+        """MOBILE runs Elasticsearch without Kibana: the step pulls, runs, waits for and removes no Kibana."""
+        data = self.data(os.path.join(self.tpotce, "data"))
+        self.edition(kibana=False)
+        code, out = self.run_check(self.master_archive(), extra=self.ACCEPT)
+        self.assertEqual(code, 0, out)
+        self.assertIn("went on", out)
+        self.assertEqual([run[3] for run in self.runs()], ["tpot_es_step"])
+        calls = self.calls()
+        self.assertNotIn(f"docker pull {self.kb_image}", calls)
+        self.assertNotIn("api/status", calls)
+        self.assertNotIn(self.kb_image, calls)
+        self.assert_cleaned_up(data, kibana=False)
+        self.assertIn(f"the update first runs Elasticsearch {self.version} once on it", " ".join(out.split()))
+        # the way by hand waits for Elasticsearch then
+        shutil.rmtree(self.backups, ignore_errors=True)
+        self.forget_calls()
+        code, out = self.run_check(self.master_archive())
+        self.assertEqual(code, 5, out)
+        flat = " ".join(out.split())
+        self.assertNotIn("tpot_kb_step", flat)
+        self.assertNotIn("api/status", flat)
+        self.assertIn("wait until curl -s 'http://127.0.0.1:64398/_cluster/health?wait_for_status=yellow&timeout=30s' "
+                      "says yellow or green", flat)
+        self.assertIn("docker stop -t 120 tpot_es_step; docker rm tpot_es_step; docker network rm tpot_es_step", flat)
+
+    def test_a_red_cluster_stops_the_wait_early(self):
+        """Red for longer than myES_STEP_RED in a row ends the wait long before its bound."""
+        data = self.data(os.path.join(self.tpotce, "data"))
+        self.write("es_health", "red\n")
+        started = time.time()
+        code, out = self.run_check(self.master_archive(), extra=self.ACCEPT + "myES_STEP_WAIT=600 myES_STEP_RED=1\n")
+        self.assertEqual(code, 5, out)
+        self.assertLess(time.time() - started, 30)
+        self.assertIn(f"the cluster of Elasticsearch {self.version} stayed red for more than 1 s", out)
+        self.assert_cleaned_up(data)
+        self.assertNotIn("api/status", self.calls())
+
+    def head(self):
+        return subprocess.run(["git", "-C", self.tpotce, "rev-parse", "HEAD"], capture_output=True,
+                              universal_newlines=True).stdout.strip()
+
+    def test_touched_without_rollback_says_not_to_start_on_this_checkout(self):
+        """The archive holds no earlier commit: the new release stays, and it cannot read the data of 8.18."""
+        data = self.data(os.path.join(self.tpotce, "data"))
+        with open(os.path.join(self.tpotce, "restore.sh"), "a") as out:
+            out.write('# while getopts ":lf:ycg:B:h" opt; do\n')
+        self.write("enabled", "")
+        self.write("dead_tpot_es_step", "")
+        code, out = self.run_check(self.master_archive({"rollback.txt": self.head() + "\n"}), extra=self.ACCEPT)
+        self.assertEqual(code, 5, out)
+        flat = " ".join(out.split())
+        self.assertIn("The checkout is already the new release: T-Pot stays stopped.", flat)
+        self.assertIn(f"DID: next: Put the Elasticsearch data from before the step back: ./restore.sh -f {self.full} "
+                      "-g data", flat)
+        self.assertIn("DID: next: Do not start T-Pot on this checkout with that data: the new release cannot read the "
+                      "data of Elasticsearch 8.18.2. Run the update again instead: it takes the step again.", flat)
+        self.assertNotIn("Then start T-Pot", flat)
+        calls = self.calls()
+        self.assertNotIn("restore.sh -f", calls)
+        self.assertNotIn("systemctl start", calls)
+        self.assert_cleaned_up(data)
+
+    def test_touched_with_a_failed_rollback_puts_the_checkout_back_first(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        with open(os.path.join(self.tpotce, "restore.sh"), "w") as out:
+            out.write('#!/bin/sh\necho "restore.sh $*" >> "$HOME/calls"\n# getopts ":lf:ycg:B:h"\nexit 1\n')
+        self.write("dead_tpot_es_step", "")
+        code, out = self.run_check(self.master_archive(), extra=self.ACCEPT)
+        self.assertEqual(code, 5, out)
+        flat = " ".join(out.split())
+        self.assertIn("and the checkout could not be put back: T-Pot stays stopped.", flat)
+        self.assertIn(f"DID: next: Put the Elasticsearch data from before the step back: ./restore.sh -f {self.full} "
+                      "-g data", flat)
+        self.assertIn("DID: next: Do not start T-Pot before the checkout is back as well: the new release cannot read "
+                      f"the data of Elasticsearch 8.18.2. ./restore.sh -f {self.full} -c puts the checkout back", flat)
+        self.assertIn("DID: next: Or leave the data as it is and run the update again: it takes the step again.", flat)
+        self.assertNotIn("systemctl start", self.calls())
+
+    def test_refused_without_rollback_names_what_the_next_start_does(self):
+        """Not touched, no rollback: the next start cannot read the data (no upgrade from 8.18 to 9)."""
+        self.data(os.path.join(self.tpotce, "data"))
+        code, out = self.run_check(self.master_archive({"rollback.txt": self.head() + "\n"}))
+        self.assertEqual(code, 5, out)
+        flat = " ".join(out.split())
+        self.assertIn("the next start of T-Pot cannot read the data of Elasticsearch 8.18.2: T-Pot stays stopped.", flat)
+        self.assertNotIn("upgrades the data", flat)
+
+    def test_the_accept_hint_without_the_handover(self):
+        self.data(os.path.join(self.tpotce, "data"))
+        code, out = self.run_check(self.master_archive(), prepared="")
+        self.assertEqual(code, 5, out)
+        flat = self.assert_ways_on(out)
+        self.assertIn("DID: next: To take the step without a terminal: ./update.sh -y --accept-data-loss.", flat)
+        self.assertNotIn("-- --accept-data-loss", flat)
+
+    def test_a_failed_owner_back_is_named(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        self.write("chown_back_fail", "")
+        code, out = self.run_check(self.master_archive(), extra=self.ACCEPT)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"DID: warn: The owner of {data}/elk/data could not be set back after the step: sudo chown -R "
+                      f"2000:2000 {data}/elk/data", out)
+        # sudo is refreshed before each owner change: the pulls and the wait may outlast its timestamp
+        self.order("docker network create", "sudo -v", "sudo chown -R 1000:0", "docker rmi", "sudo -v",
+                   "sudo chown -R 2000:2000")
+
+    def test_images_that_were_there_stay(self):
+        data = self.data(os.path.join(self.tpotce, "data"))
+        for image in (self.es_image, self.kb_image):
+            self.write("have_" + image.rsplit("/", 1)[1], "")
+        code, out = self.run_check(self.master_archive(), extra=self.ACCEPT)
+        self.assertEqual(code, 0, out)
+        calls = self.calls()
+        self.assertNotIn("docker pull", calls)
+        self.assertNotIn("docker rmi", calls)
+        self.assertEqual(len(self.runs()), 2)
+        self.assertIn(f"sudo chown -R 2000:2000 {data}/elk/data", calls)
+
+    def test_ctrl_c_between_the_backup_and_the_step_is_a_refusal(self):
+        import signal
+        self.data(os.path.join(self.tpotce, "data"))
+        self.write("enabled", "")
+        self.write("df_slow", "")
+        code, out = self.run_check(self.master_archive(), extra=self.ACCEPT,
+                                   signal_when=os.path.join(self.home, "df_started"), send=signal.SIGINT)
+        self.assertEqual(code, 5, out)
+        self.assertIn("was stopped before it began", out)
+        calls = self.calls()
+        self.assertNotIn("RUN", calls)
+        self.order(f"restore.sh -f {self.full} -c", "systemctl start tpot.service")
+
+    def test_a_wrong_step_wait_is_a_usage_error(self):
+        for value, ok in (("60", True), ("1200", True), ("86400", True), ("30m", False), ("59", False),
+                          ("86401", False), ("0600", False), ("", False), ("1e3", False)):
+            with self.subTest(value=value):
+                result = self.bash(f'myES_STEP_WAIT="{value}"\n'
+                                   'fuUI_USAGE_ERROR () { echo "USAGE: $1"; return 1; }\n'
+                                   + self.functions("fuCHECK_STEP_WAIT") + 'fuCHECK_STEP_WAIT; echo "rc=$?"\n')
+                self.assertIn("rc=0" if ok else "rc=1", result.stdout, result.stdout + result.stderr)
+                self.assertEqual("USAGE: TPOT_ES_STEP_WAIT=" in result.stdout, not ok)
+        # update.sh stops on it with the code of a wrong option, before sudo or anything else
+        environment = dict(self.environment(), TPOT_ES_STEP_WAIT="30m")
+        done = subprocess.run(["bash", UPDATE_SH, "-y"], cwd=REPO, capture_output=True, universal_newlines=True,
+                              env=environment, stdin=subprocess.DEVNULL, timeout=60)
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("TPOT_ES_STEP_WAIT=30m is no whole number of seconds from 60 to 86400.", done.stdout + done.stderr)
+        self.assertEqual(self.calls(), "")
 
 
 class StopTest(Scripts):
