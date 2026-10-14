@@ -963,7 +963,7 @@ The file holds the `@@tpot loss <key> <text>` lines of `--check-data-loss` that 
 
 If you decline (or cannot answer):
  - older backups stay where they are, the update stops before it touches anything with exit code 5 and T-Pot keeps running. Free some space, or confirm.
- - the Elasticsearch upgrade does not happen: the checkout and your configuration are rolled back, the Elasticsearch data was never touched and the run ends with exit code 5. T-Pot stays stopped, with `-s` it starts again on the release it ran before. Run it with `--full` to have the data in the backup, whatever `TPOT_DATA_PATH` is.
+ - the Elasticsearch upgrade does not happen: the checkout and your configuration are rolled back, the Elasticsearch data was never touched and the run ends with exit code 5. T-Pot starts again on the release it ran before when `tpot.service` is enabled (or with `-s`). Make room in `~/tpot_backups` and run the update again: the data then goes into the backup by itself.
  - images that cannot be pulled again are kept, and the update goes on. An image the registry can supply again (it has an image with the same digest) is removed without a question. One built here (no digest, or another one) and one the registry does not confirm within 90 seconds for all images together (not reachable, too slow) are kept unless you confirm their removal.
 
 `update.sh --check-data-loss` lists what the run would lose and changes nothing (a `git fetch` at most); exit code 0 means nothing found, 3 found, 1 it cannot tell. The T-Pot Manager runs this check before an update from its menu and asks first; a yes there confirms the findings it showed and nothing else (`--accept-data-loss-file`), if the check cannot tell it says why.
@@ -971,27 +971,33 @@ If you decline (or cannot answer):
 ### Elastic Stack Upgrades
 When a release ships a newer Elastic Stack, Elasticsearch and Kibana upgrade their data in
 `~/tpotce/data/elk` in place on the first start. ***This cannot be undone*** - the older version
-refuses to start on upgraded data. Run such an update with `--full`, or take a snapshot of the
-machine first:
-```
-./update.sh -y --full
-```
+refuses to start on upgraded data. `update.sh` therefore takes `data/elk/data` into the backup of the
+run before the upgrade, by itself.
+
 Before it pulls the new images `update.sh` compares the Elasticsearch version that ran so far with
 the one of the release and, if they differ,
  - stops if the data partition is 90% full or more - Elasticsearch no longer allocates new indices
    then. The checkout and your configuration are put back to the state before the update, nothing
-   was pulled, and T-Pot is left stopped.
+   was pulled, and T-Pot starts again when `tpot.service` is enabled (or with `-s`).
  - warns at 85% and more.
- - asks if the backup of the run does not hold `data/elk/data` (default no), and tells you how to
-   copy it while T-Pot is still stopped. A no, or no terminal without `--accept-data-loss`, puts the
-   checkout and your configuration back and ends with exit code 5; T-Pot stays stopped, with `-s` it
-   starts again on the previous release. `--full` puts the data into the backup, whatever
-   `TPOT_DATA_PATH` is, and then there is no question. `-y` does not answer it. Where the checkout
-   cannot go back (it is the new release already, see below), the question says that a no cannot
-   stop the next start from upgrading the data: copy `data/elk/data` first, then update again.
+ - adds `data/elk/data` of the data folder in use (`TPOT_DATA_PATH`) to the backup of the run when
+   it is not in it yet (with `--full` it is). That needs room in `~/tpot_backups`: the size of the
+   data plus 10 %, the reserve of every backup kept free, and, where the backups share the
+   filesystem of the data, that filesystem below 85% afterwards. The archive then has the name of a
+   full one. A copy that fails or is stopped leaves the archive as it was. This also holds after the
+   update.sh of an earlier release restarted into this one.
+ - asks only when there is no room, or the archive already holds a `data/elk/data` of another folder
+   (default no), and tells you how to copy it while T-Pot is still stopped. A no, or no terminal
+   without `--accept-data-loss`, puts the checkout and your configuration back and ends with exit
+   code 5; T-Pot starts again on the previous release when `tpot.service` is enabled (or with `-s`).
+   Make room and run the update again, or upgrade without a copy with `--accept-data-loss` (after an
+   earlier update.sh restarted into this one: `./update.sh -y -- --accept-data-loss`, an older
+   update.sh rejects the option without `--`). `-y` does not answer it. Where the checkout cannot go
+   back (it is the new release already, see below), the question says that a no cannot stop the
+   next start from upgrading the data: copy `data/elk/data` first, then update again.
 
 The first start after the upgrade takes longer than usual, give it a few minutes. To go back, stop
-T-Pot and restore the `--full` archive of that update with `restore.sh -f <archive> -y`: it replaces
+T-Pot and restore the full archive of that update (`_full` in its name) with `restore.sh -f <archive> -y`: it replaces
 `data/elk/data` with the copy from the archive (it asks first; without a terminal `--accept-data-loss`
 confirms it) and brings back the checkout and `.env`, so T-Pot starts on the previous images again.
 

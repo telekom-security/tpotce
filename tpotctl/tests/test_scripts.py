@@ -241,8 +241,18 @@ class UpdateShTest(Harness):
         self.assertEqual(len(re.findall(r'eval "\$\{myTRAP:-trap - INT\}"', append)), 2)
         self.assertEqual(len(re.findall(r"trap .*INT", read("update.sh").replace(append, ""))), 5)
 
-    def test_the_refusal_names_full(self):
-        self.assertTrue("--full" in self.check_elastic())
+    def test_the_refusal_never_names_full(self):
+        """The update.sh of the release before makes room for --full by deleting older backups without a
+        question: no hint or summary item of the Elasticsearch check sends anyone there."""
+        text = read("update.sh")
+        for name in ("fuCHECK_ELASTIC", "fuELASTIC_REFUSED", "fuES_ROOM_TEXT", "fuES_ACCEPT_TEXT",
+                     "fuAPPEND_ES_DATA", "fuRESTART_AFTER_REFUSAL"):
+            body = re.search(rf"function {name} \(\) \{{.*?\n\}}", text, re.S).group(0)
+            said = [line for line in body.splitlines()
+                    if re.search(r"fuUI_(HINT|WARN|ERROR|OK)|fuDID|echo \"|myTEXT=|myES_APPEND_WHY=", line)]
+            with self.subTest(name=name):
+                self.assertTrue(said)
+                self.assertFalse([line for line in said if "--full" in line], said)
 
     def test_restart_into_this_update_sh_keeps_it(self):
         self.assertEqual(self.restart_args(read("update.sh"), "-y", "-B", "/run/f", "-F"),
@@ -1700,7 +1710,7 @@ DF = ('#!/bin/sh\ncase "$*" in\n  *size*) echo "1B-blocks"; cat "$HOME/df_size" 
       '  *pcent*) echo "Use%"; cat "$HOME/df_pcent" 2>/dev/null || echo " 40%" ;;\nesac\n')
 # du -k <file>: the KiB of the file from HOME/sizes ("<name> <kib>" per line); du -scb (fuBACKUP_SIZE)
 # says what HOME/need holds; du -sb (fuES_DATA_FITS, the Elasticsearch data) what HOME/es_need holds,
-# without it the size cannot be read
+# without it the size cannot be read. It answers for any path, also one that does not exist
 DU = ('#!/bin/sh\nfor a; do f="$a"; done\n'
       'case "$1" in -sb) [ -f "$HOME/es_need" ] || exit 1; printf "%s\\t%s\\n" "$(cat "$HOME/es_need")" "$f"; exit 0 ;; esac\n'
       'case "$1" in -s*b) echo "$(cat "$HOME/need" 2>/dev/null || echo 1)\ttotal"; exit 0 ;; esac\n'
@@ -1709,8 +1719,9 @@ DU = ('#!/bin/sh\nfor a; do f="$a"; done\n'
 
 # The functions of update.sh that put the Elasticsearch data into the archive of the run (fuCHECK_ELASTIC)
 # and start T-Pot again after a refusal
-ES_APPEND = ("fuSAME_DIR", "fuES_DATA_FITS", "fuARCHIVE_HAS_ES_DATA", "fuARCHIVE_NAME", "fuARCHIVE_RENAMED",
-             "fuAPPEND_ES_DATA", "fuRESTART_AFTER_REFUSAL")
+ES_APPEND = ("fuSAME_DIR", "fuSAME_FS", "fuES_DATA_FITS", "fuARCHIVE_HAS_ES_DATA", "fuARCHIVE_NAME",
+             "fuARCHIVE_LIST", "fuROTATE", "fuARCHIVE_RENAMED", "fuAPPEND_ES_DATA", "fuRESTART_AFTER_REFUSAL",
+             "fuES_ROOM_TEXT", "fuES_ACCEPT_TEXT")
 
 
 class DataLossTest(Harness):
@@ -1884,7 +1895,7 @@ class DataLossTest(Harness):
         self.assertNotIn("ASKED", out)
         self.assertIn("WARN: Elasticsearch 8.19.0 -> 9.1.0 upgrades the data in "
                       f"{self.tpotce}/data/elk on the next start. This cannot be undone and the backup "
-                      "of this run does not hold it (--full does).", out)
+                      "of this run does not hold it.", out)
         self.assertIn("DID: fail: Not updated: the Elasticsearch upgrade was not confirmed, the checkout "
                       "and the configuration are back.", out)
         self.assertLess(out.index("sudo cp -a"), out.index("WARN: Elasticsearch 8.19.0"))   # the copy hint first
@@ -2205,7 +2216,7 @@ class DataLossTest(Harness):
         }
     """)
     CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
-                       "fuCHECK_BACKUP_SPACE", "fuES_DATA_FITS",
+                       "fuCHECK_BACKUP_SPACE", "fuES_DATA_FITS", "fuSAME_FS",
                        "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuIMAGE_PULLABLE", "fuSORT_IMAGES",
                        # the archive of 24.04.1 is there to be found, the check must not take it
                        "fuOLD_RELEASE_BACKUP", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",

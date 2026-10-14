@@ -305,10 +305,10 @@ checkout, your configuration and edition put back, the images of the release pul
 	  --opt "-s, --start" "Start T-Pot again once the update is through. Off by default,
 so an unattended run leaves the services stopped unless asked." \
 	  --opt "-F, --full" "Include the whole data/ folder in the backup. Off by default,
-on a busy hive it turns a 1 MB archive into tens of GB. Use it
-when a release brings a newer Elastic Stack: Elasticsearch and
-Kibana upgrade their data in data/elk/ on the first start, and
-that cannot be undone. Kept uncompressed either way." \
+on a busy hive it turns a 1 MB archive into tens of GB. Not
+needed for a newer Elastic Stack: before its upgrade, which
+cannot be undone, the run adds data/elk/data to the backup by
+itself where there is room. Kept uncompressed either way." \
 	  --opt "-o, --backup-only" "Only write the backup (T-Pot is stopped for it) and end, no
 update. With --full the data is in it, with -s T-Pot starts
 again afterwards. tpot uninstall uses it." \
@@ -1294,8 +1294,8 @@ function fuDATA_PATH () {
 # Can fuROLLBACK_CHECKOUT go back at all? Only if the archive of this run points at an older
 # commit than the checkout has now and restore.sh is there. It is not after the update.sh of the
 # tag 24.04.1 restarted into this one without a handover: its pull came before the backup of this
-# run. The update.sh of the branch master (24.04.1 as well, what the installed hosts run) hands its
-# archive over (myPREPARED): written before its pull, its rollback.txt names the commit that ran.
+# run. The update.sh of the release before on the branch master (what the installed hosts run) hands
+# its archive over (myPREPARED): written before its pull, its rollback.txt names the commit that ran.
 function fuCAN_ROLLBACK () {
 	local myCOMMIT=""
 	myCOMMIT=$(tar xOf "${myARCHIVE}" rollback.txt 2>/dev/null | tr -d "[:space:]")
@@ -1354,14 +1354,31 @@ function fuRESTART_AFTER_REFUSAL () {
 	return 1
 }
 
+# The ways on after the Elasticsearch data did not go into the backup, for the hints of fuCHECK_ELASTIC
+# and the summary of a refusal. After a handover (myPREPARED) the next run starts with the update.sh
+# that started this run: --accept-data-loss goes after `--` then (an older update.sh stops with its
+# usage on the option alone, after `--` every one hands it on). Never --full: the update.sh of the
+# release before makes room for a full backup by deleting older ones without a question.
+function fuES_ROOM_TEXT () {
+	if [ -n "${myES_WITH}" ];
+	  then echo "Make room in ${myBACKUPDIR} (it needs about $(( myES_WITH / 1048576 )) MB), then run the update again: the Elasticsearch data goes into the backup by itself."
+	  else echo "Make room in ${myBACKUPDIR}, then run the update again: the Elasticsearch data goes into the backup by itself."
+	fi
+}
+function fuES_ACCEPT_TEXT () {
+	if [ -n "${myPREPARED}" ];
+	  then echo "To upgrade without a copy: ./update.sh -y -- --accept-data-loss (an older update.sh rejects --accept-data-loss alone, after -- every one takes it)."
+	  else echo "To upgrade without a copy: ./update.sh -y --accept-data-loss."
+	fi
+}
+
 # The Elasticsearch upgrade of fuCHECK_ELASTIC was not confirmed (a no, no terminal, Ctrl+C at
 # the question or while its data went into the backup): the checkout and the configuration go
 # back to the release T-Pot ran so far, and T-Pot starts again on it where it ran before
 # (fuRESTART_AFTER_REFUSAL). Where no rollback is possible (myROLLBACK empty, see
 # fuCHECK_ELASTIC) T-Pot stays stopped: its next start upgrades the data. myDATA and myOLD are
-# the ones of fuCHECK_ELASTIC. After the handover of the update.sh of 24.04.1 (myPREPARED) the
-# next run goes through that script again: the hints name what it knows, --full, and
-# --accept-data-loss after `--` (it hands on what follows, it stops with its usage on the option).
+# the ones of fuCHECK_ELASTIC. The summary says what kept the data out of the backup
+# (myES_APPEND_WHY of fuAPPEND_ES_DATA) and the ways on that fit it.
 function fuELASTIC_REFUSED () {
 	trap - INT
 	echo
@@ -1371,6 +1388,7 @@ function fuELASTIC_REFUSED () {
 	    fuUI_HINT "T-Pot stays stopped. Exiting."
 	    echo
 	    fuDID fail "Not updated: the Elasticsearch upgrade was not confirmed. The checkout is already the new release, the next start of T-Pot upgrades the data: T-Pot stays stopped."
+	    [ -z "${myES_APPEND_WHY}" ] || fuDID info "The Elasticsearch data did not go into the backup: ${myES_APPEND_WHY}"
 	    fuDID next "Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}), then run the update again."
 	    exit 5
 	fi
@@ -1392,14 +1410,22 @@ function fuELASTIC_REFUSED () {
 	    echo
 	    fuDID fail "Not updated: the Elasticsearch upgrade was not confirmed, but the checkout could not be put back: the next start of T-Pot upgrades the data."
 	fi
+	[ -z "${myES_APPEND_WHY}" ] || fuDID info "The Elasticsearch data did not go into the backup: ${myES_APPEND_WHY}"
+	# while T-Pot is stopped its data can be copied by hand; a data/elk/data of another folder in the
+	# archive leaves no other way to a copy
+	if [ -z "${myRUNS}" ] || [ "${myES_APPEND_KIND}" == "stale" ];
+	  then
+	    fuDID next "Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}, with T-Pot stopped), then run the update again and confirm the upgrade."
+	fi
+	case "${myES_APPEND_KIND}" in
+	  room) fuDID next "$(fuES_ROOM_TEXT)" ;;
+	  tar)  fuDID next "Or see why tar could not add the data (${myLOG}), then run the update again." ;;
+	esac
+	fuDID next "$(fuES_ACCEPT_TEXT)"
 	if [ -n "${myPREPARED}" ];
 	  then
-	    fuDID next "Make room for ${myDATA}/elk/data in ${myBACKUPDIR} (see above), then update again with ./update.sh -y --full, or confirm the loss with ./update.sh -y -- --accept-data-loss (the update.sh of 24.04.1 rejects --accept-data-loss alone)."
-	    fuUI_HINT "Each run of the update.sh of 24.04.1 writes a backup to ${myBACKUPDIR} before it gets here, a cron job as well: fix the cause or answer at a terminal."
-	    fuDID info "Each run of the update.sh of 24.04.1 writes a backup to ${myBACKUPDIR} before it gets here, a cron job as well: fix the cause or answer at a terminal."
-	  elif [ -z "${myRUNS}" ];
-	    then fuDID next "Copy ${myDATA}/elk/data first or use --full, then update again and confirm the upgrade."
-	  else fuDID next "Update again with --full, the backup then holds the Elasticsearch data."
+	    fuUI_HINT "Each run of the update.sh that started this run writes a backup to ${myBACKUPDIR} before it gets here, a cron job as well: fix the cause or answer at a terminal."
+	    fuDID info "Each run of the update.sh that started this run writes a backup to ${myBACKUPDIR} before it gets here, a cron job as well: fix the cause or answer at a terminal."
 	fi
 	exit 5
 }
@@ -1429,7 +1455,7 @@ function fuOLD_ES_VERSION () {   # $1 = the registry of .env, $2 = tag
 
 # The archive the update.sh of the tag 24.04.1 wrote before it restarted into this one, if it holds
 # the Elasticsearch data: the newest $HOME/*_tpot_backup.tgz, younger than 24 hours. (The update.sh
-# of the branch master, 24.04.1 as well, hands its archive in ~/tpot_backups over as myARCHIVE
+# of the release before on the branch master hands its archive in ~/tpot_backups over as myARCHIVE
 # instead: without --full it holds no data/elk/data, fuAPPEND_ES_DATA adds it.) That script ran
 # `tar cvf` (uncompressed despite the name, `tar tf` reads either) of everything in ~/tpotce, so
 # it holds a data folder inside ~/tpotce only, under its path there (data/elk/data/...), and the
@@ -1539,7 +1565,7 @@ function fuARCHIVE_ENV () {   # $1 = archive, $2 = key
 # HEAD. Both are read from the archive before either is written, in place (mode and owner stay); a
 # write that fails puts back the files of the checkout (git show HEAD:<file>) and stops the run.
 # Otherwise nothing changes; a .env of the checkout without a web user gets the way to take it
-# from the archive yourself. The update.sh of the branch master (24.04.1 as well, what the
+# from the archive yourself. The update.sh of the release before on the branch master (what the
 # installed hosts run) needs none of this: it hands over (myPREPARED) and fuRESTORE takes your
 # configuration from the archive it hands over.
 function fuOLD_UPDATER_CONFIG () {
@@ -1653,47 +1679,71 @@ function fuSAME_DIR () {   # $1, $2 = the paths
 	[ "${myA}" == "${myB}" ]
 }
 
+# Are both paths on one filesystem? By their device (stat of GNU, else of BSD). A path that cannot
+# be told counts as on the same one: the check it guards is then the stricter one.
+function fuSAME_FS () {   # $1, $2 = the paths
+	local myA="" myB=""
+	myA=$(stat -c %d -- "$1" 2>/dev/null || stat -f %d -- "$1" 2>/dev/null)
+	myB=$(stat -c %d -- "$2" 2>/dev/null || stat -f %d -- "$2" 2>/dev/null)
+	[ -z "${myA}" ] || [ -z "${myB}" ] || [ "${myA}" == "${myB}" ]
+}
+
 # Is there room for the Elasticsearch data of the data folder $1 in the backup? Its size (du -sb
 # through sudo, as fuBACKUP_SIZE measures) and a margin of 10 % have to fit into the free space of
-# myBACKUPDIR (of HOME while that does not exist yet, as fuCHECK_BACKUP_SPACE looks), with the
-# reserve of every backup (myBACKUP_RESERVE_PERCENT of the partition) still free afterwards: the
-# archive usually sits on the filesystem of data/, Elasticsearch and the honeypots need the rest.
-# The size check only, it changes nothing. myES_NEED and myES_FREE hold the bytes, myES_FITS_WHY
-# says why not. rc 0 when it fits.
-function fuES_DATA_FITS () {   # $1 = the data folder
-	local myDIR="${myBACKUPDIR}" myOUT="" myTOTAL="" myRESERVE=0 myWITH=0
-	myES_NEED="" myES_FREE="" myES_FITS_WHY=""
+# myBACKUPDIR (of HOME while that does not exist yet, as fuCHECK_BACKUP_SPACE looks), less $2 bytes
+# that are still to be written before (the regular backup, for --check-data-loss), with the reserve
+# of every backup (myBACKUP_RESERVE_PERCENT of the partition) still free afterwards. Where the
+# backup folder is on the filesystem of the data folder, that filesystem also stays below 85 %:
+# Elasticsearch starts to complain there, and stops allocating at 90 %. The size check only, it
+# changes nothing. myES_NEED, myES_WITH (with the margin) and myES_FREE hold the bytes,
+# myES_FITS_WHY says why not, myES_FITS_KIND is room or size (the size could not be read). rc 0
+# when it fits.
+function fuES_DATA_FITS () {   # $1 = the data folder, $2 = bytes written before it (default 0)
+	local myDIR="${myBACKUPDIR}" myOUT="" myTOTAL="" myRESERVE=0 myBEFORE="${2:-0}" myAFTER=0
+	myES_NEED="" myES_WITH="" myES_FREE="" myES_FITS_WHY="" myES_FITS_KIND=""
+	[[ "${myBEFORE}" =~ ^[0-9]+$ ]] || myBEFORE=0
 	[ -d "${myDIR}" ] || myDIR="$HOME"
 	# a du that could not read everything is no size
 	myOUT=$(sudo du -sb "$1/elk/data" 2>/dev/null) || myOUT=""
 	myES_NEED="${myOUT%%[[:space:]]*}"
 	if ! [[ "${myES_NEED}" =~ ^[0-9]+$ ]];
 	  then
+	    myES_NEED=""
+	    myES_FITS_KIND="size"
 	    myES_FITS_WHY="the size of $1/elk/data could not be read."
 	    return 1
 	fi
+	myES_WITH=$(( myES_NEED + myES_NEED / 10 ))
 	myES_FREE=$(df -B1 --output=avail "${myDIR}" 2>/dev/null | tail -1 | tr -d " ")
 	myTOTAL=$(df -B1 --output=size "${myDIR}" 2>/dev/null | tail -1 | tr -d " ")
-	if ! [[ "${myES_FREE}" =~ ^[0-9]+$ ]] || ! [[ "${myTOTAL}" =~ ^[0-9]+$ ]];
+	if ! [[ "${myES_FREE}" =~ ^[0-9]+$ ]] || ! [[ "${myTOTAL}" =~ ^[0-9]+$ ]] || [ "${myTOTAL}" -eq 0 ];
 	  then
+	    myES_FITS_KIND="size"
 	    myES_FITS_WHY="the free space of ${myDIR} could not be read."
 	    return 1
 	fi
 	myRESERVE=$(( myTOTAL / 100 * myBACKUP_RESERVE_PERCENT ))
-	myWITH=$(( myES_NEED + myES_NEED / 10 ))
-	if [ $(( myES_FREE - myWITH )) -lt "${myRESERVE}" ];
+	if [ $(( myES_FREE - myBEFORE - myES_WITH )) -lt "${myRESERVE}" ];
 	  then
-	    myES_FITS_WHY="$1/elk/data needs about $(( myWITH / 1048576 )) MB with a margin of 10 %, ${myDIR} has $(( myES_FREE / 1048576 )) MB free and keeps $(( myRESERVE / 1048576 )) MB in reserve."
+	    myES_FITS_KIND="room"
+	    myES_FITS_WHY="$1/elk/data needs about $(( myES_WITH / 1048576 )) MB with a margin of 10 %, ${myDIR} has $(( (myES_FREE - myBEFORE) / 1048576 )) MB free for it and keeps $(( myRESERVE / 1048576 )) MB in reserve."
+	    return 1
+	fi
+	myAFTER=$(( (myTOTAL - myES_FREE + myBEFORE + myES_WITH) * 100 / myTOTAL ))
+	if [ "${myAFTER}" -ge 85 ] && fuSAME_FS "${myDIR}" "$1";
+	  then
+	    myES_FITS_KIND="room"
+	    myES_FITS_WHY="with about $(( myES_WITH / 1048576 )) MB of it ${myDIR} would be ${myAFTER}% full, Elasticsearch needs the filesystem of $1 below 85%."
 	    return 1
 	fi
 	return 0
 }
 
 # Does the archive of this run hold the Elasticsearch data that runs? Its members are data/...,
-# whatever the data path. The update.sh of 24.04.1 (the branch master, which hands its archive over)
-# always archives ~/tpotce/data: with TPOT_DATA_PATH elsewhere a data/elk/data in its archive is
-# that folder, not the one that runs. Elsewhere it counts only when the MANIFEST names the data
-# folder that runs (fuBACKUP writes it) or this run wrote the archive with --full itself.
+# whatever the data path. The update.sh of the branch master always archives ~/tpotce/data: with
+# TPOT_DATA_PATH elsewhere a data/elk/data in its archive is that folder, not the one that runs.
+# Elsewhere it counts only when the MANIFEST names the data folder that runs (fuBACKUP writes it) or
+# this run wrote the archive with --full itself.
 function fuARCHIVE_HAS_ES_DATA () {   # $1 = the data folder
 	local myFROM=""
 	tar tf "${myARCHIVE}" data/elk/data >/dev/null 2>&1 || return 1
@@ -1723,20 +1773,34 @@ function fuARCHIVE_RENAMED () {   # $1 = the name before, $2 = the new name
 	[ -z "${TPOT_UPDATE_DONE}" ] || TPOT_UPDATE_DONE="${TPOT_UPDATE_DONE//"$1"/"$2"}"
 }
 
-# The archive of this run holds no Elasticsearch data (no --full, or the handover of the update.sh
-# of 24.04.1, which never takes it without --full): the data folder $1 adds its elk/data to it, as
-# data/elk/data like fuBACKUP, where fuES_DATA_FITS finds room. The archive then has the name of a
-# full one (fuARCHIVE_NAME with myFULL), restore.sh and the rotation take it as one. A tar rf
-# writes from the end of the archive on, so its last MiB is kept aside first (more than the end
-# marker and the record around it): an append that fails or is stopped puts the archive back as it
-# was, byte for byte, nothing is deleted. rc 0 when the data is in the archive now; rc 1 otherwise, myES_APPEND_WHY says
-# why, myES_APPEND_STOPPED is set for a Ctrl+C.
+# The archive of this run holds no Elasticsearch data (no --full, or the handover of an update.sh that
+# never takes it without --full): the data folder $1 adds its elk/data to it, as data/elk/data like
+# fuBACKUP, where fuES_DATA_FITS finds room. The archive then has the name of a full one
+# (fuARCHIVE_NAME with myFULL), restore.sh and the rotation take it as one, and the full backups
+# rotate (fuROTATE). Not into an archive that holds a data/elk/data of another folder already (the
+# --full archive of the update.sh of the branch master with TPOT_DATA_PATH elsewhere): on a restore
+# the two would mix, and Elasticsearch does not start on that. A tar rf writes from the end of the
+# archive on, so its last MiB is kept aside first (more than the end marker and the record around
+# it): an append that fails or is stopped puts the archive back as it was, byte for byte, nothing is
+# deleted. rc 0 when the data is in the archive now; rc 1 otherwise, myES_APPEND_WHY says why and
+# myES_APPEND_KIND what kind of why (stale, room, size, archive, tar, stopped), myES_APPEND_STOPPED
+# is set for a Ctrl+C.
 function fuAPPEND_ES_DATA () {   # $1 = the data folder
-	local myOLD="${myARCHIVE}" myNEW="" mySIZE="" myKEEP=0 myTAIL="" myRC=0 myTRAP="" myBACK=""
-	myES_APPEND_WHY="" myES_APPEND_STOPPED=""
+	local myBEFORE="${myARCHIVE}" myNEW="" mySIZE="" myKEEP=0 myTAIL="" myRC=0 myTRAP="" myBACK=""
+	myES_APPEND_WHY="" myES_APPEND_KIND="" myES_APPEND_STOPPED=""
+	if tar tf "${myARCHIVE}" data/elk/data >/dev/null 2>&1;
+	  then
+	    fuARCHIVE_HAS_ES_DATA "$1" && return 0
+	    myES_APPEND_KIND="stale"
+	    myES_APPEND_WHY="${myARCHIVE} holds a data/elk/data already that is not the one of $1 (from $HOME/tpotce/data); a copy added to it would mix with that one on a restore. Copy $1/elk/data by hand."
+	    fuUI_WARN "The Elasticsearch data cannot go into the backup: ${myES_APPEND_WHY}"
+	    return 1
+	fi
 	if ! fuES_DATA_FITS "$1";
 	  then
-	    myES_APPEND_WHY="no room for it in the backup: ${myES_FITS_WHY}"
+	    myES_APPEND_KIND="${myES_FITS_KIND}"
+	    myES_APPEND_WHY="${myES_FITS_WHY}"
+	    [ "${myES_FITS_KIND}" != "room" ] || myES_APPEND_WHY="no room for it in the backup: ${myES_FITS_WHY}"
 	    fuUI_WARN "The Elasticsearch data cannot go into the backup, ${myES_APPEND_WHY}"
 	    return 1
 	fi
@@ -1744,6 +1808,7 @@ function fuAPPEND_ES_DATA () {   # $1 = the data folder
 	mySIZE=$(wc -c < "${myARCHIVE}" 2>/dev/null | tr -d "[:space:]")
 	if ! [[ "${mySIZE}" =~ ^[0-9]+$ ]] || [ "${mySIZE}" -lt 1024 ] || [ $(( mySIZE % 512 )) -ne 0 ];
 	  then
+	    myES_APPEND_KIND="archive"
 	    myES_APPEND_WHY="${myARCHIVE} cannot be read as a tar archive."
 	    fuUI_WARN "The Elasticsearch data cannot go into the backup, ${myES_APPEND_WHY}"
 	    return 1
@@ -1754,6 +1819,7 @@ function fuAPPEND_ES_DATA () {   # $1 = the data folder
 	if ! tail -c "${myKEEP}" "${myARCHIVE}" > "${myTAIL}" 2>/dev/null \
 	   || [ "$(wc -c < "${myTAIL}" | tr -d "[:space:]")" != "${myKEEP}" ];
 	  then
+	    myES_APPEND_KIND="archive"
 	    myES_APPEND_WHY="the end of ${myARCHIVE} could not be kept aside."
 	    fuUI_WARN "The Elasticsearch data cannot go into the backup, ${myES_APPEND_WHY}"
 	    return 1
@@ -1782,8 +1848,13 @@ function fuAPPEND_ES_DATA () {   # $1 = the data folder
 	        myBACK="1"
 	    fi
 	    eval "${myTRAP:-trap - INT}"
+	    myES_APPEND_KIND="tar"
 	    myES_APPEND_WHY="tar could not add it to ${myARCHIVE}, see ${myLOG}."
-	    [ -z "${myES_APPEND_STOPPED}" ] || myES_APPEND_WHY="it was stopped while it went into ${myARCHIVE}."
+	    if [ -n "${myES_APPEND_STOPPED}" ];
+	      then
+	        myES_APPEND_KIND="stopped"
+	        myES_APPEND_WHY="it was stopped while it went into ${myARCHIVE}."
+	    fi
 	    if [ -n "${myBACK}" ];
 	      then
 	        fuUI_WARN "The Elasticsearch data did not go into the backup, ${myES_APPEND_WHY} The archive is as it was before."
@@ -1797,14 +1868,16 @@ function fuAPPEND_ES_DATA () {   # $1 = the data folder
 	myES_APPEND_STOPPED=""
 	# a full archive now: its name says so, restore.sh and the rotation go by it
 	myNEW=$(myFULL="1" fuARCHIVE_NAME)
-	if mv "${myOLD}" "${myNEW}" 2>/dev/null;
+	if mv "${myBEFORE}" "${myNEW}" 2>/dev/null;
 	  then
-	    fuARCHIVE_RENAMED "${myOLD}" "${myNEW}"
+	    fuARCHIVE_RENAMED "${myBEFORE}" "${myNEW}"
 	  else
 	    fuUI_WARN "The archive keeps its name, it could not be renamed to ${myNEW}."
 	fi
 	fuUI_OK "The Elasticsearch data is now in ${myARCHIVE}."
 	fuDID ok "The Elasticsearch data is now in ${myARCHIVE}."
+	# the full backups rotate as after a --full backup (the newest, this one, stays)
+	myFULL="1" fuROTATE
 	return 0
 }
 
@@ -1850,11 +1923,16 @@ function fuCHECK_ELASTIC () {
 	  then
 	    fuUI_ERROR "${myDATA} is ${myUSED}% full, Elasticsearch needs it below 90%."
 	    fuUI_HINT "Nothing was pulled and no image was removed."
-	    fuROLLBACK_CHECKOUT
-	    fuUI_HINT "Free up space and run the update again. T-Pot is stopped, 'systemctl start tpot' brings it back."
+	    fuDID fail "${myDATA} is ${myUSED}% full, Elasticsearch needs it below 90%: free up space and update again."
+	    # as after every refusal: the release from before, and T-Pot running where it ran
+	    if fuROLLBACK_CHECKOUT && fuRESTART_AFTER_REFUSAL;
+	      then
+	        fuUI_HINT "Free up space and run the update again."
+	      else
+	        fuUI_HINT "Free up space and run the update again. T-Pot is stopped, 'systemctl start tpot' brings it back."
+	    fi
 	    fuUI_HINT "Exiting."
 	    echo
-	    fuDID fail "${myDATA} is ${myUSED}% full, Elasticsearch needs it below 90%: free up space and update again."
 	    exit 1
 	fi
 	if [ -n "${myUSED}" ] && [ "${myUSED}" -ge 85 ];
@@ -1870,39 +1948,36 @@ function fuCHECK_ELASTIC () {
 	    echo
 	    return
 	fi
+	# or the one the update.sh of the tag 24.04.1 wrote before it restarted into this one without a
+	# handover: no copy then. After a handover such an archive is from an earlier run, the copy into
+	# the archive of this run is the backup of the data as it is now. fuOLD_RELEASE_BACKUP keeps what
+	# it reads of that archive in myTMPDIR
+	fuTMPDIR
+	if [ -z "${myPREPARED}" ] && myOLDARCHIVE=$(fuOLD_RELEASE_BACKUP "${myDATA}" "${myOLDVERSION}");
+	  then
+	    fuUI_OK "The Elasticsearch data is in ${myOLDARCHIVE}, the backup of the update.sh of the release before."
+	    echo
+	    return
+	fi
 	# a no puts the checkout back (fuELASTIC_REFUSED), unless it is the new release already
 	myROLLBACK=""
 	fuCAN_ROLLBACK && myROLLBACK="1"
-	# Not in it (no --full, or the handover of the update.sh of 24.04.1): the data goes into the
-	# archive of this run now, where there is room, without a question. A Ctrl+C meanwhile is a no
+	# Not in a backup yet (no --full, or a handover): the data goes into the archive of this run
+	# now, where there is room, without a question. A Ctrl+C meanwhile is a no
 	if fuAPPEND_ES_DATA "${myDATA}";
 	  then
 	    echo
 	    return
 	fi
 	[ -z "${myES_APPEND_STOPPED}" ] || fuELASTIC_REFUSED
-	# or the one the update.sh of the tag 24.04.1 wrote before it restarted into this one;
-	# fuOLD_RELEASE_BACKUP keeps what it reads of that archive in myTMPDIR
-	fuTMPDIR
-	if myOLDARCHIVE=$(fuOLD_RELEASE_BACKUP "${myDATA}" "${myOLDVERSION}");
-	  then
-	    fuUI_OK "The Elasticsearch data is in ${myOLDARCHIVE}, the backup of the update.sh of the release before."
-	    echo
-	    return
-	fi
-	myTEXT="Elasticsearch ${myOLD:-?} -> ${myNEW} upgrades the data in ${myDATA}/elk on the next start. This cannot be undone and the backup of this run does not hold it (--full does)."
+	myTEXT="Elasticsearch ${myOLD:-?} -> ${myNEW} upgrades the data in ${myDATA}/elk on the next start. This cannot be undone and the backup of this run does not hold it."
 	if [ -n "${myROLLBACK}" ];
 	  then
 	    fuUI_HINT "T-Pot is stopped right now. To keep a copy of the data, answer no, copy it, e.g.:"
 	    fuUI_HINT "  sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}"
-	    if [ -n "${myPREPARED}" ];
-	      then
-	        # the next run goes through the update.sh of 24.04.1 again: what it knows
-	        fuUI_HINT "and run the update again. Or, with room for it in ${myBACKUPDIR}, run ./update.sh -y --full, which takes the data into the backup (the update.sh of 24.04.1 knows --full)."
-	        fuUI_HINT "Without a terminal ./update.sh -y -- --accept-data-loss confirms the loss; the update.sh of 24.04.1 rejects --accept-data-loss alone."
-	      else
-	        fuUI_HINT "and run the update again. Or run it with --full, which takes the data into the backup."
-	    fi
+	    fuUI_HINT "and run the update again."
+	    [ "${myES_APPEND_KIND}" != "room" ] || fuUI_HINT "$(fuES_ROOM_TEXT)"
+	    fuUI_HINT "$(fuES_ACCEPT_TEXT)"
 	  else
 	    fuUI_HINT "T-Pot is stopped right now."
 	    myTEXT="${myTEXT} A no cannot stop the next start of T-Pot from upgrading the data: the checkout is already the new release. Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}), then run the update again."
@@ -3007,8 +3082,8 @@ function fuCHECK_DATA_LOSS () {
 	      then
 	        myREPO="${myNEWREPO}"
 	    fi
-	    # Elasticsearch, as fuCHECK_ELASTIC will see it. Never with the archive of the update.sh of
-	    # 24.04.1 (fuOLD_RELEASE_BACKUP): this check runs for a T-Pot that is past that release, the
+	    # Elasticsearch, as fuCHECK_ELASTIC will see it. Never with the archive of the update.sh of the
+	    # tag 24.04.1 (fuOLD_RELEASE_BACKUP): this check runs for a T-Pot that is past that release, the
 	    # data in such an archive belongs to an update before this one
 	    if fuCOMPOSE_HAS elasticsearch;
 	      then
@@ -3024,13 +3099,14 @@ function fuCHECK_DATA_LOSS () {
 	          elif [ -n "${myFULL}" ] && [ -e "${myDATA}/elk/data" ];
 	            then
 	              fuUI_OK "Elasticsearch ${myOLD:-?} -> ${myNEW}, --full takes its data into the backup."
-	          # the run adds the data to its backup by itself where there is room (fuAPPEND_ES_DATA)
-	          elif fuES_DATA_FITS "${myDATA}";
+	          # the run adds the data to its backup by itself where there is room (fuAPPEND_ES_DATA),
+	          # after the regular backup it writes first
+	          elif fuES_DATA_FITS "${myDATA}" "$(fuBACKUP_SIZE)";
 	            then
 	              fuUI_OK "Elasticsearch ${myOLD:-?} -> ${myNEW}, the run adds its data to the backup (about $(( myES_NEED / 1048576 )) MB, $(( myES_FREE / 1048576 )) MB free)."
 	          else
 	            fuUI_HINT "The backup of the run cannot take the Elasticsearch data: ${myES_FITS_WHY}"
-	            fuLOSS_ADD elastic "Elasticsearch ${myOLD:-?} -> ${myNEW} upgrades the data in ${myDATA}/elk on the next start. This cannot be undone and the backup of this run does not hold it (--full does)."
+	            fuLOSS_ADD elastic "Elasticsearch ${myOLD:-?} -> ${myNEW} upgrades the data in ${myDATA}/elk on the next start. This cannot be undone and the backup of this run does not hold it."
 	        fi
 	    fi
 	    # The images of every other tag go after the pull, as fuREMOVEOLDIMAGES will see them: the
