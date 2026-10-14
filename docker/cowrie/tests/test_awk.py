@@ -498,6 +498,16 @@ class AwkTest(unittest.TestCase):
                 out, err, code = awk(style, [refs["program"]])
                 self.assertEqual((err, code), ("", 0))
                 self.assertEqual(out.splitlines(), refs[table].splitlines())
+        # mawk 1.3.3 (EdgeOS) shortens as POSIX says: a start below 1 takes its distance from 1 off the length
+        out, err, code = awk("mawk", [refs["program"]], version="1.3.3")
+        self.assertEqual((out.splitlines(), err, code), (refs["mawk-1.3.3"].splitlines(), "", 0))
+        # values beyond the int range: each version converts them its own way
+        big = refs["big"]
+        for style, version in (("gawk", None), ("mawk", "1.3.4 20200120"), ("mawk", "1.3.4 20240123"),
+                               ("mawk", "1.3.4 20250131"), ("mawk", "1.3.3")):
+            with self.subTest(big=version or style):
+                out, err, code = awk(style, [big["program"]], version=version)
+                self.assertEqual((out.splitlines(), err, code), (big[version or style].splitlines(), "", 0))
         index = refs["index"]
         for style in ("gawk", "mawk", "busybox"):
             with self.subTest(index=style):

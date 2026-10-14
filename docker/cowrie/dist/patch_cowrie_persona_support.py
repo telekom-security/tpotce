@@ -8162,20 +8162,32 @@ class TpotAwk:
             return float(math.trunc(x)) if math.isfinite(x) else x
         return self.format(text, values[1:])
 
-    @staticmethod
-    def mawk_substr(text: str, start: float, length) -> str:
-        """substr of mawk 1.3.4: start and length truncated to its int (at most 2147483647 either
-        way); a start below 1 becomes 1 and adds its distance from 0 to the length, in int
-        arithmetic (substr("hello", -1, 3) is "hell", substr("hello", 0, 5) is "hello")."""
-        def clamp(value: float) -> int:
-            return int(max(min(value, 2147483647.0), -2147483647.0)) if value == value else 0
+    def mawk_substr(self, text: str, start: float, length) -> str:
+        """substr of mawk, start and length truncated to its int (as recorded with mawk 1.3.3 of
+        debian:9, 1.3.4 20200120, 20240123 and 20250131):
+        - 1.3.3 shortens as POSIX says: a start below 1 takes its distance from 1 off the length
+          (substr("hello", 0, 5) is "hell", substr("hello", -1, 3) is "h");
+        - 1.3.4 adds its distance from 0 to the length (substr("hello", -1, 3) is "hell");
+        - up to 2020 values beyond the int are 2147483647 (or its negative), from 2023 (unverified:
+          the release between) they wrap around 2**32 (substr("hello", 1, 2147483650) is "");
+        - the length of substr(s, m) is 2147483647 in 1.3.3 and the length of s in 1.3.4;
+        - the length is computed in int arithmetic, so it can wrap past the int as well."""
+        def wrap(value: int) -> int:
+            return (value + 2 ** 31) % 2 ** 32 - 2 ** 31
 
-        begin = clamp(start)
-        if length is None:
-            return text[max(begin, 1) - 1:]
-        size = clamp(length)
+        def to_int(value: float) -> int:
+            if value != value:
+                return 0
+            if (self.version.split() + ["0"])[1] >= "20230000":
+                # through a long: saturated at its range, then the low 32 bits
+                return wrap(int(max(min(value, 2.0 ** 63 - 1), -2.0 ** 63)))
+            return int(max(min(value, 2147483647.0), -2147483647.0))
+
+        old = self.version.startswith("1.3.3")
+        begin = to_int(start)
+        size = to_int(length) if length is not None else 2147483647 if old else len(text)
         if begin < 1:
-            size = (size - begin + 2 ** 31) % 2 ** 32 - 2 ** 31
+            size = wrap(size + begin - 1 if old else size - begin)
             begin = 1
         if size <= 0:
             return ""
