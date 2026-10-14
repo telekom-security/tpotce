@@ -8607,6 +8607,11 @@ TPOT_WC_INPUT = 8 << 20
 # beyond TPOT_WC_INPUT up to this size wc counts lines, words, characters and bytes at C speed
 TPOT_WC_TAIL = 32 << 20
 TPOT_WC_PIECE = 1 << 20
+# bytes the files sort -o writes may hold in the emulated file system, for all of a session
+TPOT_WRITE_BUDGET = 4 << 20
+# the words of C wc (blanks: space, \t, \n, \v, \f, \r) without a list of them: blanks to " ", the rest
+# to "x"; a word starts at each " x"
+TPOT_WC_C_WORD_TABLE = bytes(0x20 if b in b" \t\n\v\f\r" else 0x78 for b in range(256))
 # white space Python's str.split takes that glibc's iswspace does not, characters of no width,
 # wide characters (East Asian W and F, the main blocks)
 TPOT_TEXT_PY_SPACE = re.compile("[\x1c-\x1f\x85\xa0\u2007\u202f]")
@@ -8653,6 +8658,9 @@ def tpot_text_quotef(name: str) -> str:
     """A file name in a message of coreutils 9: quoted only with characters a shell would treat."""
     if re.fullmatch(r"[\w./+,:@%^=-]++", name):
         return name
+    if "'" in name and not re.search(r'["$`\\!]', name):
+        # gnulib's shell-escape style: a name with a single quote in double quotes
+        return '"' + name + '"'
     return "'" + name.replace("'", "'\\''") + "'"
 
 
@@ -8729,7 +8737,13 @@ class TpotTextTool(HoneyPotCommand):
         return time.monotonic() > self.tpot_deadline
 
     def tpot_write_file(self, name: str, data: bytes) -> str:
-        """Write data as a file of the emulated file system (sort -o); the error text, "" if written."""
+        """Write data as a file of the emulated file system (sort -o); the error text, "" if written.
+        The files of a session share TPOT_WRITE_BUDGET bytes: past it the part that fits is written
+        and the error is the one of a full disk."""
+        used = getattr(self.protocol, "tpot_written", 0)
+        room = max(0, TPOT_WRITE_BUDGET - (used if isinstance(used, int) else 0))
+        full = len(data) > room
+        data = data[:room]
         path = self.fs.resolve_path(name, self.cwd)
         if self.fs.isdir(path):
             return "Is a directory"
@@ -8743,7 +8757,11 @@ class TpotTextTool(HoneyPotCommand):
         if isinstance(node, list):
             node[tpot_shell_fs.A_CONTENTS] = bytes(data[:TPOT_TEXT_INPUT])
         self.fs.update_size(path, len(data))
-        return ""
+        try:
+            self.protocol.tpot_written = TPOT_WRITE_BUDGET - room + len(data)
+        except Exception:  # noqa: BLE001 - a protocol that takes no attribute: no budget across commands
+            pass
+        return "No space left on device" if full else ""
 
     def tpot_emit(self, data) -> bool:
         """Output, at most TPOT_TEXT_OUTPUT bytes; False once the limit is reached."""
@@ -8964,7 +8982,7 @@ def tpot_wc_piece(data: bytes, gnu: bool, version: tuple, unicode: bool, longest
     wc (bytes) counts them; the longest line only when asked for (-L)."""
     lines = data.count(b"\n")
     if data.isascii():
-        words = len(data.split())
+        words = tpot_wc_c_words(data)
         if (gnu and version < (9, 5)) or not gnu:
             # a word has a printable character
             words -= len(TPOT_TEXT_C_CONTROL_RUNS.findall(data))
@@ -8983,7 +9001,7 @@ def tpot_wc_piece(data: bytes, gnu: bool, version: tuple, unicode: bool, longest
             words = len(text.split())
         widest = max((tpot_wc_width(part) for part in TPOT_TEXT_LINE_ENDS.split(text)), default=0) if longest else 0
         return [lines, words, len(text), len(data), widest]
-    words = len(data.split()) - len(TPOT_TEXT_C_NO_PRINT_RUNS.findall(data))
+    words = tpot_wc_c_words(data) - len(TPOT_TEXT_C_NO_PRINT_RUNS.findall(data))
     chars = len(data.translate(None, TPOT_TEXT_CONTINUATION)) if unicode else len(data)
     widest = 0
     if longest:
@@ -9009,13 +9027,14 @@ def tpot_wc_counts(data: bytes, gnu: bool, version: tuple, unicode: bool, longes
                    posix: bool = False, late=None) -> list[int]:
     """The counts of the data in pieces of at most TPOT_WC_PIECE bytes, cut after a line end, a blank
     or at least between characters (a word cut in two counts once); in the POSIX locale GNU wc
-    counts bytes as characters. late(): the time is used up, the rest is not counted."""
+    counts bytes as characters. late(): the time is used up, the rest is not counted. The data is
+    read by offsets: no copy of it beyond one piece."""
     totals, at = [0, 0, 0, 0, 0], 0
-    tail, data = data[TPOT_WC_INPUT:TPOT_WC_TAIL], data[:TPOT_WC_INPUT]
-    while at < len(data):
-        end = min(len(data), at + TPOT_WC_PIECE)
+    head, tail_end = min(len(data), TPOT_WC_INPUT), min(len(data), TPOT_WC_TAIL)
+    while at < head:
+        end = min(head, at + TPOT_WC_PIECE)
         joined = False
-        if end < len(data):
+        if end < head:
             cut = max(data.rfind(b"\n", at, end), data.rfind(b" ", at, end), data.rfind(b"\t", at, end))
             if cut > at:
                 end = cut + 1
@@ -9032,14 +9051,32 @@ def tpot_wc_counts(data: bytes, gnu: bool, version: tuple, unicode: bool, longes
         at = end
         if late is not None and late():
             return totals
-    if tail:
-        # the rest of a large input: lines, words between ASCII blanks, characters, bytes
-        if data and data[-1:] not in (b" ", b"\t", b"\n") and tail[:1] not in (b" ", b"\t", b"\n"):
-            totals[1] -= 1
-        chars = len(tail) if (posix or (not gnu and not unicode)) else len(tail.translate(None, TPOT_TEXT_CONTINUATION))
-        totals = [totals[0] + tail.count(b"\n"), totals[1] + len(tail.split()), totals[2] + chars,
-                  totals[3] + len(tail), totals[4]]
+    if tail_end > head:
+        # the rest of a large input: lines, words between ASCII blanks (one that goes on from the head
+        # counts once), characters, bytes
+        bytes_only = posix or (not gnu and not unicode)
+        words, chars, before = 0, 0, data[head - 1:head] if head else b" "
+        for at in range(head, tail_end, TPOT_WC_PIECE):
+            piece = data[at:min(tail_end, at + TPOT_WC_PIECE)]
+            words += tpot_wc_c_words(piece, before)
+            chars += len(piece) if bytes_only else len(piece.translate(None, TPOT_TEXT_CONTINUATION))
+            before = piece[-1:]
+        totals = [totals[0] + data.count(b"\n", head, tail_end), totals[1] + words, totals[2] + chars,
+                  totals[3] + tail_end - head, totals[4]]
     return totals
+
+
+def tpot_wc_c_words(data: bytes, before: bytes = b" ") -> int:
+    """The words of data between ASCII blanks (as len(data.split())), counted in pieces of
+    TPOT_WC_PIECE bytes with no list of them; before: the byte ahead of the data (a word that goes on
+    from it is not counted again)."""
+    words = 0
+    before = before[-1:].translate(TPOT_WC_C_WORD_TABLE) or b" "
+    for at in range(0, len(data), TPOT_WC_PIECE):
+        mapped = data[at:at + TPOT_WC_PIECE].translate(TPOT_WC_C_WORD_TABLE)
+        words += mapped.count(b" x") + (before == b" " and mapped[:1] == b"x")
+        before = mapped[-1:]
+    return words
 
 
 class Command_tpot_wc(TpotTextTool):
@@ -9955,9 +9992,18 @@ class Command_tpot_sort(TpotTextTool):
                     break
             return 0
         error = self.tpot_write_file(target, b"".join(result))
+        shown = tpot_text_quotef(target) if self.version >= (8, 23) else target
+        if error == "No space left on device":
+            # as in containers with a full tmpfs: coreutils fails the write and the close of stdout;
+            # BusyBox fails the flush of stdout (exit 2 from 1.36), uClibc's says nothing
+            if self.gnu:
+                raise TpotTextStop(f"sort: write failed: {shown}: {error}\nsort: write error\n", 2)
+            if self.libc == "uclibc":
+                return 0
+            raise TpotTextStop(f"sort: standard output: {error}\n", 2 if self.version >= (1, 36) else 0)
         if error:
             if self.gnu:
-                raise TpotTextStop(f"sort: open failed: {tpot_text_quotef(target)}: {error}\n", 2)
+                raise TpotTextStop(f"sort: open failed: {shown}: {error}\n", 2)
             raise TpotTextStop(f"sort: can't open '{target}': {error}\n", 2)
         return 0
 

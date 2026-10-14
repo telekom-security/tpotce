@@ -401,6 +401,47 @@ class TextToolsTest(unittest.TestCase):
         cmd.start()
         self.assertEqual((cmd.err, cmd.exit_code), ("sort: open failed: /nosuch/dir/f: No such file or directory\n", 2))
 
+    def test_sort_o_has_a_budget_per_session(self):
+        """The files of sort -o of one session share TPOT_WRITE_BUDGET bytes; past it the text of a
+        full disk (coreutils / BusyBox in containers with a 4 KiB tmpfs) and the part that fits."""
+        cases = (({"text_style": "gnu", "text_version": "9.4"},
+                  "sort: write failed: '/tmp/a b': No space left on device\nsort: write error\n", 2),
+                 ({"text_style": "gnu", "text_version": "8.22"},
+                  "sort: write failed: /tmp/a b: No space left on device\nsort: write error\n", 2),
+                 ({"text_style": "busybox", "text_version": "1.36.1", "text_libc": "musl"},
+                  "sort: standard output: No space left on device\n", 2),
+                 ({"text_style": "busybox", "text_version": "1.35.0", "text_libc": "glibc"},
+                  "sort: standard output: No space left on device\n", 0),
+                 ({"text_style": "busybox", "text_version": "1.36.1", "text_libc": "uclibc"}, "", 0))
+        for keys, err, code in cases:
+            with self.subTest(keys=keys):
+                fs = Fs()
+                namespace = self.namespace(keys)
+                namespace["TPOT_WRITE_BUDGET"] = 40
+                first = namespace["commands"]["sort"](["-o", "/tmp/one", "/tmp/k.txt"], None, fs)
+                first.start()
+                self.assertEqual((first.err, first.exit_code), ("", 0))
+                second = namespace["commands"]["sort"](["-o", "/tmp/a b", "/tmp/k.txt"], None, fs)
+                second.protocol = first.protocol
+                second.start()
+                self.assertEqual((second.err, second.exit_code), (err, code))
+                self.assertEqual(fs.nodes["/tmp/a b"][7], b"w:10:b\nx:3:z\ny:1:a\nz:2:m\n"[:15])
+                self.assertEqual(fs.nodes["/tmp/a b"][4], 15)
+
+    def test_wc_counts_a_large_input_without_a_list_of_its_words(self):
+        """The words beyond TPOT_WC_INPUT are counted at C speed without a list of them."""
+        import tracemalloc
+        namespace = self.namespace({"text_style": "gnu", "text_version": "9.4"})
+        data = b"ab " * (10 << 20) + b"cd\n"
+        tracemalloc.start()
+        try:
+            counts = namespace["tpot_wc_counts"](data, True, (9, 4), True, longest=False)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        self.assertEqual(counts[:4], [1, (10 << 20) + 1, len(data), len(data)])
+        self.assertLess(peak, 8 << 20)
+
     def test_wc_of_an_exec_channel_takes_its_stdin(self):
         namespace = self.namespace({"text_style": "gnu", "text_version": "9.4"})
         cmd = namespace["commands"]["wc"](["-l"], None, Fs())
