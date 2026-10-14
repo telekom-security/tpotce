@@ -8801,6 +8801,7 @@ TEXT_COMMAND = r'''
 # of option errors, text_unicode). They read files of the emulated file system and the data of a pipe
 # or of the terminal; input, output, lines and keys have limits.
 import posixpath
+import stat
 import time
 import unicodedata
 from decimal import Context, Decimal, InvalidOperation, localcontext
@@ -8809,6 +8810,17 @@ from twisted.python import log
 
 from cowrie.core.config import CowrieConfig
 from cowrie.shell import fs as tpot_shell_fs
+
+
+def tpot_may_write(node, uid: int, gid: int) -> bool:
+    """Whether a user may write a file, or make one in a folder (write and search), by the owner,
+    group and mode of its node; root always may. A path without a node is writable."""
+    if uid == 0 or not isinstance(node, list):
+        return True
+    mode = int(node[tpot_shell_fs.A_MODE] or 0)
+    need = 0o3 if node[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_DIR else 0o2
+    shift = 6 if node[tpot_shell_fs.A_UID] == uid else 3 if node[tpot_shell_fs.A_GID] == gid else 0
+    return (mode >> shift) & need == need
 
 
 TPOT_TEXT_INPUT = 4 << 20
@@ -8966,8 +8978,11 @@ class TpotTextTool(HoneyPotCommand):
 
     def tpot_write_file(self, name: str, data: bytes) -> str:
         """Write data as a file of the emulated file system (sort -o); the error text, "" if written.
-        The files of a session share TPOT_WRITE_BUDGET bytes: past it the part that fits is written
-        and the error is the one of a full disk."""
+        As the persona's sort opens it: a file or a new file's folder the user may not write is
+        "Permission denied" (root and the command sudo runs may); a new file is a regular file of
+        mode 0644 of its user, an existing one keeps its owner and mode. The files of a session
+        share TPOT_WRITE_BUDGET bytes: past it the part that fits is written and the error is the
+        one of a full disk."""
         used = getattr(self.protocol, "tpot_written", 0)
         room = max(0, TPOT_WRITE_BUDGET - (used if isinstance(used, int) else 0))
         full = len(data) > room
@@ -8977,14 +8992,27 @@ class TpotTextTool(HoneyPotCommand):
             return "Is a directory"
         if not self.fs.isdir(posixpath.dirname(path)):
             return "No such file or directory"
-        try:
-            self.fs.mkfile(path, self.user["uid"], self.user["gid"], 0, 0o644)
-        except Exception:  # noqa: BLE001 - the file system refuses the path
-            return "No such file or directory"
+        sudo = bool(getattr(getattr(self, "pp", None), "tpot_sudo", False))
+        uid, gid = (0, 0) if sudo else (self.user.get("uid", 0), self.user.get("gid", 0))
+        private = getattr(self.fs, "_ensure_private_fs", None)
+        if callable(private):
+            private()  # the session's own copy of the tree before a node changes
         node = self.fs.getfile(path)
+        if isinstance(node, list) and node[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_FILE:
+            if not tpot_may_write(node, uid, gid):
+                return "Permission denied"
+        else:
+            if not tpot_may_write(self.fs.getfile(posixpath.dirname(path)), uid, gid):
+                return "Permission denied"
+            try:
+                self.fs.mkfile(path, uid, gid, 0, stat.S_IFREG | 0o644)
+            except Exception:  # noqa: BLE001 - the file system refuses the path
+                return "No such file or directory"
+            node = self.fs.getfile(path)
         if isinstance(node, list):
             node[tpot_shell_fs.A_CONTENTS] = bytes(data[:TPOT_TEXT_INPUT])
-        self.fs.update_size(path, len(data))
+            node[tpot_shell_fs.A_REALFILE] = None  # the new text, not the file of the honeyfs
+            node[tpot_shell_fs.A_SIZE] = len(data)
         try:
             self.protocol.tpot_written = TPOT_WRITE_BUDGET - room + len(data)
         except Exception:  # noqa: BLE001 - a protocol that takes no attribute: no budget across commands

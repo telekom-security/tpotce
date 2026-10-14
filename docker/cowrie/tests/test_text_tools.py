@@ -134,7 +134,26 @@ class Log:
 
 
 class ShellFs:
-    A_CONTENTS, A_SIZE = 7, 4
+    A_TYPE, A_UID, A_GID, A_SIZE, A_MODE, A_CONTENTS, A_REALFILE = 1, 2, 3, 4, 5, 7, 9
+    T_DIR, T_FILE = 1, 2
+
+
+class OwnedFs(Fs):
+    """An Fs whose files and folders have Cowrie's nodes: owner, group and mode (as the persona's
+    tree has them), so that sort -o meets the permissions of the file and its folder."""
+
+    def __init__(self, nodes):
+        super().__init__(files={path: FILES.get(path, b"old\n") for path, node in nodes.items() if node[1] == 2},
+                         dirs={path for path, node in nodes.items() if node[1] == 1})
+        self.nodes = {path: list(node) for path, node in nodes.items()}
+        self.private = 0
+
+    def _ensure_private_fs(self):  # noqa: N802 - Cowrie's name
+        self.private += 1
+
+    def mkfile(self, path, uid, gid, size, mode):
+        self.made = (path, uid, gid, mode)
+        return super().mkfile(path, uid, gid, size, mode)
 
 
 _ROOT = None
@@ -400,6 +419,61 @@ class TextToolsTest(unittest.TestCase):
         cmd = namespace["commands"]["sort"](["-o", "/nosuch/dir/f", "/tmp/k.txt"], None, fs)
         cmd.start()
         self.assertEqual((cmd.err, cmd.exit_code), ("sort: open failed: /nosuch/dir/f: No such file or directory\n", 2))
+
+    def test_sort_o_meets_the_permissions_of_the_persona(self):
+        """sort -o as the persona's sort (coreutils 9.1 and 8.22, BusyBox 1.27.2 and 1.36.1 as uid
+        65534 in containers): a file or folder the user may not write is "Permission denied" (2);
+        a new file is a regular file of mode 0644 of its user; an existing file keeps its owner and mode."""
+        import stat
+        def nodes():
+            return {"/": ["", 1, 0, 0, 4096, 0o40755, 0, [], None, None],
+                    "/etc": ["etc", 1, 0, 0, 4096, 0o40755, 0, [], None, None],
+                    "/etc/passwd": ["passwd", 2, 0, 0, 4, 0o100644, 0, None, None, "/honeyfs/etc/passwd"],
+                    "/tmp": ["tmp", 1, 0, 0, 4096, 0o41777, 0, [], None, None],
+                    "/tmp/k.txt": ["k.txt", 2, 0, 0, 4, 0o100644, 0, None, None, None],
+                    "/tmp/mine": ["mine", 2, 1000, 1000, 4, 0o100600, 0, None, None, "/honeyfs/tmp/mine"],
+                    "/tmp/ro": ["ro", 2, 1000, 1000, 4, 0o100444, 0, None, None, None]}
+        sorted_k = b"w:10:b\nx:3:z\ny:1:a\nz:2:m\n"
+        for keys, denied in (({"text_style": "gnu", "text_version": "9.1"}, "sort: open failed: {}: Permission denied\n"),
+                             ({"text_style": "gnu", "text_version": "8.22"}, "sort: open failed: {}: Permission denied\n"),
+                             ({"text_style": "busybox", "text_version": "1.36.1", "text_libc": "musl"},
+                              "sort: can't open '{}': Permission denied\n"),
+                             ({"text_style": "busybox", "text_version": "1.27.2", "text_libc": "musl"},
+                              "sort: can't open '{}': Permission denied\n")):
+            namespace = self.namespace(keys)
+
+            def sort(fs, target, uid=1000, sudo=False):
+                cmd = namespace["commands"]["sort"](["-o", target, "/tmp/k.txt"], None, fs)
+                cmd.user = {"uid": uid, "gid": uid}
+                cmd.pp = type("Pipe", (), {"tpot_sudo": sudo})()
+                cmd.start()
+                return cmd.err, cmd.exit_code
+
+            with self.subTest(keys=keys):
+                for target in ("/etc/passwd", "/etc/newfile", "/tmp/ro"):
+                    fs = OwnedFs(nodes())
+                    self.assertEqual(sort(fs, target), (denied.format(target), 2))
+                    self.assertNotIn(target, getattr(fs, "made", ("",)))
+                    if target in fs.nodes:
+                        self.assertEqual(fs.nodes[target], nodes()[target])
+                # a new file of the user: a regular file of mode 0644
+                fs = OwnedFs(nodes())
+                self.assertEqual(sort(fs, "/tmp/out"), ("", 0))
+                self.assertEqual(fs.made, ("/tmp/out", 1000, 1000, stat.S_IFREG | 0o644))
+                self.assertEqual(fs.nodes["/tmp/out"][7], sorted_k)
+                # the user's file keeps its owner and mode; its new text replaces the honeyfs file
+                self.assertEqual(sort(fs, "/tmp/mine"), ("", 0))
+                self.assertEqual(fs.nodes["/tmp/mine"][:6], ["mine", 2, 1000, 1000, len(sorted_k), 0o100600])
+                self.assertEqual((fs.nodes["/tmp/mine"][7], fs.nodes["/tmp/mine"][9]), (sorted_k, None))
+                self.assertGreater(fs.private, 0)
+                # root and the command sudo runs may write it: the owner stays root
+                for how in ({"uid": 0}, {"sudo": True}):
+                    fs = OwnedFs(nodes())
+                    self.assertEqual(sort(fs, "/etc/passwd", **how), ("", 0))
+                    self.assertEqual(fs.nodes["/etc/passwd"][2:6], [0, 0, len(sorted_k), 0o100644])
+                    self.assertEqual(fs.nodes["/etc/passwd"][7], sorted_k)
+                    self.assertEqual(sort(fs, "/etc/newfile", **how), ("", 0))
+                    self.assertEqual(fs.made, ("/etc/newfile", 0, 0, stat.S_IFREG | 0o644))
 
     def test_sort_o_has_a_budget_per_session(self):
         """The files of sort -o of one session share TPOT_WRITE_BUDGET bytes; past it the text of a
