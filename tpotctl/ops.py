@@ -20,7 +20,8 @@ from tpotctl.envfile import read_values
 
 SERVICE = "tpot"
 WEB_PORT = 64297       # nginx, the one web entry point of a HIVE
-_EDITION_RE = re.compile(r"^# T-Pot: (\S.*?)\s*$")
+# "# T-Pot: STANDARD", also without the space (as update.sh fuEDITION_LINE takes it)
+_EDITION_RE = re.compile(r"^# T-Pot:\s*(\S.*?)\s*$")
 
 
 class OpsError(Exception):
@@ -118,18 +119,52 @@ def compose_path(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None)
     return os.path.normpath(os.path.join(repo_dir, path))
 
 
+def edition_line(lines: List[str]) -> int:
+    """The index of the line that names the edition: the first "# T-Pot:" line of the leading comment
+    block (the lines above the first one that is neither empty nor a comment), -1 without one. A comment
+    of your own above it keeps the edition. update.sh (fuEDITION_LINE) and compose/customizer_core.py
+    (edition_line) have the same rule."""
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        if not line.lstrip().startswith("#"):
+            break
+        if line.startswith("# T-Pot:"):
+            return index
+    return -1
+
+
+def compose_head(path: str) -> List[str]:
+    """The leading comment block of a compose file and the line after it; OSError when it cannot be read."""
+    head = []
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            head.append(line)
+            if line.strip() and not line.lstrip().startswith("#"):
+                break
+    return head
+
+
+def edition_header(path: str) -> Tuple[str, str]:
+    """(edition, the line after it) of a compose file: ("", "") without an edition line, OSError when it
+    cannot be read."""
+    head = compose_head(path)
+    index = edition_line(head)
+    match = _EDITION_RE.match(head[index]) if index >= 0 else None
+    if not match:
+        return "", ""
+    return match.group(1), head[index + 1] if index + 1 < len(head) else ""
+
+
 def edition(repo_dir: str = REPO_DIR) -> str:
     """STANDARD, SENSOR, ... or CUSTOM (from STANDARD) for a customizer file."""
     try:
-        with open(compose_path(repo_dir), encoding="utf-8") as handle:
-            head = [handle.readline() for _ in range(3)]
+        name, after = edition_header(compose_path(repo_dir))
     except OSError:
         return "none"
-    match = _EDITION_RE.match(head[0])
-    if not match:
+    if not name:
         return "unknown"
-    name = match.group(1)
-    base = re.search(r"base=(\S+)", head[1]) if head[1].startswith("# customizer:") else None
+    base = re.search(r"base=(\S+)", after) if after.startswith("# customizer:") else None
     return f"{name} (from {base.group(1)})" if base else name
 
 
@@ -401,6 +436,37 @@ def script_command(name: str, args: List[str], repo_dir: str = REPO_DIR) -> List
     return [os.path.join(repo_dir, name)] + list(args)
 
 
+# update.sh --check-data-loss: one line per loss of data, exit 0 none, 3 some, anything else unknown
+LOSS_MARK = "@@tpot loss "
+
+
+def check_data_loss(args: List[str], timeout: int = 180, run: Callable = subprocess.run,
+                    repo_dir: str = REPO_DIR) -> Tuple[bool, List[Tuple[str, str]], str]:
+    """What an update (args as for update.sh: --full, --backup-only, -b, -r) would lose for good, read
+    with update.sh --check-data-loss, which changes nothing and asks nothing. (True, [(key, text), ...], "")
+    when it could tell, (False, [], why) when it could not (another exit code, a timeout, no script): why is
+    the last line update.sh wrote to stderr, without its marks."""
+    try:
+        proc = run(script_command("update.sh", ["--check-data-loss"] + list(args), repo_dir), cwd=repo_dir,
+                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   universal_newlines=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, [], f"no answer within {timeout} s"
+    except (OSError, subprocess.SubprocessError) as err:
+        return False, [], str(err)
+    if proc.returncode not in (0, 3):
+        said = [line.strip() for line in (proc.stderr or "").splitlines() if line.strip()]
+        why = re.sub(r"^#+\s*(\[[A-Z]+\]\s*-\s*)?", "", said[-1]) if said else ""
+        return False, [], why or f"update.sh ended with {proc.returncode}"
+    items = []
+    for line in (proc.stdout or "").splitlines():
+        if line.startswith(LOSS_MARK):
+            key, _, text = line[len(LOSS_MARK):].strip().partition(" ")
+            if key:
+                items.append((key, text.strip()))
+    return True, items, ""
+
+
 def backups(home: Optional[str] = None) -> List[str]:
     """Archives update.sh wrote, newest first."""
     folder = os.path.join(home or os.path.expanduser("~"), "tpot_backups")
@@ -434,6 +500,21 @@ class BackupInfo:
     manifest: List[str]
     groups: List[str]
     problem: str = ""
+    es_data: bool = False           # data/elk/data/: restoring data/ replaces the Elasticsearch data
+    es_size: int = 0                # the bytes of the files under data/elk/data/ (its table of contents)
+
+
+def _es_size(entries) -> int:
+    """The bytes of the files under data/elk/data/ of a table of contents. tar stores a file with more names
+    once, the later names as hard links to the first: a link whose first name is outside data/elk/data/
+    counts with the size of that member (once per member), one to a file inside is that file (counted), one
+    to a member the archive does not hold counts nothing."""
+    inside = "data/elk/data/"
+    sizes = {entry.name: entry.size for entry in entries if entry.isfile()}
+    total = sum(size for name, size in sizes.items() if name.startswith(inside))
+    outside = {entry.linkname for entry in entries
+               if entry.islnk() and entry.name.startswith(inside) and not entry.linkname.startswith(inside)}
+    return total + sum(sizes.get(name, 0) for name in outside)
 
 
 def backup_info(path: str) -> BackupInfo:
@@ -447,7 +528,8 @@ def backup_info(path: str) -> BackupInfo:
         size = 0
     try:
         with tarfile.open(path) as archive:
-            members = archive.getnames()
+            entries = archive.getmembers()
+            members = [entry.name for entry in entries]
             manifest = []
             if "MANIFEST" in members:
                 handle = archive.extractfile("MANIFEST")
@@ -458,4 +540,6 @@ def backup_info(path: str) -> BackupInfo:
     for group, member in _GROUP_MEMBER.items():
         if any(m == member or (member.endswith("/") and m.startswith(member)) for m in members):
             groups.append(group)
-    return BackupInfo(path, name, size, kind, manifest, groups)
+    es_data = any(m == "data/elk/data" or m.startswith("data/elk/data/") for m in members)
+    es_size = _es_size(entries)
+    return BackupInfo(path, name, size, kind, manifest, groups, es_data=es_data, es_size=es_size)

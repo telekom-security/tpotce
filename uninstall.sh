@@ -6,7 +6,7 @@ unset CDPATH
 
 print_help() {
   # shellcheck disable=SC2088 # the examples show ~ as a person types it
-  fuUI_HELP "Uninstaller" "uninstall.sh [-y] [-k] [-B <file>]" \
+  fuUI_HELP "Uninstaller" "uninstall.sh [-y] [-k] [-B <file>]"$'\n'"             [--accept-data-loss | --accept-data-loss-file <file>]" \
     --about "Removes T-Pot from this host: the containers, images and data, Docker Engine,
 tpot.service, the tpot user and group, the tpot command and ~/tpotce. SSH goes
 back to port 22. Backups in ~/tpot_backups stay." \
@@ -17,6 +17,11 @@ sudo or -B)" \
 lands in ~/tpot_backups and restore.sh can bring it back" \
     --opt "-B <file>" "Read the sudo password from a file, so -y also works without
 passwordless sudo" \
+    --opt "--accept-data-loss" "With -k: confirm a loss of data of the backup (older backups
+deleted to make room) without a terminal; -y does not, at a terminal the
+backup asks" \
+    --opt "--accept-data-loss-file <file>" "With -k: confirm only the losses of the backup this file
+names, the lines of update.sh --check-data-loss --backup-only --full" \
     --opt "-h" "Show this help message" \
     --example "~/tpotce/uninstall.sh" "Asks before it removes T-Pot" \
     --example "~/tpotce/uninstall.sh -y -k" "A full backup first, then T-Pot goes without a question" \
@@ -95,12 +100,37 @@ fuCLEANUP () {
 myQST=""
 myUNATTENDED=""
 myBACKUP=""
+myACCEPT_LOSS=""
 myBECOME_FILE=""
 myUSER=$(whoami)
 myANSIBLE_TPOT_PLAYBOOK="${myHERE}/installer/remove/tpot.yml"
 # Ansible become executable, empty means the Ansible default. See
 # sudo_rs_become_exe.
 myANSIBLE_BECOME_EXE=""
+
+# long options are translated first, only the letters are left for the loop below
+myARGV=()
+myACCEPT_FILE=""
+myACCEPT_FILE_NEXT=""
+for myARG in "$@";
+  do
+    if [ -n "${myACCEPT_FILE_NEXT}" ];
+      then
+        myACCEPT_FILE="${myARG}"
+        myACCEPT_FILE_NEXT=""
+        [ -n "${myACCEPT_FILE}" ] || usage_error "Option --accept-data-loss-file requires a file."
+        continue
+    fi
+    case "${myARG}" in
+      --accept-data-loss) myACCEPT_LOSS="y" ;;
+      --accept-data-loss-file) myACCEPT_FILE_NEXT="y" ;;
+      --help) myARGV+=("-h") ;;
+      --?*) usage_error "Unknown option ${myARG}." ;;
+      *) myARGV+=("${myARG}") ;;
+    esac
+  done
+[ -z "${myACCEPT_FILE_NEXT}" ] || usage_error "Option --accept-data-loss-file requires a file."
+set -- "${myARGV[@]}"
 
 while getopts ":ykB:h" opt; do
   case "$opt" in
@@ -196,7 +226,21 @@ if [ "${myBACKUP}" = "y" ];
       else
         sudo true
     fi
-    if ! "${myHERE}/update.sh" -y --backup-only --full;
+    # update.sh asks at a terminal before the backup loses data (older backups to make room),
+    # -y does not confirm that, --accept-data-loss (every loss) or --accept-data-loss-file (the
+    # losses it names) does
+    myLOSS_ARGS=()
+    [ -z "${myACCEPT_LOSS}" ] || myLOSS_ARGS+=(--accept-data-loss)
+    [ -z "${myACCEPT_FILE}" ] || myLOSS_ARGS+=(--accept-data-loss-file "${myACCEPT_FILE}")
+    myRC=0
+    "${myHERE}/update.sh" -y --backup-only --full ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"} || myRC=$?
+    if [ "${myRC}" -eq 5 ];
+      then
+        fuUI_ERROR "The backup would lose data that was not confirmed, T-Pot is not uninstalled."
+        uninstall_failed "The backup would lose data that was not confirmed, see the output above" \
+          "Make room in ~/tpot_backups, or confirm it at a terminal or with --accept-data-loss, or run it without -k"
+    fi
+    if [ "${myRC}" -ne 0 ];
       then
         fuUI_ERROR "The backup failed, T-Pot is not uninstalled."
         uninstall_failed "The backup failed, see the output above" \

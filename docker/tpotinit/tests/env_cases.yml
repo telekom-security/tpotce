@@ -48,6 +48,41 @@ cases:
   - name: persistence cycles at the limits
     set: {TPOT_PERSISTENCE_CYCLES: "999"}
     warnings: [LS_WEB_USER]
+  - name: es retention in days
+    services: [elasticsearch]
+    set: {TPOT_ES_RETENTION: "365"}
+    warnings: [LS_WEB_USER]
+  - name: es retention at the limits
+    services: [elasticsearch]
+    set: {TPOT_ES_RETENTION: "3650"}
+    warnings: [LS_WEB_USER]
+  - name: es retention off keeps everything
+    services: [elasticsearch]
+    set: {TPOT_ES_RETENTION: "off"}
+    warnings: [LS_WEB_USER]
+  - name: es retention empty leaves the policy alone
+    services: [elasticsearch]
+    set: {TPOT_ES_RETENTION: ""}
+    warnings: [LS_WEB_USER]
+  - name: es retention zero
+    services: [elasticsearch]
+    set: {TPOT_ES_RETENTION: "0"}
+    errors: [TPOT_ES_RETENTION]
+    warnings: [LS_WEB_USER]
+  - name: es retention above the limit
+    services: [elasticsearch]
+    set: {TPOT_ES_RETENTION: "3651"}
+    errors: [TPOT_ES_RETENTION]
+    warnings: [LS_WEB_USER]
+  - name: es retention not a number
+    services: [elasticsearch]
+    set: {TPOT_ES_RETENTION: "30d"}
+    errors: [TPOT_ES_RETENTION]
+    warnings: [LS_WEB_USER]
+  - name: es retention is not checked without elasticsearch
+    services: [tpotinit]
+    set: {TPOT_ES_RETENTION: "abc"}
+    warnings: [LS_WEB_USER]
   - name: unknown time zone
     set: {TPOT_ATTACKMAP_TEXT_TIMEZONE: Mars/Olympus}
     errors: [TPOT_ATTACKMAP_TEXT_TIMEZONE]

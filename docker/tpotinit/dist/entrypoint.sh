@@ -19,11 +19,21 @@ cleanup() {
           echo
       fi
   fi
-  kill -TERM "$PID"
+  # autoheal and es_retention.sh, once they run; a PUT of the ILM policy in flight may finish
+  [ -n "${PID}" ] && kill -TERM "${PID}" 2>/dev/null
+  if [ -n "${myILM_PID}" ];
+    then
+      kill -TERM "${myILM_PID}" 2>/dev/null
+      wait "${myILM_PID}" 2>/dev/null
+  fi
   rm -f /tmp/success
   echo "# Cleanup done."
   echo
+  # the waits below are interruptible (sleep & wait), the script ends here instead of going on
+  exit 0
 }
+PID=""
+myILM_PID=""
 trap cleanup SIGTERM
 
 # The .env validation (rules in /opt/tpot/etc/env.schema.yml) collects all errors
@@ -263,6 +273,15 @@ figlet "T-Pot: ${TPOT_VERSION}"
 echo
 touch /tmp/success
 
+# The ILM policy tpot follows TPOT_ES_RETENTION, unless it was changed outside of T-Pot
+# (rules in its bin/es_retention.sh). In the background: Elasticsearch takes a while
+# and nothing else waits for it.
+if [ "${TPOT_TYPE}" == "HIVE" ] && yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1;
+  then
+    /opt/tpot/bin/es_retention.sh &
+    myILM_PID=$!
+fi
+
 # We need to push objects to Kibana if this is a Hive and a fresh install
 if [ "${myFIRSTRUN}" == "true" ] && [ "${TPOT_TYPE}" == "HIVE" ];
   then
@@ -287,7 +306,8 @@ fi
 # Start autoheal if running on a supported os
 if [ "${TPOT_OSTYPE}" == "linux" ];
   then
-    sleep 60
+    # in the background, so that a SIGTERM ends the wait at once (cleanup)
+    sleep 60 & wait $!
     echo "# Dropping UDP connection tables to improve visibility of true source IPs."
     /usr/sbin/conntrack -D -p udp
 fi

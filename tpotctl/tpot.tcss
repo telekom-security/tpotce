@@ -901,6 +901,13 @@ Button.-error:disabled {
     margin-right: 2;
 }
 
+/* elastic (ElasticPane): the retention field as the host field of the checks */
+
+#elastic-value {
+    width: 16;
+    margin-right: 2;
+}
+
 /* a page that does not work on this host (LockedPane) */
 
 .locked-title {

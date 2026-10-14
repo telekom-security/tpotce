@@ -268,7 +268,7 @@ class LinuxOnlyTest(Scripts):
 
 
 class VersionTest(Scripts):
-    """update.sh compares with the version of its own checkout (the file `version`), not a number in it."""
+    """update.sh compares the file `version` of ~/tpotce with the one of its own checkout, not a number in it."""
 
     def checkout(self, name, version, with_script=True):
         path = os.path.join(self.home, name)
@@ -281,7 +281,7 @@ class VersionTest(Scripts):
         return path
 
     def test_the_version_of_the_checkout_is_the_newest_it_knows(self):
-        checkout = self.checkout("next", "99.1.0")
+        checkout = self.checkout("tpotce", "99.1.0")
         result = self.run_plain(os.path.join(checkout, "update.sh"), "-y", cwd=checkout)
         out = result.stdout + result.stderr
         self.assertIn("99.1.0 is eligible for the update procedure.", out)
@@ -290,7 +290,7 @@ class VersionTest(Scripts):
 
     def test_a_checkout_newer_than_the_update_sh_is_refused(self):
         script = self.checkout("script", "25.0.0")
-        checkout = self.checkout("next", "99.1.0", with_script=False)
+        checkout = self.checkout("tpotce", "99.1.0", with_script=False)
         result = self.run_plain(os.path.join(script, "update.sh"), "-y", cwd=checkout)
         out = result.stdout + result.stderr
         self.assertIn("99.1.0 cannot be upgraded automatically", out)
@@ -300,7 +300,7 @@ class VersionTest(Scripts):
     def compare(self, local, script_version):
         """update.sh of a checkout at script_version run in a checkout at local."""
         script = self.checkout("script", script_version)
-        checkout = self.checkout("next", local, with_script=False)
+        checkout = self.checkout("tpotce", local, with_script=False)
         result = self.run_plain(os.path.join(script, "update.sh"), "-y", cwd=checkout)
         return result.stdout + result.stderr
 
@@ -319,7 +319,7 @@ class VersionTest(Scripts):
     def test_spaces_and_crlf_in_the_version_files(self):
         """A version file written on Windows (CRLF) or with spaces is the same version."""
         script = self.checkout("script", " 24.04.10\r")
-        checkout = self.checkout("next", "24.04.2 \r", with_script=False)
+        checkout = self.checkout("tpotce", "24.04.2 \r", with_script=False)
         result = self.run_plain(os.path.join(script, "update.sh"), "-y", cwd=checkout)
         out = result.stdout + result.stderr
         self.assertIn("### [OK] - 24.04.2 is eligible for the update procedure.", out)
@@ -366,6 +366,81 @@ class SummaryTest(Scripts):
                     self.assertIn(line, result.stdout)
                 self.assertEqual(result.stdout.count("[FAILED]"), 1 if rc == 1 else 0, result.stdout)
         self.assertEqual(self.source_update("exit 3").stdout, "")         # not confirmed: no summary
+
+    def test_the_warnings_of_a_run_are_in_its_summary(self):
+        """An unknown edition and a Kibana that does not answer: both warnings are in the summary too."""
+        import tarfile
+        self.stub("docker", "#!/bin/sh\necho kibana\n")                  # the container runs, curl fails
+        compose = "services:\n  kibana:\n    image: mine\n"
+        for name, text in ((".env", "TPOT_TYPE=HIVE\n"), ("docker-compose.yml", compose)):
+            with open(os.path.join(self.tpotce, name), "w", encoding="utf-8") as out:
+                out.write(text)
+        staging = os.path.join(self.home, "staging")
+        os.makedirs(staging)
+        with open(os.path.join(staging, "docker-compose.yml"), "w", encoding="utf-8") as out:
+            out.write(compose)
+        archive = os.path.join(self.home, "x_tpot_backup.tar")
+        with tarfile.open(archive, "w") as tar:
+            tar.add(os.path.join(staging, "docker-compose.yml"), arcname="docker-compose.yml")
+        result = self.source_update(
+            f'myRUNNING=1 myELASTIC_GRACE=0 myARCHIVE="{archive}"\nfuCHECK_EDITION\n'
+            'fuELASTIC_READY kibana kibana "${myKIBANA}/api/status" Kibana\nfuRESTORE_EDITION\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-800:])
+        tail = result.stdout[result.stdout.index("### T-Pot is updated"):]
+        self.assertIn("### [WARNING] - Kibana did not answer within 0s, it is NOT in the backup.", tail)
+        self.assertIn("### [WARNING] - The edition of docker-compose.yml could not be determined.", tail)
+        self.assertIn("### [WARNING] - Your docker-compose.yml matches no edition, the changes of this release "
+                      "are not in it.", tail)
+
+    def test_a_changed_edition_is_in_the_summary(self):
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=HIVE\n")
+        os.makedirs(os.path.join(self.tpotce, "compose"))
+        with open(os.path.join(self.tpotce, "compose", "standard.yml"), "w", encoding="utf-8") as out:
+            out.write("# T-Pot: STANDARD\nservices: {}\n")
+        result = self.source_update('myRUNNING=1 myEDITION=STANDARD myCOMPOSE_CUSTOMIZED=1 myARCHIVE=/b/x.tar\n'
+                                    'fuRESTORE_EDITION\nexit 0\n')
+        tail = result.stdout[result.stdout.index("### T-Pot is updated"):]
+        self.assertIn("### [WARNING] - Your docker-compose.yml had been modified, the STANDARD edition of this "
+                      "release replaces it", tail)
+
+    def test_a_restarted_update_keeps_the_items_of_the_first_pass(self):
+        first = "ok:The backup is /b/x.tar.\nwarn:Kibana did not answer within 120s, it is NOT in the backup.\n"
+        result = self.source_update('myRUNNING=1 myARCHIVE=/b/x.tar\nfuBACKUP\nfuDID ok "Pulled."\nexit 0\n',
+                                    TPOT_UPDATE_PREPARED="1", TPOT_UPDATE_DONE=first)
+        tail = result.stdout[result.stdout.index("### T-Pot is updated"):]
+        self.assertEqual(tail.count("The backup is /b/x.tar."), 1, tail)
+        self.assertIn("### [WARNING] - Kibana did not answer within 120s, it is NOT in the backup.", tail)
+        self.assertIn("### [OK] - Pulled.", tail)
+        # the restart hands them over
+        text = base.read("update.sh")
+        restart = text[text.index('export TPOT_UPDATE_COMPOSE_CUSTOMIZED'):text.index('exec bash "$0" -y')]
+        self.assertIn("fuDONE_EXPORT", restart)
+
+    def test_the_items_survive_the_handover_whole(self):
+        """fuDID, fuDONE_EXPORT and the read of a restarted update.sh: every item comes back as it was, a
+        newline in a text is a space (an item never splits in two); also with the bash 3.2 of macOS."""
+        items = [("ok", "The backup is /b/x.tar."), ("warn", "quotes ' \" $HOME `x` \\ and  two  spaces"),
+                 ("warn", "two\nlines"), ("info", "  leading blanks"), ("fail", "a: colon")]
+        calls = "".join(f"fuDID {shlex.quote(kind)} {shlex.quote(text)}\n" for kind, text in items)
+        shells = [shell for shell in (shutil.which("bash"), "/bin/bash") if shell and os.path.exists(shell)]
+        for shell in dict.fromkeys(shells):
+            with self.subTest(shell=shell):
+                script = (f"source {shlex.quote(UPDATE_SH)}\n{calls}fuDONE_EXPORT\n"
+                          f"TPOT_UPDATE_PREPARED=1 {shell} -c " + shlex.quote(
+                              f'source {shlex.quote(UPDATE_SH)}; printf "<%s>\\n" "${{myDONE[@]}}"') + "\n")
+                result = subprocess.run([shell, "-c", script], capture_output=True, universal_newlines=True,
+                                        env=self.env(TPOT_GUM="off"), cwd=self.tpotce, timeout=60)
+                self.assertEqual(result.stdout.splitlines(),
+                                 [f"<{kind}:{text.replace(chr(10), ' ')}>" for kind, text in items],
+                                 result.stdout + result.stderr)
+        # nothing to hand over: nothing comes back
+        script = (f"source {shlex.quote(UPDATE_SH)}\nfuDONE_EXPORT\nTPOT_UPDATE_PREPARED=1 bash -c "
+                  + shlex.quote(f'source {shlex.quote(UPDATE_SH)}; echo "n=${{#myDONE[@]}}"') + "\n")
+        result = subprocess.run(["bash", "-c", script], capture_output=True, universal_newlines=True,
+                                env=self.env(TPOT_GUM="off"), cwd=self.tpotce, timeout=60)
+        self.assertIn("n=0", result.stdout, result.stderr)
 
     def test_no_summary_for_the_help_or_without_y(self):
         for args in (("-h",), ()):
@@ -444,7 +519,12 @@ class RestoreChoiceTest(Scripts):
     def test_no_question_left_in_restore_sh(self):
         text = base.read("restore.sh")
         rest = text.replace(text[text.index("# >>> plain fallback"):text.index("# <<< plain fallback")], "")
-        self.assertNotIn("fuUI_CONFIRM", rest)
+        # the groups are one list; the only yes / no left is the one before a loss of data (default no)
+        calls = [line.strip() for line in rest.splitlines()
+                 if "fuUI_CONFIRM" in line and not line.lstrip().startswith("#")]
+        self.assertEqual(calls, ['fuUI_CONFIRM --default no "${3:-Accept this loss of data?}"'])
+        loss = rest[rest.index("function fuLOSS_CONFIRM ()"):]
+        self.assertIn("fuUI_CONFIRM --default no", loss[:loss.index("\n}\n")])
         self.assertIn("fuUI_CHOOSE_MANY --all", rest)
 
 
@@ -485,8 +565,11 @@ class TaskScreenTest(Scripts):
             out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n")
         self.stub("docker", '#!/bin/sh\necho "docker $*" >> "$HOME/calls"\ncase "$*" in\n'
                             '  *pull*) echo "Pulled cowrie" ;;\n'
+                            '  *buildx*) echo "sha256:aaa" ;;\n'               # the registry has the same digest
+                            '  "image inspect"*) echo "ghcr.io/telekom-security/cowrie@sha256:aaa" ;;\n'
                             '  images*) echo "ghcr.io/telekom-security/cowrie:24.04.1" ;;\n'
                             '  rmi*) echo "Untagged: $2" ;;\nesac\n')
+        self.stub("timeout", '#!/bin/sh\nshift\nexec "$@"\n')                  # macOS has none
 
     def test_the_sourced_update_sh_runs_nothing(self):
         result = self.source_update('echo "sourced"')
@@ -536,7 +619,7 @@ class TaskScreenTest(Scripts):
         backup = body("fuBACKUP")
         self.assertTrue(re.search(r"sudo -v\n(?:\s*#.*\n)*\s*(?:if ! )?fuUI_SPIN (?:[^\n]|\\\n)*?sudo tar cf", backup),
                         backup[-900:])
-        # the Elastic export asks Kibana and waits for it, the pause waits for Ctrl+C: both in the open
+        # the Elastic export asks Kibana and waits for it, the Elasticsearch upgrade asks: both in the open
         self.assertNotIn("fuUI_SPIN", body("fuEXPORT_ELASTIC"))
         self.assertNotIn("fuUI_SPIN", body("fuCHECK_ELASTIC"))
 

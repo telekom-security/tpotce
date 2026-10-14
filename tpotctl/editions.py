@@ -72,15 +72,13 @@ def available(repo_dir: str = REPO_DIR, linux: Optional[bool] = None) -> List[Ch
 def current(repo_dir: str = REPO_DIR) -> Tuple[str, str]:
     """(edition, base): STANDARD and "", or CUSTOM and the edition the customizer started from."""
     try:
-        with open(ops.compose_path(repo_dir), encoding="utf-8") as handle:
-            head = [handle.readline() for _ in range(2)]
+        name, after = ops.edition_header(ops.compose_path(repo_dir))
     except OSError:
         return "none", ""
-    match = ops._EDITION_RE.match(head[0])
-    if not match:
+    if not name:
         return "unknown", ""
-    base = _BASE.match(head[1])
-    return match.group(1), base.group(1) if base else ""
+    base = _BASE.match(after)
+    return name, base.group(1) if base else ""
 
 
 def _read(path: str) -> str:

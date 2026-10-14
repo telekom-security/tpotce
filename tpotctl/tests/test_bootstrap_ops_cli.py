@@ -356,6 +356,17 @@ class OpsTest(unittest.TestCase):
             with open(os.path.join(repo, "docker-compose.yml"), "w") as handle:
                 handle.write("# T-Pot: CUSTOM\n# customizer: version=2 base=MINI\n# customizer: add=\n")
             self.assertEqual(ops.edition(repo), "CUSTOM (from MINI)")
+            # a comment of your own above the edition line keeps it (update.sh reads it the same way)
+            with open(os.path.join(repo, "docker-compose.yml"), "w") as handle:
+                handle.write("# e2e-marker\n# T-Pot: STANDARD\nservices:\n")
+            self.assertEqual(ops.edition(repo), "STANDARD")
+            with open(os.path.join(repo, "docker-compose.yml"), "w") as handle:
+                handle.write("# mine\n\n# T-Pot: CUSTOM\n# customizer: version=2 base=MINI\nservices:\n")
+            self.assertEqual(ops.edition(repo), "CUSTOM (from MINI)")
+            # after the first YAML line it names no edition
+            with open(os.path.join(repo, "docker-compose.yml"), "w") as handle:
+                handle.write("services:\n# T-Pot: STANDARD\n")
+            self.assertEqual(ops.edition(repo), "unknown")
 
     def test_the_version_comes_from_one_place(self):
         """The file version of the checkout, else TPOT_VERSION of its .env, else nothing."""
@@ -380,6 +391,41 @@ class OpsTest(unittest.TestCase):
         self.assertEqual(ops.script_command("update.sh", ["-y"], "/r"), ["/r/update.sh", "-y"])
         with self.assertRaises(ops.OpsError):
             ops.script_command("install.sh", [])
+
+    def test_check_data_loss(self):
+        seen = []
+
+        def run(code, out="", error=None, err=""):
+            def call(command, **kwargs):
+                seen.append((command, kwargs))
+                if error:
+                    raise error
+                return subprocess.CompletedProcess(command, code, out, err)
+            return call
+        lines = ("### Checking what the update brings ...\n"
+                 "@@tpot loss backups 2 older backups go to make room.\n"
+                 "@@tpot loss elastic Elasticsearch 8 -> 9 upgrades the data.\n"
+                 "@@tpot phase done Done\n")
+        self.assertEqual(ops.check_data_loss(["--full"], run=run(3, lines), repo_dir="/r"),
+                         (True, [("backups", "2 older backups go to make room."),
+                                 ("elastic", "Elasticsearch 8 -> 9 upgrades the data.")], ""))
+        command, kwargs = seen[0]
+        self.assertEqual(command, ["/r/update.sh", "--check-data-loss", "--full"])
+        self.assertEqual(kwargs["cwd"], "/r")
+        self.assertIs(kwargs["stdin"], subprocess.DEVNULL)
+        self.assertIs(kwargs["stderr"], subprocess.PIPE)
+        self.assertEqual(kwargs["timeout"], 180)
+        self.assertEqual(ops.check_data_loss([], run=run(0, "### [OK] - No loss of data found.\n"), repo_dir="/r"),
+                         (True, [], ""))
+        # why it could not tell: the last line update.sh wrote to stderr, without its marks
+        err = "### [ERROR] - Could not fetch the branch master follows.\n\n"
+        self.assertEqual(ops.check_data_loss([], run=run(1, lines, err=err), repo_dir="/r"),
+                         (False, [], "Could not fetch the branch master follows."))
+        self.assertEqual(ops.check_data_loss([], run=run(5, lines), repo_dir="/r"), (False, [], "update.sh ended with 5"))
+        self.assertEqual(ops.check_data_loss([], run=run(0, error=subprocess.TimeoutExpired("x", 180)),
+                                             repo_dir="/r"), (False, [], "no answer within 180 s"))
+        self.assertEqual(ops.check_data_loss([], run=run(0, error=OSError("gone")), repo_dir="/r"),
+                         (False, [], "gone"))
 
     def test_backups_newest_first(self):
         with tempfile.TemporaryDirectory() as home:
