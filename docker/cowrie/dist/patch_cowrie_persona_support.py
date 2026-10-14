@@ -10427,6 +10427,165 @@ def patch_auth(cowrie_root):
     )
 
 
+# core/ttylog.py after TTYSTRUCT: the tty logs ttylog_open opened, up to their ttylog_close
+TTYLOG_FILES = '''TTYSTRUCT = "<iLiiLL"
+
+# T-Pot: the tty logs ttylog_open opened (path -> file), up to their ttylog_close. A record is a
+# write into the buffer of its file; the buffers are written out once per reactor turn and at the
+# close, not with an open and a close of the file for every record (every echoed key is one).
+_tpot_files: dict = {}
+_tpot_unflushed: set = set()
+_tpot_flush_pending = False
+
+
+def _tpot_schedule(function) -> None:
+    """Run function after this turn of the reactor."""
+    from twisted.internet import reactor
+
+    reactor.callLater(0, function)
+
+
+def _tpot_flush() -> None:
+    """Write the buffered records of the open tty logs out."""
+    global _tpot_flush_pending
+    _tpot_flush_pending = False
+    failed = None
+    while _tpot_unflushed:
+        f = _tpot_files.get(_tpot_unflushed.pop())
+        if f is None:
+            continue
+        try:
+            f.flush()
+        except OSError as error:
+            failed = failed or error
+    if failed is not None:
+        raise failed
+
+
+def _tpot_record(logfile: str, *parts: bytes) -> bool:
+    """Append parts to the open tty log logfile; False when ttylog_open did not open it."""
+    global _tpot_flush_pending
+    f = _tpot_files.get(logfile)
+    if f is None:
+        return False
+    for part in parts:
+        f.write(part)
+    _tpot_unflushed.add(logfile)
+    if not _tpot_flush_pending:
+        _tpot_flush_pending = True
+        _tpot_schedule(_tpot_flush)
+    return True
+'''
+
+
+def patch_ttylog(cowrie_root):
+    """The tty log of a session stays open from ttylog_open to ttylog_close (TTYLOG_FILES): a record is
+    a write into its buffer, written out once per reactor turn and at the close. Records and files stay
+    those of upstream. ttylog_inputhash hashes the input while it reads it (linear in the records)."""
+    path = cowrie_root / "src" / "cowrie" / "core" / "ttylog.py"
+    replace_once(path, 'TTYSTRUCT = "<iLiiLL"\n', TTYLOG_FILES)
+    replace_once(
+        path,
+        """    with open(logfile, "ab") as f:
+        sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
+        f.write(struct.pack(TTYSTRUCT, OP_OPEN, 0, 0, 0, sec, usec))
+""",
+        """    f = open(logfile, "ab")  # noqa: SIM115 - T-Pot: open up to ttylog_close
+    try:
+        sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
+        f.write(struct.pack(TTYSTRUCT, OP_OPEN, 0, 0, 0, sec, usec))
+        f.flush()
+    except BaseException:
+        f.close()
+        raise
+    _tpot_unflushed.discard(logfile)
+    previous = _tpot_files.pop(logfile, None)
+    if previous is not None:
+        previous.close()
+    _tpot_files[logfile] = f
+""",
+    )
+    replace_once(
+        path,
+        """    with open(logfile, "ab") as f:
+        sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
+        f.write(struct.pack(TTYSTRUCT, OP_WRITE, 0, length, direction, sec, usec))
+        f.write(data)
+""",
+        """    sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
+    head = struct.pack(TTYSTRUCT, OP_WRITE, 0, length, direction, sec, usec)
+    if _tpot_record(logfile, head, data):
+        return
+    with open(logfile, "ab") as f:
+        f.write(head)
+        f.write(data)
+""",
+    )
+    replace_once(
+        path,
+        """    with open(logfile, "ab") as f:
+        sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
+        f.write(struct.pack(TTYSTRUCT, OP_CLOSE, 0, 0, 0, sec, usec))
+""",
+        """    _tpot_unflushed.discard(logfile)
+    f = _tpot_files.pop(logfile, None)
+    if f is None:
+        f = open(logfile, "ab")  # noqa: SIM115 - closed by the with below
+    with f:
+        sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
+        f.write(struct.pack(TTYSTRUCT, OP_CLOSE, 0, 0, 0, sec, usec))
+""",
+    )
+    replace_once(
+        path,
+        '    inputbytes: bytes = b""\n',
+        """    digest = hashlib.sha256()
+    if logfile in _tpot_files:
+        _tpot_files[logfile].flush()
+""",
+    )
+    replace_once(path, "            inputbytes = inputbytes + data\n", "            digest.update(data)\n")
+    replace_once(path, "        shasum: str = hashlib.sha256(inputbytes).hexdigest()\n",
+                 "        shasum: str = digest.hexdigest()\n")
+
+
+def patch_line_input(cowrie_root):
+    """A line of the interactive shell holds at most TPOT_LINE_MAX (64 KiB) bytes. A key beyond it is
+    echoed as bash echoes it but not kept: the session goes on, the line runs and is logged
+    (cowrie.command.input) cut to the bound. Below it, characterReceived acts as upstream.
+    Runs after patch_protocol_load."""
+    path = cowrie_root / "src" / "cowrie" / "shell" / "protocol.py"
+    replace_once(
+        path,
+        "class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLine):\n",
+        """class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLine):
+    # T-Pot: the longest line the line editor keeps (bytes)
+    TPOT_LINE_MAX = 65536
+
+""",
+    )
+    replace_once(
+        path,
+        """        if self.mode == "insert":
+            self.lineBuffer.insert(self.lineBufferIndex, ch)
+        else:
+            self.lineBuffer[self.lineBufferIndex : self.lineBufferIndex + 1] = [ch]
+        self.lineBufferIndex += 1
+""",
+        """        # T-Pot: a line holds at most TPOT_LINE_MAX bytes; a key beyond it is echoed as bash
+        # echoes it, but not kept (the line runs and is logged cut to the bound)
+        if len(self.lineBuffer) < self.TPOT_LINE_MAX or (
+            self.mode != "insert" and self.lineBufferIndex < len(self.lineBuffer)
+        ):
+            if self.mode == "insert":
+                self.lineBuffer.insert(self.lineBufferIndex, ch)
+            else:
+                self.lineBuffer[self.lineBufferIndex : self.lineBufferIndex + 1] = [ch]
+            self.lineBufferIndex += 1
+""",
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Patch Cowrie v3.1 persona command support.")
     parser.add_argument("--cowrie-root", required=True, type=Path)
@@ -10468,6 +10627,8 @@ def main():
     patch_telnet_banner(cowrie_root)
     patch_ssh_userauth(cowrie_root)
     patch_auth(cowrie_root)
+    patch_ttylog(cowrie_root)
+    patch_line_input(cowrie_root)
 
 
 if __name__ == "__main__":

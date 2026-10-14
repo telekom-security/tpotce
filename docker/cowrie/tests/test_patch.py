@@ -3067,7 +3067,27 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/shell/protocol.py", "        if path in self.commands:\n            return self.commands[path]\n",
                   "        if path in self.commands:\n            return self.commands.get(path)\n"),
                  ("src/cowrie/commands/base.py", "1 user,  load average: 0.00, 0.00, 0.00\\n\"\n        )\n",
-                  "1 user, load average: 0.00, 0.00, 0.00\\n\"\n        )\n"))
+                  "1 user, load average: 0.00, 0.00, 0.00\\n\"\n        )\n"),
+                 ("src/cowrie/core/ttylog.py", 'TTYSTRUCT = "<iLiiLL"\n', 'TTYSTRUCT = "<iLiiLL"  # record\n'),
+                 ("src/cowrie/core/ttylog.py", "        f.write(struct.pack(TTYSTRUCT, OP_OPEN, 0, 0, 0, sec, usec))\n",
+                  "        f.write(struct.pack(TTYSTRUCT, OP_OPEN, 0, 0, 0, sec, usec))  # open\n"),
+                 ("src/cowrie/core/ttylog.py",
+                  "        f.write(struct.pack(TTYSTRUCT, OP_WRITE, 0, length, direction, sec, usec))\n"
+                  "        f.write(data)\n",
+                  "        f.write(struct.pack(TTYSTRUCT, OP_WRITE, 0, length, direction, sec, usec))\n"
+                  "        f.write(data)  # data\n"),
+                 ("src/cowrie/core/ttylog.py", "        f.write(struct.pack(TTYSTRUCT, OP_CLOSE, 0, 0, 0, sec, usec))\n",
+                  "        f.write(struct.pack(TTYSTRUCT, OP_CLOSE, 0, 0, 0, sec, usec))  # close\n"),
+                 ("src/cowrie/core/ttylog.py", '    inputbytes: bytes = b""\n', '    inputbytes = b""\n'),
+                 ("src/cowrie/core/ttylog.py", "            inputbytes = inputbytes + data\n",
+                  "            inputbytes += data\n"),
+                 ("src/cowrie/core/ttylog.py", "        shasum: str = hashlib.sha256(inputbytes).hexdigest()\n",
+                  "        shasum = hashlib.sha256(inputbytes).hexdigest()\n"),
+                 ("src/cowrie/shell/protocol.py",
+                  "class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLine):\n",
+                  "class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLine):  # shell\n"),
+                 ("src/cowrie/shell/protocol.py", "            self.lineBuffer.insert(self.lineBufferIndex, ch)\n",
+                  "            self.lineBuffer.insert(self.lineBufferIndex, ch)  # insert\n"))
         for rel, old, new in cases:
             with self.subTest(rel=rel, needle=old):
                 root = tmpdir(self) / "cowrie"
