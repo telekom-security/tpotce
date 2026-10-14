@@ -1062,6 +1062,68 @@ def patch_netstat(cowrie_root):
 
 # module code of the patched commands/netstat.py after its commands: ip, ss, netstat (and ifconfig,
 # which the patched ifconfig.py takes from here) of the persona
+# module code of the patched base.py (ps, top) and netstat.py (ss, netstat): the session's server process
+TPOT_SESSION = r'''
+
+def tpot_session(protocol, user: str = "root") -> dict:
+    """T-Pot: the server process of the session, the same in ps, top, ss and netstat: its PID (once
+    per session: just below the login shell of the ps list, else drawn), its name, its title and the
+    processes from it to the shell (chain). SSH: the session's sshd ("sshd: user@pts/0", sshd-session
+    from OpenSSH 9.8) or a child of dropbear with the daemon's command line. Telnet: BusyBox telnetd
+    serves its connections itself, so the telnetd of the ps list owns the session (a telnetd of its
+    own on a BusyBox system whose list has none); elsewhere in.telnetd, then login."""
+    server = getattr(getattr(protocol, "user", None), "server", None)
+    listed = [p for p in (getattr(server, "process", None) or [])
+              if isinstance(p, dict) and isinstance(p.get("PID"), int)]
+
+    def name(command) -> str:
+        words = str(command or "").split()
+        return words[0].rstrip(":").rsplit("/", 1)[-1].lstrip("-") if words else ""
+
+    telnet = any("telnet" in kind.__name__.lower() for kind in type(protocol).__mro__)
+    daemon = None
+    if telnet:
+        daemon = next((p for p in listed if str(p.get("TTY") or "?") == "?"
+                       and name(p.get("COMMAND")) in ("telnetd", "utelnetd")), None)
+        if daemon is not None:
+            chain = []
+        elif CowrieConfig.get("shell", "top_style", fallback="procps") == "busybox":
+            chain = [{"user": "root", "command": "/usr/sbin/telnetd", "virt": 1584, "res": 388}]
+        else:
+            client = getattr(protocol, "clientIP", "")
+            chain = [{"user": "root", "command": f"in.telnetd: {client}", "virt": 6704, "res": 1632},
+                     {"user": "root", "command": f"login -- {user}", "virt": 14460, "res": 4128}]
+    else:
+        ssh = CowrieConfig.get("shell", "ssh_version", fallback="OpenSSH")
+        if "dropbear" in ssh.lower():
+            parent = next((p for p in listed if name(p.get("COMMAND")) == "dropbear"), None)
+            chain = [{"user": "root", "command": str(parent["COMMAND"]) if parent else "dropbear", "virt": 1104,
+                      "res": 640}]
+        else:
+            match = re.match(r"OpenSSH_(\d+)\.(\d+)", ssh)
+            newer = match is not None and (int(match.group(1)), int(match.group(2))) >= (9, 8)
+            chain = [{"user": user, "command": f"sshd{'-session' if newer else ''}: {user}@pts/0", "virt": 17400,
+                      "res": 6960}]
+    pid = getattr(protocol, "tpot_session_pid", None)
+    if not isinstance(pid, int):
+        if daemon is not None:
+            pid = daemon["PID"]
+        else:
+            shells = [p["PID"] for p in listed if str(p.get("TTY") or "").startswith(("pts/", "tty"))]
+            taken = {p["PID"] for p in listed}
+            pid = shells[-1] - len(chain) if shells else random.randint(4000, 8000)
+            while pid > 300 and any(pid + n in taken for n in range(len(chain))):
+                pid -= 1
+        try:
+            protocol.tpot_session_pid = pid
+        except Exception:  # noqa: BLE001 - a protocol that takes no attribute keeps no PID
+            pass
+    owner = chain[0] if chain else {"user": str(daemon.get("USER") or "root"), "command": str(daemon["COMMAND"])}
+    return {"pid": pid, "name": name(owner["command"])[:15], "title": owner["command"], "user": owner["user"],
+            "chain": chain, "telnet": telnet}
+'''
+
+
 NET_COMMAND = r'''
 
 # T-Pot: ip, ss, netstat and ifconfig of the persona. [shell] network is a JSON file of the runtime
@@ -1128,19 +1190,6 @@ TPOT_NET_DEFAULT = {
                     "dynamic": False, "rates": [1200, 400]}],
     "gateway": "10.0.2.2", "gateway_mac": "52:55:0a:00:02:02", "manager": "static", "kernel": [6, 1],
     "booted_at": 0, "sockets": [], "family": "debian", "resolved": False, "gateway_name": ""}
-
-
-def tpot_session_pid(protocol) -> int:
-    """The PID of the session's server process: drawn once per session, ps shows it and the
-    session's connection belongs to it."""
-    pid = getattr(protocol, "tpot_session_pid", None)
-    if not isinstance(pid, int):
-        pid = random.randint(4000, 8000)
-        try:
-            protocol.tpot_session_pid = pid
-        except Exception:  # noqa: BLE001 - a protocol that takes no attribute keeps no PID
-            pass
-    return pid
 
 
 TPOT_NET_STATES = {"ESTAB": "ESTABLISHED", "TIME-WAIT": "TIME_WAIT", "FIN-WAIT-1": "FIN_WAIT1",
@@ -1244,10 +1293,10 @@ class TpotNetTool(HoneyPotCommand):
             port = int(getattr(self.protocol, "realClientPort", 0) or 0)
             transport = self.protocol.getProtoTransport()
             local = int(transport.transport.getHost().port)
-        except Exception:  # noqa: BLE001 - a protocol without a transport (tests, exec): the SSH port
-            pass
+        except Exception:  # noqa: BLE001 - a protocol without a transport (tests, exec): its usual port
+            local = 0
         if local not in (22, 23):
-            local = 23 if "telnet" in type(self.protocol).__name__.lower() else 22
+            local = 23 if tpot_session(self.protocol)["telnet"] else 22
         return local, peer, port
 
     def sockets(self) -> list[dict]:
@@ -1261,7 +1310,10 @@ class TpotNetTool(HoneyPotCommand):
             except ValueError:
                 family = 4
             # the address of the interface of the default route; the connection belongs to the session's
-            # server process of ps, whose title is sshd: user@pts/0
+            # server process (tpot_session: the PID and name of ps and top), and is there only where a
+            # daemon of the persona listens on its port (no telnet connection without a telnet daemon)
+            if not any(s["proto"] == "tcp" and s["state"] == "LISTEN" and s["port"] == local for s in found):
+                return found
             route = self.routes()[0]["iface"]
             address = next((i["inet"] for i in self.net["interfaces"] if i["name"] == route and i.get("inet")),
                            self.net["interfaces"][0]["inet"])
@@ -1273,9 +1325,10 @@ class TpotNetTool(HoneyPotCommand):
                 user = str(self.user.get("username", "root"))
             except Exception:  # noqa: BLE001
                 pass
+            owner = tpot_session(self.protocol, user)
             found.append({"proto": "tcp", "family": family, "address": address, "port": local, "peer": peer,
-                          "peer_port": port, "state": "ESTAB", "pid": tpot_session_pid(self.protocol), "comm": "sshd",
-                          "cmdline": f"sshd: {user}@pts/0", "fd": 4, "backlog": 0})
+                          "peer_port": port, "state": "ESTAB", "pid": owner["pid"], "comm": owner["name"],
+                          "cmdline": owner["title"], "fd": 4, "backlog": 0})
         return found
 
     def routes(self) -> list[dict]:
@@ -2283,16 +2336,71 @@ for _name in ("netstat", "/bin/netstat", "/usr/bin/netstat", "/sbin/netstat", "/
 '''
 
 
+PS_SESSION_OLD = '''            process = random.randint(4000, 8000)
+            output = (
+                "%s".ljust(15 - len("root")) % "root",
+                "%s".ljust(8 - len(str(process))) % str(process),
+                "%s".ljust(13 - len("0.0")) % "0.0",
+                "%s".ljust(13 - len("0.1")) % "0.1",
+                "%s".ljust(12 - len("5416")) % "5416",
+                "%s".ljust(12 - len("1024")) % "1024",
+                "%s".ljust(10 - len("?")) % "?",
+                "%s".ljust(8 - len("Ss")) % "Ss",
+                "%s".ljust(8 - len("Jul22")) % "Jul22",
+                "%s".ljust(8 - len("0:00")) % "0:00",
+                "%s".ljust(30 - len("/usr/sbin/sshd: %s@pts/0"))
+                % "/usr/sbin/sshd: %s@pts/0"
+                % user,
+            )
+            output_array.append(output)
+            process = process + 5
+            output = (
+'''
+PS_SESSION_NEW = '''            # T-Pot: the session's server process and those up to the shell (tpot_session: the PID and
+            # name of top, ss and netstat); the login shell of the ps list, else a -bash of the session
+            session = tpot_session(self.protocol, user)
+            process = session["pid"]
+            for offset, entry in enumerate(session["chain"]):
+                output = (
+                    "%s".ljust(15 - len(entry["user"])) % entry["user"],
+                    "%s".ljust(8 - len(str(process + offset))) % str(process + offset),
+                    "%s".ljust(13 - len("0.0")) % "0.0",
+                    "%s".ljust(13 - len("0.1")) % "0.1",
+                    "%s".ljust(12 - len(str(entry["virt"]))) % str(entry["virt"]),
+                    "%s".ljust(12 - len(str(entry["res"]))) % str(entry["res"]),
+                    "%s".ljust(10 - len("?")) % "?",
+                    "%s".ljust(8 - len("Ss")) % "Ss",
+                    "%s".ljust(8 - len("Jul22")) % "Jul22",
+                    "%s".ljust(8 - len("0:00")) % "0:00",
+                    "%s".ljust(30 - len(entry["command"])) % entry["command"],
+                )
+                output_array.append(output)
+            shells = [p["PID"] for p in self.protocol.user.server.process
+                      if str(p.get("TTY") or "").startswith(("pts/", "tty")) and isinstance(p.get("PID"), int)]
+            process = shells[-1] if shells else process + 5
+            output = (
+'''
+PS_SHELL_OLD = '''                "%s".ljust(30 - len("bash")) % "-bash",
+            )
+            output_array.append(output)
+            process = process + 2
+'''
+PS_SHELL_NEW = '''                "%s".ljust(30 - len("bash")) % "-bash",
+            )
+            if not shells:
+                output_array.append(output)
+            process = process + 2
+'''
+
+
 def patch_ps_session(cowrie_root):
-    """ps names the session's server process with the PID its connection has in ss and netstat (one
-    per session, tpot_session_pid of the patched netstat.py), not a new one per call."""
+    """ps shows the session's server process as top, ss and netstat do (tpot_session: one PID per
+    session, the daemon of the persona: sshd, sshd-session, dropbear, telnetd or in.telnetd), not a
+    new /usr/sbin/sshd per call, and the login shell of the ps list without a second -bash."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "base.py"
-    replace_once(path, "            process = random.randint(4000, 8000)\n",
-                 "            # T-Pot: one PID per session (the attribute tpot_session_pid of netstat.py uses)\n"
-                 "            process = getattr(self.protocol, \"tpot_session_pid\", None)\n"
-                 "            if not isinstance(process, int):\n"
-                 "                process = random.randint(4000, 8000)\n"
-                 "                self.protocol.tpot_session_pid = process\n")
+    replace_once(path, PS_SESSION_OLD, PS_SESSION_NEW)
+    replace_once(path, PS_SHELL_OLD, PS_SHELL_NEW)
+    replace_once(path, "\n\nclass Command_ps(HoneyPotCommand):\n", TPOT_SESSION + "\n\nclass Command_ps(HoneyPotCommand):\n")
 
 
 def patch_net_tools(cowrie_root):
@@ -2300,7 +2408,8 @@ def patch_net_tools(cowrie_root):
     registers its ifconfig): the interfaces, routes and sockets of [shell] network. Runs after patch_netstat."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "netstat.py"
     replace_once(path, 'commands["/bin/netstat"] = Command_netstat\ncommands["netstat"] = Command_netstat\n',
-                 'commands["/bin/netstat"] = Command_netstat\ncommands["netstat"] = Command_netstat\n' + NET_COMMAND)
+                 'commands["/bin/netstat"] = Command_netstat\ncommands["netstat"] = Command_netstat\n' + NET_COMMAND
+                 + TPOT_SESSION)
     replace_once(path, "import ipaddress\nimport socket\n", "import ipaddress\nimport re\nimport socket\n")
     path = cowrie_root / "src" / "cowrie" / "commands" / "ifconfig.py"
     replace_once(path, 'commands["/sbin/ifconfig"] = Command_ifconfig\ncommands["ifconfig"] = Command_ifconfig\n',
@@ -5506,9 +5615,10 @@ class Command_top(HoneyPotCommand):
                          "command": str(entry.get("COMMAND") or "")})
         last = self.pid
         daemon, chain = self.tpot_session(rows, user)
-        # the session's processes just below the shell, each the child of the one before
+        # the session's processes from its PID on (tpot_session: the one of ps, ss and netstat), each
+        # the child of the one before
         parent = daemon["pid"] if daemon else 1
-        first = (shell or last - 1) - len(chain)
+        first = tpot_session(protocol, user)["pid"]
         for offset, process in enumerate(chain):
             rows.append({"pid": first + offset, "ppid": parent, "stat": "S", "mem": 0.1, "time": 0.02, **process})
             parent = first + offset
@@ -5533,30 +5643,16 @@ class Command_top(HoneyPotCommand):
         return rows
 
     def tpot_session(self, rows: list[dict], user: str) -> tuple[dict | None, list[dict]]:
-        """The daemon of this session (in the ps list, or None) and the processes between it and the
-        shell. SSH: the session's sshd (sshd-session from OpenSSH 9.8) or dropbear. Telnet on
-        BusyBox: telnetd, whose login execs the shell (telnetd -> shell; a telnetd of its own
-        where the ps list has none); elsewhere in.telnetd -> login -> shell."""
+        """The daemon of this session in the rows (or None) and the processes between it and the
+        shell (tpot_session). BusyBox telnetd serves the connection itself: telnetd -> shell."""
         names = {tpot_top_comm(r["command"]): r for r in rows}
-        telnet = any("Telnet" in kind.__name__ for kind in type(self.protocol).__mro__)
-        if telnet:
-            daemon = names.get("telnetd") or names.get("utelnetd") or names.get("in.telnetd")
-            if self.style == "busybox":
-                return daemon, [] if daemon else [{"user": "root", "command": "/usr/sbin/telnetd", "virt": 1584,
-                                                   "res": 388}]
-            client = getattr(self.protocol, "clientIP", "")
-            return daemon, [{"user": "root", "command": f"in.telnetd: {client}", "virt": 6704, "res": 1632},
-                            {"user": "root", "command": f"login -- {user}", "virt": 14460, "res": 4128}]
-        ssh = CowrieConfig.get("shell", "ssh_version", fallback="OpenSSH")
-        if "dropbear" in ssh.lower():
-            daemon = names.get("dropbear")
-            return daemon, [{"user": "root", "command": daemon["command"] if daemon else "dropbear",
-                             "virt": 1104, "res": 640}]
-        match = re.match(r"OpenSSH_(\d+)\.(\d+)", ssh)
-        newer = match is not None and (int(match.group(1)), int(match.group(2))) >= (9, 8)
-        return names.get("sshd"), [{"user": tpot_top_user(user),
-                                    "command": f"sshd{'-session' if newer else ''}: {user}@pts/0",
-                                    "virt": 17400, "res": 6960}]
+        session = tpot_session(self.protocol, user)
+        chain = [dict(entry, user=tpot_top_user(entry["user"])) for entry in session["chain"]]
+        if not chain:
+            return next((r for r in rows if r["pid"] == session["pid"]), None), []
+        if session["telnet"]:
+            return names.get("telnetd") or names.get("utelnetd") or names.get("in.telnetd"), chain
+        return names.get(session["name"].split("-", 1)[0]), chain
 
     def tpot_cpu(self, now: float, row: dict) -> float:
         """%CPU of a process in this frame: top itself some, now and then a daemon a tick."""

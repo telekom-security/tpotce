@@ -294,6 +294,76 @@ class NetToolsTest(unittest.TestCase):
                 self.assertEqual(self.run_cmd(data, words[0], words[1:]),
                                  (real_card(veth.sub("", out)), err, code))
 
+    def session_persona(self, persona_id, telnet=False, ssh_version=None):
+        """A session on the network of a persona, with its ps list."""
+        persona = catalog.by_id(persona_id)
+        ident = draw(persona, 5)
+        processes = persona.builder(persona, ident).processes
+        data = network.network(persona, ident, processes)
+        if "ss" not in data["tools"]:
+            data["tools"]["ss"] = {"style": "iproute2", "version": "6.1.0", "libbpf": ""}
+        name = "HoneyPotInteractiveTelnetProtocol" if telnet else "HoneyPotInteractiveProtocol"
+
+        class Server:
+            process = processes
+
+        session = type(name, (Protocol,), {"clientIP": "203.0.113.7", "realClientPort": 51234})()
+        session.user = type("user", (), {"uid": 0, "server": Server})
+        keys = {"ssh_version": ssh_version or persona.releases[0].ssh_version}
+        if persona.kind != "server":
+            keys["top_style"] = "busybox"
+        return data, session, keys, processes
+
+    def estab(self, data, session, keys):
+        out = self.run_cmd(data, "ss", ["-tnp"], keys, protocol=session)[0]
+        return [line for line in out.splitlines() if line.startswith("ESTAB")]
+
+    def test_the_session_belongs_to_the_daemon_of_the_persona(self):
+        """dropbear on a dropbear device, the sshd (sshd-session from OpenSSH 9.8) of a server, with
+        one PID just below the login shell of the ps list."""
+        for persona_id, ssh_version, comm, title in (
+                ("openwrt", None, "dropbear", "dropbear"),
+                ("ubuntu-noble", "OpenSSH_9.6p1 Ubuntu-3ubuntu13.14, OpenSSL 3.0.13 30 Jan 2024", "sshd",
+                 "sshd: root@pts/0"),
+                ("debian-trixie", "OpenSSH_10.0p2 Debian-7, OpenSSL 3.5.1 1 Jul 2025", "sshd-session",
+                 "sshd-session: root@pts/0")):
+            data, session, keys, processes = self.session_persona(persona_id, ssh_version=ssh_version)
+            with self.subTest(persona=persona_id):
+                row = self.estab(data, session, keys)
+                self.assertEqual(len(row), 1, row)
+                self.assertIn(f'users:(("{comm}",pid={session.tpot_session_pid},fd=4))', row[0])
+                shell = [p["PID"] for p in processes if str(p["TTY"]).startswith("pts/")]
+                if shell:
+                    self.assertEqual(session.tpot_session_pid, shell[0] - 1)
+                data["tools"]["netstat"] = {"style": "net-tools", "version": "2.10", "basename": False}
+                out = self.run_cmd(data, "netstat", ["-tnp"], keys, protocol=session)[0]
+                # net-tools 2.10: the title, PID/title cut to 19 characters
+                self.assertIn(f"ESTABLISHED {session.tpot_session_pid}/{title}"[:31], out)
+                self.assertNotIn("/sshd", out) if comm == "dropbear" else None
+
+    def test_a_telnet_session_needs_a_telnet_daemon(self):
+        """A telnet session is a connection to :23 only where the persona has a telnet daemon (then
+        BusyBox telnetd owns it); elsewhere nothing listens on 23 and ss shows no connection."""
+        data, session, keys, _ = self.session_persona("ubuntu-noble", telnet=True)
+        self.assertEqual(self.estab(data, session, keys), [])
+        self.assertNotIn(":23 ", self.run_cmd(data, "ss", ["-tlnp"], keys, protocol=session)[0])
+        for persona in catalog.PERSONAS:
+            ident = draw(persona, 5)
+            processes = persona.builder(persona, ident).processes
+            daemon = [p for p in processes if re.search(r"(^|/)telnetd\b", p["COMMAND"])]
+            if not daemon:
+                continue
+            data, session, keys, _ = self.session_persona(persona.id, telnet=True)
+            with self.subTest(persona=persona.id):
+                row = self.estab(data, session, keys)
+                self.assertEqual(len(row), 1, row)
+                self.assertIn(":23 ", row[0])
+                self.assertIn(f'users:(("telnetd",pid={daemon[0]["PID"]},fd=4))', row[0])
+                self.assertEqual(session.tpot_session_pid, daemon[0]["PID"])
+                break
+        else:
+            self.fail("no persona with a telnet daemon")
+
     def test_ss_shows_processes_to_root_only(self):
         data = container_network("ubuntu_24.04")
 

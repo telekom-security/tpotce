@@ -331,10 +331,14 @@ class PatchTest(unittest.TestCase):
         self.assertIn(b"inet 10.0.2.15/24 brd 10.0.2.255 scope global eth0", bytes(command.out))
 
     def test_ps_names_the_session_with_the_pid_of_its_connection(self):
+        """base.py (ps, top) and netstat.py (ss, netstat) share tpot_session: one PID per session."""
         root = self.patched()
         base = (root / "src/cowrie/commands/base.py").read_text()
-        self.assertIn('process = getattr(self.protocol, "tpot_session_pid", None)', base)
-        self.assertIn("self.protocol.tpot_session_pid = process", base)
+        self.assertIn('session = tpot_session(self.protocol, user)', base)
+        self.assertNotIn('"/usr/sbin/sshd: %s@pts/0"', base.split("\nclass Command_ps(")[1].split("        else:\n")[0])
+        for rel in ("src/cowrie/commands/base.py", "src/cowrie/commands/netstat.py"):
+            source = (root / rel).read_text()
+            self.assertEqual(source.count("\ndef tpot_session(protocol, user"), 1, rel)
         namespace = module_all((root / "src/cowrie/commands/netstat.py").read_text(),
                                {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig({}), "log": None})
 
@@ -342,9 +346,11 @@ class PatchTest(unittest.TestCase):
             pass
 
         protocol = Protocol()
-        first = namespace["tpot_session_pid"](protocol)
-        self.assertEqual(namespace["tpot_session_pid"](protocol), first)
-        self.assertTrue(4000 <= first <= 8000)
+        first = namespace["tpot_session"](protocol)
+        self.assertEqual(namespace["tpot_session"](protocol)["pid"], first["pid"])
+        self.assertEqual(protocol.tpot_session_pid, first["pid"])
+        self.assertTrue(4000 <= first["pid"] <= 8000)
+        self.assertEqual((first["name"], first["title"]), ("sshd", "sshd: root@pts/0"))
 
     def test_links_resolve_from_their_directory(self):
         from tpot_personas.identity import draw
@@ -3047,6 +3053,11 @@ class PatchTest(unittest.TestCase):
                   'commands["ifconfig"] = Command_ifconfig  # ifconfig\n'),
                  ("src/cowrie/commands/base.py", "            process = random.randint(4000, 8000)\n",
                   "            process = random.randint(4000, 9000)\n"),
+                 ("src/cowrie/commands/base.py", '                % "/usr/sbin/sshd: %s@pts/0"\n',
+                  '                % "/usr/sbin/sshd: %s@pts/1"\n'),
+                 ("src/cowrie/commands/base.py",
+                  '                "%s".ljust(30 - len("bash")) % "-bash",\n            )\n            output_array.append(output)\n',
+                  '                "%s".ljust(30 - len("bash")) % "-bash",\n            )\n\n            output_array.append(output)\n'),
                  ("src/cowrie/commands/fs.py", "from cowrie.shell import fs\n", "from cowrie.shell import fs as f\n"),
                  ("src/cowrie/commands/fs.py", "from typing import TYPE_CHECKING\n",
                   "from typing import TYPE_CHECKING, Any\n"),

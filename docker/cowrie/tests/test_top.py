@@ -601,6 +601,51 @@ class TopSessionTest(PatchedTest):
         self.assertRegex(rows[3088], r" ubuntu .* sshd$")
         self.assertNotIn("telnetd", " ".join(rows.values()))
 
+    def ps_session(self, session):
+        """The lines of ps aux after the persona's list: the session's processes, the shell, ps."""
+        lines = session.run("Command_ps", "aux").out.splitlines()
+        return [[word.rstrip() for word in line.split(None, 10)]
+                for line in lines[1 + len(session.protocol.user.server.process):]]
+
+    def test_ps_and_top_name_one_session_process(self):
+        """ps, top, ss and netstat show the session's server process with one PID (tpot_session_pid)
+        and one name: just below the login shell of the ps list."""
+        session = Session(self, target="capture")
+        lines = self.ps_session(session)
+        self.assertEqual(session.protocol.tpot_session_pid, 3088)
+        self.assertEqual([(line[0], line[1], line[10]) for line in lines[:1]], [("ubuntu", "3088", "sshd: ubuntu@pts/0")])
+        self.assertNotIn("-bash", [line[10] for line in lines])
+        self.assertRegex(self.rows(session)[3088], r" ubuntu .* sshd$")
+        # OpenSSH 9.8 and later: sshd-session
+        session = Session(self, config={("shell", "ssh_version"): "OpenSSH_10.0p2 Debian-7, OpenSSL 3.5.4 30 Sep 2025"},
+                          target="capture")
+        self.assertEqual(self.ps_session(session)[0][10], "sshd-session: ubuntu@pts/0")
+        self.assertRegex(self.rows(session)[3088], r" ubuntu .* sshd-session$")
+
+    def test_ps_and_top_on_dropbear_and_busybox_telnetd(self):
+        dropbear = "/usr/sbin/dropbear -F -P /var/run/dropbear.1.pid -p 22 -K 300 -T 3"
+        ps = [dict(PS[0], COMMAND="/sbin/procd", STAT="S"), dict(PS[2], PID=1180, COMMAND=dropbear),
+              dict(PS[5], PID=1520, USER="root", COMMAND="-ash")]
+        session = Session(self, config=self.DEVICE, processes=ps, username="root", target="capture")
+        lines = self.ps_session(session)
+        self.assertEqual((lines[0][0], lines[0][1], lines[0][10]), ("root", "1519", dropbear))
+        self.assertNotIn("sshd", " ".join(line[10] for line in lines))
+        self.assertRegex(self.rows(session)[1519], r"^ 1519  1180 root .* /usr/sbin/dropbear -F ")
+        # BusyBox telnetd serves the connection itself: no process of its own for the session
+        ps = [dict(PS[0], COMMAND="/sbin/init", STAT="S"), dict(PS[2], PID=640, COMMAND="/usr/sbin/telnetd"),
+              dict(PS[5], PID=900, USER="admin", COMMAND="-sh")]
+        session = Session(self, config=self.DEVICE, processes=ps, username="admin", telnet=True, target="capture")
+        lines = self.ps_session(session)
+        self.assertEqual(session.protocol.tpot_session_pid, 640)
+        self.assertEqual([line[10] for line in lines], ["ps aux"])
+
+    def test_top_takes_the_session_pid(self):
+        """Without a login shell in the ps list the session's PID is drawn once; top shows it too."""
+        session = Session(self, processes=PS[:3], target="capture")
+        session.protocol.tpot_session_pid = 5000
+        self.assertRegex(self.rows(session)[5000], r" ubuntu .* sshd$")
+        self.assertEqual(self.ps_session(session)[0][1], "5000")
+
     def test_the_screen_keeps_the_session_from_the_idle_timeout(self):
         session = Session(self)
         top = session.run("Command_top")
