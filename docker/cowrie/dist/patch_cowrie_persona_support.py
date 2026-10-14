@@ -6833,8 +6833,7 @@ class Command_df(HoneyPotCommand):
             sums = {key: sum(row[key] for row, _ in chosen) for key in ("size", "used", "avail", "inodes", "iused")}
             chosen.append((dict(sums, source="total", target="-", fstype="-"), "-"))
         for row, arg in chosen:
-            table.append([self.gnu_cell(field, row, arg, human, block, suffix, total and row.get("source") == "total"
-                                        and row.get("target") == "-") for field in fields])
+            table.append([self.gnu_cell(field, row, arg, human, block, suffix) for field in fields])
         widths = [max([TPOT_DF_WIDTH[field]] + [len(line[col]) for line in table]) for col, field in enumerate(fields)]
         for line in table:
             cells = []
@@ -6848,7 +6847,7 @@ class Command_df(HoneyPotCommand):
             self.write(" ".join(cells) + "\n")
         return status
 
-    def gnu_cell(self, field: str, row: dict, arg: str, human: int, block: int, suffix: str, is_total: bool) -> str:
+    def gnu_cell(self, field: str, row: dict, arg: str, human: int, block: int, suffix: str) -> str:
         if field == "source":
             return str(row.get("source", ""))
         if field == "fstype":

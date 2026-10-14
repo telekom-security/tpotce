@@ -458,9 +458,16 @@ def _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out):
     except ValueError:
         found = None
     rows = found.get("filesystems") if isinstance(found, dict) else None
-    if not isinstance(rows, list) or found != json.loads(json.dumps(system.df_table(persona, ident, rows))):
+    # the table of the persona's mount data (the file systems its builder mounts), not of its own rows;
+    # an identity the builder cannot take (the uptime checks name it) keeps the check of the rows
+    try:
+        mounted_rows = persona.builder(persona, ident).filesystems
+    except ValueError:
+        mounted_rows = rows
+    expected = system.df_table(persona, ident, mounted_rows)
+    if not isinstance(rows, list) or found != json.loads(json.dumps(expected)):
         out.append("df: df.json is not the persona's")
-        rows = []
+        rows = rows if isinstance(rows, list) else []
     # df is a program of the coreutils or the BusyBox that wc, sort and seq are
     if (found or {}).get("style") != system.text_keys(persona, ident)["text_style"]:
         out.append(f"df: the {(found or {}).get('style')} df differs from the {system.text_keys(persona, ident)['text_style']} "

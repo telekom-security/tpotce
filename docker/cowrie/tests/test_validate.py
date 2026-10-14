@@ -879,6 +879,17 @@ class ValidateDeviceBootTest(unittest.TestCase):
         (out / "df.json").write_text(json.dumps(data))
         self.assertIn("df: the root of the server is not one disk", _problems(persona, ident, out, keys))
 
+    def test_df_rows_are_the_persona_mount_data(self):
+        """df.json holds the persona's file systems: rows that agree with each other, mount and
+        /proc/mounts but not with the persona (here fewer used inodes) are a problem."""
+        persona = catalog.by_id("ubuntu-noble")
+        ident, out, keys = render_one(self, persona, 1)
+        data = json.loads((out / "df.json").read_text())
+        row = next(row for row in data["filesystems"] if row["target"] == "/")
+        row["iused"] = max(0, row.get("iused", 0) - 1)
+        (out / "df.json").write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
+        self.assertIn("df: df.json is not the persona's", _problems(persona, ident, out, keys))
+
     def test_dmesg_bogomips_differs_from_cpuinfo(self):
         persona = catalog.by_id("dlink-dir859")
         ident, out, keys = render_one(self, persona, 1)
