@@ -765,6 +765,293 @@ print("\n".join(output))
 PY
 }
 
+# A line of 10,000 characters and a download (`echo a...a; wget http://127.0.0.1:1/x`) in the
+# interactive shell over Telnet and SSH (pty), typed one byte per write and pasted in one write, with
+# the clients in a container in the honeypot's network: the echo of the whole line is back within
+# LONG_LINE_SECONDS, the shell answers both commands and gives the prompt back. Then a pasted line of
+# 70,000 characters over Telnet: the shell keeps 64 KiB of it and takes the next line.
+LONG_LINE_LENGTH=10000
+LONG_LINE_SECONDS=1
+LONG_LINE_MAX=65536
+LONG_LINE_OVER=70000
+
+long_line() {
+  python3 -c 'import sys; print("echo " + "a" * int(sys.argv[1]) + "; wget http://127.0.0.1:1/x")' "${LONG_LINE_LENGTH}"
+}
+
+run_long_line_probe() {
+  docker run --rm -i --network "container:${TEST_CONTAINER_NAME}" --read-only --user 2000:2000 \
+    --entrypoint python3 "${IMAGE}" - "$(long_line)" "${LONG_LINE_SECONDS}" "${LONG_LINE_OVER}" \
+    "${TEST_TIMEOUT}" <<'PY'
+import json
+import re
+import socket
+import sys
+import threading
+import time
+
+LINE = sys.argv[1].encode()
+SECONDS = float(sys.argv[2])
+OVER = int(sys.argv[3])
+TIMEOUT = int(sys.argv[4])
+LENGTH = LINE.count(b"a")
+# AuthRandom accepts after 2 to 5 different attempts per source IP and keeps the pair it accepted
+PASSWORDS = [f"tpot-long-{n}" for n in range(1, 13)]
+PROMPT = re.compile(rb"[$#] ?$")
+ESCAPE = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def clean(data):
+    return ESCAPE.sub(b"", bytes(data)).replace(b"\r", b"")
+
+
+def last_line(data):
+    return clean(data).rstrip(b"\n").split(b"\n")[-1]
+
+
+def at_login(data):
+    return last_line(data).strip().lower().endswith((b"login:", b"username:"))
+
+
+def at_prompt(data):
+    return PROMPT.search(last_line(data)) is not None and not at_login(data)
+
+
+class Closed(Exception):
+    pass
+
+
+class Telnet:
+    """A Telnet client that refuses every option."""
+
+    def __init__(self):
+        self.sock = socket.create_connection(("127.0.0.1", 23), timeout=TIMEOUT)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.sock.settimeout(0.1)
+        self.data = bytearray()
+        self.end = b"\r\n"
+
+    def send(self, payload):
+        self.sock.sendall(payload)
+
+    def wait(self, done, deadline, quiet=0.0):
+        last = time.monotonic()
+        while time.monotonic() < deadline:
+            if done(self.data) and time.monotonic() - last >= quiet:
+                return True
+            try:
+                chunk = self.sock.recv(65536)
+            except socket.timeout:
+                continue
+            if not chunk:
+                raise Closed()
+            index = 0
+            while index < len(chunk):
+                if chunk[index] == 255 and index + 2 < len(chunk) and chunk[index + 1] in (251, 252, 253, 254):
+                    self.sock.sendall(bytes([255, 252 if chunk[index + 1] in (253, 254) else 254, chunk[index + 2]]))
+                    index += 3
+                    continue
+                if chunk[index] == 255 and index + 1 < len(chunk):
+                    index += 2
+                    continue
+                self.data.append(chunk[index])
+                index += 1
+            last = time.monotonic()
+        return False
+
+    def close(self):
+        self.sock.close()
+
+
+def telnet_shell(deadline):
+    session = None
+    for password in PASSWORDS:
+        if session is None:
+            session = Telnet()
+            session.wait(at_login, deadline)
+        session.data.clear()
+        session.send(b"root\r\n")
+        session.wait(lambda data: b"password:" in data.lower(), deadline)
+        session.data.clear()
+        session.send(password.encode() + b"\r\n")
+        try:
+            session.wait(lambda data: at_login(data) or at_prompt(data), deadline, quiet=1.0)
+        except Closed:
+            session = None
+            continue
+        if at_prompt(session.data):
+            return session
+    raise RuntimeError("telnet: no shell")
+
+
+class Ssh:
+    """The Twisted SSH client of the image with a pty, in a thread of its own."""
+
+    reactor = None
+
+    def __init__(self, deadline):
+        from twisted.conch.ssh import channel, connection, session, transport, userauth
+        from twisted.internet import defer, protocol, reactor
+
+        self.data = bytearray()
+        self.lock = threading.Condition()
+        self.channel = None
+        self.end = b"\r"
+        client = self
+        passwords = list(PASSWORDS)
+
+        class Shell(channel.SSHChannel):
+            name = b"session"
+
+            def channelOpen(self, _):
+                pty = session.packRequest_pty_req(b"xterm", (24, 80, 0, 0), b"")
+                self.conn.sendRequest(self, b"pty-req", pty, wantReply=False)
+                self.conn.sendRequest(self, b"shell", b"", wantReply=False)
+                client.channel = self
+
+            def dataReceived(self, payload):
+                with client.lock:
+                    client.data += payload
+                    client.lock.notify_all()
+
+        class Conn(connection.SSHConnection):
+            def serviceStarted(self):
+                self.openChannel(Shell(conn=self))
+
+        class Auth(userauth.SSHUserAuthClient):
+            def tryAuth(self, kind):
+                return kind == b"password" and userauth.SSHUserAuthClient.tryAuth(self, kind)
+
+            def getPassword(self, prompt=None):
+                return defer.succeed(passwords.pop(0).encode()) if passwords else None
+
+        class Client(transport.SSHClientTransport):
+            def verifyHostKey(self, pubKey, fingerprint):
+                return defer.succeed(True)
+
+            def connectionSecure(self):
+                self.requestService(Auth(b"root", Conn()))
+
+        factory = protocol.ClientFactory()
+        factory.protocol = Client
+        Ssh.reactor = reactor
+        reactor.callFromThread(reactor.connectTCP, "127.0.0.1", 22, factory)
+        if not self.wait(lambda data: self.channel is not None and at_prompt(data), deadline, quiet=0.5):
+            raise RuntimeError("ssh: no shell")
+
+    def send(self, payload):
+        Ssh.reactor.callFromThread(self.channel.write, payload)
+
+    def wait(self, done, deadline, quiet=0.0):
+        with self.lock:
+            size, last = -1, time.monotonic()
+            while time.monotonic() < deadline:
+                if len(self.data) != size:
+                    size, last = len(self.data), time.monotonic()
+                if done(self.data) and time.monotonic() - last >= quiet:
+                    return True
+                self.lock.wait(0.05)
+        return False
+
+    def close(self):
+        Ssh.reactor.callFromThread(self.channel.loseConnection)
+
+
+def type_line(session, line, typed, deadline):
+    """Sends line (typed: one byte per write), returns the seconds until its echo is back; then the
+    line end, and the output up to the prompt."""
+    session.data.clear()
+    started = time.monotonic()
+    if typed:
+        for value in line:
+            session.send(bytes([value]))
+    else:
+        session.send(line)
+    count = line.count(b"a")
+    if not session.wait(lambda data: data.count(b"a") >= count, deadline):
+        raise RuntimeError(f"echo incomplete: {bytes(session.data).count(b'a')} of {count}")
+    echo = time.monotonic() - started
+    session.data.clear()
+    session.send(session.end)
+    if not session.wait(at_prompt, deadline, quiet=0.5):
+        raise RuntimeError(f"no prompt after the line: {clean(session.data)[-200:]!r}")
+    return echo, clean(session.data).decode("utf-8", errors="replace")
+
+
+results = []
+try:
+    deadline = time.monotonic() + 6 * TIMEOUT
+    from twisted.internet import reactor
+
+    threading.Thread(target=reactor.run, kwargs={"installSignalHandlers": False}, daemon=True).start()
+    for name in ("telnet", "ssh"):
+        for typed in (True, False):
+            session = telnet_shell(deadline) if name == "telnet" else Ssh(deadline)
+            echo, output = type_line(session, LINE, typed, deadline)
+            lines = output.split("\n")
+            result = {"protocol": name, "typed": typed, "echo_seconds": round(echo, 3),
+                      "echo_line": any(line.strip() == "a" * LENGTH for line in lines),
+                      "wget": [line for line in lines if "wget" in line][-1:]}
+            results.append(result)
+            session.close()
+            if echo >= SECONDS or not result["echo_line"] or not result["wget"]:
+                raise RuntimeError(f"long line: {result}")
+    # beyond the bound: 64 KiB are kept, the shell takes the next line
+    session = telnet_shell(deadline)
+    echo, output = type_line(session, b"echo " + b"a" * OVER, False, deadline)
+    _, after = type_line(session, b"echo TPOT_LONG_DONE", False, deadline)
+    session.close()
+    results.append({"protocol": "telnet", "over": OVER, "echo_seconds": round(echo, 3),
+                    "next_line": "TPOT_LONG_DONE" in after.split("\n")})
+    if not results[-1]["next_line"]:
+        raise RuntimeError(f"no answer after a line of {OVER} characters: {after[-200:]!r}")
+except Exception as exc:
+    print(json.dumps(results))
+    sys.exit(f"long line probe failed: {exc}")
+finally:
+    if Ssh.reactor is not None:
+        Ssh.reactor.callFromThread(Ssh.reactor.stop)
+print(json.dumps(results))
+PY
+}
+
+# cowrie.command.input has the long line of each of the four sessions as it was sent, the line beyond
+# the bound cut to 64 KiB, and the next line of that session.
+wait_for_long_line_events() {
+  python3 - "${JSON_LOG_FILE}" "$(long_line)" "${LONG_LINE_MAX}" "${LONG_LINE_OVER}" "${TEST_TIMEOUT}" <<'PY'
+import json
+import sys
+import time
+from pathlib import Path
+
+path = Path(sys.argv[1])
+line = sys.argv[2]
+line_max = int(sys.argv[3])
+cut = ("echo " + "a" * int(sys.argv[4]))[:line_max]
+deadline = time.monotonic() + int(sys.argv[5])
+while True:
+    inputs = []
+    for text in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            event = json.loads(text)
+        except ValueError:
+            continue
+        if event.get("eventid") == "cowrie.command.input":
+            inputs.append((event.get("session"), event.get("input")))
+    full = {session for session, value in inputs if value == line}
+    cut_sessions = {session for session, value in inputs if value == cut}
+    done = {session for session, value in inputs if value == "echo TPOT_LONG_DONE"}
+    if len(full) >= 4 and cut_sessions & done:
+        print(f"cowrie.command.input: the long line in {len(full)} sessions, {line_max} of the longer one")
+        break
+    if time.monotonic() > deadline:
+        longest = sorted((len(value or "") for _, value in inputs), reverse=True)[:6]
+        sys.exit(f"long line events missing: {len(full)} sessions with the line, cut {bool(cut_sessions)}, "
+                 f"next line {bool(cut_sessions & done)}; longest inputs {longest}")
+    time.sleep(0.5)
+PY
+}
+
 read_expected_identity() {
   docker exec -i -e PYTHONDONTWRITEBYTECODE=1 "${TEST_CONTAINER_NAME}" python3 - <<'PY'
 import configparser
@@ -1447,6 +1734,14 @@ run_smoke_test() {
   wait_for_json_event_containing "TPOT_BEGIN" "command" || test_die "The shell command was not found in cowrie.json"
   wait_for_json_event_containing "TPOT_BEGIN" "closed" || test_die "No cowrie.session.closed event with an integer duration_ms for the shell session"
   test_ok "Shell commands and the closed session were written to cowrie.json"
+
+  test_info "Typing and pasting a line of ${LONG_LINE_LENGTH} characters with a download over Telnet and SSH"
+  local long_line_results=""
+  long_line_results="$(run_long_line_probe)" || test_die "The shell of ${persona} did not take the long line"
+  test_info "Long line: ${long_line_results}"
+  wait_for_long_line_events || test_die "The long lines of ${persona} are not in cowrie.json"
+  test_wait_for_container || test_die "Cowrie container stopped after the long lines"
+  test_ok "The long line came back within ${LONG_LINE_SECONDS} s, cowrie.command.input has it with its wget"
 
   if [[ "${ROTATION_STEP}" == "true" ]]; then
     test_info "Starting ${persona} again with COWRIE_PERSONA_ROTATION=${ROTATION_DAYS}"
