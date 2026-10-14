@@ -18,6 +18,7 @@ from tpot_personas.identity import draw
 
 REFS = json.loads((Path(__file__).parent / "fixtures" / "net_tools.json").read_text(encoding="utf-8"))
 MAIN = json.loads((Path(__file__).parent / "fixtures" / "net_main.json").read_text(encoding="utf-8"))
+JSON = json.loads((Path(__file__).parent / "fixtures" / "net_json.json").read_text(encoding="utf-8"))
 STATES = {"ESTABLISHED": "ESTAB", "TIME_WAIT": "TIME-WAIT", "FIN_WAIT2": "FIN-WAIT-2", "CLOSE_WAIT": "CLOSE-WAIT"}
 
 
@@ -276,6 +277,22 @@ class NetToolsTest(unittest.TestCase):
             data["tools"]["netstat"] = {"style": "net-tools", "version": "2.10", "basename": basename}
             out = self.run_cmd(data, "netstat", ["-tnp"], protocol=session)[0]
             self.assertIn(f"ESTABLISHED {session.tpot_session_pid}/{name}".ljust(32), out + " " * 32)
+
+    def test_json_in_the_layout_of_iproute2(self):
+        """ip -j and -j -p as iproute2 6.1.0 writes them (net_json.json): -p in the layout of its
+        json_writer, the metric of a DHCP address, linkmode for links, no link layer for -4."""
+        import time as real_time
+        data = container_network("ubuntu_24.04")
+        data.update(manager="networkd", booted_at=real_time.time(), sockets=[])
+        data["interfaces"][0].update(mac="e6:10:55:5e:64:26", inet="172.17.0.2", broadcast="172.17.255.255",
+                                     network="172.17.0.0", mtu=1500, dynamic=True, lease=3600, index=11)
+        veth = re.compile(r'\n *"link_index": \d+,|\n *"link_netnsid": \d+,|,\n *"link_netnsid": \d+(?=\n)|'
+                          r'"link_index":\d+,|,"link_netnsid":\d+')
+        for case, (out, err, code) in JSON["images"]["ubuntu_24.04"]["cases"].items():
+            words = case.split()
+            with self.subTest(case=case):
+                self.assertEqual(self.run_cmd(data, words[0], words[1:]),
+                                 (real_card(veth.sub("", out)), err, code))
 
     def test_ss_shows_processes_to_root_only(self):
         data = container_network("ubuntu_24.04")

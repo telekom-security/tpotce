@@ -1,0 +1,44 @@
+{
+ "about": "ip of iproute2 6.1.0 in ubuntu:24.04: eth0 with MTU 1500, qlen 1000 and its address as systemd-networkd sets it from DHCP (ip addr add ... metric 100 valid_lft 3600 preferred_lft 3600). eth0 is a veth: link_index, link_netnsid and @ifN name its peer.",
+ "images": {
+  "ubuntu_24.04": {
+   "cases": {
+    "ip -j -p a show dev lo": [
+     "[ {\n        \"ifindex\": 1,\n        \"ifname\": \"lo\",\n        \"flags\": [ \"LOOPBACK\",\"UP\",\"LOWER_UP\" ],\n        \"mtu\": 65536,\n        \"qdisc\": \"noqueue\",\n        \"operstate\": \"UNKNOWN\",\n        \"group\": \"default\",\n        \"txqlen\": 1000,\n        \"link_type\": \"loopback\",\n        \"address\": \"00:00:00:00:00:00\",\n        \"broadcast\": \"00:00:00:00:00:00\",\n        \"addr_info\": [ {\n                \"family\": \"inet\",\n                \"local\": \"127.0.0.1\",\n                \"prefixlen\": 8,\n                \"scope\": \"host\",\n                \"label\": \"lo\",\n                \"valid_life_time\": 4294967295,\n                \"preferred_life_time\": 4294967295\n            },{\n                \"family\": \"inet6\",\n                \"local\": \"::1\",\n                \"prefixlen\": 128,\n                \"scope\": \"host\",\n                \"valid_life_time\": 4294967295,\n                \"preferred_life_time\": 4294967295\n            } ]\n    } ]\n",
+     "",
+     0
+    ],
+    "ip -j -p a show dev eth0": [
+     "[ {\n        \"ifindex\": 11,\n        \"link_index\": 138,\n        \"ifname\": \"eth0\",\n        \"flags\": [ \"BROADCAST\",\"MULTICAST\",\"UP\",\"LOWER_UP\" ],\n        \"mtu\": 1500,\n        \"qdisc\": \"noqueue\",\n        \"operstate\": \"UP\",\n        \"group\": \"default\",\n        \"txqlen\": 1000,\n        \"link_type\": \"ether\",\n        \"address\": \"e6:10:55:5e:64:26\",\n        \"broadcast\": \"ff:ff:ff:ff:ff:ff\",\n        \"link_netnsid\": 0,\n        \"addr_info\": [ {\n                \"family\": \"inet\",\n                \"local\": \"172.17.0.2\",\n                \"prefixlen\": 16,\n                \"metric\": 100,\n                \"broadcast\": \"172.17.255.255\",\n                \"scope\": \"global\",\n                \"dynamic\": true,\n                \"label\": \"eth0\",\n                \"valid_life_time\": 3600,\n                \"preferred_life_time\": 3600\n            } ]\n    } ]\n",
+     "",
+     0
+    ],
+    "ip -j a show dev eth0": [
+     "[{\"ifindex\":11,\"link_index\":138,\"ifname\":\"eth0\",\"flags\":[\"BROADCAST\",\"MULTICAST\",\"UP\",\"LOWER_UP\"],\"mtu\":1500,\"qdisc\":\"noqueue\",\"operstate\":\"UP\",\"group\":\"default\",\"txqlen\":1000,\"link_type\":\"ether\",\"address\":\"e6:10:55:5e:64:26\",\"broadcast\":\"ff:ff:ff:ff:ff:ff\",\"link_netnsid\":0,\"addr_info\":[{\"family\":\"inet\",\"local\":\"172.17.0.2\",\"prefixlen\":16,\"metric\":100,\"broadcast\":\"172.17.255.255\",\"scope\":\"global\",\"dynamic\":true,\"label\":\"eth0\",\"valid_life_time\":3600,\"preferred_life_time\":3600}]}]\n",
+     "",
+     0
+    ],
+    "ip a show dev eth0": [
+     "11: eth0@if138: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000\n    link/ether e6:10:55:5e:64:26 brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 metric 100 brd 172.17.255.255 scope global dynamic eth0\n       valid_lft 3600sec preferred_lft 3600sec\n",
+     "",
+     0
+    ],
+    "ip -p -j link show dev eth0": [
+     "[ {\n        \"ifindex\": 11,\n        \"link_index\": 138,\n        \"ifname\": \"eth0\",\n        \"flags\": [ \"BROADCAST\",\"MULTICAST\",\"UP\",\"LOWER_UP\" ],\n        \"mtu\": 1500,\n        \"qdisc\": \"noqueue\",\n        \"operstate\": \"UP\",\n        \"linkmode\": \"DEFAULT\",\n        \"group\": \"default\",\n        \"txqlen\": 1000,\n        \"link_type\": \"ether\",\n        \"address\": \"e6:10:55:5e:64:26\",\n        \"broadcast\": \"ff:ff:ff:ff:ff:ff\",\n        \"link_netnsid\": 0\n    } ]\n",
+     "",
+     0
+    ],
+    "ip -j -p -4 a show dev eth0": [
+     "[ {\n        \"ifindex\": 11,\n        \"link_index\": 138,\n        \"ifname\": \"eth0\",\n        \"flags\": [ \"BROADCAST\",\"MULTICAST\",\"UP\",\"LOWER_UP\" ],\n        \"mtu\": 1500,\n        \"qdisc\": \"noqueue\",\n        \"operstate\": \"UP\",\n        \"group\": \"default\",\n        \"txqlen\": 1000,\n        \"link_netnsid\": 0,\n        \"addr_info\": [ {\n                \"family\": \"inet\",\n                \"local\": \"172.17.0.2\",\n                \"prefixlen\": 16,\n                \"metric\": 100,\n                \"broadcast\": \"172.17.255.255\",\n                \"scope\": \"global\",\n                \"dynamic\": true,\n                \"label\": \"eth0\",\n                \"valid_life_time\": 3600,\n                \"preferred_life_time\": 3600\n            } ]\n    } ]\n",
+     "",
+     0
+    ],
+    "ip -j link show dev lo": [
+     "[{\"ifindex\":1,\"ifname\":\"lo\",\"flags\":[\"LOOPBACK\",\"UP\",\"LOWER_UP\"],\"mtu\":65536,\"qdisc\":\"noqueue\",\"operstate\":\"UNKNOWN\",\"linkmode\":\"DEFAULT\",\"group\":\"default\",\"txqlen\":1000,\"link_type\":\"loopback\",\"address\":\"00:00:00:00:00:00\",\"broadcast\":\"00:00:00:00:00:00\"}]\n",
+     "",
+     0
+    ]
+   }
+  }
+ }
+}

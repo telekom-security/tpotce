@@ -1307,6 +1307,23 @@ class TpotNetTool(HoneyPotCommand):
 
 # --- ip ---------------------------------------------------------------------------------------
 
+def tpot_iproute_pretty(value, depth: int = 0) -> str:
+    """JSON in the layout of iproute2's json_writer with -p: "[ {" on one line, the members of an
+    object on lines of their own, 4 spaces per level, arrays of values inline, "[ ]" when empty."""
+    if isinstance(value, dict):
+        if not value:
+            return "{}"
+        inner = "    " * (depth + 1)
+        members = ",".join(f"\n{inner}{json.dumps(key)}: {tpot_iproute_pretty(item, depth + 1)}"
+                           for key, item in value.items())
+        return "{" + members + "\n" + "    " * depth + "}"
+    if isinstance(value, list):
+        if not value:
+            return "[ ]"
+        return "[ " + ",".join(tpot_iproute_pretty(item, depth + 1) for item in value) + " ]"
+    return json.dumps(value)
+
+
 class Command_tpot_ip(TpotNetTool):
     """ip of iproute2 (its version) or of BusyBox."""
 
@@ -1567,16 +1584,21 @@ class Command_tpot_ip(TpotNetTool):
         return 0
 
     def json_out(self, data) -> int:
-        self.put((json.dumps(data, indent=4) if self.pretty else json.dumps(data, separators=(",", ":"))) + "\n")
+        self.put((tpot_iproute_pretty(data) if self.pretty else json.dumps(data, separators=(",", ":"))) + "\n")
         return 0
 
     def json_link(self, iface: dict, addresses: bool) -> dict:
         """An interface as `ip -j` writes it."""
         flags = self.flags(iface)[1:-1].split(",")
         found = {"ifindex": iface["index"], "ifname": iface["name"], "flags": flags, "mtu": iface["mtu"],
-                 "qdisc": iface["qdisc"], "operstate": iface["state"], "group": "default", "txqlen": 1000,
-                 "link_type": "loopback" if iface.get("loopback") else "ether", "address": iface["mac"],
-                 "broadcast": "00:00:00:00:00:00" if iface.get("loopback") else "ff:ff:ff:ff:ff:ff"}
+                 "qdisc": iface["qdisc"], "operstate": iface["state"]}
+        if not addresses:
+            found["linkmode"] = "DEFAULT"
+        found.update(group="default", txqlen=1000)
+        if not addresses or self.family not in (4, 6):
+            # ip -4 / -6 address: no link layer
+            found.update(link_type="loopback" if iface.get("loopback") else "ether", address=iface["mac"],
+                         broadcast="00:00:00:00:00:00" if iface.get("loopback") else "ff:ff:ff:ff:ff:ff")
         if iface.get("altname") and self.version >= (5, 4):
             found["altnames"] = [iface["altname"]]
         if not addresses:
@@ -1586,6 +1608,9 @@ class Command_tpot_ip(TpotNetTool):
         info = []
         if iface.get("inet") and self.family in (0, 4):
             entry = {"family": "inet", "local": iface["inet"], "prefixlen": iface["prefix"]}
+            if self.net["manager"] == "networkd" and iface.get("dynamic"):
+                # the route metric of the address, as `inet ... metric 100` of the text
+                entry["metric"] = 100
             if not iface.get("loopback"):
                 entry["broadcast"] = iface["broadcast"]
             entry["scope"] = "host" if iface.get("loopback") else "global"
