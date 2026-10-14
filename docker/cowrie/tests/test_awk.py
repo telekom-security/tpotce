@@ -488,6 +488,30 @@ class AwkTest(unittest.TestCase):
                     self.assertEqual(awk(style, [program], "a\nb\n"), ("", "", 2))
         self.assertEqual(awk("gawk", ["-v", "RS=x", "{ print }"], "a\n"), ("", "", 2))
 
+    def test_substr_and_index_as_the_persona_awk(self):
+        """substr with a start below 1 and fractions, index of an empty string: the tables of gawk
+        (BusyBox prints the same substr) and of mawk, recorded in containers (fixtures/awk_substr.json)."""
+        import json
+        refs = json.loads((Path(__file__).parent / "fixtures" / "awk_substr.json").read_text(encoding="utf-8"))
+        for style, table in (("gawk", "gawk"), ("busybox", "gawk"), ("mawk", "mawk")):
+            with self.subTest(style=style):
+                out, err, code = awk(style, [refs["program"]])
+                self.assertEqual((err, code), ("", 0))
+                self.assertEqual(out.splitlines(), refs[table].splitlines())
+        index = refs["index"]
+        for style in ("gawk", "mawk", "busybox"):
+            with self.subTest(index=style):
+                self.assertEqual(awk(style, [index["program"]], index["input"]), (index[style], "", 0))
+
+    def test_a_record_separator_of_v_is_a_usage_error(self):
+        """-v RS=... ends awk with status 2 as every left-out feature does, without an internal error."""
+        for style in VERSIONS:
+            log = FakeLog()
+            with self.subTest(style=style):
+                self.assertEqual(awk(style, ["-v", "RS=x", "{ print }"], "a\n", log=log), ("", "", 2))
+                self.assertEqual(awk(style, ["-vSUBSEP=:", "{ print }"], "a\n", log=log), ("", "", 2))
+                self.assertEqual(log.errors, [])
+
     def test_internal_errors_go_to_the_log(self):
         log = FakeLog()
         self.assertEqual(awk("gawk", ["{ print }"], "a\n", log=log, broken=True), ("", "", 2))

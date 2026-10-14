@@ -8129,6 +8129,9 @@ class TpotAwk:
             start = self.num(values[1])
             if not math.isfinite(start):
                 return ""
+            if self.style == "mawk":
+                return self.mawk_substr(text, start, self.num(values[2]) if len(values) == 3 else None)
+            # gawk and BusyBox: a start below 1 is 1, the length stays
             start = max(1, int(max(min(start, 2.0 ** 31), -2.0 ** 31)))
             if len(values) == 2:
                 return text[start - 1:]
@@ -8137,7 +8140,10 @@ class TpotAwk:
                 return ""
             return text[start - 1:start - 1 + int(min(length, 2.0 ** 31))]
         if name == "index":
-            return float(text.find(self.touch(self.text(values[1]))) + 1)
+            needle = self.touch(self.text(values[1]))
+            if not needle and self.style == "busybox":
+                return 0.0  # BusyBox finds no empty string, gawk and mawk find it at 1
+            return float(text.find(needle) + 1)
         if name == "tolower":
             return text.lower() if text.isascii() else text.translate(TPOT_AWK_LOWER)
         if name == "toupper":
@@ -8146,6 +8152,25 @@ class TpotAwk:
             x = self.num(values[0])
             return float(math.trunc(x)) if math.isfinite(x) else x
         return self.format(text, values[1:])
+
+    @staticmethod
+    def mawk_substr(text: str, start: float, length) -> str:
+        """substr of mawk 1.3.4: start and length truncated to its int (at most 2147483647 either
+        way); a start below 1 becomes 1 and adds its distance from 0 to the length, in int
+        arithmetic (substr("hello", -1, 3) is "hell", substr("hello", 0, 5) is "hello")."""
+        def clamp(value: float) -> int:
+            return int(max(min(value, 2147483647.0), -2147483647.0)) if value == value else 0
+
+        begin = clamp(start)
+        if length is None:
+            return text[max(begin, 1) - 1:]
+        size = clamp(length)
+        if begin < 1:
+            size = (size - begin + 2 ** 31) % 2 ** 32 - 2 ** 31
+            begin = 1
+        if size <= 0:
+            return ""
+        return text[begin - 1:begin - 1 + size]
 
     def substitute(self, every: bool, args: list) -> float:
         regex = self.regex_of(args[0])
@@ -8709,7 +8734,11 @@ class Command_tpot_awk(Command_awk):
                     if not TPOT_AWK_ASSIGNMENT.match(value):
                         return self.tpot_usage(f"`{value}' argument to `-v' not in `var=value' form\n",
                                                f"improper assignment: -v {value}")
-                    awk.assign_operand(value)
+                    try:
+                        awk.assign_operand(value)
+                    except TpotAwkStop as stop:  # a variable left out (RS, SUBSEP): the usage error of run()
+                        awk.err.append(stop.text)
+                        return stop.code
                 elif letter == "W":
                     word = value.split("=", 1)[0]
                     if style == "busybox":
@@ -8780,6 +8809,7 @@ from twisted.python import log
 
 from cowrie.core.config import CowrieConfig
 from cowrie.shell import fs as tpot_shell_fs
+
 
 TPOT_TEXT_INPUT = 4 << 20
 TPOT_TEXT_OUTPUT = 1 << 20
