@@ -4157,8 +4157,18 @@ class Command_opkg(HoneyPotCommand):
                 self.exit(255)
             else:
                 self.exit()
-        elif words[0] in ("list", "list-installed"):
+        elif words[0] == "list-installed":
             self.write("".join(f"{name} - {version}\n" for name, version in sorted(installed.items())))
+            self.exit()
+        elif words[0] == "list":
+            # the installed packages; after `opkg update` of the session the names of the feeds too,
+            # each with its version of the lists (the lists hold no descriptions here)
+            known = dict(installed)
+            if getattr(self.protocol, "tpot_opkg_lists", False):
+                for name in tpot_opkg_names():
+                    known.setdefault(name, None)
+            shown = sorted(name for name in known if len(words) < 2 or fnmatch.fnmatchcase(name, words[1]))
+            self.write("".join(f"{name} - {known[name] or tpot_opkg_version(name)}\n" for name in shown))
             self.exit()
         elif words[0] == "remove":
             gone = [name for name in dict.fromkeys(words[1:]) if name in added]

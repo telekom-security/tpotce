@@ -1338,6 +1338,23 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(self.opkg(["remove", "htop"], protocol)[0], "Removing package htop from root...\n")
         self.assertEqual(self.opkg(["remove", "htop"], protocol)[0], "No packages removed.\n")
 
+    def test_opkg_list_shows_the_feeds_after_an_update(self):
+        """opkg list (OpenWrt 22.03.7 in a container): before `opkg update` the installed packages,
+        after it the names of the release's feeds too, `name - version` in name order (a name of the
+        feeds with its version of the lists, the same on every call); a glob selects names."""
+        before = self.opkg(["list"])
+        self.assertEqual(before[:3], ("busybox - 1.35.0-5\nopkg - 2022-1\n", "", None))
+        protocol = self.opkg(["update"])[3]
+        out, err, code, protocol = self.opkg(["list"], protocol)
+        htop, kmod = (self.opkg(["install", name], self.opkg(["update"])[3])[3].tpot_opkg_added[name]
+                      for name in ("htop", "kmod-mt7603"))
+        self.assertEqual((out, err, code), ("busybox - 1.35.0-5\n"
+                                            f"htop - {htop}\nkmod-mt7603 - {kmod}\nopkg - 2022-1\n", "", None))
+        self.assertEqual(self.opkg(["list"], protocol)[0], out)
+        self.assertEqual(self.opkg(["list", "k*"], protocol)[0], f"kmod-mt7603 - {kmod}\n")
+        self.assertEqual(self.opkg(["list", "busybox"], protocol)[0], "busybox - 1.35.0-5\n")
+        self.assertEqual(self.opkg(["list-installed"], protocol)[0], "busybox - 1.35.0-5\nopkg - 2022-1\n")
+
     def test_opkg_usage(self):
         self.assertEqual(self.opkg([])[:3], ("usage: opkg [options...] sub-command\n",
                                              "opkg must have one sub-command argument\n", 1))
