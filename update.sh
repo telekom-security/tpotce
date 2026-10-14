@@ -1651,13 +1651,21 @@ function fuOLD_UPDATER_ARCHIVE () {
 # (one tar of MANIFEST rollback.txt env tracked.patch docker-compose.yml and some files of data/,
 # .env is its member env). That folder also holds the archives of this and of later releases:
 # fuOLD_UPDATER_CONFIG takes nothing from one whose .env names the version of the checkout or a
-# newer one. It runs before the backup of this run, which is never the one found. Prints it, rc 1
-# for none.
+# newer one. A tar there counts only from the last 24 hours (fuOLD_UPDATER_FRESH, by its time, the
+# archive is not opened): an older one is never read or named. It runs before the backup of this
+# run, which is never the one found. Prints it, rc 1 for none.
 function fuOLD_UPDATER_NEWEST () {
-	local myNEWEST=""
-	myNEWEST=$(ls -1t "$HOME"/*_tpot_backup.tgz "${myBACKUPDIR}"/*_tpot_backup*.tar 2>/dev/null | head -1)
-	[ -n "${myNEWEST}" ] && [ -f "${myNEWEST}" ] || return 1
-	echo "${myNEWEST}"
+	local myTGZ="" myTAR=""
+	myTGZ=$(fuOLD_UPDATER_ARCHIVE)
+	myTAR=$(ls -1t "${myBACKUPDIR}"/*_tpot_backup*.tar 2>/dev/null | head -1)
+	if [ -n "${myTAR}" ] && [ -f "${myTAR}" ] && fuOLD_UPDATER_FRESH "${myTAR}" \
+	   && { [ -z "${myTGZ}" ] || [ "${myTAR}" -nt "${myTGZ}" ]; };
+	  then
+	    echo "${myTAR}"
+	    return 0
+	fi
+	[ -n "${myTGZ}" ] || return 1
+	echo "${myTGZ}"
 }
 
 # Is that archive from the last 24 hours, i.e. from the run that restarted into this script?

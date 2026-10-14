@@ -3123,12 +3123,6 @@ class OldUpdaterConfigTest(Harness):
         self.assertIn(f"OK: {text}", out)
         self.assertIn(f"DID: ok: {text}", out)
         self.assertIn("HINT: Put back: .env and docker-compose.yml.", out)
-        # the hints name the member env of that archive
-        self.commit(self.RELEASE_ENV)
-        archive = self.tar_archive(age=25 * 3600)
-        out = self.run_config()
-        self.assertReleaseFiles(out)
-        self.assertIn(f"tar xOf {archive} env > ~/tpotce/.env", out)
         # without a compose file in it, .env alone
         self.commit(self.RELEASE_ENV)
         os.remove(archive)
@@ -3137,6 +3131,33 @@ class OldUpdaterConfigTest(Harness):
         self.assertEqual(self.get(".env"), self.USER_ENV, out)
         self.assertEqual(self.get("docker-compose.yml"), self.RELEASE_COMPOSE, out)
         self.assertIn("HINT: Put back: .env. Other files", out)
+
+    def test_n1_an_old_tar_is_not_opened_nor_named(self):
+        """~/tpot_backups keeps archives of every age: a tar older than a day is never listed or
+        extracted (a large --full one would cost two scans at every update) and no hint names it. A
+        stale tgz of the tag 24.04.1 next to it still gets its hint, as before."""
+        real = shutil.which("tar")
+        calls = os.path.join(self.home, "tar_calls")
+        with open(os.path.join(self.bin, "tar"), "w", encoding="utf-8") as out:
+            out.write(f'#!/bin/sh\necho "$*" >> "{calls}"\nexec {real} "$@"\n')
+        os.chmod(os.path.join(self.bin, "tar"), 0o755)
+        archive = self.tar_archive(age=3 * 24 * 3600)
+        out = self.run_config()
+        self.assertIn("rc=0", out)
+        self.assertReleaseFiles(out)
+        self.assertNotIn(archive, out)
+        self.assertNotIn("WARN", out)
+        named = []
+        if os.path.exists(calls):
+            with open(calls, encoding="utf-8") as handle:
+                named = [line for line in handle.read().splitlines() if archive in line]
+        self.assertEqual(named, [])
+        # the older tgz of the tag 24.04.1 keeps its hint
+        tgz = self.archive(age=4 * 24 * 3600)
+        out = self.run_config()
+        self.assertReleaseFiles(out)
+        self.assertNotIn(archive, out)
+        self.assertIn(f"tar xOf {tgz} .env > ~/tpotce/.env", out)
 
     def test_n1_prefers_the_newer_of_tgz_and_tar(self):
         tgz_env = self.USER_ENV.replace("WEB_USER=dXNlcg==", "WEB_USER=dGd6")
