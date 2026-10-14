@@ -875,22 +875,44 @@ def _ports_of_file(name: str, old: dict, lost: List[str]) -> List[Port]:
 
 
 def _adopt_ports(name: str, old: dict, new: dict, lost: List[str]) -> PortOverrides:
-    """Host port overrides that turn the release's ports into those of the file; ports the
-    release has no counterpart for are named in lost."""
+    """Host port overrides that carry the host ports of the file, per container port.
+
+    A container port of both with another host port in the file becomes an override; one
+    only the file has is named in lost; one only the release has stays published. Adopting
+    never drops a port of the release (no override to "-"): an earlier file was built from an
+    earlier catalogue, a port missing there is no choice of the user's.
+    """
     mine = _ports_of_file(name, old, lost)
     release = service_ports(new)
-    overrides = _variant_overrides(name, release, mine)
-    result = []
-    for port in release:
-        key = (name, port.host, port.proto)
-        if key not in overrides:
-            result.append(port)
-        elif overrides[key] is not None:
-            result.append(port.with_host(overrides[key]))
-    have = {(p.ip, p.host, p.container, p.proto) for p in result}
+    any_ip = ("", "0.0.0.0")
+
+    def same_ip(a: Port, b: Port) -> bool:
+        return a.ip == b.ip or (a.ip in any_ip and b.ip in any_ip)
+
+    def same(a: Port, b: Port) -> bool:
+        return a.host == b.host and same_ip(a, b)
+
+    overrides: PortOverrides = {}
+    groups: Dict[Tuple[int, str], Tuple[List[Port], List[Port]]] = {}
     for port in mine:
-        if (port.ip, port.host, port.container, port.proto) not in have:
-            lost.append(f"{name}: port {port.raw} (the release has no such port)")
+        groups.setdefault((port.container, port.proto), ([], []))[1].append(port)
+    for port in release:
+        groups.setdefault((port.container, port.proto), ([], []))[0].append(port)
+    for (container, proto), (theirs, ours) in groups.items():
+        if not ours:
+            continue                                   # the release's port stays published
+        if not theirs:
+            lost.append(f"{name}: port {container}/{proto} (the release no longer has it)")
+            continue
+        left_theirs = [t for t in theirs if not any(same(t, o) for o in ours)]
+        left_ours = [o for o in ours if not any(same(t, o) for t in theirs)]
+        for there, here in zip(left_theirs, left_ours):
+            if here.host != there.host:
+                overrides[(name, there.host, there.proto)] = here.host
+            if not same_ip(here, there):
+                lost.append(f"{name}: port {here.raw} (only the host port is carried, the release has {there.raw})")
+        for here in left_ours[len(left_theirs):]:
+            lost.append(f"{name}: port {here.raw} (the release has no such port)")
     container_only = {str(v).strip() for v in new.get("ports") or [] if re.match(r"^\d+(/(tcp|udp))?$", str(v).strip())}
     for value in old.get("ports") or []:
         raw = str(value).strip()

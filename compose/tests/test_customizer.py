@@ -391,11 +391,6 @@ class AdoptTest(unittest.TestCase):
         adoption = core.adopt(self.catalog, text, "HIVE")
         self.assertEqual(adoption.selection.ports, {("cowrie", 22, "tcp"): 2222})
         self.assertEqual([line for line in adoption.not_carried if "port" in line], [])
-        # a port left out of the file is dropped, one the release has no counterpart for is named
-        text = v1_file(names, {"cowrie": {"ports": ["22:22", "2323:2323"]}})
-        adoption = core.adopt(self.catalog, text, "HIVE")
-        self.assertEqual(adoption.selection.ports, {("cowrie", 23, "tcp"): None})
-        self.assertIn("cowrie: port 2323:2323 (the release has no such port)", adoption.not_carried)
         with tempfile.TemporaryDirectory() as tmp:
             old, new = self.write(tmp, v1_file(names, {"cowrie": {"ports": ["2222:22", "23:23"]}})), \
                 os.path.join(tmp, "new.yml")
@@ -406,6 +401,42 @@ class AdoptTest(unittest.TestCase):
                 rendered = handle.read()
             self.assertEqual(yaml.safe_load(rendered)["services"]["cowrie"]["ports"], ["2222:22", "23:23"])
             self.assertIn("# customizer: port=cowrie:22/tcp=2222\n", rendered)
+
+    def test_a_release_port_missing_from_the_file_stays_published(self):
+        # master's ciscoasa had no IKE ports 500 / 4500, a v1 cowrie without 23 is no choice either
+        ciscoasa = {k: v for k, v in self.catalog.catalog.services["ciscoasa"].items() if k != "x-tpot"}
+        ciscoasa["ports"] = ["8443:8443"]
+        text = own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch"], {"ciscoasa": ciscoasa})
+        text = text.replace("# T-Pot: STANDARD", core.V1_EDITION_LINE, 1)
+        adoption = core.adopt(self.catalog, text, "HIVE")
+        self.assertEqual(adoption.selection.ports, {})
+        self.assertEqual(adoption.not_carried, [])
+        result = core.resolve(self.catalog, adoption.selection)
+        rendered = yaml.safe_load(core.render(self.catalog, result))["services"]["ciscoasa"]["ports"]
+        self.assertEqual(sorted(rendered), sorted(self.catalog.catalog.services["ciscoasa"]["ports"]))
+        cowrie = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"],
+                                                  {"cowrie": {"ports": ["22:22"]}}), "HIVE")
+        self.assertEqual(cowrie.selection.ports, {})
+
+    def test_an_old_only_port_is_kept_out(self):
+        ciscoasa = {k: v for k, v in self.catalog.catalog.services["ciscoasa"].items() if k != "x-tpot"}
+        ciscoasa["ports"] = ["5000:5000/udp", "8443:8443"]                 # as master had them
+        text = own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch"], {"ciscoasa": ciscoasa})
+        adoption = core.adopt(self.catalog, text, "HIVE")
+        self.assertEqual(adoption.selection.ports, {})
+        self.assertEqual(adoption.not_carried, ["ciscoasa: port 5000/udp (the release no longer has it)"])
+        # a bind IP of the file cannot be an override, it is named
+        cowrie = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"],
+                                                  {"cowrie": {"ports": ["127.0.0.1:2222:22", "23:23"]}}), "HIVE")
+        self.assertEqual(cowrie.selection.ports, {("cowrie", 22, "tcp"): 2222})
+        self.assertEqual(cowrie.not_carried,
+                         ["cowrie: port 127.0.0.1:2222:22 (only the host port is carried, the release has 22:22)"])
+
+    def test_adopt_never_drops_a_release_port(self):
+        names = ["tpotinit", "logstash", "elasticsearch", "kibana", "cowrie"]
+        for text in (v1_file(names, {"cowrie": {}}), v1_file(names, {"cowrie": {"ports": []},
+                                                                    "kibana": {"ports": []}})):
+            self.assertNotIn(None, core.adopt(self.catalog, text, "HIVE").selection.ports.values())
 
     def test_own_service_and_own_volume_are_listed_not_carried(self):
         cowrie = {k: v for k, v in self.catalog.catalog.services["cowrie"].items() if k != "x-tpot"}
