@@ -335,19 +335,26 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(FakeEngine.files, [(0o600, f"@@tpot loss elastic {elastic}\n")])
 
     async def test_the_compose_dialog_says_adapt_and_back(self):
-        backend = FakeBackend()
-        backend._loss = (True, [("compose", "Your docker-compose.yml is a compose file of your own.")], "")
-        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.2)
-            app.goto("update")
-            await pilot.pause(0.2)
-            await pilot.click("#run-update")
-            await pilot.pause(0.4)
-            self.assertIsInstance(app.screen, ConfirmDialog)
-            self.assertEqual(str(app.screen.query_one("#yes").label), "Adapt")
-            self.assertEqual(str(app.screen.query_one("#no").label), "Back")
-            self.assertEqual(app.focused.id, "no")
+        """Adapt / Back, Back focused; the title names the compose file alone, a neutral one where Adapt
+        also confirms another loss."""
+        own = ("compose", "Your docker-compose.yml is a compose file of your own.")
+        elastic = ("elastic", "Elasticsearch 8 -> 9 upgrades the data.")
+        for items, title in (([own], "Adapt your compose file?"), ([own, elastic], "Go on with these changes?")):
+            with self.subTest(title=title):
+                backend = FakeBackend()
+                backend._loss = (True, items, "")
+                app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+                async with app.run_test(size=(120, 40)) as pilot:
+                    await pilot.pause(0.2)
+                    app.goto("update")
+                    await pilot.pause(0.2)
+                    await pilot.click("#run-update")
+                    await pilot.pause(0.4)
+                    self.assertIsInstance(app.screen, ConfirmDialog)
+                    self.assertEqual(app.screen.title_text, title)
+                    self.assertEqual(str(app.screen.query_one("#yes").label), "Adapt")
+                    self.assertEqual(str(app.screen.query_one("#no").label), "Back")
+                    self.assertEqual(app.focused.id, "no")
 
     async def test_update_without_findings_runs_as_before(self):
         shown, seen, calls = await self.update_with((True, [], ""), "yes")

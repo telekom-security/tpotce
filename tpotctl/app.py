@@ -2500,7 +2500,9 @@ class TpotApp(App):
         if ok and any(key == "compose" for key, _line in items):
             # a compose file of your own: Adapt is --adapt-compose, the other findings go into the file as ever
             others = [(key, line) for key, line in items if key != "compose"]
-            dialog = ConfirmDialog("Adapt your compose file?", data_loss_text(items), yes="Adapt", no="Back")
+            # Adapt also confirms the other losses: a title that names them all
+            title = "Go on with these changes?" if others else "Adapt your compose file?"
+            dialog = ConfirmDialog(title, data_loss_text(items), yes="Adapt", no="Back")
             confirmed = loss_lines(others)
             args = list(args) + ["--adapt-compose"]
         elif ok:

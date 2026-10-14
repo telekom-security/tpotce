@@ -253,7 +253,7 @@ class UpdateShTest(Harness):
         self.assertTrue(re.search(r"function fuES_STEP_REFUSED \(\) \{\n\ttrap - INT\n", read("update.sh")))
         # the question about a compose file of your own: Ctrl+C there is a no, the trap it found comes back;
         # its cancel lets the rollback finish
-        choice = re.search(r"function fuADOPT_CHOICE \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        choice = re.search(r"function fuADOPT_ASK \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
         self.assertEqual(re.findall(r"trap .*INT", choice), ["trap -p INT", "trap 'myADOPT_INT=\"1\"' INT",
                                                              "trap - INT"])
         self.assertIn('eval "${myTRAP:-trap - INT}"', choice)

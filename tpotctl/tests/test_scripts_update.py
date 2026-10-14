@@ -1924,7 +1924,8 @@ class HandoverTest(Scripts):
 
 # compose/customizer.py of the checkout for the tests of --adopt: every call goes into HOME/calls (with the
 # file it adopts in HOME/adopted_input), the report on stdout from HOME/adopt_report, the exit code from
-# HOME/adopt_rc (HOME/adopt_rc_dry for --dry-run); without --dry-run and with 0 it writes -o with the text
+# HOME/adopt_rc (HOME/adopt_rc_dry for --dry-run, HOME/adopt_report_real for the report without it, the
+# --old-catalog it gets in HOME/old_catalog_input); without --dry-run and with 0 it writes -o with the text
 # of HOME/adopt_out
 ADOPT_STUB = textwrap.dedent('''\
     # a stub of compose/customizer.py --adopt
@@ -1941,8 +1942,11 @@ ADOPT_STUB = textwrap.dedent('''\
             return default
     dry = "--dry-run" in args
     shutil.copy(args[args.index("--adopt") + 1], os.path.join(home, "adopted_input"))
+    if "--old-catalog" in args:
+        shutil.copy(args[args.index("--old-catalog") + 1], os.path.join(home, "old_catalog_input"))
     rc = int((read("adopt_rc_dry" if dry else "adopt_rc", "0") or "0").strip() or "0")
-    sys.stdout.write(read("adopt_report", "kept-out: kibana: mem_limit 1g (the release has 2g)\\n"))
+    report = read("adopt_report", "kept-out: kibana: mem_limit 1g (the release has 2g)\\n")
+    sys.stdout.write(report if dry else read("adopt_report_real", report))
     if rc == 0 and not dry:
         with open(args[args.index("-o") + 1], "w") as out:
             out.write(read("adopt_out", ADOPTED))
@@ -1970,6 +1974,9 @@ class ComposeAdoptTest(Scripts):
         self.write(os.path.join(self.tpotce, "compose", "sensor.yml"), "# T-Pot: SENSOR\nservices: {}\n")
         self.write(os.path.join(self.tpotce, "compose", "tpot_services.yml"), "services: {}\n")
         self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\n")
+        # the venv of the T-Pot Manager: this Python (it has PyYAML)
+        self.python = os.path.join(self.home, "data", "tpotce", "venv", "bin", "python3")
+        self.venv_python()
         restore = os.path.join(self.tpotce, "restore.sh")
         self.write(restore, '#!/bin/sh\necho "restore.sh $*" >> "$HOME/calls"\n')
         os.chmod(restore, 0o755)
@@ -1983,7 +1990,16 @@ class ComposeAdoptTest(Scripts):
         subprocess.run(git + ["commit", "-q", "-m", "before"], check=True)
         self.before = subprocess.run(["git", "-C", self.tpotce, "rev-parse", "HEAD"], capture_output=True,
                                      universal_newlines=True, check=True).stdout.strip()
-        subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "release"], check=True)
+        # the release has a catalogue of its own: --old-catalog is the one of the commit that ran
+        self.write(os.path.join(self.tpotce, "compose", "tpot_services.yml"), "services: {release: {}}\n")
+        subprocess.run(git + ["commit", "-q", "-a", "-m", "release"], check=True)
+
+    def venv_python(self, yaml=True):
+        """The Python of the venv: this one, which says it has PyYAML (the stub of the customizer needs none);
+        yaml=False: one without PyYAML."""
+        probe = f'case "$*" in *"import yaml"*) exit {0 if yaml else 1} ;; esac\n'
+        self.write(self.python, f"#!/bin/sh\n{probe}exec {shlex.quote(sys.executable)} \"$@\"\n")
+        os.chmod(self.python, 0o755)
 
     def write(self, path, text):
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -2038,8 +2054,8 @@ class ComposeAdoptTest(Scripts):
         summary = self.summary(result.stdout)
         self.assertIn("### [WARNING] - Not carried over from your docker-compose.yml: cowrie: environment "
                       "COWRIE_X=1", summary)
-        self.assertIn("### [WARNING] - Dropped from your docker-compose.yml: spiderfoot (removed in this release)",
-                      summary)
+        # a service the release removed is no loss of yours: named, not in the summary
+        self.assertFalse([line for line in summary if "spiderfoot" in line], summary)
         self.assertFalse([line for line in summary if "conpot_x" in line or "2222" in line], summary)
 
     def test_v1_rebuild_failure_falls_back_to_own(self):
@@ -2053,8 +2069,8 @@ class ComposeAdoptTest(Scripts):
                 out = result.stdout + result.stderr
                 self.assertEqual(result.returncode, 1, out)
                 self.assertNotIn("went on", out)
-                self.assertIn(f"cannot rebuild your docker-compose.yml of the customizer before v2 (--adopt ended "
-                              f"with {rc}), it counts as a compose file of your own.", out)
+                self.assertIn(f"Your docker-compose.yml of the customizer before v2 is not rebuilt (compose/customizer.py "
+                              f"--adopt ended with {rc}), it counts as a compose file of your own.", out)
                 self.assertIn("is a compose file of your own", out)
                 self.assertIn(f"It cannot be adapted automatically: compose/customizer.py --adopt ended with {rc}",
                               out)
@@ -2093,7 +2109,7 @@ class ComposeAdoptTest(Scripts):
         backups = os.path.join(self.home, "tpot_backups")
         self.assertEqual([n for n in os.listdir(backups) if n.endswith(".tar")] if os.path.isdir(backups) else [], [])
         self.assertEqual(self.compose(), self.OWN)
-        self.assertIn("Not adapted: no terminal. --adapt-compose adapts it, -y does not.", out)
+        self.assertIn("Not adapted: no terminal. ./update.sh -y --adapt-compose adapts it, -y does not.", out)
         self.assertIn("not carried over: kibana: mem_limit 1g (the release has 2g)", out)
         flat = " ".join(out.split())
         self.assertIn("tpot edition set <edition>, or cp compose/<edition>.yml docker-compose.yml", flat)
@@ -2268,6 +2284,155 @@ class ComposeAdoptTest(Scripts):
                 self.assertEqual(self.compose(), template)
                 self.assertNotIn("customizer", self.calls())
 
+    # --- fix round 1 ----------------------------------------------------------------------------------
+
+    def adapt_lines(self, out):
+        return [line for line in out.splitlines() if "adapt-compose" in line and "--adapt-compose:" not in line]
+
+    def test_the_way_on_names_the_command_of_each_path(self):
+        """After a handover the next run starts with the update.sh before, which takes the option only
+        after --; in the first pass it is the option itself."""
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        lines = self.adapt_lines(out)
+        self.assertGreaterEqual(len(lines), 3, out)                    # no terminal, the ways, the summary
+        for line in lines:
+            self.assertIn("./update.sh -y --adapt-compose", line)
+            self.assertNotIn("-- --adapt-compose", line)
+        archive = self.archive(self.OWN)
+        result = self.handover(f'myRUNNING=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\nfuRESTORE_EDITION\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        lines = self.adapt_lines(out)
+        self.assertGreaterEqual(len(lines), 5, out)                    # and the cron text, hint and summary
+        for line in lines:
+            self.assertIn("./update.sh -y -- --adapt-compose", line)
+
+    def test_a_service_of_your_own_is_a_loss(self):
+        """A service the catalogue does not know is dropped: that is a loss of yours, named as one before
+        the choice, in the finding of --check-data-loss, in the ways to adapt it yourself and in the summary.
+        One the release removed is not."""
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        self.write(os.path.join(self.home, "adopt_report"), "dropped: spiderfoot (removed in this release)\n"
+                                                              "dropped: myapp (not a T-Pot service)\n")
+        result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\n')
+        out = result.stdout + result.stderr
+        self.assertIn("not carried over: the service myapp (not a T-Pot service)", out)
+        self.assertNotIn("nothing, every setting of your file is carried over", out)
+        self.assertNotIn("not carried over: the service spiderfoot", out)
+        self.assertIn("dropped: spiderfoot (removed in this release)", out)
+        self.assertIn("and keep: the service myapp (not a T-Pot service)", out)
+        self.assertNotIn("and keep: the service spiderfoot", out)
+        result = self.source_update('fuCOMPOSE_LOSS\n')
+        line = [l for l in result.stdout.splitlines() if l.startswith("@@tpot loss compose ")]
+        self.assertEqual(len(line), 1, result.stdout)
+        self.assertIn("Not carried over: the service myapp (not a T-Pot service).", line[0])
+        self.assertNotIn("Every setting", line[0])
+        self.assertNotIn("spiderfoot", line[0])
+        archive = self.archive(self.OWN)
+        result = self.source_update(f'myRUNNING=1 myADAPT_COMPOSE=1\nfuCHECK_EDITION\nmyARCHIVE="{archive}"\n'
+                                    'fuRESTORE_EDITION\nexit 0\n')
+        summary = self.summary(result.stdout)
+        self.assertIn("### [WARNING] - Not carried over from your docker-compose.yml: the service myapp (not a T-Pot "
+                      "service)", summary)
+        self.assertFalse([l for l in summary if "spiderfoot" in l], summary)
+
+    GREW = "kept-out: kibana: mem_limit 1g (the release has 2g)\nkept-out: kibana: volumes /mine:/data\n"
+
+    def test_a_longer_list_after_the_pull_asks_again_at_a_terminal(self):
+        self.write(os.path.join(self.home, "adopt_report_real"), self.GREW)
+        script = ('myRUNNING=1 mySTOPPED=1\nfuCHECK_EDITION\nmyARCHIVE="{archive}"\nfuRESTORE_EDITION\n'
+                  'echo "went on"\nexit 0\n')
+        for answer, adapted in ((b"\r", False), (b"1\r", True)):
+            with self.subTest(adapted=adapted):
+                self.forget()
+                self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+                archive = self.archive(self.OWN)
+                line = f'source {shlex.quote(UPDATE_SH)}\n{script.format(archive=archive)}'
+                _code, raw, _piped = ptyhelper.run(["bash", "-c", line], self.env(TPOT_GUM="off"), cwd=self.tpotce,
+                                                   size=(120, 49), timeout=30,
+                                                   answers=(("Choice (1-2", b"1\r"), ("Choice (1-2", answer)))
+                out = raw.decode("utf-8", "replace").replace("\r\n", "\n")
+                self.assertEqual(out.count("Choice (1-2, enter = 2)"), 2, out)      # asked again, cancel default
+                self.assertIn("leaves out more than the list shown before the choice", out)
+                self.assertIn("not carried over: kibana: volumes /mine:/data", out)
+                self.assertLess(out.index("kibana: volumes /mine:/data"), out.rindex("Choice (1-2"))
+                if adapted:
+                    self.assertIn("went on", out)
+                    self.assertEqual(self.compose(), self.ADOPTED)
+                    self.assertIn("Not carried over from your docker-compose.yml (not in the list shown before): "
+                                  "kibana: volumes /mine:/data", out)
+                else:
+                    self.assertNotIn("went on", out)
+                    self.assertEqual(self.compose(), self.OWN)                  # never written
+                    calls = self.calls()
+                    self.assertIn(f"restore.sh -f {archive} -c", calls)
+                    self.assertIn("systemctl start tpot", calls)
+
+    def test_a_longer_list_without_a_terminal_goes_on_with_the_flag(self):
+        self.write(os.path.join(self.home, "adopt_report_real"), self.GREW)
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        archive = self.archive(self.OWN)
+        result = self.source_update(f'myRUNNING=1 myADAPT_COMPOSE=1\nfuCHECK_EDITION\nmyARCHIVE="{archive}"\n'
+                                    'fuRESTORE_EDITION\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertEqual(self.compose(), self.ADOPTED)
+        summary = self.summary(result.stdout)
+        self.assertIn("### [WARNING] - Not carried over from your docker-compose.yml (not in the list shown before): "
+                      "kibana: volumes /mine:/data", summary)
+        self.assertIn("### [WARNING] - Not carried over from your docker-compose.yml: kibana: mem_limit 1g (the "
+                      "release has 2g)", summary)
+
+    def test_a_restarted_update_compares_with_the_list_of_the_first_pass(self):
+        """The list shown before the choice reaches a restarted update.sh (TPOT_UPDATE_ADOPT_SHOWN): its own
+        dry run already has the new item, the one of the first pass did not."""
+        self.write(os.path.join(self.home, "adopt_report"), self.GREW)
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.STANDARD)
+        archive = self.archive(self.OWN)
+        result = self.handover(f'myRUNNING=1 myADAPT_COMPOSE=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\n'
+                               'fuRESTORE_EDITION\nexit 0\n',
+                               TPOT_UPDATE_ADOPT_SHOWN="kibana: mem_limit 1g (the release has 2g)")
+        self.assertIn("### [WARNING] - Not carried over from your docker-compose.yml (not in the list shown before): "
+                      "kibana: volumes /mine:/data", self.summary(result.stdout))
+        # without one, the list this run showed counts
+        self.forget()
+        result = self.handover(f'myRUNNING=1 myADAPT_COMPOSE=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\n'
+                               'fuRESTORE_EDITION\nexit 0\n', TPOT_UPDATE_ADOPT_SHOWN=None)
+        self.assertNotIn("not in the list shown before", result.stdout)
+        # the restart hands it over
+        text = base.read("update.sh")
+        restart = text[text.index('export TPOT_UPDATE_COMPOSE_CUSTOMIZED'):text.index('exec bash "$0" -y')]
+        self.assertIn('TPOT_UPDATE_ADOPT_SHOWN="$(cat "${myTMPDIR}/adopt_shown")"', restart)
+        self.assertIn("export TPOT_UPDATE_ADOPT_SHOWN", restart)
+
+    def test_the_old_catalog_is_the_one_of_the_commit_that_ran(self):
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        result = self.source_update('myRUNNING=1 myADAPT_COMPOSE=1\nfuCHECK_EDITION\nexit 0\n')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # before the backup: HEAD, the checkout that runs
+        self.assertEqual(self.read(os.path.join(self.home, "old_catalog_input")), "services: {release: {}}\n")
+        archive = self.archive(self.OWN)
+        result = self.handover(f'myRUNNING=1 myADAPT_COMPOSE=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\n'
+                               'fuRESTORE_EDITION\nexit 0\n')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # after the pull: the commit of rollback.txt
+        self.assertEqual(self.read(os.path.join(self.home, "old_catalog_input")), "services: {}\n")
+
+    def test_without_pyyaml_the_hint_names_it(self):
+        self.venv_python(yaml=False)
+        self.stub("python3", f"#!/bin/sh\ncase \"$*\" in *\"import yaml\"*) exit 1 ;; esac\n"
+                             f"exec {shlex.quote(sys.executable)} \"$@\"\n")
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\n')
+        out = " ".join((result.stdout + result.stderr).split())
+        self.assertEqual(result.returncode, 1, out)
+        self.assertIn("It cannot be adapted automatically: compose/customizer.py needs PyYAML, which is missing here",
+                      out)
+        self.assertNotIn("customizer --adopt", self.calls())              # no run, no venv built on the way
+
     # --- --check-data-loss ----------------------------------------------------------------------------
 
     def test_check_data_loss_reports_own_compose(self):
@@ -2319,7 +2484,7 @@ class ComposeAdoptTest(Scripts):
         shutil.rmtree(os.path.join(self.tpotce, "compose"))
         os.symlink(os.path.join(REPO, "compose"), os.path.join(self.tpotce, "compose"))
         os.symlink(os.path.join(REPO, "tpotctl"), os.path.join(self.tpotce, "tpotctl"))
-        os.makedirs(os.path.join(self.home, "data", "tpotce"))
+        shutil.rmtree(os.path.join(self.home, "data", "tpotce", "venv"))
         os.symlink(venv, os.path.join(self.home, "data", "tpotce", "venv"))
         v1 = self.read(os.path.join(REPO, "compose", "mini.yml")).replace("# T-Pot: MINI\n",
                                                                          "# T-Pot: CUSTOM EDITION\n", 1)
