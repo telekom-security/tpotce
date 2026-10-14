@@ -951,7 +951,7 @@ code 5, leaving T-Pot up and running rather than filling the disk. That includes
 never quietly swapped for the regular backup.
 
 ### Loss of Data
-`update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade without `--full`, older backups that are deleted to make room for the new one, and images that cannot be pulled again or that the registry does not confirm in time. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout and the rewrite of `.env` and the compose file are no loss of data, they are only mentioned.
+`update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade that the backup has no room for (without `--full` the run adds that data to its backup by itself where there is room, the archive then has the name of a full one), older backups that are deleted to make room for the new one, and images that cannot be pulled again or that the registry does not confirm in time. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout and the rewrite of `.env` and the compose file are no loss of data, they are only mentioned.
 
 `-y` confirms the update, it does not confirm a loss of data. Without a terminal `--accept-data-loss` confirms every loss (for the command line and cron, where you typed it), `--accept-data-loss-file <file>` only the losses its lines name:
 ```

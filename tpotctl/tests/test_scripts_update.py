@@ -13,6 +13,9 @@ import shlex
 import shutil
 import stat
 import subprocess
+import sys
+import tarfile
+import textwrap
 import time
 import unittest
 
@@ -877,6 +880,290 @@ class SshdDocsTest(unittest.TestCase):
         name = re.search(r"- name: ([^\n]*)\n\s*file:\n\s*path: /etc/ssh/sshd_config.d/tpot.conf\n", remove).group(1)
         self.assertNotIn("(AcceptEnv COLORTERM)", name)
         self.assertIn("LC_TERMINAL", name)
+
+
+REAL_TAR = shutil.which("tar") or "/usr/bin/tar"
+# tar rf as GNU tar (the --transform of fuBACKUP: ./elk/data becomes data/elk/data) through Python's
+# tarfile, everything else the real tar: GNU or bsdtar, both list and extract. HOME/tar_fail makes the
+# append fail half way, as a full disk does: the header of a member and part of its data over the end
+# marker, then exit 2 (HOME/cut.tar keeps that state). Every call goes into HOME/calls.
+TAR = f'''#!{sys.executable}
+import os, sys, shutil, tarfile
+home = os.environ["HOME"]
+args = sys.argv[1:]
+with open(os.path.join(home, "calls"), "a") as log:
+    log.write("tar " + " ".join(args) + "\\n")
+if args and args[0] == "rf":
+    archive, folder, member = args[1], args[args.index("-C") + 1], args[-1]
+    if args[args.index("--transform") + 1] != "flags=rh;s,^\\\\./,data/,":
+        sys.exit("tar: unexpected --transform")
+    if os.path.exists(os.path.join(home, "tar_slow")):
+        open(os.path.join(home, "tar_started"), "w").close()
+        import time
+        time.sleep(30)
+    if os.path.exists(os.path.join(home, "tar_fail")):
+        with tarfile.open(archive) as old:
+            old.getmembers()
+            end = old.offset
+        with open(archive, "r+b") as out:
+            out.seek(end)
+            info = tarfile.TarInfo("data/elk/data/big")
+            info.size = 100000
+            out.write(info.tobuf())
+            out.write(b"x" * 3000)
+            out.truncate()
+        shutil.copy(archive, os.path.join(home, "cut.tar"))
+        sys.exit("tar: Error writing to archive: No space left on device")
+    source = os.path.join(folder, member)
+    if not os.path.exists(source):
+        sys.exit("tar: " + member + ": Cannot stat: No such file or directory")
+    with tarfile.open(archive, "a") as out:
+        out.add(source, arcname="data/" + member[2:])
+    sys.exit(0)
+os.execv({REAL_TAR!r}, [{REAL_TAR!r}] + args)
+'''
+# systemctl: is-enabled says what HOME/enabled holds (disabled without it), every call goes into HOME/calls
+SYSTEMCTL = ('#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\n'
+             'case "$1" in is-enabled) if [ -f "$HOME/enabled" ]; then echo enabled; else echo disabled; exit 1; fi ;; esac\n'
+             'exit 0\n')
+
+
+class EsDataAppendTest(base.Harness):
+    """fuCHECK_ELASTIC puts the Elasticsearch data into the archive of the run by itself where there is
+    room, also the one the update.sh of 24.04.1 (branch master) hands over: no question, the archive gets
+    the name of a full one. Without room the old way: the question, or without a terminal the refusal,
+    the rollback and T-Pot started again where tpot.service is enabled, with the hints that update.sh
+    knows. A data/elk/data of ~/tpotce/data counts only where that is the data folder."""
+
+    HELPERS = base.DataLossTest.HELPERS + 'fuDID () { myDONE+=("$1:$2"); echo "DID: $1: $2"; }\n'
+    functions = staticmethod(base.DataLossTest.functions)
+    # the check of --check-data-loss as DataLossTest runs it
+    CHECK = base.DataLossTest.CHECK
+    CHECK_FUNCTIONS = base.DataLossTest.CHECK_FUNCTIONS
+    target = base.DataLossTest.target
+    check = base.DataLossTest.check
+    write = base.DataLossTest.write
+    environment = base.DataLossTest.environment
+    bash = base.DataLossTest.bash
+
+    def setUp(self):
+        super().setUp()
+        for name, text in (("df", base.DF), ("du", base.DU), ("tar", TAR), ("systemctl", SYSTEMCTL)):
+            path = os.path.join(self.bin, name)
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(text)
+            os.chmod(path, 0o755)
+        self.tpotce = os.path.join(self.home, "tpotce")
+        self.backups = os.path.join(self.home, "tpot_backups")
+        os.makedirs(os.path.join(self.tpotce, "docker", "elk", "elasticsearch"))
+        with open(os.path.join(self.tpotce, "docker", "elk", "elasticsearch", "Dockerfile"), "w") as out:
+            out.write("FROM alpine\nARG ES_VER=9.5.4\n")
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), "w") as out:
+            out.write("services:\n  elasticsearch:\n    image: x\n")
+        restore = os.path.join(self.tpotce, "restore.sh")
+        with open(restore, "w", encoding="utf-8") as out:
+            out.write('#!/bin/sh\necho "restore.sh $*" >> "$HOME/calls"\n')
+        os.chmod(restore, 0o755)
+        subprocess.run(["git", "init", "-q", self.tpotce], check=True)
+        subprocess.run(["git", "-C", self.tpotce, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q",
+                        "--allow-empty", "-m", "release"], check=True)
+        # 1 GB disk, 900 MB free, 10 % reserve: room for 1 MB of Elasticsearch data, not for 900 MB
+        self.write("df_size", "1000000000\n")
+        self.write("df_avail", "900000000\n")
+        self.write("es_need", "1000000\n")
+
+    def data(self, folder):
+        """A data folder with Elasticsearch data that runs."""
+        os.makedirs(os.path.join(folder, "elk", "data", "nodes", "0"))
+        with open(os.path.join(folder, "elk", "data", "nodes", "0", "live"), "w") as out:
+            out.write("live\n")
+        return folder
+
+    def master_archive(self, extra=None):
+        """The archive the update.sh of master writes before its pull and hands over: MANIFEST without
+        a data folder, rollback.txt of the commit before the pull, no data/elk/data without --full."""
+        members = {"MANIFEST": "T-Pot backup\nTPOT_VERSION: 24.04.1\n", "rollback.txt": "0123456789abcdef\n",
+                   "env": "TPOT_VERSION=24.04.1\n", "data/uuid": "x\n"}
+        members.update(extra or {})
+        return base.make_backup(self.home, members)
+
+    def run_check(self, archive, prepared="1", env="", signal_when=None, send=None):
+        """fuCHECK_ELASTIC after the handover (prepared) or in the first pass; with signal_when the signal
+        send goes to the whole run once that file exists."""
+        with open(os.path.join(self.tpotce, ".env"), "w") as out:
+            out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n" + env)
+        script = textwrap.dedent(f"""
+            myOLDVERSION=24.04.1 myARCHIVE="{archive}" myPREPARED="{prepared}" myDATE=20261014120000
+            export TPOT_UPDATE_ARCHIVE="{archive}"
+            myDONE=("ok:The backup is {archive}.")
+            docker () {{ [ "$1 $2" = "image inspect" ] && printf 'PATH=/bin\\nES_VER=9.3.5\\n'; }}
+            trap '[ -z "${{myTMPDIR}}" ] || rm -rf "${{myTMPDIR}}"; printf "ITEM %s\\n" "${{myDONE[@]}}"; echo "HANDOVER $TPOT_UPDATE_ARCHIVE"' EXIT
+        """) + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS",
+                              "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuCAN_ROLLBACK", "fuROLLBACK_CHECKOUT",
+                              "fuSTART_TPOT", "fuELASTIC_REFUSED", "fuOLD_RELEASE_BACKUP", "fuTMPDIR",
+                              "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
+                              "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV", *base.ES_APPEND,
+                              "fuCHECK_ELASTIC") + 'fuCHECK_ELASTIC\necho "went on"\n'
+        proc = subprocess.Popen(["bash", "-c", self.HELPERS + script], cwd=REPO, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, universal_newlines=True, env=self.environment(),
+                                stdin=subprocess.DEVNULL, start_new_session=True)
+        if signal_when:
+            deadline = time.time() + 30
+            while not os.path.exists(signal_when) and proc.poll() is None and time.time() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(os.path.exists(signal_when), "the step did not start")
+            time.sleep(0.2)
+            os.killpg(proc.pid, send)
+        out, _err = proc.communicate(timeout=60)
+        return proc.returncode, out
+
+    def members(self, archive):
+        with tarfile.open(archive) as handle:
+            return handle.getnames()
+
+    def calls(self):
+        path = os.path.join(self.home, "calls")
+        if not os.path.exists(path):
+            return ""
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_handover_without_es_data_appends_and_renames_without_asking(self):
+        self.data(os.path.join(self.tpotce, "data"))
+        archive = self.master_archive()
+        code, out = self.run_check(archive)
+        self.assertEqual(code, 0, out)
+        self.assertIn("went on", out)
+        self.assertNotIn("ASKED", out)
+        self.assertNotIn("Not confirmed", out)
+        self.assertFalse(os.path.exists(archive))
+        self.assertEqual(os.listdir(self.backups), ["20261014120000_tpot_backup_full.tar"])   # fuARCHIVE_NAME
+        new = os.path.join(self.backups, "20261014120000_tpot_backup_full.tar")
+        names = self.members(new)
+        self.assertIn("data/elk/data/nodes/0/live", names)
+        self.assertIn("rollback.txt", names)                                  # what master wrote stays
+        self.assertIn(f"DID: ok: The Elasticsearch data is now in {new}.", out)
+        self.assertIn(f"ITEM ok:The Elasticsearch data is now in {new}.", out)
+        self.assertIn(f"ITEM ok:The backup is {new}.", out)                   # the summary names the new one
+        self.assertNotIn(f"ITEM ok:The backup is {archive}.", out)
+        self.assertIn(f"HANDOVER {new}", out)
+        self.assertNotIn("restore.sh", self.calls())
+
+    def test_no_room_refuses_starts_tpot_and_names_full(self):
+        self.data(os.path.join(self.tpotce, "data"))
+        self.write("es_need", "900000000\n")
+        self.write("enabled", "")
+        archive = self.master_archive()
+        with open(archive, "rb") as handle:
+            before = handle.read()
+        code, out = self.run_check(archive)
+        self.assertEqual(code, 5, out)
+        self.assertNotIn("went on", out)
+        self.assertNotIn("ASKED", out)
+        calls = self.calls()
+        self.assertIn(f"restore.sh -f {archive} -c", calls)
+        self.assertIn("systemctl start tpot.service", calls)
+        self.assertLess(calls.index("restore.sh"), calls.index("systemctl start"))
+        self.assertNotIn("tar rf", calls)
+        self.assertIn("DID: ok: T-Pot runs again, on the release from before this update.", out)
+        flat = " ".join(out.split())
+        self.assertIn("./update.sh -y --full", flat)
+        self.assertIn("./update.sh -y -- --accept-data-loss", flat)
+        self.assertIn("the update.sh of 24.04.1 rejects --accept-data-loss alone", flat)
+        self.assertIn("Each run of the update.sh of 24.04.1 writes a backup", flat)
+        self.assertIn("no room for it in the backup", flat)
+        with open(archive, "rb") as handle:
+            self.assertEqual(handle.read(), before)                          # untouched, same name
+
+    def test_outside_data_path_stale_member_does_not_count(self):
+        # stale data in ~/tpotce/data that master's archive took, the data that runs is elsewhere
+        self.data(os.path.join(self.tpotce, "data"))
+        archive = self.master_archive({"data/elk/data/nodes/0/stale": "old\n"})
+        for folder in ("/srv/tpot", self.data(os.path.join(self.home, "srv", "tpot"))):
+            with self.subTest(folder=folder):
+                if os.path.exists(os.path.join(self.home, "calls")):
+                    os.remove(os.path.join(self.home, "calls"))
+                code, out = self.run_check(archive, env=f"TPOT_DATA_PATH={folder}\n")
+                self.assertNotIn(f"OK: The Elasticsearch data is in {archive}", out)
+                self.assertIn(f" -C {folder} ./elk/data", self.calls())        # the append, from there
+                if folder == "/srv/tpot":                                      # nothing there to take
+                    self.assertEqual(code, 5, out)
+                    self.assertTrue(os.path.exists(archive))
+                else:
+                    self.assertEqual(code, 0, out)
+                    full = [name for name in os.listdir(self.backups) if name.endswith("_full.tar")]
+                    self.assertIn("data/elk/data/nodes/0/live", self.members(os.path.join(self.backups, full[0])))
+
+    def test_the_data_of_the_data_folder_that_runs_counts_by_the_manifest(self):
+        folder = self.data(os.path.join(self.home, "srv", "tpot"))
+        archive = self.master_archive({"MANIFEST": f"T-Pot backup\nData folder:  {folder}\n",
+                                       "data/elk/data/nodes/0/live": "live\n"})
+        code, out = self.run_check(archive, env=f"TPOT_DATA_PATH={folder}\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"OK: The Elasticsearch data is in {archive}", out)
+        self.assertNotIn("tar rf", self.calls())
+
+    def test_failed_append_leaves_the_archive_readable_and_refuses(self):
+        self.data(os.path.join(self.tpotce, "data"))
+        self.write("tar_fail", "")
+        archive = self.master_archive()
+        with open(archive, "rb") as handle:
+            before = handle.read()
+        code, out = self.run_check(archive)
+        self.assertEqual(code, 5, out)
+        self.assertIn("tar rf", self.calls())
+        # cut short like that, tar lists what was there before and then fails: the end is put back
+        cut = subprocess.run([REAL_TAR, "tf", os.path.join(self.home, "cut.tar")], capture_output=True,
+                             universal_newlines=True)
+        self.assertIn("rollback.txt", cut.stdout)
+        self.assertNotEqual(cut.returncode, 0, cut.stdout)
+        with open(archive, "rb") as handle:
+            self.assertEqual(handle.read(), before)                          # as it was, byte for byte
+        listed = subprocess.run([REAL_TAR, "tf", archive], capture_output=True, universal_newlines=True)
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        self.assertEqual(os.listdir(self.backups), [os.path.basename(archive)])
+        self.assertIn("The archive is as it was before.", out)
+        self.assertIn(f"restore.sh -f {archive} -c", self.calls())
+
+    def test_ctrl_c_while_the_data_goes_in_is_a_no(self):
+        """Ctrl+C ends tar: the archive is put back and the run refuses as for a no at the question."""
+        import signal
+        self.data(os.path.join(self.tpotce, "data"))
+        self.write("tar_slow", "")
+        archive = self.master_archive()
+        with open(archive, "rb") as handle:
+            before = handle.read()
+        code, out = self.run_check(archive, signal_when=os.path.join(self.home, "tar_started"),
+                                   send=signal.SIGINT)
+        self.assertEqual(code, 5, out)
+        self.assertIn("it was stopped while it went into", out)
+        self.assertNotIn("ASKED", out)
+        self.assertIn(f"restore.sh -f {archive} -c", self.calls())
+        with open(archive, "rb") as handle:
+            self.assertEqual(handle.read(), before)
+
+    def test_check_data_loss_reports_elastic_only_without_room(self):
+        for need, expected in (("1000000", []), ("900000000", ["elastic"])):
+            with self.subTest(need=need):
+                shutil.rmtree(os.path.join(self.home, "origin"), ignore_errors=True)
+                self.target()
+                self.write("es_need", need + "\n")
+                out, lines = self.check()
+                found = [line.split()[2] for line in lines if line.split()[2] == "elastic"]
+                self.assertEqual(found, expected, out)
+        self.assertIn("The backup of the run cannot take the Elasticsearch data:", out)
+
+    def test_not_enabled_service_is_not_started_after_refusal(self):
+        self.data(os.path.join(self.tpotce, "data"))
+        self.write("es_need", "900000000\n")
+        archive = self.master_archive()
+        code, out = self.run_check(archive)
+        self.assertEqual(code, 5, out)
+        calls = self.calls()
+        self.assertIn(f"restore.sh -f {archive} -c", calls)
+        self.assertIn("systemctl is-enabled tpot", calls)
+        self.assertNotIn("systemctl start", calls)
+        self.assertNotIn("T-Pot runs again", out)
 
 
 class StopTest(Scripts):

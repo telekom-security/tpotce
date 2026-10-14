@@ -235,7 +235,11 @@ class UpdateShTest(Harness):
                                   r"\s*trap - INT\n", text), text[-900:])
         refused = re.search(r"function fuELASTIC_REFUSED \(\) \{\n\ttrap - INT\n", read("update.sh"))
         self.assertTrue(refused)
-        self.assertEqual(len(re.findall(r"trap .*INT", read("update.sh"))), 5)
+        # the append of the Elasticsearch data (Ctrl+C is a no there as well) puts back the trap it found
+        # on both of its ways out, the rest of update.sh has the five above
+        append = re.search(r"function fuAPPEND_ES_DATA \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        self.assertEqual(len(re.findall(r'eval "\$\{myTRAP:-trap - INT\}"', append)), 2)
+        self.assertEqual(len(re.findall(r"trap .*INT", read("update.sh").replace(append, ""))), 5)
 
     def test_the_refusal_names_full(self):
         self.assertTrue("--full" in self.check_elastic())
@@ -1695,10 +1699,18 @@ DF = ('#!/bin/sh\ncase "$*" in\n  *size*) echo "1B-blocks"; cat "$HOME/df_size" 
       '    fi\n    echo "$a" ;;\n'
       '  *pcent*) echo "Use%"; cat "$HOME/df_pcent" 2>/dev/null || echo " 40%" ;;\nesac\n')
 # du -k <file>: the KiB of the file from HOME/sizes ("<name> <kib>" per line); du -scb (fuBACKUP_SIZE)
-# says what HOME/need holds
+# says what HOME/need holds; du -sb (fuES_DATA_FITS, the Elasticsearch data) what HOME/es_need holds,
+# without it the size cannot be read
 DU = ('#!/bin/sh\nfor a; do f="$a"; done\n'
+      'case "$1" in -sb) [ -f "$HOME/es_need" ] || exit 1; printf "%s\\t%s\\n" "$(cat "$HOME/es_need")" "$f"; exit 0 ;; esac\n'
       'case "$1" in -s*b) echo "$(cat "$HOME/need" 2>/dev/null || echo 1)\ttotal"; exit 0 ;; esac\n'
       'k=$(sed -n "s|^${f##*/} ||p" "$HOME/sizes" 2>/dev/null)\necho "${k:-1}\t$f"\n')
+
+
+# The functions of update.sh that put the Elasticsearch data into the archive of the run (fuCHECK_ELASTIC)
+# and start T-Pot again after a refusal
+ES_APPEND = ("fuSAME_DIR", "fuES_DATA_FITS", "fuARCHIVE_HAS_ES_DATA", "fuARCHIVE_NAME", "fuARCHIVE_RENAMED",
+             "fuAPPEND_ES_DATA", "fuRESTART_AFTER_REFUSAL")
 
 
 class DataLossTest(Harness):
@@ -1860,7 +1872,7 @@ class DataLossTest(Harness):
                                       "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuELASTIC_REFUSED", "fuOLD_RELEASE_BACKUP",
                                       "fuTMPDIR", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
                                       "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV",
-                                      "fuCHECK_ELASTIC") \
+                                      *ES_APPEND, "fuCHECK_ELASTIC") \
             + stub_confirm + 'fuCHECK_ELASTIC\necho "went on"\n'
 
     def test_elastic_upgrade_without_full_refused_rolls_back(self):
@@ -2085,11 +2097,15 @@ class DataLossTest(Harness):
         self.assertNotIn("STARTED", out)
 
     def test_full_with_a_custom_data_path_needs_no_question(self):
-        result = self.bash(self.elastic(archive_has_data=True, env=f"TPOT_DATA_PATH={self.home}/custom\n"))
+        """The --full archive this run wrote (no handover) holds the data folder that runs, wherever it is."""
+        full = 'myFULL=1 myARCHIVE="$HOME/tpot_backups/20261014101010_tpot_backup_full.tar"\n'
+        result = self.bash(self.elastic(archive_has_data=True, env=f"TPOT_DATA_PATH={self.home}/custom\n",
+                                        extra=full))
         out = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, out)
         self.assertIn("went on", out)
         self.assertNotIn("Not confirmed", out)
+        self.assertIn("OK: The Elasticsearch data is in", out)
 
     def test_no_pause_left(self):
         text = read("update.sh")
@@ -2189,7 +2205,7 @@ class DataLossTest(Harness):
         }
     """)
     CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
-                       "fuCHECK_BACKUP_SPACE",
+                       "fuCHECK_BACKUP_SPACE", "fuES_DATA_FITS",
                        "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuIMAGE_PULLABLE", "fuSORT_IMAGES",
                        # the archive of 24.04.1 is there to be found, the check must not take it
                        "fuOLD_RELEASE_BACKUP", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
