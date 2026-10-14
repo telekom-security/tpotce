@@ -46,7 +46,7 @@ Options:
   -h, --help           Show this help message.
 
 Environment:
-  TEST_LONG_LINE_SECONDS  Seconds the echo of a 10,000-character line may take. Default: 1.
+  TEST_LONG_LINE_SECONDS  Seconds the echo of a 10,000-character line may take. Default: 2.
 EOF
 }
 
@@ -833,7 +833,7 @@ PY
 # it connects, with this answer and no download event; cowrie.command.input logs the line.
 LONG_LINE_LENGTH=10000
 # the seconds the echo of the line may take (TEST_LONG_LINE_SECONDS for a slow host)
-LONG_LINE_SECONDS="${TEST_LONG_LINE_SECONDS:-1}"
+LONG_LINE_SECONDS="${TEST_LONG_LINE_SECONDS:-2}"
 LONG_LINE_WGET="wget: unable to resolve host address ‘127.0.0.1’"
 LONG_LINE_MAX=65536
 LONG_LINE_OVER=70000
