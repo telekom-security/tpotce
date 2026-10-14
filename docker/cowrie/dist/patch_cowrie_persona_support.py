@@ -1261,7 +1261,7 @@ class TpotNetTool(HoneyPotCommand):
             except ValueError:
                 family = 4
             # the address of the interface of the default route; the connection belongs to the session's
-            # server process of ps (/usr/sbin/sshd: user@pts/0)
+            # server process of ps, whose title is sshd: user@pts/0
             route = self.routes()[0]["iface"]
             address = next((i["inet"] for i in self.net["interfaces"] if i["name"] == route and i.get("inet")),
                            self.net["interfaces"][0]["inet"])
@@ -1275,7 +1275,7 @@ class TpotNetTool(HoneyPotCommand):
                 pass
             found.append({"proto": "tcp", "family": family, "address": address, "port": local, "peer": peer,
                           "peer_port": port, "state": "ESTAB", "pid": tpot_session_pid(self.protocol), "comm": "sshd",
-                          "cmdline": f"/usr/sbin/sshd: {user}@pts/0", "fd": 4, "backlog": 0})
+                          "cmdline": f"sshd: {user}@pts/0", "fd": 4, "backlog": 0})
         return found
 
     def routes(self) -> list[dict]:
@@ -2079,9 +2079,11 @@ class Command_tpot_netstat(TpotNetTool):
                     line += f"{state:<11}"
                     if programs:
                         name = s.get("cmdline") or s.get("comm") or "-"
-                        if name.startswith("/") or self.style.get("basename"):
-                            name = name.split()[0].rsplit("/", 1)[-1] if self.style.get("basename") else \
-                                name.rsplit("/", 1)[-1]
+                        if self.style.get("basename"):
+                            # net-tools 2.0: the program of the first word
+                            name = name.split()[0].rsplit("/", 1)[-1].rstrip(":")
+                        elif name.startswith("/"):
+                            name = name.rsplit("/", 1)[-1]
                         prog = f"{s['pid']}/{name}"[:19] if (s.get("pid") and privileged) else "-"
                         line += f" {prog:<20}"
                 self.put(line + "\n")

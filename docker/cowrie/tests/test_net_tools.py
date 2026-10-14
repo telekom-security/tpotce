@@ -271,6 +271,11 @@ class NetToolsTest(unittest.TestCase):
         self.assertEqual(row.split()[3], f"{wan}:22")
         self.assertIn(f'users:(("sshd",pid={session.tpot_session_pid},fd=4))', row)
         self.assertIn(f"{wan}:22", self.run_cmd(data, "netstat", ["-tn"], protocol=session)[0])
+        # netstat names the process by its title (net-tools 2.10) or the program (2.0 of CentOS 7)
+        for basename, name in ((False, "sshd: root@pts"), (True, "sshd")):
+            data["tools"]["netstat"] = {"style": "net-tools", "version": "2.10", "basename": basename}
+            out = self.run_cmd(data, "netstat", ["-tnp"], protocol=session)[0]
+            self.assertIn(f"ESTABLISHED {session.tpot_session_pid}/{name}".ljust(32), out + " " * 32)
 
     def test_ss_shows_processes_to_root_only(self):
         data = container_network("ubuntu_24.04")
