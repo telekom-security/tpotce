@@ -463,6 +463,28 @@ class AdoptTest(unittest.TestCase):
                                                   {"cowrie": {"ports": ["22:22"]}}), "HIVE")
         self.assertEqual(cowrie.selection.ports, {})
 
+    def test_a_port_the_release_removed_is_moved_one_you_added_is_kept_out(self):
+        old_catalog = core.old_catalog_ports(yaml.safe_dump({"services": {
+            "ciscoasa": {"ports": ["5000:5000/udp", "8443:8443"]},           # master's ciscoasa
+            "mailoney": {"ports": ["25:25", "587:25"]}}}))
+        ciscoasa = {k: v for k, v in self.catalog.catalog.services["ciscoasa"].items() if k != "x-tpot"}
+        ciscoasa["ports"] = ["5000:5000/udp", "6000:6000/udp", "8443:8443"]  # 6000 is yours
+        mailoney = {k: v for k, v in self.catalog.catalog.services["mailoney"].items() if k != "x-tpot"}
+        mailoney["ports"] = ["25:25", "587:25"]
+        text = own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch"],
+                        {"ciscoasa": ciscoasa, "mailoney": mailoney})
+        adoption = core.adopt(self.catalog, text, "HIVE", old_catalog)
+        self.assertEqual(adoption.selection.ports, {})
+        self.assertEqual(adoption.moved, ["ciscoasa: 5000/udp (removed by the release)",
+                                          "mailoney: 587:25 (removed by the release)"])
+        self.assertEqual(adoption.not_carried, ["ciscoasa: port 6000/udp (the release no longer has it)"])
+        # without the old catalogue all three are named as kept out
+        adoption = core.adopt(self.catalog, text, "HIVE")
+        self.assertEqual(adoption.moved, [])
+        self.assertEqual(adoption.not_carried, ["ciscoasa: port 5000/udp (the release no longer has it)",
+                                                "ciscoasa: port 6000/udp (the release no longer has it)",
+                                                "mailoney: port 587:25 (the release has no such port)"])
+
     def test_an_old_only_port_is_kept_out(self):
         ciscoasa = {k: v for k, v in self.catalog.catalog.services["ciscoasa"].items() if k != "x-tpot"}
         ciscoasa["ports"] = ["5000:5000/udp", "8443:8443"]                 # as master had them
@@ -470,6 +492,7 @@ class AdoptTest(unittest.TestCase):
         adoption = core.adopt(self.catalog, text, "HIVE")
         self.assertEqual(adoption.selection.ports, {})
         self.assertEqual(adoption.not_carried, ["ciscoasa: port 5000/udp (the release no longer has it)"])
+        self.assertEqual(adoption.moved, [])
         # a bind IP of the file cannot be an override, it is named
         cowrie = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"],
                                                   {"cowrie": {"ports": ["127.0.0.1:2222:22", "23:23"]}}), "HIVE",

@@ -913,7 +913,8 @@ def _adopt_ports(name: str, old: dict, new: dict, lost: List[str], moved: List[s
     A container port of both with another host port in the file becomes an override when the
     file's host port is no default of the old catalogue (old_ports) either; one it is the default
     of is named in moved (the release's wins); without old_ports it is named in lost. One
-    only the file has is named in lost; one only the release has stays published. Adopting
+    only the file has is named in moved when the old catalogue had it too (the release removed
+    it), else in lost; one only the release has stays published. Adopting
     never drops a port of the release (no override to "-"): an earlier file was built from an
     earlier catalogue, a port missing there is no choice of the user's.
     """
@@ -936,12 +937,20 @@ def _adopt_ports(name: str, old: dict, new: dict, lost: List[str], moved: List[s
     for (container, proto), (theirs, ours) in groups.items():
         if not ours:
             continue                                   # the release's port stays published
+        defaults = [p for p in (old_ports or {}).get(name, []) if (p.container, p.proto) == (container, proto)]
+
+        def removed_by_release(port: Port) -> bool:
+            """A port of the old catalogue that the release gave up: no change of yours."""
+            return old_ports is not None and any(same(d, port) for d in defaults)
+
         if not theirs:
-            lost.append(f"{name}: port {container}/{proto} (the release no longer has it)")
+            if all(removed_by_release(o) for o in ours):
+                moved.append(f"{name}: {container}/{proto} (removed by the release)")
+            else:
+                lost.append(f"{name}: port {container}/{proto} (the release no longer has it)")
             continue
         left_theirs = [t for t in theirs if not any(same(t, o) for o in ours)]
         left_ours = [o for o in ours if not any(same(t, o) for t in theirs)]
-        defaults = [p for p in (old_ports or {}).get(name, []) if (p.container, p.proto) == (container, proto)]
         for there, here in zip(left_theirs, left_ours):
             if old_ports is None:
                 # no old catalogue: the file's host port may be its default, the release's wins
@@ -954,7 +963,10 @@ def _adopt_ports(name: str, old: dict, new: dict, lost: List[str], moved: List[s
                 if not same_ip(here, there):
                     lost.append(f"{name}: port {here.raw} (only the host port is carried, the release has {there.raw})")
         for here in left_ours[len(left_theirs):]:
-            lost.append(f"{name}: port {here.raw} (the release has no such port)")
+            if removed_by_release(here):
+                moved.append(f"{name}: {here.raw} (removed by the release)")
+            else:
+                lost.append(f"{name}: port {here.raw} (the release has no such port)")
     container_only = {str(v).strip() for v in new.get("ports") or [] if re.match(r"^\d+(/(tcp|udp))?$", str(v).strip())}
     for value in old.get("ports") or []:
         raw = str(value).strip()
