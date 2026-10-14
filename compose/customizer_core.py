@@ -1176,7 +1176,8 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optio
             not_carried.append(f"{key}: {_show(data[key])}")
 
     new = [f"{n} (in this release, not in your file: compose/customizer.py --add {n})"
-           for n in remove if not catalog.flag(n, "hidden")]
+           for n in remove if not catalog.flag(n, "hidden")
+           and (old_ports is None or n not in old_ports)]       # what the old catalogue had is your choice
     selection = normalize(catalog, Selection(base, add, remove, ports))
     return Adoption(selection, dropped, not_carried, v1, moved, new)
 

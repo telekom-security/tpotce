@@ -655,6 +655,20 @@ class AdoptTest(unittest.TestCase):
             self.assertIn("new: conpot_iccp (in this release, not in your file: compose/customizer.py --add conpot_iccp)",
                           out.splitlines())
 
+    def test_with_an_old_catalog_only_services_new_in_this_release_are_new(self):
+        old_catalog = dict(MASTER_PORTS, dionaea=[])          # dionaea was there, you left it out
+        adoption = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"]),
+                              "HIVE", old_catalog)
+        named = [line.split()[0] for line in adoption.new]
+        self.assertIn("dionaea", adoption.selection.remove)
+        self.assertNotIn("dionaea", named)
+        for name in ("conpot_beckhoff_cx", "conpot_iccp"):
+            self.assertIn(name, adoption.selection.remove)
+            self.assertIn(name, named)
+        # without the old catalogue every base service the file lacks is named
+        self.assertIn("dionaea", [line.split()[0] for line in core.adopt(
+            self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"]), "HIVE").new])
+
     def test_a_failed_write_exits_2_with_one_line_and_leaves_no_file(self):
         text = v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"])
         with tempfile.TemporaryDirectory() as tmp:
