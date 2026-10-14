@@ -404,6 +404,10 @@ reactor.callLater(TIMEOUT, reactor.stop)
 reactor.run()
 
 
+class Deadline(Exception):
+    pass
+
+
 def read_until(sock, needles, deadline):
     data = bytearray()
     while time.monotonic() < deadline:
@@ -426,25 +430,35 @@ def read_until(sock, needles, deadline):
         for needle in needles:
             if text.endswith(needle):
                 return needle
+    if time.monotonic() >= deadline:
+        raise Deadline(f"telnet: none of {needles} within {TIMEOUT} s, received {bytes(data)[-120:]!r}")
     raise RuntimeError(f"telnet: none of {needles} in {bytes(data)[-120:]!r}")
 
 
 deadline = time.monotonic() + TIMEOUT
-for login, password in PAIRS:
-    with socket.create_connection(("127.0.0.1", 23), timeout=TIMEOUT) as sock:
-        sock.settimeout(0.5)
-        read_until(sock, ("login:",), deadline)
-        for _ in range(TRIES):
-            sock.sendall(login.encode() + b"\r\n")
-            read_until(sock, ("password:",), deadline)
-            sock.sendall(password.encode() + b"\r\n")
-            # refused: "Login incorrect" and the login prompt again; anything else counts as a login
-            try:
-                read_until(sock, ("login:",), min(deadline, time.monotonic() + 10))
-                results["telnet_failed"] += 1
-            except RuntimeError:
-                results["telnet_success"] += 1
-                break
+try:
+    for login, password in PAIRS:
+        with socket.create_connection(("127.0.0.1", 23), timeout=TIMEOUT) as sock:
+            sock.settimeout(0.5)
+            read_until(sock, ("login:",), deadline)
+            for _ in range(TRIES):
+                sock.sendall(login.encode() + b"\r\n")
+                read_until(sock, ("password:",), deadline)
+                sock.sendall(password.encode() + b"\r\n")
+                # refused: "Login incorrect" and the login prompt again within 10 s; anything else
+                # counts as a login, the end of the time of the whole probe as a timeout
+                try:
+                    read_until(sock, ("login:",), min(deadline, time.monotonic() + 10))
+                    results["telnet_failed"] += 1
+                except Deadline:
+                    raise
+                except RuntimeError:
+                    results["telnet_success"] += 1
+                    break
+except (Deadline, TimeoutError) as exc:
+    sys.exit(f"refused login probe: Telnet timed out after {TIMEOUT} s ({exc}); so far {json.dumps(results)}")
+except OSError as exc:
+    sys.exit(f"refused login probe: Telnet failed ({exc}); so far {json.dumps(results)}")
 
 print(json.dumps(results))
 expected = {"ssh_failed": TRIES * len(PAIRS), "ssh_success": 0, "telnet_failed": TRIES * len(PAIRS),
@@ -452,6 +466,41 @@ expected = {"ssh_failed": TRIES * len(PAIRS), "ssh_success": 0, "telnet_failed":
 if results != expected:
     sys.exit(f"refused login probe: {results}, expected {expected}")
 ' "${pairs}" "${TEST_TIMEOUT}"
+}
+
+# AuthRandom's state after run_refused_login_probe, read in the container ([honeypot] state_path
+# /tmp/cowrie/data): no pair of auth_refused_pairs in its cache, in the tries or as the login of an
+# address, and no entry for 127.0.0.1, the address of the probe's clients (nothing else logs in from
+# there before it). No state file at all is the same.
+assert_refused_pairs_left_no_state() {
+  local pairs="$1"
+
+  docker exec -i -e PYTHONDONTWRITEBYTECODE=1 "${TEST_CONTAINER_NAME}" python3 - "${pairs}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+pairs = {f"{login}:{password}" for login, password in json.loads(sys.argv[1])}
+path = Path("/tmp/cowrie/data/auth_random.json")
+state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+problems = []
+cached = sorted(pairs & set(state.get("cache", [])))
+if cached:
+    problems.append(f"cache has {cached}")
+for address, entry in state.items():
+    if not isinstance(entry, dict):
+        continue
+    tried = sorted(pairs & set(entry.get("tried", [])))
+    if tried:
+        problems.append(f"{address} tried {tried}")
+    if f"{entry.get('user')}:{entry.get('pw')}" in pairs:
+        problems.append(f"{address} logs in with {entry.get('user')}:{entry.get('pw')}")
+if "127.0.0.1" in state:
+    problems.append(f"127.0.0.1 has an entry: {state['127.0.0.1']}")
+if problems:
+    sys.exit("auth_random.json after the refused logins: " + "; ".join(problems))
+print(f"auth_random.json: {len(state)} entries" if path.exists() else "auth_random.json: none yet")
+PY
 }
 
 # A cowrie.login.failed event for every attempt of run_refused_login_probe, no cowrie.login.success.
@@ -626,6 +675,7 @@ BEGIN = "TPOT_BEGIN"
 END = "TPOT_END"
 PY_MARK = "TPOT_PY"
 AFTER_MARK = "TPOT_AFTER"
+APT_MARK = "TPOT_APT"
 COMMAND = (
     f"echo {BEGIN}; uname -r; hostname; nproc; grep -c ^processor /proc/cpuinfo; "
     f"awk '/MemTotal/ {{print $2}}' /proc/meminfo; "
@@ -635,7 +685,9 @@ COMMAND = (
     "df -k | awk 'FNR == 2 {print \"[\" $4 \"]\"}'; "
     f"cat /etc/os-release; "
     # the interpreter answers and the line goes on (a harmless stand-in, no attacker code)
-    f"echo {PY_MARK}; python3 -c 'print(1)'; echo {AFTER_MARK}; echo {END}"
+    f"echo {PY_MARK}; python3 -c 'print(1)'; echo {AFTER_MARK}; "
+    # apt-get of the persona with a name no release has (EdgeOS: the emulated apt 1.4 without sources)
+    f"echo {APT_MARK}; apt-get install nosuchpkg; echo {END}"
 )
 # AuthRandom (2, 5, 10) accepts after 2 to 5 different attempts per source IP
 MAX_LOGINS = 12
@@ -1145,6 +1197,10 @@ else:
 # python3 -c 'print(1)' answers (a stand-in for code of any kind) and the line goes on
 if "TPOT_AFTER" not in [entry.strip() for entry in after]:
     problems.append(f"the command line stopped at python3 -c, nothing came after it: {after!r}")
+apt = after[[entry.strip() for entry in after].index("TPOT_APT") + 1:] if "TPOT_APT" in after else []
+# EdgeOS: apt-get is the emulated apt 1.4 of the persona (upstream's would install any name)
+if persona == "ubiquiti-edgerouter-x" and "E: Unable to locate package nosuchpkg" not in apt:
+    problems.append(f"apt-get install nosuchpkg of EdgeOS is not the persona's apt: {apt!r}")
 ids = [entry.split("=", 1)[1].strip().strip('"') for entry in os_release if entry.startswith("ID=")]
 if expected["os_release"] or expected["kind"] != "device":
     if ids != [expected["os_id"]]:
@@ -1724,6 +1780,7 @@ run_smoke_test() {
   test_info "Trying the pairs of auth_refused_pairs over SSH and Telnet"
   run_refused_login_probe "${refused_pairs}" || test_die "A pair of auth_refused_pairs logged in on ${persona}"
   wait_for_refused_login_events "${refused_pairs}" || test_die "The refused logins of ${persona} are not in cowrie.json"
+  assert_refused_pairs_left_no_state "${refused_pairs}" || test_die "The refused logins changed AuthRandom's state on ${persona}"
   test_wait_for_container || test_die "Cowrie container stopped after the refused logins"
   test_ok "The pairs of auth_refused_pairs never logged in"
 
