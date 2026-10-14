@@ -31,7 +31,7 @@ SLOW_OPEN_SECONDS = 0.002
 # input records of the input hash test (and four times as many); the largest ratio of their times
 HASH_KEYS = 25000
 HASH_RATIO_MAX = 8.0
-# the buffer of an open tty log (Python 3.14 would take 128 KiB from the file system)
+# the buffer of an open tty log (Python 3.14 would take its io.DEFAULT_BUFFER_SIZE of 128 KiB)
 TTYLOG_BUFFER = 8192
 
 

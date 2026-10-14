@@ -10765,8 +10765,8 @@ def patch_ttylog(cowrie_root):
         sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
         f.write(struct.pack(TTYSTRUCT, OP_OPEN, 0, 0, 0, sec, usec))
 """,
-        """    # T-Pot: open up to ttylog_close, with a buffer of 8 KiB (Python 3.14 would take the 128 KiB of
-    # the file system's block size for every open session)
+        """    # T-Pot: open up to ttylog_close, with a buffer of 8 KiB (Python 3.14 would take its
+    # io.DEFAULT_BUFFER_SIZE of 128 KiB for every open session)
     f = open(logfile, "ab", buffering=8192)  # noqa: SIM115
     try:
         sec, usec = int(stamp), int(1000000 * (stamp - int(stamp)))
