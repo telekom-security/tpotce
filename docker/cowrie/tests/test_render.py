@@ -6,7 +6,7 @@ import re
 import unittest
 
 from tests.helpers import base_tree, tmpdir
-from tpot_personas import catalog, system, tree, validate
+from tpot_personas import catalog, servers, system, tree, validate
 from tpot_personas.common import kernel_series
 from tpot_personas.identity import DAY, draw, fits, kernel_time, restore, specialize, to_state, updated_at
 from tpot_personas.render import render
@@ -453,6 +453,21 @@ class ServerCommandTest(unittest.TestCase):
                 self.assertIsNone(cfg_of(out).get("shell", "dnf_packages", fallback=None), persona.id)
             if persona.family == "centos":
                 self.assertIn("usr/bin/rpm", txtcmds)
+
+    def test_openssl_of_rhel_9_4_is_its_last_public_errata(self):
+        """The 9.4 level (EUS, 2025-02-20) has the last openssl of 9.4 that the rebuilds published:
+        3.0.7-28.el9_4 (Rocky and AlmaLinux vault 9.4 BaseOS, 2024-09-18), not the GA 3.0.7-27.el9."""
+        persona = catalog.by_id("rhel-9")
+        for seed in range(30):
+            ident = draw(persona, seed)
+            if ident.release.os_version_id != "9.4":
+                continue
+            with self.subTest(seed=seed):
+                self.assertEqual(servers.dnf_packages(persona, ident)["installed"]["openssl"]["evr"],
+                                 "1:3.0.7-28.el9_4")
+                break
+        else:
+            self.fail("no 9.4 level drawn")
 
     def test_dnf_packages_of_rhel(self):
         persona = catalog.by_id("rhel-9")

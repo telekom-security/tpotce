@@ -454,7 +454,9 @@ RPM_PERSONA = {
 RHEL_DNF = {"9.4": "4.14.0-9.el9", "9.5": "4.14.0-17.el9", "9.6": "4.14.0-25.el9"}
 RHEL_RPM = {"9.4": "4.16.1.3-29.el9", "9.5": "4.16.1.3-34.el9", "9.6": "4.16.1.3-37.el9"}
 RHEL_PYTHON_RPM = {"9.4": "3.9.18-3.el9_4.6", "9.5": "3.9.19-8.el9_5.1", "9.6": "3.9.21-2.el9"}
-RHEL_OPENSSL = {"9.4": "1:3.0.7-27.el9", "9.5": "1:3.2.2-6.el9_5", "9.6": "1:3.2.2-6.el9_5.1"}
+# openssl of 9.4: the last errata the rebuilds published (Rocky / AlmaLinux vault 9.4, 2024-09-18);
+#   unverified: EUS errata after 9.5 (2024-11), which the 2025-02-20 level could have
+RHEL_OPENSSL = {"9.4": "1:3.0.7-28.el9_4", "9.5": "1:3.2.2-6.el9_5", "9.6": "1:3.2.2-6.el9_5.1"}
 RHEL_PERL = "4:5.32.1-481.el9"
 RHEL_RELEASE_RPM = {"9.4": "9.4-0.5.el9", "9.5": "9.5-0.6.el9", "9.6": "9.6-0.1.el9"}
 RHEL_SUDO = "1.9.5p2-10.el9_3"
