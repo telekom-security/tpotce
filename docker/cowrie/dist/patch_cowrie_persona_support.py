@@ -1060,9 +1060,8 @@ def patch_netstat(cowrie_root):
     )
 
 
-# module code of the patched commands/netstat.py after its commands: ip, ss, netstat (and ifconfig,
-# which the patched ifconfig.py takes from here) of the persona
-# module code of the patched base.py (ps, top) and netstat.py (ss, netstat): the session's server process
+# module code of the patched service.py (systemctl) and netstat.py (ip, ss, netstat, ifconfig): root,
+# su to root or sudo
 TPOT_PRIVILEGED = r'''
 
 def tpot_privileged(cmd) -> bool:
@@ -1072,6 +1071,7 @@ def tpot_privileged(cmd) -> bool:
 '''
 
 
+# module code of the patched base.py (ps, top) and netstat.py (ss, netstat): the session's server process
 TPOT_SESSION = r'''
 
 def tpot_session(protocol, user: str = "root") -> dict:
@@ -1133,6 +1133,8 @@ def tpot_session(protocol, user: str = "root") -> dict:
 '''
 
 
+# module code of the patched commands/netstat.py after its commands: ip, ss, netstat (and ifconfig,
+# which the patched ifconfig.py takes from here) of the persona
 NET_COMMAND = r'''
 
 # T-Pot: ip, ss, netstat and ifconfig of the persona. [shell] network is a JSON file of the runtime
