@@ -420,6 +420,21 @@ class TextToolsTest(unittest.TestCase):
         cmd.start()
         self.assertEqual((cmd.err, cmd.exit_code), ("sort: open failed: /nosuch/dir/f: No such file or directory\n", 2))
 
+    def test_seq_f_and_s_keep_backslashes(self):
+        """seq -f and -s print a backslash as it is: coreutils 8.22 (centos:7), 9.1 (debian:12),
+        9.4 (ubuntu:24.04) and 9.7 (debian:13) in containers, `seq -f FORMAT 2 | od -c`."""
+        cases = {"a\\tb%g": "a\\tb1\na\\tb2\n", "%g\\n": "1\\n\n2\\n\n", "%g\\\\x": "1\\\\x\n2\\\\x\n",
+                 "x\\x41%g": "x\\x411\nx\\x412\n", "\\101%g": "\\1011\n\\1012\n", "%g\\c": "1\\c\n2\\c\n",
+                 "q\\%g": "q\\1\nq\\2\n", "%%%g": "%1\n%2\n", "%g\\": "1\\\n2\\\n",
+                 "a\\nb%gc": "a\\nb1c\na\\nb2c\n", "%5.2f\\t|": " 1.00\\t|\n 2.00\\t|\n", "\\e%g": "\\e1\n\\e2\n"}
+        for version in ("8.22", "9.1", "9.4", "9.7"):
+            keys = {"text_style": "gnu", "text_version": version}
+            for fmt, out in cases.items():
+                with self.subTest(version=version, fmt=fmt):
+                    self.assertEqual(self.run_cmd(keys, "seq", ["-f", fmt, "2"]), (out, "", 0))
+            self.assertEqual(self.run_cmd(keys, "seq", ["-s", "\\t", "3"]), ("1\\t2\\t3\n", "", 0))
+            self.assertEqual(self.run_cmd(keys, "seq", ["-s", "\\n", "2"]), ("1\\n2\n", "", 0))
+
     def test_sort_o_meets_the_permissions_of_the_persona(self):
         """sort -o as the persona's sort (coreutils 9.1 and 8.22, BusyBox 1.27.2 and 1.36.1 as uid
         65534 in containers): a file or folder the user may not write is "Permission denied" (2);

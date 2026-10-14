@@ -9703,7 +9703,7 @@ class Command_tpot_seq(TpotTextTool):
                     core = " " * room + core
             out.append(core)
         out.append(fmt[last:])
-        return "".join(out).replace("\\n", "\n")
+        return "".join(out)  # coreutils prints the backslashes of FORMAT as they are
 
     def tpot_busybox(self) -> int:
         options, operands = self.tpot_busybox_options(list(self.args))
