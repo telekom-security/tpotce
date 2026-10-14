@@ -302,6 +302,191 @@ print("SSH session reached the authentication")
 ' "${TEST_TIMEOUT}"
 }
 
+# The pairs of [honeypot] auth_refused_pairs in the container's cowrie.cfg, read as Cowrie reads it.
+read_refused_pairs() {
+  docker exec -i -e PYTHONDONTWRITEBYTECODE=1 "${TEST_CONTAINER_NAME}" python3 - <<'PY'
+import configparser
+import json
+
+config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
+config.read("/tmp/cowrie/runtime/cowrie.cfg")
+print(json.dumps(json.loads(config.get("honeypot", "auth_refused_pairs"))))
+PY
+}
+
+# Every pair of auth_refused_pairs three times over SSH (password, the Twisted client of the image, one
+# connection per pair) and three times over Telnet, with the clients in a container in the honeypot's
+# network: never a login.
+run_refused_login_probe() {
+  local pairs="$1"
+
+  docker run --rm --network "container:${TEST_CONTAINER_NAME}" --read-only --user 2000:2000 \
+    --entrypoint python3 "${IMAGE}" -c '
+import json
+import socket
+import sys
+import time
+
+from twisted.conch.ssh import connection, transport, userauth
+from twisted.internet import defer, protocol, reactor
+
+PAIRS = [tuple(pair) for pair in json.loads(sys.argv[1])]
+TIMEOUT = int(sys.argv[2])
+TRIES = 3
+results = {"ssh_failed": 0, "ssh_success": 0, "telnet_failed": 0, "telnet_success": 0}
+
+
+class Auth(userauth.SSHUserAuthClient):
+    def __init__(self, login, password):
+        userauth.SSHUserAuthClient.__init__(self, login.encode(), connection.SSHConnection())
+        self.secret = password.encode()
+        self.tries = 0
+
+    def tryAuth(self, kind):
+        # the password method only, TRIES times
+        if kind != b"password" or self.tries == TRIES:
+            return False
+        self.tries += 1
+        return userauth.SSHUserAuthClient.tryAuth(self, kind)
+
+    def getPassword(self, prompt=None):
+        return defer.succeed(self.secret)
+
+    def ssh_USERAUTH_FAILURE(self, packet):
+        if self.lastAuth == b"password":
+            results["ssh_failed"] += 1
+        return userauth.SSHUserAuthClient.ssh_USERAUTH_FAILURE(self, packet)
+
+    def ssh_USERAUTH_SUCCESS(self, packet):
+        results["ssh_success"] += 1
+        self.transport.loseConnection()
+
+
+class Client(transport.SSHClientTransport):
+    def verifyHostKey(self, pubKey, fingerprint):
+        return defer.succeed(True)
+
+    def connectionSecure(self):
+        self.requestService(Auth(*self.factory.pair))
+
+    def connectionLost(self, reason):
+        transport.SSHClientTransport.connectionLost(self, reason)
+        if not self.factory.done.called:
+            self.factory.done.callback(None)
+
+
+class Factory(protocol.ClientFactory):
+    protocol = Client
+
+    def __init__(self, pair):
+        self.pair = pair
+        self.done = defer.Deferred()
+
+    def clientConnectionFailed(self, connector, reason):
+        self.done.callback(None)
+
+
+def ssh():
+    factories = [Factory(pair) for pair in PAIRS]
+    for factory in factories:
+        reactor.connectTCP("127.0.0.1", 22, factory)
+    defer.DeferredList([factory.done for factory in factories]).addBoth(lambda _: reactor.stop())
+
+
+reactor.callWhenRunning(ssh)
+reactor.callLater(TIMEOUT, reactor.stop)
+reactor.run()
+
+
+def read_until(sock, needles, deadline):
+    data = bytearray()
+    while time.monotonic() < deadline:
+        try:
+            chunk = sock.recv(4096)
+        except socket.timeout:
+            continue
+        if not chunk:
+            break
+        index = 0
+        while index < len(chunk):
+            if chunk[index] == 255 and index + 2 < len(chunk) and chunk[index + 1] in (251, 252, 253, 254):
+                # refuse every option: WONT for DO / DONT, DONT for WILL / WONT
+                sock.sendall(bytes([255, 252 if chunk[index + 1] in (253, 254) else 254, chunk[index + 2]]))
+                index += 3
+                continue
+            data.append(chunk[index])
+            index += 1
+        text = data.decode("utf-8", errors="replace").lower().rstrip()
+        for needle in needles:
+            if text.endswith(needle):
+                return needle
+    raise RuntimeError(f"telnet: none of {needles} in {bytes(data)[-120:]!r}")
+
+
+deadline = time.monotonic() + TIMEOUT
+for login, password in PAIRS:
+    with socket.create_connection(("127.0.0.1", 23), timeout=TIMEOUT) as sock:
+        sock.settimeout(0.5)
+        read_until(sock, ("login:",), deadline)
+        for _ in range(TRIES):
+            sock.sendall(login.encode() + b"\r\n")
+            read_until(sock, ("password:",), deadline)
+            sock.sendall(password.encode() + b"\r\n")
+            # refused: "Login incorrect" and the login prompt again; anything else counts as a login
+            try:
+                read_until(sock, ("login:",), min(deadline, time.monotonic() + 10))
+                results["telnet_failed"] += 1
+            except RuntimeError:
+                results["telnet_success"] += 1
+                break
+
+print(json.dumps(results))
+expected = {"ssh_failed": TRIES * len(PAIRS), "ssh_success": 0, "telnet_failed": TRIES * len(PAIRS),
+            "telnet_success": 0}
+if results != expected:
+    sys.exit(f"refused login probe: {results}, expected {expected}")
+' "${pairs}" "${TEST_TIMEOUT}"
+}
+
+# A cowrie.login.failed event for every attempt of run_refused_login_probe, no cowrie.login.success.
+wait_for_refused_login_events() {
+  local pairs="$1"
+
+  python3 - "${JSON_LOG_FILE}" "${pairs}" "${TEST_TIMEOUT}" <<'PY'
+import json
+import sys
+import time
+from pathlib import Path
+
+path = Path(sys.argv[1])
+pairs = {tuple(pair) for pair in json.loads(sys.argv[2])}
+deadline = time.monotonic() + int(sys.argv[3])
+while True:
+    failed, success = {}, 0
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        pair = (event.get("username"), event.get("password"))
+        if pair not in pairs:
+            continue
+        if event.get("eventid") == "cowrie.login.failed":
+            failed[pair] = failed.get(pair, 0) + 1
+        elif event.get("eventid") == "cowrie.login.success":
+            success += 1
+    if success:
+        sys.exit(f"cowrie.login.success for a pair of auth_refused_pairs ({success})")
+    # three attempts over SSH and three over Telnet
+    if all(failed.get(pair, 0) >= 6 for pair in pairs):
+        print(f"cowrie.login.failed for {len(pairs)} pairs: {sorted(failed.values())}")
+        break
+    if time.monotonic() > deadline:
+        sys.exit(f"cowrie.login.failed events missing: {failed}")
+    time.sleep(0.5)
+PY
+}
+
 run_telnet_login_probe() {
   local token="$1"
 
@@ -1234,6 +1419,14 @@ run_smoke_test() {
   test_info "Running an SSH session up to the authentication"
   run_ssh_userauth_probe || test_die "SSH session did not reach the authentication on ${persona}"
   test_wait_for_container || test_die "Cowrie container stopped after the SSH session"
+
+  local refused_pairs=""
+  refused_pairs="$(read_refused_pairs)" || test_die "Could not read auth_refused_pairs of ${persona}"
+  test_info "Trying the pairs of auth_refused_pairs over SSH and Telnet"
+  run_refused_login_probe "${refused_pairs}" || test_die "A pair of auth_refused_pairs logged in on ${persona}"
+  wait_for_refused_login_events "${refused_pairs}" || test_die "The refused logins of ${persona} are not in cowrie.json"
+  test_wait_for_container || test_die "Cowrie container stopped after the refused logins"
+  test_ok "The pairs of auth_refused_pairs never logged in"
 
   local telnet_token=""
   telnet_token="telnet-test-$(date +%s)-$$"
