@@ -69,10 +69,20 @@ class Protocol:
             pass
 
 
+class Pipe:
+    """The command's pipe (Cowrie's pp); patched sudo marks it with tpot_sudo."""
+
+
 class Base:
-    def __init__(self, args, protocol=None):
+    def __init__(self, args, protocol=None, user=None, sudo=False):
         self.args = list(args)
         self.protocol = protocol or Protocol()
+        # the shell's user (Cowrie's cmd.user, the target user after su), else the session's
+        uid = getattr(getattr(self.protocol, "user", None), "uid", 0)
+        self.user = user or {"uid": uid, "username": "root" if uid == 0 else "phil"}
+        self.pp = Pipe()
+        if sudo:
+            self.pp.tpot_sudo = True
         self.out, self.err, self.exit_code, self.exited = "", "", 0, False
 
     def write(self, text):
@@ -146,7 +156,7 @@ def busybox_network(image):
 
 
 class NetToolsTest(unittest.TestCase):
-    def run_cmd(self, data, name, args, keys=None, protocol=None):
+    def run_cmd(self, data, name, args, keys=None, protocol=None, user=None, sudo=False):
         path = Path(tempfile.mkdtemp()) / "network.json"
         path.write_text(json.dumps(data))
         values = {("shell", "network"): str(path), **{("shell", k): v for k, v in (keys or {}).items()}}
@@ -154,7 +164,7 @@ class NetToolsTest(unittest.TestCase):
                                                   "log": Log, "commands": {}})
         classes = {"ip": "Command_tpot_ip", "ss": "Command_tpot_ss", "netstat": "Command_tpot_netstat",
                    "ifconfig": "Command_tpot_ifconfig"}
-        cmd = namespace[classes[name]](args, protocol)
+        cmd = namespace[classes[name]](args, protocol, user, sudo)
         cmd.start()
         self.assertTrue(cmd.exited)
         return cmd.out, cmd.err, cmd.exit_code
@@ -341,12 +351,18 @@ class NetToolsTest(unittest.TestCase):
                 self.assertIn(f"ESTABLISHED {session.tpot_session_pid}/{title}"[:31], out)
                 self.assertNotIn("/sshd", out) if comm == "dropbear" else None
 
-    def test_a_telnet_session_needs_a_telnet_daemon(self):
-        """A telnet session is a connection to :23 only where the persona has a telnet daemon (then
-        BusyBox telnetd owns it); elsewhere nothing listens on 23 and ss shows no connection."""
+    def test_a_telnet_session_is_always_a_connection(self):
+        """A telnet session is a connection to :23 that belongs to the session's server process
+        (tpot_session: BusyBox telnetd where the persona has one, in.telnetd elsewhere), also where no
+        daemon of the persona listens on 23 (that listener is not shown: a known gap)."""
         data, session, keys, _ = self.session_persona("ubuntu-noble", telnet=True)
-        self.assertEqual(self.estab(data, session, keys), [])
+        row = self.estab(data, session, keys)
+        self.assertEqual(len(row), 1, row)
+        self.assertIn(":23 ", row[0])
+        self.assertIn(f'users:(("in.telnetd",pid={session.tpot_session_pid},fd=4))', row[0])
         self.assertNotIn(":23 ", self.run_cmd(data, "ss", ["-tlnp"], keys, protocol=session)[0])
+        out = self.run_cmd(data, "netstat", ["-tnp"], keys, protocol=session)[0]
+        self.assertIn(f"ESTABLISHED {session.tpot_session_pid}/in.telnetd", out)
         for persona in catalog.PERSONAS:
             ident = draw(persona, 5)
             processes = persona.builder(persona, ident).processes
@@ -363,6 +379,10 @@ class NetToolsTest(unittest.TestCase):
                 break
         else:
             self.fail("no persona with a telnet daemon")
+        for persona in catalog.PERSONAS:
+            data, session, keys, _ = self.session_persona(persona.id, telnet=True)
+            with self.subTest(every=persona.id):
+                self.assertEqual(len(self.estab(data, session, keys)), 1)
 
     def test_ss_shows_processes_to_root_only(self):
         data = container_network("ubuntu_24.04")
@@ -387,6 +407,233 @@ class NetToolsTest(unittest.TestCase):
         self.assertEqual(self.run_cmd(data, "ip", ["link", "set", "eth0", "down"])[2], 0)
         self.assertEqual(self.run_cmd(data, "ifconfig", ["eth0", "up"], protocol=User())[1:],
                          ("SIOCSIFFLAGS: Operation not permitted\n", 255))
+
+    def test_sudo_and_su_count_as_root(self):
+        """The command sudo runs (pp.tpot_sudo) and the shell of su - (its user is root) may change
+        interfaces and see every process, as root does; the same user without them may not."""
+        data = container_network("ubuntu_24.04")
+
+        class User(Protocol):
+            class user:  # noqa: N801
+                uid = 1000
+
+        root = {"uid": 0, "username": "root"}
+        for how in ({"sudo": True}, {"user": root}):
+            with self.subTest(how=how):
+                self.assertEqual(self.run_cmd(data, "ip", ["link", "set", "eth0", "down"], protocol=User(), **how),
+                                 ("", "", 0))
+                self.assertEqual(self.run_cmd(data, "ifconfig", ["eth0", "down"], protocol=User(), **how),
+                                 ("", "", 0))
+                self.assertIn("users:", self.run_cmd(data, "ss", ["-tlnp"], protocol=User(), **how)[0])
+                out, err, _ = self.run_cmd(data, "netstat", ["-tlnp"], protocol=User(), **how)
+                self.assertEqual(err, "")
+                self.assertIn("/sshd", out)
+        # su to another user than root takes root's rights away from a root session
+        phil = {"uid": 1000, "username": "phil"}
+        self.assertEqual(self.run_cmd(data, "ip", ["link", "set", "eth0", "down"], user=phil)[1:],
+                         ("RTNETLINK answers: Operation not permitted\n", 2))
+        self.assertNotIn("users:", self.run_cmd(data, "ss", ["-tlnp"], user=phil)[0])
+        self.assertIn("Not all processes could be identified", self.run_cmd(data, "netstat", ["-tlnp"], user=phil)[1])
+        self.assertEqual(self.run_cmd(data, "ifconfig", ["eth0", "down"], user=phil)[1:],
+                         ("SIOCSIFFLAGS: Operation not permitted\n", 255))
+
+    def test_ss_options_with_a_value(self):
+        """-f/-A/-N/-F/-D take a value (attached, the next word, --long=value or --long value), as
+        recorded with iproute2 6.1.0 (ubuntu:24.04) and ss170501 (centos:7)."""
+        data = container_network("ubuntu_24.04")
+        data["sockets"].append({"proto": "udp", "family": 4, "address": "0.0.0.0", "port": 5353, "pid": 9,
+                                "comm": "avahi-daemon", "cmdline": "avahi-daemon", "fd": 12, "backlog": 0})
+        listeners = self.run_cmd(data, "ss", ["-tlnp"])
+        self.assertIn("0.0.0.0:22", listeners[0])
+        v4 = self.run_cmd(data, "ss", ["-4tlnp"])
+        self.assertNotIn("[::]:22", v4[0])
+        for args in (["-f", "inet", "-tlnp"], ["-finet", "-tlnp"], ["--family=inet", "-tlnp"],
+                     ["--family", "inet", "-tlnp"], ["--fam=inet", "-tlnp"], ["-tlnp", "-f", "inet"],
+                     ["-tlnpf", "inet"]):
+            with self.subTest(args=args):
+                self.assertEqual(self.run_cmd(data, "ss", args), v4)
+        v6 = self.run_cmd(data, "ss", ["-f", "inet6", "-tln"])[0]
+        self.assertIn("[::]:22", v6)
+        self.assertNotIn("0.0.0.0:22", v6)
+        self.assertEqual(self.run_cmd(data, "ss", ["-A", "tcp", "-ln"]), self.run_cmd(data, "ss", ["-tln"]))
+        for args in (["--query=tcp", "-ln"], ["--query", "tcp", "-ln"], ["--qu=tcp", "-ln"], ["-Atcp", "-ln"],
+                     ["--socket=tcp", "-ln"]):
+            with self.subTest(args=args):
+                self.assertEqual(self.run_cmd(data, "ss", args), self.run_cmd(data, "ss", ["-tln"]))
+        udp = self.run_cmd(data, "ss", ["-A", "udp", "-ln"])[0]
+        self.assertTrue(udp.startswith("State ") and "0.0.0.0:5353" in udp and ":22" not in udp, udp)
+        both = self.run_cmd(data, "ss", ["-A", "tcp,udp", "-ln"])[0]
+        self.assertTrue(both.startswith("Netid ") and ":5353" in both and ":22" in both, both)
+        # -f inet alone: every inet table (Netid); -f inet with -A udp: udp of IPv4 only
+        self.assertTrue(self.run_cmd(data, "ss", ["-f", "inet", "-ln"])[0].startswith("Netid "))
+        self.assertEqual(self.run_cmd(data, "ss", ["-f", "inet", "-A", "udp", "-ln"])[0], udp)
+        # -f unix with -t: tcp and unix (Netid), -4 with -f inet6: nothing
+        self.assertTrue(self.run_cmd(data, "ss", ["-f", "unix", "-tln"])[0].startswith("Netid "))
+        # of -4, -6, -f inet and -f inet6 the last one counts
+        self.assertEqual(self.run_cmd(data, "ss", ["-4", "-f", "inet6", "-tln"]), (v6, "", 0))
+        self.assertEqual(self.run_cmd(data, "ss", ["-6", "-f", "inet", "-tlnp"]), v4)
+        self.assertEqual(self.run_cmd(data, "ss", ["-f", "inet", "-6", "-tln"]), (v6, "", 0))
+        helptext = self.run_cmd(data, "ss", ["-h"])[0]
+        self.assertEqual(self.run_cmd(data, "ss", ["-f", "help"]), (helptext, "", 0))
+        for args, message in ((["-f"], "ss: option requires an argument -- 'f'\n"),
+                              (["-tln", "-N"], "ss: option requires an argument -- 'N'\n"),
+                              (["--family"], "ss: option '--family' requires an argument\n"),
+                              (["-f", "bogus", "-tln"], 'ss: "bogus" is invalid family\n'),
+                              (["-fl"], 'ss: "l" is invalid family\n'),
+                              (["-A", "bogus"], 'ss: "bogus" is illegal socket table id\n'),
+                              (["-A", "help"], 'ss: "help" is illegal socket table id\n'),
+                              (["-q"], "ss: invalid option -- 'q'\n"),
+                              (["--foo"], "ss: unrecognized option '--foo'\n")):
+            with self.subTest(args=args):
+                self.assertEqual(self.run_cmd(data, "ss", args), ("", message + helptext, 255))
+        self.assertEqual(self.run_cmd(data, "ss", ["-N", "foo", "-tln"]),
+                         ("", 'Cannot open network namespace "foo": No such file or directory\n', 1))
+        self.assertEqual(self.run_cmd(data, "ss", ["--net=foo", "-tln"]),
+                         ("", 'Cannot open network namespace "foo": No such file or directory\n', 1))
+        self.assertEqual(self.run_cmd(data, "ss", ["-F", "/nonexist", "-tln"]),
+                         ("", "fopen filter file: No such file or directory\n", 255))
+        self.assertEqual(self.run_cmd(data, "ss", ["--diag=/tmp/d", "-tln"]), ("", "", 0))
+
+    def test_ip_help_prints_the_usage_of_the_release(self):
+        """ip -help, -hel, -he, help and ip alone: iproute2's usage of the release on stderr, 255
+        (fixtures/ip_help.json, recorded in containers); -h is -human-readable."""
+        refs = json.loads((Path(__file__).parent / "fixtures" / "ip_help.json").read_text(encoding="utf-8"))
+        for image, ref in refs["images"].items():
+            data = container_network(image)
+            data["tools"]["ip"]["version"] = ref["iproute2"]
+            for args in (["-help"], ["-hel"], ["-he"], ["-h"], ["help"], [], ["-help", "a"], ["-human"]):
+                with self.subTest(image=image, args=args):
+                    self.assertEqual(self.run_cmd(data, "ip", args), ("", ref["stderr"], 255))
+            with self.subTest(image=image, args="-h a"):
+                self.assertEqual(self.run_cmd(data, "ip", ["-h", "a"]), self.run_cmd(data, "ip", ["a"]))
+
+    def test_ip_route_get_takes_the_route_that_matches(self):
+        """ip route get as iproute2 (6.1.0 and ss170501 alike) and BusyBox print it: the default route
+        with its interface and source, a connected network without via, local and broadcast addresses,
+        the caller's uid; on a router the default route of its WAN, as ip route and the session."""
+        data = container_network("ubuntu_24.04")
+        address, gateway = data["interfaces"][0]["inet"], data["gateway"]
+        near = address.rsplit(".", 1)[0] + ".77"
+        brd = data["interfaces"][0]["broadcast"]
+        cases = {
+            ("8.8.8.8",): f"8.8.8.8 via {gateway} dev eth0 src {address} uid 0 \n    cache \n",
+            ("to", "8.8.8.8"): f"8.8.8.8 via {gateway} dev eth0 src {address} uid 0 \n    cache \n",
+            ("8.8.8.8", "oif", "eth0"): f"8.8.8.8 via {gateway} dev eth0 src {address} uid 0 \n    cache \n",
+            ("1.2.3",): f"1.2.3.0 via {gateway} dev eth0 src {address} uid 0 \n    cache \n",
+            (gateway,): f"{gateway} dev eth0 src {address} uid 0 \n    cache \n",
+            (near,): f"{near} dev eth0 src {address} uid 0 \n    cache \n",
+            (address,): f"local {address} dev lo src {address} uid 0 \n    cache <local> \n",
+            ("127.0.0.1",): "local 127.0.0.1 dev lo src 127.0.0.1 uid 0 \n    cache <local> \n",
+            ("127.5.5.5",): "local 127.5.5.5 dev lo src 127.0.0.1 uid 0 \n    cache <local> \n",
+            ("0.0.0.0",): "local 0.0.0.0 dev lo src 127.0.0.1 uid 0 \n    cache <local> \n",
+            (brd,): f"broadcast {brd} dev eth0 src {address} uid 0 \n    cache <local,brd> \n",
+            ("255.255.255.255",): f"broadcast 255.255.255.255 dev eth0 src {address} uid 0 \n    cache <local,brd> \n",
+            ("8.8.8.8", "from", address): f"8.8.8.8 from {address} via {gateway} dev eth0 uid 0 \n    cache \n",
+        }
+        for words, text in cases.items():
+            for verb in (["route", "get"], ["r", "g"]):
+                with self.subTest(words=words, verb=verb):
+                    self.assertEqual(self.run_cmd(data, "ip", verb + list(words)), (text, "", 0))
+        errors = {(): ("need at least a destination address\n", 1),
+                  ("foo",): ('Error: any valid prefix is expected rather than "foo".\n', 1),
+                  ("2001:db8::1",): ("RTNETLINK answers: Network is unreachable\n", 2)}
+        for words, (text, code) in errors.items():
+            with self.subTest(words=words):
+                self.assertEqual(self.run_cmd(data, "ip", ["route", "get", *words]), ("", text, code))
+        self.assertEqual(self.run_cmd(data, "ip", ["-6", "route", "get", "8.8.8.8"]),
+                         ("", 'Error: inet6 prefix is expected rather than "8.8.8.8".\n', 1))
+        self.assertEqual(self.run_cmd(data, "ip", ["-4", "route", "get", "::1"]),
+                         ("", 'Error: inet prefix is expected rather than "::1".\n', 1))
+        # the caller's uid; under sudo root's
+        phil = {"uid": 1000, "username": "phil"}
+        self.assertIn(" uid 1000 \n", self.run_cmd(data, "ip", ["route", "get", "8.8.8.8"], user=phil)[0])
+        self.assertIn(" uid 0 \n", self.run_cmd(data, "ip", ["route", "get", "8.8.8.8"], user=phil, sudo=True)[0])
+        # BusyBox
+        _, bb = busybox_network("busybox_1.36.1-musl")
+        address, gateway = bb["interfaces"][0]["inet"], bb["gateway"]
+        for words, text in {("8.8.8.8",): f"8.8.8.8 via {gateway} dev eth0  src {address} \n",
+                            (gateway,): f"{gateway} dev eth0  src {address} \n",
+                            (address,): f"local {address} dev lo  src {address} \n",
+                            ("127.0.0.1",): "local 127.0.0.1 dev lo  src 127.0.0.1 \n",
+                            ("172.17.255.255",): f"broadcast 172.17.255.255 dev eth0  src {address} \n",
+                            ("8.8.8.8", "from", address): f"8.8.8.8 from {address} via {gateway} dev eth0 \n"}.items():
+            with self.subTest(busybox=words):
+                self.assertEqual(self.run_cmd(bb, "ip", ["route", "get", *words]), (text, "", 0))
+        for words in ((), ("foo",)):
+            with self.subTest(busybox=words):
+                self.assertEqual(self.run_cmd(bb, "ip", ["route", "get", *words]),
+                                 ("", "ip: need at least destination address\n", 1))
+        # a router: the default route is the one of its WAN, as in ip route and the session's connection
+        persona = catalog.by_id("openwrt")
+        ident = draw(persona, 5)
+        net = network.network(persona, ident, persona.builder(persona, ident).processes)
+        wan = net["interfaces"][1]
+        default = self.run_cmd(net, "ip", ["route"])[0].splitlines()[0]
+        self.assertIn(f"dev {wan['name']}", default)
+        out = self.run_cmd(net, "ip", ["route", "get", "8.8.8.8"])[0]
+        self.assertTrue(out.startswith(f"8.8.8.8 via {net['gateway']} dev {wan['name']}  src {wan['inet']} "), out)
+        lan = net["interfaces"][0]
+        host = lan["inet"].rsplit(".", 1)[0] + ".77"
+        self.assertTrue(self.run_cmd(net, "ip", ["route", "get", host])[0]
+                        .startswith(f"{host} dev {lan['name']}  src {lan['inet']} "))
+
+    def test_ip_4_shows_the_altname_in_text_and_json(self):
+        """ip -4 a names the altname after the header, as ip -j -4 a has altnames (recorded with
+        iproute2 5.15.0, 6.1.0 and 6.15.0 after `ip link property add dev eth0 altname enp0s5`);
+        -o prints the address only."""
+        data = container_network("ubuntu_24.04")
+        data["interfaces"][0]["altname"] = "enp0s5"
+        address = data["interfaces"][0]["inet"]
+        for version in ("5.15.0", "6.1.0", "6.15.0"):
+            data["tools"]["ip"]["version"] = version
+            with self.subTest(version=version):
+                lines = self.run_cmd(data, "ip", ["-4", "a", "show", "dev", "eth0"])[0].splitlines()
+                self.assertEqual(lines[1:3], ["    altname enp0s5",
+                                              f"    inet {address}/16 brd 172.17.255.255 scope global eth0"])
+                found = json.loads(self.run_cmd(data, "ip", ["-j", "-4", "a", "show", "dev", "eth0"])[0])
+                self.assertEqual(found[0]["altnames"], ["enp0s5"])
+                self.assertNotIn("altname", self.run_cmd(data, "ip", ["-o", "-4", "a", "show", "dev", "eth0"])[0])
+                self.assertEqual(self.run_cmd(data, "ip", ["a", "show", "dev", "eth0"])[0].splitlines()[2],
+                                 "    altname enp0s5")
+        data["tools"]["ip"]["version"] = "5.3.0"
+        self.assertNotIn("altname", self.run_cmd(data, "ip", ["-4", "a"])[0])
+
+    def test_ip_json_routes_in_the_layout_of_iproute2(self):
+        """ip -j route, -j -p route, -j -6 route and -j route get as iproute2 writes them
+        (fixtures/net_route_json.json, recorded with 6.1.0; 5.15.0 and 6.15.0 give the same)."""
+        refs = json.loads((Path(__file__).parent / "fixtures" / "net_route_json.json").read_text(encoding="utf-8"))
+        data = container_network("ubuntu_24.04")
+        data["interfaces"][0].update(inet="172.17.0.2", broadcast="172.17.255.255", network="172.17.0.0")
+        data["gateway"] = "172.17.0.1"
+        for manager, case in (("device", "device"), ("networkd", "networkd"), ("static", "static")):
+            data["manager"] = manager
+            ref = refs["cases"][case]
+            with self.subTest(manager=manager):
+                self.assertEqual(self.run_cmd(data, "ip", ["r"]), (ref["ip r"], "", 0))
+                self.assertEqual(self.run_cmd(data, "ip", ["-j", "r"]), (ref["ip -j r"], "", 0))
+                self.assertEqual(self.run_cmd(data, "ip", ["-j", "-p", "r"]), (ref["ip -j -p r"], "", 0))
+                self.assertEqual(self.run_cmd(data, "ip", ["-j", "-4", "route", "show"]), (ref["ip -j r"], "", 0))
+        # NetworkManager before src on the default route: its default route as recorded
+        data["manager"] = "nm-old"
+        default = json.loads(self.run_cmd(data, "ip", ["-j", "r"])[0])[0]
+        self.assertEqual(json.dumps([default], separators=(",", ":")) + "\n", refs["cases"]["nm-old-default"]["ip -j r"])
+        # IPv6: the kernel routes of lo and of the link-local network, in the recorded form
+        data["manager"] = "device"
+        data["interfaces"][0]["inet6"] = "fe80::42:acff:fe11:2"
+        recorded = json.loads(refs["cases"]["ipv6"]["ip -j -6 r"])
+        link = next(r for r in recorded if r["dst"] == "fe80::/64")
+        want = [dict(link, dst="::1", dev="lo"), link]
+        self.assertEqual(self.run_cmd(data, "ip", ["-j", "-6", "r"]),
+                         (json.dumps(want, separators=(",", ":")) + "\n", "", 0))
+        pretty = self.run_cmd(data, "ip", ["-j", "-p", "-6", "r"])[0]
+        self.assertEqual(json.loads(pretty), want)
+        self.assertTrue(refs["cases"]["ipv6"]["ip -j -p -6 r"].startswith(pretty.split("},{")[0].replace('"::1"', '"fd00:dead:beef::/64"')
+                                                                            .replace('"lo"', '"eth0"')))
+        for target, ref in refs["cases"]["get"].items():
+            with self.subTest(get=target):
+                words = target.split()
+                self.assertEqual(self.run_cmd(data, "ip", ["-j", "route", "get", *words]), (ref["compact"], "", 0))
+                self.assertEqual(self.run_cmd(data, "ip", ["-j", "-p", "route", "get", *words]), (ref["pretty"], "", 0))
 
 
 if __name__ == "__main__":
