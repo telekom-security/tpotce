@@ -134,7 +134,7 @@ class Log:
 
 
 class ShellFs:
-    A_TYPE, A_UID, A_GID, A_SIZE, A_MODE, A_CONTENTS, A_REALFILE = 1, 2, 3, 4, 5, 7, 9
+    A_TYPE, A_UID, A_GID, A_SIZE, A_MODE, A_CTIME, A_CONTENTS, A_REALFILE = 1, 2, 3, 4, 5, 6, 7, 9
     T_DIR, T_FILE = 1, 2
 
 
@@ -480,6 +480,8 @@ class TextToolsTest(unittest.TestCase):
                 self.assertEqual(sort(fs, "/tmp/mine"), ("", 0))
                 self.assertEqual(fs.nodes["/tmp/mine"][:6], ["mine", 2, 1000, 1000, len(sorted_k), 0o100600])
                 self.assertEqual((fs.nodes["/tmp/mine"][7], fs.nodes["/tmp/mine"][9]), (sorted_k, None))
+                # written now: its time is the time of the write, as ls -l shows it
+                self.assertLess(abs(fs.nodes["/tmp/mine"][6] - time.time()), 5)
                 self.assertGreater(fs.private, 0)
                 # root and the command sudo runs may write it: the owner stays root
                 for how in ({"uid": 0}, {"sudo": True}):

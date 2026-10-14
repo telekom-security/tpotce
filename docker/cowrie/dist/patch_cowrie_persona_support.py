@@ -9034,6 +9034,7 @@ class TpotTextTool(HoneyPotCommand):
             node[tpot_shell_fs.A_CONTENTS] = bytes(data[:TPOT_TEXT_INPUT])
             node[tpot_shell_fs.A_REALFILE] = None  # the new text, not the file of the honeyfs
             node[tpot_shell_fs.A_SIZE] = len(data)
+            node[tpot_shell_fs.A_CTIME] = time.time()  # the time of the write, as ls -l shows it
         try:
             self.protocol.tpot_written = TPOT_WRITE_BUDGET - room + len(data)
         except Exception:  # noqa: BLE001 - a protocol that takes no attribute: no budget across commands
