@@ -602,10 +602,28 @@ class TopSessionTest(PatchedTest):
         self.assertNotIn("telnetd", " ".join(rows.values()))
 
     def ps_session(self, session):
-        """The lines of ps aux after the persona's list: the session's processes, the shell, ps."""
+        """The lines of ps aux that are not in the persona's list: the session's processes, the
+        shell, ps (in the order of their PID)."""
         lines = session.run("Command_ps", "aux").out.splitlines()
+        listed = {p["PID"] for p in session.protocol.user.server.process}
         return [[word.rstrip() for word in line.split(None, 10)]
-                for line in lines[1 + len(session.protocol.user.server.process):]]
+                for line in lines[1:] if int(line.split()[1]) not in listed]
+
+    def test_ps_lists_every_row_by_pid(self):
+        """ps sorts its rows by PID, as real ps does: the session's server process comes before its
+        shell, a daemon started after the login after the shell and ps."""
+        ps = PS + [dict(PS[4], PID=5012, COMMAND="/usr/sbin/cron -f")]
+        for args in ("aux", "ax"):
+            session = Session(self, processes=ps, target="capture")
+            lines = session.run("Command_ps", args).out.splitlines()[1:]
+            pids = [int(line.split()["u" in args]) for line in lines]
+            with self.subTest(args=args):
+                self.assertEqual(pids, sorted(pids))
+                self.assertIn(session.protocol.tpot_session_pid, pids)
+                self.assertEqual(pids[-1], 5012)
+        # without a or x the processes of the terminal only, in the same order
+        lines = Session(self, processes=ps, target="capture").run("Command_ps").out.splitlines()[1:]
+        self.assertEqual([int(line.split()[0]) for line in lines], [3089, 3091])
 
     def test_ps_and_top_name_one_session_process(self):
         """ps, top, ss and netstat show the session's server process with one PID (tpot_session_pid)

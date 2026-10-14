@@ -2583,15 +2583,26 @@ PS_SHELL_NEW = '''                "%s".ljust(30 - len("bash")) % "-bash",
             process = process + 2
 '''
 
+PS_SORT_OLD = '''                "%s".ljust(30 - len("ps")) % "ps %s" % " ".join(self.args),
+            )
+
+            output_array.append(output)
+'''
+PS_SORT_NEW = PS_SORT_OLD + '''            # T-Pot: the rows in the order of their PID, as ps lists them (the session's server process
+            # before its shell, a daemon started later after ps)
+            output_array[1:] = sorted(output_array[1:], key=lambda row: int(str(row[_pid]).strip()))
+'''
 
 
 def patch_ps_session(cowrie_root):
     """ps shows the session's server process as top, ss and netstat do (tpot_session: one PID per
     session, the daemon of the persona: sshd, sshd-session, dropbear, telnetd or in.telnetd), not a
-    new /usr/sbin/sshd per call, and the login shell of the ps list without a second -bash."""
+    new /usr/sbin/sshd per call, and the login shell of the ps list without a second -bash; every row in
+    the order of its PID."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "base.py"
     replace_once(path, PS_SESSION_OLD, PS_SESSION_NEW)
     replace_once(path, PS_SHELL_OLD, PS_SHELL_NEW)
+    replace_once(path, PS_SORT_OLD, PS_SORT_NEW)
     replace_once(path, "\n\nclass Command_ps(HoneyPotCommand):\n", TPOT_SESSION + "\n\nclass Command_ps(HoneyPotCommand):\n")
 
 
