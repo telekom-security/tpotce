@@ -776,6 +776,7 @@ class Adoption:
     dropped: List[str]                 # "name (why)", services the new file does not have
     not_carried: List[str]             # "service: what", what the new file leaves out beyond host ports
     v1: bool                           # built by the customizer of an earlier release
+    moved: List[str] = field(default_factory=list)   # host ports the release moved, "svc: C/PROTO host A -> B"
 
 
 def _show(value) -> str:
@@ -874,10 +875,44 @@ def _ports_of_file(name: str, old: dict, lost: List[str]) -> List[Port]:
     return ports
 
 
-def _adopt_ports(name: str, old: dict, new: dict, lost: List[str]) -> PortOverrides:
+OldPorts = Dict[str, List[Port]]
+
+
+def old_catalog_ports(text: str) -> Optional[OldPorts]:
+    """The host ports of every service of the catalogue an old file was built from (only
+    services.*.ports, no x-tpot needed); None if it cannot be read."""
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("services"), dict) or not data["services"]:
+        return None
+    ports: OldPorts = {}
+    for name, definition in data["services"].items():
+        found = []
+        values = definition.get("ports") if isinstance(definition, dict) else None
+        for value in values or []:
+            try:
+                port = parse_port(value)
+            except CustomizerError:
+                continue
+            if port:
+                found.append(port)
+        ports[str(name)] = found
+    return ports
+
+
+def _host(port: Port) -> str:
+    return f"{port.ip}:{port.host}" if port.ip else str(port.host)
+
+
+def _adopt_ports(name: str, old: dict, new: dict, lost: List[str], moved: List[str],
+                 old_ports: Optional[OldPorts] = None) -> PortOverrides:
     """Host port overrides that carry the host ports of the file, per container port.
 
-    A container port of both with another host port in the file becomes an override; one
+    A container port of both with another host port in the file becomes an override when the
+    file's host port is no default of the old catalogue (old_ports) either; one it is the default
+    of is named in moved (the release's wins); without old_ports it is named in lost. One
     only the file has is named in lost; one only the release has stays published. Adopting
     never drops a port of the release (no override to "-"): an earlier file was built from an
     earlier catalogue, a port missing there is no choice of the user's.
@@ -906,11 +941,18 @@ def _adopt_ports(name: str, old: dict, new: dict, lost: List[str]) -> PortOverri
             continue
         left_theirs = [t for t in theirs if not any(same(t, o) for o in ours)]
         left_ours = [o for o in ours if not any(same(t, o) for t in theirs)]
+        defaults = [p for p in (old_ports or {}).get(name, []) if (p.container, p.proto) == (container, proto)]
         for there, here in zip(left_theirs, left_ours):
-            if here.host != there.host:
-                overrides[(name, there.host, there.proto)] = here.host
-            if not same_ip(here, there):
-                lost.append(f"{name}: port {here.raw} (only the host port is carried, the release has {there.raw})")
+            if old_ports is None:
+                # no old catalogue: the file's host port may be its default, the release's wins
+                lost.append(f"{name}: host port {_host(here)} for {container}/{proto} (the release has {_host(there)})")
+            elif any(same(d, here) for d in defaults):
+                moved.append(f"{name}: {container}/{proto} host {_host(here)} -> {_host(there)} (changed by the release)")
+            else:
+                if here.host != there.host:
+                    overrides[(name, there.host, there.proto)] = here.host
+                if not same_ip(here, there):
+                    lost.append(f"{name}: port {here.raw} (only the host port is carried, the release has {there.raw})")
         for here in left_ours[len(left_theirs):]:
             lost.append(f"{name}: port {here.raw} (the release has no such port)")
     container_only = {str(v).strip() for v in new.get("ports") or [] if re.match(r"^\d+(/(tcp|udp))?$", str(v).strip())}
@@ -991,10 +1033,11 @@ def _not_carried(name: str, old: dict, new: dict) -> List[str]:
     return lost
 
 
-def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE") -> Adoption:
+def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optional[OldPorts] = None) -> Adoption:
     """The selection of this release closest to a compose file of any origin, what it drops
     and what it does not carry. The base is the edition of the T-Pot type: STANDARD for a
-    HIVE, SENSOR for a SENSOR."""
+    HIVE, SENSOR for a SENSOR. old_ports (old_catalog_ports) tells host ports of your own from
+    the defaults of the catalogue the file was built from; without it no host port is carried."""
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as err:
@@ -1033,13 +1076,14 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE") -> Adoption:
     remove = [n for n in catalog.order if n in edition.services and n not in wanted]
 
     not_carried: List[str] = []
+    moved: List[str] = []
     ports: PortOverrides = {}
     for name in kept:
         old = data["services"][name] or {}
         if not isinstance(old, dict):
             raise CustomizerError(f"service {name} is no mapping")
         new = catalog.source(base, name).services.get(name) or {}
-        ports.update(_adopt_ports(name, old, new, not_carried))
+        ports.update(_adopt_ports(name, old, new, not_carried, moved, old_ports))
         not_carried += _not_carried(name, old, new)
 
     # top level: settings of a network the new file has, anything besides services and networks
@@ -1062,7 +1106,7 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE") -> Adoption:
             not_carried.append(f"{key}: {_show(data[key])}")
 
     selection = normalize(catalog, Selection(base, add, remove, ports))
-    return Adoption(selection, dropped, not_carried, v1)
+    return Adoption(selection, dropped, not_carried, v1, moved)
 
 
 def compose_check(path: str, repo_dir: str = REPO_DIR) -> Optional[str]:

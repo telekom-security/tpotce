@@ -305,6 +305,11 @@ MASTER_SERVICES = {
         "depends_on": {"elasticsearch": {"condition": "service_healthy"}}, "networks": ["nginx_local"],
         "mem_limit": "1g", "ports": ["127.0.0.1:64296:5601"], "image": "${TPOT_REPO}/kibana:${TPOT_VERSION}",
         "pull_policy": "${TPOT_PULL_POLICY}"},
+    "wordpot": {
+        "container_name": "wordpot", "restart": "always",
+        "depends_on": {"tpotinit": {"condition": "service_healthy"}}, "networks": ["wordpot_local"],
+        "ports": ["80:80"], "image": "${TPOT_REPO}/wordpot:${TPOT_VERSION}", "pull_policy": "${TPOT_PULL_POLICY}",
+        "read_only": True, "volumes": ["${TPOT_DATA_PATH}/wordpot/log:/opt/wordpot/logs/"]},
     "spiderfoot": {
         "container_name": "spiderfoot", "restart": "always",
         "depends_on": {"tpotinit": {"condition": "service_healthy"}}, "networks": ["nginx_local"],
@@ -325,6 +330,11 @@ def v1_file(names, change=None):
             networks[network] = None
     return "# T-Pot: CUSTOM EDITION\n# Generated on: 2025-03-01 12:00:00\n" + yaml.dump(
         {"networks": networks, "services": services}, default_flow_style=False, sort_keys=False, indent=2)
+
+
+# what update.sh hands over as --old-catalog: master's catalogue, without x-tpot lines
+MASTER_CATALOG = yaml.dump({"services": MASTER_SERVICES}, default_flow_style=False, sort_keys=False)
+MASTER_PORTS = core.old_catalog_ports(MASTER_CATALOG)
 
 
 def own_file(catalog, names, extra=None, edition="STANDARD"):
@@ -387,20 +397,55 @@ class AdoptTest(unittest.TestCase):
 
     def test_changed_host_port_becomes_an_override(self):
         names = ["tpotinit", "logstash", "elasticsearch", "cowrie"]
+        # 2222 is neither the old default (22) nor the release's: your change
         text = v1_file(names, {"cowrie": {"ports": ["2222:22", "23:23"]}})
-        adoption = core.adopt(self.catalog, text, "HIVE")
+        adoption = core.adopt(self.catalog, text, "HIVE", MASTER_PORTS)
         self.assertEqual(adoption.selection.ports, {("cowrie", 22, "tcp"): 2222})
+        self.assertEqual(adoption.moved, [])
         self.assertEqual([line for line in adoption.not_carried if "port" in line], [])
         with tempfile.TemporaryDirectory() as tmp:
             old, new = self.write(tmp, v1_file(names, {"cowrie": {"ports": ["2222:22", "23:23"]}})), \
                 os.path.join(tmp, "new.yml")
-            code, out, err = self.run_cli("--adopt", old, "-o", new, "--report", "--tpot-type", "HIVE")
+            catalog = self.write(tmp, MASTER_CATALOG, "tpot_services.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", new, "--report", "--tpot-type", "HIVE",
+                                          "--old-catalog", catalog)
             self.assertEqual(code, 0, out + err)
             self.assertIn("port: cowrie:22/tcp=2222", out.splitlines())
             with open(new, encoding="utf-8") as handle:
                 rendered = handle.read()
             self.assertEqual(yaml.safe_load(rendered)["services"]["cowrie"]["ports"], ["2222:22", "23:23"])
             self.assertIn("# customizer: port=cowrie:22/tcp=2222\n", rendered)
+
+    def test_an_old_default_host_port_is_moved_by_the_release(self):
+        # master had wordpot on 80, the release puts it on 8080 (h0neytr4p took 80)
+        text = v1_file(["tpotinit", "logstash", "elasticsearch", "wordpot"])
+        adoption = core.adopt(self.catalog, text, "HIVE", MASTER_PORTS)
+        self.assertEqual(adoption.selection.ports, {})
+        self.assertEqual(adoption.moved, ["wordpot: 80/tcp host 80 -> 8080 (changed by the release)"])
+        self.assertEqual(adoption.not_carried, [])
+        with tempfile.TemporaryDirectory() as tmp:
+            old, new = self.write(tmp, text), os.path.join(tmp, "new.yml")
+            catalog = self.write(tmp, MASTER_CATALOG, "tpot_services.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", new, "--dry-run", "--tpot-type", "HIVE",
+                                          "--old-catalog", catalog)
+            self.assertEqual(code, 0, out + err)
+            self.assertEqual(out.splitlines(), ["moved: wordpot: 80/tcp host 80 -> 8080 (changed by the release)"])
+
+    def test_without_an_old_catalog_no_host_port_is_carried(self):
+        text = v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie", "wordpot"],
+                       {"cowrie": {"ports": ["2222:22", "23:23"]}})
+        for old_catalog in (None, "services: [unclosed\n"):
+            with self.subTest(old_catalog=old_catalog):
+                with tempfile.TemporaryDirectory() as tmp:
+                    old = self.write(tmp, text)
+                    extra = ("--old-catalog", self.write(tmp, old_catalog, "cat.yml")) if old_catalog else ()
+                    code, out, err = self.run_cli("--adopt", old, "--dry-run", "--tpot-type", "HIVE", *extra)
+                self.assertEqual(code, 0, out + err)
+                self.assertEqual(out.splitlines(), [
+                    "kept-out: cowrie: host port 2222 for 22/tcp (the release has 22)",
+                    "kept-out: wordpot: host port 80 for 80/tcp (the release has 8080)",
+                ])
+        self.assertEqual(core.adopt(self.catalog, text, "HIVE").selection.ports, {})
 
     def test_a_release_port_missing_from_the_file_stays_published(self):
         # master's ciscoasa had no IKE ports 500 / 4500, a v1 cowrie without 23 is no choice either
@@ -427,7 +472,8 @@ class AdoptTest(unittest.TestCase):
         self.assertEqual(adoption.not_carried, ["ciscoasa: port 5000/udp (the release no longer has it)"])
         # a bind IP of the file cannot be an override, it is named
         cowrie = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"],
-                                                  {"cowrie": {"ports": ["127.0.0.1:2222:22", "23:23"]}}), "HIVE")
+                                                  {"cowrie": {"ports": ["127.0.0.1:2222:22", "23:23"]}}), "HIVE",
+                             MASTER_PORTS)
         self.assertEqual(cowrie.selection.ports, {("cowrie", 22, "tcp"): 2222})
         self.assertEqual(cowrie.not_carried,
                          ["cowrie: port 127.0.0.1:2222:22 (only the host port is carried, the release has 22:22)"])

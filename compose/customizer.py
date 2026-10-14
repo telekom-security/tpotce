@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(COMPOSE_DIR))
 from tpotctl import bootstrap, prefs, say  # noqa: E402
 
 HEADLESS = ("--base", "--add", "--remove", "--port", "--rebuild", "--adopt", "--dry-run", "--report",
-            "--tpot-type", "--setup", "-h", "--help", "--text")
+            "--tpot-type", "--old-catalog", "--setup", "-h", "--help", "--text")
 
 
 def wants_ui(argv):
@@ -83,8 +83,12 @@ def parse_args(argv):
     parser.add_argument("--tpot-type", choices=["HIVE", "SENSOR"], type=str.upper,
                         help="with --adopt: the edition to start from, STANDARD for HIVE, SENSOR for SENSOR "
                              "(default: TPOT_TYPE of ~/tpotce/.env)")
+    parser.add_argument("--old-catalog", metavar="FILE",
+                        help="with --adopt: the tpot_services.yml the file was built from; a host port that "
+                             "differs from it is yours and carried, without it no host port is carried")
     parser.add_argument("--report", action="store_true",
-                        help="with --adopt: the report as plain lines on stdout (dropped:, port:, kept-out:)")
+                        help="with --adopt: the report as plain lines on stdout "
+                             "(dropped:, port:, moved:, kept-out:)")
     parser.add_argument("--dry-run", action="store_true",
                         help="with --adopt: print the report only, write nothing")
     parser.add_argument("-o", "--output", metavar="FILE",
@@ -123,6 +127,7 @@ def adoption_lines(adoption):
     """The report of --adopt, one item per line, made for update.sh to read."""
     return ([f"dropped: {item}" for item in adoption.dropped]
             + [f"port: {item}" for item in core.override_items(adoption.selection.ports)]
+            + [f"moved: {item}" for item in adoption.moved]
             + [f"kept-out: {item}" for item in adoption.not_carried])
 
 
@@ -137,8 +142,17 @@ def adopt(catalog, args):
         return 2
     tpot_type = args.tpot_type or core.env_value("TPOT_TYPE").upper() or (
         "SENSOR" if core.edition_of(text.split("\n")) == "SENSOR" else "HIVE")
+    old_ports = None
+    if args.old_catalog:
+        try:
+            with open(args.old_catalog, encoding="utf-8") as handle:
+                old_ports = core.old_catalog_ports(handle.read())
+        except (OSError, UnicodeDecodeError):
+            old_ports = None
+        if old_ports is None:
+            say.warn(f"{args.old_catalog} cannot be read as a catalogue, no host port is carried.", sys.stderr)
     try:
-        adoption = core.adopt(catalog, text, tpot_type)
+        adoption = core.adopt(catalog, text, tpot_type, old_ports)
     except core.CustomizerError as err:
         say.error(f"{args.adopt}: {err}")
         return 2
@@ -151,6 +165,8 @@ def adopt(catalog, args):
             say.warn(f"Dropped: {item}")
         for item in core.override_items(adoption.selection.ports):
             say.info(f"Host port: {item}")
+        for item in adoption.moved:
+            say.info(f"Moved by the release: {item}")
         for item in adoption.not_carried:
             say.warn(f"Left out: {item}")
     report(result)
