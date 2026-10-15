@@ -6,10 +6,12 @@ manifest is generated from the git history of the objects files:
 
     python3 -m tpotctl.kibana_objects manifest            writes the manifest
     python3 -m tpotctl.kibana_objects manifest --check    lists shipped objects it lacks (exit 1)
+    python3 -m tpotctl.kibana_objects manifest --verify   the file equals the history (exit 1)
 
 The normalisation leaves out what Kibana changes on its own (times, versions, the
 order of references, the shape of a saved search in Kibana 9.5, empty field
-attributes), so an object counts as changed only when its content changed. A change
+attributes, the Discover counts of the fields), so an object counts as changed only
+when its content changed. A change
 of these rules is a new `RULES` and a new manifest.
 
 tpotinit runs a byte-identical copy of this module with a plain python3: standard
@@ -28,7 +30,7 @@ import sys
 import zipfile
 from typing import Dict, List, Optional, Set
 
-RULES = 1
+RULES = 2
 SKIP_TYPES = frozenset({"config", "config-global"})
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -92,10 +94,14 @@ def normalise(obj: dict) -> dict:
     if out.get("type") == "index-pattern" and isinstance(attributes.get("fieldAttrs"), str):
         try:
             field_attrs = json.loads(attributes["fieldAttrs"])
-            if isinstance(field_attrs, dict):
-                attributes["fieldAttrs"] = json.dumps({k: v for k, v in field_attrs.items() if v != {}})
         except ValueError:
-            pass
+            field_attrs = None
+        if isinstance(field_attrs, dict):
+            # count is the popularity Discover raises on every use, not a choice of yours;
+            # an entry with nothing else in it means nothing
+            entries = {k: ({a: b for a, b in v.items() if a != "count"} if isinstance(v, dict) else v)
+                       for k, v in field_attrs.items()}
+            attributes["fieldAttrs"] = json.dumps({k: v for k, v in entries.items() if v != {}})
     if out.get("type") == "search":
         attributes = _search(attributes)
     out["attributes"] = _parsed(attributes)
@@ -112,6 +118,8 @@ def digest(obj: dict) -> str:
 def parse_ndjson(text: str, source: str) -> List[dict]:
     """The objects of an export, in their order; the export details and empty lines left out."""
     objects = []
+    if text.startswith("﻿"):
+        text = text[1:]
     for number, line in enumerate(text.split("\n"), 1):
         line = line.strip()
         if not line:
@@ -157,8 +165,8 @@ def _ndjson_texts(data: bytes, path: str, source: str) -> List[str]:
     return texts
 
 
-def _git(repo: str, *args: str) -> bytes:
-    return subprocess.run(["git", "-C", repo, *args], capture_output=True, check=True).stdout
+def _git(repo: str, *args: str, data: Optional[bytes] = None) -> bytes:
+    return subprocess.run(["git", "-C", repo, *args], input=data, capture_output=True, check=True).stdout
 
 
 def _add(objects: Dict[str, Set[str]], data: bytes, path: str, source: str) -> None:
@@ -171,36 +179,83 @@ def _add(objects: Dict[str, Set[str]], data: bytes, path: str, source: str) -> N
         raise KibanaError(f"{source}: {error}") from None
 
 
-def build_manifest(repo: str) -> dict:
-    """The digests of every version of the objects files in the history of HEAD of `repo`.
+def history_problem(repo: str) -> Optional[str]:
+    """Why the history of `repo` cannot give the manifest (no git, no repository with a
+    HEAD, a shallow clone), or None."""
+    try:
+        if _git(repo, "rev-parse", "--is-shallow-repository").strip() == b"true":
+            return f"{repo}: a shallow clone lacks the history"
+        _git(repo, "rev-parse", "--verify", "-q", "HEAD^{commit}")
+    except OSError as error:
+        return f"git cannot be run: {error}"
+    except subprocess.CalledProcessError:
+        return f"{repo}: no git repository with a HEAD"
+    return None
 
-    The files as they are in the working tree count as well, so a changed objects file
-    and its manifest can go into one commit."""
+
+def _blobs(repo: str, commits: List[str], path: str) -> Dict[str, str]:
+    """blob id -> the first commit that has it, of every commit in `commits` that has `path`."""
+    request = "".join(f"{commit}:{path}\n" for commit in commits).encode()
+    lines = _git(repo, "cat-file", "--batch-check", data=request).decode().splitlines()
+    if len(lines) != len(commits):
+        raise KibanaError(f"{repo}: git cat-file answered {len(lines)} lines for {len(commits)} commits")
+    blobs: Dict[str, str] = {}
+    for commit, line in zip(commits, lines):
+        if line.endswith(" missing"):
+            continue
+        fields = line.split()
+        if len(fields) != 3 or fields[1] != "blob":
+            raise KibanaError(f"commit {commit}: {path} is no file ({line})")
+        blobs.setdefault(fields[0], commit)
+    return blobs
+
+
+def _read_blobs(repo: str, blobs: List[str]) -> Dict[str, bytes]:
+    """The content of each blob, read in one `git cat-file --batch`."""
+    out = _git(repo, "cat-file", "--batch", data="".join(f"{blob}\n" for blob in blobs).encode())
+    contents: Dict[str, bytes] = {}
+    position = 0
+    for blob in blobs:
+        newline = out.find(b"\n", position)
+        fields = out[position:newline].decode().split() if newline >= 0 else []
+        if len(fields) != 3 or fields[0] != blob or fields[1] != "blob" or not fields[2].isdigit():
+            raise KibanaError(f"blob {blob} cannot be read")
+        size = int(fields[2])
+        contents[blob] = out[newline + 1:newline + 1 + size]
+        if len(contents[blob]) != size:
+            raise KibanaError(f"blob {blob} is cut short")
+        position = newline + 1 + size + 1
+    return contents
+
+
+def build_manifest(repo: str) -> dict:
+    """The digests of every version of the objects files in any commit HEAD of `repo` reaches.
+
+    Every commit counts, merges included; a commit without the file is skipped. The
+    working tree does not count: only what was committed can have been shipped."""
+    problem = history_problem(repo)
+    if problem:
+        raise KibanaError(problem)
     objects: Dict[str, Set[str]] = {}
-    for path in HISTORY_PATHS:
-        try:
-            # --full-history: a version that only a merged branch carried is in as well;
-            # --diff-filter=d: a commit that removes the file has no version of it
-            commits = _git(repo, "log", "--full-history", "--diff-filter=d", "--format=%H",
-                           "HEAD", "--", path).decode().split()
-        except (OSError, subprocess.CalledProcessError) as error:
-            raise KibanaError(f"{repo}: git log of {path} failed: {error}") from None
-        seen: Set[str] = set()
-        for commit in commits:
-            try:
-                blob = _git(repo, "rev-parse", "--verify", f"{commit}:{path}").decode().strip()
-                if blob in seen:
-                    continue
-                seen.add(blob)
-                data = _git(repo, "cat-file", "blob", blob)
-            except (OSError, subprocess.CalledProcessError) as error:
-                raise KibanaError(f"commit {commit}: {path} cannot be read: {error}") from None
-            _add(objects, data, path, f"commit {commit}: {path}")
-        local = os.path.join(repo, path)
-        if os.path.isfile(local):
-            with open(local, "rb") as handle:
-                _add(objects, handle.read(), path, local)
+    try:
+        commits = _git(repo, "rev-list", "HEAD").decode().split()
+        for path in HISTORY_PATHS:
+            blobs = _blobs(repo, commits, path)
+            contents = _read_blobs(repo, sorted(blobs))
+            for blob in sorted(blobs):
+                _add(objects, contents[blob], path, f"commit {blobs[blob]}: {path}")
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise KibanaError(f"{repo}: the history cannot be read: {error}") from None
     return {"rules": RULES, "objects": {k: sorted(objects[k]) for k in sorted(objects)}}
+
+
+def verify_manifest(path: str = MANIFEST, repo: str = REPO_DIR) -> bool:
+    """The manifest file is the one the history gives."""
+    try:
+        text = _read_text(path)
+    except KibanaError:
+        return False
+    return text == manifest_text(build_manifest(repo))
 
 
 def manifest_text(manifest: dict) -> str:
@@ -213,7 +268,7 @@ def load_manifest(path: str = MANIFEST) -> Dict[str, Set[str]]:
         data = json.loads(_read_text(path))
     except ValueError:
         raise KibanaError(f"{path}: not JSON") from None
-    if not isinstance(data, dict) or data.get("rules") != RULES:
+    if not isinstance(data, dict) or type(data.get("rules")) is not int or data["rules"] != RULES:
         found = data.get("rules") if isinstance(data, dict) else None
         raise KibanaError(f"{path}: made with the rules {found}, this T-Pot has {RULES}")
     objects = data.get("objects")
@@ -234,10 +289,19 @@ def main(argv: Optional[List[str]] = None) -> int:
                                      description="The hash manifest of T-Pot's Kibana objects.")
     commands = parser.add_subparsers(dest="command", required=True)
     manifest = commands.add_parser("manifest", help="write the manifest from the git history")
-    manifest.add_argument("--check", action="store_true",
-                          help="only list the shipped objects the manifest lacks (exit 1 if any)")
+    mode = manifest.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true",
+                      help="only list the shipped objects the manifest lacks (exit 1 if any)")
+    mode.add_argument("--verify", action="store_true",
+                      help="only compare the manifest with the one the history gives (exit 1 if they differ)")
     args = parser.parse_args(argv)
     try:
+        if args.verify:
+            if verify_manifest():
+                return 0
+            print(f"{MANIFEST} is not the manifest of the history", file=sys.stderr)
+            print("run: python3 -m tpotctl.kibana_objects manifest", file=sys.stderr)
+            return 1
         if args.check:
             missing = check_manifest()
             for name in missing:
