@@ -1589,7 +1589,7 @@ class LockTest(unittest.TestCase):
 
     def test_a_lock_that_cannot_be_used_is_named(self):
         site = Site(self, [dash("a")])
-        open(ko.state_dir(site.data), "w").close()          # a file where the folder belongs
+        os.makedirs(ko.lock_path(site.data))                # a folder where the lock file belongs
         path = os.path.abspath(ko.lock_path(site.data))
         with self.assertRaisesRegex(ko.KibanaError, f"^the Kibana import lock {re.escape(path)} cannot be used: "):
             site.apply("update", FakeKibana([as_in_kibana(CONFIG)]))
@@ -1598,11 +1598,145 @@ class LockTest(unittest.TestCase):
         self.assertEqual((rc, out, len(err.splitlines())), (1, "", 1))
         self.assertTrue(err.startswith(f"# Kibana objects: the Kibana import lock {path} cannot be used: "), err)
         self.assertNotIn("Traceback", err)
+        # a file where the folder belongs: refused, the folder named
+        other = Site(self, [dash("a")])
+        open(ko.state_dir(other.data), "w").close()
+        rc, out, err = other.cli("apply", "--mode", "update", "--data", other.data, "--objects", other.objects,
+                                 "--exports", os.path.join(other.root, "exports"), opener=FakeKibana())
+        self.assertEqual((rc, err), (1, f"# Kibana objects: {ko.state_dir(other.data)} is a link or no folder; "
+                                        "T-Pot leaves it as it is\n"))
         failing = OSError(errno.ENOLCK, "No locks available")
         with unittest.mock.patch.object(ko.fcntl, "flock", side_effect=failing):
             with self.assertRaisesRegex(ko.KibanaError, "cannot be used: No locks available$"):
                 with ko.import_lock(self.site.data):
                     pass
+
+
+@unittest.skipUnless(hasattr(os, "symlink") and ko.NOFOLLOW, "no symbolic links here")
+class LinkTest(unittest.TestCase):
+    """tpotinit writes <data>/kibana_objects as root, and the group tpot may write there:
+    a link in the place of one of its files or folders is refused, its target stays as it is."""
+
+    def setUp(self):
+        self.site = Site(self, [dash("a")])
+        os.makedirs(ko.state_dir(self.site.data))
+        self.target = os.path.join(self.site.root, "outside.txt")
+        with open(self.target, "w", encoding="utf-8") as handle:
+            handle.write("keep\n")
+        os.chmod(self.target, 0o640)
+        self.outside = os.path.join(self.site.root, "outside")
+        os.makedirs(self.outside)
+
+    def link(self, path, target=None):
+        os.symlink(target or self.target, path)
+
+    def untouched(self):
+        with open(self.target, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "keep\n")
+        self.assertEqual(stat.S_IMODE(os.stat(self.target).st_mode), 0o640)
+        self.assertEqual(os.listdir(self.outside), [])
+
+    def refused(self, path, run):
+        with self.assertRaises(ko.KibanaError) as caught:
+            run()
+        text = str(caught.exception)
+        self.assertNotIn("\n", text)
+        self.assertIn(path, text)
+        self.untouched()
+
+    def cli(self, *args, kibana=None):
+        site = self.site
+        rc, out, err = site.cli(*args, "--data", site.data, "--objects", site.objects,
+                                "--exports", ko.auto_exports_dir(site.data), opener=kibana or FakeKibana())
+        self.assertEqual((rc, len(err.splitlines())), (1, 1), err)
+        self.untouched()
+        return err
+
+    def test_a_link_at_the_lock(self):
+        path = ko.lock_path(self.site.data)
+        self.link(path)
+        kibana = FakeKibana([as_in_kibana(CONFIG)])
+        self.refused(path, lambda: self.site.apply("update", kibana))
+        self.refused(path, lambda: ko.import_lock(self.site.data).__enter__())
+        self.assertEqual(kibana.requests, [])
+        self.assertIn(path, self.cli("apply", "--mode", "update", kibana=kibana))
+
+    def test_a_link_at_the_record(self):
+        records = ko.Records(self.site.data)
+        path = records.path
+        self.link(path)
+        self.refused(path, lambda: ko.Records(self.site.data))
+        records.mark(["dashboard:a"], iso(NOW))
+        self.refused(path, records.save)
+        kibana = FakeKibana([as_in_kibana(CONFIG)])
+        self.refused(path, lambda: self.site.apply("update", kibana))
+        self.assertEqual(kibana.imports(), [])
+
+    def test_a_link_at_pending(self):
+        path = ko.pending_path(self.site.data)
+        self.link(path)
+        self.refused(path, lambda: ko.pending_state(self.site.data))
+        self.refused(path, lambda: ko.mark_pending(self.site.data, "fresh"))
+        self.refused(path, lambda: ko._write_pending(self.site.data, None))
+        self.assertTrue(os.path.islink(path))
+        self.assertIn(path, self.cli("apply", "--mode", "keep"))
+        self.assertIn(path, self.cli("first"))
+
+    def test_a_link_at_given_up(self):
+        path = ko.given_up_path(self.site.data)
+        self.link(path)
+        self.refused(path, lambda: ko.given_up(self.site.data, self.site.objects))
+        self.refused(path, lambda: ko.clear_given_up(self.site.data))
+        self.refused(path, lambda: ko._write_json(path, {"version": 1, "refused": []}, ".given-up-"))
+        self.assertTrue(os.path.islink(path))
+
+    def test_rotation_removes_regular_files_only(self):
+        folder = ko.auto_exports_dir(self.site.data)
+        os.makedirs(folder)
+        linked = os.path.join(folder, "auto_20000101000000.ndjson")
+        self.link(linked)
+        regular = ko.save_export("{}\n", folder, ko.AUTO_PREFIX, now=NOW)
+        self.assertEqual(ko.exports(folder, ko.AUTO_PREFIX), [regular])
+        self.assertEqual(ko.rotate(folder, ko.AUTO_PREFIX, keep=0), [regular])
+        self.assertTrue(os.path.islink(linked))
+        self.untouched()
+
+    def test_a_link_in_the_place_of_a_folder(self):
+        site = self.site
+        exports = ko.auto_exports_dir(site.data)
+        self.link(exports, self.outside)
+        self.refused(exports, lambda: ko.save_export("{}\n", exports, ko.AUTO_PREFIX, now=NOW))
+        os.unlink(exports)
+        os.rmdir(ko.state_dir(site.data))
+        folder = ko.state_dir(site.data)
+        self.link(folder, self.outside)
+        records = ko.Records.__new__(ko.Records)
+        records.folder, records.path, records.objects = folder, os.path.join(folder, "record.json"), {}
+        for run in (lambda: ko.Records(site.data), records.save, lambda: ko.mark_pending(site.data, "fresh"),
+                    lambda: ko.pending_state(site.data), lambda: ko.import_lock(site.data).__enter__(),
+                    lambda: ko.save_export("{}\n", exports, ko.AUTO_PREFIX, now=NOW),
+                    lambda: site.apply("update", FakeKibana([as_in_kibana(CONFIG)]))):
+            with self.subTest(run=run):
+                self.refused(folder, run)
+        # the T-Pot Manager's own exports may go into a folder of yours that is a link
+        backups = os.path.join(site.home, "tpot_backups")
+        mine = os.path.join(site.root, "my_backups")
+        os.makedirs(mine)
+        os.symlink(mine, backups)
+        path = ko.save_export("{}\n", backups, now=NOW)
+        self.assertEqual(os.listdir(mine), [os.path.basename(path)])
+
+    def test_files_are_written_as_new_regular_files(self):
+        site = self.site
+        ko.mark_pending(site.data, "fresh")
+        records = ko.Records(site.data)
+        records.mark(["dashboard:a"], iso(NOW))
+        records.save()
+        for path in (ko.pending_path(site.data), records.path):
+            info = os.lstat(path)
+            self.assertTrue(stat.S_ISREG(info.st_mode))
+            self.assertEqual(stat.S_IMODE(info.st_mode), 0o660)
+        self.assertEqual(sorted(os.listdir(ko.state_dir(site.data))), ["pending", "record.json"])
 
 
 class OpsTest(unittest.TestCase):
