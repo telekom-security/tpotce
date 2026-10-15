@@ -23,7 +23,10 @@ keep nothing, add the new, update the new and the unchanged, overwrite all but t
 advanced settings. tpotinit runs them:
 
     python3 kibana_objects.py apply --mode M --data DIR --objects DIR --exports DIR [--kibana URL]
-    python3 kibana_objects.py first --data DIR --objects DIR [--exports DIR] [--kibana URL]
+    python3 kibana_objects.py first --data DIR --objects DIR --exports DIR [--kibana URL]
+
+The first import (`<data>/kibana_objects/pending`) takes the whole shipped file once;
+its retries take only what mode update would, so they never touch what you changed.
 
 Kibana 9.5 writes nothing of an import that has one error in it (its successResults
 then name what it would have written): the import goes again without the objects that
@@ -419,35 +422,62 @@ def export_objects(url: str = KIBANA_URL, opener: Optional[Callable] = None) -> 
     return _export(url, opener)[0]
 
 
+def export_modes(prefix: str) -> Tuple[int, int]:
+    """Folder and file mode of an export: tpotinit's auto_ exports are for the group tpot
+    too (the T-Pot Manager lists and restores them), the Manager's own are private."""
+    return (0o770, 0o660) if prefix == AUTO_PREFIX else (0o700, 0o600)
+
+
 def save_export(text: str, folder: str, prefix: str = EXPORT_PREFIX, now: Optional[float] = None) -> str:
-    """`text` as <folder>/<prefix><YYYYmmddHHMMSS>.ndjson (a folder it makes 0700, the file
-    0600) and its path; a second export in the same second gets _2, _3, ..."""
-    stamp = time.strftime("%Y%m%d%H%M%S", time.localtime(time.time() if now is None else now))
+    """`text` as <folder>/<prefix><YYYYmmddHHMMSS>.ndjson, the time in UTC, and its path; a
+    second export in the same second gets _2, _3, ... (modes: export_modes; a folder that is
+    there keeps its own)."""
+    stamp = time.strftime("%Y%m%d%H%M%S", time.gmtime(time.time() if now is None else now))
+    folder_mode, file_mode = export_modes(prefix)
     try:
-        _make_dir(folder, 0o700)
+        _make_dir(folder, folder_mode)
         path, number = os.path.join(folder, f"{prefix}{stamp}.ndjson"), 1
         while os.path.exists(path):
             number += 1
             path = os.path.join(folder, f"{prefix}{stamp}_{number}.ndjson")
-        _write(path, text, 0o600, ".kibana-export-")
+        _write(path, text, file_mode, ".kibana-export-")
     except OSError as error:
         raise KibanaError(f"the export cannot be written into {folder}: {error}") from None
     return path
 
 
+def _name_order(name: str, prefix: str) -> Tuple[str, int]:
+    """The UTC stamp and the number of an export's name (_10 after _2); ("", 0) for another name."""
+    match = re.fullmatch(re.escape(prefix) + r"(\d{14})(?:_(\d+))?\.ndjson", name)
+    return (match.group(1), int(match.group(2) or 1)) if match else ("", 0)
+
+
 def exports(folder: str, prefix: str) -> List[str]:
-    """The exports <prefix>*.ndjson of `folder`, newest first (their names hold the time)."""
+    """The exports <prefix>*.ndjson of `folder`, newest first: by the time of the file, then
+    by the stamp and number of its name."""
     try:
         names = [n for n in os.listdir(folder) if n.startswith(prefix) and n.endswith(".ndjson")]
     except OSError:
         return []
-    return [os.path.join(folder, n) for n in sorted(names, reverse=True)]
+    found = []
+    for name in names:
+        path = os.path.join(folder, name)
+        try:
+            found.append(((os.path.getmtime(path), *_name_order(name, prefix)), path))
+        except OSError:
+            pass
+    return [path for _, path in sorted(found, reverse=True)]
 
 
-def rotate(folder: str, prefix: str, keep: int = AUTO_KEEP) -> List[str]:
-    """Removes all but the newest `keep` exports of `prefix` and returns what it removed."""
+def rotate(folder: str, prefix: str, keep: int = AUTO_KEEP, spare: Optional[str] = None) -> List[str]:
+    """Removes all but the newest `keep` exports of `prefix` and returns what it removed;
+    `spare`, the export just written, always stays (a clock that went back cannot remove it)."""
     removed = []
-    for path in exports(folder, prefix)[keep:]:
+    paths = exports(folder, prefix)
+    if spare in paths:
+        paths.remove(spare)
+        keep -= 1
+    for path in paths[max(keep, 0):]:
         try:
             os.unlink(path)
             removed.append(path)
@@ -501,7 +531,9 @@ def import_objects(objs: List[dict], overwrite: bool, url: str = KIBANA_URL,
     there as it is (a conflict, which counts as there, no error).
 
     Kibana writes nothing of a file with one error in it, so the objects it did not refuse
-    go in again on their own, at most ROUNDS times; what then is still out is an error."""
+    go in again on their own, at most ROUNDS times; what then is still out is an error.
+    Imported is only an object that was sent and that an answer of success true without
+    errors names; a sent object such an answer leaves out is not_imported."""
     result = Result()
     titles = {key(o): _title(o) for o in objs}
     todo = list(objs)
@@ -511,9 +543,12 @@ def import_objects(objs: List[dict], overwrite: bool, url: str = KIBANA_URL,
         answer = _import_once(todo, overwrite, url, opener)
         errors = _entries(answer.get("errors"))
         if not errors:
-            if answer.get("success") is False:
-                raise KibanaError(f"Kibana at {url} answered the import with success false and no errors")
-            result.imported = [(str(r.get("type")), str(r.get("id"))) for r in _entries(answer.get("successResults"))]
+            named = set()
+            if answer.get("success") is True:
+                named = {f"{r.get('type')}:{r.get('id')}" for r in _entries(answer.get("successResults"))}
+            result.imported = [(o["type"], o["id"]) for o in todo if key(o) in named]
+            result.errors += [(o["type"], o["id"], titles[key(o)], "not_imported") for o in todo
+                              if key(o) not in named]
             return result
         refused = set()
         for error in errors:
@@ -704,20 +739,31 @@ def preview(data_dir: str, objects_dir: str, opener: Optional[Callable] = None, 
     return plan(_export(url, opener)[1], shipped_objs, manifest, records.objects)
 
 
+def _fresh_export(url: str, opener: Optional[Callable], export, allow_empty: bool = False) -> Tuple[str, List[dict]]:
+    """The export a caller made already (one per run), or a new one; the same rules."""
+    if export is None:
+        return _export(url, opener, allow_empty)
+    text, installed = export
+    if not installed and not allow_empty:
+        raise KibanaError(f"Kibana at {url} exported no objects")
+    return text, installed
+
+
 def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opener: Optional[Callable] = None,
               now: Optional[float] = None, url: str = KIBANA_URL, prefix: str = EXPORT_PREFIX,
-              keep: Optional[int] = None) -> Tuple[Plan, Result, str]:
+              keep: Optional[int] = None, export: Optional[Tuple[str, List[dict]]] = None) -> Tuple[Plan, Result, str]:
     """Imports what `mode` takes of the plan and records it.
 
     keep makes no request. With nothing to import there is neither an export nor an
     import. update and overwrite save the export first (into `export_dir`, the newest
-    `keep` of `prefix` stay when keep is given); without it there is no import."""
+    `keep` of `prefix` stay when keep is given); without it there is no import. `export`
+    is the (text, objects) of an export this run made already."""
     if mode not in MODES:
         raise KibanaError(f"no mode {mode!r}, one of {', '.join(MODES)}")
     if mode == "keep":
         return Plan([]), Result(), ""
     records, manifest, shipped_objs = _local(data_dir, objects_dir)
-    text, installed = _export(url, opener)
+    text, installed = _fresh_export(url, opener, export)
     chosen = plan(installed, shipped_objs, manifest, records.objects)
     todo = chosen.to_import(mode)
     if not todo:
@@ -725,7 +771,7 @@ def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opene
     if mode in ("update", "overwrite"):
         chosen.export_path = save_export(text, export_dir, prefix, now)
         if keep is not None:
-            rotate(export_dir, prefix, keep)
+            rotate(export_dir, prefix, keep, spare=chosen.export_path)
     by_key = {key(o): o for o in shipped_objs}
     when = stamp(now)                    # before the request: Kibana's updated_at comes after it
     result = import_objects([by_key[i.key] for i in todo], mode != "add", url, opener)
@@ -739,13 +785,14 @@ def run_restore(path: str, data_dir: str, export_dir: str, opener: Optional[Call
                 now: Optional[float] = None, url: str = KIBANA_URL,
                 prefix: str = EXPORT_PREFIX) -> Tuple[str, Result]:
     """Imports every object of the export `path`, the advanced settings too, after a fresh
-    export. What it restored is no longer T-Pot's import: its records go."""
+    export. What it restored is no longer T-Pot's import: its records go. A Kibana that
+    holds no objects has nothing to export: the export path is "" then."""
     objs = parse_ndjson(_read_text(path), path)
     if not objs:
         raise KibanaError(f"{path} holds no Kibana objects")
     records = Records(data_dir)
-    text, _ = _export(url, opener)
-    export_path = save_export(text, export_dir, prefix, now)
+    text, installed = _export(url, opener, allow_empty=True)
+    export_path = save_export(text, export_dir, prefix, now) if installed else ""
     result = import_objects(objs, True, url, opener)
     if result.imported:
         records.drop(result.keys())
@@ -753,39 +800,107 @@ def run_restore(path: str, data_dir: str, export_dir: str, opener: Optional[Call
     return export_path, result
 
 
-def run_first_import(data_dir: str, objects_dir: str, opener: Optional[Callable] = None,
+# The first import is pending until every shipped object is in Kibana. `pending` is empty
+# before the first attempt; after it, it holds the attempts and the objects still missing.
+GIVE_UP = 3            # the same objects missing after this many attempts in a row: no more retries
+
+
+@dataclass
+class FirstImport:
+    result: Result
+    attempt: int                     # 1 is the whole file, every later one a retry
+    missing: List[str]               # shipped objects not in Kibana after it
+    done: bool                       # pending is gone: every object is there, or GIVE_UP
+    given_up: bool = False
+    export_path: str = ""
+
+
+def pending_state(data_dir: str) -> Optional[dict]:
+    """None before the first attempt (an empty or missing `pending`), else the state of the
+    retries. A file that cannot be read counts as a retry: a retry never touches yours."""
+    try:
+        with open(pending_path(data_dir), encoding="utf-8") as handle:
+            text = handle.read()
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError):
+        text = "?"
+    if not text.strip():
+        return None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        data = None
+    if (isinstance(data, dict) and type(data.get("attempts")) is int and type(data.get("same")) is int
+            and isinstance(data.get("refused"), list) and all(isinstance(k, str) for k in data["refused"])):
+        return data
+    return {"version": 1, "attempts": 1, "same": 0, "refused": []}
+
+
+def _write_pending(data_dir: str, state: Optional[dict]) -> None:
+    path = pending_path(data_dir)
+    try:
+        if state is None:
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+            return
+        _make_dir(state_dir(data_dir), 0o770)
+        _write(path, json.dumps(state, sort_keys=True) + "\n", 0o660, ".pending-")
+    except OSError as error:
+        raise KibanaError(f"cannot write {path}: {error}") from None
+
+
+def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: Optional[Callable] = None,
                      now: Optional[float] = None, url: str = KIBANA_URL,
-                     export_dir: Optional[str] = None) -> Result:
-    """Imports the whole shipped file, the advanced settings too, and records it; `pending`
-    goes when every object got in. With `export_dir`, a Kibana that holds objects is
-    exported there first (as auto_, the newest AUTO_KEEP stay); without that export no import."""
+                     export: Optional[Tuple[str, List[dict]]] = None) -> FirstImport:
+    """The first import, until every shipped object is in Kibana.
+
+    A Kibana that holds objects is exported into `export_dir` first (auto_, the newest
+    AUTO_KEEP stay); without that export no import. The first attempt imports the whole
+    shipped file, the advanced settings too. Every retry imports only what mode update
+    would (missing objects and T-Pot's unchanged ones, never yours) and the advanced
+    settings that have no record yet. `pending` goes when every shipped object is there,
+    whoever wrote it, or when the same objects are still missing after GIVE_UP attempts in
+    a row."""
     path = os.path.join(objects_dir, SHIPPED_NAME)
     objs = parse_ndjson(_read_text(path), path)
     records = Records(data_dir)
-    if export_dir is not None:
-        text, installed = _export(url, opener, allow_empty=True)
-        if installed:
-            save_export(text, export_dir, AUTO_PREFIX, now)
-            rotate(export_dir, AUTO_PREFIX, AUTO_KEEP)
+    manifest = load_manifest(os.path.join(objects_dir, MANIFEST_NAME))
+    state = pending_state(data_dir)
+    text, installed = _fresh_export(url, opener, export, allow_empty=True)
+    export_path = ""
+    if installed:
+        export_path = save_export(text, export_dir, AUTO_PREFIX, now)
+        rotate(export_dir, AUTO_PREFIX, AUTO_KEEP, spare=export_path)
+    if state is None:
+        todo = objs
+    else:
+        ours = [o for o in objs if o["type"] not in SKIP_TYPES]
+        wanted = {i.key for i in plan(installed, ours, manifest, records.objects).to_import("update")}
+        todo = [o for o in objs if key(o) in wanted
+                or (o["type"] in SKIP_TYPES and key(o) not in records.objects)]
     when = stamp(now)
-    result = import_objects(objs, True, url, opener)
+    result = import_objects(todo, True, url, opener)
     if result.imported:
         records.mark(result.keys(), when)
         records.save()
-    if not result.errors:
-        try:
-            os.unlink(pending_path(data_dir))
-        except FileNotFoundError:
-            pass
-        except OSError as error:
-            raise KibanaError(f"cannot remove {pending_path(data_dir)}: {error}") from None
-    return result
+    there = {key(o) for o in installed} | set(result.keys())
+    missing = sorted(key(o) for o in objs if key(o) not in there)
+    attempt = 1 if state is None else state["attempts"] + 1
+    same = 1 if state is None or state["refused"] != missing else state["same"] + 1
+    done = not missing or same >= GIVE_UP
+    _write_pending(data_dir, None if done else
+                   {"version": 1, "attempts": attempt, "same": same, "refused": missing})
+    return FirstImport(result, attempt, missing, done, bool(missing) and done, export_path)
 
 
 def mark_pending(data_dir: str) -> None:
+    """An empty `pending`: the next start makes the first attempt, the whole file."""
     try:
         _make_dir(state_dir(data_dir), 0o770)
-        with open(pending_path(data_dir), "a", encoding="utf-8"):
+        with open(pending_path(data_dir), "w", encoding="utf-8"):
             pass
     except OSError as error:
         raise KibanaError(f"cannot write {pending_path(data_dir)}: {error}") from None
@@ -826,22 +941,39 @@ def summary(mode: str, chosen: Plan, result: Result, export_path: str = "") -> L
     return [line] + _error_lines(result)
 
 
-def first_summary(result: Result) -> List[str]:
-    line = f"{LOG}first import, {len(result.imported)} imported"
+def first_summary(first: FirstImport) -> List[str]:
+    result = first.result
+    line = f"{LOG}first import"
+    if first.attempt > 1:
+        line += f", attempt {first.attempt}"
+    line += f", {len(result.imported)} imported"
     if result.errors:
-        line += f", {len(result.errors)} failed; tpotinit tries again on the next start"
-    return [line] + _error_lines(result)
+        line += f", {len(result.errors)} failed"
+    if not first.done:
+        line += f", {len(first.missing)} not there yet; tpotinit tries again on the next start"
+    if first.export_path:
+        line += f" (export: {first.export_path})"
+    lines = [line] + _error_lines(result)
+    if first.given_up:
+        lines.append(f"{LOG}warning: still not there after {GIVE_UP} attempts: {', '.join(first.missing)}; "
+                     "tpotinit stops trying them, tpot elastic import tries them again")
+    return lines
+
+
+def _first_exit(first: FirstImport) -> int:
+    print("\n".join(first_summary(first)), flush=True)
+    return 1 if first.result.errors or first.missing else 0
 
 
 def _cli_apply(args, opener: Optional[Callable]) -> int:
-    """tpotinit's start: the first import while it is pending or when Kibana holds none of
-    T-Pot's objects (in every mode), else the mode, with its exports rotated."""
+    """tpotinit's start, with one export: the first import while it is pending or when Kibana
+    holds none of T-Pot's objects (in every mode), else the mode, with its exports rotated."""
+    export = _export(args.kibana, opener, allow_empty=True)
     if not os.path.exists(pending_path(args.data)):
         shipped_objs = shipped(os.path.join(args.objects, SHIPPED_NAME))
-        installed = _export(args.kibana, opener, allow_empty=True)[1]
-        if not needs_first_import(installed, shipped_objs):
+        if not needs_first_import(export[1], shipped_objs):
             chosen, result, path = run_apply(args.mode, args.data, args.objects, args.exports, opener,
-                                             url=args.kibana, prefix=AUTO_PREFIX, keep=AUTO_KEEP)
+                                             url=args.kibana, prefix=AUTO_PREFIX, keep=AUTO_KEEP, export=export)
             lines = summary(args.mode, chosen, result, path)
             if args.mode != "keep" and not chosen.to_import(args.mode):
                 lines[0] = f"{LOG}nothing to import ({lines[0][len(LOG):]})"
@@ -849,14 +981,12 @@ def _cli_apply(args, opener: Optional[Callable]) -> int:
             return 1 if result.errors else 0
         print(f"{LOG}Kibana holds none of T-Pot's objects, the first import runs again", flush=True)
         mark_pending(args.data)
-    return _cli_first(args, opener)
+    return _first_exit(run_first_import(args.data, args.objects, args.exports, opener, url=args.kibana,
+                                        export=export))
 
 
 def _cli_first(args, opener: Optional[Callable]) -> int:
-    result = run_first_import(args.data, args.objects, opener, url=args.kibana,
-                              export_dir=getattr(args, "exports", None))
-    print("\n".join(first_summary(result)), flush=True)
-    return 1 if result.errors else 0
+    return _first_exit(run_first_import(args.data, args.objects, args.exports, opener, url=args.kibana))
 
 
 def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) -> int:
@@ -874,16 +1004,16 @@ def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) ->
     apply = commands.add_parser("apply", help="the first import while it is pending or when Kibana holds none "
                                               "of T-Pot's objects, else what the mode imports")
     apply.add_argument("--mode", required=True, choices=MODES, help="TPOT_KIBANA_OBJECTS")
-    first = commands.add_parser("first", help="import the whole shipped file, the advanced settings too")
+    first = commands.add_parser("first", help="the first import: the whole shipped file, the advanced settings "
+                                              "too; a retry only what mode update would import")
     for command in (apply, first):
         command.add_argument("--data", required=True, metavar="DIR", help="the data folder (TPOT_DATA_PATH)")
         command.add_argument("--objects", required=True, metavar="DIR",
                              help=f"the folder of {SHIPPED_NAME} and {MANIFEST_NAME}")
+        command.add_argument("--exports", required=True, metavar="DIR",
+                             help=f"where the export before an import goes ({AUTO_PREFIX}*, the newest "
+                                  f"{AUTO_KEEP} stay)")
         command.add_argument("--kibana", default=KIBANA_URL, metavar="URL", help=f"default {KIBANA_URL}")
-    apply.add_argument("--exports", required=True, metavar="DIR",
-                       help=f"where the export before an import goes ({AUTO_PREFIX}*, the newest {AUTO_KEEP} stay)")
-    first.add_argument("--exports", metavar="DIR",
-                       help="export a Kibana that holds objects there first")
     try:
         args = parser.parse_args(argv)
     except SystemExit as stop:

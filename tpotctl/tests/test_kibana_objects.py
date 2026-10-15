@@ -595,8 +595,47 @@ class RecordTest(unittest.TestCase):
         good, bad = dash("tpot-probe-b2-good"), dash("tpot-probe-b2-bad")
         result = ko.import_objects([good, bad], True, opener=Scripted(answers["missing_reference_overwrite_true"],
                                                                       answers["created"]))
-        self.assertEqual(result.errors, [("dashboard", "tpot-probe-b2-bad", "tpot-probe-b2-bad", "missing_references")])
-        self.assertEqual(result.imported, [("dashboard", "tpot-probe-b2-b-dashboard")])   # what the retry answered
+        self.assertEqual(result.errors[0], ("dashboard", "tpot-probe-b2-bad", "tpot-probe-b2-bad", "missing_references"))
+        # the retry of good got the answer of another object: that one was not sent, good is not named
+        self.assertEqual(result.imported, [])
+        self.assertEqual(result.errors[1:],
+                         [("dashboard", "tpot-probe-b2-good", "Dashboard tpot-probe-b2-good", "not_imported")])
+        retry = dict(answers["created"], successResults=[{"type": "dashboard", "id": "tpot-probe-b2-good"}])
+        result = ko.import_objects([good, bad], True, opener=Scripted(answers["missing_reference_overwrite_true"],
+                                                                      retry))
+        self.assertEqual(result.imported, [("dashboard", "tpot-probe-b2-good")])
+
+    def test_only_what_was_sent_and_named_is_imported(self):
+        a, b = dash("a"), dash("b")
+        answers = {
+            "a key that was not sent": {"success": True, "successResults": [
+                {"type": "dashboard", "id": "a"}, {"type": "dashboard", "id": "b"}, {"type": "dashboard", "id": "x"}]},
+            "no success true": {"successResults": [{"type": "dashboard", "id": "a"}, {"type": "dashboard", "id": "b"}]},
+            "success false": {"success": False},
+            "an empty answer": {},
+            "empty successResults": {"success": True, "successResults": []},
+            "one of two named": {"success": True, "successResults": [{"type": "dashboard", "id": "a"}]},
+        }
+        expected = {"a key that was not sent": ["dashboard:a", "dashboard:b"], "one of two named": ["dashboard:a"]}
+        for name, answer in answers.items():
+            with self.subTest(name):
+                result = ko.import_objects([a, b], True, opener=Scripted(answer))
+                self.assertEqual(result.keys(), expected.get(name, []))
+                self.assertEqual(sorted(f"{t}:{i}" for t, i, _, why in result.errors if why == "not_imported"),
+                                 sorted({"dashboard:a", "dashboard:b"} - set(expected.get(name, []))))
+        # and through a mode: only what was sent and named gets a record
+        site = Site(self, [a, b, dash("x")])
+        site.record(NOW - DAY, "dashboard:x")
+        mine = as_in_kibana(dash("x", title="Mine"), NOW - DAY / 2)
+
+        def opener(request, timeout=None):
+            if "_export" in request.full_url:
+                return io.BytesIO((json.dumps(as_in_kibana(CONFIG)) + "\n" + json.dumps(mine) + "\n").encode())
+            return io.BytesIO(json.dumps(answers["a key that was not sent"]).encode())
+        chosen, result, _ = site.apply("update", opener)
+        self.assertEqual(keys(chosen.yours), ["dashboard:x"])
+        self.assertEqual(site.records(), {"dashboard:a": iso(NOW), "dashboard:b": iso(NOW),
+                                          "dashboard:x": iso(NOW - DAY)})      # x was named, not sent
 
     def test_what_still_fails_after_the_last_round_is_an_error(self):
         objs = [dash(f"o{n}") for n in range(ko.ROUNDS + 2)]
@@ -614,8 +653,6 @@ class RecordTest(unittest.TestCase):
         result = ko.import_objects([dash("a")], True, opener=kibana)
         self.assertEqual(len(kibana.requests), 1)
         self.assertEqual([e[:2] for e in result.errors], [("x", "y"), ("dashboard", "a")])
-        with self.assertRaisesRegex(ko.KibanaError, "success false"):
-            ko.import_objects([dash("a")], True, opener=Scripted({"success": False}))
 
     def test_records_keep_mode_0660_and_survive_a_missing_file(self):
         site = Site(self, [])
@@ -696,7 +733,7 @@ class ExportTest(unittest.TestCase):
             second = ko.save_export(text, site.exports, now=NOW)
         finally:
             os.umask(old)
-        stamp = time.strftime("%Y%m%d%H%M%S", time.localtime(NOW))
+        stamp = time.strftime("%Y%m%d%H%M%S", time.gmtime(NOW))
         self.assertEqual(os.path.basename(path), f"kibana_objects_{stamp}.ndjson")
         self.assertEqual(os.path.basename(second), f"kibana_objects_{stamp}_2.ndjson")
         self.assertEqual(stat.S_IMODE(os.stat(site.exports).st_mode), 0o700)
@@ -705,6 +742,39 @@ class ExportTest(unittest.TestCase):
             with open(written, encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), text)
         self.assertEqual(site.files(), sorted(os.path.basename(p) for p in (path, second)))
+
+    def test_auto_exports_are_for_the_group_tpot(self):
+        site = Site(self, [])
+        folder = ko.auto_exports_dir(site.data)
+        old = os.umask(0o077)
+        try:
+            path = ko.save_export("{}\n", folder, ko.AUTO_PREFIX, now=NOW)
+        finally:
+            os.umask(old)
+        self.assertEqual(stat.S_IMODE(os.stat(folder).st_mode), 0o770)
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o660)
+        self.assertEqual(ko.export_modes(ko.EXPORT_PREFIX), (0o700, 0o600))
+
+    def test_exports_sort_by_time_then_by_stamp_and_number(self):
+        site = Site(self, [])
+        os.makedirs(site.exports)
+        names = ["kibana_objects_20270101000000.ndjson", "kibana_objects_20270101000000_2.ndjson",
+                 "kibana_objects_20270101000000_10.ndjson", "kibana_objects_20270102000000.ndjson"]
+        for name in names:
+            path = os.path.join(site.exports, name)
+            open(path, "w").close()
+            os.utime(path, (NOW, NOW))                     # one time: the names decide
+        self.assertEqual([os.path.basename(p) for p in ko.exports(site.exports, ko.EXPORT_PREFIX)],
+                         [names[3], names[2], names[1], names[0]])
+        os.utime(os.path.join(site.exports, names[0]), (NOW + 5, NOW + 5))    # the time first
+        self.assertEqual(os.path.basename(ko.exports(site.exports, ko.EXPORT_PREFIX)[0]), names[0])
+        # the export just written stays, also when its time lies before the others (a clock that went back)
+        spare = os.path.join(site.exports, names[1])
+        os.utime(spare, (NOW - DAY, NOW - DAY))
+        removed = ko.rotate(site.exports, ko.EXPORT_PREFIX, 2, spare=spare)
+        self.assertTrue(os.path.exists(spare))
+        self.assertEqual(sorted(site.files()), sorted([names[0], names[1]]))
+        self.assertEqual(len(removed), 2)
 
     def test_auto_exports_rotate_at_10(self):
         site = Site(self, [dash("a")])
@@ -721,9 +791,9 @@ class ExportTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
         autos = [n for n in site.files(folder) if n.startswith("auto_")]
         self.assertEqual(len(autos), 10)
-        newest = time.strftime("%Y%m%d%H%M%S", time.localtime(NOW + 11 * 60))
+        newest = time.strftime("%Y%m%d%H%M%S", time.gmtime(NOW + 11 * 60))
         self.assertEqual(autos[-1], f"auto_{newest}.ndjson")
-        oldest_kept = time.strftime("%Y%m%d%H%M%S", time.localtime(NOW + 2 * 60))
+        oldest_kept = time.strftime("%Y%m%d%H%M%S", time.gmtime(NOW + 2 * 60))
         self.assertEqual(autos[0], f"auto_{oldest_kept}.ndjson")
         self.assertTrue(os.path.exists(manager))      # only its own prefix rotates
         self.assertEqual(ko.rotate(folder, ko.AUTO_PREFIX, 10), [])
@@ -859,6 +929,19 @@ class RestoreTest(unittest.TestCase):
         with open(export_path, encoding="utf-8") as handle:     # what Kibana held before
             self.assertIn('"defaultIndex": "logstash"', handle.read())
 
+    def test_restore_into_an_empty_kibana_has_nothing_to_export_first(self):
+        site = Site(self, [dash("a")])
+        kibana = FakeKibana()
+        path = os.path.join(site.root, "pick.ndjson")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(dash("a", title="Old")) + "\n")
+        export_path, result = ko.run_restore(path, site.data, site.exports, opener=kibana, now=NOW)
+        self.assertEqual((export_path, result.imported, site.files()), ("", [("dashboard", "a")], []))
+        kibana = FakeKibana(export_status=503)
+        with self.assertRaises(ko.KibanaError):
+            ko.run_restore(path, site.data, site.exports, opener=kibana, now=NOW)
+        self.assertEqual(kibana.imports(), [])
+
 
 class RequestTest(unittest.TestCase):
     def test_import_sends_kbn_xsrf_and_multipart(self):
@@ -923,47 +1006,129 @@ class RequestTest(unittest.TestCase):
 
 
 class FirstImportTest(unittest.TestCase):
+    def first(self, site, kibana, now=NOW):
+        return ko.run_first_import(site.data, site.objects, ko.auto_exports_dir(site.data), opener=kibana, now=now)
+
+    def pending(self, site):
+        with open(ko.pending_path(site.data), encoding="utf-8") as handle:
+            return handle.read()
+
     def test_first_import_takes_everything_and_ends_pending(self):
         site = Site(self, [dash("a"), dash("b")])
         ko.mark_pending(site.data)
         kibana = FakeKibana()
-        result = ko.run_first_import(site.data, site.objects, opener=kibana, now=NOW)
-        self.assertEqual(result.errors, [])
+        first = self.first(site, kibana)
+        self.assertEqual((first.result.errors, first.attempt, first.missing, first.done), ([], 1, [], True))
         self.assertEqual(sorted(kibana.store), ["config:9.5.4", "dashboard:a", "dashboard:b"])
         self.assertTrue(kibana.imports()[0].full_url.endswith("overwrite=true"))
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
         self.assertEqual(site.records(), {k: iso(NOW) for k in ("config:9.5.4", "dashboard:a", "dashboard:b")})
-        self.assertEqual(ko.first_summary(result), ["# Kibana objects: first import, 3 imported"])
+        self.assertEqual(ko.first_summary(first), ["# Kibana objects: first import, 3 imported"])
+
+    def test_the_first_attempt_takes_the_whole_file_with_the_advanced_settings(self):
+        site = Site(self, [dash("a"), dash("b")])
+        ko.mark_pending(site.data)
+        mine = as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}))
+        kibana = FakeKibana([mine, as_in_kibana(dash("own"))])
+        first = self.first(site, kibana)
+        self.assertEqual(kibana.store["config:9.5.4"]["attributes"], CONFIG["attributes"])
+        with open(first.export_path, encoding="utf-8") as handle:       # what was there first
+            self.assertIn('"defaultIndex": "mine"', handle.read())
+        self.assertEqual(kibana.store["dashboard:own"], as_in_kibana(dash("own")))
 
     def test_first_import_partial_keeps_pending(self):
         site = Site(self, [dash("a"), dash("b")])
         ko.mark_pending(site.data)
         kibana = FakeKibana(fail={"dashboard:b"})
-        result = ko.run_first_import(site.data, site.objects, opener=kibana, now=NOW)
-        self.assertEqual(result.errors, [("dashboard", "b", "Dashboard b", "missing_references")])
-        self.assertTrue(os.path.exists(ko.pending_path(site.data)))
+        first = self.first(site, kibana)
+        self.assertEqual(first.result.errors, [("dashboard", "b", "Dashboard b", "missing_references")])
+        self.assertEqual(json.loads(self.pending(site)),
+                         {"version": 1, "attempts": 1, "same": 1, "refused": ["dashboard:b"]})
         self.assertEqual(sorted(site.records()), ["config:9.5.4", "dashboard:a"])
-        self.assertEqual(ko.first_summary(result), [
-            "# Kibana objects: first import, 2 imported, 1 failed; tpotinit tries again on the next start",
+        self.assertEqual(ko.first_summary(first), [
+            "# Kibana objects: first import, 2 imported, 1 failed, 1 not there yet; "
+            "tpotinit tries again on the next start",
             '# Kibana objects: not imported: dashboard:b "Dashboard b" (missing_references)'])
         kibana.fail.clear()
-        result = ko.run_first_import(site.data, site.objects, opener=kibana, now=NOW + 60)
-        self.assertEqual(result.errors, [])
+        first = self.first(site, kibana, now=NOW + 60)
+        self.assertEqual((first.result.imported, first.attempt, first.done), ([("dashboard", "b")], 2, True))
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
         self.assertEqual(site.records()["dashboard:b"], iso(NOW + 60))
+
+    def test_a_retry_imports_what_update_would_and_never_yours(self):
+        a, b, c, d = dash("a"), dash("b"), dash("c"), dash("d")
+        b_old = dash("b", body=0)
+        site = Site(self, [a, b, c, d], old=[b_old])
+        os.makedirs(ko.state_dir(site.data))
+        with open(ko.pending_path(site.data), "w", encoding="utf-8") as handle:
+            json.dump({"version": 1, "attempts": 1, "same": 1, "refused": ["dashboard:a"]}, handle)
+        mine_c = as_in_kibana(dash("c", title="Mine"))
+        mine_config = as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}))
+        kibana = FakeKibana([as_in_kibana(b_old), mine_c, as_in_kibana(d), mine_config])
+        # the advanced settings have no record yet: they are retried
+        first = self.first(site, kibana)
+        self.assertEqual(sorted(first.result.keys()), ["config:9.5.4", "dashboard:a", "dashboard:b"])
+        self.assertEqual(kibana.store["dashboard:c"], mine_c)
+        self.assertTrue(first.done)
+        # with a record they are not, nor is yours
+        ko.mark_pending(site.data)
+        with open(ko.pending_path(site.data), "w", encoding="utf-8") as handle:
+            handle.write("not json")                       # a retry too: a retry never touches yours
+        kibana.store["config:9.5.4"] = mine_config
+        kibana.store["dashboard:c"] = mine_c
+        del kibana.store["dashboard:a"]
+        first = self.first(site, kibana, now=NOW + 600)
+        self.assertEqual(first.result.keys(), ["dashboard:a"])
+        self.assertEqual((kibana.store["config:9.5.4"], kibana.store["dashboard:c"]), (mine_config, mine_c))
+
+    def test_all_objects_present_ends_pending(self):
+        a, b = dash("a"), dash("b")
+        site = Site(self, [a, b])
+        site.record(NOW - DAY, "config:9.5.4", "dashboard:a", "dashboard:b")
+        os.makedirs(ko.state_dir(site.data), exist_ok=True)
+        with open(ko.pending_path(site.data), "w", encoding="utf-8") as handle:
+            json.dump({"version": 1, "attempts": 2, "same": 1, "refused": ["dashboard:b"]}, handle)
+        kibana = FakeKibana([as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"})),
+                             as_in_kibana(dash("a", title="Mine"), NOW), as_in_kibana(b)])
+        first = self.first(site, kibana)
+        self.assertEqual((kibana.imports(), first.done, first.missing, first.attempt), ([], True, [], 3))
+        self.assertFalse(os.path.exists(ko.pending_path(site.data)))
+        self.assertEqual(ko.first_summary(first)[0].split(" (export")[0],
+                         "# Kibana objects: first import, attempt 3, 0 imported")
+
+    def test_a_refused_set_ends_pending_after_3_attempts(self):
+        site = Site(self, [dash("a"), dash("b")])
+        ko.mark_pending(site.data)
+        kibana = FakeKibana(fail={"dashboard:b"})
+        states = []
+        for attempt in range(1, 4):
+            first = self.first(site, kibana, now=NOW + attempt * 600)
+            states.append((first.attempt, first.done, first.given_up))
+        self.assertEqual(states, [(1, False, False), (2, False, False), (3, True, True)])
+        self.assertFalse(os.path.exists(ko.pending_path(site.data)))
+        self.assertEqual(ko.first_summary(first)[-1],
+                         "# Kibana objects: warning: still not there after 3 attempts: dashboard:b; tpotinit stops "
+                         "trying them, tpot elastic import tries them again")
+        # another set missing starts the count again
+        ko.mark_pending(site.data)
+        self.first(site, kibana)
+        kibana.fail = {"dashboard:a"}
+        del kibana.store["dashboard:a"]
+        self.first(site, kibana)
+        self.assertEqual(json.loads(self.pending(site))["same"], 1)
 
     def test_first_import_exports_a_kibana_that_holds_objects(self):
         site = Site(self, [dash("a")])
         folder = ko.auto_exports_dir(site.data)
-        kibana = FakeKibana()
-        ko.run_first_import(site.data, site.objects, opener=kibana, now=NOW, export_dir=folder)
+        ko.mark_pending(site.data)
+        self.first(site, FakeKibana())
         self.assertEqual(site.files(folder), [])                   # an empty Kibana: nothing to keep
-        kibana = FakeKibana([as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}))])
-        ko.run_first_import(site.data, site.objects, opener=kibana, now=NOW, export_dir=folder)
+        ko.mark_pending(site.data)
+        self.first(site, FakeKibana([as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}))]))
         self.assertEqual(len(site.files(folder)), 1)
         kibana = FakeKibana([as_in_kibana(CONFIG)], export_status=500)
         with self.assertRaises(ko.KibanaError):
-            ko.run_first_import(site.data, site.objects, opener=kibana, now=NOW, export_dir=folder)
+            self.first(site, kibana)
         self.assertEqual(kibana.imports(), [])
 
 
@@ -982,6 +1147,7 @@ class CliTest(unittest.TestCase):
         [path] = [os.path.join(folder, n) for n in site.files(folder)]
         self.assertTrue(os.path.basename(path).startswith("auto_"))
         self.assertEqual(out, f"# Kibana objects: 1 new, 0 updated, 0 the same, 1 of yours kept (export: {path})\n")
+        self.assertEqual(len([r for r in kibana.requests if "_export" in r.full_url]), 1)   # one export per run
         rc, out, err = site.cli(*self.args(site), opener=kibana)
         self.assertEqual((rc, out), (0, "# Kibana objects: nothing to import (0 new, 0 updated, 1 the same, "
                                         "1 of yours kept)\n"))
@@ -1005,7 +1171,7 @@ class CliTest(unittest.TestCase):
     def test_a_wrong_call_exits_2(self):
         site = Site(self, [dash("a")])
         for args in (self.args(site, "all"), ("apply", "--mode", "update", "--data", site.data),
-                     ("first",), ("nothing",)):
+                     ("first",), ("first", "--data", site.data, "--objects", site.objects), ("nothing",)):
             with self.subTest(args=args):
                 kibana = FakeKibana()
                 with contextlib.redirect_stderr(io.StringIO()):
@@ -1017,8 +1183,10 @@ class CliTest(unittest.TestCase):
         ko.mark_pending(site.data)
         kibana = FakeKibana([as_in_kibana(dash("a", title="Mine"))])
         rc, out, _ = site.cli(*self.args(site, "keep"), opener=kibana)
-        self.assertEqual((rc, out.splitlines()[-1]), (0, "# Kibana objects: first import, 2 imported"))
+        self.assertEqual(rc, 0)
+        self.assertTrue(out.splitlines()[-1].startswith("# Kibana objects: first import, 2 imported (export: "))
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
+        self.assertEqual(len([r for r in kibana.requests if "_export" in r.full_url]), 1)
 
     def test_apply_without_any_tpot_object_imports_them_in_every_mode(self):
         for mode in ko.MODES:
@@ -1037,10 +1205,37 @@ class CliTest(unittest.TestCase):
                 self.assertEqual(rc, 0)
                 self.assertFalse(os.path.exists(ko.pending_path(site.data)))
 
+    def test_a_refused_object_across_12_starts_never_reverts_yours(self):
+        site = Site(self, [dash("a"), dash("b"), dash("c")])
+        ko.mark_pending(site.data)
+        kibana = FakeKibana(fail={"dashboard:b"}, clock=time.time)
+        codes, pending, warned = [], [], []
+        for start in range(1, 13):
+            if start > 1:          # you change a and the advanced settings between the starts
+                kibana.store["dashboard:a"] = as_in_kibana(dash("a", title=f"Mine {start}"), time.time() + 120)
+                kibana.store["config:9.5.4"] = as_in_kibana(
+                    dict(CONFIG, attributes={"defaultIndex": f"mine {start}"}), time.time() + 120)
+            rc, out, _ = site.cli(*self.args(site, "keep"), opener=kibana)
+            codes.append(rc)
+            pending.append(os.path.exists(ko.pending_path(site.data)))
+            warned.append("warning" in out)
+            if start > 1:
+                self.assertEqual(kibana.store["dashboard:a"]["attributes"]["title"], f"Mine {start}", start)
+                self.assertEqual(kibana.store["config:9.5.4"]["attributes"]["defaultIndex"], f"mine {start}", start)
+            if start == 3:
+                self.assertIn("still not there after 3 attempts: dashboard:b", out)
+                self.assertIn("tpot elastic import tries them again", out)
+        self.assertEqual(codes, [1, 1, 1] + [0] * 9)
+        self.assertEqual(pending, [True, True] + [False] * 10)
+        self.assertEqual(warned, [False, False, True] + [False] * 9)
+        self.assertEqual(sorted(site.records()), ["config:9.5.4", "dashboard:a", "dashboard:c"])
+        self.assertLessEqual(len(site.files(ko.auto_exports_dir(site.data))), ko.AUTO_KEEP)
+
     def test_first_runs_alone(self):
         site = Site(self, [dash("a")])
         ko.mark_pending(site.data)
-        rc, out, _ = site.cli("first", "--data", site.data, "--objects", site.objects, opener=FakeKibana())
+        rc, out, _ = site.cli("first", "--data", site.data, "--objects", site.objects,
+                              "--exports", ko.auto_exports_dir(site.data), opener=FakeKibana())
         self.assertEqual((rc, out), (0, "# Kibana objects: first import, 2 imported\n"))
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
 
