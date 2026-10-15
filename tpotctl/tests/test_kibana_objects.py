@@ -1,14 +1,17 @@
 """The normalisation, the hash manifest, the client, the plan and the record of T-Pot's Kibana objects."""
 import ast
 import contextlib
+import errno
 import io
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import unittest.mock
@@ -1474,7 +1477,7 @@ class CliTest(unittest.TestCase):
 @unittest.skipIf(ko.fcntl is None, "no flock on this platform")
 class LockTest(unittest.TestCase):
     HOLD = ("import fcntl, os, sys, time\n"
-            "handle = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o660)\n"
+            "handle = os.open(sys.argv[1], os.O_RDONLY | os.O_CREAT, 0o660)\n"
             "fcntl.flock(handle, fcntl.LOCK_EX)\n"
             "print('held', flush=True)\n"
             "time.sleep(float(sys.argv[2]))\n")
@@ -1536,7 +1539,70 @@ class LockTest(unittest.TestCase):
                 self.site.apply("update", kibana)
         with ko.import_lock(self.site.data):
             pass
-        self.assertEqual(ko._HELD, {})
+        self.assertEqual(ko._held(), {})
+
+    def test_the_lock_file_is_0660_whatever_the_umask(self):
+        old = os.umask(0o077)
+        try:
+            with ko.import_lock(self.site.data):
+                pass
+        finally:
+            os.umask(old)
+        self.assertEqual(stat.S_IMODE(os.stat(ko.lock_path(self.site.data)).st_mode), 0o660)
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root writes every file")
+    def test_a_lock_file_this_user_cannot_write_is_locked_read_only(self):
+        path = ko.lock_path(self.site.data)
+        open(path, "w").close()
+        os.chmod(path, 0o440)                 # as one of tpotinit's would be for the T-Pot Manager
+        self.addCleanup(os.chmod, path, 0o640)
+        with ko.import_lock(self.site.data):
+            self.assertEqual(ko._held(), {os.path.abspath(path): 1})
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o440)   # not ours to change
+        # and it still keeps out another run
+        self.hold(3)
+        ko.LOCK_WAIT = 0.4
+        with self.assertRaisesRegex(ko.KibanaError, "another Kibana import is running"):
+            with ko.import_lock(self.site.data):
+                pass
+
+    def test_two_threads_never_share_the_lock(self):
+        held, done = threading.Event(), threading.Event()
+
+        def holder():
+            with ko.import_lock(self.site.data):
+                held.set()
+                done.wait(10)
+        thread = threading.Thread(target=holder)
+        thread.start()
+        self.addCleanup(thread.join)
+        self.addCleanup(done.set)
+        self.assertTrue(held.wait(10))
+        ko.LOCK_WAIT = 0.4
+        with self.assertRaisesRegex(ko.KibanaError, "another Kibana import is running"):
+            with ko.import_lock(self.site.data):
+                pass
+        done.set()
+        thread.join(10)
+        with ko.import_lock(self.site.data):
+            self.assertEqual(len(ko._held()), 1)
+
+    def test_a_lock_that_cannot_be_used_is_named(self):
+        site = Site(self, [dash("a")])
+        open(ko.state_dir(site.data), "w").close()          # a file where the folder belongs
+        path = os.path.abspath(ko.lock_path(site.data))
+        with self.assertRaisesRegex(ko.KibanaError, f"^the Kibana import lock {re.escape(path)} cannot be used: "):
+            site.apply("update", FakeKibana([as_in_kibana(CONFIG)]))
+        rc, out, err = site.cli("apply", "--mode", "update", "--data", site.data, "--objects", site.objects,
+                                "--exports", os.path.join(site.root, "exports"), opener=FakeKibana())
+        self.assertEqual((rc, out, len(err.splitlines())), (1, "", 1))
+        self.assertTrue(err.startswith(f"# Kibana objects: the Kibana import lock {path} cannot be used: "), err)
+        self.assertNotIn("Traceback", err)
+        failing = OSError(errno.ENOLCK, "No locks available")
+        with unittest.mock.patch.object(ko.fcntl, "flock", side_effect=failing):
+            with self.assertRaisesRegex(ko.KibanaError, "cannot be used: No locks available$"):
+                with ko.import_lock(self.site.data):
+                    pass
 
 
 class OpsTest(unittest.TestCase):

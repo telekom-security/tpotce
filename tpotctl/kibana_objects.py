@@ -54,6 +54,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -358,30 +359,56 @@ def lock_path(data_dir: str) -> str:
 
 
 BUSY = "another Kibana import is running (tpotinit or tpot elastic)"
-_HELD: Dict[str, int] = {}             # the locks this process holds, and how deep
+_HELD = threading.local()              # per thread: the locks it holds, and how deep
+
+
+def _held() -> Dict[str, int]:
+    if not hasattr(_HELD, "depth"):
+        _HELD.depth = {}
+    return _HELD.depth
+
+
+def _unusable(path: str, error: OSError) -> KibanaError:
+    return KibanaError(f"the Kibana import lock {path} cannot be used: {error.strerror or error}")
+
+
+def _open_lock(path: str) -> int:
+    """The lock file, made 0660 whatever the umask; one this user may not write (tpotinit
+    made it) is opened read-only, which is enough for flock."""
+    try:
+        handle = os.open(path, os.O_RDWR | os.O_CREAT, 0o660)
+    except PermissionError:
+        return os.open(path, os.O_RDONLY)
+    try:
+        os.fchmod(handle, 0o660)
+    except OSError:
+        pass                           # not ours: its owner chose the mode
+    return handle
 
 
 @contextlib.contextmanager
 def import_lock(data_dir: str):
     """One run at a time that reads a plan and imports: an exclusive flock on
     <data>/kibana_objects/lock, waited for at most LOCK_WAIT seconds (then BUSY). A run
-    inside a run of the same process holds it already."""
+    inside a run of the same thread holds it already; another thread waits like any other
+    run. A lock that cannot be opened or taken is a KibanaError that names it."""
     path = os.path.abspath(lock_path(data_dir))
-    if _HELD.get(path):
-        _HELD[path] += 1
+    held = _held()
+    if held.get(path):
+        held[path] += 1
         try:
             yield
         finally:
-            _HELD[path] -= 1
+            held[path] -= 1
         return
     if fcntl is None:
         yield
         return
     try:
         _make_dir(state_dir(data_dir), 0o770)
-        handle = os.open(path, os.O_RDWR | os.O_CREAT, 0o660)
+        handle = _open_lock(path)
     except OSError as error:
-        raise KibanaError(f"cannot open {path}: {error}") from None
+        raise _unusable(path, error) from None
     try:
         deadline = time.monotonic() + LOCK_WAIT
         while True:
@@ -392,11 +419,13 @@ def import_lock(data_dir: str):
                 if time.monotonic() >= deadline:
                     raise KibanaError(BUSY) from None
                 time.sleep(0.2)
-        _HELD[path] = 1
+            except OSError as error:
+                raise _unusable(path, error) from None
+        held[path] = 1
         try:
             yield
         finally:
-            _HELD.pop(path, None)
+            held.pop(path, None)
             fcntl.flock(handle, fcntl.LOCK_UN)
     finally:
         os.close(handle)
