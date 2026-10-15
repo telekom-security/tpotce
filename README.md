@@ -1244,7 +1244,7 @@ A policy that was changed in Kibana (make sure to "Include managed system polici
 <br>
 If Elasticsearch answers with something T-Pot cannot read (a policy or an index list of a shape it does not know, no answer at all), T-Pot says why (`Why: ...`) next to the waiting text, writes only `.env` and leaves the policy as it is. A closed index is listed as "closed, size unknown", an open one without its primaries (health red) as "size unknown"; neither is counted in the sizes, both are deleted with the others. tpotinit rejects any other value of `TPOT_ES_RETENTION` than the ones `env.schema.yml` accepts (1 to 3650 days, `off` or empty) in its `.env` check and does not start; `es_retention.sh` never touches the policy for a value that still gets through.
 <br>
-`update.sh` writes the retention of an existing policy into `.env` once, so an update keeps the time you set in Kibana before. If it cannot read the policy or its time is no whole number of days, it leaves `TPOT_ES_RETENTION` empty: T-Pot then leaves the policy as it is, `tpot elastic retention --adopt` lets T-Pot manage it.
+`update.sh` writes the retention of an existing policy into `.env` once, so an update keeps the time you set in Kibana before; after the update.sh of the release before restarted into the new one it reads the policy that one exported into its backup. If it cannot read the policy or its time is no whole number of days, it leaves `TPOT_ES_RETENTION` empty: T-Pot then leaves the policy as it is, `tpot elastic retention --adopt` lets T-Pot manage it.
 ![IndexManagement2](doc/kibana_c.png)
 <br><br>
 

@@ -134,6 +134,9 @@ myRUNNING=""
 mySTOPPED=""
 # set once fuSTART_TPOT brought T-Pot up again in this run
 mySTARTED=""
+# systemctl is-active tpot when this run started (main, not after a handover): a refusal starts T-Pot
+# again only when it ran then (fuRESTART_AFTER_REFUSAL)
+myWAS_ACTIVE=""
 
 # The look of the T-Pot scripts (installer/lib/ui.sh: gum at a terminal, plain text
 # otherwise) and the @@tpot marks the task screen of tpot reads (fuMARK). BASH_SOURCE:
@@ -1467,32 +1470,83 @@ function fuROLLBACK_CHECKOUT () {
 	    fuUI_ERROR "The checkout and the configuration could not be put back completely, see above. The backup is ${myARCHIVE}."
 	    return 1
 	fi
+	# the summary names the release the host is on now, not the one of the pull
+	fuDONE_ROLLED_BACK
 	# the checkout is the one before this update again, tpot needs no restart for it
 	fuMARK changed back
 }
 
+# After fuROLLBACK_CHECKOUT: the items of the summary that named the checkout and the .env of the new
+# release go, one item names what the host is on now, read anew from the checkout and .env.
+function fuDONE_ROLLED_BACK () {
+	local myITEM="" myKEEP=()
+	for myITEM in ${myDONE[@]+"${myDONE[@]}"};
+	  do
+	    case "${myITEM}" in
+	      "ok:The checkout is on "*|"ok:Your configuration (.env) is back"*) ;;
+	      *) myKEEP+=("${myITEM}") ;;
+	    esac
+	  done
+	myDONE=(${myKEEP[@]+"${myKEEP[@]}"})
+	local myVERSION="" myTAG=""
+	myVERSION=$(cat "$HOME/tpotce/version" 2>/dev/null | tr -d "[:space:]")
+	myTAG=$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_VERSION)
+	fuDID info "Back on $(git -C "$HOME/tpotce" rev-parse --abbrev-ref HEAD 2>/dev/null) at $(git -C "$HOME/tpotce" rev-parse --short HEAD 2>/dev/null)${myVERSION:+, version ${myVERSION}}${myTAG:+, TPOT_VERSION=${myTAG}}."
+	return 0
+}
+
 # After a refusal the checkout and the configuration are the ones from before this update again:
-# T-Pot runs again as it ran before, when tpot.service is enabled (a reboot would start it as
-# well) or -s asks for it. Only after a rollback that worked: on the new checkout a start would
-# upgrade the data. rc 0 when T-Pot runs again.
+# T-Pot runs again as it ran before. A T-Pot that runs already is left as it is. In the first pass it
+# starts where it ran when this run started (myWAS_ACTIVE) or -s asks for it; after a handover, and
+# after an updater without one (myOLD_UPDATER_RAN), that is not known: where tpot.service is enabled (a
+# reboot would start it as well) or -s asks for it. Only after a rollback that worked: on the new
+# checkout a start would upgrade the data. After an updater without a handover the checkout is the new
+# release, your .env and compose file from its backup name the images that ran. rc 0 when T-Pot runs.
 function fuRESTART_AFTER_REFUSAL () {
+	local myON="on the release from before this update"
+	[ -z "${myOLD_UPDATER_RAN}" ] || myON="with your .env and docker-compose.yml from the backup of the update.sh before, on their images"
+	if [ "$(systemctl is-active tpot 2>/dev/null)" == "active" ];
+	  then
+	    mySTOPPED=""
+	    fuDID info "T-Pot runs, ${myON}."
+	    return 0
+	fi
 	if [ -n "${mySTART}" ];
 	  then
-	    fuUI_HINT "Starting T-Pot again (-s), on the release from before this update."
+	    fuUI_HINT "Starting T-Pot again (-s), ${myON}."
+	  elif [ -z "${myPREPARED}" ] && [ -z "${myOLD_UPDATER_RAN}" ];
+	    then
+	      if [ "${myWAS_ACTIVE}" != "active" ];
+	        then
+	          fuUI_HINT "T-Pot did not run when this update started, it stays stopped."
+	          return 1
+	      fi
+	      fuUI_HINT "T-Pot ran when this update started, starting it again ${myON}."
 	  elif [ "$(systemctl is-enabled tpot 2>/dev/null)" == "enabled" ];
 	    then
-	      fuUI_HINT "tpot.service is enabled, starting T-Pot again on the release from before this update."
+	      fuUI_HINT "tpot.service is enabled, starting T-Pot again ${myON}."
 	  else
 	    return 1
 	fi
 	fuMARK phase start Starting T-Pot
 	if fuSTART_TPOT;
 	  then
-	    fuDID ok "T-Pot runs again, on the release from before this update."
+	    fuDID ok "T-Pot runs again, ${myON}."
 	    return 0
 	fi
 	fuDID warn "T-Pot did not start again, please start it yourself."
 	return 1
+}
+
+# Where a copy of the Elasticsearch data by hand goes: next to the backups, unless the refusal was for want
+# of room there (fuAPPEND_ES_DATA, fuES_DATA_FITS): then a place with room, with the size it needs.
+function fuES_COPY_TO () {
+	if [ "${myES_APPEND_KIND}" == "room" ] || [ "${myES_FITS_KIND}" == "room" ];
+	  then
+	    echo "<a place with room, e.g. another disk>/elk_data_${myOLD:-old}${myES_WITH:+ (it needs about $(( myES_WITH / 1048576 )) MB)}"
+	  else
+	    echo "${myBACKUPDIR}/elk_data_${myOLD:-old}"
+	fi
 }
 
 # The ways on after the Elasticsearch data did not go into the backup, for the hints of fuCHECK_ELASTIC
@@ -1606,7 +1660,7 @@ function fuELASTIC_REFUSED () {
 	        exit 5
 	    fi
 	    [ -z "${myES_APPEND_WHY}" ] || fuDID info "The Elasticsearch data did not go into the backup: ${myES_APPEND_WHY}"
-	    fuDID next "Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}), then run the update again."
+	    fuDID next "Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data $(fuES_COPY_TO)), then run the update again."
 	    exit 5
 	fi
 	# a Ctrl+C now would leave the checkout half way back, and the next start would upgrade
@@ -1652,7 +1706,7 @@ function fuELASTIC_REFUSED () {
 	    # archive leaves no other way to a copy
 	    if [ -z "${myRUNS}" ] || [ "${myES_APPEND_KIND}" == "stale" ];
 	      then
-	        fuDID next "Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}, with T-Pot stopped), then run the update again and confirm the upgrade."
+	        fuDID next "Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data $(fuES_COPY_TO), with T-Pot stopped), then run the update again and confirm the upgrade."
 	    fi
 	    case "${myES_APPEND_KIND}" in
 	      room) fuDID next "$(fuES_ROOM_TEXT)" ;;
@@ -2044,6 +2098,8 @@ function fuARCHIVE_HAS_ES_DATA () {   # $1 = the data folder
 function fuARCHIVE_RENAMED () {   # $1 = the name before, $2 = the new name
 	local myI=""
 	myARCHIVE="$2"
+	# hints of this run printed before name the archive by its old name
+	fuUI_HINT "The backup of this run is $2 now (it was $1): the commands above that name $1 take $2."
 	for myI in "${!myDONE[@]}";
 	  do
 	    myDONE[myI]="${myDONE[myI]//"$1"/"$2"}"
@@ -2230,7 +2286,7 @@ function fuES_STEP_LINE () {   # $@ = the words
 function fuES_STEP_MANUAL () {   # $1 = the data folder
 	fuES_STEP_COMMANDS "$1"
 	fuUI_HINT "To take the step by hand instead, with T-Pot stopped (sudo systemctl stop tpot):"
-	fuUI_HINT "  sudo cp -a $1/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}"
+	fuUI_HINT "  sudo cp -a $1/elk/data $(fuES_COPY_TO)"
 	fuUI_HINT "  docker network create ${myES_STEP_NAME}"
 	fuUI_HINT "  sudo chown -R 1000:0 $1/elk/data"
 	fuUI_HINT "  $(fuES_STEP_LINE "${myES_STEP_ES_RUN[@]}")"
@@ -2610,13 +2666,13 @@ function fuCHECK_ELASTIC () {
 	if [ -n "${myROLLBACK}" ];
 	  then
 	    fuUI_HINT "T-Pot is stopped right now. To keep a copy of the data, answer no, copy it, e.g.:"
-	    fuUI_HINT "  sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}"
+	    fuUI_HINT "  sudo cp -a ${myDATA}/elk/data $(fuES_COPY_TO)"
 	    fuUI_HINT "and run the update again."
 	    [ "${myES_APPEND_KIND}" != "room" ] || fuUI_HINT "$(fuES_ROOM_TEXT)"
 	    fuUI_HINT "$(fuES_ACCEPT_TEXT)"
 	  else
 	    fuUI_HINT "T-Pot is stopped right now."
-	    myTEXT="${myTEXT} A no cannot stop the next start of T-Pot from upgrading the data: the checkout is already the new release. Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}), then run the update again."
+	    myTEXT="${myTEXT} A no cannot stop the next start of T-Pot from upgrading the data: the checkout is already the new release. Copy ${myDATA}/elk/data first (sudo cp -a ${myDATA}/elk/data $(fuES_COPY_TO)), then run the update again."
 	fi
 	# Ctrl+C at the question is a no as well: the checkout goes back either way
 	trap fuELASTIC_REFUSED INT
@@ -3201,7 +3257,8 @@ function fuRETENTION_EXPORT () {
 
 # TPOT_ES_RETENTION is new in 24.04.2, before it the retention lived only in the ILM policy
 # tpot (Kibana). The first update with it takes the delete phase of the exported policy over,
-# so that .env says what the policy does and T-Pot never shortens it: 365 days stay 365 days.
+# so that .env says what the policy does and T-Pot never shortens it: 365 days stay 365 days. After a
+# handover the export is the one the update.sh before wrote into its archive (fuRETENTION_EXPORT).
 # Without an export, with one that cannot be read or with a value that is no whole number of
 # days it is left empty: T-Pot then leaves the policy as it is (and creates a missing one with
 # 30 days), nothing shortens an unknown policy by one click.
@@ -3566,7 +3623,7 @@ function fuADOPT_CANCEL () {   # $1 = check | restore
 	      then
 	        mySTOPPED="1"
 	        fuUI_HINT "Not updated. T-Pot does not run at the moment (an earlier update.sh may have stopped it), nothing of this run was changed."
-	        fuDID fail "Not updated: your docker-compose.yml is a compose file of your own and was not adapted. T-Pot did not run, it starts again with your file where tpot.service is enabled."
+	        fuDID fail "Not updated: your docker-compose.yml is a compose file of your own and was not adapted. T-Pot does not run, nothing of this run was changed."
 	        fuADOPT_WAYS
 	        fuRESTART_AFTER_REFUSAL
 	        echo
@@ -3698,6 +3755,8 @@ function fuADOPT_WRITE () {   # $1 = v1 | own
 	fuADOPT_REPORT after
 	fuUI_HINT "Compare it with: tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml"
 	fuDID ok "${myWHAT} (compose/customizer.py --adopt), the backup ${myARCHIVE} keeps your file."
+	# in the summary as well: it names the archive by its final name (fuARCHIVE_RENAMED)
+	fuDID info "Compare it with: tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml"
 	while IFS= read -r myLINE;
 	  do
 	    [ -n "${myLINE}" ] || continue
@@ -4470,6 +4529,8 @@ if ! sudo true;
     exit 1
 fi
 fuLOG_START
+# did T-Pot run when this run started? After a handover the update.sh before has stopped it already
+[ -n "${myPREPARED}" ] || myWAS_ACTIVE=$(systemctl is-active tpot 2>/dev/null)
 # a TPOT_ES_STEP_WAIT that fuCHECK_STEP_WAIT replaced after a handover
 fuSTEP_WAIT_WARN
 

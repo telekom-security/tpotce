@@ -1743,6 +1743,7 @@ DU = ('#!/bin/sh\nfor a; do f="$a"; done\n'
 # and start T-Pot again after a refusal
 ES_APPEND = ("fuSAME_DIR", "fuSAME_FS", "fuES_DATA_FITS", "fuARCHIVE_HAS_ES_DATA", "fuARCHIVE_NAME",
              "fuARCHIVE_LIST", "fuROTATE", "fuARCHIVE_RENAMED", "fuAPPEND_ES_DATA", "fuRESTART_AFTER_REFUSAL",
+             "fuDONE_ROLLED_BACK", "fuES_COPY_TO",
              "fuES_ROOM_TEXT", "fuES_ACCEPT_TEXT", "fuES_STEP_REFUSED_ITEMS", "fuES_STEP_RESTORE_ITEMS",
              # the step of the data of an Elasticsearch before 8.19 through 8.19
              "fuES_NEEDS_STEP", "fuES_STEP_WHAT", "fuES_STEP_RESTORE_TEXT", "fuES_STEP_TEXT", "fuES_STEP_COMMANDS",

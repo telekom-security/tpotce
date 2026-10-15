@@ -1421,7 +1421,13 @@ class EsStepTest(EsHarness):
     def assert_manual(self, out, data):
         flat = " ".join(out.split())
         self.assertIn("To take the step by hand instead, with T-Pot stopped (sudo systemctl stop tpot):", flat)
-        self.assertIn(f"sudo cp -a {data}/elk/data {self.backups}/elk_data_8.18.2", flat)
+        # the copy goes next to the backups, unless they had no room for it: then to a place with room
+        if "no room for it in the backup" in flat:
+            self.assertRegex(flat, re.escape(f"sudo cp -a {data}/elk/data <a place with room, e.g. another disk>/"
+                                             "elk_data_8.18.2 (it needs about ") + r"\d+ MB\)")
+            self.assertNotIn(f"{self.backups}/elk_data_", flat)
+        else:
+            self.assertIn(f"sudo cp -a {data}/elk/data {self.backups}/elk_data_8.18.2", flat)
         self.assertIn("docker network create tpot_es_step", flat)
         self.assertIn(f"sudo chown -R 1000:0 {data}/elk/data", flat)
         self.assertIn("docker run -d --name tpot_es_step --network tpot_es_step -p 127.0.0.1:64398:9200 "
@@ -1980,11 +1986,12 @@ class ComposeAdoptTest(Scripts):
         restore = os.path.join(self.tpotce, "restore.sh")
         self.write(restore, '#!/bin/sh\necho "restore.sh $*" >> "$HOME/calls"\n')
         os.chmod(restore, 0o755)
-        # systemctl: is-enabled says enabled, every call is logged
-        self.stub("systemctl", '#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\n'
-                               '[ "$1" = "is-enabled" ] && echo enabled\n'
-                               'if [ "$1" = "is-active" ]; then [ -f "$HOME/tpot_inactive" ] && echo inactive || echo active; fi\n'
-                               'exit 0\n')
+        # systemctl: is-enabled says enabled, T-Pot runs until a stop (HOME/tpot_inactive) and again after a
+        # start, every call is logged
+        self.stub("systemctl", '#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\ncase "$1" in\n'
+                               '  is-enabled) echo enabled ;;\n'
+                               '  is-active) if [ -f "$HOME/tpot_inactive" ]; then echo inactive; else echo active; fi ;;\n'
+                               '  start) rm -f "$HOME/tpot_inactive" ;;\n  stop) : > "$HOME/tpot_inactive" ;;\nesac\nexit 0\n')
         git = ["git", "-C", self.tpotce, "-c", "user.email=t@t", "-c", "user.name=t"]
         subprocess.run(["git", "init", "-q", self.tpotce], check=True)
         subprocess.run(git + ["checkout", "-q", "-b", "master"], check=True)
@@ -2195,6 +2202,7 @@ class ComposeAdoptTest(Scripts):
     # --- after the handover of the update.sh of the release before ------------------------------------
 
     def handover(self, call, edition="UNKNOWN", **extra):
+        self.write(os.path.join(self.home, "tpot_inactive"), "")                 # the update.sh before stopped it
         return self.source_update(call, TPOT_UPDATE_PREPARED="1", TPOT_UPDATE_EDITION=edition, **extra)
 
     def test_handover_own_cancel_rolls_back_and_starts_tpot(self):
@@ -2345,8 +2353,9 @@ class ComposeAdoptTest(Scripts):
 
     def test_a_longer_list_after_the_pull_asks_again_at_a_terminal(self):
         self.write(os.path.join(self.home, "adopt_report_real"), self.GREW)
-        script = ('myRUNNING=1 mySTOPPED=1\nfuCHECK_EDITION\nmyARCHIVE="{archive}"\nfuRESTORE_EDITION\n'
-                  'echo "went on"\nexit 0\n')
+        # T-Pot ran when the run started, the stop of the run comes between the check and the restore
+        script = ('myRUNNING=1 myWAS_ACTIVE=active\nfuCHECK_EDITION\nsystemctl stop tpot; mySTOPPED=1\n'
+                  'myARCHIVE="{archive}"\nfuRESTORE_EDITION\necho "went on"\nexit 0\n')
         for answer, adapted in ((b"\r", False), (b"1\r", True)):
             with self.subTest(adapted=adapted):
                 self.forget()
@@ -2464,29 +2473,97 @@ class ComposeAdoptTest(Scripts):
         self.assertIn("systemctl start tpot", self.calls())
         tail = result.stdout[result.stdout.index("### The update did not finish"):]
         self.assertIn("The update finishes once you adapt the file: ./update.sh -y --adapt-compose", " ".join(tail.split()))
-        self.assertIn("T-Pot runs again, on the release from before this update.", tail)
+        # the checkout is the new release: what runs are your files and their images
+        self.assertIn("T-Pot runs again, with your .env and docker-compose.yml from the backup of the update.sh "
+                      "before, on their images.", tail)
+        self.assertNotIn("release from before this update", tail)
 
-    def test_a_cancel_while_tpot_does_not_run_starts_it_again(self):
+    def test_a_cancel_while_tpot_does_not_run_leaves_it_stopped(self):
+        """T-Pot did not run when this run started (stopped by hand, or by an earlier update.sh): the cancel
+        says so, never that it was left running, and does not start it."""
         self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
         self.write(os.path.join(self.home, "tpot_inactive"), "")
-        result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\n')
+        result = self.source_update('myRUNNING=1 myWAS_ACTIVE=inactive\nfuCHECK_EDITION\n')
         out = result.stdout + result.stderr
         self.assertEqual(result.returncode, 1, out)
-        self.assertNotIn("nothing was changed.", out.replace("nothing of this run was changed", ""))
         self.assertNotIn("T-Pot was left running", out)
         self.assertIn("T-Pot does not run at the moment", out)
-        self.assertIn("systemctl start tpot", self.calls())
-        tail = result.stdout[result.stdout.index("### The update did not finish"):]
-        self.assertIn("T-Pot did not run, it starts again with your file where tpot.service is enabled.", tail)
-        self.assertIn("T-Pot runs again", tail)
-        # not enabled: it stays stopped, and the summary says so
-        self.forget()
-        self.stub("systemctl", '#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\n'
-                               '[ "$1" = "is-active" ] && echo inactive\nexit 0\n')
-        result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\n')
-        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("T-Pot did not run when this update started, it stays stopped.", out)
         self.assertNotIn("systemctl start", self.calls())
-        self.assertIn("T-Pot is stopped, 'sudo systemctl start tpot' brings it back.", result.stdout)
+        tail = result.stdout[result.stdout.index("### The update did not finish"):]
+        self.assertIn("T-Pot does not run, nothing of this run was changed.", tail)
+        self.assertIn("T-Pot is stopped, 'sudo systemctl start tpot' brings it back.", tail)
+
+    RESTART = 'myRUNNING=1 mySTOPPED=1\nfuRESTART_AFTER_REFUSAL; echo "rc=$?"\nexit 0\n'
+
+    def test_the_restart_after_a_refusal_starts_only_what_ran(self):
+        """First pass: only a T-Pot that ran when the run started (or -s); after a handover where tpot.service
+        is enabled; one that runs already is never started again."""
+        cases = (("myWAS_ACTIVE=active", {}, True), ("myWAS_ACTIVE=inactive", {}, False),
+                 ("myWAS_ACTIVE=inactive mySTART=1", {}, True),
+                 ("", {"TPOT_UPDATE_PREPARED": "1"}, True))
+        for prefix, env, started in cases:
+            with self.subTest(prefix=prefix, env=env):
+                self.forget()
+                self.write(os.path.join(self.home, "tpot_inactive"), "")
+                result = self.source_update(f"{prefix}\n{self.RESTART}", **env)
+                self.assertEqual("systemctl start tpot.service" in self.calls(), started, result.stdout)
+                self.assertIn("rc=0" if started else "rc=1", result.stdout)
+        # it runs already: no start, the summary says it runs
+        self.forget()
+        if os.path.exists(os.path.join(self.home, "tpot_inactive")):
+            os.remove(os.path.join(self.home, "tpot_inactive"))
+        result = self.source_update("myWAS_ACTIVE=active\n" + self.RESTART)
+        self.assertNotIn("systemctl start", self.calls())
+        self.assertIn("rc=0", result.stdout)
+        self.assertIn("T-Pot runs, on the release from before this update.", result.stdout)
+        # after an updater without a handover the checkout is the new release: the words say what runs
+        self.forget()
+        self.write(os.path.join(self.home, "tpot_inactive"), "")
+        result = self.source_update("myOLD_UPDATER_RAN=/x.tgz\n" + self.RESTART)
+        self.assertIn("systemctl start tpot.service", self.calls())
+        self.assertIn("T-Pot runs again, with your .env and docker-compose.yml from the backup of the update.sh "
+                      "before, on their images.", result.stdout)
+        self.assertNotIn("release from before this update", result.stdout)
+
+    def test_after_a_rollback_the_summary_names_the_release_the_host_is_on(self):
+        """The rollback puts the commit and the .env of the archive back: the items of the pull go, one item
+        names the commit, the version and the TPOT_VERSION read anew."""
+        restore = os.path.join(self.tpotce, "restore.sh")
+        self.write(restore, '#!/bin/sh\necho "restore.sh $*" >> "$HOME/calls"\n'
+                            f'git -C "$HOME/tpotce" reset -q --hard {self.before}\n'
+                            'echo 24.04.1 > "$HOME/tpotce/version"\n'
+                            'printf "TPOT_TYPE=HIVE\\nTPOT_VERSION=24.04.1\\n" > "$HOME/tpotce/.env"\n')
+        os.chmod(restore, 0o755)
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.STANDARD)
+        archive = self.archive(self.OWN)
+        new = subprocess.run(["git", "-C", self.tpotce, "rev-parse", "--short", "HEAD"], capture_output=True,
+                             universal_newlines=True).stdout.strip()
+        done = (f'myDONE=("ok:The checkout is on master at {new}, version 24.04.2." '
+                '"ok:Your configuration (.env) is back, TPOT_VERSION=24.04.2.")\n')
+        result = self.handover(done + f'myRUNNING=1 myARCHIVE="{archive}"\nfuCHECK_EDITION\nfuRESTORE_EDITION\n')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        tail = result.stdout[result.stdout.index("### The update did not finish"):]
+        self.assertNotIn(f"at {new}", tail)
+        self.assertNotIn("24.04.2", tail)
+        short = self.before[:len(new)]
+        self.assertIn(f"Back on master at {short}, version 24.04.1, TPOT_VERSION=24.04.1.", tail)
+
+    def test_the_hints_name_the_archive_after_its_rename(self):
+        """The Elasticsearch data goes into the archive after the compose file was adapted, the archive gets
+        the name of a full one: the run says so, and the summary names the new name."""
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.V1)
+        archive = self.archive(self.V1)
+        full = archive.replace(".tar", "_full.tar")
+        result = self.source_update(f'myRUNNING=1 myEDITION=UNKNOWN myARCHIVE="{archive}"\nfuRESTORE_EDITION\n'
+                                    f'fuARCHIVE_RENAMED "{archive}" "{full}"\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertIn(f"The backup of this run is {full} now (it was {archive}): the commands above that name "
+                      f"{archive} take {full}.", " ".join(out.split()))
+        tail = result.stdout[result.stdout.index("### T-Pot is updated"):]
+        self.assertIn(f"Compare it with: tar xOf {full} docker-compose.yml | diff - {self.tpotce}/docker-compose.yml",
+                      tail)
+        self.assertNotIn(f"{archive} ", tail)
 
     # --- --check-data-loss ----------------------------------------------------------------------------
 
