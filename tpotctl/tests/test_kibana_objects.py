@@ -1231,6 +1231,72 @@ class CliTest(unittest.TestCase):
         self.assertEqual(sorted(site.records()), ["config:9.5.4", "dashboard:a", "dashboard:c"])
         self.assertLessEqual(len(site.files(ko.auto_exports_dir(site.data))), ko.AUTO_KEEP)
 
+    def give_up(self, site, kibana):
+        """Three starts of a first import that Kibana refuses all of."""
+        ko.mark_pending(site.data)
+        for _ in range(3):
+            site.cli(*self.args(site, "keep"), opener=kibana)
+
+    def test_a_first_import_that_gave_up_stays_given_up(self):
+        site = Site(self, [dash("a"), dash("b")])
+        ko.mark_pending(site.data)
+        everything = {"config:9.5.4", "dashboard:a", "dashboard:b"}
+        kibana = FakeKibana(fail=everything)
+        imports, config_sent, lines = [], [], []
+        for start in range(1, 10):
+            before = len(kibana.imports())
+            rc, out, _ = site.cli(*self.args(site, "keep"), opener=kibana)
+            sent = kibana.imports()[before:]
+            imports.append(len(sent))
+            config_sent.append(any('"type": "config"' in FakeKibana.ndjson(r) for r in sent))
+            lines.append(out.splitlines()[-1])
+        self.assertTrue(all(imports[:3]))
+        self.assertEqual(imports[3:], [0] * 6)
+        self.assertEqual(config_sent[3:], [False] * 6)
+        self.assertEqual(lines[3:], ["# Kibana objects: the first import gave up on 3 objects, "
+                                     "tpot elastic import retries them"] * 6)
+        self.assertFalse(os.path.exists(ko.pending_path(site.data)))
+        with open(ko.given_up_path(site.data), encoding="utf-8") as handle:
+            marker = json.load(handle)
+        self.assertEqual(marker["refused"], sorted(everything))
+        self.assertEqual(marker["shipped"], ko.shipped_sha(site.objects))
+        self.assertIsNotNone(ko._time(marker["at"]))
+        self.assertEqual(stat.S_IMODE(os.stat(ko.given_up_path(site.data)).st_mode), 0o660)
+
+    def test_the_given_up_marker_goes_with_a_new_release(self):
+        site = Site(self, [dash("a")])
+        kibana = FakeKibana(fail={"config:9.5.4", "dashboard:a"})
+        self.give_up(site, kibana)
+        self.assertTrue(os.path.exists(ko.given_up_path(site.data)))
+        with open(os.path.join(site.objects, ko.SHIPPED_NAME), "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(dash("c")) + "\n")      # the shipped file of the next release
+        kibana.fail.clear()
+        rc, out, _ = site.cli(*self.args(site, "keep"), opener=kibana)
+        self.assertEqual(out.splitlines()[0],
+                         "# Kibana objects: Kibana holds none of T-Pot's objects, the first import runs again")
+        self.assertEqual(rc, 0)
+        self.assertEqual(sorted(kibana.store), ["config:9.5.4", "dashboard:a", "dashboard:c"])
+        self.assertFalse(os.path.exists(ko.given_up_path(site.data)))
+
+    def test_the_given_up_marker_goes_when_an_import_brings_everything_in(self):
+        site = Site(self, [dash("a"), dash("b")])
+        kibana = FakeKibana([as_in_kibana(dash("own"))], fail={"config:9.5.4", "dashboard:a", "dashboard:b"})
+        self.give_up(site, kibana)
+        self.assertTrue(os.path.exists(ko.given_up_path(site.data)))
+        kibana.fail = {"dashboard:b"}
+        site.apply("update", kibana)                        # tpot elastic import, b refused still
+        self.assertTrue(os.path.exists(ko.given_up_path(site.data)))
+        kibana.fail.clear()
+        chosen, result, _ = site.apply("update", kibana)
+        self.assertEqual(result.imported, [("dashboard", "b")])
+        self.assertFalse(os.path.exists(ko.given_up_path(site.data)))
+        # a marker that cannot be read still holds the first import back
+        os.makedirs(ko.state_dir(site.data), exist_ok=True)
+        with open(ko.given_up_path(site.data), "w", encoding="utf-8") as handle:
+            handle.write("not json")
+        self.assertEqual(ko.given_up(site.data, site.objects), [])
+        self.assertEqual(ko.given_up(os.path.join(site.root, "nowhere"), site.objects), None)
+
     def test_first_runs_alone(self):
         site = Site(self, [dash("a")])
         ko.mark_pending(site.data)

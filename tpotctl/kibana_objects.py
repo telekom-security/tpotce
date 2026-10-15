@@ -767,6 +767,8 @@ def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opene
     chosen = plan(installed, shipped_objs, manifest, records.objects)
     todo = chosen.to_import(mode)
     if not todo:
+        if not chosen.new:
+            clear_given_up(data_dir)
         return chosen, Result(), ""
     if mode in ("update", "overwrite"):
         chosen.export_path = save_export(text, export_dir, prefix, now)
@@ -778,6 +780,8 @@ def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opene
     if result.imported:
         records.mark(result.keys(), when)
         records.save()
+    if all(i.action != "new" or i.key in set(result.keys()) for i in chosen.items):
+        clear_given_up(data_dir)        # every shipped object is in Kibana now
     return chosen, result, chosen.export_path
 
 
@@ -891,9 +895,66 @@ def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: O
     attempt = 1 if state is None else state["attempts"] + 1
     same = 1 if state is None or state["refused"] != missing else state["same"] + 1
     done = not missing or same >= GIVE_UP
+    if missing and done:
+        _write_json(given_up_path(data_dir), {"version": 1, "refused": missing, "at": when,
+                                              "shipped": shipped_sha(objects_dir)}, ".given-up-")
+    elif not missing:
+        clear_given_up(data_dir)
     _write_pending(data_dir, None if done else
                    {"version": 1, "attempts": attempt, "same": same, "refused": missing})
     return FirstImport(result, attempt, missing, done, bool(missing) and done, export_path)
+
+
+def given_up_path(data_dir: str) -> str:
+    """There when the first import gave up: the objects it gave up on, when, and the sha256
+    of the shipped file it gave up with."""
+    return os.path.join(state_dir(data_dir), "given_up")
+
+
+def shipped_sha(objects_dir: str) -> str:
+    path = os.path.join(objects_dir, SHIPPED_NAME)
+    try:
+        with open(path, "rb") as handle:
+            return hashlib.sha256(handle.read()).hexdigest()
+    except OSError as error:
+        raise KibanaError(f"{path}: {error}") from None
+
+
+def given_up(data_dir: str, objects_dir: str) -> Optional[List[str]]:
+    """The objects the first import gave up on, while its marker is for this shipped file;
+    None without one. A marker of another shipped file (a new release) goes. A marker that
+    cannot be read still counts: the first import does not run again on its own then."""
+    path = given_up_path(data_dir)
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.loads(handle.read())
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    if not (isinstance(data, dict) and isinstance(data.get("refused"), list)):
+        return []
+    if data.get("shipped") != shipped_sha(objects_dir):
+        clear_given_up(data_dir)
+        return None
+    return [k for k in data["refused"] if isinstance(k, str)]
+
+
+def clear_given_up(data_dir: str) -> None:
+    try:
+        os.unlink(given_up_path(data_dir))
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        raise KibanaError(f"cannot remove {given_up_path(data_dir)}: {error}") from None
+
+
+def _write_json(path: str, data: dict, prefix: str) -> None:
+    try:
+        _make_dir(os.path.dirname(path), 0o770)
+        _write(path, json.dumps(data, sort_keys=True) + "\n", 0o660, prefix)
+    except OSError as error:
+        raise KibanaError(f"cannot write {path}: {error}") from None
 
 
 def mark_pending(data_dir: str) -> None:
@@ -967,7 +1028,8 @@ def _first_exit(first: FirstImport) -> int:
 
 def _cli_apply(args, opener: Optional[Callable]) -> int:
     """tpotinit's start, with one export: the first import while it is pending or when Kibana
-    holds none of T-Pot's objects (in every mode), else the mode, with its exports rotated."""
+    holds none of T-Pot's objects (in every mode, unless the first import gave up with this
+    shipped file), else the mode, with its exports rotated."""
     export = _export(args.kibana, opener, allow_empty=True)
     if not os.path.exists(pending_path(args.data)):
         shipped_objs = shipped(os.path.join(args.objects, SHIPPED_NAME))
@@ -979,6 +1041,11 @@ def _cli_apply(args, opener: Optional[Callable]) -> int:
                 lines[0] = f"{LOG}nothing to import ({lines[0][len(LOG):]})"
             print("\n".join(lines), flush=True)
             return 1 if result.errors else 0
+        refused = given_up(args.data, args.objects)
+        if refused is not None:          # it gave up with this shipped file: until the release or you
+            print(f"{LOG}the first import gave up on {len(refused)} objects, tpot elastic import retries them",
+                  flush=True)
+            return 0
         print(f"{LOG}Kibana holds none of T-Pot's objects, the first import runs again", flush=True)
         mark_pending(args.data)
     return _first_exit(run_first_import(args.data, args.objects, args.exports, opener, url=args.kibana,
