@@ -1,0 +1,20 @@
+{
+ "attributes": {
+  "color": "#d61613",
+  "description": "",
+  "name": "Nginx"
+ },
+ "coreMigrationVersion": "8.8.0",
+ "created_at": "2024-12-10T10:48:59.729Z",
+ "id": "0185bb20-8ebc-11ec-82b5-d375cfa90394",
+ "managed": false,
+ "references": [],
+ "sort": [
+  1733827739729,
+  33
+ ],
+ "type": "tag",
+ "typeMigrationVersion": "8.0.0",
+ "updated_at": "2024-12-10T10:48:59.729Z",
+ "version": "WzgsMV0="
+}
