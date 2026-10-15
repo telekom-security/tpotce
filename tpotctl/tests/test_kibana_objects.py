@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 import urllib.error
 import zipfile
 
@@ -316,9 +317,11 @@ class FakeKibana:
     there is a conflict. `hidden` objects are there but left out of the export."""
 
     def __init__(self, objects=(), fail=(), hidden=(), export_status=200, import_status=200, down=False,
-                 clock=None, on_import=None):
+                 clock=None, on_import=None, lose=0, lose_written=True):
         self.store = {ko.key(o): json.loads(json.dumps(o)) for o in objects}
         self.fail, self.hidden = set(fail), set(hidden)
+        # the next `lose` imports time out: after Kibana wrote them (lose_written), or before
+        self.lose, self.lose_written = lose, lose_written
         self.export_status, self.import_status, self.down = export_status, import_status, down
         self.clock = clock or (lambda: NOW)
         self.on_import = on_import
@@ -342,7 +345,14 @@ class FakeKibana:
                 self.on_import(request)
             if self.import_status != 200:
                 raise self.http_error(request, self.import_status)
-            return io.BytesIO(json.dumps(self.answer(request, "overwrite=true" in path)).encode())
+            if self.lose and not self.lose_written:
+                self.lose -= 1
+                raise TimeoutError("timed out")
+            answer = self.answer(request, "overwrite=true" in path)
+            if self.lose and answer["success"]:
+                self.lose -= 1
+                raise TimeoutError("timed out")           # written, but the answer never comes
+            return io.BytesIO(json.dumps(answer).encode())
         raise urllib.error.URLError("no route")
 
     @staticmethod
@@ -1013,9 +1023,14 @@ class FirstImportTest(unittest.TestCase):
         with open(ko.pending_path(site.data), encoding="utf-8") as handle:
             return handle.read()
 
+    def write_pending(self, site, text):
+        os.makedirs(ko.state_dir(site.data), exist_ok=True)
+        with open(ko.pending_path(site.data), "w", encoding="utf-8") as handle:
+            handle.write(text if isinstance(text, str) else json.dumps(text))
+
     def test_first_import_takes_everything_and_ends_pending(self):
         site = Site(self, [dash("a"), dash("b")])
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         kibana = FakeKibana()
         first = self.first(site, kibana)
         self.assertEqual((first.result.errors, first.attempt, first.missing, first.done), ([], 1, [], True))
@@ -1027,7 +1042,7 @@ class FirstImportTest(unittest.TestCase):
 
     def test_the_first_attempt_takes_the_whole_file_with_the_advanced_settings(self):
         site = Site(self, [dash("a"), dash("b")])
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         mine = as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}))
         kibana = FakeKibana([mine, as_in_kibana(dash("own"))])
         first = self.first(site, kibana)
@@ -1036,14 +1051,33 @@ class FirstImportTest(unittest.TestCase):
             self.assertIn('"defaultIndex": "mine"', handle.read())
         self.assertEqual(kibana.store["dashboard:own"], as_in_kibana(dash("own")))
 
+    def test_an_existing_host_keeps_its_advanced_settings(self):
+        mine = as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}))
+        for pending in ({"version": 1, "reason": "no-objects", "attempt": 0, "refused": []},
+                        "", {"attempt": 0}, {"reason": "other", "attempt": 0}):
+            with self.subTest(pending=pending):
+                site = Site(self, [dash("a"), dash("b")])
+                self.write_pending(site, pending)
+                kibana = FakeKibana([mine])
+                first = self.first(site, kibana)
+                self.assertEqual((first.attempt, first.done, first.missing), (1, True, []))
+                self.assertEqual(kibana.store["config:9.5.4"], mine)
+                self.assertNotIn('"type": "config"', FakeKibana.ndjson(kibana.imports()[0]))
+                self.assertEqual(sorted(first.result.keys()), ["dashboard:a", "dashboard:b"])
+        site = Site(self, [dash("a")])
+        ko.mark_pending(site.data)                                      # the default is the safe side
+        self.assertEqual(ko.pending_state(site.data)["reason"], "no-objects")
+        with self.assertRaises(ko.KibanaError):
+            ko.mark_pending(site.data, "other")
+
     def test_first_import_partial_keeps_pending(self):
         site = Site(self, [dash("a"), dash("b")])
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         kibana = FakeKibana(fail={"dashboard:b"})
         first = self.first(site, kibana)
         self.assertEqual(first.result.errors, [("dashboard", "b", "Dashboard b", "missing_references")])
         self.assertEqual(json.loads(self.pending(site)),
-                         {"version": 1, "attempts": 1, "same": 1, "refused": ["dashboard:b"]})
+                         {"version": 1, "reason": "fresh", "attempt": 1, "refused": ["dashboard:b"]})
         self.assertEqual(sorted(site.records()), ["config:9.5.4", "dashboard:a"])
         self.assertEqual(ko.first_summary(first), [
             "# Kibana objects: first import, 2 imported, 1 failed, 1 not there yet; "
@@ -1059,77 +1093,137 @@ class FirstImportTest(unittest.TestCase):
         a, b, c, d = dash("a"), dash("b"), dash("c"), dash("d")
         b_old = dash("b", body=0)
         site = Site(self, [a, b, c, d], old=[b_old])
-        os.makedirs(ko.state_dir(site.data))
-        with open(ko.pending_path(site.data), "w", encoding="utf-8") as handle:
-            json.dump({"version": 1, "attempts": 1, "same": 1, "refused": ["dashboard:a"]}, handle)
         mine_c = as_in_kibana(dash("c", title="Mine"))
         mine_config = as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}))
+        # the advanced settings go along only when an answer refused them
+        self.write_pending(site, {"version": 1, "reason": "fresh", "attempt": 1, "refused": ["config:9.5.4"]})
         kibana = FakeKibana([as_in_kibana(b_old), mine_c, as_in_kibana(d), mine_config])
-        # the advanced settings have no record yet: they are retried
         first = self.first(site, kibana)
         self.assertEqual(sorted(first.result.keys()), ["config:9.5.4", "dashboard:a", "dashboard:b"])
         self.assertEqual(kibana.store["dashboard:c"], mine_c)
         self.assertTrue(first.done)
-        # with a record they are not, nor is yours
-        ko.mark_pending(site.data)
-        with open(ko.pending_path(site.data), "w", encoding="utf-8") as handle:
-            handle.write("not json")                       # a retry too: a retry never touches yours
-        kibana.store["config:9.5.4"] = mine_config
-        kibana.store["dashboard:c"] = mine_c
-        del kibana.store["dashboard:a"]
-        first = self.first(site, kibana, now=NOW + 600)
-        self.assertEqual(first.result.keys(), ["dashboard:a"])
-        self.assertEqual((kibana.store["config:9.5.4"], kibana.store["dashboard:c"]), (mine_config, mine_c))
+        # without a refusal they do not, nor does yours: also with no record, and from a broken pending
+        for pending in ({"version": 1, "reason": "fresh", "attempt": 1, "refused": []}, "not json"):
+            with self.subTest(pending=pending):
+                self.write_pending(site, pending)
+                os.unlink(os.path.join(ko.state_dir(site.data), "record.json"))
+                kibana.store["config:9.5.4"] = mine_config
+                kibana.store["dashboard:c"] = mine_c
+                kibana.store.pop("dashboard:a", None)
+                first = self.first(site, kibana, now=NOW + 600)
+                self.assertEqual((first.attempt, first.result.keys()), (2, ["dashboard:a"]))
+                self.assertEqual((kibana.store["config:9.5.4"], kibana.store["dashboard:c"]), (mine_config, mine_c))
 
     def test_all_objects_present_ends_pending(self):
         a, b = dash("a"), dash("b")
         site = Site(self, [a, b])
         site.record(NOW - DAY, "config:9.5.4", "dashboard:a", "dashboard:b")
-        os.makedirs(ko.state_dir(site.data), exist_ok=True)
-        with open(ko.pending_path(site.data), "w", encoding="utf-8") as handle:
-            json.dump({"version": 1, "attempts": 2, "same": 1, "refused": ["dashboard:b"]}, handle)
+        self.write_pending(site, {"version": 1, "reason": "fresh", "attempt": 1, "refused": ["dashboard:b"]})
         kibana = FakeKibana([as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"})),
                              as_in_kibana(dash("a", title="Mine"), NOW), as_in_kibana(b)])
         first = self.first(site, kibana)
-        self.assertEqual((kibana.imports(), first.done, first.missing, first.attempt), ([], True, [], 3))
+        self.assertEqual((kibana.imports(), first.done, first.missing, first.attempt), ([], True, [], 2))
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
         self.assertEqual(ko.first_summary(first)[0].split(" (export")[0],
-                         "# Kibana objects: first import, attempt 3, 0 imported")
+                         "# Kibana objects: first import, attempt 2, 0 imported")
 
-    def test_a_refused_set_ends_pending_after_3_attempts(self):
+    def test_three_attempts_end_pending_whatever_is_refused(self):
         site = Site(self, [dash("a"), dash("b")])
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         kibana = FakeKibana(fail={"dashboard:b"})
         states = []
         for attempt in range(1, 4):
+            if attempt == 2:
+                kibana.fail = {"dashboard:a", "dashboard:b"}            # another set: the attempts still count
+                del kibana.store["dashboard:a"]
             first = self.first(site, kibana, now=NOW + attempt * 600)
             states.append((first.attempt, first.done, first.given_up))
         self.assertEqual(states, [(1, False, False), (2, False, False), (3, True, True)])
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
         self.assertEqual(ko.first_summary(first)[-1],
-                         "# Kibana objects: warning: still not there after 3 attempts: dashboard:b; tpotinit stops "
-                         "trying them, tpot elastic import tries them again")
-        # another set missing starts the count again
-        ko.mark_pending(site.data)
-        self.first(site, kibana)
-        kibana.fail = {"dashboard:a"}
-        del kibana.store["dashboard:a"]
-        self.first(site, kibana)
-        self.assertEqual(json.loads(self.pending(site))["same"], 1)
+                         "# Kibana objects: warning: still not there after 3 attempts: dashboard:a, dashboard:b; "
+                         "tpotinit stops trying them, tpot elastic import tries them again")
+        with self.assertRaisesRegex(ko.KibanaError, "no first import is pending"):
+            self.first(site, kibana)
+
+    def lost(self, site, kibana, lose):
+        """Four starts of the CLI, you change a and the advanced settings before each from the
+        second on; `lose(start)` breaks that start."""
+        codes = []
+        for start in range(1, 5):
+            if start > 1:
+                kibana.store["dashboard:a"] = as_in_kibana(dash("a", title=f"Mine {start}"), time.time() + 120)
+                kibana.store["config:9.5.4"] = as_in_kibana(
+                    dict(CONFIG, attributes={"defaultIndex": f"mine {start}"}), time.time() + 120)
+            before = len(kibana.imports())
+            with lose(start):
+                rc, out, err = site.cli("apply", "--mode", "keep", "--data", site.data, "--objects", site.objects,
+                                        "--exports", ko.auto_exports_dir(site.data), opener=kibana)
+            codes.append((rc, len(kibana.imports()) - before, os.path.exists(ko.pending_path(site.data))))
+            if start > 1:
+                self.assertEqual(kibana.store["dashboard:a"]["attributes"]["title"], f"Mine {start}", start)
+                self.assertEqual(kibana.store["config:9.5.4"]["attributes"]["defaultIndex"], f"mine {start}",
+                                 start)
+        return codes
+
+    def test_a_lost_answer_makes_the_next_start_a_retry(self):
+        site = Site(self, [dash("a"), dash("b")])
+        ko.mark_pending(site.data, "fresh")
+        kibana = FakeKibana(fail={"dashboard:b"}, clock=time.time)
+
+        @contextlib.contextmanager
+        def lose(start):
+            kibana.lose = 1 if start == 1 else 0          # Kibana writes the second round, its answer is lost
+            yield
+        codes = self.lost(site, kibana, lose)
+        self.assertEqual(codes, [(1, 2, True), (1, 1, True), (1, 1, False), (0, 0, False)])
+        self.assertTrue(os.path.exists(ko.given_up_path(site.data)))
+
+    def test_a_lost_answer_on_every_start_gives_up_after_3_attempts(self):
+        site = Site(self, [dash("a"), dash("b")])
+        ko.mark_pending(site.data, "fresh")
+        kibana = FakeKibana(clock=time.time, lose_written=False)
+
+        @contextlib.contextmanager
+        def lose(start):
+            kibana.lose = 1                               # the request times out, nothing is written
+            yield
+        codes = self.lost(site, kibana, lose)
+        self.assertEqual(codes, [(1, 1, True), (1, 1, True), (1, 1, True), (1, 0, False)])   # never a fourth
+        with open(ko.given_up_path(site.data), encoding="utf-8") as handle:
+            self.assertEqual(json.load(handle)["refused"], ["dashboard:b"])
+
+    def test_a_record_that_cannot_be_written_makes_the_next_start_a_retry(self):
+        site = Site(self, [dash("a"), dash("b")])
+        ko.mark_pending(site.data, "fresh")
+        kibana = FakeKibana(fail={"dashboard:b"}, clock=time.time)
+
+        @contextlib.contextmanager
+        def lose(start):
+            if start != 1:
+                yield
+                return
+            with unittest.mock.patch.object(ko.Records, "save", side_effect=ko.KibanaError("disk full")):
+                yield
+        codes = self.lost(site, kibana, lose)
+        self.assertEqual(codes, [(1, 2, True), (1, 1, True), (1, 1, False), (0, 0, False)])
+        self.assertTrue(os.path.exists(ko.given_up_path(site.data)))
 
     def test_first_import_exports_a_kibana_that_holds_objects(self):
         site = Site(self, [dash("a")])
         folder = ko.auto_exports_dir(site.data)
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         self.first(site, FakeKibana())
         self.assertEqual(site.files(folder), [])                   # an empty Kibana: nothing to keep
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         self.first(site, FakeKibana([as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}))]))
         self.assertEqual(len(site.files(folder)), 1)
+        ko.mark_pending(site.data, "fresh")
         kibana = FakeKibana([as_in_kibana(CONFIG)], export_status=500)
         with self.assertRaises(ko.KibanaError):
             self.first(site, kibana)
         self.assertEqual(kibana.imports(), [])
+        self.assertEqual(ko.pending_state(site.data)["attempt"], 0)    # no request, no attempt
 
 
 class CliTest(unittest.TestCase):
@@ -1180,7 +1274,7 @@ class CliTest(unittest.TestCase):
 
     def test_apply_runs_the_first_import_while_it_is_pending(self):
         site = Site(self, [dash("a")])
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         kibana = FakeKibana([as_in_kibana(dash("a", title="Mine"))])
         rc, out, _ = site.cli(*self.args(site, "keep"), opener=kibana)
         self.assertEqual(rc, 0)
@@ -1204,10 +1298,13 @@ class CliTest(unittest.TestCase):
                 rc, out, _ = site.cli(*self.args(site, mode), opener=kibana)
                 self.assertEqual(rc, 0)
                 self.assertFalse(os.path.exists(ko.pending_path(site.data)))
+                # an existing host: its advanced settings are never sent
+                self.assertEqual(kibana.store["config:9.5.4"], as_in_kibana(CONFIG))
+                self.assertFalse(any('"type": "config"' in FakeKibana.ndjson(r) for r in kibana.imports()))
 
     def test_a_refused_object_across_12_starts_never_reverts_yours(self):
         site = Site(self, [dash("a"), dash("b"), dash("c")])
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         kibana = FakeKibana(fail={"dashboard:b"}, clock=time.time)
         codes, pending, warned = [], [], []
         for start in range(1, 13):
@@ -1239,7 +1336,7 @@ class CliTest(unittest.TestCase):
 
     def test_a_first_import_that_gave_up_stays_given_up(self):
         site = Site(self, [dash("a"), dash("b")])
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         everything = {"config:9.5.4", "dashboard:a", "dashboard:b"}
         kibana = FakeKibana(fail=everything)
         imports, config_sent, lines = [], [], []
@@ -1275,7 +1372,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(out.splitlines()[0],
                          "# Kibana objects: Kibana holds none of T-Pot's objects, the first import runs again")
         self.assertEqual(rc, 0)
-        self.assertEqual(sorted(kibana.store), ["config:9.5.4", "dashboard:a", "dashboard:c"])
+        self.assertEqual(sorted(kibana.store), ["dashboard:a", "dashboard:c"])
         self.assertFalse(os.path.exists(ko.given_up_path(site.data)))
 
     def test_the_given_up_marker_goes_when_an_import_brings_everything_in(self):
@@ -1299,11 +1396,20 @@ class CliTest(unittest.TestCase):
 
     def test_first_runs_alone(self):
         site = Site(self, [dash("a")])
-        ko.mark_pending(site.data)
+        ko.mark_pending(site.data, "fresh")
         rc, out, _ = site.cli("first", "--data", site.data, "--objects", site.objects,
                               "--exports", ko.auto_exports_dir(site.data), opener=FakeKibana())
         self.assertEqual((rc, out), (0, "# Kibana objects: first import, 2 imported\n"))
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
+
+    def test_first_without_pending_refuses_and_names_apply(self):
+        site = Site(self, [dash("a")])
+        kibana = FakeKibana([as_in_kibana(CONFIG)])
+        rc, out, err = site.cli("first", "--data", site.data, "--objects", site.objects,
+                                "--exports", ko.auto_exports_dir(site.data), opener=kibana)
+        self.assertEqual((rc, out, kibana.requests), (2, "", []))
+        self.assertIn("no first import is pending", err)
+        self.assertIn("run apply", err)
 
 
 class OpsTest(unittest.TestCase):

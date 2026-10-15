@@ -25,8 +25,10 @@ advanced settings. tpotinit runs them:
     python3 kibana_objects.py apply --mode M --data DIR --objects DIR --exports DIR [--kibana URL]
     python3 kibana_objects.py first --data DIR --objects DIR --exports DIR [--kibana URL]
 
-The first import (`<data>/kibana_objects/pending`) takes the whole shipped file once;
-its retries take only what mode update would, so they never touch what you changed.
+The first import (`<data>/kibana_objects/pending`) takes the whole shipped file on its
+first attempt, the advanced settings only on a fresh install; its retries take only what
+mode update would, so they never touch what you changed. Every attempt is counted before
+its request; after three it gives up (`given_up`) until the next release.
 
 Kibana 9.5 writes nothing of an import that has one error in it (its successResults
 then name what it would have written): the import goes again without the objects that
@@ -804,9 +806,13 @@ def run_restore(path: str, data_dir: str, export_dir: str, opener: Optional[Call
     return export_path, result
 
 
-# The first import is pending until every shipped object is in Kibana. `pending` is empty
-# before the first attempt; after it, it holds the attempts and the objects still missing.
-GIVE_UP = 3            # the same objects missing after this many attempts in a row: no more retries
+# The first import is pending until every shipped object is in Kibana. `pending` holds
+# {"version": 1, "reason": "fresh"|"no-objects", "attempt": N, "refused": [...]}: why it is
+# pending, how many attempts were started (counted before each request), and what the last
+# answer that came back refused. tpotinit's first run writes {"reason": "fresh", "attempt": 0};
+# the "no T-Pot objects" check writes "no-objects", which never imports the advanced settings.
+GIVE_UP = 3            # attempts; after them the first import gives up on what is still missing
+REASONS = ("fresh", "no-objects")
 
 
 @dataclass
@@ -820,8 +826,9 @@ class FirstImport:
 
 
 def pending_state(data_dir: str) -> Optional[dict]:
-    """None before the first attempt (an empty or missing `pending`), else the state of the
-    retries. A file that cannot be read counts as a retry: a retry never touches yours."""
+    """The state of a pending first import, None when none is pending. A `pending` without a
+    reason (empty, old, broken) counts as "no-objects"; one that cannot be read, or without a
+    number of attempts, counts as a retry: a retry never touches yours."""
     try:
         with open(pending_path(data_dir), encoding="utf-8") as handle:
             text = handle.read()
@@ -830,15 +837,19 @@ def pending_state(data_dir: str) -> Optional[dict]:
     except (OSError, UnicodeDecodeError):
         text = "?"
     if not text.strip():
-        return None
+        return {"version": 1, "reason": "no-objects", "attempt": 0, "refused": []}
     try:
         data = json.loads(text)
     except ValueError:
         data = None
-    if (isinstance(data, dict) and type(data.get("attempts")) is int and type(data.get("same")) is int
-            and isinstance(data.get("refused"), list) and all(isinstance(k, str) for k in data["refused"])):
-        return data
-    return {"version": 1, "attempts": 1, "same": 0, "refused": []}
+    if not isinstance(data, dict):
+        return {"version": 1, "reason": "no-objects", "attempt": 1, "refused": []}
+    attempt = data.get("attempt")
+    refused = data.get("refused")
+    return {"version": 1,
+            "reason": data.get("reason") if data.get("reason") in REASONS else "no-objects",
+            "attempt": attempt if type(attempt) is int and attempt >= 0 else 1,
+            "refused": [k for k in refused if isinstance(k, str)] if isinstance(refused, list) else []}
 
 
 def _write_pending(data_dir: str, state: Optional[dict]) -> None:
@@ -859,49 +870,56 @@ def _write_pending(data_dir: str, state: Optional[dict]) -> None:
 def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: Optional[Callable] = None,
                      now: Optional[float] = None, url: str = KIBANA_URL,
                      export: Optional[Tuple[str, List[dict]]] = None) -> FirstImport:
-    """The first import, until every shipped object is in Kibana.
+    """One attempt of the pending first import.
 
     A Kibana that holds objects is exported into `export_dir` first (auto_, the newest
-    AUTO_KEEP stay); without that export no import. The first attempt imports the whole
-    shipped file, the advanced settings too. Every retry imports only what mode update
-    would (missing objects and T-Pot's unchanged ones, never yours) and the advanced
-    settings that have no record yet. `pending` goes when every shipped object is there,
-    whoever wrote it, or when the same objects are still missing after GIVE_UP attempts in
-    a row."""
+    AUTO_KEEP stay); without that export no import. The attempt is counted in `pending`
+    before the request, so an answer that never comes counts too. Attempt 1 imports the
+    whole shipped file, the advanced settings only for a "fresh" install. Every later
+    attempt is a retry: what mode update would import (missing objects and T-Pot's
+    unchanged ones, never yours), and the advanced settings only when an answer refused
+    them. `pending` goes when every shipped object is there, whoever wrote it; after GIVE_UP
+    attempts the first import gives up on what is missing (`given_up`)."""
     path = os.path.join(objects_dir, SHIPPED_NAME)
     objs = parse_ndjson(_read_text(path), path)
     records = Records(data_dir)
     manifest = load_manifest(os.path.join(objects_dir, MANIFEST_NAME))
     state = pending_state(data_dir)
+    if state is None:
+        raise KibanaError(f"no first import is pending ({pending_path(data_dir)})")
     text, installed = _fresh_export(url, opener, export, allow_empty=True)
     export_path = ""
     if installed:
         export_path = save_export(text, export_dir, AUTO_PREFIX, now)
         rotate(export_dir, AUTO_PREFIX, AUTO_KEEP, spare=export_path)
-    if state is None:
-        todo = objs
-    else:
-        ours = [o for o in objs if o["type"] not in SKIP_TYPES]
-        wanted = {i.key for i in plan(installed, ours, manifest, records.objects).to_import("update")}
-        todo = [o for o in objs if key(o) in wanted
-                or (o["type"] in SKIP_TYPES and key(o) not in records.objects)]
-    when = stamp(now)
-    result = import_objects(todo, True, url, opener)
-    if result.imported:
-        records.mark(result.keys(), when)
-        records.save()
+    ours = [o for o in objs if o["type"] not in SKIP_TYPES]
+    settings = [o for o in objs if o["type"] in SKIP_TYPES]
+    result = Result()
+    attempt = state["attempt"]
+    if attempt < GIVE_UP:
+        attempt += 1
+        if attempt == 1:
+            todo = ours + (settings if state["reason"] == "fresh" else [])
+        else:
+            wanted = {i.key for i in plan(installed, ours, manifest, records.objects).to_import("update")}
+            todo = [o for o in ours if key(o) in wanted] + [o for o in settings if key(o) in state["refused"]]
+        _write_pending(data_dir, dict(state, attempt=attempt))       # before the request
+        when = stamp(now)
+        result = import_objects(todo, True, url, opener)
+        if result.imported:
+            records.mark(result.keys(), when)
+            records.save()
+    refused = sorted({f"{t}:{i}" for t, i, _, why in result.errors if why != "not_imported"})
     there = {key(o) for o in installed} | set(result.keys())
-    missing = sorted(key(o) for o in objs if key(o) not in there)
-    attempt = 1 if state is None else state["attempts"] + 1
-    same = 1 if state is None or state["refused"] != missing else state["same"] + 1
-    done = not missing or same >= GIVE_UP
+    missing = sorted([key(o) for o in ours if key(o) not in there]
+                     + [key(o) for o in settings if key(o) in refused])
+    done = not missing or attempt >= GIVE_UP
     if missing and done:
-        _write_json(given_up_path(data_dir), {"version": 1, "refused": missing, "at": when,
+        _write_json(given_up_path(data_dir), {"version": 1, "refused": missing, "at": stamp(now),
                                               "shipped": shipped_sha(objects_dir)}, ".given-up-")
     elif not missing:
         clear_given_up(data_dir)
-    _write_pending(data_dir, None if done else
-                   {"version": 1, "attempts": attempt, "same": same, "refused": missing})
+    _write_pending(data_dir, None if done else dict(state, attempt=attempt, refused=refused))
     return FirstImport(result, attempt, missing, done, bool(missing) and done, export_path)
 
 
@@ -957,14 +975,12 @@ def _write_json(path: str, data: dict, prefix: str) -> None:
         raise KibanaError(f"cannot write {path}: {error}") from None
 
 
-def mark_pending(data_dir: str) -> None:
-    """An empty `pending`: the next start makes the first attempt, the whole file."""
-    try:
-        _make_dir(state_dir(data_dir), 0o770)
-        with open(pending_path(data_dir), "w", encoding="utf-8"):
-            pass
-    except OSError as error:
-        raise KibanaError(f"cannot write {pending_path(data_dir)}: {error}") from None
+def mark_pending(data_dir: str, reason: str = "no-objects") -> None:
+    """A first import pending for `reason`, no attempt yet: the next start makes attempt 1.
+    "fresh" (tpotinit's first run) takes the advanced settings along, "no-objects" never."""
+    if reason not in REASONS:
+        raise KibanaError(f"no reason {reason!r}, one of {', '.join(REASONS)}")
+    _write_pending(data_dir, {"version": 1, "reason": reason, "attempt": 0, "refused": []})
 
 
 # ---------------------------------------------------------------------------
@@ -1047,12 +1063,17 @@ def _cli_apply(args, opener: Optional[Callable]) -> int:
                   flush=True)
             return 0
         print(f"{LOG}Kibana holds none of T-Pot's objects, the first import runs again", flush=True)
-        mark_pending(args.data)
+        mark_pending(args.data, "no-objects")
     return _first_exit(run_first_import(args.data, args.objects, args.exports, opener, url=args.kibana,
                                         export=export))
 
 
 def _cli_first(args, opener: Optional[Callable]) -> int:
+    """One attempt of a pending first import; without `pending` nothing (apply decides)."""
+    if pending_state(args.data) is None:
+        print(f"{LOG}no first import is pending ({pending_path(args.data)}); "
+              "run apply, which starts one when Kibana needs it", file=sys.stderr)
+        return 2
     return _first_exit(run_first_import(args.data, args.objects, args.exports, opener, url=args.kibana))
 
 
