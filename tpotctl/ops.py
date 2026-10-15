@@ -483,6 +483,36 @@ def backups(home: Optional[str] = None) -> List[str]:
     return sorted((os.path.join(folder, n) for n in names), key=os.path.getmtime, reverse=True)
 
 
+def kibana_dirs(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> Tuple[str, str]:
+    """The data folder (TPOT_DATA_PATH as docker compose sees it) and the folder of the
+    shipped Kibana objects and their manifest, for tpotctl.kibana_objects."""
+    values = env_values(repo_dir) if env is None else env
+    data = os.path.normpath(os.path.join(repo_dir, os.path.expanduser(values.get("TPOT_DATA_PATH") or "./data")))
+    return data, os.path.join(repo_dir, "docker", "tpotinit", "dist", "etc", "objects")
+
+
+def kibana_exports(home: Optional[str] = None, data_dir: Optional[str] = None) -> List[str]:
+    """Exports of the Kibana objects, newest first: kibana_objects_*.ndjson of the T-Pot
+    Manager in ~/tpot_backups and, with `data_dir`, auto_*.ndjson of tpotinit in
+    <data>/kibana_objects/exports."""
+    places = [(os.path.join(home or os.path.expanduser("~"), "tpot_backups"), "kibana_objects_")]
+    if data_dir:
+        places.append((os.path.join(data_dir, "kibana_objects", "exports"), "auto_"))
+    found = []
+    for folder, prefix in places:
+        try:
+            names = [n for n in os.listdir(folder) if n.startswith(prefix) and n.endswith(".ndjson")]
+        except OSError:
+            continue
+        for name in names:
+            path = os.path.join(folder, name)
+            try:
+                found.append((os.path.getmtime(path), path))
+            except OSError:
+                pass
+    return [path for _, path in sorted(found, key=lambda f: (f[0], f[1]), reverse=True)]
+
+
 # The groups of an archive restore.sh can bring back (-g), with the questions it
 # asks for them; tests keep them the same as in restore.sh.
 GROUP_TEXT = {

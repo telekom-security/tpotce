@@ -1,0 +1,51 @@
+{
+ "_about": "Answers of POST /api/saved_objects/_import of Kibana 9.5.4 (VM tpot-e2e-installer, 2026-10-15), each for a file of two objects. When an answer holds errors, Kibana wrote none of the objects: successResults names the objects it would have written, they stayed missing (GET 404). Without errors every object is written.",
+ "conflict_overwrite_false": {
+  "_file": "tag a (exists in Kibana) and tag b (missing), overwrite=false: a stays as it was, b is NOT created",
+  "successCount": 1,
+  "success": false,
+  "warnings": [],
+  "successResults": [
+   {"type": "tag", "id": "tpot-probe-b2-b", "meta": {"title": "tpot-probe-b2-b", "icon": "tag"}, "managed": false}
+  ],
+  "errors": [
+   {"type": "tag", "id": "tpot-probe-b2-a", "meta": {"icon": "tag"}, "error": {"type": "conflict"}}
+  ]
+ },
+ "conflict_only": {
+  "_file": "dashboard only (exists in Kibana), overwrite=false: unchanged",
+  "successCount": 0,
+  "success": false,
+  "warnings": [],
+  "errors": [
+   {"type": "dashboard", "id": "tpot-probe-b2-only", "meta": {"title": "tpot-probe-b2-only", "icon": "dashboardApp"}, "error": {"type": "conflict"}}
+  ]
+ },
+ "missing_reference_overwrite_true": {
+  "_file": "dashboard good (no references) and dashboard bad (a reference to a missing index-pattern), overwrite=true: neither is created",
+  "successCount": 1,
+  "success": false,
+  "warnings": [],
+  "successResults": [
+   {"type": "dashboard", "id": "tpot-probe-b2-good", "meta": {"title": "tpot-probe-b2-good", "icon": "dashboardApp"}, "managed": false}
+  ],
+  "errors": [
+   {"id": "tpot-probe-b2-bad", "type": "dashboard", "meta": {"title": "tpot-probe-b2-bad", "icon": "dashboardApp"}, "error": {"type": "missing_references", "references": [{"type": "index-pattern", "id": "tpot-probe-b2-no-such-pattern"}]}}
+  ]
+ },
+ "created": {
+  "_file": "dashboard b alone (missing), overwrite=false: created",
+  "successCount": 1,
+  "success": true,
+  "warnings": [],
+  "successResults": [
+   {"type": "dashboard", "id": "tpot-probe-b2-b-dashboard", "meta": {"title": "#000002", "icon": "dashboardApp"}, "managed": false}
+  ]
+ },
+ "not_multipart": {
+  "_file": "a body of application/json instead of multipart/form-data: HTTP 415",
+  "statusCode": 415,
+  "error": "Unsupported Media Type",
+  "message": "Unsupported Media Type"
+ }
+}

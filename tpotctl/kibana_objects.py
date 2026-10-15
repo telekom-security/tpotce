@@ -1,4 +1,5 @@
-"""T-Pot's own Kibana objects: their normalised form, their digest and the manifest.
+"""T-Pot's own Kibana objects: their normalised form, their digest, the manifest,
+and how they get into Kibana and stay current there.
 
 An object in Kibana is T-Pot's when its digest is in the manifest of every version
 T-Pot ever shipped, `docker/tpotinit/dist/etc/objects/kibana_hashes.json`. The
@@ -14,6 +15,20 @@ attributes, the Discover counts of the fields), so an object counts as changed o
 when its content changed. A change
 of these rules is a new `RULES` and a new manifest.
 
+The plan compares Kibana with the shipped file: an object is *new* (missing),
+*current* (the shipped version), *update* (a version T-Pot shipped, or one T-Pot
+imported and nobody changed since: the record of `<data>/kibana_objects/record.json`)
+or *yours* (changed in Kibana). The modes of TPOT_KIBANA_OBJECTS import from it:
+keep nothing, add the new, update the new and the unchanged, overwrite all but the
+advanced settings. tpotinit runs them:
+
+    python3 kibana_objects.py apply --mode M --data DIR --objects DIR --exports DIR [--kibana URL]
+    python3 kibana_objects.py first --data DIR --objects DIR [--exports DIR] [--kibana URL]
+
+Kibana 9.5 writes nothing of an import that has one error in it (its successResults
+then name what it would have written): the import goes again without the objects that
+failed, so the others still get in.
+
 tpotinit runs a byte-identical copy of this module with a plain python3: standard
 library only, no import of `tpotctl`, Python 3.9. The default paths are those of
 the checkout; the copy hands its own as parameters.
@@ -21,22 +36,44 @@ the checkout; the copy hands its own as parameters.
 
 import argparse
 import copy
+import datetime
 import hashlib
+import http.client
 import io
 import json
 import os
+import re
 import subprocess
 import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+import uuid
 import zipfile
-from typing import Dict, List, Optional, Set
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 RULES = 2
 SKIP_TYPES = frozenset({"config", "config-global"})
 
+SHIPPED_NAME = "kibana_export.ndjson"
+MANIFEST_NAME = "kibana_hashes.json"
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OBJECTS_DIR = os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "etc", "objects")
-SHIPPED = os.path.join(OBJECTS_DIR, "kibana_export.ndjson")
-MANIFEST = os.path.join(OBJECTS_DIR, "kibana_hashes.json")
+SHIPPED = os.path.join(OBJECTS_DIR, SHIPPED_NAME)
+MANIFEST = os.path.join(OBJECTS_DIR, MANIFEST_NAME)
+
+KIBANA_URL = "http://127.0.0.1:64296"
+MODES = ("keep", "add", "update", "overwrite")
+EXPORT_PREFIX = "kibana_objects_"      # the exports of the T-Pot Manager in ~/tpot_backups
+AUTO_PREFIX = "auto_"                  # the exports of tpotinit in <data>/kibana_objects/exports
+AUTO_KEEP = 10
+EXPORT_BODY = {"type": "*", "excludeExportDetails": True}
+WINDOW = 60                            # seconds after a recorded import in which Kibana's updated_at is that import
+TIMEOUT = 30
+STATUS_TIMEOUT = 5
+ROUNDS = 5                             # imports of one call, each without the objects the last one refused
 
 # the files in the repository whose every committed version goes into the manifest
 HISTORY_PATHS = ("docker/tpotinit/dist/etc/objects/kibana_export.ndjson",
@@ -284,9 +321,549 @@ def check_manifest(path: str = MANIFEST, shipped_path: str = SHIPPED) -> List[st
     return [key(o) for o in shipped(shipped_path) if digest(o) not in manifest.get(key(o), ())]
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+# ---------------------------------------------------------------------------
+# where things are
+# ---------------------------------------------------------------------------
+
+def state_dir(data_dir: str) -> str:
+    """<data>/kibana_objects: the record, `pending` and the exports of tpotinit."""
+    return os.path.join(data_dir, "kibana_objects")
+
+
+def pending_path(data_dir: str) -> str:
+    """There while the first import has not worked yet; tpotinit tries it on every start."""
+    return os.path.join(state_dir(data_dir), "pending")
+
+
+def auto_exports_dir(data_dir: str) -> str:
+    return os.path.join(state_dir(data_dir), "exports")
+
+
+def _make_dir(folder: str, mode: int) -> None:
+    """The folder with its parents; one it makes gets `mode` whatever the umask, one that is
+    there stays as it is."""
+    if os.path.isdir(folder):
+        return
+    os.makedirs(folder, mode=mode, exist_ok=True)
+    os.chmod(folder, mode)
+
+
+def _write(path: str, text: str, mode: int, prefix: str) -> None:
+    """`text` into `path` through a temporary file of `mode` next to it and a rename."""
+    handle, temp = tempfile.mkstemp(prefix=prefix, suffix=".tmp", dir=os.path.dirname(path))
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as out:
+            out.write(text)
+        os.chmod(temp, mode)
+        os.replace(temp, path)
+    except BaseException:
+        try:
+            os.unlink(temp)
+        except OSError:
+            pass
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Kibana
+# ---------------------------------------------------------------------------
+
+def _request(method: str, path: str, url: str, opener: Optional[Callable], data: Optional[bytes] = None,
+             content_type: Optional[str] = None, timeout: int = TIMEOUT) -> bytes:
+    headers = {"kbn-xsrf": "true"}
+    if content_type:
+        headers["Content-Type"] = content_type
+    request = urllib.request.Request(url.rstrip("/") + path, data=data, method=method, headers=headers)
+    try:
+        with (opener or urllib.request.urlopen)(request, timeout=timeout) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        try:
+            body = error.read().decode("utf-8", "replace")
+        except (OSError, http.client.HTTPException):
+            body = ""
+        finally:
+            error.close()
+        body = " ".join(body.split())[:200]
+        raise KibanaError(f"Kibana at {url} answered {error.code}" + (f": {body}" if body else "")) from None
+    except (OSError, http.client.HTTPException) as error:    # no connection, a timeout, a broken answer
+        raise KibanaError(f"Kibana at {url} is not reachable ({getattr(error, 'reason', error)})") from None
+
+
+def status(url: str = KIBANA_URL, opener: Optional[Callable] = None) -> Optional[str]:
+    """None when Kibana answers its status with 200, else why not."""
+    try:
+        _request("GET", "/api/status", url, opener, timeout=STATUS_TIMEOUT)
+    except KibanaError as error:
+        return str(error)
+    return None
+
+
+def _export(url: str, opener: Optional[Callable], allow_empty: bool = False) -> Tuple[str, List[dict]]:
+    raw = _request("POST", "/api/saved_objects/_export", url, opener,
+                   json.dumps(EXPORT_BODY).encode(), "application/json")
+    source = f"the export of Kibana at {url}"
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise KibanaError(f"{source} is no UTF-8 text") from None
+    objects = parse_ndjson(text, source)
+    if not objects and not allow_empty:
+        raise KibanaError(f"Kibana at {url} exported no objects")
+    return text, objects
+
+
+def export_objects(url: str = KIBANA_URL, opener: Optional[Callable] = None) -> str:
+    """Every saved object of the default space as ndjson. An answer without objects, or
+    with a line that is no object, counts as failed: it is no export to go back to."""
+    return _export(url, opener)[0]
+
+
+def save_export(text: str, folder: str, prefix: str = EXPORT_PREFIX, now: Optional[float] = None) -> str:
+    """`text` as <folder>/<prefix><YYYYmmddHHMMSS>.ndjson (a folder it makes 0700, the file
+    0600) and its path; a second export in the same second gets _2, _3, ..."""
+    stamp = time.strftime("%Y%m%d%H%M%S", time.localtime(time.time() if now is None else now))
+    try:
+        _make_dir(folder, 0o700)
+        path, number = os.path.join(folder, f"{prefix}{stamp}.ndjson"), 1
+        while os.path.exists(path):
+            number += 1
+            path = os.path.join(folder, f"{prefix}{stamp}_{number}.ndjson")
+        _write(path, text, 0o600, ".kibana-export-")
+    except OSError as error:
+        raise KibanaError(f"the export cannot be written into {folder}: {error}") from None
+    return path
+
+
+def exports(folder: str, prefix: str) -> List[str]:
+    """The exports <prefix>*.ndjson of `folder`, newest first (their names hold the time)."""
+    try:
+        names = [n for n in os.listdir(folder) if n.startswith(prefix) and n.endswith(".ndjson")]
+    except OSError:
+        return []
+    return [os.path.join(folder, n) for n in sorted(names, reverse=True)]
+
+
+def rotate(folder: str, prefix: str, keep: int = AUTO_KEEP) -> List[str]:
+    """Removes all but the newest `keep` exports of `prefix` and returns what it removed."""
+    removed = []
+    for path in exports(folder, prefix)[keep:]:
+        try:
+            os.unlink(path)
+            removed.append(path)
+        except OSError:
+            pass
+    return removed
+
+
+@dataclass
+class Result:
+    """What an import did: (type, id) of what Kibana wrote, (type, id, title, error type) of
+    what it refused, and in add mode (type, id) of what was there already."""
+    imported: List[Tuple[str, str]] = field(default_factory=list)
+    errors: List[Tuple[str, str, str, str]] = field(default_factory=list)
+    existing: List[Tuple[str, str]] = field(default_factory=list)
+
+    def keys(self) -> List[str]:
+        return [f"{t}:{i}" for t, i in self.imported]
+
+
+def _title(obj: dict) -> str:
+    attributes = obj.get("attributes") or {}
+    return str(attributes.get("title") or attributes.get("name") or key(obj))
+
+
+def _import_once(objs: List[dict], overwrite: bool, url: str, opener: Optional[Callable]) -> dict:
+    boundary = uuid.uuid4().hex
+    ndjson = "\n".join(json.dumps(o, ensure_ascii=False) for o in objs)
+    body = (f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="tpot.ndjson"\r\n'
+            f"Content-Type: application/ndjson\r\n\r\n"
+            f"{ndjson}\r\n--{boundary}--\r\n").encode("utf-8")
+    raw = _request("POST", f"/api/saved_objects/_import?overwrite={'true' if overwrite else 'false'}", url,
+                   opener, body, f"multipart/form-data; boundary={boundary}")
+    try:
+        answer = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        answer = None
+    if not isinstance(answer, dict):
+        raise KibanaError(f"Kibana at {url} answered the import with no JSON object")
+    return answer
+
+
+def _entries(value) -> List[dict]:
+    return [e for e in (value if isinstance(value, list) else []) if isinstance(e, dict)]
+
+
+def import_objects(objs: List[dict], overwrite: bool, url: str = KIBANA_URL,
+                   opener: Optional[Callable] = None) -> Result:
+    """Imports `objs` into the default space; overwrite=False leaves every object that is
+    there as it is (a conflict, which counts as there, no error).
+
+    Kibana writes nothing of a file with one error in it, so the objects it did not refuse
+    go in again on their own, at most ROUNDS times; what then is still out is an error."""
+    result = Result()
+    titles = {key(o): _title(o) for o in objs}
+    todo = list(objs)
+    for _ in range(ROUNDS):
+        if not todo:
+            return result
+        answer = _import_once(todo, overwrite, url, opener)
+        errors = _entries(answer.get("errors"))
+        if not errors:
+            if answer.get("success") is False:
+                raise KibanaError(f"Kibana at {url} answered the import with success false and no errors")
+            result.imported = [(str(r.get("type")), str(r.get("id"))) for r in _entries(answer.get("successResults"))]
+            return result
+        refused = set()
+        for error in errors:
+            kind, ident = str(error.get("type") or ""), str(error.get("id") or "")
+            name = f"{kind}:{ident}"
+            refused.add(name)
+            what = error.get("error") if isinstance(error.get("error"), dict) else {}
+            reason = str(what.get("type") or "unknown")
+            meta = error.get("meta") if isinstance(error.get("meta"), dict) else {}
+            title = str(meta.get("title") or error.get("title") or titles.get(name) or name)
+            if reason == "conflict" and not overwrite:
+                result.existing.append((kind, ident))
+            else:
+                result.errors.append((kind, ident, title, reason))
+        left = [o for o in todo if key(o) not in refused]
+        if len(left) == len(todo):        # errors of no object in the file: nothing more to try
+            break
+        todo = left
+    result.errors += [(o["type"], o["id"], titles[key(o)], "not_imported") for o in todo]
+    return result
+
+
+# ---------------------------------------------------------------------------
+# the record: when T-Pot imported each object
+# ---------------------------------------------------------------------------
+
+class Records:
+    """<data>/kibana_objects/record.json: `type:id` -> the time of T-Pot's last import of it.
+
+    A missing file is an empty record (the hashes alone decide then); a file that cannot be
+    read is an error, never an empty record."""
+
+    def __init__(self, data_dir: str):
+        self.folder = state_dir(data_dir)
+        self.path = os.path.join(self.folder, "record.json")
+        self.objects: Dict[str, str] = {}
+        try:
+            with open(self.path, encoding="utf-8") as handle:
+                text = handle.read()
+        except FileNotFoundError:
+            return
+        except (OSError, UnicodeDecodeError) as error:
+            raise KibanaError(f"{self.path} cannot be read: {error}") from None
+        try:
+            data = json.loads(text)
+        except ValueError:
+            raise KibanaError(f"{self.path} is no JSON; move it away to start a new record") from None
+        objects = data.get("objects") if isinstance(data, dict) else None
+        if not (isinstance(data, dict) and data.get("version") == 1 and isinstance(objects, dict)
+                and all(isinstance(k, str) and isinstance(v, str) for k, v in objects.items())):
+            raise KibanaError(f"{self.path} is no record of the Kibana objects")
+        self.objects = dict(objects)
+
+    def mark(self, keys, when: str) -> None:
+        for name in keys:
+            self.objects[name] = when
+
+    def drop(self, keys) -> None:
+        for name in keys:
+            self.objects.pop(name, None)
+
+    def save(self) -> None:
+        text = json.dumps({"version": 1, "objects": self.objects}, indent=1, sort_keys=True) + "\n"
+        try:
+            _make_dir(self.folder, 0o770)
+            _write(self.path, text, 0o660, ".record-")
+        except OSError as error:
+            raise KibanaError(f"cannot write {self.path}: {error}") from None
+
+
+_TIME = re.compile(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)")
+
+
+def _time(value) -> Optional[datetime.datetime]:
+    """An ISO 8601 time with its zone (Kibana's 2026-10-15T08:08:24.513Z); None for anything else."""
+    match = _TIME.fullmatch(value.strip()) if isinstance(value, str) else None
+    if not match:
+        return None
+    fraction = ((match.group(2) or "") + "000000")[:6]
+    zone = "+00:00" if match.group(3) == "Z" else match.group(3)
+    try:
+        return datetime.datetime.fromisoformat(f"{match.group(1)}.{fraction}{zone}")
+    except ValueError:
+        return None
+
+
+def stamp(now: Optional[float] = None) -> str:
+    """`now` as the UTC time of the record, in Kibana's form."""
+    moment = datetime.datetime.fromtimestamp(time.time() if now is None else now, datetime.timezone.utc)
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _within(updated, recorded) -> bool:
+    """Kibana's updated_at is that of the recorded import: at most WINDOW seconds after it."""
+    changed, imported = _time(updated), _time(recorded)
+    if changed is None or imported is None:
+        return False
+    return changed <= imported + datetime.timedelta(seconds=WINDOW)
+
+
+# ---------------------------------------------------------------------------
+# the plan and the modes
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Item:
+    key: str
+    type: str
+    id: str
+    title: str
+    action: str          # new, update, current or yours
+
+
+_MODE_ACTIONS = {"keep": (), "add": ("new",), "update": ("new", "update"),
+                 "overwrite": ("new", "update", "yours")}
+
+
+@dataclass
+class Plan:
+    items: List[Item]
+    export_path: str = ""
+
+    def _of(self, action: str) -> List[Item]:
+        return [i for i in self.items if i.action == action]
+
+    @property
+    def new(self) -> List[Item]:
+        return self._of("new")
+
+    @property
+    def update(self) -> List[Item]:
+        return self._of("update")
+
+    @property
+    def current(self) -> List[Item]:
+        return self._of("current")
+
+    @property
+    def yours(self) -> List[Item]:
+        return self._of("yours")
+
+    def to_import(self, mode: str) -> List[Item]:
+        """What `mode` imports; current never, it is the shipped version already."""
+        if mode not in _MODE_ACTIONS:
+            raise KibanaError(f"no mode {mode!r}, one of {', '.join(MODES)}")
+        return [i for i in self.items if i.action in _MODE_ACTIONS[mode]]
+
+
+def plan(installed: List[dict], shipped_objs: List[dict], manifest: Dict[str, Set[str]],
+         records: Dict[str, str]) -> Plan:
+    """What each shipped object is in Kibana. Objects that T-Pot does not ship, and the
+    advanced settings, are not in it at all."""
+    by_key = {key(o): o for o in installed}
+    items = []
+    for obj in shipped_objs:
+        if obj["type"] in SKIP_TYPES:
+            continue
+        name = key(obj)
+        have = by_key.get(name)
+        title = _title(have or obj)
+        if have is None:
+            action = "new"
+        elif digest(have) == digest(obj):
+            action = "current"
+        elif digest(have) in manifest.get(name, set()) or _within(have.get("updated_at"), records.get(name)):
+            action = "update"
+        else:
+            action = "yours"
+        items.append(Item(name, obj["type"], obj["id"], title, action))
+    return Plan(items)
+
+
+def needs_first_import(installed: List[dict], shipped_objs: List[dict]) -> bool:
+    """Kibana holds none of the objects T-Pot ships: the first import never worked."""
+    ours = {key(o) for o in shipped_objs if o["type"] not in SKIP_TYPES}
+    return bool(ours) and not ours & {key(o) for o in installed}
+
+
+def _local(data_dir: str, objects_dir: str) -> Tuple["Records", Dict[str, Set[str]], List[dict]]:
+    """The record, the manifest and the shipped objects: read before any request."""
+    return (Records(data_dir), load_manifest(os.path.join(objects_dir, MANIFEST_NAME)),
+            shipped(os.path.join(objects_dir, SHIPPED_NAME)))
+
+
+def preview(data_dir: str, objects_dir: str, opener: Optional[Callable] = None, url: str = KIBANA_URL) -> Plan:
+    """The plan for Kibana as it is now; nothing is written."""
+    records, manifest, shipped_objs = _local(data_dir, objects_dir)
+    return plan(_export(url, opener)[1], shipped_objs, manifest, records.objects)
+
+
+def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opener: Optional[Callable] = None,
+              now: Optional[float] = None, url: str = KIBANA_URL, prefix: str = EXPORT_PREFIX,
+              keep: Optional[int] = None) -> Tuple[Plan, Result, str]:
+    """Imports what `mode` takes of the plan and records it.
+
+    keep makes no request. With nothing to import there is neither an export nor an
+    import. update and overwrite save the export first (into `export_dir`, the newest
+    `keep` of `prefix` stay when keep is given); without it there is no import."""
+    if mode not in MODES:
+        raise KibanaError(f"no mode {mode!r}, one of {', '.join(MODES)}")
+    if mode == "keep":
+        return Plan([]), Result(), ""
+    records, manifest, shipped_objs = _local(data_dir, objects_dir)
+    text, installed = _export(url, opener)
+    chosen = plan(installed, shipped_objs, manifest, records.objects)
+    todo = chosen.to_import(mode)
+    if not todo:
+        return chosen, Result(), ""
+    if mode in ("update", "overwrite"):
+        chosen.export_path = save_export(text, export_dir, prefix, now)
+        if keep is not None:
+            rotate(export_dir, prefix, keep)
+    by_key = {key(o): o for o in shipped_objs}
+    when = stamp(now)                    # before the request: Kibana's updated_at comes after it
+    result = import_objects([by_key[i.key] for i in todo], mode != "add", url, opener)
+    if result.imported:
+        records.mark(result.keys(), when)
+        records.save()
+    return chosen, result, chosen.export_path
+
+
+def run_restore(path: str, data_dir: str, export_dir: str, opener: Optional[Callable] = None,
+                now: Optional[float] = None, url: str = KIBANA_URL,
+                prefix: str = EXPORT_PREFIX) -> Tuple[str, Result]:
+    """Imports every object of the export `path`, the advanced settings too, after a fresh
+    export. What it restored is no longer T-Pot's import: its records go."""
+    objs = parse_ndjson(_read_text(path), path)
+    if not objs:
+        raise KibanaError(f"{path} holds no Kibana objects")
+    records = Records(data_dir)
+    text, _ = _export(url, opener)
+    export_path = save_export(text, export_dir, prefix, now)
+    result = import_objects(objs, True, url, opener)
+    if result.imported:
+        records.drop(result.keys())
+        records.save()
+    return export_path, result
+
+
+def run_first_import(data_dir: str, objects_dir: str, opener: Optional[Callable] = None,
+                     now: Optional[float] = None, url: str = KIBANA_URL,
+                     export_dir: Optional[str] = None) -> Result:
+    """Imports the whole shipped file, the advanced settings too, and records it; `pending`
+    goes when every object got in. With `export_dir`, a Kibana that holds objects is
+    exported there first (as auto_, the newest AUTO_KEEP stay); without that export no import."""
+    path = os.path.join(objects_dir, SHIPPED_NAME)
+    objs = parse_ndjson(_read_text(path), path)
+    records = Records(data_dir)
+    if export_dir is not None:
+        text, installed = _export(url, opener, allow_empty=True)
+        if installed:
+            save_export(text, export_dir, AUTO_PREFIX, now)
+            rotate(export_dir, AUTO_PREFIX, AUTO_KEEP)
+    when = stamp(now)
+    result = import_objects(objs, True, url, opener)
+    if result.imported:
+        records.mark(result.keys(), when)
+        records.save()
+    if not result.errors:
+        try:
+            os.unlink(pending_path(data_dir))
+        except FileNotFoundError:
+            pass
+        except OSError as error:
+            raise KibanaError(f"cannot remove {pending_path(data_dir)}: {error}") from None
+    return result
+
+
+def mark_pending(data_dir: str) -> None:
+    try:
+        _make_dir(state_dir(data_dir), 0o770)
+        with open(pending_path(data_dir), "a", encoding="utf-8"):
+            pass
+    except OSError as error:
+        raise KibanaError(f"cannot write {pending_path(data_dir)}: {error}") from None
+
+
+# ---------------------------------------------------------------------------
+# what the runs say
+# ---------------------------------------------------------------------------
+
+LOG = "# Kibana objects: "
+
+
+def _error_lines(result: Result) -> List[str]:
+    return [f"{LOG}not imported: {t}:{i} \"{title}\" ({reason})" for t, i, title, reason in result.errors]
+
+
+def summary(mode: str, chosen: Plan, result: Result, export_path: str = "") -> List[str]:
+    """One line of counts, then one line per object Kibana refused."""
+    if mode == "keep":
+        return [f"{LOG}TPOT_KIBANA_OBJECTS=keep, nothing changed"]
+    done = set(result.keys())
+
+    def count(action):
+        return sum(1 for i in chosen.items if i.action == action and i.key in done)
+    parts = [f"{count('new')} new"]
+    if mode == "add":
+        there = len(chosen.items) - len(chosen.new) + len(result.existing)
+        parts.append(f"{there} already there")
+    else:
+        parts += [f"{count('update')} updated", f"{len(chosen.current)} the same"]
+        parts.append(f"{count('yours')} of yours replaced" if mode == "overwrite"
+                     else f"{len(chosen.yours)} of yours kept")
+    if result.errors:
+        parts.append(f"{len(result.errors)} failed")
+    line = LOG + ", ".join(parts)
+    if export_path:
+        line += f" (export: {export_path})"
+    return [line] + _error_lines(result)
+
+
+def first_summary(result: Result) -> List[str]:
+    line = f"{LOG}first import, {len(result.imported)} imported"
+    if result.errors:
+        line += f", {len(result.errors)} failed; tpotinit tries again on the next start"
+    return [line] + _error_lines(result)
+
+
+def _cli_apply(args, opener: Optional[Callable]) -> int:
+    """tpotinit's start: the first import while it is pending or when Kibana holds none of
+    T-Pot's objects (in every mode), else the mode, with its exports rotated."""
+    if not os.path.exists(pending_path(args.data)):
+        shipped_objs = shipped(os.path.join(args.objects, SHIPPED_NAME))
+        installed = _export(args.kibana, opener, allow_empty=True)[1]
+        if not needs_first_import(installed, shipped_objs):
+            chosen, result, path = run_apply(args.mode, args.data, args.objects, args.exports, opener,
+                                             url=args.kibana, prefix=AUTO_PREFIX, keep=AUTO_KEEP)
+            lines = summary(args.mode, chosen, result, path)
+            if args.mode != "keep" and not chosen.to_import(args.mode):
+                lines[0] = f"{LOG}nothing to import ({lines[0][len(LOG):]})"
+            print("\n".join(lines), flush=True)
+            return 1 if result.errors else 0
+        print(f"{LOG}Kibana holds none of T-Pot's objects, the first import runs again", flush=True)
+        mark_pending(args.data)
+    return _cli_first(args, opener)
+
+
+def _cli_first(args, opener: Optional[Callable]) -> int:
+    result = run_first_import(args.data, args.objects, opener, url=args.kibana,
+                              export_dir=getattr(args, "exports", None))
+    print("\n".join(first_summary(result)), flush=True)
+    return 1 if result.errors else 0
+
+
+def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) -> int:
+    """Exit 0, 1 on an error (also an object Kibana refused), 2 on a wrong call."""
     parser = argparse.ArgumentParser(prog="python3 -m tpotctl.kibana_objects",
-                                     description="The hash manifest of T-Pot's Kibana objects.")
+                                     description="T-Pot's Kibana objects: the hash manifest, and the "
+                                                 "imports tpotinit runs.")
     commands = parser.add_subparsers(dest="command", required=True)
     manifest = commands.add_parser("manifest", help="write the manifest from the git history")
     mode = manifest.add_mutually_exclusive_group()
@@ -294,8 +871,28 @@ def main(argv: Optional[List[str]] = None) -> int:
                       help="only list the shipped objects the manifest lacks (exit 1 if any)")
     mode.add_argument("--verify", action="store_true",
                       help="only compare the manifest with the one the history gives (exit 1 if they differ)")
-    args = parser.parse_args(argv)
+    apply = commands.add_parser("apply", help="the first import while it is pending or when Kibana holds none "
+                                              "of T-Pot's objects, else what the mode imports")
+    apply.add_argument("--mode", required=True, choices=MODES, help="TPOT_KIBANA_OBJECTS")
+    first = commands.add_parser("first", help="import the whole shipped file, the advanced settings too")
+    for command in (apply, first):
+        command.add_argument("--data", required=True, metavar="DIR", help="the data folder (TPOT_DATA_PATH)")
+        command.add_argument("--objects", required=True, metavar="DIR",
+                             help=f"the folder of {SHIPPED_NAME} and {MANIFEST_NAME}")
+        command.add_argument("--kibana", default=KIBANA_URL, metavar="URL", help=f"default {KIBANA_URL}")
+    apply.add_argument("--exports", required=True, metavar="DIR",
+                       help=f"where the export before an import goes ({AUTO_PREFIX}*, the newest {AUTO_KEEP} stay)")
+    first.add_argument("--exports", metavar="DIR",
+                       help="export a Kibana that holds objects there first")
     try:
+        args = parser.parse_args(argv)
+    except SystemExit as stop:
+        return stop.code if isinstance(stop.code, int) else 2
+    try:
+        if args.command == "apply":
+            return _cli_apply(args, opener)
+        if args.command == "first":
+            return _cli_first(args, opener)
         if args.verify:
             if verify_manifest():
                 return 0
@@ -316,7 +913,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"{MANIFEST}: {len(data['objects'])} objects, {versions} versions")
         return 0
     except KibanaError as error:
-        print(error, file=sys.stderr)
+        print(f"{LOG}{error}" if args.command != "manifest" else error, file=sys.stderr)
         return 1
 
 
