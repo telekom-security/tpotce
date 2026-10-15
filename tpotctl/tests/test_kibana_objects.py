@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -1687,7 +1688,8 @@ class LinkTest(unittest.TestCase):
         self.link(path)
         self.refused(path, lambda: ko.given_up(self.site.data, self.site.objects))
         self.refused(path, lambda: ko.clear_given_up(self.site.data))
-        self.refused(path, lambda: ko._write_json(path, {"version": 1, "refused": []}, ".given-up-"))
+        self.refused(path, lambda: ko._write_state(self.site.data, "given_up", {"version": 1, "refused": []},
+                                                   ".given-up-"))
         self.assertTrue(os.path.islink(path))
 
     def test_rotation_removes_regular_files_only(self):
@@ -1711,7 +1713,8 @@ class LinkTest(unittest.TestCase):
         folder = ko.state_dir(site.data)
         self.link(folder, self.outside)
         records = ko.Records.__new__(ko.Records)
-        records.folder, records.path, records.objects = folder, os.path.join(folder, "record.json"), {}
+        records.data_dir, records.folder, records.objects = site.data, folder, {}
+        records.path = os.path.join(folder, "record.json")
         for run in (lambda: ko.Records(site.data), records.save, lambda: ko.mark_pending(site.data, "fresh"),
                     lambda: ko.pending_state(site.data), lambda: ko.import_lock(site.data).__enter__(),
                     lambda: ko.save_export("{}\n", exports, ko.AUTO_PREFIX, now=NOW),
@@ -1725,6 +1728,80 @@ class LinkTest(unittest.TestCase):
         os.symlink(mine, backups)
         path = ko.save_export("{}\n", backups, now=NOW)
         self.assertEqual(os.listdir(mine), [os.path.basename(path)])
+
+    def swap_on_first_write(self):
+        """The first write through a Folder first moves <data>/kibana_objects away and puts a
+        link to a folder outside in its place: what was opened already must not follow it."""
+        state = ko.state_dir(self.site.data)
+        moved = os.path.join(self.site.data, "moved")
+        write = ko.Folder.write
+        swapped = []
+
+        def swap_then_write(folder, *args, **kwargs):
+            if not swapped:
+                os.rename(state, moved)
+                os.symlink(self.outside, state)
+                swapped.append(True)
+            return write(folder, *args, **kwargs)
+        return moved, unittest.mock.patch.object(ko.Folder, "write", swap_then_write)
+
+    def test_a_folder_swapped_for_a_link_in_a_run_is_not_followed(self):
+        site = self.site
+        moved, patch = self.swap_on_first_write()
+        kibana = FakeKibana([as_in_kibana(CONFIG)])
+        with patch:
+            chosen, result, path = ko.run_apply("update", site.data, site.objects, ko.auto_exports_dir(site.data),
+                                                opener=kibana, now=NOW, prefix=ko.AUTO_PREFIX, keep=10)
+        self.assertEqual(result.imported, [("dashboard", "a")])
+        self.untouched()
+        self.assertEqual(sorted(os.listdir(moved)), ["exports", "lock", "record.json"])
+        self.assertEqual(os.listdir(os.path.join(moved, "exports")), [os.path.basename(path)])
+
+    def test_a_folder_swapped_for_a_link_before_a_write_is_not_followed(self):
+        moved, patch = self.swap_on_first_write()
+        with patch:
+            ko.mark_pending(self.site.data, "fresh")
+        self.untouched()
+        self.assertEqual(os.listdir(moved), ["pending"])
+        # and the next call meets the link: refused
+        self.refused(ko.state_dir(self.site.data), lambda: ko.pending_state(self.site.data))
+
+    @unittest.skipUnless(hasattr(os, "mkfifo") and hasattr(signal, "alarm"), "no FIFO here")
+    def test_a_fifo_is_refused_without_waiting(self):
+        def stuck(signum, frame):
+            raise AssertionError("a read waited on a FIFO")
+        old = signal.signal(signal.SIGALRM, stuck)
+        self.addCleanup(signal.signal, signal.SIGALRM, old)
+        self.addCleanup(signal.alarm, 0)
+        site = self.site
+        runs = {
+            ko.pending_path(site.data): lambda: ko.pending_state(site.data),
+            os.path.join(ko.state_dir(site.data), "record.json"): lambda: ko.Records(site.data),
+            ko.given_up_path(site.data): lambda: ko.given_up(site.data, site.objects),
+            ko.lock_path(site.data): lambda: ko.import_lock(site.data).__enter__(),
+        }
+        for path, run in runs.items():
+            for mode in (0o660, 0o440):          # 0440: the read-only open of the lock
+                with self.subTest(path=os.path.basename(path), mode=oct(mode)):
+                    os.mkfifo(path, mode)
+                    signal.alarm(3)
+                    try:
+                        self.refused(path, run)
+                    finally:
+                        signal.alarm(0)
+                        os.unlink(path)
+
+    def test_a_hard_link_at_the_lock_is_refused_and_its_mode_kept(self):
+        path = ko.lock_path(self.site.data)
+        os.link(self.target, path)
+        with self.assertRaises(ko.KibanaError) as caught:
+            ko.import_lock(self.site.data).__enter__()
+        self.assertEqual(str(caught.exception),
+                         f"{path} has another name (a hard link); T-Pot leaves it as it is")
+        self.untouched()
+        kibana = FakeKibana([as_in_kibana(CONFIG)])
+        self.refused(path, lambda: self.site.apply("update", kibana))
+        self.assertEqual(kibana.requests, [])
 
     def test_files_are_written_as_new_regular_files(self):
         site = self.site

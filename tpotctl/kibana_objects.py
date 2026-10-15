@@ -360,7 +360,15 @@ def lock_path(data_dir: str) -> str:
 
 
 BUSY = "another Kibana import is running (tpotinit or tpot elastic)"
-_HELD = threading.local()              # per thread: the locks it holds, and how deep
+_HELD = threading.local()              # per thread: the locks it holds, how deep, and their folders
+
+NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+DIRECTORY = getattr(os, "O_DIRECTORY", 0)
+NONBLOCK = getattr(os, "O_NONBLOCK", 0)
+# every file of <data>/kibana_objects is reached through its folder's descriptor, never by path
+DIR_FD = (bool(NOFOLLOW and DIRECTORY and NONBLOCK)
+          and all(f in os.supports_dir_fd for f in (os.open, os.mkdir, os.unlink, os.stat, os.rename))
+          and os.stat in os.supports_follow_symlinks and os.listdir in os.supports_fd)
 
 
 def _held() -> Dict[str, int]:
@@ -369,41 +377,285 @@ def _held() -> Dict[str, int]:
     return _HELD.depth
 
 
+def _held_folders() -> Dict[str, "Folder"]:
+    if not hasattr(_HELD, "folders"):
+        _HELD.folders = {}
+    return _HELD.folders
+
+
+def _not_own(path: str, what: str) -> KibanaError:
+    return KibanaError(f"{path} is a link or no {what}; T-Pot leaves it as it is")
+
+
+def _blocking(handle: int) -> None:
+    if fcntl is not None:
+        fcntl.fcntl(handle, fcntl.F_SETFL, fcntl.fcntl(handle, fcntl.F_GETFL) & ~NONBLOCK)
+
+
+class Folder:
+    """A folder held by its descriptor: every name in it is opened, written, listed and
+    removed relative to that descriptor, so a folder swapped for a link after it was opened
+    changes nothing. Links and special files in it are refused, never followed, never
+    waited on."""
+
+    def __init__(self, handle: int, path: str):
+        self.handle, self.path = handle, path
+
+    def close(self) -> None:
+        if self.handle is not None:
+            os.close(self.handle)
+            self.handle = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    @staticmethod
+    def _need_dir_fd() -> None:
+        if not DIR_FD:
+            raise KibanaError("this system cannot reach a file through its folder; T-Pot writes no Kibana "
+                              "object file here")
+
+    @classmethod
+    def walk(cls, base: str, parts: Tuple[str, ...], create: bool, mode: int = 0o770) -> Optional["Folder"]:
+        """`base` (by its path, the data folder), then each of `parts` below it, one at a time,
+        none of them a link; with `create` the missing ones are made with `mode`. None when one
+        is missing and `create` is false."""
+        cls._need_dir_fd()
+        try:
+            if create:
+                os.makedirs(base, exist_ok=True)
+            handle = os.open(base, os.O_RDONLY | DIRECTORY)
+        except FileNotFoundError:
+            if create:
+                raise
+            return None
+        folder = cls(handle, base)
+        try:
+            for part in parts:
+                child = folder.sub(part, create, mode)
+                folder.close()
+                if child is None:
+                    return None
+                folder = child
+        except BaseException:
+            folder.close()
+            raise
+        return folder
+
+    @classmethod
+    def at(cls, path: str, create: bool, mode: int) -> Optional["Folder"]:
+        """A folder of yours by its path (a link of yours to it counts as it): the Manager's
+        ~/tpot_backups. A folder it makes gets `mode`."""
+        cls._need_dir_fd()
+        created = False
+        if create and not os.path.isdir(path):
+            os.makedirs(path, mode=mode, exist_ok=True)
+            created = True
+        try:
+            handle = os.open(path, os.O_RDONLY | DIRECTORY)
+        except FileNotFoundError:
+            if create:
+                raise
+            return None
+        if created:
+            os.fchmod(handle, mode)
+        return cls(handle, path)
+
+    def name(self, name: str) -> str:
+        return os.path.join(self.path, name)
+
+    def lstat(self, name: str) -> Optional[os.stat_result]:
+        try:
+            return os.stat(name, dir_fd=self.handle, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+
+    def _regular_or_missing(self, name: str) -> Optional[os.stat_result]:
+        info = self.lstat(name)
+        if info is not None and not stat.S_ISREG(info.st_mode):
+            raise _not_own(self.name(name), "regular file")
+        return info
+
+    def sub(self, name: str, create: bool, mode: int = 0o770) -> Optional["Folder"]:
+        """The folder `name` in this one, no link; with `create` made with `mode` if missing."""
+        created = False
+        if create:
+            try:
+                os.mkdir(name, mode, dir_fd=self.handle)
+                created = True
+            except FileExistsError:
+                pass
+        try:
+            handle = os.open(name, os.O_RDONLY | DIRECTORY | NOFOLLOW, dir_fd=self.handle)
+        except FileNotFoundError:
+            if create:
+                raise
+            return None
+        except OSError as error:
+            if error.errno in (errno.ELOOP, errno.ENOTDIR):
+                raise _not_own(self.name(name), "folder") from None
+            raise
+        try:
+            if not stat.S_ISDIR(os.fstat(handle).st_mode):
+                raise _not_own(self.name(name), "folder")
+            if created:
+                os.fchmod(handle, mode)
+        except BaseException:
+            os.close(handle)
+            raise
+        return Folder(handle, self.name(name))
+
+    def read(self, name: str) -> Optional[str]:
+        """The text of the regular file `name`, None when it is missing."""
+        try:
+            handle = os.open(name, os.O_RDONLY | NOFOLLOW | NONBLOCK, dir_fd=self.handle)
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            info = self.lstat(name)
+            if error.errno == errno.ELOOP or (info is not None and stat.S_ISLNK(info.st_mode)):
+                raise _not_own(self.name(name), "regular file") from None
+            raise
+        try:
+            if not stat.S_ISREG(os.fstat(handle).st_mode):
+                raise _not_own(self.name(name), "regular file")
+            _blocking(handle)
+            source = os.fdopen(handle, encoding="utf-8")
+        except BaseException:
+            os.close(handle)
+            raise
+        with source:
+            return source.read()
+
+    def write(self, name: str, text: str, mode: int, prefix: str) -> None:
+        """`text` as the regular file `name`: a new temporary file (O_EXCL, no link followed),
+        its mode set on its own descriptor, then a rename in this folder."""
+        self._regular_or_missing(name)
+        temp = f"{prefix}{uuid.uuid4().hex}.tmp"
+        handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW, 0o600, dir_fd=self.handle)
+        try:
+            os.fchmod(handle, mode)
+            out = os.fdopen(handle, "w", encoding="utf-8", newline="\n")
+        except BaseException:
+            os.close(handle)
+            os.unlink(temp, dir_fd=self.handle)
+            raise
+        try:
+            with out:
+                out.write(text)
+            # os.replace is os.rename with the overwrite POSIX rename has anyway; both take dir_fd
+            os.replace(temp, name, src_dir_fd=self.handle, dst_dir_fd=self.handle)
+        except BaseException:
+            try:
+                os.unlink(temp, dir_fd=self.handle)
+            except OSError:
+                pass
+            raise
+
+    def remove(self, name: str) -> bool:
+        """Removes the regular file `name`; a link or anything else is refused."""
+        if self._regular_or_missing(name) is None:
+            return False
+        try:
+            os.unlink(name, dir_fd=self.handle)
+        except FileNotFoundError:
+            return False
+        return True
+
+    def regular_files(self) -> List[Tuple[str, os.stat_result]]:
+        """The regular files of the folder with their lstat; links and the rest are left out."""
+        found = []
+        for name in os.listdir(self.handle):
+            info = self.lstat(name)
+            if info is not None and stat.S_ISREG(info.st_mode):
+                found.append((name, info))
+        return found
+
+    def open_lock(self, name: str) -> int:
+        """The lock file, made 0660 whatever the umask; one this user may not write (tpotinit
+        made it) is opened read-only, which is enough for flock. A link, a special file or a
+        file with other names (a hard link) is refused, its mode left alone."""
+        writable = True
+        try:
+            handle = os.open(name, os.O_RDWR | os.O_CREAT | NOFOLLOW | NONBLOCK, 0o660, dir_fd=self.handle)
+        except OSError as error:
+            info = self.lstat(name)
+            if error.errno == errno.ELOOP or (info is not None and stat.S_ISLNK(info.st_mode)):
+                raise _not_own(self.name(name), "regular file") from None
+            if not isinstance(error, PermissionError):
+                raise
+            handle = os.open(name, os.O_RDONLY | NOFOLLOW | NONBLOCK, dir_fd=self.handle)
+            writable = False
+        try:
+            info = os.fstat(handle)
+            if not stat.S_ISREG(info.st_mode):
+                raise _not_own(self.name(name), "regular file")
+            if info.st_nlink != 1:
+                raise KibanaError(f"{self.name(name)} has another name (a hard link); T-Pot leaves it as it is")
+            if writable:
+                try:
+                    os.fchmod(handle, 0o660)
+                except OSError:
+                    pass                   # not ours: its owner chose the mode
+        except BaseException:
+            os.close(handle)
+            raise
+        return handle
+
+
+@contextlib.contextmanager
+def _state(data_dir: str, create: bool):
+    """<data>/kibana_objects as a Folder: the one the running import holds (one per run), or
+    one of its own for this call. None when it is missing and `create` is false."""
+    held = _held_folders().get(os.path.abspath(state_dir(data_dir)))
+    if held is not None:
+        yield held
+        return
+    folder = Folder.walk(data_dir, (os.path.basename(state_dir(data_dir)),), create)
+    try:
+        yield folder
+    finally:
+        if folder is not None:
+            folder.close()
+
+
+@contextlib.contextmanager
+def _export_folder(folder: str, prefix: str, create: bool):
+    """The folder of exports: tpotinit's (auto_) is <data>/kibana_objects/exports, reached
+    through <data>/kibana_objects, no link on the way; the Manager's ~/tpot_backups may be a
+    link of yours."""
+    folder_mode = export_modes(prefix)[0]
+    if prefix != AUTO_PREFIX:
+        found = Folder.at(folder, create, folder_mode)
+    else:
+        state = os.path.dirname(os.path.abspath(folder))
+        held = _held_folders().get(state)
+        if held is not None:
+            found = held.sub(os.path.basename(folder), create, folder_mode)
+        else:
+            found = Folder.walk(os.path.dirname(state), (os.path.basename(state), os.path.basename(folder)),
+                                create, folder_mode)
+    try:
+        yield found
+    finally:
+        if found is not None:
+            found.close()
+
+
 def _unusable(path: str, error: OSError) -> KibanaError:
     return KibanaError(f"the Kibana import lock {path} cannot be used: {error.strerror or error}")
-
-
-def _open_lock(path: str) -> int:
-    """The lock file, made 0660 whatever the umask; one this user may not write (tpotinit
-    made it) is opened read-only, which is enough for flock."""
-    try:
-        handle = os.open(path, os.O_RDWR | os.O_CREAT | NOFOLLOW, 0o660)
-    except OSError as error:
-        if error.errno == errno.ELOOP or os.path.islink(path):
-            raise _not_own(path, "regular file") from None
-        if not isinstance(error, PermissionError):
-            raise
-        handle = os.open(path, os.O_RDONLY | NOFOLLOW)
-        if not stat.S_ISREG(os.fstat(handle).st_mode):
-            os.close(handle)
-            raise _not_own(path, "regular file") from None
-        return handle
-    if not stat.S_ISREG(os.fstat(handle).st_mode):
-        os.close(handle)
-        raise _not_own(path, "regular file")
-    try:
-        os.fchmod(handle, 0o660)
-    except OSError:
-        pass                           # not ours: its owner chose the mode
-    return handle
 
 
 @contextlib.contextmanager
 def import_lock(data_dir: str):
     """One run at a time that reads a plan and imports: an exclusive flock on
-    <data>/kibana_objects/lock, waited for at most LOCK_WAIT seconds (then BUSY). A run
-    inside a run of the same thread holds it already; another thread waits like any other
-    run. A lock that cannot be opened or taken is a KibanaError that names it."""
+    <data>/kibana_objects/lock, waited for at most LOCK_WAIT seconds (then BUSY). The run
+    holds <data>/kibana_objects open for all its files. A run inside a run of the same
+    thread holds it already; another thread waits like any other run. A lock that cannot
+    be opened or taken is a KibanaError that names it."""
     path = os.path.abspath(lock_path(data_dir))
     held = _held()
     if held.get(path):
@@ -416,11 +668,18 @@ def import_lock(data_dir: str):
     if fcntl is None:
         yield
         return
+    folder = None
     try:
-        _make_dir(state_dir(data_dir), 0o770)
-        handle = _open_lock(path)
+        folder = Folder.walk(data_dir, (os.path.basename(state_dir(data_dir)),), True)
+        handle = folder.open_lock(os.path.basename(path))
     except OSError as error:
+        if folder is not None:
+            folder.close()
         raise _unusable(path, error) from None
+    except BaseException:
+        if folder is not None:
+            folder.close()
+        raise
     try:
         deadline = time.monotonic() + LOCK_WAIT
         while True:
@@ -434,13 +693,16 @@ def import_lock(data_dir: str):
             except OSError as error:
                 raise _unusable(path, error) from None
         held[path] = 1
+        _held_folders()[os.path.abspath(state_dir(data_dir))] = folder
         try:
             yield
         finally:
             held.pop(path, None)
+            _held_folders().pop(os.path.abspath(state_dir(data_dir)), None)
             fcntl.flock(handle, fcntl.LOCK_UN)
     finally:
         os.close(handle)
+        folder.close()
 
 
 def _one_at_a_time(run):
@@ -455,98 +717,6 @@ def _one_at_a_time(run):
         with import_lock(given["data_dir"]):
             return run(*args, **kwargs)
     return locked
-
-
-NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
-DIRECTORY = getattr(os, "O_DIRECTORY", 0)
-
-
-def _not_own(path: str, what: str) -> KibanaError:
-    return KibanaError(f"{path} is a link or no {what}; T-Pot leaves it as it is")
-
-
-def _make_dir(folder: str, mode: int, strict: bool = True) -> None:
-    """The folder with its parents; one it makes gets `mode` whatever the umask (through
-    its own descriptor), one that is there stays as it is. `strict`: the folder must be a
-    folder of its own, no link (the folders in <data>/kibana_objects)."""
-    try:
-        os.makedirs(folder, mode=mode)
-        created = True
-    except FileExistsError:
-        created = False
-    info = os.lstat(folder)
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
-        if strict or not os.path.isdir(folder):
-            raise _not_own(folder, "folder")
-        return
-    if created:
-        handle = os.open(folder, os.O_RDONLY | DIRECTORY | NOFOLLOW)
-        try:
-            os.fchmod(handle, mode)
-        finally:
-            os.close(handle)
-
-
-def _no_link_dir(folder: str) -> None:
-    """`folder` is missing or a folder of its own; a link or a file in its place is refused."""
-    try:
-        info = os.lstat(folder)
-    except FileNotFoundError:
-        return
-    if not stat.S_ISDIR(info.st_mode):
-        raise _not_own(folder, "folder")
-
-
-def _no_link(path: str) -> None:
-    """`path` is missing or a regular file; a link, a folder or anything else is refused."""
-    try:
-        info = os.lstat(path)
-    except FileNotFoundError:
-        return
-    if not stat.S_ISREG(info.st_mode):
-        raise _not_own(path, "regular file")
-
-
-def _read_own(path: str) -> Optional[str]:
-    """The text of the regular file `path`, None when it is missing; a link is refused."""
-    try:
-        handle = os.open(path, os.O_RDONLY | NOFOLLOW)
-    except FileNotFoundError:
-        return None
-    except OSError as error:
-        if error.errno == errno.ELOOP or os.path.islink(path):
-            raise _not_own(path, "regular file") from None
-        raise
-    with os.fdopen(handle, encoding="utf-8") as source:
-        if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
-            raise _not_own(path, "regular file")
-        return source.read()
-
-
-def _write(path: str, text: str, mode: int, prefix: str) -> None:
-    """`text` into `path` as a regular file: a new temporary file (O_EXCL, no link followed)
-    next to it, its mode set on its own descriptor, then a rename. A link at `path` is
-    refused and nothing is written."""
-    _no_link(path)
-    temp = os.path.join(os.path.dirname(path), f"{prefix}{uuid.uuid4().hex}.tmp")
-    handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW, 0o600)
-    try:
-        os.fchmod(handle, mode)
-        out = os.fdopen(handle, "w", encoding="utf-8", newline="\n")
-    except BaseException:
-        os.close(handle)
-        os.unlink(temp)
-        raise
-    try:
-        with out:
-            out.write(text)
-        os.replace(temp, path)
-    except BaseException:
-        try:
-            os.unlink(temp)
-        except OSError:
-            pass
-        raise
 
 
 # ---------------------------------------------------------------------------
@@ -613,23 +783,20 @@ def export_modes(prefix: str) -> Tuple[int, int]:
 def save_export(text: str, folder: str, prefix: str = EXPORT_PREFIX, now: Optional[float] = None) -> str:
     """`text` as <folder>/<prefix><YYYYmmddHHMMSS>.ndjson, the time in UTC, and its path; a
     second export in the same second gets _2, _3, ... (modes: export_modes; a folder that is
-    there keeps its own). tpotinit's folder and the one above it (<data>/kibana_objects) must
-    be folders of their own, no links; the Manager's ~/tpot_backups may be a link of yours."""
+    there keeps its own). tpotinit's folder is reached through <data>/kibana_objects, no link
+    on the way; the Manager's ~/tpot_backups may be a link of yours."""
     stamp = time.strftime("%Y%m%d%H%M%S", time.gmtime(time.time() if now is None else now))
-    folder_mode, file_mode = export_modes(prefix)
-    strict = prefix == AUTO_PREFIX
+    file_mode = export_modes(prefix)[1]
     try:
-        if strict:
-            _make_dir(os.path.dirname(os.path.abspath(folder)), 0o770)
-        _make_dir(folder, folder_mode, strict=strict)
-        path, number = os.path.join(folder, f"{prefix}{stamp}.ndjson"), 1
-        while os.path.lexists(path):
-            number += 1
-            path = os.path.join(folder, f"{prefix}{stamp}_{number}.ndjson")
-        _write(path, text, file_mode, ".kibana-export-")
+        with _export_folder(folder, prefix, create=True) as target:
+            name, number = f"{prefix}{stamp}.ndjson", 1
+            while target.lstat(name) is not None:
+                number += 1
+                name = f"{prefix}{stamp}_{number}.ndjson"
+            target.write(name, text, file_mode, ".kibana-export-")
     except OSError as error:
         raise KibanaError(f"the export cannot be written into {folder}: {error}") from None
-    return path
+    return os.path.join(folder, name)
 
 
 def _name_order(name: str, prefix: str) -> Tuple[str, int]:
@@ -638,41 +805,45 @@ def _name_order(name: str, prefix: str) -> Tuple[str, int]:
     return (match.group(1), int(match.group(2) or 1)) if match else ("", 0)
 
 
+def _ordered(target: "Folder", folder: str, prefix: str) -> List[str]:
+    found = [((info.st_mtime, *_name_order(name, prefix)), name) for name, info in target.regular_files()
+             if name.startswith(prefix) and name.endswith(".ndjson")]
+    return [name for _, name in sorted(found, reverse=True)]
+
+
 def exports(folder: str, prefix: str) -> List[str]:
     """The exports <prefix>*.ndjson of `folder`, newest first: by the time of the file, then
     by the stamp and number of its name. Only regular files count, a link is never followed."""
     try:
-        names = [n for n in os.listdir(folder) if n.startswith(prefix) and n.endswith(".ndjson")]
+        with _export_folder(folder, prefix, create=False) as target:
+            if target is None:
+                return []
+            return [os.path.join(folder, name) for name in _ordered(target, folder, prefix)]
     except OSError:
         return []
-    found = []
-    for name in names:
-        path = os.path.join(folder, name)
-        try:
-            info = os.lstat(path)
-        except OSError:
-            continue
-        if stat.S_ISREG(info.st_mode):
-            found.append(((info.st_mtime, *_name_order(name, prefix)), path))
-    return [path for _, path in sorted(found, reverse=True)]
 
 
 def rotate(folder: str, prefix: str, keep: int = AUTO_KEEP, spare: Optional[str] = None) -> List[str]:
     """Removes all but the newest `keep` exports of `prefix` and returns what it removed;
     `spare`, the export just written, always stays (a clock that went back cannot remove it).
-    It removes regular files only (exports() lists no other); a link stays where it is."""
+    It removes regular files only, through the folder it lists; a link stays where it is."""
     removed = []
-    paths = exports(folder, prefix)
-    if spare in paths:
-        paths.remove(spare)
-        keep -= 1
-    for path in paths[max(keep, 0):]:
-        try:
-            if stat.S_ISREG(os.lstat(path).st_mode):
-                os.unlink(path)
-                removed.append(path)
-        except OSError:
-            pass
+    try:
+        with _export_folder(folder, prefix, create=False) as target:
+            if target is None:
+                return []
+            names = _ordered(target, folder, prefix)
+            if spare is not None and os.path.basename(spare) in names:
+                names.remove(os.path.basename(spare))
+                keep -= 1
+            for name in names[max(keep, 0):]:
+                try:
+                    if target.remove(name):
+                        removed.append(os.path.join(folder, name))
+                except (OSError, KibanaError):
+                    pass
+    except OSError:
+        pass
     return removed
 
 
@@ -771,13 +942,16 @@ class Records:
     A missing file is an empty record (the hashes alone decide then); a file that cannot be
     read is an error, never an empty record."""
 
+    NAME = "record.json"
+
     def __init__(self, data_dir: str):
+        self.data_dir = data_dir
         self.folder = state_dir(data_dir)
-        self.path = os.path.join(self.folder, "record.json")
+        self.path = os.path.join(self.folder, self.NAME)
         self.objects: Dict[str, str] = {}
         try:
-            _no_link_dir(self.folder)
-            text = _read_own(self.path)
+            with _state(data_dir, create=False) as folder:
+                text = folder.read(self.NAME) if folder is not None else None
         except (OSError, UnicodeDecodeError) as error:
             raise KibanaError(f"{self.path} cannot be read: {error}") from None
         if text is None:
@@ -803,8 +977,8 @@ class Records:
     def save(self) -> None:
         text = json.dumps({"version": 1, "objects": self.objects}, indent=1, sort_keys=True) + "\n"
         try:
-            _make_dir(self.folder, 0o770)
-            _write(self.path, text, 0o660, ".record-")
+            with _state(self.data_dir, create=True) as folder:
+                folder.write(self.NAME, text, 0o660, ".record-")
         except OSError as error:
             raise KibanaError(f"cannot write {self.path}: {error}") from None
 
@@ -1022,9 +1196,9 @@ def pending_state(data_dir: str) -> Optional[dict]:
     reason (empty, old, broken) counts as "no-objects"; one that cannot be read, or without a
     number of attempts, counts as a retry: a retry never touches yours. A link in its place
     (or in the place of its folder) is refused."""
-    _no_link_dir(state_dir(data_dir))
     try:
-        text = _read_own(pending_path(data_dir))
+        with _state(data_dir, create=False) as folder:
+            text = folder.read(os.path.basename(pending_path(data_dir))) if folder is not None else None
     except (OSError, UnicodeDecodeError):
         text = "?"
     if text is None:
@@ -1049,15 +1223,11 @@ def _write_pending(data_dir: str, state: Optional[dict]) -> None:
     path = pending_path(data_dir)
     try:
         if state is None:
-            _no_link_dir(state_dir(data_dir))
-            _no_link(path)
-            try:
-                os.unlink(path)
-            except FileNotFoundError:
-                pass
+            with _state(data_dir, create=False) as folder:
+                if folder is not None:
+                    folder.remove(os.path.basename(path))
             return
-        _make_dir(state_dir(data_dir), 0o770)
-        _write(path, json.dumps(state, sort_keys=True) + "\n", 0o660, ".pending-")
+        _write_state(data_dir, os.path.basename(path), state, ".pending-")
     except OSError as error:
         raise KibanaError(f"cannot write {path}: {error}") from None
 
@@ -1114,8 +1284,9 @@ def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: O
                      + [key(o) for o in settings if key(o) in refused])
     done = not missing or attempt >= GIVE_UP
     if missing and done:
-        _write_json(given_up_path(data_dir), {"version": 1, "refused": missing, "at": stamp(now),
-                                              "shipped": shipped_sha(objects_dir)}, ".given-up-")
+        _write_state(data_dir, os.path.basename(given_up_path(data_dir)),
+                     {"version": 1, "refused": missing, "at": stamp(now), "shipped": shipped_sha(objects_dir)},
+                     ".given-up-")
     elif not missing:
         clear_given_up(data_dir)
     _write_pending(data_dir, None if done else dict(state, attempt=attempt, refused=refused))
@@ -1141,10 +1312,9 @@ def given_up(data_dir: str, objects_dir: str) -> Optional[List[str]]:
     """The objects the first import gave up on, while its marker is for this shipped file;
     None without one. A marker of another shipped file (a new release) goes. A marker that
     cannot be read still counts: the first import does not run again on its own then."""
-    path = given_up_path(data_dir)
-    _no_link_dir(state_dir(data_dir))
     try:
-        text = _read_own(path)
+        with _state(data_dir, create=False) as folder:
+            text = folder.read(os.path.basename(given_up_path(data_dir))) if folder is not None else None
         if text is None:
             return None
         data = json.loads(text)
@@ -1159,22 +1329,21 @@ def given_up(data_dir: str, objects_dir: str) -> Optional[List[str]]:
 
 
 def clear_given_up(data_dir: str) -> None:
-    _no_link_dir(state_dir(data_dir))
-    _no_link(given_up_path(data_dir))
     try:
-        os.unlink(given_up_path(data_dir))
-    except FileNotFoundError:
-        pass
+        with _state(data_dir, create=False) as folder:
+            if folder is not None:
+                folder.remove(os.path.basename(given_up_path(data_dir)))
     except OSError as error:
         raise KibanaError(f"cannot remove {given_up_path(data_dir)}: {error}") from None
 
 
-def _write_json(path: str, data: dict, prefix: str) -> None:
+def _write_state(data_dir: str, name: str, data: dict, prefix: str) -> None:
+    """`data` as JSON into <data>/kibana_objects/<name>, through the folder's descriptor."""
     try:
-        _make_dir(os.path.dirname(path), 0o770)
-        _write(path, json.dumps(data, sort_keys=True) + "\n", 0o660, prefix)
+        with _state(data_dir, create=True) as folder:
+            folder.write(name, json.dumps(data, sort_keys=True) + "\n", 0o660, prefix)
     except OSError as error:
-        raise KibanaError(f"cannot write {path}: {error}") from None
+        raise KibanaError(f"cannot write {os.path.join(state_dir(data_dir), name)}: {error}") from None
 
 
 def mark_pending(data_dir: str, reason: str = "no-objects") -> None:
