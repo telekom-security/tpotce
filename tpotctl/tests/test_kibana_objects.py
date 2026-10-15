@@ -508,6 +508,15 @@ class PlanTest(unittest.TestCase):
         del without["updated_at"]
         self.assertEqual(self.action([without], records={"dashboard:d": iso(NOW)}), "yours")
 
+    def test_plan_a_change_before_its_record_is_yours(self):
+        # a clock that went back after T-Pot's import: your change lies before the record
+        for before in (600, 0.5):
+            with self.subTest(before=before):
+                self.assertEqual(self.action([as_in_kibana(dash("d", title="Mine"), NOW - before)],
+                                             records={"dashboard:d": iso(NOW)}), "yours")
+        self.assertEqual(self.action([as_in_kibana(dash("d", title="Mine"), NOW)],
+                                     records={"dashboard:d": iso(NOW)}), "update")
+
     def test_plan_never_lists_config_or_objects_of_your_own(self):
         installed = [as_in_kibana(self.D), as_in_kibana(CONFIG), as_in_kibana(dash("mine"))]
         found = self.plan_of(installed, shipped=[CONFIG, self.D])
@@ -1146,6 +1155,50 @@ class FirstImportTest(unittest.TestCase):
         with self.assertRaisesRegex(ko.KibanaError, "no first import is pending"):
             self.first(site, kibana)
 
+    def test_a_pending_first_import_that_starts_late_never_touches_yours(self):
+        a, b = dash("a"), dash("b")
+        site = Site(self, [a, b])
+        ko.mark_pending(site.data, "fresh")
+        kibana = FakeKibana([as_in_kibana(CONFIG)])
+        # start 1 cannot write its export: no attempt
+        blocked = ko.auto_exports_dir(site.data)
+        os.makedirs(os.path.dirname(blocked), exist_ok=True)
+        open(blocked, "w").close()
+        with self.assertRaises(ko.KibanaError):
+            self.first(site, kibana)
+        os.unlink(blocked)
+        self.assertEqual((ko.pending_state(site.data)["attempt"], kibana.imports()), (0, []))
+        # meanwhile you bring them in yourself and change a and the advanced settings
+        site.apply("update", kibana)
+        mine_a = as_in_kibana(dash("a", title="Mine"), NOW + DAY)
+        mine_config = as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}), NOW + DAY)
+        kibana.store.update({"dashboard:a": mine_a, "config:9.5.4": mine_config})
+        sent = len(kibana.imports())
+        first = self.first(site, kibana, now=NOW + 2 * DAY)
+        self.assertEqual((first.attempt, first.done, first.result.imported), (1, True, []))
+        self.assertEqual(len(kibana.imports()), sent)                   # nothing to send at all
+        self.assertEqual((kibana.store["dashboard:a"], kibana.store["config:9.5.4"]), (mine_a, mine_config))
+
+    def test_a_refusal_is_used_up_once_it_was_sent_again(self):
+        site = Site(self, [dash("a")])
+        ko.mark_pending(site.data, "fresh")
+        kibana = FakeKibana(fail={"config:9.5.4"}, clock=time.time)
+        self.first(site, kibana)
+        self.assertEqual(json.loads(self.pending(site))["refused"], ["config:9.5.4"])
+        # attempt 2 sends the settings again; Kibana writes them, the answer is lost
+        kibana.fail.clear()
+        kibana.lose = 1
+        with self.assertRaises(ko.KibanaError):
+            self.first(site, kibana)
+        self.assertEqual(json.loads(self.pending(site)), {"version": 1, "reason": "fresh", "attempt": 2,
+                                                          "refused": []})
+        mine = as_in_kibana(dict(CONFIG, attributes={"defaultIndex": "mine"}), time.time() + 120)
+        kibana.store["config:9.5.4"] = mine
+        sent = len(kibana.imports())
+        first = self.first(site, kibana)
+        self.assertEqual((first.attempt, first.done, len(kibana.imports())), (3, True, sent))
+        self.assertEqual(kibana.store["config:9.5.4"], mine)
+
     def lost(self, site, kibana, lose):
         """Four starts of the CLI, you change a and the advanced settings before each from the
         second on; `lose(start)` breaks that start."""
@@ -1275,12 +1328,18 @@ class CliTest(unittest.TestCase):
     def test_apply_runs_the_first_import_while_it_is_pending(self):
         site = Site(self, [dash("a")])
         ko.mark_pending(site.data, "fresh")
-        kibana = FakeKibana([as_in_kibana(dash("a", title="Mine"))])
+        kibana = FakeKibana([as_in_kibana(dash("own"))])
         rc, out, _ = site.cli(*self.args(site, "keep"), opener=kibana)
         self.assertEqual(rc, 0)
         self.assertTrue(out.splitlines()[-1].startswith("# Kibana objects: first import, 2 imported (export: "))
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
         self.assertEqual(len([r for r in kibana.requests if "_export" in r.full_url]), 1)
+        # a Kibana that holds a T-Pot object already gets a retry, also on attempt 1: yours stays
+        ko.mark_pending(site.data, "fresh")
+        kibana.store["dashboard:a"] = mine = as_in_kibana(dash("a", title="Mine"), NOW + DAY)
+        kibana.store["config:9.5.4"] = setting = as_in_kibana(dict(CONFIG, attributes={"x": 1}), NOW + DAY)
+        rc, out, _ = site.cli(*self.args(site, "keep"), opener=kibana)
+        self.assertEqual((rc, kibana.store["dashboard:a"], kibana.store["config:9.5.4"]), (0, mine, setting))
 
     def test_apply_without_any_tpot_object_imports_them_in_every_mode(self):
         for mode in ko.MODES:
@@ -1410,6 +1469,74 @@ class CliTest(unittest.TestCase):
         self.assertEqual((rc, out, kibana.requests), (2, "", []))
         self.assertIn("no first import is pending", err)
         self.assertIn("run apply", err)
+
+
+@unittest.skipIf(ko.fcntl is None, "no flock on this platform")
+class LockTest(unittest.TestCase):
+    HOLD = ("import fcntl, os, sys, time\n"
+            "handle = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o660)\n"
+            "fcntl.flock(handle, fcntl.LOCK_EX)\n"
+            "print('held', flush=True)\n"
+            "time.sleep(float(sys.argv[2]))\n")
+
+    def setUp(self):
+        self.site = Site(self, [dash("a")])
+        os.makedirs(ko.state_dir(self.site.data))
+        self.wait = ko.LOCK_WAIT
+        self.addCleanup(setattr, ko, "LOCK_WAIT", self.wait)
+
+    def hold(self, seconds):
+        """Another process holds the lock for `seconds`."""
+        proc = subprocess.Popen([sys.executable, "-c", self.HOLD, ko.lock_path(self.site.data), str(seconds)],
+                                stdout=subprocess.PIPE, text=True)
+        self.addCleanup(proc.wait)
+        self.assertEqual(proc.stdout.readline().strip(), "held")
+        proc.stdout.close()
+        return proc
+
+    def test_one_import_at_a_time(self):
+        site = self.site
+        self.hold(3)
+        ko.LOCK_WAIT = 0.4
+        kibana = FakeKibana([as_in_kibana(CONFIG)])
+        backup = os.path.join(site.root, "pick.ndjson")
+        with open(backup, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(dash("a")) + "\n")
+        ko.mark_pending(site.data, "fresh")
+        runs = {
+            "update": lambda: site.apply("update", kibana),
+            "restore": lambda: ko.run_restore(backup, site.data, site.exports, opener=kibana),
+            "first": lambda: ko.run_first_import(site.data, site.objects, ko.auto_exports_dir(site.data),
+                                                 opener=kibana),
+        }
+        for name, run in runs.items():
+            with self.subTest(name):
+                with self.assertRaisesRegex(ko.KibanaError, r"^another Kibana import is running "
+                                                            r"\(tpotinit or tpot elastic\)$"):
+                    run()
+        rc, out, err = site.cli("apply", "--mode", "update", "--data", site.data, "--objects", site.objects,
+                                "--exports", ko.auto_exports_dir(site.data), opener=kibana)
+        self.assertEqual((rc, err), (1, f"# Kibana objects: {ko.BUSY}\n"))
+        self.assertEqual(kibana.requests, [])
+        self.assertEqual(ko.pending_state(site.data)["attempt"], 0)
+        # keep makes no request, it needs no lock
+        self.assertEqual(site.apply("keep", kibana)[2], "")
+
+    def test_a_run_waits_for_the_other_one(self):
+        self.hold(1)
+        ko.LOCK_WAIT = 20
+        kibana = FakeKibana([as_in_kibana(CONFIG)])
+        started = time.monotonic()
+        chosen, result, _ = self.site.apply("update", kibana)
+        self.assertGreater(time.monotonic() - started, 0.5)
+        self.assertEqual(result.imported, [("dashboard", "a")])
+        # inside a run of the same process the lock is held already
+        with ko.import_lock(self.site.data):
+            with ko.import_lock(self.site.data):
+                self.site.apply("update", kibana)
+        with ko.import_lock(self.site.data):
+            pass
+        self.assertEqual(ko._HELD, {})
 
 
 class OpsTest(unittest.TestCase):

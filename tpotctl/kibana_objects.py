@@ -40,9 +40,12 @@ the checkout; the copy hands its own as parameters.
 """
 
 import argparse
+import contextlib
 import copy
 import datetime
+import functools
 import hashlib
+import inspect
 import http.client
 import io
 import json
@@ -58,6 +61,11 @@ import uuid
 import zipfile
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Set, Tuple
+
+try:
+    import fcntl
+except ImportError:          # Windows: the imports run on a Linux host only, the lock is not needed there
+    fcntl = None
 
 RULES = 2
 SKIP_TYPES = frozenset({"config", "config-global"})
@@ -79,6 +87,7 @@ WINDOW = 60                            # seconds after a recorded import in whic
 TIMEOUT = 30
 STATUS_TIMEOUT = 5
 ROUNDS = 5                             # imports of one call, each without the objects the last one refused
+LOCK_WAIT = 60                         # seconds a run waits for another one (tpotinit or tpot elastic)
 
 # the files in the repository whose every committed version goes into the manifest
 HISTORY_PATHS = ("docker/tpotinit/dist/etc/objects/kibana_export.ndjson",
@@ -342,6 +351,69 @@ def pending_path(data_dir: str) -> str:
 
 def auto_exports_dir(data_dir: str) -> str:
     return os.path.join(state_dir(data_dir), "exports")
+
+
+def lock_path(data_dir: str) -> str:
+    return os.path.join(state_dir(data_dir), "lock")
+
+
+BUSY = "another Kibana import is running (tpotinit or tpot elastic)"
+_HELD: Dict[str, int] = {}             # the locks this process holds, and how deep
+
+
+@contextlib.contextmanager
+def import_lock(data_dir: str):
+    """One run at a time that reads a plan and imports: an exclusive flock on
+    <data>/kibana_objects/lock, waited for at most LOCK_WAIT seconds (then BUSY). A run
+    inside a run of the same process holds it already."""
+    path = os.path.abspath(lock_path(data_dir))
+    if _HELD.get(path):
+        _HELD[path] += 1
+        try:
+            yield
+        finally:
+            _HELD[path] -= 1
+        return
+    if fcntl is None:
+        yield
+        return
+    try:
+        _make_dir(state_dir(data_dir), 0o770)
+        handle = os.open(path, os.O_RDWR | os.O_CREAT, 0o660)
+    except OSError as error:
+        raise KibanaError(f"cannot open {path}: {error}") from None
+    try:
+        deadline = time.monotonic() + LOCK_WAIT
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise KibanaError(BUSY) from None
+                time.sleep(0.2)
+        _HELD[path] = 1
+        try:
+            yield
+        finally:
+            _HELD.pop(path, None)
+            fcntl.flock(handle, fcntl.LOCK_UN)
+    finally:
+        os.close(handle)
+
+
+def _one_at_a_time(run):
+    """`run` under import_lock of its data_dir; mode keep makes no request, so no lock."""
+    signature = inspect.signature(run)
+
+    @functools.wraps(run)
+    def locked(*args, **kwargs):
+        given = signature.bind(*args, **kwargs).arguments
+        if given.get("mode") == "keep":
+            return run(*args, **kwargs)
+        with import_lock(given["data_dir"]):
+            return run(*args, **kwargs)
+    return locked
 
 
 def _make_dir(folder: str, mode: int) -> None:
@@ -648,7 +720,9 @@ def _within(updated, recorded) -> bool:
     changed, imported = _time(updated), _time(recorded)
     if changed is None or imported is None:
         return False
-    return changed <= imported + datetime.timedelta(seconds=WINDOW)
+    # T-Pot takes its time before the request, so its own write never lies before it; a time
+    # before the record is a clock that went back, or someone else: yours
+    return imported <= changed <= imported + datetime.timedelta(seconds=WINDOW)
 
 
 # ---------------------------------------------------------------------------
@@ -751,6 +825,7 @@ def _fresh_export(url: str, opener: Optional[Callable], export, allow_empty: boo
     return text, installed
 
 
+@_one_at_a_time
 def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opener: Optional[Callable] = None,
               now: Optional[float] = None, url: str = KIBANA_URL, prefix: str = EXPORT_PREFIX,
               keep: Optional[int] = None, export: Optional[Tuple[str, List[dict]]] = None) -> Tuple[Plan, Result, str]:
@@ -787,6 +862,7 @@ def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opene
     return chosen, result, chosen.export_path
 
 
+@_one_at_a_time
 def run_restore(path: str, data_dir: str, export_dir: str, opener: Optional[Callable] = None,
                 now: Optional[float] = None, url: str = KIBANA_URL,
                 prefix: str = EXPORT_PREFIX) -> Tuple[str, Result]:
@@ -867,6 +943,7 @@ def _write_pending(data_dir: str, state: Optional[dict]) -> None:
         raise KibanaError(f"cannot write {path}: {error}") from None
 
 
+@_one_at_a_time
 def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: Optional[Callable] = None,
                      now: Optional[float] = None, url: str = KIBANA_URL,
                      export: Optional[Tuple[str, List[dict]]] = None) -> FirstImport:
@@ -898,12 +975,15 @@ def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: O
     attempt = state["attempt"]
     if attempt < GIVE_UP:
         attempt += 1
-        if attempt == 1:
+        if attempt == 1 and needs_first_import(installed, objs):
+            # the whole file only into a Kibana that holds none of T-Pot's objects: one that has
+            # some (an import of yours came first) gets a retry, so nothing of yours is touched
             todo = ours + (settings if state["reason"] == "fresh" else [])
         else:
             wanted = {i.key for i in plan(installed, ours, manifest, records.objects).to_import("update")}
             todo = [o for o in ours if key(o) in wanted] + [o for o in settings if key(o) in state["refused"]]
-        _write_pending(data_dir, dict(state, attempt=attempt))       # before the request
+        # before the request: the attempt counts, and a refusal is used up once it is sent again
+        _write_pending(data_dir, dict(state, attempt=attempt, refused=[]))
         when = stamp(now)
         result = import_objects(todo, True, url, opener)
         if result.imported:
@@ -1108,7 +1188,8 @@ def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) ->
         return stop.code if isinstance(stop.code, int) else 2
     try:
         if args.command == "apply":
-            return _cli_apply(args, opener)
+            with import_lock(args.data):            # its export, its plan and its import: one run
+                return _cli_apply(args, opener)
         if args.command == "first":
             return _cli_first(args, opener)
         if args.verify:
