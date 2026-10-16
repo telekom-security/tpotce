@@ -9,6 +9,7 @@ real loop in the image.
 """
 
 import configparser
+import fnmatch
 import os
 import re
 import shutil
@@ -28,17 +29,40 @@ CLEAN = ROOT / "docker" / "tpotinit" / "dist" / "bin" / "clean.sh"
 SHELLS = [shell for shell in ("/bin/sh", "/bin/dash", shutil.which("busybox") and "busybox-ash")
           if shell and (shell == "busybox-ash" or os.access(shell, os.X_OK))]
 OFF = {"EWS": "ews", "HPFEED": "hpfeed", "EWSJSON": "json", "INFLUXDB": "influxdb"}
+LOGROTATE = ROOT / "docker" / "tpotinit" / "dist" / "etc" / "logrotate" / "logrotate.template"
 
-# A stand-in for python3: records its arguments, says the limit was reached for the first
-# $STUB_LIMITED calls (the line ews.py prints), ends with $STUB_RC
+# The ewsposter commit of docker/ewsposter/Dockerfile and the two lines of it whose output the
+# rounds read: modules/ealert.py:437 (EAlert.buildAlert) and :43 (EAlert.__init__)
+PINNED = "c6b44c7544e71a637d1bcc019abf4a248afb05d4"
+SENDLIMIT_SOURCE = """print(f'    -> Sendlimit ({self.ECFG["sendlimit"]}) for Honeypot {self.MODUL} reached. Skip.')"""
+STARTING_SOURCE = "print(f' => Starting {self.MODUL.title()} Honeypot Modul.')"
+
+# A stand-in for python3: records its arguments; prints " => Starting ..." with $STUB_STARTED;
+# says the limit was reached for the first $STUB_LIMITED calls (the line ews.py prints); ends
+# with $STUB_RC, with 1 for the calls in $STUB_FAIL_CALLS and, with $STUB_CRASH, for a run of all
+# modules and for "-m $STUB_CRASH"; ends itself by TERM on the calls in $STUB_KILL_CALLS
 STUB = """#!/bin/sh
 echo "$*" >> "$STUB_DIR/calls"
 n=$(wc -l < "$STUB_DIR/calls")
+n=$((n + 0))
+module=""
+previous=""
+for argument in "$@"; do
+  [ "$previous" = "-m" ] && module="$argument"
+  previous="$argument"
+done
+[ -n "${STUB_STARTED:-}" ] && echo " => Starting Cowrie Honeypot Modul."
 if [ "$n" -le "${STUB_LIMITED:-0}" ]; then
   echo "    -> Sendlimit (5000) for Honeypot COWRIE reached. Skip."
 fi
+case " ${STUB_KILL_CALLS:-} " in *" $n "*) kill -TERM $$ ;; esac
+rc="${STUB_RC:-0}"
+case " ${STUB_FAIL_CALLS:-} " in *" $n "*) rc=1 ;; esac
+if [ -n "${STUB_CRASH:-}" ] && { [ -z "$module" ] || [ "$module" = "$STUB_CRASH" ]; }; then
+  rc=1
+fi
 echo " => EWSrun finish."
-exit "${STUB_RC:-0}"
+exit "$rc"
 """
 
 
@@ -85,6 +109,7 @@ class Sandbox:
             f'myIDLE_CFG="{self.idle}"\n'
             'mySLEEP=42\n'
             'myHELD=""\n'
+            'myIDLE_RETRY_PAUSE=0\n'
         )
         environ = dict(os.environ, ENTRY=str(ENTRYPOINT), STUB_DIR=str(self.base),
                        **{key: str(value) for key, value in env.items()})
@@ -236,14 +261,105 @@ class PassCountTest(EntrypointCase):
                                      {f"-u {box.ews}/ews.py -c {box.idle}/ -l 0 -E -L 5000"})
                     self.assertIn("EWSrun finish", result.stdout)
 
-    def test_failed_pass_ends_the_round(self):
+    def test_failed_pass_is_tried_again(self):
+        """A failed pass is tried again up to 3 times; one that works on the second try is clean."""
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 box = self.sandbox(Path(shell).name)
-                result = box.run(shell, "fuIDLE", STUB_LIMITED=5, STUB_RC=1)
+                result = box.run(shell, "fuIDLE", STUB_FAIL_CALLS="1 2")
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertEqual(len(box.calls()), 3)
+                self.assertIn("try 1 of 3", result.stdout)
+
+    def test_killed_pass_is_tried_again(self):
+        """ews.py ended by a signal (rc 143) counts as a failed pass."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = box.run(shell, "fuIDLE", STUB_KILL_CALLS="1")
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertEqual(len(box.calls()), 2)
+                self.assertIn("rc=143", result.stdout)
+
+    def test_start_failure_fails_the_round_without_module_passes(self):
+        """ews.py fails before any module (as with an error of api.ipify.org): 1 + 3 tries, no
+        pass per module, the round failed."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = box.run(shell, "fuIDLE", STUB_RC=1)
                 self.assertEqual(result.returncode, 1)
-                self.assertEqual(len(box.calls()), 1)
-                self.assertIn("rc=1", result.stdout)
+                self.assertEqual(len(box.calls()), 4)
+                self.assertFalse(any(" -m " in call for call in box.calls()))
+
+    def test_module_crash_falls_back_to_one_pass_per_module(self):
+        """A module that keeps failing: after the tries, every module of the idle config has its
+        own pass (-m), so the others move on; the round still failed."""
+        config = configparser.RawConfigParser()
+        config.read(EWS_CFG)
+        modules = sorted(section.lower() for section in config.sections()
+                         if config.has_option(section, section.lower()) and section not in OFF
+                         and config.get(section, section.lower()).lower() == "true")
+        self.assertIn("cowrie", modules)
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = box.run(shell, "fuIDLE", STUB_STARTED=1, STUB_CRASH="cowrie")
+                self.assertEqual(result.returncode, 1)
+                calls = box.calls()
+                self.assertEqual(len([call for call in calls if " -m " not in call]), 4)
+                per_module = [call.rsplit(" -m ", 1)[1] for call in calls if " -m " in call]
+                self.assertEqual(sorted(set(per_module)), modules)
+                self.assertEqual(per_module.count("cowrie"), 4)
+                self.assertTrue(all(per_module.count(name) == 1 for name in modules if name != "cowrie"))
+                self.assertIn("Idle passes failed for: cowrie.", result.stdout)
+
+    def test_unwritable_config_folder_fails_the_round(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                locked = box.base / "locked"
+                locked.mkdir()
+                locked.chmod(0o555)
+                self.addCleanup(locked.chmod, 0o755)
+                if os.access(locked, os.W_OK):
+                    self.skipTest("the folder stays writable (root)")
+                result = box.run(shell, f'myIDLE_CFG="{locked}/hold"; fuIDLE')
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(box.calls(), [])
+                self.assertIn("could not be written", result.stdout)
+
+    def test_module_list_of_the_idle_config(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.idle.mkdir()
+                (box.idle / "ews.cfg").write_text(
+                    "[EWS]\news = false\n[COWRIE]\ncowrie = true\nlogfile = x\n"
+                    "[WORDPOT]\nwordpot= TRUE\n[GLUTTON]\nglutton = false\n# glutton = true\n")
+                result = box.run(shell, "fuIDLE_MODULES")
+                self.assertEqual(result.stdout.split(), ["cowrie", "wordpot"])
+
+    def test_texts_of_the_pinned_ewsposter(self):
+        """The texts the rounds read from ews.py are those of the pinned commit; a bump of
+        EWSPOSTER_COMMIT means checking them again (and this test)."""
+        dockerfile = (ROOT / "docker" / "ewsposter" / "Dockerfile").read_text()
+        self.assertIn(f"ARG EWSPOSTER_COMMIT={PINNED}", dockerfile)
+        text = ENTRYPOINT.read_text()
+        for source in (SENDLIMIT_SOURCE, STARTING_SOURCE):
+            self.assertIn(source, text)
+        result = Sandbox(Path(self.tmp.name) / "texts").run(
+            SHELLS[0], 'printf "%s\\n%s\\n" "$myIDLE_LIMIT_TEXT" "$myIDLE_MODULE_TEXT"')
+        limit_text, module_text = result.stdout.split("\n")[:2]
+        # the f-strings of the source, filled in as ews.py does for -L 5000 and the cowrie module
+        printed_limit = "    -> Sendlimit (5000) for Honeypot COWRIE reached. Skip."
+        printed_start = " => Starting Cowrie Honeypot Modul."
+        self.assertEqual(SENDLIMIT_SOURCE.replace('{self.ECFG["sendlimit"]}', "5000")
+                         .replace("{self.MODUL}", "COWRIE"), f"print(f'{printed_limit}')")
+        self.assertEqual(STARTING_SOURCE.replace("{self.MODUL.title()}", "Cowrie"),
+                         f"print(f'{printed_start}')")
+        self.assertIn(limit_text, printed_limit)
+        self.assertTrue(printed_start.startswith(module_text))
 
 
 class RoundTest(EntrypointCase):
@@ -293,6 +409,63 @@ class RoundTest(EntrypointCase):
                 # the first round of the hold starts with a normal pass
                 self.assertEqual(self.kinds(box), ["normal", "idle", "idle", "idle", "normal", "normal"])
 
+    def test_failed_round_writes_no_ack(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.hold.write_text("")
+                result = box.run(shell, 'myHELD=yes; fuROUND; echo "interval=$myINTERVAL"', STUB_RC=1)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("interval=5", result.stdout)
+                self.assertFalse(os.path.lexists(box.ack))
+                self.assertIn("No hold.ack", result.stdout)
+                self.assertEqual(self.kinds(box), ["idle"] * 4)
+
+    def test_end_of_hold_waits_for_a_clean_round(self):
+        """After the marker is gone a failed idle round keeps the rounds idle; the normal pass
+        comes only after a clean one."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.ack.write_text("")
+                script = (
+                    'myHELD=yes\n'
+                    'export STUB_RC=1\n'
+                    'fuROUND; echo "interval=$myINTERVAL held=$myHELD"\n'
+                    'fuROUND; echo "interval=$myINTERVAL held=$myHELD"\n'
+                    'export STUB_RC=0\n'
+                    'fuROUND; echo "interval=$myINTERVAL held=$myHELD"\n'
+                )
+                result = box.run(shell, script)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(re.findall(r"^interval=(\d+) held=(\w*)$", result.stdout, re.M),
+                                 [("5", "yes"), ("5", "yes"), ("42", "")])
+                self.assertEqual(self.kinds(box), ["idle"] * 9 + ["normal"])
+                self.assertFalse(os.path.lexists(box.ack))
+
+    def test_hold_on_at_the_start_goes_on_idle(self):
+        """A restart while the marker is there: no normal pass first, the stale ack is gone."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.hold.write_text("")
+                box.ack.write_text("")
+                result = box.run(shell, f'fuSTART; [ -e "{box.ack}" ] || echo no-ack; fuROUND')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("no-ack", result.stdout)
+                self.assertEqual(self.kinds(box), ["idle"])
+                self.assertTrue(box.ack.is_file())
+
+    def test_no_hold_at_the_start(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.ack.write_text("")
+                result = box.run(shell, 'fuSTART; echo "held=$myHELD"; fuROUND')
+                self.assertIn("held=\n", result.stdout)
+                self.assertFalse(os.path.lexists(box.ack))
+                self.assertEqual(self.kinds(box), ["normal"])
+
     def test_no_hold_and_stale_hold_send(self):
         for shell in SHELLS:
             for name in ("none", "stale"):
@@ -334,8 +507,9 @@ class RoundTest(EntrypointCase):
         self.assertIn("trap fuSTOP INT TERM", text)
         self.assertEqual(len(re.findall(r'fuRUN "\$\{myPYTHON\}" -u "\$\{myEWS\}/ews.py"', text)), 2)
         self.assertIn('fuRUN sleep "${myINTERVAL}"', text)
+        self.assertIn('fuRUN sleep "${myIDLE_RETRY_PAUSE}"', text)
         self.assertNotIn("exec ", text)
-        self.assertRegex(text, r'rm -f "\$\{myHOLD_ACK\}"\n  while :;')
+        self.assertRegex(text, r'myINTERVAL=\$\{mySLEEP\}\n  fuSTART\n  while :;')
         self.assertRegex(text, r'case "\$\{0##\*/\}" in\n  entrypoint\.sh\) fuMAIN ;;\nesac\n$')
 
 
@@ -384,7 +558,7 @@ class TpotinitClearTest(unittest.TestCase):
         outside.mkdir()
         (outside / "hold").write_text("keep")
         self.ews.symlink_to(outside)
-        self.clear()
+        self.assertIn("is a link", self.clear())
         self.assertTrue((outside / "hold").exists())
 
     def test_folder_named_hold_stays_and_missing_folder_is_fine(self):
@@ -474,6 +648,29 @@ class EwsCfgPathsTest(unittest.TestCase):
                         self.assertIn(os.path.dirname(value), [os.path.dirname(path) for path in logstash])
                     else:
                         self.assertIn(value, logstash)
+
+    def test_logs_are_rotated(self):
+        """ewsposter starts its indexes anew with every container, the logs it reads must be
+        rotated (emptied) on every start of T-Pot, or it reads them from line 1 again; the same
+        for the logs of Logstash."""
+        globs = [line.strip() for line in LOGROTATE.read_text().splitlines() if line.startswith("/data/")]
+        self.assertIn("/data/citrixhoneypot/log/server.log", globs)
+
+        def rotated(path):
+            if "*" in path:      # a glob of Logstash: a glob of logrotate in the same folder
+                return any(os.path.dirname(glob) == os.path.dirname(path) for glob in globs)
+            return any(fnmatch.fnmatchcase(path, glob) for glob in globs)
+
+        reads = []
+        for section in self.modules():
+            for key in ("logfile", "attackerfile", "sqlitedb", "logdir"):
+                if self.config.has_option(section, key) and (section, key) not in self.OLDER_LOG:
+                    value = self.config.get(section, key).rstrip("/")
+                    reads.append(value + "/*" if key == "logdir" else value)
+        reads += [path for paths in self.paths.values() for path in paths]
+        for path in reads:
+            with self.subTest(path=path):
+                self.assertTrue(rotated(path), f"{path} is not in {LOGROTATE.name}")
 
     def test_payload_folders_are_made_by_tpotinit(self):
         folders = {path.rstrip("/") for path in re.findall(r'"(/data/[^"$]+)"', CLEAN.read_text())}

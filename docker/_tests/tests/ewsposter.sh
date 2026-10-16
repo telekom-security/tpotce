@@ -40,10 +40,12 @@ that keeps every POST, nothing is sent to the EWS backend.
      sent by the normal pass the hold starts with, before ewsposter writes
      data/ews/hold.ack. After the ack its indexes move on over three new Cowrie
      sessions and a honeytrap line, and no POST arrives.
-  3. Without the marker hold.ack goes away, a new Cowrie session arrives, the
-     lines of the hold never do.
-  4. A marker older than 30 minutes is ignored.
-  5. docker stop ends the container at once.
+  3. ewsposter is restarted during the hold, two Cowrie sessions are written
+     while it is down: it goes on with idle passes, no POST arrives.
+  4. Without the marker hold.ack goes away, exactly one new Cowrie session
+     arrives, the lines of the hold never do.
+  5. A marker older than 30 minutes is ignored.
+  6. docker stop ends the container at once.
 
 The container needs outbound network access, ewsposter looks up the external
 IP via api.ipify.org on every pass.
@@ -450,17 +452,39 @@ step_hold() {
   test_ok "No POST during the hold"
 }
 
+step_restart_in_hold() {
+  local posts=""
+
+  test_info "A restart during the hold: lines written while ewsposter is down"
+  posts="$(python3 "${CHECK}" posts "${SINK_DIR}/posts")"
+  docker stop -t 30 "${TEST_CONTAINER_NAME}" >/dev/null
+  cowrie_session c0ffee00a004 198.51.100.25 22 ssh
+  cowrie_session c0ffee00a005 198.51.100.26 23 telnet
+  : > "${DATA_DIR}/ews/hold"
+  docker start "${TEST_CONTAINER_NAME}" >/dev/null
+  wait_until 30 ack_present || test_die "hold.ack did not appear after the restart"
+  wait_until 30 sessions_known c0ffee00a004 c0ffee00a005 \
+    || test_die "The idle passes after the restart did not take the Cowrie sessions"
+  [[ "$(python3 "${CHECK}" posts "${SINK_DIR}/posts")" == "${posts}" ]] || test_die "A POST arrived after the restart in the hold"
+  test_ok "After the restart the hold went on idle, no POST"
+}
+
 step_hold_over() {
+  local alerts=""
+
   test_info "The hold is over: the marker is removed, hold.ack must go"
   rm -f "${DATA_DIR}/ews/hold"
   wait_until 30 ack_absent || test_die "hold.ack is still there"
   test_ok "hold.ack is gone"
 
+  alerts="$(python3 "${CHECK}" count "${SINK_DIR}/posts")"
   cowrie_session c0ffee00b001 198.51.100.31 22 ssh
   wait_until "$(pass_wait)" alert_from 198.51.100.31 || test_die "The line after the hold did not arrive"
   python3 "${CHECK}" none-of "${SINK_DIR}/posts" 198.51.100.21 198.51.100.22 198.51.100.23 198.51.100.24 \
-    || test_die "Lines of the hold were sent"
-  test_ok "The line after the hold arrived, the lines of the hold did not"
+    198.51.100.25 198.51.100.26 || test_die "Lines of the hold were sent"
+  [[ "$(python3 "${CHECK}" count "${SINK_DIR}/posts")" == "$((alerts + 1))" ]] \
+    || test_die "More than the one line after the hold was sent"
+  test_ok "Only the line after the hold arrived, the lines of the hold did not"
 }
 
 step_stale_marker() {
@@ -510,6 +534,7 @@ main() {
 
   step_first_pass
   step_hold
+  step_restart_in_hold
   step_hold_over
   step_stale_marker
   step_stop

@@ -6,10 +6,12 @@
 # The hold: while T-Pot checks itself (tpot check), the check writes the marker /data/ews/hold.
 # One normal pass first sends the lines from before the hold, then the passes are idle: ews.py
 # builds, spools and sends no alert, its indexes move on, so the lines of the check are never
-# sent, not even later. /data/ews/hold.ack says that ewsposter holds:
-# it is written after each idle round and removed when the hold is over. The marker only counts
-# as a regular file (no link) younger than 30 minutes, so a check that was cut off never keeps
-# ewsposter quiet for good.
+# sent, not even later. /data/ews/hold.ack says that ewsposter holds: it is written after each
+# idle round that ended cleanly (every pass with rc 0) and removed when the hold is over. Normal
+# passes come back only after a clean idle round without the marker; a hold that is on when
+# ewsposter starts goes on with idle passes at once. The marker only counts as a regular file
+# (no link) younger than 30 minutes, so a check that was cut off never keeps ewsposter quiet for
+# good.
 #
 # Only one ews.py runs at a time (its lock socket would end a second one), each pass is waited for.
 # The functions can be sourced for the tests (tpotctl/tests/test_ewsposter_entrypoint.py), the loop
@@ -29,6 +31,15 @@ myIDLE_CFG="/tmp/ews-hold"
 myIDLE_LIMIT=5000
 # a module that reached the limit has more lines: another idle pass, at most this many in a row
 myIDLE_PASSES=20
+# what ews.py prints when a module stopped at the limit, at c6b44c7 modules/ealert.py:437
+# (EAlert.buildAlert): print(f'    -> Sendlimit ({self.ECFG["sendlimit"]}) for Honeypot {self.MODUL} reached. Skip.')
+myIDLE_LIMIT_TEXT="Sendlimit (${myIDLE_LIMIT}) for Honeypot"
+# what ews.py prints when it starts a module, at c6b44c7 modules/ealert.py:43
+# (EAlert.__init__): print(f' => Starting {self.MODUL.title()} Honeypot Modul.')
+myIDLE_MODULE_TEXT=" => Starting "
+# a failed idle pass is tried again this many times, after this pause (seconds)
+myIDLE_RETRIES=3
+myIDLE_RETRY_PAUSE=5
 myCHILD=""
 
 # On INT (docker stop) or TERM the running pass or pause ends at once, and so does ewsposter
@@ -125,38 +136,96 @@ fuIDLE_CONFIG () {
   done
 }
 
-# One idle pass: the idle config, no spool (-E), at most myIDLE_LIMIT lines per module (-L)
+# One idle pass: the idle config, no spool (-E), at most myIDLE_LIMIT lines per module (-L);
+# with a module as $1 only that one (-m)
 fuIDLE_PASS () {
   local myRC=0
-  fuRUN "${myPYTHON}" -u "${myEWS}/ews.py" -c "${myIDLE_CFG}/" -l 0 -E -L "${myIDLE_LIMIT}" > "${myIDLE_CFG}/pass.log" 2>&1
+  if [ -n "${1:-}" ];
+    then
+      set -- -m "$1"
+  fi
+  fuRUN "${myPYTHON}" -u "${myEWS}/ews.py" -c "${myIDLE_CFG}/" -l 0 -E -L "${myIDLE_LIMIT}" "$@" > "${myIDLE_CFG}/pass.log" 2>&1
   myRC=$?
-  cat "${myIDLE_CFG}/pass.log"
+  cat "${myIDLE_CFG}/pass.log" 2>/dev/null
   return ${myRC}
 }
 
-# Idle passes until no module stopped at the limit; ews.py says so with
-# "Sendlimit (5000) for Honeypot <MODULE> reached". At most myIDLE_PASSES in a row.
-fuIDLE () {
+# Idle passes ([MODULE] as for fuIDLE_PASS) until no module stopped at the limit, at most
+# myIDLE_PASSES in a row; a failed pass is tried again up to myIDLE_RETRIES times. A module that
+# fails on a line has counted that line already, so a new try goes on behind it. 0 when the last
+# try of every pass ended with rc 0.
+fuIDLE_PASSES () {
   local myPASS=1
+  local myTRY=0
   local myRC=0
+  while :;
+    do
+      fuIDLE_PASS "$@"
+      myRC=$?
+      if [ ${myRC} -ne 0 ];
+        then
+          if [ ${myTRY} -ge ${myIDLE_RETRIES} ];
+            then
+              echo " => [WARN] The idle pass ${1:+of $1 }ended with rc=${myRC}, also after ${myIDLE_RETRIES} more tries."
+              return 1
+          fi
+          myTRY=$(( myTRY + 1 ))
+          echo " => [WARN] The idle pass ${1:+of $1 }ended with rc=${myRC}, try ${myTRY} of ${myIDLE_RETRIES} in ${myIDLE_RETRY_PAUSE} s."
+          fuRUN sleep "${myIDLE_RETRY_PAUSE}"
+          continue
+      fi
+      myTRY=0
+      grep -qF -- "${myIDLE_LIMIT_TEXT}" "${myIDLE_CFG}/pass.log" || return 0
+      [ ${myPASS} -lt ${myIDLE_PASSES} ] || return 0
+      myPASS=$(( myPASS + 1 ))
+  done
+}
+
+# The modules the idle config has on (the key named as its section is true), one per line
+fuIDLE_MODULES () {
+  awk '
+    /^\[/ {
+      section = tolower(substr($0, 2, index($0, "]") - 2))
+      next
+    }
+    match($0, /^[^=:]+[=:]/) {
+      key = tolower(substr($0, 1, RLENGTH - 1))
+      value = tolower(substr($0, RLENGTH + 1))
+      gsub(/[ \t]+$/, "", key)
+      gsub(/^[ \t]+|[ \t]+$/, "", value)
+      if (key == section && value == "true") print section
+    }
+  ' "${myIDLE_CFG}/ews.cfg"
+}
+
+# One idle round: all modules in one ews.py; when that still fails, module by module (-m), so a
+# module that keeps failing does not keep the others from moving on. When no module was started
+# (the start of ews.py failed: config, lock, the lookup of the address), one by one would fail the
+# same way and is left out. 0 only when the round ended cleanly.
+fuIDLE () {
+  local myMODULE=""
+  local myFAILED=""
   if ! fuIDLE_CONFIG;
     then
       echo " => [WARN] The config of the idle passes could not be written to ${myIDLE_CFG}."
       return 1
   fi
-  while :;
+  fuIDLE_PASSES && return 0
+  if ! grep -qF -- "${myIDLE_MODULE_TEXT}" "${myIDLE_CFG}/pass.log" 2>/dev/null;
+    then
+      return 1
+  fi
+  echo " => [WARN] The idle round failed, now module by module."
+  for myMODULE in $(fuIDLE_MODULES);
     do
-      fuIDLE_PASS
-      myRC=$?
-      if [ ${myRC} -ne 0 ];
-        then
-          echo " => [WARN] The idle pass ended with rc=${myRC}."
-          return ${myRC}
-      fi
-      grep -q "Sendlimit (${myIDLE_LIMIT}) for Honeypot" "${myIDLE_CFG}/pass.log" || return 0
-      [ ${myPASS} -lt ${myIDLE_PASSES} ] || return 0
-      myPASS=$(( myPASS + 1 ))
+      fuIDLE_PASSES "${myMODULE}" || myFAILED="${myFAILED} ${myMODULE}"
   done
+  if [ -n "${myFAILED}" ];
+    then
+      echo " => [WARN] Idle passes failed for:${myFAILED}."
+      return 1
+  fi
+  return 0
 }
 
 # hold.ack, written new (a link in its place is removed, never followed)
@@ -180,10 +249,12 @@ fuPASS () {
   return 0
 }
 
-# One round of the loop: while the hold is on idle passes and hold.ack (the first round of a hold
-# starts with a normal pass); when it is over one more idle pass, hold.ack removed, then the
-# normal pass. Sets myINTERVAL, the pause after the round.
+# One round of the loop. While the hold is on: idle passes, and hold.ack once they ended
+# cleanly (the first round of a hold starts with a normal pass). When it is over: hold.ack
+# removed, one more idle round, and only when that ended cleanly the normal pass; until then the
+# rounds stay idle. Sets myINTERVAL, the pause after the round.
 fuROUND () {
+  myINTERVAL=${myHOLD_INTERVAL}
   if fuHOLD_ON;
     then
       if [ -z "${myHELD}" ];
@@ -194,20 +265,40 @@ fuROUND () {
           fuPASS
           myHELD="yes"
       fi
-      fuIDLE
-      fuHOLD_ACK
-      myINTERVAL=${myHOLD_INTERVAL}
+      if fuIDLE;
+        then
+          fuHOLD_ACK
+        else
+          echo " => [WARN] No hold.ack: the idle round did not end cleanly, it runs again in ${myHOLD_INTERVAL} s."
+      fi
       return 0
   fi
   if [ -n "${myHELD}" ];
     then
-      fuIDLE
       rm -f "${myHOLD_ACK}"
+      if ! fuIDLE;
+        then
+          echo " => [WARN] The hold is over, but its idle round did not end cleanly: idle again in ${myHOLD_INTERVAL} s, nothing is sent."
+          return 0
+      fi
       myHELD=""
       echo " => The hold is over, ewsposter sends again."
   fi
   fuPASS
   myINTERVAL=${mySLEEP}
+}
+
+# The state at the start: an ack of an earlier run would tell a new check that ewsposter holds
+# before it does; a hold that is on at the start has been probing for a while already, so it goes
+# on with idle passes at once, without the normal pass a new hold starts with
+fuSTART () {
+  myHELD=""
+  rm -f "${myHOLD_ACK}"
+  if fuHOLD_ON;
+    then
+      echo " => The hold for the check of T-Pot is on at the start: idle passes only, nothing is sent."
+      myHELD="yes"
+  fi
 }
 
 fuMAIN () {
@@ -219,10 +310,8 @@ fuMAIN () {
   fi
   trap fuSTOP INT TERM
   mySLEEP=$(shuf -i 10-60 -n 1)
-  myHELD=""
   myINTERVAL=${mySLEEP}
-  # an ack of an earlier run would tell a new check that ewsposter holds before it does
-  rm -f "${myHOLD_ACK}"
+  fuSTART
   while :;
     do
       fuROUND

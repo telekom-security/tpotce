@@ -90,7 +90,13 @@ except OSError:
     sys.exit(0)
 try:
     ews_fd = os.open("ews", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=data_fd)
-except OSError:
+except FileNotFoundError:
+    sys.exit(0)
+except OSError as error:
+    if os.path.islink(os.path.join(data, "ews")):
+        print(f"# Warning: {data}/ews is a link, the hold of ewsposter is not cleared there.")
+    else:
+        print(f"# Warning: {data}/ews could not be opened ({error.strerror}), the hold of ewsposter is not cleared.")
     sys.exit(0)
 for name in ("hold", "hold.ack", "check.lock"):
     try:
