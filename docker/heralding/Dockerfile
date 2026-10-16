@@ -6,9 +6,13 @@
 FROM python:3.14-alpine AS build
 COPY --from=ghcr.io/astral-sh/uv:0.12@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
+# the T-Pot fork of Heralding 2.0 at a fixed commit; bump it to take a newer one
+ARG HERALDING_COMMIT=8a21ca0cbeeeb53b05b20f773f1155ef13f78a73
 # only the project files, no tests in the image
 RUN apk --no-cache add git \
-    && git clone --depth 1 https://github.com/t3chn0m4g3/heralding /root/heralding \
+    && git init -q /root/heralding \
+    && git -C /root/heralding fetch -q --depth 1 https://github.com/t3chn0m4g3/heralding ${HERALDING_COMMIT} \
+    && git -C /root/heralding checkout -q FETCH_HEAD \
     && mkdir -p /opt/heralding \
     && cp -r /root/heralding/pyproject.toml /root/heralding/uv.lock /root/heralding/README.md \
              /root/heralding/heralding /opt/heralding/ \
