@@ -3038,8 +3038,7 @@ function fuUPDATER () {
 	    fuUI_INFO "Your previous one is in the backup as 'docker-compose.yml'."
 	fi
 	fuUI_INFO "We stored the previous version as backup in $myARCHIVE."
-	fuUI_INFO "Your own Kibana objects and the ILM policy were saved to the archive before"
-	fuUI_INFO "T-Pot was stopped, 'restore.sh' can put them back."
+	fuUI_INFO "Your own Kibana objects and the ILM policy were saved to the archive before T-Pot was stopped, 'restore.sh' can put them back."
 	fuKIBANA_OBJECTS_HINT "$HOME/tpotce/.env"
 	echo
 }

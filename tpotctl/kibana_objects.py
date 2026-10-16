@@ -423,11 +423,12 @@ def _owner_failed(error: OSError) -> None:
 def _owner_of(handle: int) -> Optional[Tuple[int, int]]:
     """uid and gid of the data folder held by `handle` when this runs as root (tpotinit): what
     it makes below that folder gets them, by its descriptor, so the T-Pot Manager (the group
-    tpot) can use it at once. None for any other user, who owns what it makes anyway."""
-    if not hasattr(os, "geteuid") or os.geteuid() != 0:
+    tpot) can use it at once. For any other user (the T-Pot Manager) (-1, gid): it owns what it
+    makes, and the group of the data folder keeps tpotinit and the others of that group in."""
+    if not hasattr(os, "geteuid"):
         return None
     info = os.fstat(handle)
-    return info.st_uid, info.st_gid
+    return (info.st_uid, info.st_gid) if os.geteuid() == 0 else (-1, info.st_gid)
 
 
 class Folder:
@@ -447,7 +448,8 @@ class Folder:
         except OSError as error:
             if error.errno not in OWNER_ERRORS:
                 raise
-            _owner_failed(error)
+            if self.owner[0] != -1:     # a user outside that group keeps its own, nothing to say
+                _owner_failed(error)
 
     def close(self) -> None:
         if self.handle is not None:
@@ -854,6 +856,48 @@ def _request(method: str, path: str, url: str, opener: Optional[Callable], data:
         raise KibanaError(f"Kibana at {url} answered {error.code}" + (f": {body}" if body else "")) from None
     except (OSError, http.client.HTTPException) as error:    # no connection, a timeout, a broken answer
         raise KibanaError(f"Kibana at {url} is not reachable ({getattr(error, 'reason', error)})") from None
+
+
+VERSION_ID = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?")
+
+
+def kibana_version(url: str = KIBANA_URL, opener: Optional[Callable] = None) -> Tuple[Optional[str], Optional[int]]:
+    """version.number and version.build_number of Kibana's /api/status; (None, None) when it names no
+    version (or does not answer), a build number that is no whole number is None."""
+    try:
+        data = json.loads(_request("GET", "/api/status", url, opener, timeout=STATUS_TIMEOUT).decode("utf-8"))
+    except (KibanaError, UnicodeDecodeError, ValueError):
+        return None, None
+    version = data.get("version") if isinstance(data, dict) else None
+    if not isinstance(version, dict):
+        return None, None
+    number, build = version.get("number"), version.get("build_number")
+    if not (isinstance(number, str) and VERSION_ID.fullmatch(number)):
+        return None, None
+    return number, build if type(build) is int else None
+
+
+def settings_for(settings: List[dict], number: Optional[str], build: Optional[int]) -> List[dict]:
+    """The shipped advanced settings as the running Kibana reads them: Kibana keeps `config` under its own
+    version (config:9.5.4), the shipped file has the version that exported it. `config` gets `number` as
+    its id, `config-global` too when its id is a version; buildNum becomes `build` (left out without one).
+    Without a version they stay out (one line says so): an id Kibana does not read would change nothing."""
+    if number is None:
+        print(f"{LOG}Kibana names no version in /api/status, the first import goes in without the advanced "
+              "settings", flush=True)
+        return []
+    out = []
+    for obj in settings:
+        obj = copy.deepcopy(obj)
+        if obj["type"] == "config" or VERSION_ID.fullmatch(obj["id"]):
+            obj["id"] = number
+            attributes = obj.get("attributes")
+            if isinstance(attributes, dict):
+                attributes.pop("buildNum", None)
+                if build is not None:
+                    attributes["buildNum"] = build
+        out.append(obj)
+    return out
 
 
 def status(url: str = KIBANA_URL, opener: Optional[Callable] = None) -> Optional[str]:
@@ -1437,6 +1481,8 @@ def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: O
         rotate(export_dir, AUTO_PREFIX, AUTO_KEEP, spare=export_path)
     ours = [o for o in objs if o["type"] not in SKIP_TYPES]
     settings = [o for o in objs if o["type"] in SKIP_TYPES]
+    if state["reason"] == "fresh" and settings and state["attempt"] < GIVE_UP:
+        settings = settings_for(settings, *kibana_version(url, opener))
     result = Result()
     attempt = state["attempt"]
     if attempt < GIVE_UP:
@@ -1632,8 +1678,8 @@ def _cli_apply(args, opener: Optional[Callable]) -> int:
             return 1 if result.errors else 0
         refused = given_up(args.data, args.objects)
         if refused is not None:          # it gave up with this shipped file: until the release or you
-            print(f"{LOG}the first import gave up on {len(refused)} objects, tpot elastic import retries them",
-                  flush=True)
+            what = f"on {len(refused)} objects" if refused else "(its marker cannot be read)"
+            print(f"{LOG}the first import gave up {what}, tpot elastic import retries them", flush=True)
             return 0
         print(f"{LOG}Kibana holds none of T-Pot's objects, the first import runs again", flush=True)
         mark_pending(args.data, "no-objects")

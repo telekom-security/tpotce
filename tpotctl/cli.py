@@ -473,7 +473,10 @@ class KibanaState:
 
 
 def kibana_given_up(refused) -> str:
-    """The first import gave up on what Kibana kept refusing (kibana_objects.given_up)."""
+    """The first import gave up on what Kibana kept refusing (kibana_objects.given_up: [] for a marker that
+    cannot be read)."""
+    if not refused:
+        return "the first import gave up (its marker cannot be read); tpot elastic import retries it"
     return f"the first import gave up on {_objects(len(refused), 'objects')}; tpot elastic import retries them"
 
 

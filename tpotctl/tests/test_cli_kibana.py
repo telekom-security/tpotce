@@ -381,6 +381,13 @@ class KibanaCliTest(unittest.TestCase):
         self.run_cli("status")
         self.assertNotIn("gave up", self.out.getvalue())
         self.assertTrue(os.path.exists(ko.given_up_path(self.site.data)))
+        # a marker that cannot be read counts (the first import does not run again), without a number
+        with open(ko.given_up_path(self.site.data), "w", encoding="utf-8") as handle:
+            handle.write("{broken")
+        self.run_cli("status")
+        self.assertIn("· the first import gave up (its marker cannot be read); tpot elastic import retries it",
+                      self.out.getvalue())
+        self.assertNotIn("0 objects", self.out.getvalue())
 
     def test_status_of_an_empty_mode_is_keep(self):
         self.run_cli("status", values={"TPOT_TYPE": "HIVE", "TPOT_ES_RETENTION": "30"})

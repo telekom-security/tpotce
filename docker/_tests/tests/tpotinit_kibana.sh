@@ -55,8 +55,9 @@ parse_args() {
   done
 }
 
-# the stub Kibana: /api/status answers 503 for the first LATE requests, the first FAIL_IMPORTS imports
-# answer 500; it keeps what is imported and exports it; one line per request on stdout
+# the stub Kibana: /api/status answers 503 for the first LATE requests, then its version (9.5.4, build
+# 107666); the first FAIL_IMPORTS imports answer 500; it keeps what is imported and exports it; one line
+# per request on stdout
 write_stub() {
   cat > "${TEST_TMP_ROOT}/stub.py" <<'EOF'
 import datetime
@@ -89,7 +90,8 @@ class Stub(BaseHTTPRequestHandler):
         COUNT["status"] += 1
         if COUNT["status"] <= LATE:
             return self.answer(503, '{"status":{"overall":{"level":"unavailable"}}}')
-        return self.answer(200, '{"status":{"overall":{"level":"available"}}}')
+        return self.answer(200, '{"version":{"number":"9.5.4","build_number":107666},'
+                                '"status":{"overall":{"level":"available"}}}')
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8")
@@ -170,6 +172,13 @@ stub_configs() {
     -d '{"type":"*"}' http://kibana:5601/api/saved_objects/_export | grep -c '"type": "config"' || true
 }
 
+# the ids of the advanced settings (config) the stub Kibana holds, one per line
+stub_config_ids() {
+  in_tpotinit --entrypoint curl "${IMAGE}" -s -X POST -H "kbn-xsrf: true" -H "Content-Type: application/json" \
+    -d '{"type":"*"}' http://kibana:5601/api/saved_objects/_export | grep '"type": "config"' \
+    | sed -n 's/.*"id": "\([^"]*\)".*/\1/p' | sort
+}
+
 # $1 = name, $2 = the condition (a command line, run with eval), $3 = what to show on a FAIL
 check() {
   if eval "$2"; then echo "ok   $1"; else echo "FAIL $1: $3"; myFAILED=1; fi
@@ -223,8 +232,9 @@ main() {
   start_stub 2 1
   run_job
   st="$(state)"
+  # 200 twice: the end of the wait, then the version the advanced settings of a fresh install go in under
   check "a late Kibana is waited for (2 x 503, then 200)" \
-    '[[ "$(stub_log | grep -c "^GET /api/status 503")" -eq 2 && "$(stub_log | grep -c "^GET /api/status 200")" -eq 1 ]]' "$(stub_log)"
+    '[[ "$(stub_log | grep -c "^GET /api/status 503")" -eq 2 && "$(stub_log | grep -c "^GET /api/status 200")" -eq 2 ]]' "$(stub_log)"
   check "a refused first import stays pending" \
     '[[ "${myRC}" -eq 1 && "$(head -1 <<<"${st}")" == *"\"attempt\": 1"* && "${st}" == *no-record* ]]' "rc=${myRC} ${out} ${st}"
 
@@ -259,6 +269,8 @@ main() {
   run_job
   check "a fresh first import takes the advanced settings along" \
     '[[ "${myRC}" -eq 0 && "${out}" == *"first import, "*" imported"* && "$(stub_configs)" -ge 1 ]]' "rc=${myRC} ${out}"
+  check "  ... under the version of the running Kibana (config:9.5.4)" \
+    '[[ "$(stub_config_ids)" == 9.5.4 ]]' "$(stub_config_ids | tr '\n' ' ')"
   st="$(state)"
   check "  ... its files belong to the owner of /data (1234:4321) right after the job" \
     '[[ "$(tail -n +2 <<<"${st}")" == record ]]' "${st}"

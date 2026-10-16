@@ -1038,7 +1038,7 @@ function fuDO_ELASTIC () {
 	    # now, after the same start), an export into ~/tpot_backups first, and the restored objects are no
 	    # T-Pot import any more, so the next start keeps them
 	    myRC=0
-	    fuUI_SPIN "Importing the Kibana objects ..." "${myLOG}" \
+	    fuUI_SPIN "Importing the Kibana objects (waits up to 15 minutes for an import of T-Pot that runs) ..." "${myLOG}" \
 	      fuKO_RESTORE "${myKO_PYTHON}" "${myTMPDIR}/elastic/kibana_export.ndjson" "${myTMPDIR}/import.txt" || myRC=$?
 	    [ "${myRC}" -ne 130 ] || fuSTOPPED "importing the Kibana objects"
 	    myOBJ=$(sed -n 's/^# Kibana objects: \([0-9]*\) restored.*/\1/p' "${myTMPDIR}/import.txt" 2>/dev/null | head -1)
@@ -1060,6 +1060,7 @@ function fuDO_ELASTIC () {
 	elif [ -n "${myKIBANA_UP}" ];
 	  then
 	    fuUI_WARN "Python 3 or tpotctl/kibana_objects.py is missing, the Kibana objects go in with curl: the restored objects are not protected from tpotinit's next import."
+	    fuWARNED elastic "the Kibana objects went in with curl: tpotinit's next import may replace the restored ones"
 	    myRC=0
 	    fuUI_SPIN "Importing the Kibana objects ..." "${myLOG}" \
 	      curl -s -S -f -X POST "${myKIBANA}/api/saved_objects/_import?overwrite=true" \

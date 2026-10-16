@@ -473,6 +473,10 @@ class RestoreShTest(Harness):
         result, text, calls = self.kibana_restore(module=False)
         self.assertEqual(result.returncode, 0, text[-600:])
         self.assertIn("the restored objects are not protected from tpotinit's next import", text)
+        tail = text[text.index("### Restored from"):]
+        self.assertIn("### [WARNING] - The Kibana objects and the ILM policy: the Kibana objects went in with curl: "
+                      "tpotinit's next import may replace the restored ones", tail)
+        self.assertNotIn("[OK] - The Kibana objects and the ILM policy", tail)
         self.assertTrue([c for c in calls if "saved_objects/_import?overwrite=true" in c], calls)
         self.assertFalse([c for c in calls if c.startswith("python3")], calls)
 

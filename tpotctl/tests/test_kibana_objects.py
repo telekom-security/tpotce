@@ -321,7 +321,7 @@ class FakeKibana:
     there is a conflict. `hidden` objects are there but left out of the export."""
 
     def __init__(self, objects=(), fail=(), hidden=(), export_status=200, import_status=200, down=False,
-                 clock=None, on_import=None, lose=0, lose_written=True):
+                 clock=None, on_import=None, lose=0, lose_written=True, version="9.5.4", build=None):
         self.store = {ko.key(o): json.loads(json.dumps(o)) for o in objects}
         self.fail, self.hidden = set(fail), set(hidden)
         # the next `lose` imports time out: after Kibana wrote them (lose_written), or before
@@ -329,6 +329,8 @@ class FakeKibana:
         self.export_status, self.import_status, self.down = export_status, import_status, down
         self.clock = clock or (lambda: NOW)
         self.on_import = on_import
+        # /api/status: version.number (None: an answer without a version) and version.build_number
+        self.version, self.build = version, build
         self.requests = []
 
     def imports(self):
@@ -339,6 +341,12 @@ class FakeKibana:
         if self.down:
             raise urllib.error.URLError("connection refused")
         path = request.full_url.split("64296", 1)[1]
+        if path.startswith("/api/status"):
+            version = {"number": self.version} if self.version else None
+            if version is not None and self.build is not None:
+                version["build_number"] = self.build
+            return io.BytesIO(json.dumps({"name": "kibana", "version": version} if version else
+                                         {"name": "kibana", "status": {"overall": {"level": "available"}}}).encode())
         if path.startswith("/api/saved_objects/_export"):
             if self.export_status != 200:
                 raise self.http_error(request, self.export_status)
@@ -1083,6 +1091,75 @@ class FirstImportTest(unittest.TestCase):
         self.assertEqual(ko.pending_state(site.data)["reason"], "no-objects")
         with self.assertRaises(ko.KibanaError):
             ko.mark_pending(site.data, "other")
+
+    def shipped_settings(self, site, *settings):
+        """The shipped file of `site` with these advanced settings instead of CONFIG."""
+        path = os.path.join(site.objects, ko.SHIPPED_NAME)
+        with open(path, encoding="utf-8") as handle:
+            lines = [line for line in handle.read().splitlines() if '"type": "config"' not in line]
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("\n".join([json.dumps(o) for o in settings] + lines) + "\n")
+
+    def test_the_advanced_settings_go_in_under_the_version_of_the_running_kibana(self):
+        """Kibana 9.5.4 reads config:9.5.4; the shipped file has the id of the Kibana that exported it."""
+        site = Site(self, [dash("a")])
+        old = {"type": "config", "id": "9.2.3", "references": [],
+               "attributes": {"theme:darkMode": True, "defaultRoute": "/app/dashboards", "buildNum": 92546}}
+        everywhere = {"type": "config-global", "id": "9.2.3", "references": [], "attributes": {"buildNum": 92546}}
+        named = {"type": "config-global", "id": "tpot", "references": [], "attributes": {"buildNum": 1}}
+        self.shipped_settings(site, old, everywhere, named)
+        ko.mark_pending(site.data, "fresh")
+        kibana = FakeKibana(version="9.5.4", build=107666)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            first = self.first(site, kibana)
+        self.assertEqual((first.done, first.missing, out.getvalue()), (True, [], ""))
+        sent = {ko.key(o): o for o in ko.parse_ndjson(FakeKibana.ndjson(kibana.imports()[0]), "the upload")}
+        self.assertEqual(sorted(sent), ["config-global:9.5.4", "config-global:tpot", "config:9.5.4", "dashboard:a"])
+        self.assertEqual(sent["config:9.5.4"]["attributes"],
+                         {"theme:darkMode": True, "defaultRoute": "/app/dashboards", "buildNum": 107666})
+        self.assertEqual(sent["config-global:9.5.4"]["attributes"], {"buildNum": 107666})
+        self.assertEqual(sent["config-global:tpot"], named)                 # no version: as shipped
+        self.assertNotIn("config:9.2.3", kibana.store)
+        self.assertEqual(sorted(site.records()), ["config-global:9.5.4", "config-global:tpot", "config:9.5.4",
+                                                  "dashboard:a"])
+        # without a build number in the answer buildNum stays out
+        site = Site(self, [dash("a")])
+        self.shipped_settings(site, old)
+        ko.mark_pending(site.data, "fresh")
+        kibana = FakeKibana(version="9.5.4")
+        self.first(site, kibana)
+        self.assertEqual(kibana.store["config:9.5.4"]["attributes"],
+                         {"theme:darkMode": True, "defaultRoute": "/app/dashboards"})
+
+    def test_without_a_version_the_first_import_leaves_the_advanced_settings_out(self):
+        site = Site(self, [dash("a"), dash("b")])
+        ko.mark_pending(site.data, "fresh")
+        kibana = FakeKibana(version=None)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            first = self.first(site, kibana)
+        self.assertEqual(out.getvalue(), "# Kibana objects: Kibana names no version in /api/status, the first "
+                                         "import goes in without the advanced settings\n")
+        self.assertEqual((first.done, first.missing), (True, []))
+        self.assertEqual(sorted(first.result.keys()), ["dashboard:a", "dashboard:b"])
+        self.assertNotIn('"type": "config"', FakeKibana.ndjson(kibana.imports()[0]))
+        self.assertFalse(os.path.exists(ko.pending_path(site.data)))
+        # a no-objects first import never sends them, so it never asks for the version
+        site = Site(self, [dash("a")])
+        ko.mark_pending(site.data, "no-objects")
+        kibana = FakeKibana(version=None)
+        self.first(site, kibana)
+        self.assertFalse([r for r in kibana.requests if "/api/status" in r.full_url])
+
+    def test_kibana_version(self):
+        self.assertEqual(ko.kibana_version(opener=FakeKibana(version="9.5.4", build=107666)), ("9.5.4", 107666))
+        self.assertEqual(ko.kibana_version(opener=FakeKibana(version="9.5.4")), ("9.5.4", None))
+        self.assertEqual(ko.kibana_version(opener=FakeKibana(version=None)), (None, None))
+        self.assertEqual(ko.kibana_version(opener=FakeKibana(down=True)), (None, None))
+        for bad in ("9.5", "latest", "9.5.4; x"):
+            self.assertEqual(ko.kibana_version(opener=FakeKibana(version=bad)), (None, None))
+        self.assertEqual(ko.kibana_version(opener=FakeKibana(version="9.5.4", build="1")), ("9.5.4", None))
 
     def test_first_import_partial_keeps_pending(self):
         site = Site(self, [dash("a"), dash("b")])
@@ -2222,7 +2299,8 @@ class MarkFreshTest(unittest.TestCase):
 
 class OwnerTest(unittest.TestCase):
     """As root (tpotinit) every folder and file the module makes in <data>/kibana_objects gets the
-    owner of <data>, by its descriptor (fchown, never a chown by path); as anyone else nothing."""
+    owner of <data>, by its descriptor (fchown, never a chown by path); as anyone else (the T-Pot
+    Manager) the group of <data>, so tpotinit and the group keep their access."""
 
     def run_as(self, euid):
         site = Site(self, [dash("a"), dash("b")])
@@ -2266,10 +2344,28 @@ class OwnerTest(unittest.TestCase):
         self.assertIn((pending_ino, False), owned)         # pending too, before it went
         self.assertEqual(sum(1 for _, is_dir, _, _ in calls if is_dir), 2)   # the two folders, once each
 
-    def test_as_another_user_nothing_is_chowned(self):
-        _, _, calls, made, _ = self.run_as(1000)
-        self.assertEqual(calls, [])
+    def test_as_another_user_only_the_group_of_the_data_folder_is_set(self):
+        site, data, calls, made, _ = self.run_as(1000)
+        self.assertEqual({(uid, gid) for _, _, uid, gid in calls}, {(-1, data.st_gid)})
+        owned = {(ino, is_dir) for ino, is_dir, _, _ in calls}
+        for name, what in made.items():
+            with self.subTest(name=name):
+                self.assertIn(what, owned)
         self.assertIn("record.json", made)
+
+    def test_a_user_outside_the_group_keeps_its_own_without_a_word(self):
+        site = Site(self, [dash("a")])
+
+        def fchown(handle, uid, gid):
+            raise OSError(errno.EPERM, os.strerror(errno.EPERM))
+        with unittest.mock.patch.object(ko.os, "geteuid", return_value=1000, create=True), \
+                unittest.mock.patch.object(ko.os, "fchown", fchown, create=True), \
+                unittest.mock.patch.object(ko, "_OWNER_WARNED", []):
+            rc, out, err = site.cli("apply", "--mode", "update", "--data", site.data, "--objects", site.objects,
+                                    "--exports", ko.auto_exports_dir(site.data),
+                                    opener=FakeKibana([as_in_kibana(dash("own"))]))
+        self.assertEqual((rc, err), (0, ""))
+        self.assertTrue(os.path.isfile(os.path.join(ko.state_dir(site.data), "record.json")))
 
     def test_an_owner_the_file_system_refuses_is_logged_once_and_the_files_are_written(self):
         for code in (errno.EPERM, errno.EINVAL):
