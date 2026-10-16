@@ -3040,8 +3040,24 @@ function fuUPDATER () {
 	fuUI_INFO "We stored the previous version as backup in $myARCHIVE."
 	fuUI_INFO "Your own Kibana objects and the ILM policy were saved to the archive before"
 	fuUI_INFO "T-Pot was stopped, 'restore.sh' can put them back."
-	fuUI_INFO "Some updates ship newer Kibana objects. With TPOT_KIBANA_OBJECTS=keep nothing changes; 'tpot elastic import --dry-run' shows what an update would bring."
+	fuKIBANA_OBJECTS_HINT "$HOME/tpotce/.env"
 	echo
+}
+
+# The end of a run: what the TPOT_KIBANA_OBJECTS of .env (after fuMIGRATE_KIBANA_OBJECTS) does with
+# the newer Kibana objects of a release. $1 = .env
+function fuKIBANA_OBJECTS_HINT () {
+	local myMODE="" myWHAT=""
+	myMODE=$(fuENV_VALUE "$1" TPOT_KIBANA_OBJECTS)
+	case "${myMODE}" in
+	  "")        myWHAT="With TPOT_KIBANA_OBJECTS empty (keep) nothing changes" ;;
+	  keep)      myWHAT="With TPOT_KIBANA_OBJECTS=keep nothing changes" ;;
+	  add)       myWHAT="With TPOT_KIBANA_OBJECTS=add T-Pot adds the missing ones on its next start" ;;
+	  update)    myWHAT="With TPOT_KIBANA_OBJECTS=update T-Pot brings its unchanged ones up to date on its next start, after an export, and yours stay" ;;
+	  overwrite) myWHAT="With TPOT_KIBANA_OBJECTS=overwrite T-Pot overwrites all of its objects on its next start, after an export" ;;
+	  *)         myWHAT="TPOT_KIBANA_OBJECTS=${myMODE} is no mode of T-Pot, choose keep, add, update or overwrite" ;;
+	esac
+	fuUI_INFO "Some updates ship newer Kibana objects. ${myWHAT}; 'tpot elastic import --dry-run' shows what an update would bring."
 }
 
 function fuRESTORE () {
