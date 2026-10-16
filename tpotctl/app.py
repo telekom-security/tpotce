@@ -146,6 +146,50 @@ class Backend:
         from tpotctl import settings as tsettings
         tsettings.load().change({"TPOT_ES_RETENTION": value})
 
+    # the Kibana objects (tpotctl.kibana_objects, as tpot elastic export / import / restore do it); each may
+    # wait up to a minute for another import (kibana_objects.BUSY), the page calls them in a worker
+
+    def kibana_status(self):
+        """cli.KibanaState: the mode, a pending first import, the plan or why Kibana cannot be read (5 s)."""
+        from tpotctl import cli
+        return cli.kibana_state(ops.env_values())
+
+    def kibana_preview(self):
+        """The plan of Kibana as it is now, before the question of Update and Overwrite all."""
+        from tpotctl import kibana_objects as ko
+        return ko.preview(*ops.kibana_dirs())
+
+    def kibana_update(self, overwrite: bool, confirmed=None):
+        """A one-off import as the mode update or overwrite does it (the mode in .env stays): (plan, result,
+        export path). confirmed: the objects of yours the question named, for overwrite."""
+        from tpotctl import kibana_objects as ko
+        data, objects = ops.kibana_dirs()
+        return ko.run_apply("overwrite" if overwrite else "update", data, objects, ops.kibana_export_dir(),
+                            confirmed=confirmed)
+
+    def kibana_export(self):
+        """Every object into ~/tpot_backups: (path, count)."""
+        from tpotctl import cli
+        return cli.kibana_export()
+
+    def kibana_check_export(self, path: str) -> int:
+        """The objects of an export as a restore reads them, before its question (KibanaError if none)."""
+        from tpotctl import kibana_objects as ko
+        return len(ko.read_export(path))
+
+    def kibana_restore(self, path: str):
+        """(export path, result) of a restore of `path`."""
+        from tpotctl import kibana_objects as ko
+        return ko.run_restore(path, ops.kibana_dirs()[0], ops.kibana_export_dir())
+
+    def kibana_exports(self):
+        """The exports of the T-Pot Manager and of tpotinit (ops.KibanaExport), newest first."""
+        return ops.kibana_export_infos(data_dir=ops.kibana_dirs()[0])
+
+    def set_kibana_mode(self, value: str) -> None:
+        from tpotctl import settings as tsettings
+        tsettings.load().change({"TPOT_KIBANA_OBJECTS": value})
+
     def check_data_loss(self, args: List[str]):
         return ops.check_data_loss(args)
 
@@ -899,13 +943,25 @@ class SettingsPane(Vertical):
             if self.saving:             # a press that came in before Save was disabled
                 return
             saved = self.changes()
-            if "TPOT_ES_RETENTION" in saved and self.current.values.get("TPOT_TYPE", "HIVE") != "SENSOR":
-                # Elasticsearch may take seconds: in a worker, Save disabled meanwhile
-                self.saving = True
-                self.query_one(f"#{self.PREFIX}-save", Button).disabled = True
-                self.run_worker(self.save_retention(saved), group=f"{self.PREFIX}-save")
+            if saved.get("TPOT_KIBANA_OBJECTS") == "overwrite" and \
+                    self.current.values.get("TPOT_KIBANA_OBJECTS") != "overwrite":
+                # as on the Elastic page: overwrite resets your changes to T-Pot objects on every start
+                def answered(yes) -> None:
+                    if yes:
+                        self.run_worker(self.save_checked(saved), group=f"{self.PREFIX}-save")
+                self.app.push_screen(overwrite_mode_question(), answered)
                 return
-            await self.save_confirmed(saved)
+            await self.save_checked(saved)
+
+    async def save_checked(self, saved: Dict[str, str]) -> None:
+        """The save after the question of overwrite (if any): a changed retention plans first."""
+        if "TPOT_ES_RETENTION" in saved and self.current.values.get("TPOT_TYPE", "HIVE") != "SENSOR":
+            # Elasticsearch may take seconds: in a worker, Save disabled meanwhile
+            self.saving = True
+            self.query_one(f"#{self.PREFIX}-save", Button).disabled = True
+            self.run_worker(self.save_retention(saved), group=f"{self.PREFIX}-save")
+            return
+        await self.save_confirmed(saved)
 
     async def save_retention(self, saved: Dict[str, str]) -> None:
         """A changed TPOT_ES_RETENTION: a shorter retention asks first, before anything is written, whether
@@ -1509,7 +1565,8 @@ class ChecksPane(Vertical):
 
 
 class ElasticPane(Vertical):
-    """How long Elasticsearch keeps the events: TPOT_ES_RETENTION and the ILM policy tpot."""
+    """How long Elasticsearch keeps the events (TPOT_ES_RETENTION and the ILM policy tpot), and T-Pot's
+    Kibana objects: the mode TPOT_KIBANA_OBJECTS, Export, Update, Overwrite all and Restore."""
 
     status = None           # the elastic.Status the page shows, None before the first read or after an error
     busy = False            # a Set, Apply or Take over is under way: its buttons are disabled
@@ -1517,19 +1574,48 @@ class ElasticPane(Vertical):
     reload_wanted = False   # a load came in while a read ran: one more read after it
     shows = 0               # the number of the latest show() begun, so that an older answer stays out
     shown = 0               # the number of the show() whose answer the page shows
+    # the Kibana objects, the same in their own part: the cli.KibanaState shown, a job (Export, Update,
+    # Overwrite all, Restore, Save) under way, a read under way and one wanted after it, the reads begun
+    # and the one shown; the mode of .env as read last (empty is keep)
+    kibana = None
+    kibana_busy = False
+    kibana_reading = False
+    kibana_reload_wanted = False
+    kibana_shows = 0
+    kibana_shown = 0
+    kibana_mode = None
 
     def compose(self) -> ComposeResult:
-        yield Static("", id="elastic-info", classes="info")
-        yield Static("", id="elastic-status")
-        with Horizontal(classes="actions"):
-            yield NavInput(placeholder="days or off", id="elastic-value", compact=True)
-            yield Button("Set", id="elastic-set", variant="primary")
-        # a row of their own: the four do not fit next to the menu at 80 or 100 columns
-        with Horizontal(classes="actions"):
-            yield Button("Take over from Kibana", id="elastic-adopt", disabled=True)
-            yield Button("Apply .env to the policy", id="elastic-apply", disabled=True)
+        from tpotctl.widgets.fields import TpotSelect
+        from tpotctl.widgets.nav import NavScroll
+        # the two parts do not fit into 24 rows: the page scrolls to the widget with the focus
+        with NavScroll(id="elastic-scroll"):
+            yield Static("", id="elastic-info", classes="info")
+            yield Static("", id="elastic-status")
+            with Horizontal(classes="actions"):
+                yield NavInput(placeholder="days or off", id="elastic-value", compact=True)
+                yield Button("Set", id="elastic-set", variant="primary")
+            # a row of their own: the four do not fit next to the menu at 80 or 100 columns
+            with Horizontal(classes="actions"):
+                yield Button("Take over from Kibana", id="elastic-adopt", disabled=True)
+                yield Button("Apply .env to the policy", id="elastic-apply", disabled=True)
+            yield Static("", id="kibana-info", classes="info")
+            yield Static("", id="kibana-status")
+            with Horizontal(classes="actions"):
+                yield TpotSelect([(label, value) for value, label, _help in kibana_modes()], value="keep",
+                                 allow_blank=False, id="kibana-mode", compact=True, disabled=True)
+                yield Button("Save", id="kibana-mode-save", disabled=True)
+            yield Static("", id="kibana-mode-help")
+            with Horizontal(classes="actions"):
+                yield Button("Export", id="kibana-export", disabled=True)
+                yield Button("Update", id="kibana-update", variant="primary", disabled=True)
+                yield Button("Overwrite all", id="kibana-overwrite", disabled=True)
+            yield NavDataTable(id="kibana-exports", cursor_type="row", zebra_stripes=True, enter_goes_on=True)
+            with Horizontal(classes="actions"):
+                yield Button("Restore", id="kibana-restore", disabled=True)
 
     def on_mount(self) -> None:
+        self.query_one("#kibana-exports", DataTable).add_columns("Exported", "From", "Size", "Objects")
         self.load()
 
     def load(self) -> None:
@@ -1549,11 +1635,27 @@ class ElasticPane(Vertical):
             if self.is_attached and not self.app._closing and not self._closing:
                 raise
             return
+        self.query_one("#kibana-info", Static).update(kibana_info())
+        if self.kibana_reading:
+            self.kibana_reload_wanted = True
+        else:
+            self.kibana_reading = True
+            self.run_worker(self.read_kibana(), group="kibana")
         if self.reading:
             self.reload_wanted = True
             return
         self.reading = True
         self.run_worker(self.read(), group="elastic")
+
+    async def read_kibana(self) -> None:
+        try:
+            while True:
+                self.kibana_reload_wanted = False
+                await self.show_kibana()
+                if not self.kibana_reload_wanted:
+                    break
+        finally:
+            self.kibana_reading = False
 
     async def read(self) -> None:
         try:
@@ -1622,6 +1724,290 @@ class ElasticPane(Vertical):
         if not field.value or (previous is not None and field.value == previous.value):
             field.value = state.value           # not typed in: the value of .env as it is now
 
+    async def write_env(self, change, value: str) -> None:
+        """A write of .env of this page (Set of the retention, Save of the mode), one at a time: each loads
+        .env and writes the text it loaded with its change, two at once would lose one of them."""
+        import asyncio
+        if getattr(self, "_env_lock", None) is None:
+            self._env_lock = asyncio.Lock()
+        async with self._env_lock:
+            await asyncio.to_thread(change, value)
+
+    # -- the Kibana objects ---------------------------------------------------------------------------
+
+    async def show_kibana(self) -> None:
+        """The Kibana objects as read now: the status line, the mode, the exports. As with show(), the answer
+        of a read begun earlier never replaces that of one begun later."""
+        import asyncio
+        from textual.css.query import NoMatches
+        from tpotctl import cli, kibana_objects as ko
+        self.kibana_shows += 1
+        mine = self.kibana_shows
+        try:
+            state = await asyncio.to_thread(self.app.backend.kibana_status)
+        except (ko.KibanaError, ops.OpsError, OSError) as err:
+            state = cli.KibanaState("", problem=str(err))
+        exports = []
+        if state.kibana:
+            try:
+                exports = await asyncio.to_thread(self.app.backend.kibana_exports)
+            except (ko.KibanaError, ops.OpsError, OSError):
+                exports = []
+        if mine < self.kibana_shown:
+            return
+        self.kibana_shown = mine
+        try:
+            self.paint_kibana(state, exports)
+        except NoMatches:           # the T-Pot Manager ends meanwhile, its widgets are going
+            if self.is_attached and not self.app._closing and not self._closing:
+                raise
+
+    def paint_kibana(self, state, exports) -> None:
+        from tpotctl.cli import _human_size
+        from tpotctl.widgets.fields import TpotSelect
+        previous, self.kibana = self.kibana_mode, state
+        text = Text()
+        text.append(f"{'TPOT_KIBANA_OBJECTS':<21}", style=theme.color("mist"))
+        text.append(f"{state.mode or 'keep'}\n", style=f"bold {theme.color('glass')}")
+        text.append(f"{'In Kibana now':<21}", style=theme.color("mist"))
+        text.append(state.text(), style=theme.color("glass" if state.plan is not None else "wax"))
+        self.query_one("#kibana-status", Static).update(text)
+        if state.mode:
+            self.kibana_mode = state.mode
+            select = self.query_one("#kibana-mode", TpotSelect)
+            # not chosen anew on the page: the mode of .env as it is now
+            if not self.kibana_busy and (previous is None or select.value == previous):
+                select.value = state.mode
+        rows = [(item.path, (time.strftime("%Y-%m-%d %H:%M", time.localtime(item.modified)), item.origin,
+                             _human_size(item.size), "?" if item.objects is None else str(item.objects)))
+                for item in exports]
+        self.query_one("#kibana-exports", NavDataTable).sync_rows(rows)
+        self.kibana_help()
+        self.kibana_buttons()
+
+    def chosen_mode(self) -> str:
+        from textual.widgets import Select
+        from tpotctl.widgets.fields import TpotSelect
+        value = self.query_one("#kibana-mode", TpotSelect).value
+        return "keep" if value is Select.NULL else str(value)
+
+    def kibana_help(self) -> None:
+        """The pros and cons of the mode chosen in the list (the help of env.schema.yml, as the Settings page
+        shows it), what it would do on the next start, and that Save writes it."""
+        mode = self.chosen_mode()
+        helps = {value: help_text for value, _label, help_text in kibana_modes()}
+        text = Text(helps.get(mode, ""), style=theme.color("mist"))
+        state = self.kibana
+        if state is not None and state.plan is not None:
+            text.append(f"\n{mode_effect(mode, state.plan, state.given_up)}", style=theme.color("glass"))
+        if state is not None and state.kibana and self.kibana_mode is not None and mode != self.kibana_mode:
+            text.append(f"\nSave writes TPOT_KIBANA_OBJECTS={mode} into .env, T-Pot uses it from its next start.",
+                        style=f"bold {theme.color('wax')}")
+        self.query_one("#kibana-mode-help", Static).update(text)
+
+    def kibana_buttons(self) -> None:
+        """Every control of the Kibana objects as of the state read last: none without Kibana in the edition,
+        none while a job runs; Save only for a mode other than the one of .env, Restore with an export."""
+        state = self.kibana
+        ready = state is not None and state.kibana and not self.kibana_busy
+        for name in ("#kibana-mode", "#kibana-export", "#kibana-update", "#kibana-overwrite"):
+            self.query_one(name).disabled = not ready
+        self.query_one("#kibana-mode-save", Button).disabled = not (
+            ready and self.kibana_mode is not None and self.chosen_mode() != self.kibana_mode)
+        self.query_one("#kibana-restore", Button).disabled = not (
+            ready and self.query_one("#kibana-exports", DataTable).row_count > 0)
+
+    def on_select_changed(self, event) -> None:
+        if event.select.id == "kibana-mode":
+            event.stop()
+            self.kibana_help()
+            self.kibana_buttons()
+
+    def selected_export(self) -> str:
+        table = self.query_one("#kibana-exports", DataTable)
+        if not table.row_count:
+            return ""
+        return str(table.coordinate_to_cell_key((table.cursor_row, 0)).row_key.value)
+
+    def kibana_pressed(self, button: str) -> None:
+        if self.kibana_busy or self.kibana is None or not self.kibana.kibana:
+            return              # a press that came in before the buttons were disabled
+        if button == "kibana-mode-save":
+            mode = self.chosen_mode()
+            if mode == self.kibana_mode:
+                return
+            if mode == "overwrite":
+                self.app.push_screen(overwrite_mode_question(),
+                                     lambda yes: self.start_kibana(self.save_mode(mode)) if yes
+                                     else self.revert_mode())
+                return
+            self.start_kibana(self.save_mode(mode))
+        elif button == "kibana-export":
+            self.start_kibana(self.export_kibana())
+        elif button in ("kibana-update", "kibana-overwrite"):
+            self.start_kibana(self.ask_import(button == "kibana-overwrite"))
+        elif button == "kibana-restore" and self.selected_export():
+            self.start_kibana(self.ask_restore(self.selected_export()))
+
+    def revert_mode(self) -> None:
+        """Back on the question of overwrite: the list shows the mode of .env again."""
+        from tpotctl.widgets.fields import TpotSelect
+        if self.kibana_mode is not None:
+            self.query_one("#kibana-mode", TpotSelect).value = self.kibana_mode
+
+    def start_kibana(self, job) -> None:
+        """One job of the Kibana objects at a time: their controls stay disabled until it is done."""
+        if self.kibana_busy:
+            job.close()
+            return
+        self.kibana_busy = True
+        self.kibana_buttons()
+        self.run_worker(self.run_kibana_job(job), group="kibana-change")
+
+    async def run_kibana_job(self, job) -> None:
+        try:
+            await job
+        finally:
+            self.kibana_busy = False
+            from textual.css.query import NoMatches
+            try:
+                self.kibana_buttons()
+            except NoMatches:       # the T-Pot Manager ends meanwhile, its widgets are going
+                if self.is_attached and not self.app._closing and not self._closing:
+                    raise
+
+    def kibana_failed(self, err: Exception, title: str = "Kibana objects") -> None:
+        """A KibanaError or OSError: its reason as a note, nothing more is written. Another import that runs
+        (kibana_objects.BUSY, after a minute of waiting) is a warning."""
+        from tpotctl import kibana_objects as ko
+        reason = str(err)
+        self.app.notify(reason[:1].upper() + reason[1:] + ("" if reason.endswith(".") else "."), title=title,
+                        severity="warning" if reason == ko.BUSY else "error", timeout=12)
+
+    async def save_mode(self, mode: str) -> None:
+        from tpotctl.settings import SettingsError
+        try:
+            await self.write_env(self.app.backend.set_kibana_mode, mode)
+        except (SettingsError, OSError) as err:
+            self.app.notify(str(err), title="Not saved", severity="error", timeout=10)
+            self.revert_mode()
+            return
+        self.app.config_maybe_changed()             # the Settings page shows TPOT_KIBANA_OBJECTS too
+        self.app.notify(f"TPOT_KIBANA_OBJECTS={mode} is saved in .env. T-Pot uses it from its next start.",
+                        title="Elastic")
+        await self.show_kibana()
+
+    async def export_kibana(self) -> None:
+        import asyncio
+        from tpotctl import cli, kibana_objects as ko
+        try:
+            path, count = await asyncio.to_thread(self.app.backend.kibana_export)
+        except (ko.KibanaError, OSError) as err:
+            self.kibana_failed(err, "Not exported")
+            return
+        self.app.notify(f"{cli._objects(count)} exported to {path}.", title="Kibana objects", timeout=10)
+        await self.show_kibana()
+
+    async def ask_import(self, overwrite: bool) -> None:
+        """Update / Overwrite all: the plan of Kibana as it is now, then the question with the counts and the
+        objects of yours (kept or replaced). A one-off run: TPOT_KIBANA_OBJECTS stays as it is."""
+        import asyncio
+        from tpotctl import cli, kibana_objects as ko
+        mode = "overwrite" if overwrite else "update"
+        try:
+            chosen = await asyncio.to_thread(self.app.backend.kibana_preview)
+        except (ko.KibanaError, OSError) as err:
+            self.kibana_failed(err)
+            return
+        if not chosen.to_import(mode):
+            self.app.notify(f"Nothing to import ({cli._kibana_counts(chosen)}).", title="Kibana objects")
+            return
+        button = "Overwrite all" if overwrite else "Update"
+        if another_screen(self.app, button, "The plan of the Kibana objects is ready"):
+            return
+        text = Text("\n".join(cli.kibana_plan_lines(mode, chosen)), style=theme.color("mist"))
+        kept = (self.kibana.mode if self.kibana is not None else "") or "keep"
+        text.append(f"\n\nThis runs once: TPOT_KIBANA_OBJECTS stays {kept}.", style=theme.color("ash"))
+        if not overwrite:
+            title = "Update the Kibana objects?"
+        elif chosen.yours:
+            title = f"Overwrite {cli._objects(len(chosen.yours), 'objects of yours')} with the T-Pot version?"
+        else:
+            title = "Overwrite the T-Pot objects with the T-Pot version?"
+        confirmed = {item.key for item in chosen.yours} if overwrite else None
+        self.app.push_screen(ConfirmDialog(title, text, yes="Overwrite" if overwrite else "Update", no="Back"),
+                             lambda yes: self.start_kibana(self.run_import(overwrite, confirmed)) if yes else None)
+
+    async def run_import(self, overwrite: bool, confirmed) -> None:
+        import asyncio
+        from tpotctl import cli, kibana_objects as ko
+        mode = "overwrite" if overwrite else "update"
+        try:
+            chosen, result, path = await asyncio.to_thread(self.app.backend.kibana_update, overwrite, confirmed)
+        except (ko.KibanaError, OSError) as err:
+            self.kibana_failed(err, "Not imported")
+            await self.show_kibana()
+            return
+        if chosen.to_import(mode):
+            lines = cli.kibana_result_lines(ko.summary(mode, chosen, result, path))
+            if mode == "update" and chosen.yours:
+                lines += [cli.KIBANA_KEPT] + cli._kibana_titles(chosen.yours)
+        else:
+            lines = [f"Nothing to import ({cli._kibana_counts(chosen)})."]
+        self.kibana_result("Kibana objects", lines, not result.errors)
+        await self.show_kibana()
+
+    async def ask_restore(self, path: str) -> None:
+        """Restore: the chosen export is read as the restore reads it, then the question of tpot elastic
+        restore."""
+        import asyncio
+        from tpotctl import cli, kibana_objects as ko
+        try:
+            count = await asyncio.to_thread(self.app.backend.kibana_check_export, path)
+        except (ko.KibanaError, OSError) as err:
+            self.kibana_failed(err, "Not restored")
+            return
+        if another_screen(self.app, "Restore", "The check of the export is done"):
+            return
+        self.app.push_screen(ConfirmDialog("Restore this export?",
+                                           Text(cli.kibana_restore_question(path, count), style=theme.color("mist")),
+                                           yes="Restore", no="Back"),
+                             lambda yes: self.start_kibana(self.run_restore(path)) if yes else None)
+
+    async def run_restore(self, path: str) -> None:
+        import asyncio
+        from tpotctl import cli, kibana_objects as ko
+        try:
+            export_path, result = await asyncio.to_thread(self.app.backend.kibana_restore, path)
+        except (ko.KibanaError, OSError) as err:
+            self.kibana_failed(err, "Not restored")
+            await self.show_kibana()
+            return
+        self.kibana_result("Restore", cli.kibana_result_lines(cli.kibana_restore_lines(export_path, result)),
+                           not result.errors)
+        await self.show_kibana()
+
+    def kibana_result(self, title: str, lines: List[str], ok: bool) -> None:
+        """What a run did, in a dialog; with another screen open a note instead: its first line and the
+        objects Kibana refused (at most RESULT_REFUSED_SHOWN)."""
+        if len(self.app.screen_stack) > 1:
+            refused = [line for line in lines[1:] if line.startswith("not imported:")]
+            note = [lines[0]] + refused[:RESULT_REFUSED_SHOWN]
+            if len(refused) > RESULT_REFUSED_SHOWN:
+                note.append(f"… and {len(refused) - RESULT_REFUSED_SHOWN} more")
+            self.app.notify("\n".join(note), title=title, severity="information" if ok else "warning",
+                            timeout=12 if ok else 30)
+            return
+        text = Text()
+        text.append(f"{glyphs.g('ok') if ok else glyphs.g('warn')} {lines[0]}\n",
+                    style=f"bold {theme.color('ok' if ok else 'warn')}")
+        for line in lines[1:]:
+            text.append(f"{line}\n", style=theme.color("mist"))
+        text.rstrip()
+        self.app.push_screen(ConfirmDialog(title, text, no="Close", allow_yes=False))
+
+    # -- the retention -------------------------------------------------------------------------------
+
     def buttons(self) -> None:
         """Set, Take over and Apply as of the status read last; all three disabled while a change runs."""
         state = self.status
@@ -1641,6 +2027,9 @@ class ElasticPane(Vertical):
             self.query_one("#elastic-set", Button).press()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if (event.button.id or "").startswith("kibana-"):
+            self.kibana_pressed(event.button.id)
+            return
         if self.busy:               # a press that came in before the buttons were disabled
             return
         if event.button.id == "elastic-set":
@@ -1726,7 +2115,7 @@ class ElasticPane(Vertical):
         if waits is None:
             waits = _shortens_env(old, value)
         try:
-            await asyncio.to_thread(self.app.backend.set_retention, value)
+            await self.write_env(self.app.backend.set_retention, value)
         except (SettingsError, OSError) as err:
             self.app.notify(str(err), title="Not set", severity="error", timeout=10)
             return
@@ -1773,14 +2162,74 @@ FOREIGN_BUTTONS = ("Take over from Kibana keeps it, Apply .env to the policy app
                    "if that shortens the retention.")
 
 
-def another_screen(app, button: str) -> bool:
+def another_screen(app, button: str, done: str = "The check of the ILM policy is done") -> bool:
     """Another screen opened while a check ran (the palette, a question of another page): the question of the
     check does not land on top of it, a note says to press the button again. True when one is open."""
     if len(app.screen_stack) <= 1:
         return False
-    app.notify(f"The check of the ILM policy is done, but another screen was open: press {button} again.",
+    app.notify(f"{done}, but another screen was open: press {button} again.",
                title="Not saved" if button == "Save" else "Elastic", severity="warning", timeout=10)
     return True
+
+
+def kibana_modes():
+    """(value, label, help) of the modes of TPOT_KIBANA_OBJECTS: the choices of env.schema.yml, whose help
+    (the pros and cons) the Settings page shows as well."""
+    from tpotctl import envschema
+    if not hasattr(kibana_modes, "cached"):
+        rule = envschema.load_schema()["TPOT_KIBANA_OBJECTS"]
+        kibana_modes.cached = [(c["value"], c["label"], c.get("help", "")) for c in rule.choices]
+    return kibana_modes.cached
+
+
+def kibana_info() -> Text:
+    text = Text()
+    text.append("Kibana objects", style=f"bold {theme.color('glass')}")
+    text.append("  T-Pot's dashboards, visualizations and searches. Update brings in the ones of this release and "
+                "keeps the ones you changed, Overwrite all replaces those too, Restore brings an export back; each "
+                "asks first and runs once. An export always comes first (Manager: ~/tpot_backups, T-Pot: "
+                "data/kibana_objects/exports). The mode is what T-Pot does on every start.",
+                style=theme.color("mist"))
+    return text
+
+
+# the refused objects a note names when the result dialog cannot be shown (another screen is open)
+RESULT_REFUSED_SHOWN = 5
+
+def overwrite_mode_question() -> ConfirmDialog:
+    """The question before TPOT_KIBANA_OBJECTS=overwrite is saved, on the Elastic and the Settings page; #no has
+    the focus."""
+    from tpotctl import cli
+    return ConfirmDialog(cli.KIBANA_OVERWRITE_QUESTION,
+                         Text(cli.KIBANA_OVERWRITE_EVERY_START, style=theme.color("glass")),
+                         yes="Choose overwrite", no="Back")
+
+
+def mode_effect(mode: str, chosen, given_up=None) -> str:
+    """What `mode` would do on the next start, for Kibana as the plan `chosen` read it; given_up: the
+    objects the first import gave up on (kibana_objects.given_up), None without its marker."""
+    from tpotctl.cli import _objects, kibana_given_up
+
+    def are(items, what: str) -> str:
+        return f"{_objects(len(items), what)} {'is' if len(items) == 1 else 'are'}"
+    if chosen.new and not (chosen.update or chosen.current or chosen.yours):
+        # kibana_objects.needs_first_import: the first import runs again, in every mode, unless it gave up
+        if given_up is not None:
+            return f"On the next start: nothing is imported, {kibana_given_up(given_up)}."
+        return ("Kibana holds none of T-Pot's objects: the next start imports them, without your advanced "
+                "settings.")
+    if mode == "keep":
+        return "On the next start: nothing is imported."
+    todo = chosen.to_import(mode)
+    if not todo:
+        return "On the next start: nothing to import."
+    if mode == "add":
+        return f"On the next start: {are(todo, 'new Kibana objects')} imported, nothing is replaced."
+    kept = f", {are(chosen.yours, 'objects of yours')} kept" if mode == "update" and chosen.yours else ""
+    replaced = (f", {are(chosen.yours, 'objects of yours')} replaced" if mode == "overwrite" and chosen.yours
+                else "")
+    return (f"On the next start: {are(todo, 'Kibana objects')} imported after an export ({len(chosen.new)} new)"
+            f"{kept}{replaced}.")
 
 
 def foreign_kept(value: str, where: str) -> str:

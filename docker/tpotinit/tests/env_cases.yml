@@ -83,6 +83,50 @@ cases:
     services: [tpotinit]
     set: {TPOT_ES_RETENTION: "abc"}
     warnings: [LS_WEB_USER]
+  - name: kibana objects keep
+    services: [kibana]
+    set: {TPOT_KIBANA_OBJECTS: keep}
+    warnings: [LS_WEB_USER]
+  - name: kibana objects add
+    services: [kibana]
+    set: {TPOT_KIBANA_OBJECTS: add}
+    warnings: [LS_WEB_USER]
+  - name: kibana objects update
+    services: [kibana]
+    set: {TPOT_KIBANA_OBJECTS: update}
+    warnings: [LS_WEB_USER]
+  - name: kibana objects overwrite
+    services: [kibana]
+    set: {TPOT_KIBANA_OBJECTS: overwrite}
+    warnings: [LS_WEB_USER]
+  - name: kibana objects empty is keep
+    services: [kibana]
+    set: {TPOT_KIBANA_OBJECTS: ""}
+    warnings: [LS_WEB_USER]
+  - name: kibana objects yes
+    services: [kibana]
+    set: {TPOT_KIBANA_OBJECTS: "yes"}
+    errors: [TPOT_KIBANA_OBJECTS]
+    warnings: [LS_WEB_USER]
+    messages: ['invalid value "yes", allowed: keep add update overwrite.']
+  - name: kibana objects in capitals
+    services: [kibana]
+    set: {TPOT_KIBANA_OBJECTS: Update}
+    errors: [TPOT_KIBANA_OBJECTS]
+    warnings: [LS_WEB_USER]
+  - name: kibana objects a number
+    services: [kibana]
+    set: {TPOT_KIBANA_OBJECTS: "1"}
+    errors: [TPOT_KIBANA_OBJECTS]
+    warnings: [LS_WEB_USER]
+  - name: kibana objects are not checked without kibana
+    services: [tpotinit, elasticsearch]
+    set: {TPOT_KIBANA_OBJECTS: "yes"}
+    warnings: [LS_WEB_USER]
+  - name: kibana objects are not checked on a sensor
+    services: [kibana]
+    set: {TPOT_TYPE: SENSOR, WEB_USER: "", TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: 192.168.1.10,
+          TPOT_KIBANA_OBJECTS: "yes"}
   - name: unknown time zone
     set: {TPOT_ATTACKMAP_TEXT_TIMEZONE: Mars/Olympus}
     errors: [TPOT_ATTACKMAP_TEXT_TIMEZONE]

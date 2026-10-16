@@ -1,0 +1,57 @@
+{
+ "attributes": {
+  "columns": [],
+  "description": "",
+  "hits": 0,
+  "kibanaSavedObjectMeta": {
+   "searchSourceJSON": "{\"query\":{\"query\":\"type:\\\"Ddospot\\\"\",\"language\":\"kuery\"},\"filter\":[],\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.index\"}"
+  },
+  "sort": [
+   [
+    "@timestamp",
+    "desc"
+   ]
+  ],
+  "tabs": [
+   {
+    "attributes": {
+     "columns": [],
+     "hits": 0,
+     "kibanaSavedObjectMeta": {
+      "searchSourceJSON": "{\"query\":{\"query\":\"type:\\\"Ddospot\\\"\",\"language\":\"kuery\"},\"filter\":[],\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.index\"}"
+     },
+     "sort": [
+      [
+       "@timestamp",
+       "desc"
+      ]
+     ],
+     "version": 1
+    },
+    "id": "6c3463af-b9d9-4289-be5c-4fd5f4b01543",
+    "label": "Untitled"
+   }
+  ],
+  "title": "Ddospot-Logs",
+  "version": 1
+ },
+ "coreMigrationVersion": "8.8.0",
+ "created_at": "2026-06-01T17:06:34.891Z",
+ "id": "bd083250-3738-11ec-a911-7f1b8f93d32e",
+ "managed": false,
+ "references": [
+  {
+   "id": "logstash-*",
+   "name": "kibanaSavedObjectMeta.searchSourceJSON.index",
+   "type": "index-pattern"
+  }
+ ],
+ "sort": [
+  1780333594891,
+  8589935816
+ ],
+ "type": "search",
+ "typeMigrationVersion": "10.9.0",
+ "updated_at": "2026-06-01T17:06:34.891Z",
+ "version": "WzU1MSwxM10="
+}

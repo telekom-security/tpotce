@@ -40,6 +40,48 @@ def block(text):
     return text[text.index("# >>> tpot ui >>>"):text.index("# <<< tpot ui <<<")]
 
 
+class FreshInstallEnvTest(unittest.TestCase):
+    """A fresh install runs on the tracked .env of its clone: install.sh only writes WEB_USER into it,
+    and the playbook only clones. So the defaults of a new install are the values of that file."""
+
+    ENV = os.path.join(REPO_DIR, ".env")
+
+    def kibana_block(self, path):
+        with open(path, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+        end = lines.index("TPOT_KIBANA_OBJECTS=update")
+        start = max(i for i in range(end) if lines[i].startswith("# T-Pot Kibana Objects"))
+        return lines[start:end + 1]
+
+    def test_install_sh_writes_only_the_web_user_into_env(self):
+        with open(INSTALL_SH, encoding="utf-8") as handle:
+            text = handle.read()
+        writes = [line.strip() for line in text.splitlines()
+                  if "myTPOT_CONF_FILE" in line and not line.strip().startswith(("#", "myTPOT_CONF_FILE=",
+                                                                                  "fuUI_INFO"))]
+        self.assertEqual(writes, ['sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" ${myTPOT_CONF_FILE}'])
+        self.assertNotIn("env.example", text)
+        with open(os.path.join(REPO_DIR, "installer", "install", "tpot.yml"), encoding="utf-8") as handle:
+            playbook = handle.read()
+        self.assertNotIn("tpotce/.env", playbook)
+        self.assertNotIn("env.example", playbook)
+
+    def test_a_fresh_install_chooses_update_for_the_kibana_objects(self):
+        # the tracked .env, after the one change install.sh makes to it
+        with tempfile.TemporaryDirectory() as tmp:
+            env = os.path.join(tmp, ".env")
+            shutil.copy(self.ENV, env)
+            subprocess.run(["sed", "-i.bak", "s|^WEB_USER=.*|WEB_USER=dXNlcjpwYXNz|", env], check=True)
+            from tpotctl.envfile import EnvFile
+            values = EnvFile(env).values()
+        self.assertEqual(values["WEB_USER"], "dXNlcjpwYXNz")
+        self.assertEqual(values["TPOT_KIBANA_OBJECTS"], "update")
+        # with the comments of env.example, at the same place
+        self.assertEqual(self.kibana_block(self.ENV), self.kibana_block(os.path.join(REPO_DIR, "env.example")))
+        keys = list(values)
+        self.assertEqual(keys[keys.index("TPOT_KIBANA_OBJECTS") + 1], "TPOT_TYPE")
+
+
 class ScriptsInSyncTest(unittest.TestCase):
 
     def test_ui_block_is_the_same_in_install_sh(self):

@@ -483,6 +483,79 @@ def backups(home: Optional[str] = None) -> List[str]:
     return sorted((os.path.join(folder, n) for n in names), key=os.path.getmtime, reverse=True)
 
 
+def kibana_dirs(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> Tuple[str, str]:
+    """The data folder (TPOT_DATA_PATH as docker compose sees it) and the folder of the
+    shipped Kibana objects and their manifest, for tpotctl.kibana_objects."""
+    values = env_values(repo_dir) if env is None else env
+    data = os.path.normpath(os.path.join(repo_dir, os.path.expanduser(values.get("TPOT_DATA_PATH") or "./data")))
+    return data, os.path.join(repo_dir, "docker", "tpotinit", "dist", "etc", "objects")
+
+
+def kibana_export_dir(home: Optional[str] = None) -> str:
+    """Where the T-Pot Manager keeps its exports of the Kibana objects: ~/tpot_backups (0700,
+    the files 0600, never rotated), next to the archives of update.sh."""
+    return os.path.join(home or os.path.expanduser("~"), "tpot_backups")
+
+
+def kibana_exports(home: Optional[str] = None, data_dir: Optional[str] = None) -> List[str]:
+    """Exports of the Kibana objects, newest first: kibana_objects_*.ndjson of the T-Pot
+    Manager in ~/tpot_backups and, with `data_dir`, auto_*.ndjson of tpotinit in
+    <data>/kibana_objects/exports. Each place as kibana_objects.exports lists it: regular files
+    only, no link followed (~/tpot_backups itself may be a link of yours)."""
+    from tpotctl import kibana_objects as ko
+    places = [(kibana_export_dir(home), ko.EXPORT_PREFIX)]
+    if data_dir:
+        places.append((ko.auto_exports_dir(data_dir), ko.AUTO_PREFIX))
+    found = []
+    for folder, prefix in places:
+        for path in ko.exports(folder, prefix):
+            try:
+                found.append((os.lstat(path).st_mtime, path))
+            except OSError:
+                pass
+    return [path for _, path in sorted(found, key=lambda f: (f[0], f[1]), reverse=True)]
+
+
+@dataclass
+class KibanaExport:
+    """One export of the Kibana objects for the Elastic page: who wrote it (Manager: the T-Pot Manager or
+    tpot elastic, T-Pot: tpotinit), its time, its size and its objects (None: no export that can be read)."""
+    path: str
+    origin: str
+    modified: float
+    size: int
+    objects: Optional[int]
+
+
+# exports larger than this are listed without a count ("?"): the page reads every listed export on each visit
+KIBANA_COUNT_LIMIT = 50 * 2 ** 20
+
+
+def kibana_export_infos(home: Optional[str] = None, data_dir: Optional[str] = None) -> List[KibanaExport]:
+    """kibana_exports with what the table of the Elastic page shows: regular files only (a link, a pipe or a
+    folder of that name is left out, as tpotinit's rotation does). The objects are counted as a restore
+    reads the file (kibana_objects.read_export), up to KIBANA_COUNT_LIMIT bytes."""
+    import stat
+    from tpotctl import kibana_objects as ko
+    infos = []
+    for path in kibana_exports(home, data_dir):
+        try:
+            info = os.lstat(path)
+        except OSError:
+            continue
+        if not stat.S_ISREG(info.st_mode):
+            continue
+        count: Optional[int] = None
+        if info.st_size <= KIBANA_COUNT_LIMIT:
+            try:
+                count = len(ko.read_export(path))
+            except ko.KibanaError:
+                count = None
+        origin = "T-Pot" if os.path.basename(path).startswith(ko.AUTO_PREFIX) else "Manager"
+        infos.append(KibanaExport(path, origin, info.st_mtime, info.st_size, count))
+    return infos
+
+
 # The groups of an archive restore.sh can bring back (-g), with the questions it
 # asks for them; tests keep them the same as in restore.sh.
 GROUP_TEXT = {

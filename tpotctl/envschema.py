@@ -92,8 +92,10 @@ def load_schema(path: str = SCHEMA_PATH) -> Dict[str, Rule]:
             spec[name] = [str(v) for v in spec.get(name) or []]
         for name in ("default",):
             spec[name] = "" if spec.get(name) is None else str(spec[name])
-        spec["choices"] = [{"value": str(c["value"]), "label": str(c.get("label") or c["value"])}
-                           for c in spec.get("choices") or []]
+        # a choice is {value, label, help} (label and help optional) or the value alone
+        choices = [c if isinstance(c, dict) else {"value": c} for c in spec.get("choices") or []]
+        spec["choices"] = [{"value": str(c["value"]), "label": str(c.get("label") or c["value"]),
+                            "help": str(c.get("help") or "")} for c in choices]
         spec["groups"] = _groups(key, spec)
         rules[key] = Rule(key=key, **spec)
     return rules

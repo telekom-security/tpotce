@@ -1101,7 +1101,7 @@ class SmokeTest(BuilderHarness):
         super().setUp()
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
-        for name in ("cowrie", "tpotinit_env", "redis"):
+        for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
 
@@ -1113,13 +1113,23 @@ class SmokeTest(BuilderHarness):
                            'printf "I %s\\n" "${mySMOKE_IMAGES[@]}"; printf "W %s\\n" "${mySMOKE_NOTES[@]}"',
                            TPOT_BUILDER_TESTS_DIR=self.tests)
         lines = result.stdout.splitlines()
-        self.assertEqual([line[2:] for line in lines if line.startswith("N ")], ["cowrie", "tpotinit_env", "redis"])
+        self.assertEqual([line[2:] for line in lines if line.startswith("N ")], ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "redis"])
         self.assertEqual([line[2:] for line in lines if line.startswith("A ")],
-                         ["--image hub/cowrie:1.0", "--image hub/tpotinit:1.0", "--image hub/redis:1.0"])
+                         ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 3 + ["--image hub/redis:1.0"])
         self.assertEqual([line[2:] for line in lines if line.startswith("I ")], ["cowrie", "tpotinit", "redis"])
         notes = [line[2:] for line in lines if line.startswith("W ")]
         self.assertEqual(len(notes), 1, notes)
         self.assertIn("No smoke test for adbhoney", notes[0])
+        # tpotinit without one of its tests: the others run, the missing one is named, the image is built once
+        os.remove(os.path.join(self.tests, "tpotinit_ilm.sh"))
+        result = self.bash('myHUB=hub myGHCR=ghcr.io/me myVER=1.0\nfuSMOKE_PLAN tpotinit\n'
+                           'printf "N %s\\n" "${mySMOKE_NAMES[@]}"; printf "I %s\\n" "${mySMOKE_IMAGES[@]}"\n'
+                           'printf "W %s\\n" "${mySMOKE_NOTES[@]}"', TPOT_BUILDER_TESTS_DIR=self.tests)
+        lines = result.stdout.splitlines()
+        self.assertEqual([line[2:] for line in lines if line.startswith("N ")], ["tpotinit_env", "tpotinit_kibana"])
+        self.assertEqual([line[2:] for line in lines if line.startswith("I ")], ["tpotinit"])
+        self.assertEqual([line[2:] for line in lines if line.startswith("W ")],
+                         [f"No smoke test for tpotinit ({self.tests}/tpotinit_ilm.sh)"])
         result = self.bash('myHUB=hub myGHCR=ghcr.io/me myVER=1.0 myPUSH_GHCR=1\n'
                            'fuSMOKE_PLAN redis\n'
                            'printf "N %s\\n" "${mySMOKE_NAMES[@]}"; printf "A %s\\n" "${mySMOKE_ARGS[@]}"',
@@ -1152,8 +1162,9 @@ class SmokeTest(BuilderHarness):
         self.assertIn("build cowrie tpotinit --builder mybuilder", calls[load[0]])
         self.assertNotIn("--push", calls[load[0]])
         self.assertTrue(load[0] < tests[0], calls)
-        self.assertEqual([calls[i] for i in tests], [f"test cowrie --image hub/cowrie:{VERSION}",
-                                                     f"test tpotinit_env --image hub/tpotinit:{VERSION}"])
+        self.assertEqual([calls[i] for i in tests], [f"test cowrie --image hub/cowrie:{VERSION}"]
+                         + [f"test {name} --image hub/tpotinit:{VERSION}"
+                            for name in ("tpotinit_env", "tpotinit_ilm", "tpotinit_kibana")])
         override = self.override("override-load.yml")
         self.assertIn(f"  cowrie:\n    image: hub/cowrie:{VERSION}\n    build:\n      platforms: !override\n"
                       "        - linux/amd64\n      tags: !reset []\n", override)
@@ -1170,7 +1181,7 @@ class SmokeTest(BuilderHarness):
         self.assertEqual(len(load), 1, self.calls())
         self.assertIn("build cowrie tpotinit --builder mybuilder", load[0])
         self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")],
-                         ["cowrie", "tpotinit_env"])
+                         ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana"])
 
     def test_ctrl_c_under_a_spinner_cancels_the_run(self):
         """gum takes Ctrl+C as a key and fuUI_SPIN gives back 130: the run ends as cancelled (130),
@@ -1294,7 +1305,7 @@ class SmokeTest(BuilderHarness):
         rc, out = self.builder("-i", "cowrie,tpotinit", "-T", "-a", "host", STUB_PLATFORMS="linux/amd64",
                                STUB_FAIL="cowrie", TPOT_BUILDER_TESTS_DIR=self.tests)
         self.assertEqual(rc, 1, out)
-        self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")], ["tpotinit_env"])
+        self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")], ["tpotinit_env", "tpotinit_ilm", "tpotinit_kibana"])
 
 
 class SetupTest(BuilderHarness):

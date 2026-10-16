@@ -3038,12 +3038,25 @@ function fuUPDATER () {
 	    fuUI_INFO "Your previous one is in the backup as 'docker-compose.yml'."
 	fi
 	fuUI_INFO "We stored the previous version as backup in $myARCHIVE."
-	fuUI_INFO "Your own Kibana objects and the ILM policy were saved to the archive before"
-	fuUI_INFO "T-Pot was stopped, 'restore.sh' can put them back."
-	fuUI_INFO "Some updates ship newer Kibana objects. Download them here if they changed:"
-	fuUI_INFO "https://raw.githubusercontent.com/telekom-security/tpotce/refs/heads/master/docker/tpotinit/dist/etc/objects/kibana_export.ndjson.zip"
-	fuUI_INFO "Import through the Kibana WebUI: Management > Saved Objects > Import"
+	fuUI_INFO "Your own Kibana objects and the ILM policy were saved to the archive before T-Pot was stopped, 'restore.sh' can put them back."
+	fuKIBANA_OBJECTS_HINT "$HOME/tpotce/.env"
 	echo
+}
+
+# The end of a run: what the TPOT_KIBANA_OBJECTS of .env (after fuMIGRATE_KIBANA_OBJECTS) does with
+# the newer Kibana objects of a release. $1 = .env
+function fuKIBANA_OBJECTS_HINT () {
+	local myMODE="" myWHAT=""
+	myMODE=$(fuENV_VALUE "$1" TPOT_KIBANA_OBJECTS)
+	case "${myMODE}" in
+	  "")        myWHAT="With TPOT_KIBANA_OBJECTS empty (keep) nothing changes" ;;
+	  keep)      myWHAT="With TPOT_KIBANA_OBJECTS=keep nothing changes" ;;
+	  add)       myWHAT="With TPOT_KIBANA_OBJECTS=add T-Pot adds the missing ones on its next start" ;;
+	  update)    myWHAT="With TPOT_KIBANA_OBJECTS=update T-Pot brings its unchanged ones up to date on its next start, after an export, and yours stay" ;;
+	  overwrite) myWHAT="With TPOT_KIBANA_OBJECTS=overwrite T-Pot overwrites all of its objects on its next start, after an export" ;;
+	  *)         myWHAT="TPOT_KIBANA_OBJECTS=${myMODE} is no mode of T-Pot, choose keep, add, update or overwrite" ;;
+	esac
+	fuUI_INFO "Some updates ship newer Kibana objects. ${myWHAT}; 'tpot elastic import --dry-run' shows what an update would bring."
 }
 
 function fuRESTORE () {
@@ -3118,6 +3131,7 @@ function fuRESTORE () {
 	fuMERGE_ENV_KEYS "$HOME/tpotce/.env" "$HOME/tpotce/env.example" "$HOME/tpotce/docker-compose.yml" "${myTMPDIR}/docker-compose.yml"
 	fuMIGRATE_RETENTION "$HOME/tpotce/.env" "${myTMPDIR}/env" \
 	  "$(fuRETENTION_EXPORT "${myTMPDIR}/stage/elastic/ilm_policy_tpot.json" "${myARCHIVE}")"
+	fuMIGRATE_KIBANA_OBJECTS "$HOME/tpotce/.env" "${myTMPDIR}/env"
 	fuDID ok "Your configuration (.env) is back, TPOT_VERSION=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)."
 }
 
@@ -3292,6 +3306,44 @@ function fuMIGRATE_RETENTION () {
 	  else
 	    fuUI_WARN "TPOT_ES_RETENTION could not be written into ${myENVFILE}, it stays $(fuENV_VALUE "${myENVFILE}" TPOT_ES_RETENTION); tpot elastic retention shows the ILM policy tpot, --adopt lets T-Pot manage it."
 	    fuDID warn "TPOT_ES_RETENTION could not be written into .env (tpot elastic retention shows the ILM policy tpot)."
+	fi
+	[ -z "${myTMP}" ] || rm -f "${myTMP}"
+}
+
+# TPOT_KIBANA_OBJECTS is new in 24.04.2: what T-Pot does with its Kibana objects after the first
+# import. env.example brings update for a new install; an existing install keeps its objects as they
+# are (keep) until you choose otherwise. As for TPOT_ES_RETENTION, the .env of the archive decides,
+# the one of this run's backup or the one master's update.sh handed over: without the key there,
+# fuMERGE_ENV_KEYS has just added it with the default of env.example and its comments, and the value
+# becomes keep. A key the archive had stays as it is, and so does a .env the merge left without it
+# (an empty or missing value is keep for tpotinit as well).
+# $1 = .env, $2 = .env of the archive
+function fuMIGRATE_KIBANA_OBJECTS () {
+	local myENVFILE="$1" myOLDENV="$2" myTMP="" myNOW="" myWHAT=""
+	# without the .env of the release before it is unknown whether the key was set: nothing is written
+	[ -r "${myOLDENV}" ] && [ -r "${myENVFILE}" ] || return 0
+	grep -qE "^TPOT_KIBANA_OBJECTS[[:space:]]*[:=]" "${myOLDENV}" 2>/dev/null && return 0
+	grep -qE "^TPOT_KIBANA_OBJECTS[[:space:]]*[:=]" "${myENVFILE}" || return 0
+	# rewritten in place (cat >), so that owner, mode and inode of .env stay; no sed -i (BSD sed differs)
+	myTMP=$(mktemp) || myTMP=""
+	if [ -n "${myTMP}" ] \
+	   && sed -E "s/^(TPOT_KIBANA_OBJECTS[[:space:]]*[:=][[:space:]]*).*$/\1keep/" "${myENVFILE}" > "${myTMP}" \
+	   && { cat "${myTMP}" > "${myENVFILE}"; } 2>/dev/null \
+	   && ! grep -E "^TPOT_KIBANA_OBJECTS[[:space:]]*[:=]" "${myENVFILE}" | grep -qvE "[:=][[:space:]]*keep[[:space:]]*$";
+	  then
+	    fuUI_OK "TPOT_KIBANA_OBJECTS=keep, T-Pot leaves its Kibana objects as they are."
+	    fuDID info "TPOT_KIBANA_OBJECTS=keep: T-Pot leaves its Kibana objects as they are; choose add, update or overwrite on the Elastic page of the T-Pot Manager (tpot elastic import shows what each would do)."
+	  else
+	    myNOW=$(fuENV_VALUE "${myENVFILE}" TPOT_KIBANA_OBJECTS)
+	    case "${myNOW}" in
+	      update)    myWHAT="on its next start T-Pot updates its unchanged Kibana objects, after an export" ;;
+	      add)       myWHAT="on its next start T-Pot adds its missing Kibana objects" ;;
+	      overwrite) myWHAT="on its next start T-Pot overwrites all of its Kibana objects, after an export" ;;
+	      *)         myWHAT="T-Pot uses it from its next start" ;;
+	    esac
+	    fuUI_WARN "TPOT_KIBANA_OBJECTS could not be set to keep in ${myENVFILE}, it is ${myNOW:-empty}: ${myWHAT}."
+	    fuUI_HINT "'tpot env set TPOT_KIBANA_OBJECTS=keep' leaves the Kibana objects of T-Pot as they are."
+	    fuDID warn "TPOT_KIBANA_OBJECTS could not be set to keep in .env, it is ${myNOW:-empty}: ${myWHAT} (tpot env set TPOT_KIBANA_OBJECTS=keep leaves them as they are)."
 	fi
 	[ -z "${myTMP}" ] || rm -f "${myTMP}"
 }

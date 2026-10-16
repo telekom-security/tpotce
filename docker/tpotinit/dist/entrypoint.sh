@@ -19,12 +19,18 @@ cleanup() {
           echo
       fi
   fi
-  # autoheal and es_retention.sh, once they run; a PUT of the ILM policy in flight may finish
+  # autoheal, es_retention.sh and kibana_objects.sh, once they run; a PUT of the ILM policy in flight
+  # may finish, the Kibana objects are checked again on the next start
   [ -n "${PID}" ] && kill -TERM "${PID}" 2>/dev/null
   if [ -n "${myILM_PID}" ];
     then
       kill -TERM "${myILM_PID}" 2>/dev/null
       wait "${myILM_PID}" 2>/dev/null
+  fi
+  if [ -n "${myKIBANA_PID}" ];
+    then
+      kill -TERM "${myKIBANA_PID}" 2>/dev/null
+      wait "${myKIBANA_PID}" 2>/dev/null
   fi
   rm -f /tmp/success
   echo "# Cleanup done."
@@ -34,6 +40,7 @@ cleanup() {
 }
 PID=""
 myILM_PID=""
+myKIBANA_PID=""
 trap cleanup SIGTERM
 
 # The .env validation (rules in /opt/tpot/etc/env.schema.yml) collects all errors
@@ -164,6 +171,13 @@ if [ -f "/data/uuid" ];
     echo
     /opt/tpot/bin/clean.sh off
     echo
+    # The first import of the Kibana objects is pending until it worked (kibana_objects.sh), written
+    # before /data/uuid: a first start that ends before the import tries it again on the next one
+    if ! python3 /opt/tpot/bin/kibana_objects.py mark-fresh --data /data;
+      then
+        echo "# Warning: the first import of the Kibana objects could not be marked, the Kibana objects job of this start imports them without the advanced settings."
+    fi
+    echo
     echo "# Generating self signed certificate ..."
     echo
     myINTIP=$(/sbin/ip address show | awk '/inet .*brd/{split($2,a,"/"); print a[1]; exit}')
@@ -282,24 +296,12 @@ if [ "${TPOT_TYPE}" == "HIVE" ] && yq -e '.services | has("elasticsearch")' "${C
     myILM_PID=$!
 fi
 
-# We need to push objects to Kibana if this is a Hive and a fresh install
-if [ "${myFIRSTRUN}" == "true" ] && [ "${TPOT_TYPE}" == "HIVE" ];
+# T-Pot's Kibana objects: the first import until it worked, then TPOT_KIBANA_OBJECTS (rules in
+# bin/kibana_objects.py). In the background: Kibana takes a while and nothing else waits for it.
+if [ "${TPOT_TYPE}" == "HIVE" ] && yq -e '.services | has("kibana")' "${COMPOSE}" >/dev/null 2>&1;
   then
-    myKIBANA_URL="http://127.0.0.1:64296"
-    myKIBANA_CONFIG="/opt/tpot/etc/objects/export.ndjson"
-
-    # Wait for Kibana to be available
-    until curl -s -f -o /dev/null "{$myKIBANA_URL}/api/status"; do
-      echo "# Waiting for Kibana to upload config..."
-      sleep 2
-    done
-
-    # Upload Kibana config
-    echo "# Now uploading config to Kibana."
-    curl -X POST "http://127.0.0.1:64296/api/saved_objects/_import?overwrite=true" \
-      -H "kbn-xsrf: true" \
-      --form file=@/opt/tpot/etc/objects/kibana_export.ndjson
-    echo "# Kibana config has been uploaded."
+    /opt/tpot/bin/kibana_objects.sh &
+    myKIBANA_PID=$!
 fi
 
 # We want to see true source for UDP packets in container (https://github.com/moby/libnetwork/issues/1994)

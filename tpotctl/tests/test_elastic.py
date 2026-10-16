@@ -291,7 +291,7 @@ class WiringTest(unittest.TestCase):
     def test_tpotinit_applies_the_rule_on_a_hive_with_elasticsearch(self):
         """After touch /tmp/success (the healthcheck: the honeypots start meanwhile): one if block that
         only on a HIVE whose compose file has elasticsearch starts es_retention.sh in the background,
-        before the Kibana import (which waits for Kibana and must not hold it up)."""
+        before the Kibana objects (which wait for Kibana and must not hold it up)."""
         text = self.read("docker", "tpotinit", "dist", "entrypoint.sh")
         start = text.index("touch /tmp/success\n")
         calls = [line for line in text.splitlines() if "es_retention.sh" in line and not line.lstrip().startswith("#")]
@@ -306,8 +306,8 @@ class WiringTest(unittest.TestCase):
         # the body: the call alone, in the background, and its PID for the cleanup on SIGTERM
         body = [line.strip() for line in block.group("body").splitlines() if line.strip()]
         self.assertEqual(body, ["/opt/tpot/bin/es_retention.sh &", "myILM_PID=$!"])
-        # between the healthcheck and the Kibana block, nothing in between waits
-        kibana = text.index('if [ "${myFIRSTRUN}" == "true" ] && [ "${TPOT_TYPE}" == "HIVE" ];')
+        # between the healthcheck and the Kibana block (kibana_objects.sh), nothing in between waits
+        kibana = [b for b in self.IF_BLOCK.finditer(text, start) if "kibana_objects.sh" in b.group("body")][0].start()
         self.assertLess(block.end(), kibana)
         between = text[start + len("touch /tmp/success\n"):block.start()] + text[block.end():kibana]
         self.assertEqual([line for line in between.splitlines() if line.strip() and not line.lstrip().startswith("#")],
@@ -822,6 +822,7 @@ class RunElasticTest(unittest.TestCase):
                 mock.patch("tpotctl.cli.confirm", side_effect=lambda *a: self.plain_confirmed.append(a) or True), \
                 mock.patch("tpotctl.cli.ask", side_effect=typed), \
                 mock.patch("tpotctl.cli._console", return_value=Console(file=self.out, width=200)), \
+                mock.patch("tpotctl.cli._kibana_status"), \
                 contextlib.redirect_stderr(self.err):
             if terminal is None:
                 with mock.patch("tpotctl.cli.confirm_data_loss", side_effect=ask):

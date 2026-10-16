@@ -411,6 +411,75 @@ class RestoreShTest(Harness):
         self.assertTrue("Not restored: elastic." in text, text[-400:])
         self.assertFalse("The rest is back" in text, text[-400:])      # nothing else was chosen
 
+    def kibana_restore(self, module=True, answer="# Kibana objects: 3 restored (export: /x/kibana_objects_1.ndjson)",
+                       rc=0):
+        """restore.sh -g elastic with a Kibana that answers (curl, its calls logged) and a python3 that
+        stands in for tpotctl/kibana_objects.py of the checkout (its calls logged)."""
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/kibana_export.ndjson": "{}\n"},
+                              name="20261005141414_tpot_backup.tar")
+        if module:
+            os.makedirs(os.path.join(self.tpotce, "tpotctl"))
+            open(os.path.join(self.tpotce, "tpotctl", "kibana_objects.py"), "w").close()
+        log = os.path.join(self.home, "calls.log")
+        self.fake("curl", f'#!/bin/sh\necho "curl $*" >> "{log}"\nout=""\nprev=""\n'
+                          'for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done\n'
+                          'case "$*" in *_import*) echo \'{"success":true,"successCount":2}\' > "$out" ;; esac\n'
+                          'exit 0\n')
+        real = shutil.which("python3")
+        self.fake("python3", f'#!/bin/sh\ncase "$2" in */tpotctl/kibana_objects.py)\n'
+                             f'  echo "python3 $*" >> "{log}"\n'
+                             f'  [ "$4" = "--help" ] && exit 0\n'
+                             f"  printf '%s\\n' '{answer}'\n  exit {rc} ;;\nesac\nexec \"{real}\" \"$@\"\n")
+        result = self.restore("-f", archive, "-g", "elastic", env={"TPOT_KIBANA_TIMEOUT": "0",
+                                                                    "TPOT_VENV_PYTHON": "/nonexistent"})
+        try:
+            with open(log, encoding="utf-8") as handle:
+                calls = handle.read().splitlines()
+        except FileNotFoundError:
+            calls = []
+        return result, result.stdout + result.stderr, calls
+
+    def test_the_kibana_objects_are_restored_through_the_module(self):
+        result, text, calls = self.kibana_restore()
+        self.assertEqual(result.returncode, 0, text[-600:])
+        module = os.path.join(self.tpotce, "tpotctl", "kibana_objects.py")
+        restore = [c for c in calls if c.startswith("python3 -I") and "--help" not in c]
+        self.assertEqual(restore, [f"python3 -I {module} restore --data {self.tpotce}/data --objects "
+                                   f"{self.tpotce}/docker/tpotinit/dist/etc/objects --exports {self.home}/tpot_backups "
+                                   f"--kibana http://127.0.0.1:64296 --wait 900 "
+                                   f"{restore[0].rsplit(' ', 1)[-1] if restore else ''}"])
+        self.assertTrue(restore[0].endswith("/elastic/kibana_export.ndjson"), restore)
+        self.assertFalse([c for c in calls if "_import" in c], calls)          # no curl import
+        self.assertIn("Imported 3 Kibana objects (the ones before are exported into ~/tpot_backups).", text)
+        self.assertNotIn("not protected", text)
+
+    def test_refused_objects_of_the_module_are_named(self):
+        answer = ("# Kibana objects: 2 restored, 1 failed (export: /x/e.ndjson)\n"
+                  '# Kibana objects: not imported: dashboard:d "Mine" (missing_references)')
+        result, text, _calls = self.kibana_restore(answer=answer, rc=1)
+        self.assertEqual(result.returncode, 1, text[-600:])
+        self.assertIn("Imported 2 Kibana objects, errors reported:", text)
+        self.assertIn('    dashboard:d "Mine" (missing_references)', text)
+        self.assertIn("Not restored: elastic.", text)
+
+    def test_a_module_error_is_no_import(self):
+        answer = "# Kibana objects: another Kibana import is running (tpotinit or tpot elastic), try again in a minute"
+        result, text, _calls = self.kibana_restore(answer=answer, rc=1)
+        self.assertEqual(result.returncode, 1, text[-600:])
+        self.assertIn("The Kibana objects could not be imported.", text)
+        self.assertIn("    another Kibana import is running", text)
+
+    def test_without_the_module_curl_imports_with_a_warning(self):
+        result, text, calls = self.kibana_restore(module=False)
+        self.assertEqual(result.returncode, 0, text[-600:])
+        self.assertIn("the restored objects are not protected from tpotinit's next import", text)
+        tail = text[text.index("### Restored from"):]
+        self.assertIn("### [WARNING] - The Kibana objects and the ILM policy: the Kibana objects went in with curl: "
+                      "tpotinit's next import may replace the restored ones", tail)
+        self.assertNotIn("[OK] - The Kibana objects and the ILM policy", tail)
+        self.assertTrue([c for c in calls if "saved_objects/_import?overwrite=true" in c], calls)
+        self.assertFalse([c for c in calls if c.startswith("python3")], calls)
+
     def test_an_unreadable_patch_is_not_called_empty(self):
         archive = self.git_checkout_with_a_patch()
         real = shutil.which("tar")

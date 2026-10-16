@@ -948,7 +948,37 @@ function fuILM_CONFIRMED () {   # $1 = the policy of the archive
 	fuLOSS_CONFIRM ilm "${myTEXT}" "Put the ILM policy of the archive back?"
 }
 
+# The Python that runs tpotctl/kibana_objects.py of the checkout (standard library only): the one of the
+# venv of tpot, else python3. Prints it; rc 1 when there is none that knows its restore.
+function fuKO_PYTHON () {
+	local myPY=""
+	[ -f "${myTPOTDIR}/tpotctl/kibana_objects.py" ] || return 1
+	for myPY in "${TPOT_VENV_PYTHON:-${HOME}/.local/share/tpotce/venv/bin/python}" python3;
+	  do
+	    command -v "${myPY}" >/dev/null 2>&1 || continue
+	    if "${myPY}" -I "${myTPOTDIR}/tpotctl/kibana_objects.py" restore --help >/dev/null 2>&1;
+	      then
+	        echo "${myPY}"
+	        return 0
+	    fi
+	done
+	return 1
+}
+
+# A restore of the Kibana objects through the module: it waits for an import of tpotinit's job (up to
+# 15 min), exports into ~/tpot_backups, imports and drops the records of what it restored. Its lines
+# go into $3 and to stdout (the log).
+function fuKO_RESTORE () {   # $1 = python, $2 = the export, $3 = its output
+	local myRC=0
+	"$1" -I "${myTPOTDIR}/tpotctl/kibana_objects.py" restore --data "$(fuDATA_PATH)" \
+	  --objects "${myTPOTDIR}/docker/tpotinit/dist/etc/objects" --exports "${HOME}/tpot_backups" \
+	  --kibana "${myKIBANA}" --wait 900 "$2" > "$3" 2>&1 || myRC=$?
+	cat "$3"
+	return "${myRC}"
+}
+
 function fuDO_ELASTIC () {
+	local myKO_PYTHON=""
 	local myTEXT=""
 	local myWAIT=0
 	local myOBJ=0
@@ -1002,8 +1032,35 @@ function fuDO_ELASTIC () {
 	        myKIBANA_UP="1"
 	    fi
 	fi
-	if [ -n "${myKIBANA_UP}" ];
+	if [ -n "${myKIBANA_UP}" ] && myKO_PYTHON=$(fuKO_PYTHON);
 	  then
+	    # through tpotctl/kibana_objects.py: under the import lock of tpotinit's job (which may import right
+	    # now, after the same start), an export into ~/tpot_backups first, and the restored objects are no
+	    # T-Pot import any more, so the next start keeps them
+	    myRC=0
+	    fuUI_SPIN "Importing the Kibana objects (waits up to 15 minutes for an import of T-Pot that runs) ..." "${myLOG}" \
+	      fuKO_RESTORE "${myKO_PYTHON}" "${myTMPDIR}/elastic/kibana_export.ndjson" "${myTMPDIR}/import.txt" || myRC=$?
+	    [ "${myRC}" -ne 130 ] || fuSTOPPED "importing the Kibana objects"
+	    myOBJ=$(sed -n 's/^# Kibana objects: \([0-9]*\) restored.*/\1/p' "${myTMPDIR}/import.txt" 2>/dev/null | head -1)
+	    if [ "${myRC}" -eq 0 ];
+	      then
+	        fuUI_OK "Imported ${myOBJ:-0} Kibana objects (the ones before are exported into ~/tpot_backups)."
+	    elif [ -n "${myOBJ}" ];
+	      then
+	        fuUI_WARN "Imported ${myOBJ} Kibana objects, errors reported:"
+	        fuFAILED elastic
+	        myBAD="1"
+	        sed -n 's/^# Kibana objects: not imported: /    /p' "${myTMPDIR}/import.txt" | head -5
+	      else
+	        fuUI_ERROR "The Kibana objects could not be imported."
+	        fuFAILED elastic
+	        myBAD="1"
+	        sed 's/^# Kibana objects: /    /' "${myTMPDIR}/import.txt" 2>/dev/null | head -5
+	    fi
+	elif [ -n "${myKIBANA_UP}" ];
+	  then
+	    fuUI_WARN "Python 3 or tpotctl/kibana_objects.py is missing, the Kibana objects go in with curl: the restored objects are not protected from tpotinit's next import."
+	    fuWARNED elastic "the Kibana objects went in with curl: tpotinit's next import may replace the restored ones"
 	    myRC=0
 	    fuUI_SPIN "Importing the Kibana objects ..." "${myLOG}" \
 	      curl -s -S -f -X POST "${myKIBANA}/api/saved_objects/_import?overwrite=true" \
