@@ -44,6 +44,21 @@ function fuKO_URL () {
   fi
 }
 
+# prints the URL of Elasticsearch, whose version a fresh install's advanced settings take when Kibana has
+# no config of its own yet: TPOT_ES_URL, else as es_retention.sh (fuILM_CANDIDATES) picks it
+function fuKO_ES_URL () {
+  local myFILE="${COMPOSE:-/tmp/tpot/docker-compose.yml}" myMODE
+  if [[ -n "${TPOT_ES_URL:-}" ]];
+    then
+      echo "${TPOT_ES_URL}"
+    elif [[ -r "${myFILE}" ]] && myMODE="$(yq -r '.services.tpotinit.network_mode // ""' "${myFILE}" 2>/dev/null)" && [[ "${myMODE}" != "host" ]];
+      then
+        echo "http://elasticsearch:9200"
+      else
+        echo "http://127.0.0.1:64298"
+  fi
+}
+
 # $1 = the URL, $2 = seconds; 0 once /api/status answers 200, tried every 5 s
 function fuKO_WAIT_FOR () {
   local myEND=$(( SECONDS + $2 ))
@@ -77,7 +92,7 @@ function fuKO_MAIN () {
   # in the background as well: a SIGTERM ends the run at once, its files are written whole or not at all.
   # What it makes in <data>/kibana_objects gets the owner of <data> from the module (as root), at once.
   python3 "${myKO_PY}" apply --mode "${myMODE}" --data "${myKO_DATA}" --objects "${myKO_OBJECTS}" \
-          --exports "${myKO_DATA}/kibana_objects/exports" --kibana "${myURL}" &
+          --exports "${myKO_DATA}/kibana_objects/exports" --kibana "${myURL}" --es "$(fuKO_ES_URL)" &
   myKO_CHILD=$!
   wait "${myKO_CHILD}" || myRC=$?
   myKO_CHILD=""

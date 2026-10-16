@@ -55,9 +55,10 @@ parse_args() {
   done
 }
 
-# the stub Kibana: /api/status answers 503 for the first LATE requests, then its version (9.5.4, build
-# 107666); the first FAIL_IMPORTS imports answer 500; it keeps what is imported and exports it; one line
-# per request on stdout
+# the stub Kibana: /api/status answers 503 for the first LATE requests, then 200 without a version (as
+# T-Pot's Kibana does without a login); with OWN_CONFIG it holds the config it made of its own at its
+# start (config:9.5.4, buildNum 107666); the first FAIL_IMPORTS imports answer 500; it keeps what is
+# imported and exports it; one line per request on stdout
 write_stub() {
   cat > "${TEST_TMP_ROOT}/stub.py" <<'EOF'
 import datetime
@@ -68,6 +69,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 LATE = int(os.environ.get("LATE", "0"))
 FAIL_IMPORTS = int(os.environ.get("FAIL_IMPORTS", "0"))
 STORE = {}
+if os.environ.get("OWN_CONFIG"):
+    STORE["config:9.5.4"] = {"type": "config", "id": "9.5.4", "references": [],
+                             "attributes": {"buildNum": 107666, "isDefaultIndexMigrated": True},
+                             "updated_at": "2026-10-16T14:20:09.290Z"}
 COUNT = {"status": 0, "import": 0}
 
 
@@ -90,8 +95,7 @@ class Stub(BaseHTTPRequestHandler):
         COUNT["status"] += 1
         if COUNT["status"] <= LATE:
             return self.answer(503, '{"status":{"overall":{"level":"unavailable"}}}')
-        return self.answer(200, '{"version":{"number":"9.5.4","build_number":107666},'
-                                '"status":{"overall":{"level":"available"}}}')
+        return self.answer(200, '{"status":{"overall":{"level":"available"}}}')
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8")
@@ -135,7 +139,7 @@ start_stub() {
   [[ -z "${mySTUB}" ]] || docker rm -f "${mySTUB}" >/dev/null 2>&1 || true
   mySTUB="${TEST_PROJECT_NAME}-kibana-$((RANDOM))"
   docker run -d --name "${mySTUB}" --network "${myNET}" --network-alias kibana \
-    -e LATE="$1" -e FAIL_IMPORTS="$2" \
+    -e LATE="$1" -e FAIL_IMPORTS="$2" -e OWN_CONFIG="${3:-}" \
     -v "${TEST_TMP_ROOT}/stub.py:/work/stub.py:ro" \
     --entrypoint python3 "${IMAGE}" /work/stub.py >/dev/null
 }
@@ -177,6 +181,12 @@ stub_config_ids() {
   in_tpotinit --entrypoint curl "${IMAGE}" -s -X POST -H "kbn-xsrf: true" -H "Content-Type: application/json" \
     -d '{"type":"*"}' http://kibana:5601/api/saved_objects/_export | grep '"type": "config"' \
     | sed -n 's/.*"id": "\([^"]*\)".*/\1/p' | sort
+}
+
+# the config objects the stub Kibana holds, as it exports them
+stub_config() {
+  in_tpotinit --entrypoint curl "${IMAGE}" -s -X POST -H "kbn-xsrf: true" -H "Content-Type: application/json" \
+    -d '{"type":"*"}' http://kibana:5601/api/saved_objects/_export | grep '"type": "config"'
 }
 
 # $1 = name, $2 = the condition (a command line, run with eval), $3 = what to show on a FAIL
@@ -232,9 +242,8 @@ main() {
   start_stub 2 1
   run_job
   st="$(state)"
-  # 200 twice: the end of the wait, then the version the advanced settings of a fresh install go in under
   check "a late Kibana is waited for (2 x 503, then 200)" \
-    '[[ "$(stub_log | grep -c "^GET /api/status 503")" -eq 2 && "$(stub_log | grep -c "^GET /api/status 200")" -eq 2 ]]' "$(stub_log)"
+    '[[ "$(stub_log | grep -c "^GET /api/status 503")" -eq 2 && "$(stub_log | grep -c "^GET /api/status 200")" -eq 1 ]]' "$(stub_log)"
   check "a refused first import stays pending" \
     '[[ "${myRC}" -eq 1 && "$(head -1 <<<"${st}")" == *"\"attempt\": 1"* && "${st}" == *no-record* ]]' "rc=${myRC} ${out} ${st}"
 
@@ -265,12 +274,14 @@ main() {
   in_tpotinit --entrypoint sh "${IMAGE}" -c 'rm -rf /data/kibana_objects' >/dev/null 2>&1
   own_data 1234:4321
   in_tpotinit --entrypoint python3 "${IMAGE}" /opt/tpot/bin/kibana_objects.py mark-fresh --data /data >/dev/null 2>&1
-  start_stub 0 0
+  # its Kibana made config:9.5.4 of its own at its start, /api/status names no version
+  start_stub 0 0 1
   run_job
   check "a fresh first import takes the advanced settings along" \
     '[[ "${myRC}" -eq 0 && "${out}" == *"first import, "*" imported"* && "$(stub_configs)" -ge 1 ]]' "rc=${myRC} ${out}"
-  check "  ... under the version of the running Kibana (config:9.5.4)" \
-    '[[ "$(stub_config_ids)" == 9.5.4 ]]' "$(stub_config_ids | tr '\n' ' ')"
+  check "  ... under the version of Kibana's own config (config:9.5.4, its buildNum)" \
+    '[[ "$(stub_config_ids)" == 9.5.4 && "$(stub_config)" == *"\"defaultRoute\""* && "$(stub_config)" == *"\"buildNum\": 107666"* ]]' \
+    "$(stub_config_ids | tr '\n' ' ') $(stub_config)"
   st="$(state)"
   check "  ... its files belong to the owner of /data (1234:4321) right after the job" \
     '[[ "$(tail -n +2 <<<"${st}")" == record ]]' "${st}"

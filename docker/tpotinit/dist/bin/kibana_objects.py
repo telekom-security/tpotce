@@ -81,6 +81,7 @@ SHIPPED = os.path.join(OBJECTS_DIR, SHIPPED_NAME)
 MANIFEST = os.path.join(OBJECTS_DIR, MANIFEST_NAME)
 
 KIBANA_URL = "http://127.0.0.1:64296"
+ES_URL = "http://127.0.0.1:64298"
 MODES = ("keep", "add", "update", "overwrite")
 EXPORT_PREFIX = "kibana_objects_"      # the exports of the T-Pot Manager in ~/tpot_backups
 AUTO_PREFIX = "auto_"                  # the exports of tpotinit in <data>/kibana_objects/exports
@@ -861,20 +862,36 @@ def _request(method: str, path: str, url: str, opener: Optional[Callable], data:
 VERSION_ID = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?")
 
 
-def kibana_version(url: str = KIBANA_URL, opener: Optional[Callable] = None) -> Tuple[Optional[str], Optional[int]]:
-    """version.number and version.build_number of Kibana's /api/status; (None, None) when it names no
-    version (or does not answer), a build number that is no whole number is None."""
+def _version_key(number: str) -> Tuple[int, ...]:
+    return tuple(int(part) for part in number.split("-", 1)[0].split("."))
+
+
+def es_version(url: str = ES_URL, opener: Optional[Callable] = None) -> Optional[str]:
+    """version.number of the root of Elasticsearch, None when it does not answer or names none. In T-Pot
+    Kibana and Elasticsearch are of one version."""
     try:
-        data = json.loads(_request("GET", "/api/status", url, opener, timeout=STATUS_TIMEOUT).decode("utf-8"))
+        data = json.loads(_request("GET", "/", url, opener, timeout=STATUS_TIMEOUT).decode("utf-8"))
     except (KibanaError, UnicodeDecodeError, ValueError):
-        return None, None
+        return None
     version = data.get("version") if isinstance(data, dict) else None
-    if not isinstance(version, dict):
-        return None, None
-    number, build = version.get("number"), version.get("build_number")
-    if not (isinstance(number, str) and VERSION_ID.fullmatch(number)):
-        return None, None
-    return number, build if type(build) is int else None
+    number = version.get("number") if isinstance(version, dict) else None
+    return number if isinstance(number, str) and VERSION_ID.fullmatch(number) else None
+
+
+def running_version(installed: List[dict], shipped_ids: Set[str], es_url: str = ES_URL,
+                    opener: Optional[Callable] = None) -> Tuple[Optional[str], Optional[int]]:
+    """The version of the running Kibana and its build number, for the advanced settings of a fresh
+    install. Its /api/status names none without a login, so: the config Kibana made of its own at its
+    start (config:<its version>, the highest version among the configs of the export that is no shipped
+    id), with its buildNum; else the version of Elasticsearch, without a build number; else (None, None)."""
+    own = [o for o in installed if o.get("type") == "config" and isinstance(o.get("id"), str)
+           and VERSION_ID.fullmatch(o["id"]) and o["id"] not in shipped_ids]
+    if own:
+        best = max(own, key=lambda o: _version_key(o["id"]))
+        attributes = best.get("attributes") if isinstance(best.get("attributes"), dict) else {}
+        build = attributes.get("buildNum")
+        return best["id"], build if type(build) is int else None
+    return es_version(es_url, opener), None
 
 
 def settings_for(settings: List[dict], number: Optional[str], build: Optional[int]) -> List[dict]:
@@ -883,8 +900,8 @@ def settings_for(settings: List[dict], number: Optional[str], build: Optional[in
     its id, `config-global` too when its id is a version; buildNum becomes `build` (left out without one).
     Without a version they stay out (one line says so): an id Kibana does not read would change nothing."""
     if number is None:
-        print(f"{LOG}Kibana names no version in /api/status, the first import goes in without the advanced "
-              "settings", flush=True)
+        print(f"{LOG}the version of Kibana is unknown (no config of its own, no answer of Elasticsearch), the "
+              "first import goes in without the advanced settings", flush=True)
         return []
     out = []
     for obj in settings:
@@ -1456,7 +1473,7 @@ def _write_pending(data_dir: str, state: Optional[dict]) -> None:
 @_one_at_a_time
 def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: Optional[Callable] = None,
                      now: Optional[float] = None, url: str = KIBANA_URL,
-                     export: Optional[Tuple[str, List[dict]]] = None) -> FirstImport:
+                     export: Optional[Tuple[str, List[dict]]] = None, es_url: str = ES_URL) -> FirstImport:
     """One attempt of the pending first import.
 
     A Kibana that holds objects is exported into `export_dir` first (auto_, the newest
@@ -1482,7 +1499,8 @@ def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: O
     ours = [o for o in objs if o["type"] not in SKIP_TYPES]
     settings = [o for o in objs if o["type"] in SKIP_TYPES]
     if state["reason"] == "fresh" and settings and state["attempt"] < GIVE_UP:
-        settings = settings_for(settings, *kibana_version(url, opener))
+        shipped_ids = {o["id"] for o in settings if o["type"] == "config"}
+        settings = settings_for(settings, *running_version(installed, shipped_ids, es_url, opener))
     result = Result()
     attempt = state["attempt"]
     if attempt < GIVE_UP:
@@ -1684,7 +1702,7 @@ def _cli_apply(args, opener: Optional[Callable]) -> int:
         print(f"{LOG}Kibana holds none of T-Pot's objects, the first import runs again", flush=True)
         mark_pending(args.data, "no-objects")
     return _first_exit(run_first_import(args.data, args.objects, args.exports, opener, url=args.kibana,
-                                        export=export))
+                                        export=export, es_url=args.es))
 
 
 def _cli_restore(args, opener: Optional[Callable]) -> int:
@@ -1703,7 +1721,8 @@ def _cli_first(args, opener: Optional[Callable]) -> int:
         print(f"{LOG}no first import is pending ({pending_path(args.data)}); "
               "run apply, which starts one when Kibana needs it", file=sys.stderr)
         return 2
-    return _first_exit(run_first_import(args.data, args.objects, args.exports, opener, url=args.kibana))
+    return _first_exit(run_first_import(args.data, args.objects, args.exports, opener, url=args.kibana,
+                                        es_url=args.es))
 
 
 def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) -> int:
@@ -1739,6 +1758,9 @@ def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) ->
                              help=f"where the export before an import goes ({AUTO_PREFIX}*, the newest "
                                   f"{AUTO_KEEP} stay)")
         command.add_argument("--kibana", default=KIBANA_URL, metavar="URL", help=f"default {KIBANA_URL}")
+        command.add_argument("--es", default=ES_URL, metavar="URL",
+                             help=f"Elasticsearch, whose version a fresh install's advanced settings may take "
+                                  f"(default {ES_URL})")
     try:
         args = parser.parse_args(argv)
     except SystemExit as stop:

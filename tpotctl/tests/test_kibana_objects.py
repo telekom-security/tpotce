@@ -321,7 +321,7 @@ class FakeKibana:
     there is a conflict. `hidden` objects are there but left out of the export."""
 
     def __init__(self, objects=(), fail=(), hidden=(), export_status=200, import_status=200, down=False,
-                 clock=None, on_import=None, lose=0, lose_written=True, version="9.5.4", build=None):
+                 clock=None, on_import=None, lose=0, lose_written=True, es="9.5.4"):
         self.store = {ko.key(o): json.loads(json.dumps(o)) for o in objects}
         self.fail, self.hidden = set(fail), set(hidden)
         # the next `lose` imports time out: after Kibana wrote them (lose_written), or before
@@ -329,8 +329,9 @@ class FakeKibana:
         self.export_status, self.import_status, self.down = export_status, import_status, down
         self.clock = clock or (lambda: NOW)
         self.on_import = on_import
-        # /api/status: version.number (None: an answer without a version) and version.build_number
-        self.version, self.build = version, build
+        # the version of Elasticsearch at its root (None: no Elasticsearch answers); /api/status names none,
+        # as T-Pot's Kibana does without a login
+        self.es = es
         self.requests = []
 
     def imports(self):
@@ -340,13 +341,13 @@ class FakeKibana:
         self.requests.append(request)
         if self.down:
             raise urllib.error.URLError("connection refused")
+        if ":64298" in request.full_url:
+            if self.es is None:
+                raise urllib.error.URLError("connection refused")
+            return io.BytesIO(json.dumps({"name": "es", "version": {"number": self.es}}).encode())
         path = request.full_url.split("64296", 1)[1]
         if path.startswith("/api/status"):
-            version = {"number": self.version} if self.version else None
-            if version is not None and self.build is not None:
-                version["build_number"] = self.build
-            return io.BytesIO(json.dumps({"name": "kibana", "version": version} if version else
-                                         {"name": "kibana", "status": {"overall": {"level": "available"}}}).encode())
+            return io.BytesIO(b'{"status":{"overall":{"level":"available"}}}')
         if path.startswith("/api/saved_objects/_export"):
             if self.export_status != 200:
                 raise self.http_error(request, self.export_status)
@@ -1100,66 +1101,90 @@ class FirstImportTest(unittest.TestCase):
         with open(path, "w", encoding="utf-8") as handle:
             handle.write("\n".join([json.dumps(o) for o in settings] + lines) + "\n")
 
-    def test_the_advanced_settings_go_in_under_the_version_of_the_running_kibana(self):
-        """Kibana 9.5.4 reads config:9.5.4; the shipped file has the id of the Kibana that exported it."""
+    OLD = {"type": "config", "id": "9.2.3", "references": [],
+           "attributes": {"theme:darkMode": True, "defaultRoute": "/app/dashboards", "buildNum": 92546}}
+
+    def own_config(self, version, build=107666):
+        """The config Kibana makes of its own at its start."""
+        return as_in_kibana({"type": "config", "id": version, "references": [],
+                             "attributes": {"buildNum": build, "isDefaultIndexMigrated": True}})
+
+    def fresh(self, kibana, *settings):
         site = Site(self, [dash("a")])
-        old = {"type": "config", "id": "9.2.3", "references": [],
-               "attributes": {"theme:darkMode": True, "defaultRoute": "/app/dashboards", "buildNum": 92546}}
+        self.shipped_settings(site, *(settings or (self.OLD,)))
+        ko.mark_pending(site.data, "fresh")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            first = self.first(site, kibana)
+        sent = {ko.key(o): o for o in ko.parse_ndjson(FakeKibana.ndjson(kibana.imports()[0]), "the upload")}
+        return site, first, sent, out.getvalue()
+
+    def test_the_advanced_settings_take_the_version_of_kibanas_own_config(self):
+        """Kibana 9.5.4 reads config:9.5.4, which it made at its start; its /api/status names no version
+        without a login. The shipped file has the id of the Kibana that exported it."""
         everywhere = {"type": "config-global", "id": "9.2.3", "references": [], "attributes": {"buildNum": 92546}}
         named = {"type": "config-global", "id": "tpot", "references": [], "attributes": {"buildNum": 1}}
-        self.shipped_settings(site, old, everywhere, named)
-        ko.mark_pending(site.data, "fresh")
-        kibana = FakeKibana(version="9.5.4", build=107666)
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            first = self.first(site, kibana)
-        self.assertEqual((first.done, first.missing, out.getvalue()), (True, [], ""))
-        sent = {ko.key(o): o for o in ko.parse_ndjson(FakeKibana.ndjson(kibana.imports()[0]), "the upload")}
-        self.assertEqual(sorted(sent), ["config-global:9.5.4", "config-global:tpot", "config:9.5.4", "dashboard:a"])
-        self.assertEqual(sent["config:9.5.4"]["attributes"],
-                         {"theme:darkMode": True, "defaultRoute": "/app/dashboards", "buildNum": 107666})
-        self.assertEqual(sent["config-global:9.5.4"]["attributes"], {"buildNum": 107666})
+        kibana = FakeKibana([self.own_config("9.4.0", 1), self.own_config("9.5.4"), self.own_config("9.10.1", 3)],
+                            es=None)
+        site, first, sent, out = self.fresh(kibana, self.OLD, everywhere, named)
+        self.assertEqual((first.done, first.missing, out), (True, [], ""))
+        self.assertEqual(sorted(sent), ["config-global:9.10.1", "config-global:tpot", "config:9.10.1", "dashboard:a"])
+        self.assertEqual(sent["config:9.10.1"]["attributes"],               # 9.10.1 > 9.5.4 > 9.4.0
+                         {"theme:darkMode": True, "defaultRoute": "/app/dashboards", "buildNum": 3})
+        self.assertEqual(sent["config-global:9.10.1"]["attributes"], {"buildNum": 3})
         self.assertEqual(sent["config-global:tpot"], named)                 # no version: as shipped
         self.assertNotIn("config:9.2.3", kibana.store)
-        self.assertEqual(sorted(site.records()), ["config-global:9.5.4", "config-global:tpot", "config:9.5.4",
-                                                  "dashboard:a"])
-        # without a build number in the answer buildNum stays out
-        site = Site(self, [dash("a")])
-        self.shipped_settings(site, old)
-        ko.mark_pending(site.data, "fresh")
-        kibana = FakeKibana(version="9.5.4")
-        self.first(site, kibana)
+        self.assertIn("config:9.10.1", site.records())
+        kibana = FakeKibana([self.own_config("9.5.4")], es="9.4.0")         # its own config comes first
+        _, _, sent, _ = self.fresh(kibana)
+        self.assertEqual(sent["config:9.5.4"]["attributes"]["buildNum"], 107666)
         self.assertEqual(kibana.store["config:9.5.4"]["attributes"],
-                         {"theme:darkMode": True, "defaultRoute": "/app/dashboards"})
+                         {"theme:darkMode": True, "defaultRoute": "/app/dashboards", "buildNum": 107666})
+        self.assertFalse([r for r in kibana.requests if ":64298" in r.full_url])
+
+    def test_a_config_with_the_shipped_id_is_none_of_kibanas_own(self):
+        kibana = FakeKibana([as_in_kibana(self.OLD)], es="9.5.4")
+        _, _, sent, _ = self.fresh(kibana)
+        self.assertEqual(sorted(k for k in sent if k.startswith("config")), ["config:9.5.4"])
+
+    def test_without_a_config_of_its_own_the_version_of_elasticsearch(self):
+        kibana = FakeKibana(es="9.5.4")
+        _, first, sent, out = self.fresh(kibana)
+        self.assertEqual((first.done, out), (True, ""))
+        self.assertEqual(sent["config:9.5.4"]["attributes"],
+                         {"theme:darkMode": True, "defaultRoute": "/app/dashboards"})       # no buildNum
+        es = [r for r in kibana.requests if ":64298" in r.full_url]
+        self.assertEqual([r.full_url for r in es], [ko.ES_URL + "/"])
+        site = Site(self, [dash("a")])                                      # --es of the job
+        self.shipped_settings(site, self.OLD)
+        ko.mark_pending(site.data, "fresh")
+        kibana = FakeKibana(es="9.5.4")
+        rc, out, _ = site.cli("first", "--data", site.data, "--objects", site.objects, "--exports",
+                              ko.auto_exports_dir(site.data), "--es", "http://es.test:64298", opener=kibana)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual([r.full_url for r in kibana.requests if ":64298" in r.full_url], ["http://es.test:64298/"])
 
     def test_without_a_version_the_first_import_leaves_the_advanced_settings_out(self):
-        site = Site(self, [dash("a"), dash("b")])
-        ko.mark_pending(site.data, "fresh")
-        kibana = FakeKibana(version=None)
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            first = self.first(site, kibana)
-        self.assertEqual(out.getvalue(), "# Kibana objects: Kibana names no version in /api/status, the first "
-                                         "import goes in without the advanced settings\n")
+        kibana = FakeKibana(es=None)
+        site, first, sent, out = self.fresh(kibana)
+        self.assertEqual(out, "# Kibana objects: the version of Kibana is unknown (no config of its own, no answer "
+                              "of Elasticsearch), the first import goes in without the advanced settings\n")
         self.assertEqual((first.done, first.missing), (True, []))
-        self.assertEqual(sorted(first.result.keys()), ["dashboard:a", "dashboard:b"])
-        self.assertNotIn('"type": "config"', FakeKibana.ndjson(kibana.imports()[0]))
+        self.assertEqual(sorted(first.result.keys()), ["dashboard:a"])
+        self.assertEqual(sorted(sent), ["dashboard:a"])
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
         # a no-objects first import never sends them, so it never asks for the version
         site = Site(self, [dash("a")])
         ko.mark_pending(site.data, "no-objects")
-        kibana = FakeKibana(version=None)
+        kibana = FakeKibana()
         self.first(site, kibana)
-        self.assertFalse([r for r in kibana.requests if "/api/status" in r.full_url])
+        self.assertFalse([r for r in kibana.requests if ":64298" in r.full_url])
 
-    def test_kibana_version(self):
-        self.assertEqual(ko.kibana_version(opener=FakeKibana(version="9.5.4", build=107666)), ("9.5.4", 107666))
-        self.assertEqual(ko.kibana_version(opener=FakeKibana(version="9.5.4")), ("9.5.4", None))
-        self.assertEqual(ko.kibana_version(opener=FakeKibana(version=None)), (None, None))
-        self.assertEqual(ko.kibana_version(opener=FakeKibana(down=True)), (None, None))
+    def test_es_version(self):
+        self.assertEqual(ko.es_version(opener=FakeKibana(es="9.5.4")), "9.5.4")
+        self.assertIsNone(ko.es_version(opener=FakeKibana(es=None)))
         for bad in ("9.5", "latest", "9.5.4; x"):
-            self.assertEqual(ko.kibana_version(opener=FakeKibana(version=bad)), (None, None))
-        self.assertEqual(ko.kibana_version(opener=FakeKibana(version="9.5.4", build="1")), ("9.5.4", None))
+            self.assertIsNone(ko.es_version(opener=FakeKibana(es=bad)))
 
     def test_first_import_partial_keeps_pending(self):
         site = Site(self, [dash("a"), dash("b")])
@@ -2545,6 +2570,7 @@ class JobTest(unittest.TestCase):
         open(self.calls, "w").close()
         self.env = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", CALLS=self.calls,
                         STATE=os.path.join(self.tmp, "state"), TPOT_KIBANA_URL="http://kibana.test",
+                        TPOT_ES_URL="http://es.test",
                         TPOT_KIBANA_OBJECTS="", TPOT_KIBANA_WAIT="600", COMPOSE=os.path.join(self.tmp, "none.yml"))
         for key in ("PY_SLEEP", "PY_RC", "LATE"):
             self.env.pop(key, None)
@@ -2560,7 +2586,8 @@ class JobTest(unittest.TestCase):
         return proc.returncode, proc.stdout, proc.stderr
 
     APPLY = ("python3 /opt/tpot/bin/kibana_objects.py apply --mode {mode} --data /data --objects "
-             "/opt/tpot/etc/objects --exports /data/kibana_objects/exports --kibana http://kibana.test")
+             "/opt/tpot/etc/objects --exports /data/kibana_objects/exports --kibana http://kibana.test "
+             "--es http://es.test")
 
     def test_kibana_answers_late_then_apply_runs_once_per_start(self):
         # the waits are short here: sleep 5 is a sleep of 0.05 s
@@ -2623,6 +2650,13 @@ class JobTest(unittest.TestCase):
                                    (net, "http://k.test:1", "http://k.test:1")):
             with self.subTest(compose=os.path.basename(compose), url=url):
                 rc, out, _ = self.source("fuKO_URL", COMPOSE=compose, TPOT_KIBANA_URL=url)
+                self.assertEqual((rc, out), (0, want + "\n"))
+        # Elasticsearch as es_retention.sh reaches it (fuILM_CANDIDATES)
+        for compose, url, want in ((host, "", "http://127.0.0.1:64298"), (net, "", "http://elasticsearch:9200"),
+                                   (os.path.join(self.tmp, "missing.yml"), "", "http://127.0.0.1:64298"),
+                                   (net, "http://e.test:1", "http://e.test:1")):
+            with self.subTest(compose=os.path.basename(compose), es=url):
+                rc, out, _ = self.source("fuKO_ES_URL", COMPOSE=compose, TPOT_ES_URL=url)
                 self.assertEqual((rc, out), (0, want + "\n"))
 
     def test_the_job_leaves_the_owners_to_the_module(self):
