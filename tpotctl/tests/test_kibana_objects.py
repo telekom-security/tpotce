@@ -2007,5 +2007,328 @@ class StandaloneTest(unittest.TestCase):
             self.assertFalse([n for n in names if n.split(".")[0] not in sys.stdlib_module_names], names)
 
 
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+TPOTINIT = os.path.join(REPO_DIR, "docker", "tpotinit")
+JOB = os.path.join(TPOTINIT, "dist", "bin", "kibana_objects.sh")
+
+
+def read(*parts):
+    with open(os.path.join(REPO_DIR, *parts), encoding="utf-8") as handle:
+        return handle.read()
+
+
+class CopyTest(unittest.TestCase):
+    """tpotinit runs docker/tpotinit/dist/bin/kibana_objects.py, a copy of tpotctl/kibana_objects.py
+    (the image is built from docker/tpotinit alone): both must be the same, byte for byte."""
+
+    def test_the_copy_of_tpotinit_is_the_module(self):
+        with open(ko.__file__, "rb") as handle:
+            module = handle.read()
+        with open(os.path.join(TPOTINIT, "dist", "bin", "kibana_objects.py"), "rb") as handle:
+            copy_of = handle.read()
+        self.assertTrue(module == copy_of, "run: cp tpotctl/kibana_objects.py docker/tpotinit/dist/bin/")
+
+
+class MarkFreshTest(unittest.TestCase):
+    """mark-fresh: tpotinit's first run marks the first import as pending, before /data/uuid."""
+
+    def test_mark_fresh_writes_a_fresh_pending_without_a_request(self):
+        site = Site(self, [dash("a")])
+        kibana = FakeKibana()
+        rc, out, err = site.cli("mark-fresh", "--data", site.data, opener=kibana)
+        self.assertEqual((rc, err, kibana.requests), (0, "", []))
+        self.assertEqual(out, f"# Kibana objects: the first import is pending ({ko.pending_path(site.data)})\n")
+        with open(ko.pending_path(site.data), encoding="utf-8") as handle:
+            self.assertEqual(json.load(handle), {"version": 1, "reason": "fresh", "attempt": 0, "refused": []})
+        self.assertEqual(stat.S_IMODE(os.stat(ko.state_dir(site.data)).st_mode), 0o770)
+        self.assertEqual(stat.S_IMODE(os.stat(ko.pending_path(site.data)).st_mode), 0o660)
+        self.assertEqual(ko.pending_state(site.data)["reason"], "fresh")
+        # the next start imports the whole file, the advanced settings too
+        rc, out, _ = site.cli("apply", "--mode", "keep", "--data", site.data, "--objects", site.objects,
+                              "--exports", ko.auto_exports_dir(site.data), opener=kibana)
+        self.assertEqual((rc, out), (0, "# Kibana objects: first import, 2 imported\n"))
+        self.assertIn("config:9.5.4", kibana.store)
+
+    def test_mark_fresh_follows_no_link(self):
+        for where in ("folder", "file"):
+            with self.subTest(where=where):
+                site = Site(self, [dash("a")])
+                elsewhere = os.path.join(site.root, "elsewhere")
+                os.makedirs(elsewhere)
+                if where == "folder":
+                    os.symlink(elsewhere, ko.state_dir(site.data))
+                else:
+                    os.makedirs(ko.state_dir(site.data))
+                    os.symlink(os.path.join(elsewhere, "target"), ko.pending_path(site.data))
+                rc, out, err = site.cli("mark-fresh", "--data", site.data, opener=FakeKibana())
+                self.assertEqual((rc, out), (1, ""))
+                self.assertIn("is a link", err)
+                self.assertEqual(os.listdir(elsewhere), [])
+
+
+class WiringTest(unittest.TestCase):
+    """How tpotinit starts the Kibana objects: entrypoint.sh, kibana_objects.sh and the Dockerfile."""
+
+    IF_BLOCK = re.compile(r"^if (?P<cond>[^\n]*);\n\s*then\n(?P<body>(?:(?!fi\n)[^\n]*\n)*?)fi$", re.M)
+
+    @staticmethod
+    def code(text):
+        return [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+
+    def test_pending_is_written_before_the_uuid_on_the_first_run(self):
+        text = read("docker", "tpotinit", "dist", "entrypoint.sh")
+        branch = text.index('myFIRSTRUN="true"')
+        mark = text.index("python3 /opt/tpot/bin/kibana_objects.py mark-fresh --data /data")
+        uuid = text.index("uuidgen > /data/uuid")
+        self.assertLess(text.index('if [ -f "/data/uuid" ];'), branch)
+        self.assertLess(branch, mark)
+        self.assertLess(mark, uuid)
+        code = "\n".join(self.code(text))
+        self.assertEqual(code.count("mark-fresh"), 1)
+        self.assertEqual(code.count("/data/uuid"), 2)                 # the test and the one write
+
+    def test_the_job_starts_on_a_hive_with_kibana_in_the_background(self):
+        text = read("docker", "tpotinit", "dist", "entrypoint.sh")
+        start = text.index("touch /tmp/success\n")
+        calls = [line for line in self.code(text) if "kibana_objects.sh" in line]
+        self.assertEqual(calls, ["    /opt/tpot/bin/kibana_objects.sh &"])
+        blocks = [b for b in self.IF_BLOCK.finditer(text, start) if "kibana_objects.sh" in b.group("body")]
+        self.assertEqual(len(blocks), 1, blocks)
+        self.assertEqual([" ".join(part.split()) for part in blocks[0].group("cond").split("&&")],
+                         ['[ "${TPOT_TYPE}" == "HIVE" ]',
+                          """yq -e '.services | has("kibana")' "${COMPOSE}" >/dev/null 2>&1"""])
+        self.assertEqual([line.strip() for line in self.code(blocks[0].group("body"))],
+                         ["/opt/tpot/bin/kibana_objects.sh &", "myKIBANA_PID=$!"])
+        self.assertLess(text.index('myKIBANA_PID=""'), text.index("trap cleanup SIGTERM"))
+
+    def test_the_cleanup_stops_the_job(self):
+        text = read("docker", "tpotinit", "dist", "entrypoint.sh")
+        cleanup = re.search(r"^cleanup\(\) \{\n.*?^\}\n", text, re.S | re.M).group(0)
+        self.assertIn('if [ -n "${myKIBANA_PID}" ];', cleanup)
+        self.assertIn('kill -TERM "${myKIBANA_PID}"', cleanup)
+        self.assertIn('wait "${myKIBANA_PID}"', cleanup)
+        self.assertLess(cleanup.index('wait "${myKIBANA_PID}"'), cleanup.index("exit 0"))
+
+    def test_the_old_import_of_the_first_run_is_gone(self):
+        text = read("docker", "tpotinit", "dist", "entrypoint.sh")
+        for gone in ("_import", "saved_objects", "myKIBANA_CONFIG", "myKIBANA_URL", "{$", "64296"):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, text)
+
+    def test_python3_is_in_the_image(self):
+        text = read("docker", "tpotinit", "Dockerfile")
+        packages = re.search(r"apk --no-cache -U add \\\n(?P<list>(?:\s+[\w.-]+ \\\n)+\s+[\w.-]+ &&)", text)
+        self.assertIsNotNone(packages)
+        self.assertIn("python3", re.findall(r"[\w.-]+", packages.group("list")))
+
+    def test_the_job_runs_only_apply_and_waits_interruptibly(self):
+        script = read("docker", "tpotinit", "dist", "bin", "kibana_objects.sh")
+        runs = [line.strip() for line in self.code(script) if "python3" in line]
+        self.assertEqual(runs, ['python3 "${myKO_PY}" apply --mode "${myMODE}" --data "${myKO_DATA}" '
+                                '--objects "${myKO_OBJECTS}" \\'])
+        self.assertNotRegex(script, r"\bpy\S*\s+\S+\s+first\b")
+        self.assertIn('myMODE="${TPOT_KIBANA_OBJECTS:-keep}"', script)
+        self.assertIn("sleep 5 & wait $!", script)
+        self.assertNotRegex(script, r"(?m)^\s*sleep \d+\s*$")
+        self.assertIn('echo "http://127.0.0.1:64296"', script)
+        self.assertIn('echo "http://kibana:5601"', script)
+        self.assertIn('myKO_PY="/opt/tpot/bin/kibana_objects.py"', script)
+        self.assertTrue(os.access(JOB, os.X_OK))
+
+    def test_tpotinit_reaches_kibana_in_every_edition(self):
+        import yaml
+        for name in sorted(os.listdir(os.path.join(REPO_DIR, "compose"))):
+            if not name.endswith(".yml") or name == "tpot_services.yml":
+                continue
+            services = yaml.safe_load(read("compose", name))["services"]
+            if "kibana" not in services:
+                continue
+            with self.subTest(edition=name):
+                tpotinit = services["tpotinit"]
+                if tpotinit.get("network_mode") == "host":
+                    self.assertIn("127.0.0.1:64296:5601", services["kibana"]["ports"])
+                else:
+                    self.assertTrue(set(tpotinit.get("networks") or []) & set(services["kibana"]["networks"]))
+
+
+# curl for kibana_objects.sh: /api/status fails LATE times (counted in $STATE), then answers; every call
+# in $CALLS. python3 writes its arguments into $CALLS (its PID into $CALLS.pid) and becomes a sleep of
+# PY_SLEEP seconds, its exit code is PY_RC. chown only records its arguments.
+JOB_CURL = """#!/bin/sh
+for a in "$@"; do last="$a"; done
+echo "curl $last" >> "$CALLS"
+n=$(cat "$STATE" 2>/dev/null || echo 0)
+echo $((n + 1)) > "$STATE"
+[ "$n" -ge "${LATE:-0}" ] || exit 22
+exit 0
+"""
+JOB_PYTHON = """#!/bin/sh
+echo "python3 $*" >> "$CALLS"
+echo $$ > "$CALLS.pid"
+echo "# Kibana objects: stub"
+[ -z "$PY_SLEEP" ] || exec sleep "$PY_SLEEP"
+exit "${PY_RC:-0}"
+"""
+JOB_CHOWN = """#!/bin/sh
+echo "chown $*" >> "$CALLS"
+"""
+
+
+@unittest.skipUnless(shutil.which("bash"), "needs bash")
+class JobTest(unittest.TestCase):
+    """kibana_objects.sh with stubs: it waits for Kibana, runs apply once, stops at once on TERM."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="tpot-kibana-job-")
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.bin = os.path.join(self.tmp, "bin")
+        os.makedirs(self.bin)
+        for name, text in (("curl", JOB_CURL), ("python3", JOB_PYTHON), ("chown", JOB_CHOWN)):
+            with open(os.path.join(self.bin, name), "w", encoding="utf-8") as out:
+                out.write(text)
+            os.chmod(os.path.join(self.bin, name), 0o755)
+        self.calls = os.path.join(self.tmp, "calls")
+        open(self.calls, "w").close()
+        self.env = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", CALLS=self.calls,
+                        STATE=os.path.join(self.tmp, "state"), TPOT_KIBANA_URL="http://kibana.test",
+                        TPOT_KIBANA_OBJECTS="", TPOT_KIBANA_WAIT="600", COMPOSE=os.path.join(self.tmp, "none.yml"))
+        for key in ("PY_SLEEP", "PY_RC", "LATE"):
+            self.env.pop(key, None)
+
+    def lines(self):
+        with open(self.calls, encoding="utf-8") as handle:
+            return handle.read().splitlines()
+
+    def source(self, body, **env):
+        """`body` after kibana_objects.sh is sourced (only its functions), its output and exit code."""
+        proc = subprocess.run(["bash", "-c", f'source "{JOB}"\n{body}'], env=dict(self.env, **env),
+                              capture_output=True, text=True, timeout=60)
+        return proc.returncode, proc.stdout, proc.stderr
+
+    APPLY = ("python3 /opt/tpot/bin/kibana_objects.py apply --mode {mode} --data /data --objects "
+             "/opt/tpot/etc/objects --exports /data/kibana_objects/exports --kibana http://kibana.test")
+
+    def test_kibana_answers_late_then_apply_runs_once_per_start(self):
+        # the waits are short here: sleep 5 is a sleep of 0.05 s
+        with open(os.path.join(self.bin, "sleep"), "w", encoding="utf-8") as out:
+            out.write("#!/bin/sh\nexec /bin/sleep 0.05\n")
+        os.chmod(os.path.join(self.bin, "sleep"), 0o755)
+        for start in (1, 2):                      # a restart runs apply again, the module decides what it does
+            rc, out, err = self.source("fuKO_MAIN", LATE="3" if start == 1 else "0")
+            self.assertEqual((rc, err), (0, ""))
+            self.assertIn("# Kibana objects: stub", out)
+        calls = self.lines()
+        self.assertEqual(calls, ["curl http://kibana.test/api/status"] * 4 + [self.APPLY.format(mode="keep")]
+                         + ["curl http://kibana.test/api/status", self.APPLY.format(mode="keep")])
+
+    def test_every_mode_is_handed_on_and_an_unknown_one_runs_nothing(self):
+        for mode in ko.MODES:
+            with self.subTest(mode=mode):
+                open(self.calls, "w").close()
+                rc, out, _ = self.source("fuKO_MAIN", TPOT_KIBANA_OBJECTS=mode)
+                self.assertEqual(rc, 0)
+                self.assertEqual(self.lines()[-1], self.APPLY.format(mode=mode))
+        open(self.calls, "w").close()
+        rc, out, _ = self.source("fuKO_MAIN", TPOT_KIBANA_OBJECTS="first")
+        self.assertEqual((rc, self.lines()), (0, []))
+        self.assertIn("# Warning: TPOT_KIBANA_OBJECTS=first is not keep, add, update or overwrite", out)
+
+    def test_the_exit_code_of_apply_is_the_one_of_the_job(self):
+        rc, out, _ = self.source("fuKO_MAIN", PY_RC="1")
+        self.assertEqual(rc, 1)
+
+    def test_a_kibana_that_does_not_answer_in_time_is_left_for_the_next_start(self):
+        rc, out, _ = self.source("fuKO_WAIT_LIMIT () { echo 0; }\nfuKO_MAIN", LATE="99")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out, "# Warning: Kibana did not answer at http://kibana.test within 0 s, "
+                              "the Kibana objects are checked on the next start.\n")
+        self.assertEqual(self.lines(), ["curl http://kibana.test/api/status"])
+
+    def test_the_wait_is_whole_seconds_from_60_to_7200(self):
+        for value, want in (("", "1800"), ("60", "60"), ("1800", "1800"), ("7200", "7200"), ("59", "1800"),
+                            ("7201", "1800"), ("0060", "1800"), ("abc", "1800"), ("1e3", "1800"), ("-60", "1800"),
+                            ("600 ", "1800")):
+            with self.subTest(value=value):
+                rc, out, err = self.source("fuKO_WAIT_LIMIT", TPOT_KIBANA_WAIT=value)
+                self.assertEqual((rc, out), (0, want + "\n"))
+                if value and want != value:
+                    self.assertIn(f"TPOT_KIBANA_WAIT={value} is no number of seconds from 60 to 7200", err)
+                else:
+                    self.assertEqual(err, "")
+
+    @unittest.skipUnless(shutil.which("yq"), "needs yq")
+    def test_the_url_follows_the_network_of_tpotinit(self):
+        host = os.path.join(self.tmp, "host.yml")
+        net = os.path.join(self.tmp, "net.yml")
+        with open(host, "w", encoding="utf-8") as out:
+            out.write("services:\n  tpotinit:\n    network_mode: host\n")
+        with open(net, "w", encoding="utf-8") as out:
+            out.write("services:\n  tpotinit:\n    networks: [nginx_local]\n")
+        for compose, url, want in ((host, "", "http://127.0.0.1:64296"), (net, "", "http://kibana:5601"),
+                                   (os.path.join(self.tmp, "missing.yml"), "", "http://127.0.0.1:64296"),
+                                   (net, "http://k.test:1", "http://k.test:1")):
+            with self.subTest(compose=os.path.basename(compose), url=url):
+                rc, out, _ = self.source("fuKO_URL", COMPOSE=compose, TPOT_KIBANA_URL=url)
+                self.assertEqual((rc, out), (0, want + "\n"))
+
+    def test_the_files_of_the_run_go_to_tpot_and_no_link_is_followed(self):
+        data = os.path.join(self.tmp, "data")
+        state = os.path.join(data, "kibana_objects")
+        os.makedirs(os.path.join(state, "exports"))
+        open(os.path.join(state, "record.json"), "w").close()
+        open(os.path.join(state, "exports", "auto_1.ndjson"), "w").close()
+        os.symlink(self.tmp, os.path.join(state, "link"))
+        rc, _, _ = self.source(f'myKO_DATA="{data}"\nfuKO_OWN')
+        self.assertEqual(rc, 0)
+        owned = sorted(arg for line in self.lines() for arg in line.split()[3:])
+        self.assertTrue(all(line.startswith("chown -h tpot:tpot ") for line in self.lines()), self.lines())
+        self.assertEqual(owned, sorted([state, os.path.join(state, "exports"), os.path.join(state, "record.json"),
+                                        os.path.join(state, "exports", "auto_1.ndjson")]))
+        # a link in the place of the folder: nothing is touched
+        shutil.rmtree(state)
+        os.symlink(self.tmp, state)
+        open(self.calls, "w").close()
+        rc, _, _ = self.source(f'myKO_DATA="{data}"\nfuKO_OWN')
+        self.assertEqual((rc, self.lines()), (0, []))
+
+    def stop(self, mark, **env):
+        """Starts the job, sends TERM once `mark` is in the calls; its exit code, how long it took and its output."""
+        log = os.path.join(self.tmp, "out")
+        with open(log, "w", encoding="utf-8") as handle:          # a file: a sleep keeps no pipe open
+            proc = subprocess.Popen(["bash", JOB], env=dict(self.env, **env), stdout=handle,
+                                    stderr=subprocess.STDOUT)
+        deadline = time.monotonic() + 15
+        while not any(line.startswith(mark) for line in self.lines()):
+            if time.monotonic() > deadline or proc.poll() is not None:
+                proc.kill()
+                proc.wait()
+                self.fail(f"never reached {mark}: {self.lines()}")
+            time.sleep(0.05)
+        time.sleep(0.3)
+        sent = time.monotonic()
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=20)
+        took = time.monotonic() - sent
+        with open(log, encoding="utf-8") as handle:
+            return proc.returncode, took, handle.read()
+
+    def test_term_during_the_wait_ends_at_once(self):
+        rc, took, out = self.stop("curl", LATE="99")
+        self.assertEqual(rc, 143, out)
+        self.assertLess(took, 3, out)                     # not the 5 s of the wait
+        self.assertFalse([line for line in self.lines() if line.startswith("python3")])
+        self.assertIn("# tpotinit stops, the Kibana objects are checked on the next start.", out)
+
+    def test_term_during_the_run_ends_it_at_once(self):
+        rc, took, out = self.stop("python3", PY_SLEEP="30")
+        self.assertEqual(rc, 143, out)
+        self.assertLess(took, 3, out)
+        with open(self.calls + ".pid", encoding="utf-8") as handle:
+            pid = int(handle.read())
+        with self.assertRaises(OSError):                  # the run got its TERM and is gone
+            os.kill(pid, 0)
+        self.assertIn("# tpotinit stops, the Kibana objects are checked on the next start.", out)
+
+
 if __name__ == "__main__":
     unittest.main()

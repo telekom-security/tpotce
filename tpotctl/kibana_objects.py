@@ -24,6 +24,7 @@ advanced settings. tpotinit runs them:
 
     python3 kibana_objects.py apply --mode M --data DIR --objects DIR --exports DIR [--kibana URL]
     python3 kibana_objects.py first --data DIR --objects DIR --exports DIR [--kibana URL]
+    python3 kibana_objects.py mark-fresh --data DIR      tpotinit's first run, before /data/uuid
 
 The first import (`<data>/kibana_objects/pending`) takes the whole shipped file on its
 first attempt, the advanced settings only on a fresh install; its retries take only what
@@ -1573,6 +1574,9 @@ def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) ->
     apply.add_argument("--mode", required=True, choices=MODES, help="TPOT_KIBANA_OBJECTS")
     first = commands.add_parser("first", help="the first import: the whole shipped file, the advanced settings "
                                               "too; a retry only what mode update would import")
+    mark = commands.add_parser("mark-fresh", help="tpotinit's first run: the first import is pending, the "
+                                                  "advanced settings too (no request)")
+    mark.add_argument("--data", required=True, metavar="DIR", help="the data folder (TPOT_DATA_PATH)")
     for command in (apply, first):
         command.add_argument("--data", required=True, metavar="DIR", help="the data folder (TPOT_DATA_PATH)")
         command.add_argument("--objects", required=True, metavar="DIR",
@@ -1591,6 +1595,10 @@ def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) ->
                 return _cli_apply(args, opener)
         if args.command == "first":
             return _cli_first(args, opener)
+        if args.command == "mark-fresh":
+            mark_pending(args.data, "fresh")
+            print(f"{LOG}the first import is pending ({pending_path(args.data)})", flush=True)
+            return 0
         if args.verify:
             if verify_manifest():
                 return 0

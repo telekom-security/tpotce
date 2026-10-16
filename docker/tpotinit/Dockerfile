@@ -27,6 +27,7 @@ RUN apk --no-cache -U upgrade && \
         nftables \
         openssl \
         pigz \
+        python3 \
         tar \
         tzdata \
         uuidgen \
