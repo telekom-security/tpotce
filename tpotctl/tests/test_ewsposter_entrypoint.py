@@ -253,6 +253,23 @@ class RoundTest(EntrypointCase):
     def kinds(box):
         return ["idle" if " -E " in call else "normal" for call in box.calls()]
 
+    def test_first_round_of_a_hold_sends_before_the_ack(self):
+        """The normal pass of the first hold round runs before the idle passes and before hold.ack."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.hold.write_text("")
+                # the stand-in notes whether hold.ack was there when it ran
+                stub = box.stub.read_text().replace(
+                    'echo "$*" >> "$STUB_DIR/calls"',
+                    'echo "$*" >> "$STUB_DIR/calls"; [ -e "$STUB_ACK" ] && echo ack >> "$STUB_DIR/acks"')
+                box.stub.write_text(stub)
+                result = box.run(shell, "fuROUND", STUB_ACK=box.ack)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.kinds(box), ["normal", "idle"])
+                self.assertFalse((box.base / "acks").exists())
+                self.assertTrue(box.ack.is_file())
+
     def test_hold_on_then_over(self):
         for shell in SHELLS:
             with self.subTest(shell=shell):
@@ -273,7 +290,8 @@ class RoundTest(EntrypointCase):
                                  ["5", "5", "42", "42"])
                 self.assertIn("ack-after-1", result.stdout)
                 self.assertIn("no-ack-after-3", result.stdout)
-                self.assertEqual(self.kinds(box), ["idle", "idle", "idle", "normal", "normal"])
+                # the first round of the hold starts with a normal pass
+                self.assertEqual(self.kinds(box), ["normal", "idle", "idle", "idle", "normal", "normal"])
 
     def test_no_hold_and_stale_hold_send(self):
         for shell in SHELLS:
@@ -408,6 +426,10 @@ class EwsCfgPathsTest(unittest.TestCase):
         ("HONEYTRAP", "attackerfile"): "the attacker.log of honeytrap, Logstash reads attackers.json",
         ("DIONAEA", "sqlitedb"): "the SQLite log of Dionaea, Logstash reads dionaea.json",
     }
+    # ewsposter reads a log of an older release of the honeypot, on purpose
+    OLDER_LOG = {
+        ("MAILONEY", "logfile"): "mailoney 3 writes log/log.json; ewsposter reads it after its PR #17",
+    }
 
     def setUp(self):
         self.config = configparser.RawConfigParser()
@@ -419,6 +441,13 @@ class EwsCfgPathsTest(unittest.TestCase):
         for section in self.config.sections():
             if self.config.has_option(section, section.lower()) and section not in OFF:
                 yield section
+
+    def test_older_logs_say_why(self):
+        text = EWS_CFG.read_text()
+        for (section, key), reason in self.OLDER_LOG.items():
+            with self.subTest(section=section):
+                self.assertIn(f"[{section}]\n# {reason}\n", text)
+                self.assertNotIn(self.config.get(section, key), self.paths[section.lower()])
 
     def test_logstash_inputs_are_found(self):
         self.assertIn("cowrie", self.paths)
@@ -437,6 +466,8 @@ class EwsCfgPathsTest(unittest.TestCase):
                 self.assertTrue(keys, f"[{section}] names no log")
                 for key in keys:
                     value = self.config.get(section, key).rstrip("/")
+                    if (section, key) in self.OLDER_LOG:
+                        continue
                     if key == "logdir":
                         self.assertIn(value, [os.path.dirname(path) for path in logstash if "*" in path])
                     elif (section, key) in self.SAME_FOLDER:

@@ -135,10 +135,11 @@ The EWSPoster test runs the image with its real entrypoint (the loop of
 `ews.py` passes) and sends EWS submissions to a local sink container that keeps
 every POST. The first pass over empty Honeytrap, Endlessh, Heralding, IPPHoney
 and Cowrie logs sends nothing; then line 1 of the Honeytrap and IPPHoney logs
-and three Cowrie sessions (labelled SSH or Telnet) must arrive. With the hold
-marker `data/ews/hold` EWSPoster writes `data/ews/hold.ack`, its indexes move on
-and nothing is sent; after the hold only new lines arrive, never those of the
-hold. A marker older than 30 minutes is ignored, and `docker stop` ends the
+and three Cowrie sessions (labelled SSH or Telnet) must arrive. A line written
+right before the hold marker `data/ews/hold` is still sent by the normal pass
+the hold starts with; then EWSPoster writes `data/ews/hold.ack`, its indexes
+move on and nothing is sent; after the hold only new lines arrive, never those
+of the hold. A marker older than 30 minutes is ignored, and `docker stop` ends the
 container at once. The container needs outbound network access, EWSPoster looks
 up the external IP via `api.ipify.org` on every pass.
 

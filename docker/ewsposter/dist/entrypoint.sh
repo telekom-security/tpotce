@@ -4,8 +4,9 @@
 # drawn once per start.
 #
 # The hold: while T-Pot checks itself (tpot check), the check writes the marker /data/ews/hold.
-# The passes are idle then: ews.py builds, spools and sends no alert, its indexes move on, so the
-# lines of the check are never sent, not even later. /data/ews/hold.ack says that ewsposter holds:
+# One normal pass first sends the lines from before the hold, then the passes are idle: ews.py
+# builds, spools and sends no alert, its indexes move on, so the lines of the check are never
+# sent, not even later. /data/ews/hold.ack says that ewsposter holds:
 # it is written after each idle round and removed when the hold is over. The marker only counts
 # as a regular file (no link) younger than 30 minutes, so a check that was cut off never keeps
 # ewsposter quiet for good.
@@ -179,14 +180,18 @@ fuPASS () {
   return 0
 }
 
-# One round of the loop: idle passes and hold.ack while the hold is on; when it is over one more
-# idle pass, hold.ack removed, then the normal pass. Sets myINTERVAL, the pause after the round.
+# One round of the loop: while the hold is on idle passes and hold.ack (the first round of a hold
+# starts with a normal pass); when it is over one more idle pass, hold.ack removed, then the
+# normal pass. Sets myINTERVAL, the pause after the round.
 fuROUND () {
   if fuHOLD_ON;
     then
       if [ -z "${myHELD}" ];
         then
-          echo " => Hold for the check of T-Pot: idle passes, nothing is sent."
+          # the lines from before the hold are sent first; the check waits for hold.ack, so
+          # none of its own lines are there yet
+          echo " => Hold for the check of T-Pot: one normal pass, then idle passes, nothing is sent."
+          fuPASS
           myHELD="yes"
       fi
       fuIDLE

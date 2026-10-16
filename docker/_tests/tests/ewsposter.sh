@@ -36,9 +36,10 @@ that keeps every POST, nothing is sent to the EWS backend.
      line in the honeytrap and ipphoney logs and three Cowrie sessions arrive at
      the sink, the Cowrie sessions labelled SSH or Telnet by their protocol or
      target port.
-  2. With the hold marker data/ews/hold, ewsposter writes data/ews/hold.ack, its
-     indexes move on over three new Cowrie sessions and a honeytrap line, and no
-     POST arrives.
+  2. A Cowrie session written right before the hold marker data/ews/hold is
+     sent by the normal pass the hold starts with, before ewsposter writes
+     data/ews/hold.ack. After the ack its indexes move on over three new Cowrie
+     sessions and a honeytrap line, and no POST arrives.
   3. Without the marker hold.ack goes away, a new Cowrie session arrives, the
      lines of the hold never do.
   4. A marker older than 30 minutes is ignored.
@@ -415,10 +416,14 @@ step_hold() {
   local honeytrap_idx=""
   local ack=""
 
-  test_info "Hold: the marker is set, ewsposter must answer with hold.ack"
+  test_info "Hold: a Cowrie session, right after it the marker; ewsposter must answer with hold.ack"
+  cowrie_session c0ffee00a000 198.51.100.20 22 ssh
   : > "${DATA_DIR}/ews/hold"
   wait_until "$(pass_wait)" ack_present || test_die "hold.ack did not appear"
   test_ok "hold.ack appeared"
+  # the hold starts with a normal pass, before its ack
+  alert_from 198.51.100.20 || test_die "The line from right before the marker was not sent before hold.ack"
+  test_ok "The line from right before the marker was sent"
 
   posts="$(python3 "${CHECK}" posts "${SINK_DIR}/posts")"
   cowrie_idx="$(idx_value COWRIE)"
