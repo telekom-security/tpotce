@@ -2298,7 +2298,14 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
             with self.subTest(mode=mode):
                 self.assertEqual(tapp.mode_effect(mode, empty), "Kibana holds none of T-Pot's objects: the next "
                                                                 "start imports them, without your advanced settings.")
+        for mode in ko.MODES:                   # it gave up: nothing comes on its own any more
+            with self.subTest(mode=mode, given_up=True):
+                self.assertEqual(tapp.mode_effect(mode, empty, ["dashboard:a"]),
+                                 "On the next start: nothing is imported, the first import gave up on 1 object; "
+                                 "tpot elastic import retries them.")
         some = ko.Plan(empty.items[:1] + [ko.Item("dashboard:c", "dashboard", "c", "Cowrie", "current")])
+        self.assertEqual(tapp.mode_effect("add", some, ["dashboard:a"]),
+                         "On the next start: 1 new Kibana object is imported, nothing is replaced.")
         self.assertEqual(tapp.mode_effect("keep", some), "On the next start: nothing is imported.")
         self.assertEqual(tapp.mode_effect("add", some),
                          "On the next start: 1 new Kibana object is imported, nothing is replaced.")

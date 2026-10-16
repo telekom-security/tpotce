@@ -1025,7 +1025,7 @@ class RequestTest(unittest.TestCase):
         ko.status(opener=opener)
         ko.export_objects(opener=opener)
         ko.import_objects([dash("a")], True, opener=opener)
-        self.assertEqual(seen, [("status", 5), ("_export", 30), ("_import?overwrite=true", 30)])
+        self.assertEqual(seen, [("status", 5), ("_export", 30), ("_import?overwrite=true", 120)])
 
 
 class FirstImportTest(unittest.TestCase):
@@ -1076,6 +1076,7 @@ class FirstImportTest(unittest.TestCase):
                 self.assertEqual((first.attempt, first.done, first.missing), (1, True, []))
                 self.assertEqual(kibana.store["config:9.5.4"], mine)
                 self.assertNotIn('"type": "config"', FakeKibana.ndjson(kibana.imports()[0]))
+                self.assertTrue(kibana.imports()[0].full_url.endswith("overwrite=false"))   # none is there
                 self.assertEqual(sorted(first.result.keys()), ["dashboard:a", "dashboard:b"])
         site = Site(self, [dash("a")])
         ko.mark_pending(site.data)                                      # the default is the safe side
@@ -1527,13 +1528,37 @@ class LockTest(unittest.TestCase):
         # keep makes no request, it needs no lock
         self.assertEqual(site.apply("keep", kibana)[2], "")
 
+    HOLD_UNTIL = ("import fcntl, os, sys\n"
+                  "handle = os.open(sys.argv[1], os.O_RDONLY | os.O_CREAT, 0o660)\n"
+                  "fcntl.flock(handle, fcntl.LOCK_EX)\n"
+                  "print('held', flush=True)\n"
+                  "sys.stdin.readline()\n")
+
+    def hold_until_told(self):
+        """Another process holds the lock until a line comes on its stdin (no clock involved)."""
+        proc = subprocess.Popen([sys.executable, "-c", self.HOLD_UNTIL, ko.lock_path(self.site.data)],
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        self.addCleanup(proc.wait)
+        self.addCleanup(lambda: proc.stdin.closed or proc.stdin.close())
+        self.assertEqual(proc.stdout.readline().strip(), "held")
+        proc.stdout.close()
+        return proc
+
     def test_a_run_waits_for_the_other_one(self):
-        self.hold(1)
-        ko.LOCK_WAIT = 20
+        holder = self.hold_until_told()
+        ko.LOCK_WAIT = 120
         kibana = FakeKibana([as_in_kibana(CONFIG)])
-        started = time.monotonic()
-        chosen, result, _ = self.site.apply("update", kibana)
-        self.assertGreater(time.monotonic() - started, 0.5)
+        answer = {}
+        run = threading.Thread(target=lambda: answer.update(done=self.site.apply("update", kibana)))
+        run.start()
+        time.sleep(0.5)
+        self.assertTrue(run.is_alive())                     # it waits for the holder, whatever the load
+        self.assertEqual(kibana.requests, [])
+        holder.stdin.write("go\n")
+        holder.stdin.close()
+        run.join(60)
+        self.assertFalse(run.is_alive())
+        chosen, result, _ = answer["done"]
         self.assertEqual(result.imported, [("dashboard", "a")])
         # inside a run of the same process the lock is held already
         with ko.import_lock(self.site.data):
@@ -1542,6 +1567,41 @@ class LockTest(unittest.TestCase):
         with ko.import_lock(self.site.data):
             pass
         self.assertEqual(ko._held(), {})
+
+    def test_the_restore_command_waits_for_the_lock_and_drops_the_records(self):
+        """restore.sh's import: after tpotinit's import (the lock), with an export first; what it restored is
+        no T-Pot import any more, so the next update keeps it."""
+        site = self.site
+        backup = os.path.join(site.root, "archive.ndjson")
+        with open(backup, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(dash("a", title="Mine")) + "\n")
+        site.record(NOW, "dashboard:a")
+        kibana = FakeKibana([as_in_kibana(CONFIG), as_in_kibana(dash("a"))])
+        holder = self.hold_until_told()
+        ko.LOCK_WAIT = 0.2                      # the default wait would give up, --wait is longer
+        answer = {}
+        run = threading.Thread(target=lambda: answer.update(done=site.cli(
+            "restore", "--data", site.data, "--objects", site.objects, "--exports", site.exports,
+            "--wait", "120", backup, opener=kibana)))
+        run.start()
+        time.sleep(0.5)
+        self.assertTrue(run.is_alive())
+        self.assertEqual(kibana.requests, [])
+        holder.stdin.write("go\n")
+        holder.stdin.close()
+        run.join(60)
+        rc, out, err = answer["done"]
+        exports = site.files()
+        self.assertEqual((rc, err, len(exports)), (0, "", 1))
+        self.assertEqual(out, f"# Kibana objects: 1 restored (export: {os.path.join(site.exports, exports[0])})\n")
+        self.assertEqual(kibana.store["dashboard:a"]["attributes"]["title"], "Mine")
+        self.assertNotIn("dashboard:a", site.records())
+        self.assertEqual(site.preview(kibana).yours[0].key, "dashboard:a")
+        # no wait: another import is running
+        holder = self.hold_until_told()
+        rc, out, err = site.cli("restore", "--data", site.data, "--objects", site.objects, "--exports",
+                                site.exports, "--wait", "0", backup, opener=kibana)
+        self.assertEqual((rc, err), (1, f"# Kibana objects: {ko.BUSY}\n"))
 
     def test_the_lock_file_is_0660_whatever_the_umask(self):
         old = os.umask(0o077)
@@ -1607,11 +1667,32 @@ class LockTest(unittest.TestCase):
                                  "--exports", os.path.join(other.root, "exports"), opener=FakeKibana())
         self.assertEqual((rc, err), (1, f"# Kibana objects: {ko.state_dir(other.data)} is a link or no folder; "
                                         "T-Pot leaves it as it is\n"))
-        failing = OSError(errno.ENOLCK, "No locks available")
+        failing = OSError(errno.EBADF, "Bad file descriptor")
         with unittest.mock.patch.object(ko.fcntl, "flock", side_effect=failing):
-            with self.assertRaisesRegex(ko.KibanaError, "cannot be used: No locks available$"):
+            with self.assertRaisesRegex(ko.KibanaError, "cannot be used: Bad file descriptor$"):
                 with ko.import_lock(self.site.data):
                     pass
+
+    def test_a_file_system_without_locks_runs_without_the_lock(self):
+        """Docker Desktop bind mounts (MAC_WIN) may have no flock: the run goes on, warned once."""
+        self.addCleanup(ko._UNLOCKED_WARNED.clear)
+        for number in sorted(ko.NO_LOCKS):
+            with self.subTest(errno=errno.errorcode.get(number, number)):
+                ko._UNLOCKED_WARNED.clear()
+                failing = OSError(number, os.strerror(number))
+                err = io.StringIO()
+                with unittest.mock.patch.object(ko.fcntl, "flock", side_effect=failing) as flock, \
+                        contextlib.redirect_stderr(err):
+                    chosen, result, _ = self.site.apply("update", FakeKibana([as_in_kibana(CONFIG)]))
+                    self.site.apply("update", FakeKibana([as_in_kibana(CONFIG)]))
+                self.assertEqual(result.imported, [("dashboard", "a")])
+                self.assertEqual(err.getvalue(), f"# Kibana objects: warning: {ko.lock_path(self.site.data)} "
+                                                 f"cannot be locked here ({os.strerror(number)}), the import runs "
+                                                 "without the lock\n")
+                self.assertTrue(all(c.args[1] & ko.fcntl.LOCK_EX for c in flock.call_args_list))   # no unlock
+                self.assertEqual(ko._held(), {})
+        self.assertTrue({errno.ENOLCK, errno.EINVAL} <= ko.NO_LOCKS)
+        self.assertNotIn(errno.EBADF, ko.NO_LOCKS)
 
 
 @unittest.skipUnless(hasattr(os, "symlink") and ko.NOFOLLOW, "no symbolic links here")

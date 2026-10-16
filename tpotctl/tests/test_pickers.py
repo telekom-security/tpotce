@@ -587,6 +587,37 @@ class SettingsHelpersTest(SettingsHelpersBase):
                           " ".join(str(self.app.query_one("#help-below-TPOT_KIBANA_OBJECTS").render()).split()))
             self.assertEqual(pane.changes(), {"TPOT_KIBANA_OBJECTS": "overwrite"})
 
+    async def test_choosing_overwrite_asks_first(self):
+        """Save of TPOT_KIBANA_OBJECTS=overwrite asks the question of the Elastic page, #no has the focus."""
+        from tpotctl import cli
+        from tpotctl.screens.dialogs import ConfirmDialog
+
+        def written():
+            with open(os.path.join(self.repo, ".env"), encoding="utf-8") as handle:
+                return [line for line in handle.read().splitlines() if line.startswith("TPOT_KIBANA_OBJECTS=")]
+        before = written()
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            self.app.goto_setting("TPOT_KIBANA_OBJECTS")
+            await pilot.pause(0.3)
+            self.app.query_one("#set-TPOT_KIBANA_OBJECTS").value = "overwrite"
+            await pilot.pause(0.2)
+            self.app.query_one("#settings-save").press()
+            await pilot.pause(0.3)
+            self.assertIsInstance(self.app.screen, ConfirmDialog)
+            self.assertEqual(self.app.screen.title_text, cli.KIBANA_OVERWRITE_QUESTION)
+            self.assertIs(self.app.focused, self.app.screen.query_one("#no"))
+            self.assertIn(cli.KIBANA_OVERWRITE_EVERY_START,
+                          " ".join(" ".join(str(w.render()) for w in self.app.screen.query("Static")).split()))
+            await pilot.press("enter")                                   # Back
+            await pilot.pause(0.3)
+            self.assertEqual(written(), before)
+            self.app.query_one("#settings-save").press()
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+            self.assertEqual(written(), ["TPOT_KIBANA_OBJECTS=overwrite"])
+
     async def test_goto_setting_focuses_the_field(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
             await self.open_settings(pilot)

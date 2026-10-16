@@ -169,10 +169,8 @@ class Backend:
 
     def kibana_export(self):
         """Every object into ~/tpot_backups: (path, count)."""
-        from tpotctl import kibana_objects as ko
-        text = ko.export_objects()
-        count = len(ko.parse_ndjson(text, "the export of Kibana"))
-        return ko.save_export(text, ops.kibana_export_dir()), count
+        from tpotctl import cli
+        return cli.kibana_export()
 
     def kibana_check_export(self, path: str) -> int:
         """The objects of an export as a restore reads them, before its question (KibanaError if none)."""
@@ -945,13 +943,25 @@ class SettingsPane(Vertical):
             if self.saving:             # a press that came in before Save was disabled
                 return
             saved = self.changes()
-            if "TPOT_ES_RETENTION" in saved and self.current.values.get("TPOT_TYPE", "HIVE") != "SENSOR":
-                # Elasticsearch may take seconds: in a worker, Save disabled meanwhile
-                self.saving = True
-                self.query_one(f"#{self.PREFIX}-save", Button).disabled = True
-                self.run_worker(self.save_retention(saved), group=f"{self.PREFIX}-save")
+            if saved.get("TPOT_KIBANA_OBJECTS") == "overwrite" and \
+                    self.current.values.get("TPOT_KIBANA_OBJECTS") != "overwrite":
+                # as on the Elastic page: overwrite resets your changes to T-Pot objects on every start
+                def answered(yes) -> None:
+                    if yes:
+                        self.run_worker(self.save_checked(saved), group=f"{self.PREFIX}-save")
+                self.app.push_screen(overwrite_mode_question(), answered)
                 return
-            await self.save_confirmed(saved)
+            await self.save_checked(saved)
+
+    async def save_checked(self, saved: Dict[str, str]) -> None:
+        """The save after the question of overwrite (if any): a changed retention plans first."""
+        if "TPOT_ES_RETENTION" in saved and self.current.values.get("TPOT_TYPE", "HIVE") != "SENSOR":
+            # Elasticsearch may take seconds: in a worker, Save disabled meanwhile
+            self.saving = True
+            self.query_one(f"#{self.PREFIX}-save", Button).disabled = True
+            self.run_worker(self.save_retention(saved), group=f"{self.PREFIX}-save")
+            return
+        await self.save_confirmed(saved)
 
     async def save_retention(self, saved: Dict[str, str]) -> None:
         """A changed TPOT_ES_RETENTION: a shorter retention asks first, before anything is written, whether
@@ -1789,7 +1799,7 @@ class ElasticPane(Vertical):
         text = Text(helps.get(mode, ""), style=theme.color("mist"))
         state = self.kibana
         if state is not None and state.plan is not None:
-            text.append(f"\n{mode_effect(mode, state.plan)}", style=theme.color("glass"))
+            text.append(f"\n{mode_effect(mode, state.plan, state.given_up)}", style=theme.color("glass"))
         if state is not None and state.kibana and self.kibana_mode is not None and mode != self.kibana_mode:
             text.append(f"\nSave writes TPOT_KIBANA_OBJECTS={mode} into .env, T-Pot uses it from its next start.",
                         style=f"bold {theme.color('wax')}")
@@ -1827,9 +1837,7 @@ class ElasticPane(Vertical):
             if mode == self.kibana_mode:
                 return
             if mode == "overwrite":
-                self.app.push_screen(ConfirmDialog("Overwrite the Kibana objects on every start?",
-                                                   Text(OVERWRITE_EVERY_START, style=theme.color("glass")),
-                                                   yes="Choose overwrite", no="Back"),
+                self.app.push_screen(overwrite_mode_question(),
                                      lambda yes: self.start_kibana(self.save_mode(mode)) if yes
                                      else self.revert_mode())
                 return
@@ -2188,20 +2196,26 @@ def kibana_info() -> Text:
 # the refused objects a note names when the result dialog cannot be shown (another screen is open)
 RESULT_REFUSED_SHOWN = 5
 
-# the question before the mode overwrite is saved
-OVERWRITE_EVERY_START = ("On every start T-Pot brings each of its Kibana objects back to the shipped version: your "
-                         "changes to T-Pot objects are reset each time. An export comes first each time (the newest "
-                         "10 stay in data/kibana_objects/exports), your advanced settings stay.")
+def overwrite_mode_question() -> ConfirmDialog:
+    """The question before TPOT_KIBANA_OBJECTS=overwrite is saved, on the Elastic and the Settings page; #no has
+    the focus."""
+    from tpotctl import cli
+    return ConfirmDialog(cli.KIBANA_OVERWRITE_QUESTION,
+                         Text(cli.KIBANA_OVERWRITE_EVERY_START, style=theme.color("glass")),
+                         yes="Choose overwrite", no="Back")
 
 
-def mode_effect(mode: str, chosen) -> str:
-    """What `mode` would do on the next start, for Kibana as the plan `chosen` read it."""
-    from tpotctl.cli import _objects
+def mode_effect(mode: str, chosen, given_up=None) -> str:
+    """What `mode` would do on the next start, for Kibana as the plan `chosen` read it; given_up: the
+    objects the first import gave up on (kibana_objects.given_up), None without its marker."""
+    from tpotctl.cli import _objects, kibana_given_up
 
     def are(items, what: str) -> str:
         return f"{_objects(len(items), what)} {'is' if len(items) == 1 else 'are'}"
     if chosen.new and not (chosen.update or chosen.current or chosen.yours):
-        # kibana_objects.needs_first_import: the first import runs again, in every mode
+        # kibana_objects.needs_first_import: the first import runs again, in every mode, unless it gave up
+        if given_up is not None:
+            return f"On the next start: nothing is imported, {kibana_given_up(given_up)}."
         return ("Kibana holds none of T-Pot's objects: the next start imports them, without your advanced "
                 "settings.")
     if mode == "keep":

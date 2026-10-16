@@ -368,6 +368,20 @@ class KibanaCliTest(unittest.TestCase):
         self.assertEqual(seen, [ko.STATUS_TIMEOUT])
         self.assertEqual(ko.STATUS_TIMEOUT, 5)
 
+    def test_status_names_a_first_import_that_gave_up(self):
+        ko._write_state(self.site.data, os.path.basename(ko.given_up_path(self.site.data)),
+                        {"version": 1, "refused": ["dashboard:b", "dashboard:x"], "at": "2026-10-16T10:00:00Z",
+                         "shipped": ko.shipped_sha(self.site.objects)}, ko.TEMP_GIVEN_UP)
+        self.run_cli("status")
+        self.assertIn("1 of yours · the first import gave up on 2 objects; tpot elastic import retries them",
+                      self.out.getvalue())
+        # a marker of another shipped file counts as none, and a status leaves it where it is
+        ko._write_state(self.site.data, os.path.basename(ko.given_up_path(self.site.data)),
+                        {"version": 1, "refused": ["dashboard:b"], "shipped": "other"}, ko.TEMP_GIVEN_UP)
+        self.run_cli("status")
+        self.assertNotIn("gave up", self.out.getvalue())
+        self.assertTrue(os.path.exists(ko.given_up_path(self.site.data)))
+
     def test_status_of_an_empty_mode_is_keep(self):
         self.run_cli("status", values={"TPOT_TYPE": "HIVE", "TPOT_ES_RETENTION": "30"})
         self.assertIn("TPOT_KIBANA_OBJECTS=keep · 1 new", self.out.getvalue())

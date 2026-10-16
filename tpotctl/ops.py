@@ -500,20 +500,17 @@ def kibana_export_dir(home: Optional[str] = None) -> str:
 def kibana_exports(home: Optional[str] = None, data_dir: Optional[str] = None) -> List[str]:
     """Exports of the Kibana objects, newest first: kibana_objects_*.ndjson of the T-Pot
     Manager in ~/tpot_backups and, with `data_dir`, auto_*.ndjson of tpotinit in
-    <data>/kibana_objects/exports."""
-    places = [(kibana_export_dir(home), "kibana_objects_")]
+    <data>/kibana_objects/exports. Each place as kibana_objects.exports lists it: regular files
+    only, no link followed (~/tpot_backups itself may be a link of yours)."""
+    from tpotctl import kibana_objects as ko
+    places = [(kibana_export_dir(home), ko.EXPORT_PREFIX)]
     if data_dir:
-        places.append((os.path.join(data_dir, "kibana_objects", "exports"), "auto_"))
+        places.append((ko.auto_exports_dir(data_dir), ko.AUTO_PREFIX))
     found = []
     for folder, prefix in places:
-        try:
-            names = [n for n in os.listdir(folder) if n.startswith(prefix) and n.endswith(".ndjson")]
-        except OSError:
-            continue
-        for name in names:
-            path = os.path.join(folder, name)
+        for path in ko.exports(folder, prefix):
             try:
-                found.append((os.path.getmtime(path), path))
+                found.append((os.lstat(path).st_mtime, path))
             except OSError:
                 pass
     return [path for _, path in sorted(found, key=lambda f: (f[0], f[1]), reverse=True)]

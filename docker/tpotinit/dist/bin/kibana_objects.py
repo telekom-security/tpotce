@@ -89,6 +89,7 @@ EXPORT_BODY = {"type": "*", "excludeExportDetails": True}
 WINDOW = 60                            # seconds after a recorded import in which Kibana's updated_at is that import
 TIMEOUT = 30
 STATUS_TIMEOUT = 5
+IMPORT_TIMEOUT = 120                   # an import of the whole file takes Kibana a while on a small host
 ROUNDS = 5                             # imports of one call, each without the objects the last one refused
 LOCK_WAIT = 60                         # seconds a run waits for another one (tpotinit or tpot elastic)
 
@@ -361,6 +362,11 @@ def lock_path(data_dir: str) -> str:
 
 
 BUSY = "another Kibana import is running (tpotinit or tpot elastic), try again in a minute"
+# flock errors of a file system without file locks (Docker Desktop bind mounts): the run goes on
+# without the lock, warned once per process
+NO_LOCKS = {e for e in (getattr(errno, "ENOLCK", None), getattr(errno, "ENOTSUP", None),
+                        getattr(errno, "EOPNOTSUPP", None), errno.EINVAL) if e is not None}
+_UNLOCKED_WARNED: List[str] = []
 _HELD = threading.local()              # per thread: the locks it holds, how deep, and their folders
 
 # the temporary files Folder.write makes: <prefix><32 hex>.tmp, renamed into place when written; one
@@ -743,12 +749,14 @@ def _tidy(folder: "Folder") -> None:
 
 
 @contextlib.contextmanager
-def import_lock(data_dir: str):
+def import_lock(data_dir: str, wait: Optional[float] = None):
     """One run at a time that reads a plan and imports: an exclusive flock on
-    <data>/kibana_objects/lock, waited for at most LOCK_WAIT seconds (then BUSY). The run
-    holds <data>/kibana_objects open for all its files. A run inside a run of the same
-    thread holds it already; another thread waits like any other run. A lock that cannot
-    be opened or taken is a KibanaError that names it."""
+    <data>/kibana_objects/lock, waited for at most `wait` (LOCK_WAIT) seconds (then BUSY).
+    The run holds <data>/kibana_objects open for all its files. A run inside a run of the
+    same thread holds it already; another thread waits like any other run. A file system
+    without file locks (NO_LOCKS, a bind mount of Docker Desktop) runs without the lock,
+    with one warning per process; any other lock that cannot be opened or taken is a
+    KibanaError that names it."""
     path = os.path.abspath(lock_path(data_dir))
     held = _held()
     if held.get(path):
@@ -774,7 +782,8 @@ def import_lock(data_dir: str):
             folder.close()
         raise
     try:
-        deadline = time.monotonic() + LOCK_WAIT
+        deadline = time.monotonic() + (LOCK_WAIT if wait is None else wait)
+        locked = True
         while True:
             try:
                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -784,7 +793,14 @@ def import_lock(data_dir: str):
                     raise KibanaError(BUSY) from None
                 time.sleep(0.2)
             except OSError as error:
-                raise _unusable(path, error) from None
+                if error.errno not in NO_LOCKS:
+                    raise _unusable(path, error) from None
+                locked = False
+                if not _UNLOCKED_WARNED:
+                    _UNLOCKED_WARNED.append(path)
+                    print(f"{LOG}warning: {path} cannot be locked here ({error.strerror or error}), the "
+                          "import runs without the lock", file=sys.stderr, flush=True)
+                break
         _tidy(folder)
         held[path] = 1
         _held_folders()[os.path.abspath(state_dir(data_dir))] = folder
@@ -793,7 +809,8 @@ def import_lock(data_dir: str):
         finally:
             held.pop(path, None)
             _held_folders().pop(os.path.abspath(state_dir(data_dir)), None)
-            fcntl.flock(handle, fcntl.LOCK_UN)
+            if locked:
+                fcntl.flock(handle, fcntl.LOCK_UN)
     finally:
         os.close(handle)
         folder.close()
@@ -1022,7 +1039,7 @@ def _import_once(objs: List[dict], overwrite: bool, url: str, opener: Optional[C
             f"Content-Type: application/ndjson\r\n\r\n"
             f"{ndjson}\r\n--{boundary}--\r\n").encode("utf-8")
     raw = _request("POST", f"/api/saved_objects/_import?overwrite={'true' if overwrite else 'false'}", url,
-                   opener, body, f"multipart/form-data; boundary={boundary}")
+                   opener, body, f"multipart/form-data; boundary={boundary}", timeout=IMPORT_TIMEOUT)
     try:
         answer = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
@@ -1434,7 +1451,9 @@ def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: O
         # before the request: the attempt counts, and a refusal is used up once it is sent again
         _write_pending(data_dir, dict(state, attempt=attempt, refused=[]))
         when = stamp(now)
-        result = import_objects(todo, True, url, opener)
+        # a fresh install overwrites what Kibana made of the advanced settings on its own; for "no-objects"
+        # none of T-Pot's objects is there, so nothing is overwritten (an export that left some out)
+        result = import_objects(todo, state["reason"] == "fresh", url, opener)
         if result.imported:
             records.mark(result.keys(), when)
             records.save()
@@ -1468,10 +1487,11 @@ def shipped_sha(objects_dir: str) -> str:
         raise KibanaError(f"{path}: {error}") from None
 
 
-def given_up(data_dir: str, objects_dir: str) -> Optional[List[str]]:
+def given_up(data_dir: str, objects_dir: str, tidy: bool = True) -> Optional[List[str]]:
     """The objects the first import gave up on, while its marker is for this shipped file;
-    None without one. A marker of another shipped file (a new release) goes. A marker that
-    cannot be read still counts: the first import does not run again on its own then."""
+    None without one. A marker of another shipped file (a new release) goes (tidy False, for
+    a status: it stays, and counts as none). A marker that cannot be read still counts: the
+    first import does not run again on its own then."""
     try:
         with _state(data_dir, create=False) as folder:
             text = folder.read(os.path.basename(given_up_path(data_dir))) if folder is not None else None
@@ -1483,7 +1503,8 @@ def given_up(data_dir: str, objects_dir: str) -> Optional[List[str]]:
     if not (isinstance(data, dict) and isinstance(data.get("refused"), list)):
         return []
     if data.get("shipped") != shipped_sha(objects_dir):
-        clear_given_up(data_dir)
+        if tidy:
+            clear_given_up(data_dir)
         return None
     return [k for k in data["refused"] if isinstance(k, str)]
 
@@ -1560,6 +1581,16 @@ def summary(mode: str, chosen: Plan, result: Result, export_path: str = "") -> L
     return [line] + _error_lines(result)
 
 
+def restore_summary(export_path: str, result: Result) -> List[str]:
+    """One line of what a restore did, then one line per object Kibana refused."""
+    line = f"{LOG}{len(result.imported)} restored"
+    if result.errors:
+        line += f", {len(result.errors)} failed"
+    if export_path:
+        line += f" (export: {export_path})"
+    return [line] + _error_lines(result)
+
+
 def first_summary(first: FirstImport) -> List[str]:
     result = first.result
     line = f"{LOG}first import"
@@ -1610,6 +1641,16 @@ def _cli_apply(args, opener: Optional[Callable]) -> int:
                                         export=export))
 
 
+def _cli_restore(args, opener: Optional[Callable]) -> int:
+    """restore.sh: run_restore under the lock (waited for up to --wait seconds, tpotinit may be importing
+    right then), so the restored objects are no T-Pot import any more and tpotinit's next run keeps them."""
+    with import_lock(args.data, wait=args.wait):
+        export_path, result = run_restore(os.path.abspath(args.file), args.data, args.exports, opener,
+                                          url=args.kibana)
+    print("\n".join(restore_summary(export_path, result)), flush=True)
+    return 1 if result.errors else 0
+
+
 def _cli_first(args, opener: Optional[Callable]) -> int:
     """One attempt of a pending first import; without `pending` nothing (apply decides)."""
     if pending_state(args.data) is None:
@@ -1636,10 +1677,15 @@ def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) ->
     apply.add_argument("--mode", required=True, choices=MODES, help="TPOT_KIBANA_OBJECTS")
     first = commands.add_parser("first", help="the first import: the whole shipped file, the advanced settings "
                                               "too; a retry only what mode update would import")
+    restore = commands.add_parser("restore", help="import every object of an export, the advanced settings too, "
+                                                  "after a fresh export; its records go (restore.sh)")
+    restore.add_argument("file", metavar="FILE", help="the export to restore")
+    restore.add_argument("--wait", type=int, default=LOCK_WAIT, metavar="SECONDS",
+                         help=f"how long to wait for another import (default {LOCK_WAIT})")
     mark = commands.add_parser("mark-fresh", help="tpotinit's first run: the first import is pending, the "
                                                   "advanced settings too (no request)")
     mark.add_argument("--data", required=True, metavar="DIR", help="the data folder (TPOT_DATA_PATH)")
-    for command in (apply, first):
+    for command in (apply, first, restore):
         command.add_argument("--data", required=True, metavar="DIR", help="the data folder (TPOT_DATA_PATH)")
         command.add_argument("--objects", required=True, metavar="DIR",
                              help=f"the folder of {SHIPPED_NAME} and {MANIFEST_NAME}")
@@ -1657,6 +1703,8 @@ def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) ->
                 return _cli_apply(args, opener)
         if args.command == "first":
             return _cli_first(args, opener)
+        if args.command == "restore":
+            return _cli_restore(args, opener)
         if args.command == "mark-fresh":
             if imported_before(args.data):
                 print(f"{LOG}the Kibana objects were imported before, no fresh import", flush=True)

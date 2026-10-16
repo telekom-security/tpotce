@@ -122,6 +122,27 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(self.load().values["TPOT_ATTACKMAP_TEXT"], "DISABLED")
 
     @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_cli_overwrite_mode_says_what_it_does(self):
+        """tpot env set TPOT_KIBANA_OBJECTS=overwrite asks nothing (as for a shorter retention), its hint
+        says what overwrite does on every start."""
+        from tpotctl import cli
+        original = self.settings.load
+
+        def run(*argv):
+            out = io.StringIO()
+            with redirect_stdout(out), redirect_stderr(out):
+                done = cli.main(list(argv))
+            return done, " ".join(out.getvalue().split())
+
+        with mock.patch.object(self.settings, "load", lambda **kwargs: original(self.repo, **kwargs)):
+            done, text = run("env", "set", "TPOT_KIBANA_OBJECTS=overwrite")
+            self.assertEqual(done, 0, text)
+            self.assertIn(f"TPOT_KIBANA_OBJECTS=overwrite: {cli.KIBANA_OVERWRITE_EVERY_START}", text)
+            done, text = run("env", "set", "TPOT_KIBANA_OBJECTS=update")
+            self.assertNotIn(cli.KIBANA_OVERWRITE_EVERY_START, text)
+        self.assertEqual(self.load().values["TPOT_KIBANA_OBJECTS"], "update")
+
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
     def test_cli_cowrie_personas_and_rotation(self):
         from tpotctl import cli
         original = self.settings.load

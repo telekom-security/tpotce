@@ -441,6 +441,13 @@ def _kibana_counts(chosen) -> str:
             f"{len(chosen.yours)} of yours")
 
 
+# what the mode overwrite does on every start: the question of the Elastic and the Settings page, the hint of
+# tpot env set
+KIBANA_OVERWRITE_QUESTION = "Overwrite the Kibana objects on every start?"
+KIBANA_OVERWRITE_EVERY_START = ("On every start T-Pot brings each of its Kibana objects back to the shipped "
+                                "version: your changes to T-Pot objects are reset each time. An export comes "
+                                "first each time (the newest 10 stay in data/kibana_objects/exports), your "
+                                "advanced settings stay.")
 KIBANA_ABSENT = "no Kibana in this edition"
 KIBANA_PENDING = "the first import has not finished yet, tpotinit retries on every start"
 
@@ -449,15 +456,25 @@ class KibanaState:
     """The Kibana objects as tpot elastic status and the Elastic page show them: the mode of .env (empty
     is keep), whether the edition runs Kibana, a pending first import, else the plan or why there is none."""
 
-    def __init__(self, mode: str, kibana: bool = True, pending: bool = False, plan=None, problem: str = ""):
+    def __init__(self, mode: str, kibana: bool = True, pending: bool = False, plan=None, problem: str = "",
+                 given_up=None):
         self.mode, self.kibana, self.pending, self.plan, self.problem = mode, kibana, pending, plan, problem
+        self.given_up = given_up        # the objects the first import gave up on, None without its marker
 
     def text(self) -> str:
         if not self.kibana:
             return KIBANA_ABSENT
         if self.pending:
             return KIBANA_PENDING
-        return _kibana_counts(self.plan) if self.plan is not None else self.problem
+        text = _kibana_counts(self.plan) if self.plan is not None else self.problem
+        if self.given_up is not None:
+            text += f" · {kibana_given_up(self.given_up)}"
+        return text
+
+
+def kibana_given_up(refused) -> str:
+    """The first import gave up on what Kibana kept refusing (kibana_objects.given_up)."""
+    return f"the first import gave up on {_objects(len(refused), 'objects')}; tpot elastic import retries them"
 
 
 def kibana_state(values) -> KibanaState:
@@ -470,7 +487,8 @@ def kibana_state(values) -> KibanaState:
     try:
         if ko.pending_state(data) is not None:
             return KibanaState(mode, pending=True)
-        return KibanaState(mode, plan=ko.preview(data, objects, timeout=ko.STATUS_TIMEOUT))
+        return KibanaState(mode, plan=ko.preview(data, objects, timeout=ko.STATUS_TIMEOUT),
+                           given_up=ko.given_up(data, objects, tidy=False))
     except ko.KibanaError as err:
         return KibanaState(mode, problem=str(err))
 
@@ -537,14 +555,19 @@ def _kibana_result(lines, ok: bool, console) -> None:
         console.print(f"  {line}", markup=False)
 
 
-def _kibana_export(args, console) -> int:
+def kibana_export(file: Optional[str] = None):
+    """Every Kibana object into ~/tpot_backups (or into the new `file`): (path, count). tpot elastic export
+    and Export on the Elastic page."""
     from tpotctl import kibana_objects as ko
     text = ko.export_objects()
     count = len(ko.parse_ndjson(text, "the export of Kibana"))
-    if args.file:
-        path = ko.save_export_as(text, os.path.abspath(os.path.expanduser(args.file)))
-    else:
-        path = ko.save_export(text, ops.kibana_export_dir())
+    if file:
+        return ko.save_export_as(text, os.path.abspath(os.path.expanduser(file))), count
+    return ko.save_export(text, ops.kibana_export_dir()), count
+
+
+def _kibana_export(args, console) -> int:
+    path, count = kibana_export(args.file)
     say.ok(f"{_objects(count)} exported to {path}.", console.file)
     return 0
 
@@ -770,6 +793,9 @@ def run_env(args) -> int:
                               f"tpot elastic retention --force applies it now.[/]")
             else:               # the policy was not read, or Elasticsearch did not answer: it is unknown
                 say.hint(f"TPOT_ES_RETENTION={new} is set. {UNKNOWN_POLICY}", stream=console.file)
+        if changes.get("TPOT_KIBANA_OBJECTS") == "overwrite":
+            # no question, as for a shorter retention: env set writes what it is told, the hint says what it does
+            say.hint(f"TPOT_KIBANA_OBJECTS=overwrite: {KIBANA_OVERWRITE_EVERY_START}", stream=console.file)
         if set(changes) - {"TPOT_ES_RETENTION"}:
             console.print(f"[{MAGENTA}]Restart T-Pot to apply it: tpot restart[/]")
         return 0
