@@ -194,6 +194,23 @@ class SchemaWidgetsTest(unittest.TestCase):
                 if rule.offer:
                     self.assertTrue(rule.services, "an offered key belongs to a service")
 
+    def test_kibana_objects_offers_every_mode_with_its_help(self):
+        rule = self.schema["TPOT_KIBANA_OBJECTS"]
+        self.assertEqual(rule.widget, "choice")
+        self.assertFalse(rule.custom)
+        self.assertEqual([c["value"] for c in rule.choices], rule.values)
+        for choice in rule.choices:
+            with self.subTest(mode=choice["value"]):
+                self.assertEqual(self.envschema.check(rule, {"TPOT_KIBANA_OBJECTS": choice["value"]}, {},
+                                                      check_host=False), [])
+                self.assertTrue(choice["help"].startswith(choice["value"] + ": "), choice["help"])
+                self.assertIn(" Pro: ", choice["help"])
+                self.assertIn(" Con: ", choice["help"])
+
+    def test_choice_help_is_optional(self):
+        rule = self.schema["TPOT_ES_RETENTION"]
+        self.assertEqual({c["help"] for c in rule.choices}, {""})
+
     def test_every_llm_key_is_offered(self):
         llm_keys = [k for k in self.schema if k.startswith(("BEELZEBUB_LLM_", "GALAH_LLM_"))]
         self.assertEqual(len(llm_keys), 11)
@@ -525,6 +542,25 @@ class SettingsHelpersTest(SettingsHelpersBase):
             await pilot.click("#reveal-OINKCODE")
             await pilot.pause(0.2)
             self.assertFalse(field.password)
+
+    async def test_the_help_of_the_chosen_mode_is_shown(self):
+        """TPOT_KIBANA_OBJECTS: the help of the key, then the pros and cons of the mode that is chosen."""
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            self.app.goto_setting("TPOT_KIBANA_OBJECTS")
+            await pilot.pause(0.3)
+
+            def shown():
+                return " ".join(str(self.app.query_one("#help-TPOT_KIBANA_OBJECTS").render()).split())
+            self.assertIn("after the first import", shown())
+            self.assertIn("update: missing T-Pot objects are created", shown())     # env.example: update
+            self.app.query_one("#set-TPOT_KIBANA_OBJECTS").value = "overwrite"
+            await pilot.pause(0.2)
+            self.assertIn("overwrite: every T-Pot object", shown())
+            self.assertNotIn("update: missing", shown())
+            self.assertIn("overwrite: every T-Pot object",
+                          " ".join(str(self.app.query_one("#help-below-TPOT_KIBANA_OBJECTS").render()).split()))
+            self.assertEqual(pane.changes(), {"TPOT_KIBANA_OBJECTS": "overwrite"})
 
     async def test_goto_setting_focuses_the_field(self):
         async with self.app.run_test(size=(150, 50)) as pilot:

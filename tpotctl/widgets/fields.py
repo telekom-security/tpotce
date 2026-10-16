@@ -92,10 +92,28 @@ class SettingRow(Vertical):
                     yield Label(Text(self.note, style=theme.color("ash")), classes="setting-absent")
             with Horizontal(classes="setting-control"):
                 yield from self.control()
-            yield Static(Text(rule.help), classes="help")
-        if rule.help:
-            yield Static(Text(rule.help), classes="help-below")
+            yield Static(self.help_text(self.value), id=f"help-{rule.key}", classes="help")
+        if rule.help or self.choice_helps():
+            yield Static(self.help_text(self.value), id=f"help-below-{rule.key}", classes="help-below")
         yield Static("", id=f"err-{rule.key}", classes="setting-problems")
+
+    def choice_helps(self) -> Dict[str, str]:
+        """The help of each choice that has one (the pros and cons of a mode, say)."""
+        if self.rule.widget != "choice":
+            return {}
+        return {c["value"]: c["help"] for c in self.rule.choices if c.get("help")}
+
+    def help_text(self, value: str) -> Text:
+        """The help of the key, then the help of the chosen value (or of the default for an empty one)."""
+        parts = [self.rule.help, self.choice_helps().get(value or self.rule.default, "")]
+        return Text("\n".join(p for p in parts if p))
+
+    def show_help(self, value: str) -> None:
+        if not self.choice_helps():
+            return
+        for name in (f"#help-{self.rule.key}", f"#help-below-{self.rule.key}"):
+            for widget in self.query(name):
+                widget.update(self.help_text(value))
 
     def control(self) -> ComposeResult:
         rule, value, key = self.rule, self.value, self.rule.key
@@ -167,6 +185,7 @@ class SettingRow(Vertical):
             if value == OTHER:
                 own.focus()
                 value = own.value
+        self.show_help(value)
         self.post_message(self.Changed(self.rule.key, value))
 
     def on_input_changed(self, event: Input.Changed) -> None:

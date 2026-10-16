@@ -115,6 +115,30 @@ class SchemaTest(unittest.TestCase):
                                                     'build daily weekly every_<duration>.')
         self.assertEqual(texts["WEB_USER"], "is not set or empty.")
 
+    def test_env_example_default_is_update(self):
+        """A new install gets update; an empty value is keep, which update.sh writes for an existing one."""
+        self.assertEqual(example_values()["TPOT_KIBANA_OBJECTS"], "update")
+        rule = self.schema["TPOT_KIBANA_OBJECTS"]
+        self.assertEqual(rule.values, ["keep", "add", "update", "overwrite"])
+        self.assertTrue(rule.optional)
+        self.assertEqual(rule.default, "keep")
+        self.assertEqual(rule.scope, "HIVE")
+        self.assertEqual(rule.services, ["kibana"])
+        order = list(example_values())
+        self.assertEqual(order.index("TPOT_KIBANA_OBJECTS"), order.index("TPOT_ES_RETENTION") + 1)
+
+    def test_kibana_objects_names_every_mode_with_its_pros_and_cons(self):
+        with open(ENV_EXAMPLE, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+        end = lines.index("TPOT_KIBANA_OBJECTS=update")
+        start = max(i for i in range(end) if lines[i].startswith("# T-Pot Kibana Objects"))
+        block = "\n".join(lines[start:end])
+        for mode in ("keep", "add", "update", "overwrite"):
+            self.assertRegex(block, rf"(?m)^#  {mode}: ")
+        self.assertEqual(block.count("Pro: "), 4)
+        self.assertEqual(block.count("Con: "), 4)
+        self.assertIn("Empty: the same as keep.", block)
+
     def test_compose_services(self):
         services = self.envschema.compose_services(os.path.join(REPO_DIR, "compose", "standard.yml"))
         self.assertIn("suricata", services)

@@ -1928,6 +1928,111 @@ class HandoverTest(Scripts):
         self.assertEqual(self.calls(), "")
 
 
+class KibanaObjectsMigrationTest(Scripts):
+    """TPOT_KIBANA_OBJECTS: env.example brings update for a new install. An existing install, whose .env
+    of the archive has no such key, keeps its Kibana objects (keep), after a run of its own and after the
+    handover of master's update.sh alike; a value it has stays."""
+
+    ITEM = ("info:TPOT_KIBANA_OBJECTS=keep: T-Pot leaves its Kibana objects as they are; choose add, update "
+            "or overwrite on the Elastic page of the T-Pot Manager (tpot elastic import shows what each would "
+            "do).")
+
+    def restore(self, archive_env, handover):
+        """fuRESTORE from an archive with this env, the .env of the checkout reset to env.example."""
+        shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.tpotce, "env.example"))
+        shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.tpotce, ".env"))
+        source = os.path.join(self.home, "archive")
+        os.makedirs(source, exist_ok=True)
+        with open(os.path.join(source, "env"), "w", encoding="utf-8") as out:
+            out.write(archive_env)
+        archive = os.path.join(self.home, "20261016101010_tpot_backup.tar")
+        with tarfile.open(archive, "w") as tar:
+            tar.add(os.path.join(source, "env"), arcname="env")
+        call = ('myCOMPOSEFILE="$HOME/tpotce/docker-compose.yml"\n'
+                + ('' if handover else f'myARCHIVE={shlex.quote(archive)}\n')
+                + 'fuRESTORE\nprintf "DONE %s\\n" "${myDONE[@]}"\n')
+        extra = {"TPOT_UPDATE_PREPARED": "1", "TPOT_UPDATE_ARCHIVE": archive} if handover else \
+                {"TPOT_UPDATE_PREPARED": None, "TPOT_UPDATE_ARCHIVE": None}
+        result = self.source_update(call, **extra)
+        with open(os.path.join(self.tpotce, ".env"), encoding="utf-8") as handle:
+            return handle.read(), result.stdout + result.stderr
+
+    OLD_ENV = "TPOT_TYPE=HIVE\nTPOT_ES_RETENTION=30\nTPOT_VERSION=24.04.1\n"
+
+    def test_migration_writes_keep_for_an_existing_install(self):
+        for handover in (False, True):
+            with self.subTest(handover=handover):
+                env, out = self.restore(self.OLD_ENV, handover)
+                self.assertIn("\nTPOT_KIBANA_OBJECTS=keep\n", env, out)
+                self.assertNotIn("TPOT_KIBANA_OBJECTS=update", env)
+                self.assertEqual(env.count("TPOT_KIBANA_OBJECTS="), 1)
+                # with the comments of env.example, so the four modes are named in .env as well
+                self.assertIn("# T-Pot Kibana Objects (HIVE only)", env)
+                self.assertIn(f"DONE {self.ITEM}\n", out)
+                self.assertIn("TPOT_KIBANA_OBJECTS=keep", out.split("DONE ")[0])
+
+    def test_migration_keeps_a_set_value(self):
+        for line in ("TPOT_KIBANA_OBJECTS=overwrite", "TPOT_KIBANA_OBJECTS=add", 'TPOT_KIBANA_OBJECTS: "update"',
+                     "TPOT_KIBANA_OBJECTS="):
+            for handover in (False, True):
+                with self.subTest(line=line, handover=handover):
+                    env, out = self.restore(self.OLD_ENV + line + "\n", handover)
+                    self.assertIn("\n" + line + "\n", env, out)
+                    self.assertEqual(env.count("TPOT_KIBANA_OBJECTS"), 1)
+                    self.assertNotIn("TPOT_KIBANA_OBJECTS=keep", out)
+    
+    def migrate(self, old_env, env_text="TPOT_TYPE=HIVE\nTPOT_KIBANA_OBJECTS=update\n", read_only=False):
+        env, old = os.path.join(self.home, ".env"), os.path.join(self.home, "old.env")
+        with open(env, "w", encoding="utf-8") as out:
+            out.write(env_text)
+        if read_only:
+            os.chmod(env, 0o444)
+        if old_env is not None:
+            with open(old, "w", encoding="utf-8") as out:
+                out.write(old_env)
+        result = self.source_update(f'fuMIGRATE_KIBANA_OBJECTS {shlex.quote(env)} {shlex.quote(old)}\n'
+                                    'printf "DONE %s\\n" ${myDONE[@]+"${myDONE[@]}"}\n')
+        with open(env, encoding="utf-8") as handle:
+            return handle.read(), result.stdout + result.stderr
+
+    def test_without_the_old_env_nothing_is_written(self):
+        env, out = self.migrate(None)
+        self.assertIn("TPOT_KIBANA_OBJECTS=update\n", env)
+        self.assertNotIn("TPOT_KIBANA_OBJECTS", out)
+
+    def test_a_env_without_the_key_stays_without_it(self):
+        # the merge did not add it: an empty or missing value is keep for tpotinit as well
+        env, out = self.migrate("TPOT_TYPE=HIVE\n", env_text="TPOT_TYPE=HIVE\n")
+        self.assertEqual(env, "TPOT_TYPE=HIVE\n")
+        self.assertNotIn("TPOT_KIBANA_OBJECTS", out)
+
+    def test_a_failed_write_says_what_stays(self):
+        env, out = self.migrate("TPOT_TYPE=HIVE\n", read_only=True)
+        self.assertIn("TPOT_KIBANA_OBJECTS=update\n", env)
+        self.assertNotIn(self.ITEM, out)
+        self.assertIn("DONE warn:TPOT_KIBANA_OBJECTS could not be set to keep in .env, it is update: on its next "
+                      "start T-Pot updates its unchanged Kibana objects, after an export "
+                      "(tpot env set TPOT_KIBANA_OBJECTS=keep leaves them as they are).", out)
+
+    def test_restore_calls_it_after_the_merge(self):
+        with open(UPDATE_SH, encoding="utf-8") as handle:
+            text = handle.read()
+        body = text[text.index("function fuRESTORE ()"):]
+        body = body[:body.index("\n}\n")]
+        self.assertLess(body.index("fuMERGE_ENV_KEYS "), body.index('fuMIGRATE_KIBANA_OBJECTS "$HOME/tpotce/.env" '
+                                                                    '"${myTMPDIR}/env"'))
+
+    def test_the_hint_at_the_end_names_the_setting_not_a_download(self):
+        with open(UPDATE_SH, encoding="utf-8") as handle:
+            text = handle.read()
+        body = text[text.index("function fuUPDATER ()"):]
+        body = body[:body.index("\n}\n")]
+        self.assertIn('fuUI_INFO "Some updates ship newer Kibana objects. With TPOT_KIBANA_OBJECTS=keep nothing '
+                      "changes; 'tpot elastic import --dry-run' shows what an update would bring.\"", body)
+        self.assertNotIn("kibana_export.ndjson.zip", text)
+        self.assertNotIn("Saved Objects > Import", text)
+
+
 # compose/customizer.py of the checkout for the tests of --adopt: every call goes into HOME/calls (with the
 # file it adopts in HOME/adopted_input), the report on stdout from HOME/adopt_report, the exit code from
 # HOME/adopt_rc (HOME/adopt_rc_dry for --dry-run, HOME/adopt_report_real for the report without it, the
