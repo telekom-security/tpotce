@@ -1127,7 +1127,9 @@ class FirstImportTest(unittest.TestCase):
         kibana = FakeKibana([self.own_config("9.4.0", 1), self.own_config("9.5.4"), self.own_config("9.10.1", 3)],
                             es=None)
         site, first, sent, out = self.fresh(kibana, self.OLD, everywhere, named)
-        self.assertEqual((first.done, first.missing, out), (True, [], ""))
+        self.assertEqual((first.done, first.missing), (True, []))
+        self.assertEqual(out, "# Kibana objects: the advanced settings go in as config:9.10.1, the version of "
+                              "Kibana's own settings object\n")
         self.assertEqual(sorted(sent), ["config-global:9.10.1", "config-global:tpot", "config:9.10.1", "dashboard:a"])
         self.assertEqual(sent["config:9.10.1"]["attributes"],               # 9.10.1 > 9.5.4 > 9.4.0
                          {"theme:darkMode": True, "defaultRoute": "/app/dashboards", "buildNum": 3})
@@ -1150,7 +1152,9 @@ class FirstImportTest(unittest.TestCase):
     def test_without_a_config_of_its_own_the_version_of_elasticsearch(self):
         kibana = FakeKibana(es="9.5.4")
         _, first, sent, out = self.fresh(kibana)
-        self.assertEqual((first.done, out), (True, ""))
+        self.assertEqual(first.done, True)
+        self.assertEqual(out, "# Kibana objects: the advanced settings go in as config:9.5.4, the version of "
+                              "Elasticsearch\n")
         self.assertEqual(sent["config:9.5.4"]["attributes"],
                          {"theme:darkMode": True, "defaultRoute": "/app/dashboards"})       # no buildNum
         es = [r for r in kibana.requests if ":64298" in r.full_url]
@@ -1565,7 +1569,8 @@ class CliTest(unittest.TestCase):
         ko.mark_pending(site.data, "fresh")
         rc, out, _ = site.cli("first", "--data", site.data, "--objects", site.objects,
                               "--exports", ko.auto_exports_dir(site.data), opener=FakeKibana())
-        self.assertEqual((rc, out), (0, "# Kibana objects: first import, 2 imported\n"))
+        self.assertEqual((rc, out), (0, "# Kibana objects: the advanced settings go in as config:9.5.4, the version "
+                                         "of Elasticsearch\n# Kibana objects: first import, 2 imported\n"))
         self.assertFalse(os.path.exists(ko.pending_path(site.data)))
 
     def test_first_without_pending_refuses_and_names_apply(self):
@@ -2282,7 +2287,8 @@ class MarkFreshTest(unittest.TestCase):
         # the next start imports the whole file, the advanced settings too
         rc, out, _ = site.cli("apply", "--mode", "keep", "--data", site.data, "--objects", site.objects,
                               "--exports", ko.auto_exports_dir(site.data), opener=kibana)
-        self.assertEqual((rc, out), (0, "# Kibana objects: first import, 2 imported\n"))
+        self.assertEqual((rc, out), (0, "# Kibana objects: the advanced settings go in as config:9.5.4, the version "
+                                         "of Elasticsearch\n# Kibana objects: first import, 2 imported\n"))
         self.assertIn("config:9.5.4", kibana.store)
 
     def test_mark_fresh_follows_no_link(self):
@@ -2514,7 +2520,10 @@ class WiringTest(unittest.TestCase):
         self.assertTrue(os.access(JOB, os.X_OK))
 
     def test_tpotinit_reaches_kibana_in_every_edition(self):
-        import yaml
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("PyYAML is not installed")
         for name in sorted(os.listdir(os.path.join(REPO_DIR, "compose"))):
             if not name.endswith(".yml") or name == "tpot_services.yml":
                 continue

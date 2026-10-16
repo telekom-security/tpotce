@@ -890,8 +890,13 @@ def running_version(installed: List[dict], shipped_ids: Set[str], es_url: str = 
         best = max(own, key=lambda o: _version_key(o["id"]))
         attributes = best.get("attributes") if isinstance(best.get("attributes"), dict) else {}
         build = attributes.get("buildNum")
+        print(f"{LOG}the advanced settings go in as config:{best['id']}, the version of Kibana's own settings "
+              "object", flush=True)
         return best["id"], build if type(build) is int else None
-    return es_version(es_url, opener), None
+    number = es_version(es_url, opener)
+    if number is not None:
+        print(f"{LOG}the advanced settings go in as config:{number}, the version of Elasticsearch", flush=True)
+    return number, None
 
 
 def settings_for(settings: List[dict], number: Optional[str], build: Optional[int]) -> List[dict]:
