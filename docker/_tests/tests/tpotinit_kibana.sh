@@ -175,12 +175,19 @@ check() {
   if eval "$2"; then echo "ok   $1"; else echo "FAIL $1: $3"; myFAILED=1; fi
 }
 
-# the state in the data volume: pending (or "none"), whether record.json is there, files not of tpot
+# the state in the data volume: pending (or "none"), whether record.json is there, then every file or
+# folder of /data/kibana_objects that does not belong to the owner of /data
 state() {
   in_tpotinit --entrypoint sh "${IMAGE}" -c \
     'cat /data/kibana_objects/pending 2>/dev/null || echo none
      [ -f /data/kibana_objects/record.json ] && echo record || echo no-record
-     find /data/kibana_objects ! -user 2000 -print 2>/dev/null; find /data/kibana_objects ! -group 2000 -print 2>/dev/null'
+     u="$(stat -c %u /data)"; g="$(stat -c %g /data)"
+     find /data/kibana_objects \( ! -user "${u}" -o ! -group "${g}" \) -exec stat -c "%n %u:%g" {} +'
+}
+
+# $1 = uid:gid for /data, as tpotinit sets it (update_permissions) before the job
+own_data() {
+  in_tpotinit --entrypoint chown "${IMAGE}" "$1" /data >/dev/null
 }
 
 main() {
@@ -203,11 +210,14 @@ main() {
   test_info "Checking the Kibana objects job of ${IMAGE} with the files of this checkout"
   local out st
 
-  # the first run: pending before /data/uuid, as entrypoint.sh writes it
+  # the first run: pending before /data/uuid, as entrypoint.sh writes it; /data is tpot's
+  own_data 2000:2000
   out="$(in_tpotinit --entrypoint python3 "${IMAGE}" /opt/tpot/bin/kibana_objects.py mark-fresh --data /data 2>&1)" || true
   st="$(state)"
   check "mark-fresh writes a fresh pending" \
     '[[ "$(head -1 <<<"${st}")" == "{\"attempt\": 0, \"reason\": \"fresh\", \"refused\": [], \"version\": 1}" ]]' "${out} ${st}"
+  check "  ... its folder and file belong to the owner of /data (2000:2000)" \
+    '[[ "$(tail -n +2 <<<"${st}")" == no-record ]]' "${st}"
 
   # start 1: Kibana answers late, then refuses the import: still pending, the attempt counted
   start_stub 2 1
@@ -223,7 +233,7 @@ main() {
   st="$(state)"
   check "the next start imports and ends the pending first import" \
     '[[ "${myRC}" -eq 0 && "${out}" == *"first import, attempt 2, "*" imported"* && "$(head -1 <<<"${st}")" == none ]]' "rc=${myRC} ${out} ${st}"
-  check "  ... the record is written and every file is tpot:tpot" \
+  check "  ... the record is written and every file belongs to the owner of /data (2000:2000)" \
     '[[ "$(tail -n +2 <<<"${st}")" == record ]]' "${st}"
   check "  ... the job reached Kibana by its service name (kibana:5601)" \
     '[[ "$(stub_log | grep -c "^POST /api/saved_objects/_import 200")" -eq 1 ]]' "$(stub_log)"
@@ -243,11 +253,15 @@ main() {
 
   # a fresh install whose Kibana answers at once: the whole file, the advanced settings too
   in_tpotinit --entrypoint sh "${IMAGE}" -c 'rm -rf /data/kibana_objects' >/dev/null 2>&1
+  own_data 1234:4321
   in_tpotinit --entrypoint python3 "${IMAGE}" /opt/tpot/bin/kibana_objects.py mark-fresh --data /data >/dev/null 2>&1
   start_stub 0 0
   run_job
   check "a fresh first import takes the advanced settings along" \
     '[[ "${myRC}" -eq 0 && "${out}" == *"first import, "*" imported"* && "$(stub_configs)" -ge 1 ]]' "rc=${myRC} ${out}"
+  st="$(state)"
+  check "  ... its files belong to the owner of /data (1234:4321) right after the job" \
+    '[[ "$(tail -n +2 <<<"${st}")" == record ]]' "${st}"
 
   # TERM while the job waits for Kibana: it ends at once
   start_stub 100000 0

@@ -400,14 +400,28 @@ def _blocking(handle: int) -> None:
         fcntl.fcntl(handle, fcntl.F_SETFL, fcntl.fcntl(handle, fcntl.F_GETFL) & ~NONBLOCK)
 
 
+def _owner_of(handle: int) -> Optional[Tuple[int, int]]:
+    """uid and gid of the data folder held by `handle` when this runs as root (tpotinit): what
+    it makes below that folder gets them, by its descriptor, so the T-Pot Manager (the group
+    tpot) can use it at once. None for any other user, who owns what it makes anyway."""
+    if not hasattr(os, "geteuid") or os.geteuid() != 0:
+        return None
+    info = os.fstat(handle)
+    return info.st_uid, info.st_gid
+
+
 class Folder:
     """A folder held by its descriptor: every name in it is opened, written, listed and
     removed relative to that descriptor, so a folder swapped for a link after it was opened
     changes nothing. Links and special files in it are refused, never followed, never
-    waited on."""
+    waited on. `owner` (uid, gid), when set, is given to every folder and file it makes."""
 
-    def __init__(self, handle: int, path: str):
-        self.handle, self.path = handle, path
+    def __init__(self, handle: int, path: str, owner: Optional[Tuple[int, int]] = None):
+        self.handle, self.path, self.owner = handle, path, owner
+
+    def _own(self, handle: int) -> None:
+        if self.owner is not None:
+            os.fchown(handle, *self.owner)
 
     def close(self) -> None:
         if self.handle is not None:
@@ -440,7 +454,12 @@ class Folder:
             if create:
                 raise
             return None
-        folder = cls(handle, base)
+        try:
+            owner = _owner_of(handle)
+        except BaseException:
+            os.close(handle)
+            raise
+        folder = cls(handle, base, owner)
         try:
             for part in parts:
                 child = folder.sub(part, create, mode)
@@ -515,10 +534,11 @@ class Folder:
                 raise _not_own(self.name(name), "folder")
             if created:
                 os.fchmod(handle, mode)
+                self._own(handle)
         except BaseException:
             os.close(handle)
             raise
-        return Folder(handle, self.name(name))
+        return Folder(handle, self.name(name), self.owner)
 
     def read(self, name: str) -> Optional[str]:
         """The text of the regular file `name`, None when it is missing."""
@@ -550,6 +570,7 @@ class Folder:
         handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW, 0o600, dir_fd=self.handle)
         try:
             os.fchmod(handle, mode)
+            self._own(handle)
             out = os.fdopen(handle, "w", encoding="utf-8", newline="\n")
         except BaseException:
             os.close(handle)
@@ -590,9 +611,14 @@ class Folder:
         """The lock file, made 0660 whatever the umask; one this user may not write (tpotinit
         made it) is opened read-only, which is enough for flock. A link, a special file or a
         file with other names (a hard link) is refused, its mode left alone."""
-        writable = True
+        writable, created = True, False
         try:
-            handle = os.open(name, os.O_RDWR | os.O_CREAT | NOFOLLOW | NONBLOCK, 0o660, dir_fd=self.handle)
+            try:
+                handle = os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | NOFOLLOW | NONBLOCK, 0o660,
+                                 dir_fd=self.handle)
+                created = True
+            except FileExistsError:
+                handle = os.open(name, os.O_RDWR | NOFOLLOW | NONBLOCK, dir_fd=self.handle)
         except OSError as error:
             info = self.lstat(name)
             if error.errno == errno.ELOOP or (info is not None and stat.S_ISLNK(info.st_mode)):
@@ -607,6 +633,8 @@ class Folder:
                 raise _not_own(self.name(name), "regular file")
             if info.st_nlink != 1:
                 raise KibanaError(f"{self.name(name)} has another name (a hard link); T-Pot leaves it as it is")
+            if created:
+                self._own(handle)
             if writable:
                 try:
                     os.fchmod(handle, 0o660)

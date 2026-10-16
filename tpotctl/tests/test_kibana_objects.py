@@ -2066,6 +2066,71 @@ class MarkFreshTest(unittest.TestCase):
                 self.assertEqual(os.listdir(elsewhere), [])
 
 
+class OwnerTest(unittest.TestCase):
+    """As root (tpotinit) every folder and file the module makes in <data>/kibana_objects gets the
+    owner of <data>, by its descriptor (fchown, never a chown by path); as anyone else nothing."""
+
+    def run_as(self, euid):
+        site = Site(self, [dash("a"), dash("b")])
+        data = os.stat(site.data)
+        calls = []
+
+        def fchown(handle, uid, gid):
+            info = os.fstat(handle)
+            calls.append((info.st_ino, stat.S_ISDIR(info.st_mode), uid, gid))
+
+        def by_path(*args, **kwargs):
+            raise AssertionError(f"chown by path: {args}")
+        kibana = FakeKibana([as_in_kibana(dash("own"))])
+        with unittest.mock.patch.object(ko.os, "geteuid", return_value=euid, create=True), \
+                unittest.mock.patch.object(ko.os, "fchown", fchown, create=True), \
+                unittest.mock.patch.object(ko.os, "chown", by_path), \
+                unittest.mock.patch.object(ko.os, "lchown", by_path, create=True):
+            rc, _, _ = site.cli("mark-fresh", "--data", site.data, opener=kibana)
+            self.assertEqual(rc, 0)
+            pending_ino = os.lstat(ko.pending_path(site.data)).st_ino
+            rc, out, _ = site.cli("apply", "--mode", "update", "--data", site.data, "--objects", site.objects,
+                                  "--exports", ko.auto_exports_dir(site.data), opener=kibana)
+            self.assertEqual(rc, 0, out)
+        made = {}
+        state = ko.state_dir(site.data)
+        for folder, dirs, files in os.walk(state):
+            for name in [folder] + [os.path.join(folder, f) for f in files]:
+                info = os.lstat(name)
+                made[os.path.relpath(name, state)] = (info.st_ino, stat.S_ISDIR(info.st_mode))
+        return site, data, calls, made, pending_ino
+
+    def test_as_root_everything_made_gets_the_owner_of_the_data_folder(self):
+        site, data, calls, made, pending_ino = self.run_as(0)
+        self.assertEqual(sorted(made), sorted([".", "exports", "lock", "record.json",
+                                               os.path.join("exports", os.listdir(ko.auto_exports_dir(site.data))[0])]))
+        self.assertEqual({(uid, gid) for _, _, uid, gid in calls}, {(data.st_uid, data.st_gid)})
+        owned = {(ino, is_dir) for ino, is_dir, _, _ in calls}
+        for name, what in made.items():
+            with self.subTest(name=name):
+                self.assertIn(what, owned)                 # the folders, the lock, the record and the export
+        self.assertIn((pending_ino, False), owned)         # pending too, before it went
+        self.assertEqual(sum(1 for _, is_dir, _, _ in calls if is_dir), 2)   # the two folders, once each
+
+    def test_as_another_user_nothing_is_chowned(self):
+        _, _, calls, made, _ = self.run_as(1000)
+        self.assertEqual(calls, [])
+        self.assertIn("record.json", made)
+
+    def test_what_is_there_already_keeps_its_owner(self):
+        site = Site(self, [dash("a")])
+        os.makedirs(ko.auto_exports_dir(site.data))
+        open(ko.lock_path(site.data), "w").close()
+        calls = []
+        with unittest.mock.patch.object(ko.os, "geteuid", return_value=0, create=True), \
+                unittest.mock.patch.object(ko.os, "fchown", lambda h, u, g: calls.append(os.fstat(h).st_ino),
+                                           create=True):
+            with ko.import_lock(site.data):
+                with ko._export_folder(ko.auto_exports_dir(site.data), ko.AUTO_PREFIX, create=True):
+                    pass
+        self.assertEqual(calls, [])
+
+
 class WiringTest(unittest.TestCase):
     """How tpotinit starts the Kibana objects: entrypoint.sh, kibana_objects.sh and the Dockerfile."""
 
@@ -2153,7 +2218,7 @@ class WiringTest(unittest.TestCase):
 
 # curl for kibana_objects.sh: /api/status fails LATE times (counted in $STATE), then answers; every call
 # in $CALLS. python3 writes its arguments into $CALLS (its PID into $CALLS.pid) and becomes a sleep of
-# PY_SLEEP seconds, its exit code is PY_RC. chown only records its arguments.
+# PY_SLEEP seconds, its exit code is PY_RC. chown and find would record a call: the job makes none.
 JOB_CURL = """#!/bin/sh
 for a in "$@"; do last="$a"; done
 echo "curl $last" >> "$CALLS"
@@ -2169,8 +2234,8 @@ echo "# Kibana objects: stub"
 [ -z "$PY_SLEEP" ] || exec sleep "$PY_SLEEP"
 exit "${PY_RC:-0}"
 """
-JOB_CHOWN = """#!/bin/sh
-echo "chown $*" >> "$CALLS"
+JOB_RECORD = """#!/bin/sh
+echo "$(basename "$0") $*" >> "$CALLS"
 """
 
 
@@ -2183,7 +2248,8 @@ class JobTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
         self.bin = os.path.join(self.tmp, "bin")
         os.makedirs(self.bin)
-        for name, text in (("curl", JOB_CURL), ("python3", JOB_PYTHON), ("chown", JOB_CHOWN)):
+        for name, text in (("curl", JOB_CURL), ("python3", JOB_PYTHON), ("chown", JOB_RECORD),
+                           ("chmod", JOB_RECORD), ("find", JOB_RECORD)):
             with open(os.path.join(self.bin, name), "w", encoding="utf-8") as out:
                 out.write(text)
             os.chmod(os.path.join(self.bin, name), 0o755)
@@ -2271,25 +2337,13 @@ class JobTest(unittest.TestCase):
                 rc, out, _ = self.source("fuKO_URL", COMPOSE=compose, TPOT_KIBANA_URL=url)
                 self.assertEqual((rc, out), (0, want + "\n"))
 
-    def test_the_files_of_the_run_go_to_tpot_and_no_link_is_followed(self):
-        data = os.path.join(self.tmp, "data")
-        state = os.path.join(data, "kibana_objects")
-        os.makedirs(os.path.join(state, "exports"))
-        open(os.path.join(state, "record.json"), "w").close()
-        open(os.path.join(state, "exports", "auto_1.ndjson"), "w").close()
-        os.symlink(self.tmp, os.path.join(state, "link"))
-        rc, _, _ = self.source(f'myKO_DATA="{data}"\nfuKO_OWN')
-        self.assertEqual(rc, 0)
-        owned = sorted(arg for line in self.lines() for arg in line.split()[3:])
-        self.assertTrue(all(line.startswith("chown -h tpot:tpot ") for line in self.lines()), self.lines())
-        self.assertEqual(owned, sorted([state, os.path.join(state, "exports"), os.path.join(state, "record.json"),
-                                        os.path.join(state, "exports", "auto_1.ndjson")]))
-        # a link in the place of the folder: nothing is touched
-        shutil.rmtree(state)
-        os.symlink(self.tmp, state)
-        open(self.calls, "w").close()
-        rc, _, _ = self.source(f'myKO_DATA="{data}"\nfuKO_OWN')
-        self.assertEqual((rc, self.lines()), (0, []))
+    def test_the_job_leaves_the_owners_to_the_module(self):
+        """No chown, chmod or find of its own: the module gives what it makes the owner of the data folder."""
+        rc, _, _ = self.source("fuKO_MAIN", TPOT_KIBANA_OBJECTS="update")
+        self.assertEqual((rc, self.lines()), (0, ["curl http://kibana.test/api/status",
+                                                  self.APPLY.format(mode="update")]))
+        code = "\n".join(WiringTest.code(read("docker", "tpotinit", "dist", "bin", "kibana_objects.sh")))
+        self.assertNotRegex(code, r"\b(chown|chmod|find)\b")
 
     def stop(self, mark, **env):
         """Starts the job, sends TERM once `mark` is in the calls; its exit code, how long it took and its output."""

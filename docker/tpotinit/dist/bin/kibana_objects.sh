@@ -58,15 +58,6 @@ function fuKO_WAIT_FOR () {
   done
 }
 
-# the files of <data>/kibana_objects that the run made as root go to tpot:tpot, so the T-Pot Manager
-# (the group tpot) can use them before the next start; a link is never followed, its target never touched
-function fuKO_OWN () {
-  local myDIR="${myKO_DATA}/kibana_objects"
-  [[ -d "${myDIR}" && ! -L "${myDIR}" ]] || return 0
-  find "${myDIR}" -xdev ! -type l -exec chown -h tpot:tpot {} + 2>/dev/null
-  return 0
-}
-
 function fuKO_MAIN () {
   local myMODE="${TPOT_KIBANA_OBJECTS:-keep}" myURL myWAIT myRC=0
   # the values of env.schema.yml: tpotinit validates .env before it starts this, a value that gets here
@@ -83,13 +74,13 @@ function fuKO_MAIN () {
       echo "# Warning: Kibana did not answer at ${myURL} within ${myWAIT} s, the Kibana objects are checked on the next start."
       return 0
   fi
-  # in the background as well: a SIGTERM ends the run at once, its files are written whole or not at all
+  # in the background as well: a SIGTERM ends the run at once, its files are written whole or not at all.
+  # What it makes in <data>/kibana_objects gets the owner of <data> from the module (as root), at once.
   python3 "${myKO_PY}" apply --mode "${myMODE}" --data "${myKO_DATA}" --objects "${myKO_OBJECTS}" \
           --exports "${myKO_DATA}/kibana_objects/exports" --kibana "${myURL}" &
   myKO_CHILD=$!
   wait "${myKO_CHILD}" || myRC=$?
   myKO_CHILD=""
-  fuKO_OWN
   return "${myRC}"
 }
 
