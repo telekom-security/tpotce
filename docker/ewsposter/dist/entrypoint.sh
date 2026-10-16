@@ -7,8 +7,9 @@
 # One normal pass first sends the lines from before the hold, then the passes are idle: ews.py
 # builds, spools and sends no alert, its indexes move on, so the lines of the check are never
 # sent, not even later. /data/ews/hold.ack says that ewsposter holds: it is written after each
-# idle round that ended cleanly (every pass with rc 0) and removed when the hold is over. Normal
-# passes come back only after a clean idle round without the marker; a hold that is on when
+# idle round that ended cleanly (every pass with rc 0, no module behind) and removed when the hold
+# is over. Normal passes come back only after such a round without the marker; until then the
+# hold is stuck, which /data/ews/hold.state says (normal, held or stuck). A hold that is on when
 # ewsposter starts goes on with idle passes at once. The marker only counts as a regular file
 # (no link) younger than 30 minutes, so a check that was cut off never keeps ewsposter quiet for
 # good.
@@ -21,6 +22,10 @@ myPYTHON="/usr/bin/python3"
 myEWS="/opt/ewsposter"
 myHOLD="/data/ews/hold"
 myHOLD_ACK="/data/ews/hold.ack"
+# the state of the hold for the Manager: one line "<normal|held|stuck> <epoch seconds of the round>"
+myHOLD_STATE="/data/ews/hold.state"
+# how often a hold that cannot end says so as an error (seconds)
+mySTUCK_REPORT=600
 # the marker counts while it is younger than this (seconds); one dated more than a minute ahead counts neither
 myHOLD_MAX_AGE=1800
 # the pause between the passes while the hold is on (seconds)
@@ -41,6 +46,8 @@ myIDLE_MODULE_TEXT=" => Starting "
 myIDLE_RETRIES=3
 myIDLE_RETRY_PAUSE=5
 myCHILD=""
+mySTUCK_SINCE=""
+mySTUCK_SAID=0
 
 # On INT (docker stop) or TERM the running pass or pause ends at once, and so does ewsposter
 fuSTOP () {
@@ -153,7 +160,8 @@ fuIDLE_PASS () {
 # Idle passes ([MODULE] as for fuIDLE_PASS) until no module stopped at the limit, at most
 # myIDLE_PASSES in a row; a failed pass is tried again up to myIDLE_RETRIES times. A module that
 # fails on a line has counted that line already, so a new try goes on behind it. 0 when the last
-# try of every pass ended with rc 0.
+# try of every pass ended with rc 0 and no module is behind; 2 when they ended with rc 0 but the
+# last pass still stopped at the limit (clean, but behind); 1 when a pass failed.
 fuIDLE_PASSES () {
   local myPASS=1
   local myTRY=0
@@ -176,12 +184,18 @@ fuIDLE_PASSES () {
       fi
       myTRY=0
       grep -qF -- "${myIDLE_LIMIT_TEXT}" "${myIDLE_CFG}/pass.log" || return 0
-      [ ${myPASS} -lt ${myIDLE_PASSES} ] || return 0
+      if [ ${myPASS} -ge ${myIDLE_PASSES} ];
+        then
+          echo " => [WARN] After ${myIDLE_PASSES} idle passes ${1:+of $1 }a module is still behind."
+          return 2
+      fi
       myPASS=$(( myPASS + 1 ))
   done
 }
 
-# The modules the idle config has on (the key named as its section is true), one per line
+# The modules ews.py runs with the idle config, one per line: as readMYcfg of ews.py, every
+# section with a key of its own name that is not empty (a module skips itself on "false"),
+# without the four output sections
 fuIDLE_MODULES () {
   awk '
     /^\[/ {
@@ -193,7 +207,7 @@ fuIDLE_MODULES () {
       value = tolower(substr($0, RLENGTH + 1))
       gsub(/[ \t]+$/, "", key)
       gsub(/^[ \t]+|[ \t]+$/, "", value)
-      if (key == section && value == "true") print section
+      if (key == section && value != "" && section !~ /^(ews|hpfeed|ewsjson|influxdb)$/) print section
     }
   ' "${myIDLE_CFG}/ews.cfg"
 }
@@ -201,16 +215,21 @@ fuIDLE_MODULES () {
 # One idle round: all modules in one ews.py; when that still fails, module by module (-m), so a
 # module that keeps failing does not keep the others from moving on. When no module was started
 # (the start of ews.py failed: config, lock, the lookup of the address), one by one would fail the
-# same way and is left out. 0 only when the round ended cleanly.
+# same way and is left out. 0 only when the round ended cleanly and no module is behind, 2 when
+# it ended cleanly but a module is behind (the cap of myIDLE_PASSES), 1 when it failed.
 fuIDLE () {
   local myMODULE=""
   local myFAILED=""
+  local myBEHIND=""
+  local myRC=0
   if ! fuIDLE_CONFIG;
     then
       echo " => [WARN] The config of the idle passes could not be written to ${myIDLE_CFG}."
       return 1
   fi
-  fuIDLE_PASSES && return 0
+  fuIDLE_PASSES
+  myRC=$?
+  [ ${myRC} -eq 1 ] || return ${myRC}
   if ! grep -qF -- "${myIDLE_MODULE_TEXT}" "${myIDLE_CFG}/pass.log" 2>/dev/null;
     then
       return 1
@@ -218,12 +237,20 @@ fuIDLE () {
   echo " => [WARN] The idle round failed, now module by module."
   for myMODULE in $(fuIDLE_MODULES);
     do
-      fuIDLE_PASSES "${myMODULE}" || myFAILED="${myFAILED} ${myMODULE}"
+      fuIDLE_PASSES "${myMODULE}"
+      case $? in
+        1) myFAILED="${myFAILED} ${myMODULE}" ;;
+        2) myBEHIND="${myBEHIND} ${myMODULE}" ;;
+      esac
   done
   if [ -n "${myFAILED}" ];
     then
       echo " => [WARN] Idle passes failed for:${myFAILED}."
       return 1
+  fi
+  if [ -n "${myBEHIND}" ];
+    then
+      return 2
   fi
   return 0
 }
@@ -235,6 +262,34 @@ fuHOLD_ACK () {
       rm -f "${myHOLD_ACK}"
   fi
   touch "${myHOLD_ACK}" 2>/dev/null || echo " => [WARN] ${myHOLD_ACK} could not be written."
+}
+
+# hold.state: "$1 <epoch seconds>", a new file renamed into place (a link of that name is
+# replaced, never followed)
+fuHOLD_STATE () {
+  local myTMP="${myHOLD_STATE}.$$"
+  rm -f "${myTMP}"
+  if ! { echo "$1 $(date +%s)" > "${myTMP}" && mv -f "${myTMP}" "${myHOLD_STATE}"; } 2>/dev/null;
+    then
+      rm -f "${myTMP}" 2>/dev/null
+      echo " => [WARN] ${myHOLD_STATE} could not be written."
+  fi
+}
+
+# The hold is over but cannot end: an error when that begins, then every mySTUCK_REPORT seconds
+fuSTUCK () {
+  local myNOW=""
+  myNOW=$(date +%s)
+  if [ -z "${mySTUCK_SINCE}" ];
+    then
+      mySTUCK_SINCE=${myNOW}
+      mySTUCK_SAID=0
+  fi
+  if [ $(( myNOW - mySTUCK_SAID )) -ge ${mySTUCK_REPORT} ];
+    then
+      echo " => [ERROR] The hold is over since $(date -d "@${mySTUCK_SINCE}" 2>/dev/null || echo "${mySTUCK_SINCE}"), but its idle rounds do not end cleanly or a module is still behind: ewsposter sends nothing until one does, or until the container starts again."
+      mySTUCK_SAID=${myNOW}
+  fi
 }
 
 # One normal pass
@@ -250,10 +305,12 @@ fuPASS () {
 }
 
 # One round of the loop. While the hold is on: idle passes, and hold.ack once they ended
-# cleanly (the first round of a hold starts with a normal pass). When it is over: hold.ack
-# removed, one more idle round, and only when that ended cleanly the normal pass; until then the
-# rounds stay idle. Sets myINTERVAL, the pause after the round.
+# cleanly with no module behind (the first round of a hold starts with a normal pass). When it is
+# over: hold.ack removed, one more idle round, and only when that ended cleanly with no module
+# behind the normal pass; until then the rounds stay idle (stuck). Sets myINTERVAL, the pause
+# after the round, and writes hold.state.
 fuROUND () {
+  local myRC=0
   myINTERVAL=${myHOLD_INTERVAL}
   if fuHOLD_ON;
     then
@@ -265,27 +322,35 @@ fuROUND () {
           fuPASS
           myHELD="yes"
       fi
-      if fuIDLE;
-        then
-          fuHOLD_ACK
-        else
-          echo " => [WARN] No hold.ack: the idle round did not end cleanly, it runs again in ${myHOLD_INTERVAL} s."
-      fi
+      fuIDLE
+      myRC=$?
+      case ${myRC} in
+        0) fuHOLD_ACK ;;
+        2) echo " => [WARN] No hold.ack yet: a module is still behind, the idle rounds go on in ${myHOLD_INTERVAL} s." ;;
+        *) echo " => [WARN] No hold.ack: the idle round did not end cleanly, it runs again in ${myHOLD_INTERVAL} s." ;;
+      esac
+      fuHOLD_STATE held
       return 0
   fi
   if [ -n "${myHELD}" ];
     then
       rm -f "${myHOLD_ACK}"
-      if ! fuIDLE;
+      fuIDLE
+      myRC=$?
+      if [ ${myRC} -ne 0 ];
         then
-          echo " => [WARN] The hold is over, but its idle round did not end cleanly: idle again in ${myHOLD_INTERVAL} s, nothing is sent."
+          echo " => [WARN] The hold is over, but its idle round did not end cleanly or a module is still behind: idle again in ${myHOLD_INTERVAL} s, nothing is sent."
+          fuSTUCK
+          fuHOLD_STATE stuck
           return 0
       fi
       myHELD=""
+      mySTUCK_SINCE=""
       echo " => The hold is over, ewsposter sends again."
   fi
   fuPASS
   myINTERVAL=${mySLEEP}
+  fuHOLD_STATE normal
 }
 
 # The state at the start: an ack of an earlier run would tell a new check that ewsposter holds
@@ -293,11 +358,15 @@ fuROUND () {
 # on with idle passes at once, without the normal pass a new hold starts with
 fuSTART () {
   myHELD=""
+  mySTUCK_SINCE=""
   rm -f "${myHOLD_ACK}"
   if fuHOLD_ON;
     then
       echo " => The hold for the check of T-Pot is on at the start: idle passes only, nothing is sent."
       myHELD="yes"
+      fuHOLD_STATE held
+    else
+      fuHOLD_STATE normal
   fi
 }
 

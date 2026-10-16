@@ -94,6 +94,13 @@ class Sandbox:
     def ack(self):
         return self.data / "hold.ack"
 
+    @property
+    def state(self):
+        return self.data / "hold.state"
+
+    def state_word(self):
+        return self.state.read_text().split()[0] if self.state.exists() else None
+
     def calls(self):
         path = self.base / "calls"
         return path.read_text().splitlines() if path.exists() else []
@@ -106,6 +113,7 @@ class Sandbox:
             f'myEWS="{self.ews}"\n'
             f'myHOLD="{self.hold}"\n'
             f'myHOLD_ACK="{self.ack}"\n'
+            f'myHOLD_STATE="{self.state}"\n'
             f'myIDLE_CFG="{self.idle}"\n'
             'mySLEEP=42\n'
             'myHELD=""\n'
@@ -250,11 +258,12 @@ class PassCountTest(EntrypointCase):
 
     def test_passes(self):
         for shell in SHELLS:
-            for limited, passes in ((0, 1), (3, 4), (100, 20)):
+            for limited, passes, rc in ((0, 1, 0), (3, 4, 0), (19, 20, 0), (100, 20, 2)):
                 with self.subTest(shell=shell, limited=limited):
                     box = self.sandbox(f"{Path(shell).name}-{limited}")
                     result = box.run(shell, "fuIDLE", STUB_LIMITED=limited)
-                    self.assertEqual(result.returncode, 0, result.stderr)
+                    # 2: every pass ended with rc 0, but a module is still behind at the cap
+                    self.assertEqual(result.returncode, rc, result.stderr)
                     calls = box.calls()
                     self.assertEqual(len(calls), passes)
                     self.assertEqual(set(calls),
@@ -299,7 +308,7 @@ class PassCountTest(EntrypointCase):
         config.read(EWS_CFG)
         modules = sorted(section.lower() for section in config.sections()
                          if config.has_option(section, section.lower()) and section not in OFF
-                         and config.get(section, section.lower()).lower() == "true")
+                         and config.get(section, section.lower()) != "")
         self.assertIn("cowrie", modules)
         for shell in SHELLS:
             with self.subTest(shell=shell):
@@ -335,10 +344,15 @@ class PassCountTest(EntrypointCase):
                 box = self.sandbox(Path(shell).name)
                 box.idle.mkdir()
                 (box.idle / "ews.cfg").write_text(
-                    "[EWS]\news = false\n[COWRIE]\ncowrie = true\nlogfile = x\n"
-                    "[WORDPOT]\nwordpot= TRUE\n[GLUTTON]\nglutton = false\n# glutton = true\n")
+                    "[MAIN]\nhomedir = /opt/ewsposter/\n[EWS]\news = false\n[HPFEED]\nhpfeed = %(X)s\n"
+                    "[EWSJSON]\njson = false\n[INFLUXDB]\ninfluxdb = false\n"
+                    "[COWRIE]\ncowrie = true\nlogfile = x\n[WORDPOT]\nwordpot= TRUE\n"
+                    "[GLUTTON]\nglutton = false\n# glutton = true\n[GOPOT]\ngopot = %(GOPOT)s\n"
+                    "[HELLPOT]\nhellpot =\n")
                 result = box.run(shell, "fuIDLE_MODULES")
-                self.assertEqual(result.stdout.split(), ["cowrie", "wordpot"])
+                # as readMYcfg of ews.py: a key of the section's name that is not empty; the
+                # module itself skips on "false"
+                self.assertEqual(result.stdout.split(), ["cowrie", "wordpot", "glutton", "gopot"])
 
     def test_texts_of_the_pinned_ewsposter(self):
         """The texts the rounds read from ews.py are those of the pinned commit; a bump of
@@ -408,6 +422,78 @@ class RoundTest(EntrypointCase):
                 self.assertIn("no-ack-after-3", result.stdout)
                 # the first round of the hold starts with a normal pass
                 self.assertEqual(self.kinds(box), ["normal", "idle", "idle", "idle", "normal", "normal"])
+
+    def test_cap_during_the_hold_writes_no_ack_until_caught_up(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.hold.write_text("")
+                script = (
+                    f'myHELD=yes; fuROUND; [ -e "{box.ack}" ] || echo no-ack-after-cap\n'
+                    'fuROUND\n'
+                )
+                result = box.run(shell, script, STUB_LIMITED=20)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("no-ack-after-cap", result.stdout)
+                self.assertIn("still behind", result.stdout)
+                self.assertEqual(self.kinds(box), ["idle"] * 21)
+                self.assertTrue(box.ack.is_file())
+                self.assertEqual(box.state_word(), "held")
+
+    def test_cap_at_the_end_of_a_hold_keeps_it_idle(self):
+        """A module still behind when the marker is gone: no normal pass, stuck, an error; the
+        next round catches up and the normal pass follows."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                script = (
+                    'myHELD=yes; fuROUND; echo "interval=$myINTERVAL held=$myHELD"\n'
+                    f'echo "state=$(cut -d" " -f1 "{box.state}")"\n'
+                    'fuROUND; echo "interval=$myINTERVAL held=$myHELD"\n'
+                )
+                result = box.run(shell, script, STUB_LIMITED=20)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(re.findall(r"^interval=(\d+) held=(\w*)$", result.stdout, re.M),
+                                 [("5", "yes"), ("42", "")])
+                self.assertIn("state=stuck", result.stdout)
+                self.assertEqual(self.kinds(box), ["idle"] * 21 + ["normal"])
+                self.assertEqual(result.stdout.count("[ERROR]"), 1)
+                self.assertEqual(box.state_word(), "normal")
+
+    def test_stuck_says_so_as_error_every_ten_minutes(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = box.run(shell, "myHELD=yes; fuROUND; fuROUND; fuROUND", STUB_RC=1)
+                self.assertEqual(result.stdout.count("[ERROR]"), 1)
+                self.assertEqual(box.state_word(), "stuck")
+                # once the report time has passed it says so again
+                result = box.run(shell, "myHELD=yes; mySTUCK_REPORT=0; fuROUND; fuROUND", STUB_RC=1)
+                self.assertEqual(result.stdout.count("[ERROR]"), 2)
+                self.assertRegex(result.stdout, re.compile(r"^ => \[ERROR\] The hold is over since ", re.M))
+
+    def test_state_file(self):
+        """hold.state is one line "<word> <epoch>", a regular file; a link of that name is
+        replaced, its target stays."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                target = box.base / "elsewhere"
+                target.write_text("keep")
+                box.state.symlink_to(target)
+                before = int(time.time())
+                result = box.run(shell, "fuSTART; fuROUND")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse(box.state.is_symlink())
+                self.assertEqual(target.read_text(), "keep")
+                word, stamp = box.state.read_text().split()
+                self.assertEqual(word, "normal")
+                self.assertRegex(box.state.read_text(), r"^normal \d+\n$")
+                self.assertGreaterEqual(int(stamp), before)
+                self.assertEqual([path.name for path in box.data.iterdir() if path.name.startswith("hold.state.")], [])
+                box.hold.write_text("")
+                box.run(shell, "fuSTART")
+                self.assertEqual(box.state_word(), "held")
 
     def test_failed_round_writes_no_ack(self):
         for shell in SHELLS:
@@ -615,6 +701,13 @@ class EwsCfgPathsTest(unittest.TestCase):
         for section in self.config.sections():
             if self.config.has_option(section, section.lower()) and section not in OFF:
                 yield section
+
+    def test_module_keys_are_true_or_false(self):
+        """ews.py runs a module whose key is not empty, the fallback per module lists it the
+        same way; both agree only when the key says true or false."""
+        for section in self.modules():
+            with self.subTest(section=section):
+                self.assertIn(self.config.get(section, section.lower()), ("true", "false"))
 
     def test_older_logs_say_why(self):
         text = EWS_CFG.read_text()

@@ -367,6 +367,10 @@ ack_absent() {
   [[ ! -e "${DATA_DIR}/ews/hold.ack" && ! -L "${DATA_DIR}/ews/hold.ack" ]]
 }
 
+state_is() {
+  [[ -f "${DATA_DIR}/ews/hold.state" && "$(cut -d " " -f 1 "${DATA_DIR}/ews/hold.state")" == "$1" ]]
+}
+
 ack_mtime() {
   python3 -c 'import os, sys; print(os.stat(sys.argv[1]).st_mtime_ns)' "${DATA_DIR}/ews/hold.ack"
 }
@@ -426,6 +430,7 @@ step_hold() {
   # the hold starts with a normal pass, before its ack
   alert_from 198.51.100.20 || test_die "The line from right before the marker was not sent before hold.ack"
   test_ok "The line from right before the marker was sent"
+  state_is held || test_die "hold.state does not say held"
 
   posts="$(python3 "${CHECK}" posts "${SINK_DIR}/posts")"
   cowrie_idx="$(idx_value COWRIE)"
@@ -484,6 +489,7 @@ step_hold_over() {
     198.51.100.25 198.51.100.26 || test_die "Lines of the hold were sent"
   [[ "$(python3 "${CHECK}" count "${SINK_DIR}/posts")" == "$((alerts + 1))" ]] \
     || test_die "More than the one line after the hold was sent"
+  state_is normal || test_die "hold.state does not say normal after the hold"
   test_ok "Only the line after the hold arrived, the lines of the hold did not"
 }
 
