@@ -175,7 +175,7 @@ if [ -f "/data/uuid" ];
     # before /data/uuid: a first start that ends before the import tries it again on the next one
     if ! python3 /opt/tpot/bin/kibana_objects.py mark-fresh --data /data;
       then
-        echo "# Warning: the first import of the Kibana objects could not be marked, the next start imports them without the advanced settings."
+        echo "# Warning: the first import of the Kibana objects could not be marked, the Kibana objects job of this start imports them without the advanced settings."
     fi
     echo
     echo "# Generating self signed certificate ..."

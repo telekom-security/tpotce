@@ -2066,6 +2066,26 @@ class MarkFreshTest(unittest.TestCase):
                 self.assertEqual(os.listdir(elsewhere), [])
 
 
+    def test_an_earlier_install_is_never_marked_fresh(self):
+        for name in ("record.json", "given_up"):
+            with self.subTest(name=name):
+                site = Site(self, [dash("a")])
+                os.makedirs(ko.state_dir(site.data))
+                with open(os.path.join(ko.state_dir(site.data), name), "w", encoding="utf-8") as handle:
+                    handle.write("{}")
+                rc, out, err = site.cli("mark-fresh", "--data", site.data, opener=FakeKibana())
+                self.assertEqual((rc, out, err), (0, "# Kibana objects: the Kibana objects were imported before, "
+                                                    "no fresh import\n", ""))
+                self.assertFalse(os.path.lexists(ko.pending_path(site.data)))
+                self.assertEqual(os.listdir(ko.state_dir(site.data)), [name])
+        # a link in the place of the record counts as there (nothing is written), the folder as a link is refused
+        site = Site(self, [dash("a")])
+        os.makedirs(ko.state_dir(site.data))
+        os.symlink(os.path.join(site.root, "nowhere"), os.path.join(ko.state_dir(site.data), "record.json"))
+        self.assertEqual(site.cli("mark-fresh", "--data", site.data, opener=FakeKibana())[0], 0)
+        self.assertFalse(os.path.lexists(ko.pending_path(site.data)))
+
+
 class OwnerTest(unittest.TestCase):
     """As root (tpotinit) every folder and file the module makes in <data>/kibana_objects gets the
     owner of <data>, by its descriptor (fchown, never a chown by path); as anyone else nothing."""
@@ -2116,6 +2136,44 @@ class OwnerTest(unittest.TestCase):
         _, _, calls, made, _ = self.run_as(1000)
         self.assertEqual(calls, [])
         self.assertIn("record.json", made)
+
+    def test_an_owner_the_file_system_refuses_is_logged_once_and_the_files_are_written(self):
+        for code in (errno.EPERM, errno.EINVAL):
+            with self.subTest(errno=errno.errorcode[code]):
+                site = Site(self, [dash("a"), dash("b")])
+                tried = []
+
+                def fchown(handle, uid, gid):
+                    tried.append(handle)
+                    raise OSError(code, os.strerror(code))
+                with unittest.mock.patch.object(ko.os, "geteuid", return_value=0, create=True), \
+                        unittest.mock.patch.object(ko.os, "fchown", fchown, create=True), \
+                        unittest.mock.patch.object(ko, "_OWNER_WARNED", []):
+                    rc, out, err = site.cli("mark-fresh", "--data", site.data, opener=FakeKibana())
+                    self.assertEqual(rc, 0, err)
+                    rc, out, err2 = site.cli("apply", "--mode", "update", "--data", site.data, "--objects",
+                                             site.objects, "--exports", ko.auto_exports_dir(site.data),
+                                             opener=FakeKibana([as_in_kibana(dash("own"))]))
+                self.assertEqual(rc, 0, out + err2)
+                self.assertGreater(len(tried), 3)
+                self.assertEqual((err + err2).splitlines(),
+                                 [f"# Kibana objects: the owner of the Kibana object files could not be set: "
+                                  f"{os.strerror(code)}"])
+                self.assertTrue(os.path.isfile(os.path.join(ko.state_dir(site.data), "record.json")))
+                self.assertFalse(os.path.lexists(ko.pending_path(site.data)))
+                self.assertEqual(len(os.listdir(ko.auto_exports_dir(site.data))), 1)
+                self.assertEqual([n for n in os.listdir(ko.state_dir(site.data)) if n.endswith(".tmp")], [])
+
+    def test_another_error_of_fchown_still_fails_the_write(self):
+        site = Site(self, [dash("a")])
+
+        def fchown(handle, uid, gid):
+            raise OSError(errno.EIO, os.strerror(errno.EIO))
+        with unittest.mock.patch.object(ko.os, "geteuid", return_value=0, create=True), \
+                unittest.mock.patch.object(ko.os, "fchown", fchown, create=True):
+            rc, out, err = site.cli("mark-fresh", "--data", site.data, opener=FakeKibana())
+        self.assertEqual(rc, 1)
+        self.assertFalse(os.path.lexists(ko.pending_path(site.data)))
 
     def test_what_is_there_already_keeps_its_owner(self):
         site = Site(self, [dash("a")])

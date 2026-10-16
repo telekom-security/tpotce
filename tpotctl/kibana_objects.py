@@ -400,6 +400,20 @@ def _blocking(handle: int) -> None:
         fcntl.fcntl(handle, fcntl.F_SETFL, fcntl.fcntl(handle, fcntl.F_GETFL) & ~NONBLOCK)
 
 
+# errors of fchown that mean the folder cannot take this owner (NFS with root_squash, a file
+# system without owners): the file is written all the same, one line per run says so
+OWNER_ERRORS = {errno.EPERM, errno.EINVAL, getattr(errno, "ENOTSUP", errno.EINVAL),
+                getattr(errno, "EOPNOTSUPP", errno.EINVAL)}
+_OWNER_WARNED = []
+
+
+def _owner_failed(error: OSError) -> None:
+    if not _OWNER_WARNED:
+        _OWNER_WARNED.append(True)
+        print(f"{LOG}the owner of the Kibana object files could not be set: {error.strerror or error}",
+              file=sys.stderr, flush=True)
+
+
 def _owner_of(handle: int) -> Optional[Tuple[int, int]]:
     """uid and gid of the data folder held by `handle` when this runs as root (tpotinit): what
     it makes below that folder gets them, by its descriptor, so the T-Pot Manager (the group
@@ -420,8 +434,14 @@ class Folder:
         self.handle, self.path, self.owner = handle, path, owner
 
     def _own(self, handle: int) -> None:
-        if self.owner is not None:
+        if self.owner is None:
+            return
+        try:
             os.fchown(handle, *self.owner)
+        except OSError as error:
+            if error.errno not in OWNER_ERRORS:
+                raise
+            _owner_failed(error)
 
     def close(self) -> None:
         if self.handle is not None:
@@ -1483,6 +1503,17 @@ def _write_state(data_dir: str, name: str, data: dict, prefix: str) -> None:
         raise KibanaError(f"cannot write {os.path.join(state_dir(data_dir), name)}: {error}") from None
 
 
+def imported_before(data_dir: str) -> bool:
+    """A record or a given_up marker is there: an earlier install imported (or tried to), so a
+    first run of tpotinit on this data folder is no fresh install (no advanced settings)."""
+    try:
+        with _state(data_dir, create=False) as folder:
+            return folder is not None and any(folder.lstat(name) is not None
+                                              for name in (Records.NAME, os.path.basename(given_up_path(data_dir))))
+    except OSError as error:
+        raise KibanaError(f"cannot read {state_dir(data_dir)}: {error}") from None
+
+
 def mark_pending(data_dir: str, reason: str = "no-objects") -> None:
     """A first import pending for `reason`, no attempt yet: the next start makes attempt 1.
     "fresh" (tpotinit's first run) takes the advanced settings along, "no-objects" never."""
@@ -1624,6 +1655,9 @@ def main(argv: Optional[List[str]] = None, opener: Optional[Callable] = None) ->
         if args.command == "first":
             return _cli_first(args, opener)
         if args.command == "mark-fresh":
+            if imported_before(args.data):
+                print(f"{LOG}the Kibana objects were imported before, no fresh import", flush=True)
+                return 0
             mark_pending(args.data, "fresh")
             print(f"{LOG}the first import is pending ({pending_path(args.data)})", flush=True)
             return 0
