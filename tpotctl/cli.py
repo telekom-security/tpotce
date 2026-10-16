@@ -441,49 +441,98 @@ def _kibana_counts(chosen) -> str:
             f"{len(chosen.yours)} of yours")
 
 
-def _kibana_status(values, console) -> None:
-    """The line of the Kibana objects in tpot elastic status: the mode and what an import would bring."""
+KIBANA_ABSENT = "no Kibana in this edition"
+KIBANA_PENDING = "the first import has not finished yet, tpotinit retries on every start"
+
+
+class KibanaState:
+    """The Kibana objects as tpot elastic status and the Elastic page show them: the mode of .env (empty
+    is keep), whether the edition runs Kibana, a pending first import, else the plan or why there is none."""
+
+    def __init__(self, mode: str, kibana: bool = True, pending: bool = False, plan=None, problem: str = ""):
+        self.mode, self.kibana, self.pending, self.plan, self.problem = mode, kibana, pending, plan, problem
+
+    def text(self) -> str:
+        if not self.kibana:
+            return KIBANA_ABSENT
+        if self.pending:
+            return KIBANA_PENDING
+        return _kibana_counts(self.plan) if self.plan is not None else self.problem
+
+
+def kibana_state(values) -> KibanaState:
+    """The state of the Kibana objects; Kibana is read with the short timeout of a status (5 s)."""
     from tpotctl import kibana_objects as ko
     mode = values.get("TPOT_KIBANA_OBJECTS") or "keep"
     if "kibana" not in ops.compose_names():
-        text = "no Kibana in this edition"
+        return KibanaState(mode, kibana=False)
+    data, objects = ops.kibana_dirs(env=values)
+    try:
+        if ko.pending_state(data) is not None:
+            return KibanaState(mode, pending=True)
+        return KibanaState(mode, plan=ko.preview(data, objects, timeout=ko.STATUS_TIMEOUT))
+    except ko.KibanaError as err:
+        return KibanaState(mode, problem=str(err))
+
+
+def _kibana_status(values, console) -> None:
+    """The line of the Kibana objects in tpot elastic status: the mode and what an import would bring."""
+    state = kibana_state(values)
+    console.print(f"{'Kibana objects':<19}TPOT_KIBANA_OBJECTS={state.mode} · {state.text()}", markup=False)
+
+
+KIBANA_KEPT = "These objects of yours stay as they are:"
+KIBANA_REPLACED = "These objects of yours are replaced by the T-Pot version, the export keeps them:"
+
+
+def kibana_plan_lines(mode: str, chosen) -> List[str]:
+    """What `mode` would import of `chosen`, and which objects of yours it keeps or replaces."""
+    lines = [f"Kibana objects: {_kibana_counts(chosen)}"]
+    todo = len(chosen.to_import(mode))
+    if not todo:
+        lines.append(f"Mode {mode} has nothing to import.")
+    elif mode == "add":
+        lines.append(f"Mode add imports the {todo} new ones, the others stay as they are.")
     else:
-        data, objects = ops.kibana_dirs(env=values)
-        try:
-            if ko.pending_state(data) is not None:
-                text = "the first import has not finished yet, tpotinit retries on every start"
-            else:
-                text = _kibana_counts(ko.preview(data, objects))
-        except ko.KibanaError as err:
-            text = str(err)
-    console.print(f"{'Kibana objects':<19}TPOT_KIBANA_OBJECTS={mode} · {text}", markup=False)
+        lines.append(f"Mode {mode} imports {todo}, an export comes first.")
+    if chosen.yours and mode in ("update", "overwrite"):
+        lines.append(KIBANA_KEPT if mode == "update" else KIBANA_REPLACED)
+        lines += _kibana_titles(chosen.yours)
+    return lines
 
 
 def _kibana_plan(mode: str, chosen, console) -> None:
-    """What `mode` would import of `chosen`, and which objects of yours it keeps or replaces."""
-    console.print(f"Kibana objects: {_kibana_counts(chosen)}", markup=False)
-    todo = len(chosen.to_import(mode))
-    if not todo:
-        console.print(f"Mode {mode} has nothing to import.", markup=False)
-    elif mode == "add":
-        console.print(f"Mode add imports the {todo} new ones, the others stay as they are.", markup=False)
-    else:
-        console.print(f"Mode {mode} imports {todo}, an export comes first.", markup=False)
-    if chosen.yours and mode == "update":
-        console.print("These objects of yours stay as they are:", markup=False)
-    elif chosen.yours and mode == "overwrite":
-        console.print("These objects of yours are replaced by the T-Pot version, the export keeps them:",
-                      markup=False)
-    if chosen.yours and mode != "add":
-        for line in _kibana_titles(chosen.yours):
-            console.print(line, markup=False)
+    for line in kibana_plan_lines(mode, chosen):
+        console.print(line, markup=False)
+
+
+def kibana_result_lines(lines) -> List[str]:
+    """The lines of kibana_objects.summary without its log mark, the first one as a sentence: the counts,
+    then what failed."""
+    from tpotctl import kibana_objects as ko
+    plain = [line[len(ko.LOG):] if line.startswith(ko.LOG) else line for line in lines]
+    return [plain[0][:1].upper() + plain[0][1:] + "."] + plain[1:]
+
+
+def kibana_restore_lines(export_path: str, result) -> List[str]:
+    """What a restore did, as kibana_objects.summary says it for an import."""
+    line = f"{_objects(len(result.imported))} restored"
+    if result.errors:
+        line += f", {len(result.errors)} failed"
+    if export_path:
+        line += f" (export: {export_path})"
+    return [line] + [f'not imported: {kind}:{ident} "{title}" ({why})' for kind, ident, title, why in result.errors]
+
+
+def kibana_restore_question(path: str, count: int) -> str:
+    return (f"{path}: {_objects(count)}. A restore imports every object of the file, also the advanced settings; "
+            "objects made after it stay, Kibana never deletes on import. An export comes first.")
 
 
 def _kibana_result(lines, ok: bool, console) -> None:
     """The lines of kibana_objects.summary without its log mark: the counts, then what failed."""
-    from tpotctl import kibana_objects as ko
-    plain = [line[len(ko.LOG):] if line.startswith(ko.LOG) else line for line in lines]
-    (say.ok if ok else say.warn)(plain[0][:1].upper() + plain[0][1:] + ".", console.file)
+    plain = kibana_result_lines(lines)
+    (say.ok if ok else say.warn)(plain[0], console.file)
     for line in plain[1:]:
         console.print(f"  {line}", markup=False)
 
@@ -522,7 +571,7 @@ def _kibana_import(args, values, console) -> int:
         return 0
     _kibana_result(ko.summary(mode, chosen, result, path), not result.errors, console)
     if mode == "update" and chosen.yours:
-        console.print("These objects of yours stay as they are:", markup=False)
+        console.print(KIBANA_KEPT, markup=False)
         for line in _kibana_titles(chosen.yours):
             console.print(line, markup=False)
     return 1 if result.errors else 0
@@ -533,20 +582,12 @@ def _kibana_restore(args, values, console) -> int:
     path = os.path.abspath(os.path.expanduser(args.file))
     objs = ko.read_export(path)         # before the question and before any request
     data = ops.kibana_dirs(env=values)[0]
-    console.print(f"{path}: {_objects(len(objs))}. A restore imports every object of the file, also the "
-                  "advanced settings; objects made after it stay, Kibana never deletes on import. "
-                  "An export comes first.", markup=False)
+    console.print(kibana_restore_question(path, len(objs)), markup=False)
     if not confirm("Restore them?", args.yes):
         say.info("Nothing was changed.", console.file)
         return 1
     export_path, result = ko.run_restore(path, data, ops.kibana_export_dir())
-    line = f"{_objects(len(result.imported))} restored"
-    if result.errors:
-        line += f", {len(result.errors)} failed"
-    if export_path:
-        line += f" (export: {export_path})"
-    failed = [f'not imported: {kind}:{ident} "{title}" ({why})' for kind, ident, title, why in result.errors]
-    _kibana_result([line] + failed, not result.errors, console)
+    _kibana_result(kibana_restore_lines(export_path, result), not result.errors, console)
     return 1 if result.errors else 0
 
 

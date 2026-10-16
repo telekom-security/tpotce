@@ -908,6 +908,27 @@ Button.-error:disabled {
     margin-right: 2;
 }
 
+/* the Kibana objects under the retention; the page scrolls, so the table takes its rows only */
+
+#kibana-info {
+    margin: 2 0 1 0;
+}
+
+#kibana-mode {
+    width: 28;
+    margin-right: 2;
+}
+
+#kibana-mode-help {
+    margin-top: 1;
+}
+
+#kibana-exports {
+    height: auto;
+    max-height: 12;
+    margin-top: 1;
+}
+
 /* a page that does not work on this host (LockedPane) */
 
 .locked-title {

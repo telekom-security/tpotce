@@ -848,9 +848,10 @@ def status(url: str = KIBANA_URL, opener: Optional[Callable] = None) -> Optional
     return None
 
 
-def _export(url: str, opener: Optional[Callable], allow_empty: bool = False) -> Tuple[str, List[dict]]:
+def _export(url: str, opener: Optional[Callable], allow_empty: bool = False,
+            timeout: int = TIMEOUT) -> Tuple[str, List[dict]]:
     raw = _request("POST", "/api/saved_objects/_export", url, opener,
-                   json.dumps(EXPORT_BODY).encode(), "application/json")
+                   json.dumps(EXPORT_BODY).encode(), "application/json", timeout=timeout)
     source = f"the export of Kibana at {url}"
     try:
         text = raw.decode("utf-8")
@@ -1248,10 +1249,11 @@ def _local(data_dir: str, objects_dir: str) -> Tuple["Records", Dict[str, Set[st
             shipped(os.path.join(objects_dir, SHIPPED_NAME)))
 
 
-def preview(data_dir: str, objects_dir: str, opener: Optional[Callable] = None, url: str = KIBANA_URL) -> Plan:
-    """The plan for Kibana as it is now; nothing is written."""
+def preview(data_dir: str, objects_dir: str, opener: Optional[Callable] = None, url: str = KIBANA_URL,
+            timeout: int = TIMEOUT) -> Plan:
+    """The plan for Kibana as it is now; nothing is written. A status line takes STATUS_TIMEOUT."""
     records, manifest, shipped_objs = _local(data_dir, objects_dir)
-    return plan(_export(url, opener)[1], shipped_objs, manifest, records.objects)
+    return plan(_export(url, opener, timeout=timeout)[1], shipped_objs, manifest, records.objects)
 
 
 def _fresh_export(url: str, opener: Optional[Callable], export, allow_empty: bool = False) -> Tuple[str, List[dict]]:
@@ -1288,8 +1290,9 @@ def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opene
         more = [i for i in chosen.yours if i.key not in confirmed]
         if more:
             names = ", ".join(i.title for i in more[:5]) + (", ..." if len(more) > 5 else "")
-            raise KibanaError(f"Kibana holds {len(more)} more objects of yours than at the question ({names}); "
-                              "nothing was changed, run it again to see them")
+            raise KibanaError(f"Kibana holds {len(more)} more {'object' if len(more) == 1 else 'objects'} of yours "
+                              f"than when the plan was shown ({names}); nothing was changed, run it again to see "
+                              f"{'it' if len(more) == 1 else 'them'}")
     todo = chosen.to_import(mode)
     if not todo:
         if not chosen.new:

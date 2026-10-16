@@ -519,6 +519,36 @@ def kibana_exports(home: Optional[str] = None, data_dir: Optional[str] = None) -
     return [path for _, path in sorted(found, key=lambda f: (f[0], f[1]), reverse=True)]
 
 
+@dataclass
+class KibanaExport:
+    """One export of the Kibana objects for the Elastic page: who wrote it (Manager: the T-Pot Manager or
+    tpot elastic, T-Pot: tpotinit), its time, its size and its objects (None: no export that can be read)."""
+    path: str
+    origin: str
+    modified: float
+    size: int
+    objects: Optional[int]
+
+
+def kibana_export_infos(home: Optional[str] = None, data_dir: Optional[str] = None) -> List[KibanaExport]:
+    """kibana_exports with what the table of the Elastic page shows. The objects are counted as a restore
+    reads the file (kibana_objects.read_export: a regular file only, nothing waits on a pipe)."""
+    from tpotctl import kibana_objects as ko
+    infos = []
+    for path in kibana_exports(home, data_dir):
+        try:
+            info = os.stat(path)
+        except OSError:
+            continue
+        try:
+            count: Optional[int] = len(ko.read_export(path))
+        except ko.KibanaError:
+            count = None
+        origin = "T-Pot" if os.path.basename(path).startswith(ko.AUTO_PREFIX) else "Manager"
+        infos.append(KibanaExport(path, origin, info.st_mtime, info.st_size, count))
+    return infos
+
+
 # The groups of an archive restore.sh can bring back (-g), with the questions it
 # asks for them; tests keep them the same as in restore.sh.
 GROUP_TEXT = {

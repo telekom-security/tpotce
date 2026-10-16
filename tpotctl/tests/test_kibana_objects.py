@@ -1897,8 +1897,9 @@ class ConfirmedTest(unittest.TestCase):
     def test_overwrite_stops_for_objects_of_yours_that_were_not_confirmed(self):
         site = Site(self, [dash("a"), dash("b")])
         kibana = FakeKibana([as_in_kibana(dash("a", title="Mine")), as_in_kibana(dash("b", title="Mine too"))])
-        with self.assertRaisesRegex(ko.KibanaError, r"^Kibana holds 1 more objects of yours than at the "
-                                                    r"question \(Mine too\); nothing was changed"):
+        with self.assertRaisesRegex(ko.KibanaError, r"^Kibana holds 1 more object of yours than when the plan "
+                                                    r"was shown \(Mine too\); nothing was changed, run it again "
+                                                    r"to see it$"):
             site.apply("overwrite", kibana, confirmed={"dashboard:a"})
         self.assertEqual((kibana.imports(), site.files()), ([], []))
         chosen, result, path = site.apply("overwrite", kibana, confirmed={"dashboard:a", "dashboard:b"})
@@ -1906,6 +1907,16 @@ class ConfirmedTest(unittest.TestCase):
         self.assertTrue(path)
         # confirmed is only about overwrite: update never touches yours
         site.apply("update", FakeKibana([as_in_kibana(dash("a", title="Mine"))]), confirmed=set())
+
+    def test_the_stop_reads_right_without_a_question(self):
+        """overwrite without a terminal asks nothing (confirmed is empty): the stop names no question."""
+        site = Site(self, [dash("a"), dash("b")])
+        kibana = FakeKibana([as_in_kibana(dash("a", title="Mine")), as_in_kibana(dash("b", title="Mine too"))])
+        with self.assertRaisesRegex(ko.KibanaError, r"^Kibana holds 2 more objects of yours than when the plan "
+                                                    r"was shown \(Mine, Mine too\); nothing was changed, run it "
+                                                    r"again to see them$"):
+            site.apply("overwrite", kibana, confirmed=set())
+        self.assertEqual((kibana.imports(), site.files()), ([], []))
 
 
 class StaleTempTest(unittest.TestCase):
@@ -1987,6 +1998,29 @@ class OpsTest(unittest.TestCase):
         self.assertEqual(ops.kibana_exports(site.home), [made[2], made[0]])
         self.assertEqual(ops.kibana_exports(site.home, site.data), [made[2], made[1], made[0]])
         self.assertEqual(ops.kibana_exports(os.path.join(site.root, "nobody")), [])
+
+    def test_kibana_export_infos_say_who_wrote_them_and_count_the_objects(self):
+        from tpotctl import ops
+        site = Site(self, [])
+        auto = ko.auto_exports_dir(site.data)
+        os.makedirs(site.exports)
+        os.makedirs(auto)
+        text = "".join(json.dumps(o) + "\n" for o in (dash("a"), dash("b"))) + '{"exportedCount":2}\n'
+        mine = os.path.join(site.exports, "kibana_objects_20261016101010.ndjson")
+        theirs = os.path.join(auto, "auto_20261016101011.ndjson")
+        broken = os.path.join(site.exports, "kibana_objects_20261016101012.ndjson")
+        pipe = os.path.join(site.exports, "kibana_objects_20261016101013.ndjson")
+        for n, (path, body) in enumerate([(mine, text), (theirs, text[:text.index("\n") + 1]), (broken, "{x\n")]):
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(body)
+            os.utime(path, (NOW + n, NOW + n))
+        os.mkfifo(pipe)                         # listed, never waited on
+        os.utime(pipe, (NOW + 3, NOW + 3))
+        infos = ops.kibana_export_infos(site.home, site.data)
+        self.assertEqual([(i.path, i.origin, i.objects) for i in infos],
+                         [(pipe, "Manager", None), (broken, "Manager", None), (theirs, "T-Pot", 1),
+                          (mine, "Manager", 2)])
+        self.assertEqual((infos[-1].modified, infos[-1].size), (NOW, len(text)))
 
 
 class StandaloneTest(unittest.TestCase):

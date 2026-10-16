@@ -226,7 +226,7 @@ class KibanaCliTest(unittest.TestCase):
             return "y"
         self.answers = [change_then_yes]
         self.assertEqual(self.run_cli("import", "--mode", "overwrite"), 1)
-        self.assertIn("1 more objects of yours than at the question (Mine too)", self.err.getvalue())
+        self.assertIn("1 more object of yours than when the plan was shown (Mine too)", self.err.getvalue())
         self.assertEqual((self.kibana.imports(), self.site.files()), ([], []))
         self.assertEqual(self.title("d"), "Mine")
 
@@ -356,6 +356,17 @@ class KibanaCliTest(unittest.TestCase):
         self.assertEqual((self.kibana.imports(), self.site.files()), ([], []))
         self.assertEqual(self.run_cli(), 0)                       # status is the default
         self.assertIn("TPOT_KIBANA_OBJECTS=update ·", self.out.getvalue())
+
+    def test_status_reads_kibana_with_the_short_timeout(self):
+        seen, kibana = [], self.kibana
+
+        def opener(request, timeout=None):
+            seen.append(timeout)
+            return kibana(request, timeout)
+        self.kibana = opener
+        self.run_cli("status")
+        self.assertEqual(seen, [ko.STATUS_TIMEOUT])
+        self.assertEqual(ko.STATUS_TIMEOUT, 5)
 
     def test_status_of_an_empty_mode_is_keep(self):
         self.run_cli("status", values={"TPOT_TYPE": "HIVE", "TPOT_ES_RETENTION": "30"})
