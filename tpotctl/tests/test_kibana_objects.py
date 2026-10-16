@@ -1516,7 +1516,8 @@ class LockTest(unittest.TestCase):
         for name, run in runs.items():
             with self.subTest(name):
                 with self.assertRaisesRegex(ko.KibanaError, r"^another Kibana import is running "
-                                                            r"\(tpotinit or tpot elastic\)$"):
+                                                            r"\(tpotinit or tpot elastic\), try again in "
+                                                            r"a minute$"):
                     run()
         rc, out, err = site.cli("apply", "--mode", "update", "--data", site.data, "--objects", site.objects,
                                 "--exports", ko.auto_exports_dir(site.data), opener=kibana)
@@ -1816,7 +1817,147 @@ class LinkTest(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(ko.state_dir(site.data))), ["pending", "record.json"])
 
 
+class ChosenFileTest(unittest.TestCase):
+    """The files a person names: the export a restore takes, the file an export goes to."""
+
+    def setUp(self):
+        self.site = Site(self, [dash("a")])
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "no named pipes here")
+    def test_a_pipe_is_refused_at_once_and_nothing_waits_on_it(self):
+        pipe = os.path.join(self.site.root, "pipe.ndjson")
+        os.mkfifo(pipe)
+        kibana = FakeKibana([as_in_kibana(CONFIG)])
+        started = time.monotonic()
+        with self.assertRaisesRegex(ko.KibanaError, r"^\S+pipe\.ndjson is no regular file, [^\n]+$"):
+            ko.read_export(pipe)
+        with self.assertRaisesRegex(ko.KibanaError, "is no regular file"):
+            ko.run_restore(pipe, self.site.data, self.site.exports, opener=kibana, now=NOW)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual((kibana.requests, self.site.files()), ([], []))
+
+    def test_a_folder_is_refused(self):
+        with self.assertRaisesRegex(ko.KibanaError, "is no regular file"):
+            ko.read_export(self.site.root)
+
+    def test_read_export_checks_what_a_restore_takes(self):
+        path = os.path.join(self.site.root, "pick.ndjson")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(dash("a")) + "\n" + '{"exportedCount":1,"missingRefCount":0}\n')
+        self.assertEqual([ko.key(o) for o in ko.read_export(path)], ["dashboard:a"])
+        os.symlink(path, os.path.join(self.site.root, "link.ndjson"))      # a link of yours to an export counts
+        self.assertEqual(len(ko.read_export(os.path.join(self.site.root, "link.ndjson"))), 1)
+        with open(path, "wb") as handle:
+            handle.write(b"\xff\xfe\n")
+        with self.assertRaisesRegex(ko.KibanaError, "cannot be read"):
+            ko.read_export(path)
+        with self.assertRaisesRegex(ko.KibanaError, "No such file or directory"):
+            ko.read_export(os.path.join(self.site.root, "missing.ndjson"))
+
+    def test_save_export_as_writes_a_new_file_0600_and_never_over_one(self):
+        path = os.path.join(self.site.root, "mine.ndjson")
+        old = os.umask(0)
+        try:
+            self.assertEqual(ko.save_export_as("x\n", path), path)
+        finally:
+            os.umask(old)
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+        with self.assertRaisesRegex(ko.KibanaError, "is there already"):
+            ko.save_export_as("y\n", path)
+        with open(path, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "x\n")
+        target = os.path.join(self.site.root, "target")
+        os.symlink(target, os.path.join(self.site.root, "dangling.ndjson"))
+        with self.assertRaisesRegex(ko.KibanaError, "is there already"):
+            ko.save_export_as("y\n", os.path.join(self.site.root, "dangling.ndjson"))
+        self.assertFalse(os.path.exists(target))
+        with self.assertRaisesRegex(ko.KibanaError, "cannot be written"):
+            ko.save_export_as("y\n", os.path.join(self.site.root, "no", "such.ndjson"))
+
+    def test_folder_at_closes_its_descriptor_when_the_mode_cannot_be_set(self):
+        opened = []
+        real_open = os.open
+
+        def track(*args, **kwargs):
+            handle = real_open(*args, **kwargs)
+            opened.append(handle)
+            return handle
+
+        with unittest.mock.patch("os.open", side_effect=track), \
+                unittest.mock.patch("os.fchmod", side_effect=PermissionError(errno.EPERM, "not permitted")):
+            with self.assertRaises(PermissionError):
+                ko.Folder.at(os.path.join(self.site.root, "new"), create=True, mode=0o700)
+        self.assertEqual(len(opened), 1)
+        with self.assertRaises(OSError) as closed:
+            os.fstat(opened[0])
+        self.assertEqual(closed.exception.errno, errno.EBADF)
+
+
+class ConfirmedTest(unittest.TestCase):
+    def test_overwrite_stops_for_objects_of_yours_that_were_not_confirmed(self):
+        site = Site(self, [dash("a"), dash("b")])
+        kibana = FakeKibana([as_in_kibana(dash("a", title="Mine")), as_in_kibana(dash("b", title="Mine too"))])
+        with self.assertRaisesRegex(ko.KibanaError, r"^Kibana holds 1 more objects of yours than at the "
+                                                    r"question \(Mine too\); nothing was changed"):
+            site.apply("overwrite", kibana, confirmed={"dashboard:a"})
+        self.assertEqual((kibana.imports(), site.files()), ([], []))
+        chosen, result, path = site.apply("overwrite", kibana, confirmed={"dashboard:a", "dashboard:b"})
+        self.assertEqual(sorted(result.keys()), ["dashboard:a", "dashboard:b"])
+        self.assertTrue(path)
+        # confirmed is only about overwrite: update never touches yours
+        site.apply("update", FakeKibana([as_in_kibana(dash("a", title="Mine"))]), confirmed=set())
+
+
+class StaleTempTest(unittest.TestCase):
+    """A killed run can leave a temporary file; the next locked run removes it once it is old."""
+
+    def test_a_locked_run_removes_the_stale_temporary_files_of_the_module_only(self):
+        site = Site(self, [dash("a")])
+        state = ko.state_dir(site.data)
+        exports = ko.auto_exports_dir(site.data)
+        os.makedirs(exports)
+        hexed = "0123456789abcdef" * 2
+        old, fresh = time.time() - ko.STALE - 60, time.time() - 60
+        made = {}
+        for folder, name, when in ((state, f".record-{hexed}.tmp", old), (state, f".pending-{hexed}.tmp", fresh),
+                                   (state, f".given-up-{hexed}.tmp", old), (exports, f".kibana-export-{hexed}.tmp", old),
+                                   (state, f".other-{hexed}.tmp", old), (state, f".record-{hexed[:-1]}.tmp", old),
+                                   (state, "record.json.tmp", old)):
+            path = os.path.join(folder, name)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("{}")
+            os.utime(path, (when, when))
+            made[name] = path
+        outside = os.path.join(site.root, "outside.tmp")
+        with open(outside, "w", encoding="utf-8") as handle:
+            handle.write("mine")
+        link = os.path.join(state, f".pending-{'f' * 32}.tmp")
+        os.symlink(outside, link)
+        os.utime(link, (old, old), follow_symlinks=False)
+        os.mkdir(os.path.join(state, f".record-{'e' * 32}.tmp"))
+        site.apply("update", FakeKibana([as_in_kibana(dash("a"))]))
+        gone = sorted(n for n, p in made.items() if not os.path.lexists(p))
+        self.assertEqual(gone, sorted([f".record-{hexed}.tmp", f".given-up-{hexed}.tmp",
+                                       f".kibana-export-{hexed}.tmp"]))
+        self.assertTrue(os.path.islink(link))
+        self.assertTrue(os.path.isdir(os.path.join(state, f".record-{'e' * 32}.tmp")))
+        with open(outside, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "mine")
+
+    def test_every_temporary_prefix_of_the_module_is_known(self):
+        with open(ko.__file__, encoding="utf-8") as handle:
+            source = handle.read()
+        # a temporary name is <prefix><hex>.tmp: every prefix the module spells out is one the tidy-up knows
+        literals = set(re.findall(r"\"(\.[a-z-]+-)\"", source))
+        self.assertEqual(literals, set(ko.TEMP_PREFIXES))
+
+
 class OpsTest(unittest.TestCase):
+    def test_kibana_export_dir_is_tpot_backups(self):
+        from tpotctl import ops
+        self.assertEqual(ops.kibana_export_dir("/home/x"), "/home/x/tpot_backups")
+        self.assertEqual(ops.kibana_export_dir(), os.path.join(os.path.expanduser("~"), "tpot_backups"))
+
     def test_kibana_dirs_come_from_the_env(self):
         from tpotctl import ops
         repo = tempfile.mkdtemp()

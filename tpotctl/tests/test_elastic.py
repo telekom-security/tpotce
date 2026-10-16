@@ -822,6 +822,7 @@ class RunElasticTest(unittest.TestCase):
                 mock.patch("tpotctl.cli.confirm", side_effect=lambda *a: self.plain_confirmed.append(a) or True), \
                 mock.patch("tpotctl.cli.ask", side_effect=typed), \
                 mock.patch("tpotctl.cli._console", return_value=Console(file=self.out, width=200)), \
+                mock.patch("tpotctl.cli._kibana_status"), \
                 contextlib.redirect_stderr(self.err):
             if terminal is None:
                 with mock.patch("tpotctl.cli.confirm_data_loss", side_effect=ask):

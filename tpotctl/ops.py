@@ -491,11 +491,17 @@ def kibana_dirs(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) 
     return data, os.path.join(repo_dir, "docker", "tpotinit", "dist", "etc", "objects")
 
 
+def kibana_export_dir(home: Optional[str] = None) -> str:
+    """Where the T-Pot Manager keeps its exports of the Kibana objects: ~/tpot_backups (0700,
+    the files 0600, never rotated), next to the archives of update.sh."""
+    return os.path.join(home or os.path.expanduser("~"), "tpot_backups")
+
+
 def kibana_exports(home: Optional[str] = None, data_dir: Optional[str] = None) -> List[str]:
     """Exports of the Kibana objects, newest first: kibana_objects_*.ndjson of the T-Pot
     Manager in ~/tpot_backups and, with `data_dir`, auto_*.ndjson of tpotinit in
     <data>/kibana_objects/exports."""
-    places = [(os.path.join(home or os.path.expanduser("~"), "tpot_backups"), "kibana_objects_")]
+    places = [(kibana_export_dir(home), "kibana_objects_")]
     if data_dir:
         places.append((os.path.join(data_dir, "kibana_objects", "exports"), "auto_"))
     found = []

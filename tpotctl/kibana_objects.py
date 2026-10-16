@@ -359,8 +359,15 @@ def lock_path(data_dir: str) -> str:
     return os.path.join(state_dir(data_dir), "lock")
 
 
-BUSY = "another Kibana import is running (tpotinit or tpot elastic)"
+BUSY = "another Kibana import is running (tpotinit or tpot elastic), try again in a minute"
 _HELD = threading.local()              # per thread: the locks it holds, how deep, and their folders
+
+# the temporary files Folder.write makes: <prefix><32 hex>.tmp, renamed into place when written; one
+# that is left (a run that was killed) goes at the start of a later locked run once it is STALE old
+TEMP_EXPORT, TEMP_RECORD, TEMP_PENDING, TEMP_GIVEN_UP = ".kibana-export-", ".record-", ".pending-", ".given-up-"
+TEMP_PREFIXES = (TEMP_EXPORT, TEMP_RECORD, TEMP_PENDING, TEMP_GIVEN_UP)
+_TEMP_NAME = re.compile("(?:" + "|".join(re.escape(p) for p in TEMP_PREFIXES) + r")[0-9a-f]{32}\.tmp")
+STALE = 600                            # seconds
 
 NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 DIRECTORY = getattr(os, "O_DIRECTORY", 0)
@@ -461,7 +468,11 @@ class Folder:
                 raise
             return None
         if created:
-            os.fchmod(handle, mode)
+            try:
+                os.fchmod(handle, mode)
+            except BaseException:
+                os.close(handle)
+                raise
         return cls(handle, path)
 
     def name(self, name: str) -> str:
@@ -649,6 +660,39 @@ def _unusable(path: str, error: OSError) -> KibanaError:
     return KibanaError(f"the Kibana import lock {path} cannot be used: {error.strerror or error}")
 
 
+def _remove_stale(folder: "Folder", now: Optional[float] = None) -> List[str]:
+    """Removes the temporary files of this module that a killed run left in `folder`: regular
+    files named <TEMP_PREFIXES><32 hex>.tmp, older than STALE seconds, found and removed through
+    the folder's descriptor. Anything else stays; a file it cannot remove too."""
+    limit = (time.time() if now is None else now) - STALE
+    removed = []
+    try:
+        found = folder.regular_files()
+    except OSError:
+        return removed
+    for name, info in found:
+        if _TEMP_NAME.fullmatch(name) and info.st_mtime < limit:
+            try:
+                if folder.remove(name):
+                    removed.append(folder.name(name))
+            except (OSError, KibanaError):
+                pass
+    return removed
+
+
+def _tidy(folder: "Folder") -> None:
+    """At the start of a locked run: the stale temporary files of <data>/kibana_objects and of its
+    exports folder (no link followed); nothing else of the run depends on it."""
+    _remove_stale(folder)
+    try:
+        exports_folder = folder.sub(os.path.basename(auto_exports_dir("")), create=False)
+    except (OSError, KibanaError):
+        return
+    if exports_folder is not None:
+        with exports_folder:
+            _remove_stale(exports_folder)
+
+
 @contextlib.contextmanager
 def import_lock(data_dir: str):
     """One run at a time that reads a plan and imports: an exclusive flock on
@@ -692,6 +736,7 @@ def import_lock(data_dir: str):
                 time.sleep(0.2)
             except OSError as error:
                 raise _unusable(path, error) from None
+        _tidy(folder)
         held[path] = 1
         _held_folders()[os.path.abspath(state_dir(data_dir))] = folder
         try:
@@ -793,10 +838,65 @@ def save_export(text: str, folder: str, prefix: str = EXPORT_PREFIX, now: Option
             while target.lstat(name) is not None:
                 number += 1
                 name = f"{prefix}{stamp}_{number}.ndjson"
-            target.write(name, text, file_mode, ".kibana-export-")
+            target.write(name, text, file_mode, TEMP_EXPORT)
     except OSError as error:
         raise KibanaError(f"the export cannot be written into {folder}: {error}") from None
     return os.path.join(folder, name)
+
+
+def save_export_as(text: str, path: str) -> str:
+    """`text` as the new file `path`, mode 0600 whatever the umask; a file (or anything else)
+    that is there already is refused and left as it is, a link is never followed."""
+    try:
+        handle = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW, 0o600)
+    except FileExistsError:
+        raise KibanaError(f"{path} is there already, T-Pot does not overwrite it; choose another name") from None
+    except OSError as error:
+        raise KibanaError(f"the export cannot be written to {path}: {error.strerror or error}") from None
+    out = None
+    try:
+        os.fchmod(handle, 0o600)
+        out = os.fdopen(handle, "w", encoding="utf-8", newline="\n")
+        with out:
+            out.write(text)
+    except BaseException as error:
+        if out is None:
+            os.close(handle)
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        if isinstance(error, OSError):
+            raise KibanaError(f"the export cannot be written to {path}: {error.strerror or error}") from None
+        raise
+    return path
+
+
+def read_export(path: str) -> List[dict]:
+    """The objects of an export chosen for a restore, checked: a regular file of UTF-8 ndjson
+    with at least one object, every line an object with type and id (the line number says
+    where not). A pipe, a folder or a device is refused at once, nothing waits on it."""
+    try:
+        handle = os.open(path, os.O_RDONLY | NONBLOCK)
+    except OSError as error:
+        raise KibanaError(f"{path}: {error.strerror or error}") from None
+    try:
+        if not stat.S_ISREG(os.fstat(handle).st_mode):
+            raise KibanaError(f"{path} is no regular file, a restore takes an export (.ndjson)")
+        _blocking(handle)
+        source = os.fdopen(handle, encoding="utf-8")
+    except BaseException:
+        os.close(handle)
+        raise
+    try:
+        with source:
+            text = source.read()
+    except (OSError, UnicodeDecodeError) as error:
+        raise KibanaError(f"{path} cannot be read: {error}") from None
+    objs = parse_ndjson(text, path)
+    if not objs:
+        raise KibanaError(f"{path} holds no Kibana objects")
+    return objs
 
 
 def _name_order(name: str, prefix: str) -> Tuple[str, int]:
@@ -978,7 +1078,7 @@ class Records:
         text = json.dumps({"version": 1, "objects": self.objects}, indent=1, sort_keys=True) + "\n"
         try:
             with _state(self.data_dir, create=True) as folder:
-                folder.write(self.NAME, text, 0o660, ".record-")
+                folder.write(self.NAME, text, 0o660, TEMP_RECORD)
         except OSError as error:
             raise KibanaError(f"cannot write {self.path}: {error}") from None
 
@@ -1118,13 +1218,16 @@ def _fresh_export(url: str, opener: Optional[Callable], export, allow_empty: boo
 @_one_at_a_time
 def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opener: Optional[Callable] = None,
               now: Optional[float] = None, url: str = KIBANA_URL, prefix: str = EXPORT_PREFIX,
-              keep: Optional[int] = None, export: Optional[Tuple[str, List[dict]]] = None) -> Tuple[Plan, Result, str]:
+              keep: Optional[int] = None, export: Optional[Tuple[str, List[dict]]] = None,
+              confirmed: Optional[Set[str]] = None) -> Tuple[Plan, Result, str]:
     """Imports what `mode` takes of the plan and records it.
 
     keep makes no request. With nothing to import there is neither an export nor an
     import. update and overwrite save the export first (into `export_dir`, the newest
     `keep` of `prefix` stay when keep is given); without it there is no import. `export`
-    is the (text, objects) of an export this run made already."""
+    is the (text, objects) of an export this run made already. `confirmed`, for overwrite:
+    the type:id of the objects of yours that were confirmed; one more of yours in the plan
+    stops the run before its export."""
     if mode not in MODES:
         raise KibanaError(f"no mode {mode!r}, one of {', '.join(MODES)}")
     if mode == "keep":
@@ -1132,6 +1235,12 @@ def run_apply(mode: str, data_dir: str, objects_dir: str, export_dir: str, opene
     records, manifest, shipped_objs = _local(data_dir, objects_dir)
     text, installed = _fresh_export(url, opener, export)
     chosen = plan(installed, shipped_objs, manifest, records.objects)
+    if mode == "overwrite" and confirmed is not None:
+        more = [i for i in chosen.yours if i.key not in confirmed]
+        if more:
+            names = ", ".join(i.title for i in more[:5]) + (", ..." if len(more) > 5 else "")
+            raise KibanaError(f"Kibana holds {len(more)} more objects of yours than at the question ({names}); "
+                              "nothing was changed, run it again to see them")
     todo = chosen.to_import(mode)
     if not todo:
         if not chosen.new:
@@ -1158,10 +1267,9 @@ def run_restore(path: str, data_dir: str, export_dir: str, opener: Optional[Call
                 prefix: str = EXPORT_PREFIX) -> Tuple[str, Result]:
     """Imports every object of the export `path`, the advanced settings too, after a fresh
     export. What it restored is no longer T-Pot's import: its records go. A Kibana that
-    holds no objects has nothing to export: the export path is "" then."""
-    objs = parse_ndjson(_read_text(path), path)
-    if not objs:
-        raise KibanaError(f"{path} holds no Kibana objects")
+    holds no objects has nothing to export: the export path is "" then. The file is checked
+    first (read_export), before any request."""
+    objs = read_export(path)
     records = Records(data_dir)
     text, installed = _export(url, opener, allow_empty=True)
     export_path = save_export(text, export_dir, prefix, now) if installed else ""
@@ -1227,7 +1335,7 @@ def _write_pending(data_dir: str, state: Optional[dict]) -> None:
                 if folder is not None:
                     folder.remove(os.path.basename(path))
             return
-        _write_state(data_dir, os.path.basename(path), state, ".pending-")
+        _write_state(data_dir, os.path.basename(path), state, TEMP_PENDING)
     except OSError as error:
         raise KibanaError(f"cannot write {path}: {error}") from None
 
@@ -1286,7 +1394,7 @@ def run_first_import(data_dir: str, objects_dir: str, export_dir: str, opener: O
     if missing and done:
         _write_state(data_dir, os.path.basename(given_up_path(data_dir)),
                      {"version": 1, "refused": missing, "at": stamp(now), "shipped": shipped_sha(objects_dir)},
-                     ".given-up-")
+                     TEMP_GIVEN_UP)
     elif not missing:
         clear_given_up(data_dir)
     _write_pending(data_dir, None if done else dict(state, attempt=attempt, refused=refused))

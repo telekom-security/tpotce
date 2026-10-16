@@ -94,6 +94,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Stop T-Pot](#stop-t-pot)
   - [T-Pot Data Folder](#t-pot-data-folder)
   - [Log Persistence](#log-persistence)
+  - [Kibana Objects](#kibana-objects)
   - [Factory Reset](#factory-reset)
   - [Show Containers and Images](#show-containers-and-images)
   - [Blackhole](#blackhole)
@@ -776,7 +777,8 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot env [list [--all] [--show-secrets]]` | *Settings* (*All settings*) | every host | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
 | `tpot env get KEY` / `tpot env set KEY=VALUE …` | *Settings* | every host | read or change a setting, it is only written if it is valid afterwards |
 | `tpot env check` | `ctrl+f` *Check the settings* | every host | checks `.env` as T-Pot does on start, exit code 1 on errors |
-| `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--adopt] [--force] [--accept-data-loss]` | *Elastic* | T-Pot host, HIVE | how long Elasticsearch keeps the events (`TPOT_ES_RETENTION`, the ILM policy `tpot`); a shorter time always asks first (also with `-y`; without a terminal `--accept-data-loss`), T-Pot never shortens it on its own, and lists the indices it deletes; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value), `DAYS` alone writes only `.env` then and says so (exit 0), as the pages do; where Elasticsearch cannot be read it says why and writes only `.env` |
+| `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--adopt] [--force] [--accept-data-loss]` | *Elastic* | T-Pot host, HIVE | how long Elasticsearch keeps the events (`TPOT_ES_RETENTION`, the ILM policy `tpot`); a shorter time always asks first (also with `-y`; without a terminal `--accept-data-loss`), T-Pot never shortens it on its own, and lists the indices it deletes; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value), `DAYS` alone writes only `.env` then and says so (exit 0), as the pages do; where Elasticsearch cannot be read it says why and writes only `.env`. `status` also shows `TPOT_KIBANA_OBJECTS` and what an import would bring (new, to update, the same, yours), or why Kibana cannot be read |
+| `tpot elastic export [FILE]` / `tpot elastic import [--mode add\|update\|overwrite] [--dry-run] [-y]` / `tpot elastic restore FILE [-y]` | *Elastic* | T-Pot host, HIVE (with Kibana) | T-Pot's [Kibana objects](#kibana-objects): `export` saves every object into `~/tpot_backups` (or into the new `FILE`); `import` brings T-Pot's objects in as the mode does (default `update`: the missing and the unchanged ones, yours stay), `--dry-run` only shows what it would do, `overwrite` lists the objects of yours it replaces and asks first (`-y` confirms, without a terminal it needs `-y`, exit 2); `restore` checks the file, asks and imports every object of it, the advanced settings too; `import` and `restore` export first and import nothing if that fails; exit 1 on an error or an object Kibana refused, "This edition runs no Kibana." where it has none |
 | `tpot llm [detect [--scan]\|models\|test]` | *LLM* | every host | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
 | `tpot users [list\|add\|passwd\|remove]` | *Web users* | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | `tpot sensors [list\|add\|remove\|set\|cert]` | *Sensors* (`set` is *Edit*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
@@ -1248,6 +1250,29 @@ If Elasticsearch answers with something T-Pot cannot read (a policy or an index 
 ![IndexManagement2](doc/kibana_c.png)
 <br><br>
 
+## Kibana Objects
+T-Pot brings its own Kibana objects: the dashboards, visualizations, saved searches and data views of `~/tpotce/docker/tpotinit/dist/etc/objects/kibana_export.ndjson`. An object in Kibana counts as T-Pot's as long as nobody changed it since T-Pot brought it in: its content is one of the versions T-Pot ever shipped (their hashes are in `kibana_hashes.json` next to it), or its last change in Kibana is T-Pot's own import (T-Pot keeps the time of every import in `~/tpotce/data/kibana_objects/record.json`). Otherwise it is *yours*: you changed it in Kibana, or a restore brought it back. Objects T-Pot does not ship are never touched.
+<br>
+**The first import.** A fresh install imports all of T-Pot's objects, together with the advanced settings of Kibana (`config`). tpotinit tries it on every start until Kibana has taken them (while `~/tpotce/data/kibana_objects/pending` is there), so a first start that ends before Kibana is ready does not leave you without dashboards. After three attempts it stops trying what Kibana still refuses, until the next release; `tpot elastic import` tries them again. If Kibana holds none of T-Pot's objects at all, T-Pot imports them once more, whatever the mode, but never the advanced settings.
+<br>
+**The modes.** After the first import `TPOT_KIBANA_OBJECTS` in `~/tpotce/.env` (HIVE only) says what T-Pot does on every start, the *Elastic* page of the T-Pot Manager and `tpot elastic status` show what each would do:
+
+| Mode | What it does | Pro | Con |
+|---|---|---|---|
+| `keep` | nothing after the first import; you decide on the *Elastic* page, with `tpot elastic import` or in Kibana | nothing changes without you | new dashboards of a release are missing until you get them |
+| `add` | creates missing T-Pot objects, existing ones stay as they are | new dashboards come by themselves, nothing is overwritten | improved versions of existing dashboards do not come; T-Pot objects you deleted come back |
+| `update` | creates missing T-Pot objects, brings the unchanged ones up to date, the ones you changed stay; an export comes first | always the current dashboards, your changes stay | T-Pot objects you deleted come back; an object you changed gets no more improvements |
+| `overwrite` | brings every T-Pot object to the shipped version, your changes to them are lost; an export always comes first | one known, consistent state | your changes to T-Pot objects are reset on every start, only the export keeps them |
+
+New installs use `update` (the default of `env.example`). An update of an existing install sets `keep`, so nothing changes until you choose; an empty value is `keep` as well. `tpot elastic import --dry-run` shows what an update would bring.
+<br>
+**The advanced settings** (`config`, `config-global`: the default data view, the theme, ...) are only imported by the first import of a fresh install and by a restore you choose; `add`, `update` and `overwrite` never touch them.
+<br>
+**An export always comes first.** Before `update`, `overwrite` or a restore change anything, T-Pot exports every object of Kibana; if that export fails, nothing is imported. The exports of the T-Pot Manager go to `~/tpot_backups/kibana_objects_<UTC time>.ndjson` (only for you, mode 0600; T-Pot never removes them), the ones of tpotinit to `~/tpotce/data/kibana_objects/exports/auto_<UTC time>.ndjson` (the newest 10 stay). `add` replaces nothing and needs no export.
+<br>
+**By hand.** `tpot elastic export [FILE]` saves every object (into `~/tpot_backups`, or into the new file `FILE`). `tpot elastic import` brings T-Pot's objects in as `update` does, `--mode add` or `--mode overwrite` as those do; `overwrite` lists the objects of yours it replaces and asks first (`-y` answers yes). `tpot elastic restore FILE` imports every object of an export, the advanced settings too: objects made after the export stay, Kibana never deletes on import, and a changed object it brings back stays yours (T-Pot forgets its own import time of what was restored). Only one import runs at a time; while tpotinit runs one, the T-Pot Manager says "another Kibana import is running (tpotinit or tpot elastic), try again in a minute". The MOBILE edition runs no Kibana, there these commands say so.
+<br><br>
+
 ## Factory Reset
 All log data stored in the [T-Pot Data Folder](#t-pot-data-folder) (except for Elasticsearch indices, of course) can be erased by running `clean.sh`.
 Sometimes things might break beyond repair and it has never been easier to reset a T-Pot to factory defaults (make sure to enter `cd ~/tpotce`).
@@ -1287,24 +1312,13 @@ Without `tpot` (i.e. no internet to set up its Python packages) `genuser.sh` ask
 <br><br>
 
 ## Import and Export Kibana Objects
-Some T-Pot updates will require you to update the Kibana objects. Either to support new honeypots or to improve existing dashboards or visualizations. Make sure to ***export*** first so you do not loose any of your adjustments.
+Some T-Pot updates bring new or improved Kibana objects, to support new honeypots or to improve existing dashboards and visualizations. How T-Pot keeps them current, and which of them count as yours, is described in [Kibana Objects](#kibana-objects); `TPOT_KIBANA_OBJECTS` chooses it.
 
 ### Export
-1. Go to Kibana
-2. Click on "Stack Management"
-3. Click on "Saved Objects"
-4. Click on "Export <no.> objects"
-5. Click on "Export all"
-This will export a NDJSON file with all your objects. Always run a full export to make sure all references are included.
+`tpot elastic export` saves every Kibana object into `~/tpot_backups/kibana_objects_<UTC time>.ndjson`, `tpot elastic export FILE` into a new file of your choice. The *Elastic* page of the T-Pot Manager does the same. In Kibana: "Stack Management", "Saved Objects", "Export <no.> objects", "Export all" (always a full export, so all references are included).
 
 ### Import
-1. [Download the NDJSON file](https://raw.githubusercontent.com/telekom-security/tpotce/refs/heads/master/docker/tpotinit/dist/etc/objects/kibana_export.ndjson.zip) and unzip it.
-2. Go to Kibana
-3. Click on "Stack Management"
-4. Click on "Saved Objects"
-5. Click on "Import" and leave the defaults (check for existing objects and automatically overwrite conflicts) if you did not make personal changes to the Kibana objects.
-6. Browse for NDJSON file
-When asked: "If any of the objects already exist, do you want to automatically overwrite them?" you answer with "Yes, overwrite all".
+`tpot elastic import --dry-run` shows what an import would bring, `tpot elastic import` brings in the missing and the unchanged T-Pot objects and keeps the ones you changed, `tpot elastic import --mode overwrite` replaces yours too (it lists them and asks first). Both export first. `tpot elastic restore FILE` brings an export back, the advanced settings too. The shipped file is `~/tpotce/docker/tpotinit/dist/etc/objects/kibana_export.ndjson`; an import of it in Kibana ("Saved Objects", "Import", "Automatically overwrite conflicts") replaces your changes to T-Pot objects as well, export first.
 <br><br>
 
 # Troubleshooting

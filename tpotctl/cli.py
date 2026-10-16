@@ -14,6 +14,9 @@ HEALTH_STYLE = {"healthy": "green", "unhealthy": "red", "starting": "yellow"}
 # handed over unchanged, `tpot update -h` shows the help of update.sh
 PASSTHROUGH = {"update": "update.sh", "restore": "restore.sh"}
 CUSTOMIZER = os.path.join(REPO_DIR, "compose", "customizer.py")
+# the modes tpot elastic import takes: keep imports nothing
+KIBANA_IMPORT_MODES = ("add", "update", "overwrite")
+KIBANA_COMMANDS = ("export", "import", "restore")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -55,9 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="also change fixed keys of the system section (TPOT_VERSION, TPOT_DATA_PATH, ...), "
                              "after their warning")
     actions.add_parser("check", help="check .env as tpotinit does on start, exit code 1 on errors")
-    elastic = sub.add_parser("elastic", help="how long Elasticsearch keeps the events (default: status)")
+    elastic = sub.add_parser("elastic", help="how long Elasticsearch keeps the events, and T-Pot's Kibana objects "
+                                             "(default: status)")
     elastic_actions = elastic.add_subparsers(dest="elastic_command", metavar="ACTION")
-    elastic_actions.add_parser("status", help="TPOT_ES_RETENTION and what the ILM policy tpot does")
+    elastic_actions.add_parser("status", help="TPOT_ES_RETENTION and what the ILM policy tpot does, "
+                                              "TPOT_KIBANA_OBJECTS and what an import would bring")
     retention = elastic_actions.add_parser("retention", help="show or set TPOT_ES_RETENTION and apply it now")
     retention.add_argument("value", nargs="?", help="days (1-3650) or off; left out: show it")
     retention.add_argument("--adopt", action="store_true",
@@ -69,6 +74,22 @@ def build_parser() -> argparse.ArgumentParser:
                            help="confirm deleting events without a terminal; --yes does not")
     retention.add_argument("-y", "--yes", action="store_true",
                            help="do not ask other questions; it never confirms deleting events")
+    kibana_export = elastic_actions.add_parser("export", help="export every Kibana object, into "
+                                                              "~/tpot_backups/kibana_objects_<time>.ndjson")
+    kibana_export.add_argument("file", nargs="?", metavar="FILE",
+                               help="write the export to FILE instead, a new file (mode 0600)")
+    kibana_import = elastic_actions.add_parser("import", help="import T-Pot's Kibana objects as a mode of "
+                                                              "TPOT_KIBANA_OBJECTS does, an export first")
+    kibana_import.add_argument("--mode", choices=KIBANA_IMPORT_MODES, default="update",
+                               help="add: only the missing ones; update (default): the missing and the unchanged "
+                                    "ones, yours stay; overwrite: all of them, yours too (asks first)")
+    kibana_import.add_argument("--dry-run", action="store_true", help="only show what the mode would import")
+    kibana_import.add_argument("-y", "--yes", action="store_true",
+                               help="do not ask before overwrite replaces objects of yours (the export keeps them)")
+    kibana_restore = elastic_actions.add_parser("restore", help="import every object of an export, the advanced "
+                                                                "settings too, after a new export")
+    kibana_restore.add_argument("file", metavar="FILE", help="the export, i.e. one in ~/tpot_backups")
+    kibana_restore.add_argument("-y", "--yes", action="store_true", help="do not ask")
     users = sub.add_parser("users", help="users of the T-Pot web UI (default: list)")
     user_actions = users.add_subparsers(dest="users_command", metavar="ACTION")
     user_actions.add_parser("list", help="the web users, entries T-Pot would not start with are marked")
@@ -401,6 +422,149 @@ def _shortens_env(old: str, new: str) -> bool:
     return bool(old) and elastic.shortens(old, new)
 
 
+KIBANA_TITLES = 20          # objects named one per line, the rest counted
+
+
+def _objects(count: int, what: str = "Kibana objects") -> str:
+    return f"{count} {what.replace('objects', 'object') if count == 1 else what}"
+
+
+def _kibana_titles(items) -> List[str]:
+    lines = [f"  {item.title} ({item.key})" for item in items[:KIBANA_TITLES]]
+    if len(items) > KIBANA_TITLES:
+        lines.append(f"  … and {len(items) - KIBANA_TITLES} more")
+    return lines
+
+
+def _kibana_counts(chosen) -> str:
+    return (f"{len(chosen.new)} new · {len(chosen.update)} to update · {len(chosen.current)} the same · "
+            f"{len(chosen.yours)} of yours")
+
+
+def _kibana_status(values, console) -> None:
+    """The line of the Kibana objects in tpot elastic status: the mode and what an import would bring."""
+    from tpotctl import kibana_objects as ko
+    mode = values.get("TPOT_KIBANA_OBJECTS") or "keep"
+    if "kibana" not in ops.compose_names():
+        text = "no Kibana in this edition"
+    else:
+        data, objects = ops.kibana_dirs(env=values)
+        try:
+            if ko.pending_state(data) is not None:
+                text = "the first import has not finished yet, tpotinit retries on every start"
+            else:
+                text = _kibana_counts(ko.preview(data, objects))
+        except ko.KibanaError as err:
+            text = str(err)
+    console.print(f"{'Kibana objects':<19}TPOT_KIBANA_OBJECTS={mode} · {text}", markup=False)
+
+
+def _kibana_plan(mode: str, chosen, console) -> None:
+    """What `mode` would import of `chosen`, and which objects of yours it keeps or replaces."""
+    console.print(f"Kibana objects: {_kibana_counts(chosen)}", markup=False)
+    todo = len(chosen.to_import(mode))
+    if not todo:
+        console.print(f"Mode {mode} has nothing to import.", markup=False)
+    elif mode == "add":
+        console.print(f"Mode add imports the {todo} new ones, the others stay as they are.", markup=False)
+    else:
+        console.print(f"Mode {mode} imports {todo}, an export comes first.", markup=False)
+    if chosen.yours and mode == "update":
+        console.print("These objects of yours stay as they are:", markup=False)
+    elif chosen.yours and mode == "overwrite":
+        console.print("These objects of yours are replaced by the T-Pot version, the export keeps them:",
+                      markup=False)
+    if chosen.yours and mode != "add":
+        for line in _kibana_titles(chosen.yours):
+            console.print(line, markup=False)
+
+
+def _kibana_result(lines, ok: bool, console) -> None:
+    """The lines of kibana_objects.summary without its log mark: the counts, then what failed."""
+    from tpotctl import kibana_objects as ko
+    plain = [line[len(ko.LOG):] if line.startswith(ko.LOG) else line for line in lines]
+    (say.ok if ok else say.warn)(plain[0][:1].upper() + plain[0][1:] + ".", console.file)
+    for line in plain[1:]:
+        console.print(f"  {line}", markup=False)
+
+
+def _kibana_export(args, console) -> int:
+    from tpotctl import kibana_objects as ko
+    text = ko.export_objects()
+    count = len(ko.parse_ndjson(text, "the export of Kibana"))
+    if args.file:
+        path = ko.save_export_as(text, os.path.abspath(os.path.expanduser(args.file)))
+    else:
+        path = ko.save_export(text, ops.kibana_export_dir())
+    say.ok(f"{_objects(count)} exported to {path}.", console.file)
+    return 0
+
+
+def _kibana_import(args, values, console) -> int:
+    from tpotctl import kibana_objects as ko
+    mode = args.mode
+    data, objects = ops.kibana_dirs(env=values)
+    confirmed = None
+    if args.dry_run or mode == "overwrite":
+        chosen = ko.preview(data, objects)
+        _kibana_plan(mode, chosen, console)
+        if args.dry_run:
+            say.info("Nothing was changed (--dry-run).", console.file)
+            return 0
+        if chosen.yours and not confirm(f"Overwrite {_objects(len(chosen.yours), 'objects of yours')} with "
+                                        "the T-Pot version?", args.yes):
+            say.info("Nothing was changed.", console.file)
+            return 1
+        confirmed = {item.key for item in chosen.yours}
+    chosen, result, path = ko.run_apply(mode, data, objects, ops.kibana_export_dir(), confirmed=confirmed)
+    if not chosen.to_import(mode):
+        say.ok(f"Nothing to import ({_kibana_counts(chosen)}).", console.file)
+        return 0
+    _kibana_result(ko.summary(mode, chosen, result, path), not result.errors, console)
+    if mode == "update" and chosen.yours:
+        console.print("These objects of yours stay as they are:", markup=False)
+        for line in _kibana_titles(chosen.yours):
+            console.print(line, markup=False)
+    return 1 if result.errors else 0
+
+
+def _kibana_restore(args, values, console) -> int:
+    from tpotctl import kibana_objects as ko
+    path = os.path.abspath(os.path.expanduser(args.file))
+    objs = ko.read_export(path)         # before the question and before any request
+    data = ops.kibana_dirs(env=values)[0]
+    console.print(f"{path}: {_objects(len(objs))}. A restore imports every object of the file, also the "
+                  "advanced settings; objects made after it stay, Kibana never deletes on import. "
+                  "An export comes first.", markup=False)
+    if not confirm("Restore them?", args.yes):
+        say.info("Nothing was changed.", console.file)
+        return 1
+    export_path, result = ko.run_restore(path, data, ops.kibana_export_dir())
+    line = f"{_objects(len(result.imported))} restored"
+    if result.errors:
+        line += f", {len(result.errors)} failed"
+    if export_path:
+        line += f" (export: {export_path})"
+    failed = [f'not imported: {kind}:{ident} "{title}" ({why})' for kind, ident, title, why in result.errors]
+    _kibana_result([line] + failed, not result.errors, console)
+    return 1 if result.errors else 0
+
+
+def _run_kibana(args, values, console) -> int:
+    from tpotctl import kibana_objects as ko
+    if "kibana" not in ops.compose_names():
+        error("This edition runs no Kibana.")
+        return 1
+    run = {"export": lambda: _kibana_export(args, console),
+           "import": lambda: _kibana_import(args, values, console),
+           "restore": lambda: _kibana_restore(args, values, console)}[args.elastic_command]
+    try:
+        return run()
+    except ko.KibanaError as err:
+        error(str(err))
+        return 1
+
+
 def run_elastic(args) -> int:
     from tpotctl import elastic, settings as tsettings
     if getattr(args, "adopt", False) and getattr(args, "value", None):
@@ -414,6 +578,8 @@ def run_elastic(args) -> int:
         return 1
     value = current.values.get("TPOT_ES_RETENTION", "")
     console = _console()
+    if getattr(args, "elastic_command", None) in KIBANA_COMMANDS:
+        return _run_kibana(args, current.values, console)
     from_env = False
     if (getattr(args, "elastic_command", None) == "retention" and args.force and not args.value
             and not args.adopt):
@@ -424,7 +590,11 @@ def run_elastic(args) -> int:
         from_env = True
     state = elastic.status(value)
     shown = _retention_shown
-    if getattr(args, "elastic_command", None) in (None, "status") or (not args.value and not args.adopt):
+    if getattr(args, "elastic_command", None) in (None, "status"):
+        _retention_status(state, console, shown)
+        _kibana_status(current.values, console)
+        return 1 if state.state == "unreachable" else 0
+    if not args.value and not args.adopt:
         _retention_status(state, console, shown)
         return 1 if state.state == "unreachable" else 0
     if args.adopt:
