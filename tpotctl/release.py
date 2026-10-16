@@ -119,6 +119,7 @@ EXCLUDED = (
               "documentation examples, the docs are reviewed by hand for a release"),
     Exclusion(("SECURITY.md",), None, "the support policy (which releases get fixes) is decided at the release"),
     Exclusion(("update.sh",), r"^\s*#", "comments of update.sh are migration history (\"until ...\", Beelzebub note)"),
+    Exclusion(("update.sh",), r"^myES_STEP_VERSION=", "Elasticsearch step version for old data"),
     Exclusion(("docker/honeyaml/Dockerfile",), r"\btpot-[0-9]", "the name of a branch of the honeyaml fork, a fixed ref"),
     Exclusion(("docker/deprecated/**/*",), None, "deprecated services are not built, their images exist only at the last tag"),
     Exclusion(("tpotctl/tests/**/*", "compose/tests/**/*", "docker/tpotinit/tests/**/*"), None,

@@ -920,7 +920,19 @@ The update script will ...
  - remove docker images of earlier versions, keeping the tag your `.env` now names
  - detect the installed T-Pot edition (i.e. `SENSOR`, `MINI`, `LLM`, `TARPIT`, `MOBILE`) and restore it, using this release's `~/tpotce/compose/<edition>.yml` so that new honeypots and changes of the release are included.
  - rebuild a `docker-compose.yml` made with `~/tpotce/compose/customizer.py` from this release,
-   with the edition and the changes the customizer noted in its header.
+   with the edition and the changes the customizer noted in its header. A file of the customizer
+   before v2 (`# T-Pot: CUSTOM EDITION`) is rebuilt from its services with
+   `compose/customizer.py --adopt`, without a question; the run lists what it did not carry over.
+ - ask about a `docker-compose.yml` of your own (no edition, not from the customizer): the changes of
+   a release do not reach it. Before anything is stopped the run lists what an automatic adaptation
+   (`compose/customizer.py --adopt`, your file stays in the backup) would not carry over, then asks:
+   back up and adapt, or cancel (the default) and adapt it yourself (`tpot edition set <edition>`,
+   the customizer, or by hand along `diff -u docker-compose.yml compose/standard.yml`). Without a
+   terminal only `--adapt-compose` adapts it, `-y` does not; otherwise the run stops with exit code 1
+   and nothing changed. After the update.sh of an earlier release restarted into this one the
+   question comes after its pull: a cancel puts the checkout back and starts T-Pot again where
+   `tpot.service` is enabled. `--check-data-loss` reports it as `@@tpot loss compose`, the T-Pot
+   Manager offers *Adapt* or *Back*.
  - keep your previous `docker-compose.yml` in the backup archive. If you made changes to it by hand
    (i.e. removing the `ewsposter` section) you need to add them again - the run tells you how to
    compare the two.
@@ -951,7 +963,7 @@ code 5, leaving T-Pot up and running rather than filling the disk. That includes
 never quietly swapped for the regular backup.
 
 ### Loss of Data
-`update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade without `--full`, older backups that are deleted to make room for the new one, and images that cannot be pulled again or that the registry does not confirm in time. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout and the rewrite of `.env` and the compose file are no loss of data, they are only mentioned.
+`update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade that the backup has no room for (without `--full` the run adds that data to its backup by itself where there is room, the archive then has the name of a full one), the step of the data of an Elasticsearch before 8.19 through 8.19 on the way to 9 (key `elastic-step`, see [Elastic Stack Upgrades](#elastic-stack-upgrades)), older backups that are deleted to make room for the new one, and images that cannot be pulled again or that the registry does not confirm in time. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout, the rewrite of `.env` and of an edition or a file of the customizer are no loss of data, they are only mentioned. A compose file of your own is rewritten only after a yes (key `compose`, `--adapt-compose` without a terminal, never `--accept-data-loss`), the old one stays in the archive.
 
 `-y` confirms the update, it does not confirm a loss of data. Without a terminal `--accept-data-loss` confirms every loss (for the command line and cron, where you typed it), `--accept-data-loss-file <file>` only the losses its lines name:
 ```
@@ -963,7 +975,9 @@ The file holds the `@@tpot loss <key> <text>` lines of `--check-data-loss` that 
 
 If you decline (or cannot answer):
  - older backups stay where they are, the update stops before it touches anything with exit code 5 and T-Pot keeps running. Free some space, or confirm.
- - the Elasticsearch upgrade does not happen: the checkout and your configuration are rolled back, the Elasticsearch data was never touched and the run ends with exit code 5. T-Pot stays stopped, with `-s` it starts again on the release it ran before. Run it with `--full` to have the data in the backup, whatever `TPOT_DATA_PATH` is.
+ - the Elasticsearch upgrade does not happen: the checkout and your configuration are rolled back, the Elasticsearch data was never touched and the run ends with exit code 5. T-Pot starts again on the release it ran before when `tpot.service` is enabled (or with `-s`). Make room in `~/tpot_backups` and run the update again: the data then goes into the backup by itself.
+ - the step through Elasticsearch 8.19 does not happen: as for the upgrade, the checkout and your configuration go back, the data was never touched, exit code 5, and the run names the `docker run` lines to take the step by hand.
+ - a compose file of your own is not adapted and the update stops with exit code 1: before the stop nothing changed, T-Pot keeps running. After the update.sh of an earlier release already pulled (it restarted into this one), the checkout and your configuration go back, or, without a handover, your configuration and your file are back from its backup; T-Pot starts again where `tpot.service` is enabled. In that run the packages the customizer needs (PyYAML, the venv module of Python) are installed before the question and stay installed, the release needs them either way.
  - images that cannot be pulled again are kept, and the update goes on. An image the registry can supply again (it has an image with the same digest) is removed without a question. One built here (no digest, or another one) and one the registry does not confirm within 90 seconds for all images together (not reachable, too slow) are kept unless you confirm their removal.
 
 `update.sh --check-data-loss` lists what the run would lose and changes nothing (a `git fetch` at most); exit code 0 means nothing found, 3 found, 1 it cannot tell. The T-Pot Manager runs this check before an update from its menu and asks first; a yes there confirms the findings it showed and nothing else (`--accept-data-loss-file`), if the check cannot tell it says why.
@@ -971,27 +985,53 @@ If you decline (or cannot answer):
 ### Elastic Stack Upgrades
 When a release ships a newer Elastic Stack, Elasticsearch and Kibana upgrade their data in
 `~/tpotce/data/elk` in place on the first start. ***This cannot be undone*** - the older version
-refuses to start on upgraded data. Run such an update with `--full`, or take a snapshot of the
-machine first:
-```
-./update.sh -y --full
-```
+refuses to start on upgraded data. `update.sh` therefore takes `data/elk/data` into the backup of the
+run before the upgrade, by itself.
+
 Before it pulls the new images `update.sh` compares the Elasticsearch version that ran so far with
 the one of the release and, if they differ,
  - stops if the data partition is 90% full or more - Elasticsearch no longer allocates new indices
    then. The checkout and your configuration are put back to the state before the update, nothing
-   was pulled, and T-Pot is left stopped.
+   was pulled, and T-Pot starts again when `tpot.service` is enabled (or with `-s`).
  - warns at 85% and more.
- - asks if the backup of the run does not hold `data/elk/data` (default no), and tells you how to
-   copy it while T-Pot is still stopped. A no, or no terminal without `--accept-data-loss`, puts the
-   checkout and your configuration back and ends with exit code 5; T-Pot stays stopped, with `-s` it
-   starts again on the previous release. `--full` puts the data into the backup, whatever
-   `TPOT_DATA_PATH` is, and then there is no question. `-y` does not answer it. Where the checkout
-   cannot go back (it is the new release already, see below), the question says that a no cannot
-   stop the next start from upgrading the data: copy `data/elk/data` first, then update again.
+ - takes the data of an Elasticsearch before 8.19 through 8.19 first when the release ships 9 or
+   later: Elasticsearch 9 reads only the data of 8.19. The run says so and asks (default no; without
+   a terminal `--accept-data-loss`, or an `elastic-step` line in `--accept-data-loss-file`), puts
+   `data/elk/data` into its backup (also when the archive holds it already), checks that the Docker
+   root has about 4 GB free for the official images, and then runs Elasticsearch 8.19 once on the
+   data until it is yellow or green; where the edition has Kibana, Kibana 8.19 runs as well until it
+   has migrated its saved objects (MOBILE gets no Kibana). That takes 20 minutes at most
+   (`TPOT_ES_STEP_WAIT=<seconds>`, 60 to 86400, sets another bound; any other value stops the run
+   at once), a cluster that answers red for more than two minutes in a row ends it earlier. Its
+   containers, its network and the images it pulled are removed afterwards, the data belongs to
+   `2000:2000` again, then the update goes on with the new release. A no, Ctrl+C before the step
+   begins, no room for the data or the images, or a failed pull is a refusal as below, with the
+   commands to take the step by hand. A step that does not go through after Elasticsearch 8.19
+   started on the data (a timeout, a red cluster, a stop) puts the checkout back but leaves T-Pot
+   stopped; the summary says how the backup of that run puts the data from before the step back
+   (`restore.sh -f <archive> -g data`, or by hand with the `restore.sh` of the release before) and
+   what to start then. Where the checkout could not go back, the new release cannot read that data:
+   put the checkout back as well, or run the update again, it takes the step again. Copy that
+   archive elsewhere before you run the update again: the rotation of the full backups may remove
+   it. Every refusal of these checks ends with exit code 5, also one that loses nothing.
+ - adds `data/elk/data` of the data folder in use (`TPOT_DATA_PATH`) to the backup of the run when
+   it is not in it yet (with `--full` it is). That needs room in `~/tpot_backups`: the size of the
+   data plus 10 %, the reserve of every backup kept free, and, where the backups share the
+   filesystem of the data, that filesystem below 85% afterwards. The archive then has the name of a
+   full one. A copy that fails or is stopped leaves the archive as it was. This also holds after the
+   update.sh of an earlier release restarted into this one.
+ - asks only when there is no room, or the archive already holds a `data/elk/data` of another folder
+   (default no), and tells you how to copy it while T-Pot is still stopped. A no, or no terminal
+   without `--accept-data-loss`, puts the checkout and your configuration back and ends with exit
+   code 5; T-Pot starts again on the previous release when `tpot.service` is enabled (or with `-s`).
+   Make room and run the update again, or upgrade without a copy with `--accept-data-loss` (after an
+   earlier update.sh restarted into this one: `./update.sh -y -- --accept-data-loss`, an older
+   update.sh rejects the option without `--`). `-y` does not answer it. Where the checkout cannot go
+   back (it is the new release already, see below), the question says that a no cannot stop the
+   next start from upgrading the data: copy `data/elk/data` first, then update again.
 
 The first start after the upgrade takes longer than usual, give it a few minutes. To go back, stop
-T-Pot and restore the `--full` archive of that update with `restore.sh -f <archive> -y`: it replaces
+T-Pot and restore the full archive of that update (`_full` in its name) with `restore.sh -f <archive> -y`: it replaces
 `data/elk/data` with the copy from the archive (it asks first; without a terminal `--accept-data-loss`
 confirms it) and brings back the checkout and `.env`, so T-Pot starts on the previous images again.
 
@@ -1021,7 +1061,7 @@ and remove the ones your installation is running on.
 This is only needed once, coming from a release that predates this behaviour. Afterwards a plain
 `./update.sh -y` carries everything across on its own.
 
-If the `update.sh` of 24.04.1 already restarted into the new one, its checkout is the new release
+If the `update.sh` of the tag 24.04.1 already restarted into the new one, its checkout is the new release
 before the new script writes its backup, so a rollback is no longer possible. That old script also
 reset `.env` and `docker-compose.yml` to the files of the release: the new one takes both back from
 the archive the old one wrote to `~/*_tpot_backup.tgz` before it checks or writes anything (only if
@@ -1037,6 +1077,26 @@ folder and its `.env` names the version that ran before this update (`TPOT_VERSI
 an update before that one holds the data of an older release and does not count, and
 `update.sh --check-data-loss` (run by the T-Pot Manager on a T-Pot past 24.04.1) never counts it.
 Otherwise it says that a no cannot stop the upgrade and how to copy the data first.
+The `update.sh` of `master` of 2026-08-24 restarted the same way, without handing anything
+over, after it wrote its backup to `~/tpot_backups/*_tpot_backup*.tar` (there `.env` is the
+member `env`): the new script takes `.env` and `docker-compose.yml` from the newer of that
+archive and `~/*_tpot_backup.tgz`, under the same conditions. A tar there that is older than
+24 hours is not opened at all.
+
+From 2026-08-25 on, the `update.sh` of `master` (what installed T-Pots of 24.04.1 run) hands
+over to the new one: it stops T-Pot, writes its backup, resets the checkout and pulls, then
+starts the new `update.sh`, which goes on from there and restores from that backup. Its archive
+in `~/tpot_backups` holds `MANIFEST`, `rollback.txt`, `tracked.patch`, `env`,
+`docker-compose.yml`, `untracked/` and the Kibana objects and ILM policy in `elastic/` where
+there are any, and the files of `data/` that T-Pot keeps, always from `~/tpotce/data`, whatever
+`TPOT_DATA_PATH` says; `data/elk/data` only with `--full` (the new script adds it where there is
+room, see above). Its `tracked.patch` has no binary changes: a changed binary file in
+`~/tpotce` is not in it, copy it yourself first. The warnings of that first pass are not in the
+summary of the new script, read them in its output above. If it handed over no edition
+(`TPOT_DOCKER_COMPOSE` names another file, or there was no `docker-compose.yml`), the edition
+counts as unknown: it is not read from the reset checkout. The old script rejects the options it
+does not know; give the options of this release after `--`, it passes them on, e.g.
+`./update.sh -y -- --accept-data-loss`.
 
 To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
 
@@ -1184,7 +1244,7 @@ A policy that was changed in Kibana (make sure to "Include managed system polici
 <br>
 If Elasticsearch answers with something T-Pot cannot read (a policy or an index list of a shape it does not know, no answer at all), T-Pot says why (`Why: ...`) next to the waiting text, writes only `.env` and leaves the policy as it is. A closed index is listed as "closed, size unknown", an open one without its primaries (health red) as "size unknown"; neither is counted in the sizes, both are deleted with the others. tpotinit rejects any other value of `TPOT_ES_RETENTION` than the ones `env.schema.yml` accepts (1 to 3650 days, `off` or empty) in its `.env` check and does not start; `es_retention.sh` never touches the policy for a value that still gets through.
 <br>
-`update.sh` writes the retention of an existing policy into `.env` once, so an update keeps the time you set in Kibana before. If it cannot read the policy or its time is no whole number of days, it leaves `TPOT_ES_RETENTION` empty: T-Pot then leaves the policy as it is, `tpot elastic retention --adopt` lets T-Pot manage it.
+`update.sh` writes the retention of an existing policy into `.env` once, so an update keeps the time you set in Kibana before; after the update.sh of the release before restarted into the new one it reads the policy that one exported into its backup. If it cannot read the policy or its time is no whole number of days, it leaves `TPOT_ES_RETENTION` empty: T-Pot then leaves the policy as it is, `tpot elastic retention --adopt` lets T-Pot manage it.
 ![IndexManagement2](doc/kibana_c.png)
 <br><br>
 

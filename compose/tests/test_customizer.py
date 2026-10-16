@@ -263,6 +263,454 @@ class CoreTest(unittest.TestCase):
         self.assertEqual(core.render(self.catalog, result), text)
 
 
+# The definitions of master's tpot_services.yml (24.04.1), as its customizer copied them.
+MASTER_SERVICES = {
+    "tpotinit": {
+        "container_name": "tpotinit", "env_file": [".env"], "restart": "always", "stop_grace_period": "60s",
+        "tmpfs": ["/tmp/etc:uid=2000,gid=2000", "/tmp/:uid=2000,gid=2000"], "network_mode": "host",
+        "cap_add": ["NET_ADMIN"], "image": "${TPOT_REPO}/tpotinit:${TPOT_VERSION}",
+        "pull_policy": "${TPOT_PULL_POLICY}",
+        "volumes": ["${TPOT_DOCKER_COMPOSE}:/tmp/tpot/docker-compose.yml:ro",
+                    "${TPOT_DATA_PATH}/blackhole:/etc/blackhole", "${TPOT_DATA_PATH}:/data",
+                    "/var/run/docker.sock:/var/run/docker.sock:ro"]},
+    "logstash": {
+        "container_name": "logstash", "restart": "always",
+        "depends_on": {"elasticsearch": {"condition": "service_healthy"}}, "networks": ["nginx_local"],
+        "environment": ["LS_JAVA_OPTS=-Xms1024m -Xmx1024m", "TPOT_TYPE=${TPOT_TYPE:-HIVE}",
+                        "TPOT_HIVE_USER=${TPOT_HIVE_USER}", "TPOT_HIVE_IP=${TPOT_HIVE_IP}",
+                        "LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}"],
+        "ports": ["127.0.0.1:64305:64305"], "mem_limit": "2g", "image": "${TPOT_REPO}/logstash:${TPOT_VERSION}",
+        "pull_policy": "${TPOT_PULL_POLICY}", "volumes": ["${TPOT_DATA_PATH}:/data"]},
+    "cowrie": {
+        "container_name": "cowrie", "restart": "always",
+        "depends_on": {"tpotinit": {"condition": "service_healthy"}},
+        "tmpfs": ["/tmp/cowrie:uid=2000,gid=2000", "/tmp/cowrie/data:uid=2000,gid=2000"],
+        "networks": ["cowrie_local"], "ports": ["22:22", "23:23"], "image": "${TPOT_REPO}/cowrie:${TPOT_VERSION}",
+        "pull_policy": "${TPOT_PULL_POLICY}", "read_only": True,
+        "volumes": ["${TPOT_DATA_PATH}/cowrie/downloads:/home/cowrie/cowrie/dl",
+                    "${TPOT_DATA_PATH}/cowrie/keys:/home/cowrie/cowrie/etc",
+                    "${TPOT_DATA_PATH}/cowrie/log:/home/cowrie/cowrie/log",
+                    "${TPOT_DATA_PATH}/cowrie/log/tty:/home/cowrie/cowrie/log/tty"]},
+    "elasticsearch": {
+        "container_name": "elasticsearch", "restart": "always",
+        "depends_on": {"tpotinit": {"condition": "service_healthy"}}, "networks": ["nginx_local"],
+        "environment": ["bootstrap.memory_lock=true", "ES_JAVA_OPTS=-Xms2048m -Xmx2048m", "ES_TMPDIR=/tmp"],
+        "cap_add": ["IPC_LOCK"],
+        "ulimits": {"memlock": {"soft": -1, "hard": -1}, "nofile": {"soft": 65536, "hard": 65536}},
+        "mem_limit": "4g", "ports": ["127.0.0.1:64298:9200"],
+        "image": "${TPOT_REPO}/elasticsearch:${TPOT_VERSION}", "pull_policy": "${TPOT_PULL_POLICY}",
+        "volumes": ["${TPOT_DATA_PATH}:/data"]},
+    "kibana": {
+        "container_name": "kibana", "restart": "always",
+        "depends_on": {"elasticsearch": {"condition": "service_healthy"}}, "networks": ["nginx_local"],
+        "mem_limit": "1g", "ports": ["127.0.0.1:64296:5601"], "image": "${TPOT_REPO}/kibana:${TPOT_VERSION}",
+        "pull_policy": "${TPOT_PULL_POLICY}"},
+    "wordpot": {
+        "container_name": "wordpot", "restart": "always",
+        "depends_on": {"tpotinit": {"condition": "service_healthy"}}, "networks": ["wordpot_local"],
+        "ports": ["80:80"], "image": "${TPOT_REPO}/wordpot:${TPOT_VERSION}", "pull_policy": "${TPOT_PULL_POLICY}",
+        "read_only": True, "volumes": ["${TPOT_DATA_PATH}/wordpot/log:/opt/wordpot/logs/"]},
+    "spiderfoot": {
+        "container_name": "spiderfoot", "restart": "always",
+        "depends_on": {"tpotinit": {"condition": "service_healthy"}}, "networks": ["nginx_local"],
+        "ports": ["127.0.0.1:64303:8080"], "image": "${TPOT_REPO}/spiderfoot:${TPOT_VERSION}",
+        "pull_policy": "${TPOT_PULL_POLICY}",
+        "volumes": ["${TPOT_DATA_PATH}/spiderfoot:/home/spiderfoot/.spiderfoot"]},
+}
+
+
+def v1_file(names, change=None):
+    """A docker-compose-custom.yml as master's customizer wrote it: its header, then yaml.dump."""
+    services = {n: dict(MASTER_SERVICES[n]) for n in names}
+    for name, values in (change or {}).items():
+        services[name].update(values)
+    networks = {}
+    for definition in services.values():
+        for network in definition.get("networks", []):
+            networks[network] = None
+    return "# T-Pot: CUSTOM EDITION\n# Generated on: 2025-03-01 12:00:00\n" + yaml.dump(
+        {"networks": networks, "services": services}, default_flow_style=False, sort_keys=False, indent=2)
+
+
+# what update.sh hands over as --old-catalog: master's catalogue, without x-tpot lines
+MASTER_CATALOG = yaml.dump({"services": MASTER_SERVICES}, default_flow_style=False, sort_keys=False)
+MASTER_PORTS = core.old_catalog_ports(MASTER_CATALOG)
+
+
+def own_file(catalog, names, extra=None, edition="STANDARD"):
+    """A compose file of your own: the release's definitions plus services of your own."""
+    services = {}
+    for name in names:
+        services[name] = {k: v for k, v in catalog.catalog.services[name].items() if k != "x-tpot"}
+    services.update(extra or {})
+    return f"# T-Pot: {edition}\n" + yaml.safe_dump(
+        {"networks": {n: None for n in catalog.catalog.networks}, "services": services}, sort_keys=False)
+
+
+def without_new(out):
+    """The report lines but the new: ones (the base's services a small file does not have)."""
+    return [line for line in out.splitlines() if not line.startswith("new: ")]
+
+
+class AdoptTest(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.catalog = core.Catalog()
+
+    def run_cli(self, *args, path="/usr/bin:/bin"):           # no docker: no compose check
+        proc = subprocess.run([sys.executable, CUSTOMIZER] + list(args), stdin=subprocess.DEVNULL,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
+                              env=dict(os.environ, PATH=path))
+        return proc.returncode, proc.stdout, proc.stderr
+
+    def write(self, tmp, text, name="old.yml"):
+        path = os.path.join(tmp, name)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(text)
+        return path
+
+    def test_v1_file_with_a_removed_service_becomes_v2(self):
+        names = ["tpotinit", "logstash", "elasticsearch", "kibana", "cowrie", "spiderfoot"]
+        adoption = core.adopt(self.catalog, v1_file(names), "HIVE")
+        self.assertTrue(adoption.v1)
+        self.assertEqual(adoption.dropped, ["spiderfoot (removed in this release)"])
+        self.assertEqual(adoption.selection.base, "STANDARD")
+        self.assertEqual(adoption.selection.add, [])
+        self.assertEqual(adoption.selection.ports, {})
+        with tempfile.TemporaryDirectory() as tmp:
+            old, new = self.write(tmp, v1_file(names)), os.path.join(tmp, "new.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", new, "--report", "--tpot-type", "HIVE")
+            self.assertEqual(code, 0, out + err)
+            self.assertIn("dropped: spiderfoot (removed in this release)", out.splitlines())
+            for line in out.splitlines():
+                self.assertTrue(line.startswith(("dropped: ", "port: ", "moved: ", "new: ", "kept-out: ")), line)
+            with open(new, encoding="utf-8") as handle:
+                text = handle.read()
+            self.assertTrue(text.startswith("# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\n"))
+            self.assertTrue(core.checksum_ok(text))
+            services = yaml.safe_load(text)["services"]
+            for name in names[:-1]:
+                self.assertIn(name, services)
+            self.assertNotIn("spiderfoot", services)
+            self.assertIn("nginx", services)                          # kibana requires it
+            self.assertNotIn("dionaea", services)                     # not in the file: removed from the base
+            code, out, err = self.run_cli("--rebuild", new)
+            self.assertEqual(code, 0, out + err)
+            with open(new, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), text)
+
+    def test_changed_host_port_becomes_an_override(self):
+        names = ["tpotinit", "logstash", "elasticsearch", "cowrie"]
+        # 2222 is neither the old default (22) nor the release's: your change
+        text = v1_file(names, {"cowrie": {"ports": ["2222:22", "23:23"]}})
+        adoption = core.adopt(self.catalog, text, "HIVE", MASTER_PORTS)
+        self.assertEqual(adoption.selection.ports, {("cowrie", 22, "tcp"): 2222})
+        self.assertEqual(adoption.moved, [])
+        self.assertEqual([line for line in adoption.not_carried if "port" in line], [])
+        with tempfile.TemporaryDirectory() as tmp:
+            old, new = self.write(tmp, v1_file(names, {"cowrie": {"ports": ["2222:22", "23:23"]}})), \
+                os.path.join(tmp, "new.yml")
+            catalog = self.write(tmp, MASTER_CATALOG, "tpot_services.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", new, "--report", "--tpot-type", "HIVE",
+                                          "--old-catalog", catalog)
+            self.assertEqual(code, 0, out + err)
+            self.assertIn("port: cowrie:22/tcp=2222", out.splitlines())
+            with open(new, encoding="utf-8") as handle:
+                rendered = handle.read()
+            self.assertEqual(yaml.safe_load(rendered)["services"]["cowrie"]["ports"], ["2222:22", "23:23"])
+            self.assertIn("# customizer: port=cowrie:22/tcp=2222\n", rendered)
+
+    def test_an_old_default_host_port_is_moved_by_the_release(self):
+        # master had wordpot on 80, the release puts it on 8080 (h0neytr4p took 80)
+        text = v1_file(["tpotinit", "logstash", "elasticsearch", "wordpot"])
+        adoption = core.adopt(self.catalog, text, "HIVE", MASTER_PORTS)
+        self.assertEqual(adoption.selection.ports, {})
+        self.assertEqual(adoption.moved, ["wordpot: 80/tcp host 80 -> 8080 (changed by the release)"])
+        self.assertEqual(adoption.not_carried, [])
+        with tempfile.TemporaryDirectory() as tmp:
+            old, new = self.write(tmp, text), os.path.join(tmp, "new.yml")
+            catalog = self.write(tmp, MASTER_CATALOG, "tpot_services.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", new, "--dry-run", "--tpot-type", "HIVE",
+                                          "--old-catalog", catalog)
+            self.assertEqual(code, 0, out + err)
+            self.assertEqual(without_new(out), ["moved: wordpot: 80/tcp host 80 -> 8080 (changed by the release)"])
+
+    def test_without_an_old_catalog_no_host_port_is_carried(self):
+        text = v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie", "wordpot"],
+                       {"cowrie": {"ports": ["2222:22", "23:23"]}})
+        for old_catalog in (None, "services: [unclosed\n"):
+            with self.subTest(old_catalog=old_catalog):
+                with tempfile.TemporaryDirectory() as tmp:
+                    old = self.write(tmp, text)
+                    extra = ("--old-catalog", self.write(tmp, old_catalog, "cat.yml")) if old_catalog else ()
+                    code, out, err = self.run_cli("--adopt", old, "--dry-run", "--tpot-type", "HIVE", *extra)
+                self.assertEqual(code, 0, out + err)
+                self.assertEqual(without_new(out), [
+                    "kept-out: cowrie: host port 2222 for 22/tcp (the release has 22)",
+                    "kept-out: wordpot: host port 80 for 80/tcp (the release has 8080)",
+                ])
+        self.assertEqual(core.adopt(self.catalog, text, "HIVE").selection.ports, {})
+
+    def test_a_release_port_missing_from_the_file_stays_published(self):
+        # master's ciscoasa had no IKE ports 500 / 4500, a v1 cowrie without 23 is no choice either
+        ciscoasa = {k: v for k, v in self.catalog.catalog.services["ciscoasa"].items() if k != "x-tpot"}
+        ciscoasa["ports"] = ["8443:8443"]
+        text = own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch"], {"ciscoasa": ciscoasa})
+        text = text.replace("# T-Pot: STANDARD", core.V1_EDITION_LINE, 1)
+        adoption = core.adopt(self.catalog, text, "HIVE")
+        self.assertEqual(adoption.selection.ports, {})
+        self.assertEqual(adoption.not_carried, [])
+        result = core.resolve(self.catalog, adoption.selection)
+        rendered = yaml.safe_load(core.render(self.catalog, result))["services"]["ciscoasa"]["ports"]
+        self.assertEqual(sorted(rendered), sorted(self.catalog.catalog.services["ciscoasa"]["ports"]))
+        cowrie = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"],
+                                                  {"cowrie": {"ports": ["22:22"]}}), "HIVE")
+        self.assertEqual(cowrie.selection.ports, {})
+
+    def test_a_port_the_release_removed_is_moved_one_you_added_is_kept_out(self):
+        old_catalog = core.old_catalog_ports(yaml.safe_dump({"services": {
+            "ciscoasa": {"ports": ["5000:5000/udp", "8443:8443"]},           # master's ciscoasa
+            "mailoney": {"ports": ["25:25", "587:25"]}}}))
+        ciscoasa = {k: v for k, v in self.catalog.catalog.services["ciscoasa"].items() if k != "x-tpot"}
+        ciscoasa["ports"] = ["5000:5000/udp", "6000:6000/udp", "8443:8443"]  # 6000 is yours
+        mailoney = {k: v for k, v in self.catalog.catalog.services["mailoney"].items() if k != "x-tpot"}
+        mailoney["ports"] = ["25:25", "587:25"]
+        text = own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch"],
+                        {"ciscoasa": ciscoasa, "mailoney": mailoney})
+        adoption = core.adopt(self.catalog, text, "HIVE", old_catalog)
+        self.assertEqual(adoption.selection.ports, {})
+        self.assertEqual(adoption.moved, ["ciscoasa: 5000/udp (removed by the release)",
+                                          "mailoney: 587:25 (removed by the release)"])
+        self.assertEqual(adoption.not_carried, ["ciscoasa: port 6000/udp (the release no longer has it)"])
+        # without the old catalogue all three are named as kept out
+        adoption = core.adopt(self.catalog, text, "HIVE")
+        self.assertEqual(adoption.moved, [])
+        self.assertEqual(adoption.not_carried, ["ciscoasa: port 5000/udp (the release no longer has it)",
+                                                "ciscoasa: port 6000/udp (the release no longer has it)",
+                                                "mailoney: port 587:25 (the release has no such port)"])
+
+    def test_an_old_only_port_is_kept_out(self):
+        ciscoasa = {k: v for k, v in self.catalog.catalog.services["ciscoasa"].items() if k != "x-tpot"}
+        ciscoasa["ports"] = ["5000:5000/udp", "8443:8443"]                 # as master had them
+        text = own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch"], {"ciscoasa": ciscoasa})
+        adoption = core.adopt(self.catalog, text, "HIVE")
+        self.assertEqual(adoption.selection.ports, {})
+        self.assertEqual(adoption.not_carried, ["ciscoasa: port 5000/udp (the release no longer has it)"])
+        self.assertEqual(adoption.moved, [])
+        # a bind IP of the file cannot be an override, it is named
+        cowrie = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"],
+                                                  {"cowrie": {"ports": ["127.0.0.1:2222:22", "23:23"]}}), "HIVE",
+                             MASTER_PORTS)
+        self.assertEqual(cowrie.selection.ports, {("cowrie", 22, "tcp"): 2222})
+        self.assertEqual(cowrie.not_carried,
+                         ["cowrie: port 127.0.0.1:2222:22 (only the host port is carried, the release has 22:22)"])
+
+    def test_adopt_never_drops_a_release_port(self):
+        names = ["tpotinit", "logstash", "elasticsearch", "kibana", "cowrie"]
+        for text in (v1_file(names, {"cowrie": {}}), v1_file(names, {"cowrie": {"ports": []},
+                                                                    "kibana": {"ports": []}})):
+            self.assertNotIn(None, core.adopt(self.catalog, text, "HIVE").selection.ports.values())
+
+    def test_own_service_and_own_volume_are_listed_not_carried(self):
+        cowrie = {k: v for k, v in self.catalog.catalog.services["cowrie"].items() if k != "x-tpot"}
+        cowrie["volumes"] = cowrie["volumes"] + ["/srv/cowrie/etc:/home/cowrie/cowrie/etc/extra:ro"]
+        cowrie["environment"] = cowrie["environment"] + ["COWRIE_X=1"]
+        cowrie["networks"] = ["honeypot_local", "mynet"]
+        mine = {"image": "nginx:alpine", "networks": ["mynet"], "ports": ["8081:80"]}
+        text = own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch"],
+                        {"cowrie": cowrie, "mytool": mine})
+        text = text.replace("networks:\n", "networks:\n  mynet: {}\n", 1)
+        adoption = core.adopt(self.catalog, text, "HIVE")
+        self.assertFalse(adoption.v1)
+        self.assertEqual(adoption.dropped, ["mytool (not a T-Pot service)"])
+        self.assertEqual(adoption.not_carried, [
+            "cowrie: environment COWRIE_X=1",
+            "cowrie: volume /srv/cowrie/etc:/home/cowrie/cowrie/etc/extra:ro",
+            "cowrie: network mynet",
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            old, new = self.write(tmp, text), os.path.join(tmp, "new.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", new, "--dry-run", "--tpot-type", "HIVE")
+            self.assertEqual(code, 0, out + err)
+            self.assertEqual(without_new(out), ["dropped: mytool (not a T-Pot service)",
+                                                "kept-out: cowrie: environment COWRIE_X=1",
+                                                "kept-out: cowrie: volume /srv/cowrie/etc:/home/cowrie/cowrie/etc/extra:ro",
+                                                "kept-out: cowrie: network mynet"])
+            self.assertFalse(os.path.exists(new))                     # --dry-run writes nothing
+
+    def test_old_kibana_mem_limit_is_named(self):
+        adoption = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "kibana"]), "HIVE")
+        self.assertEqual(adoption.not_carried, ["kibana: mem_limit 1g (the release has 2g)"])
+
+    def test_old_network_of_a_service_and_a_new_default_are_no_loss(self):
+        # cowrie_local became honeypot_local, ${X} became ${X:-default}: nothing to name
+        cowrie = {k: v for k, v in self.catalog.catalog.services["cowrie"].items() if k != "x-tpot"}
+        cowrie["networks"] = ["cowrie_local"]
+        cowrie["environment"] = ["COWRIE_PERSONA=${COWRIE_PERSONA}"]
+        adoption = core.adopt(self.catalog, own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch"],
+                                                     {"cowrie": cowrie}), "HIVE")
+        self.assertEqual(adoption.not_carried, [])
+
+    def test_other_keys_image_and_top_level_sections_are_named(self):
+        cowrie = {k: v for k, v in self.catalog.catalog.services["cowrie"].items() if k != "x-tpot"}
+        cowrie["image"] = "cowrie/cowrie:latest"
+        cowrie["command"] = "cowrie start -n"
+        cowrie["restart"] = "unless-stopped"
+        cowrie["labels"] = {"me": "yes"}
+        logstash = {k: v for k, v in self.catalog.catalog.services["logstash"].items() if k != "x-tpot"}
+        logstash["image"] = "dtagdevsec/logstash:24.04.1"            # a T-Pot image with its tag: no loss
+        text = own_file(self.catalog, ["tpotinit", "elasticsearch"], {"cowrie": cowrie, "logstash": logstash})
+        text += "volumes:\n  mydata: {}\n"
+        lines = core.adopt(self.catalog, text, "HIVE").not_carried
+        self.assertEqual(lines, [
+            "cowrie: image cowrie/cowrie:latest (the release has ${TPOT_REPO}/cowrie:${TPOT_VERSION})",
+            "cowrie: command cowrie start -n (the release has none)",
+            "cowrie: restart unless-stopped (the release has always)",
+            "cowrie: labels {me: 'yes'} (the release has none)",
+            "volumes: {mydata: {}}",
+        ])
+
+    def test_sensor_type_takes_the_sensor_base(self):
+        text = v1_file(["tpotinit", "logstash", "cowrie", "kibana", "elasticsearch"])
+        adoption = core.adopt(self.catalog, text, "SENSOR")
+        self.assertEqual(adoption.selection.base, "SENSOR")
+        self.assertIn("kibana (a SENSOR has no kibana)", adoption.dropped)
+        self.assertIn("elasticsearch (a SENSOR has no elasticsearch)", adoption.dropped)
+        result = core.resolve(self.catalog, adoption.selection)
+        self.assertEqual(errors(result), [])
+        self.assertIn("cowrie", result.services)
+        self.assertNotIn("dionaea", result.services)
+        self.assertEqual(core.adopt(self.catalog, text, "HIVE").selection.base, "STANDARD")
+
+    def test_unreadable_file_exits_2_and_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            new = os.path.join(tmp, "new.yml")
+            for text in ("services: [unclosed\n", "# T-Pot: CUSTOM EDITION\nnetworks: {}\n", "services: {}\n"):
+                with self.subTest(text=text):
+                    code, out, err = self.run_cli("--adopt", self.write(tmp, text), "-o", new, "--report")
+                    self.assertEqual(code, 2, out + err)
+                    self.assertEqual(out, "")
+                    self.assertFalse(os.path.exists(new))
+            code, out, err = self.run_cli("--adopt", os.path.join(tmp, "missing.yml"), "-o", new, "--report")
+            self.assertEqual(code, 2, out + err)
+            self.assertEqual(out, "")
+
+    def test_conflict_exits_3_and_writes_nothing(self):
+        text = own_file(self.catalog, ["tpotinit", "logstash", "elasticsearch", "glutton", "honeytrap"])
+        with tempfile.TemporaryDirectory() as tmp:
+            new = os.path.join(tmp, "new.yml")
+            for extra in ((), ("--dry-run",)):
+                code, out, err = self.run_cli("--adopt", self.write(tmp, text), "-o", new, "--report",
+                                              "--tpot-type", "HIVE", *extra)
+                self.assertEqual(code, 3, out + err)
+                self.assertIn("glutton and honeytrap cannot run at the same time", err)
+                self.assertFalse(os.path.exists(new))
+
+    def test_unquoted_ports_are_text_not_base_60(self):
+        # YAML 1.1 reads an unquoted 22:22 as 1342; compose and --adopt read the text
+        text = ("# T-Pot: STANDARD\nservices:\n"
+                "  tpotinit:\n    image: ${TPOT_REPO}/tpotinit:${TPOT_VERSION}\n"
+                "  cowrie:\n    image: ${TPOT_REPO}/cowrie:${TPOT_VERSION}\n    ports:\n"
+                "      - 2222:22\n      - 23:23\n")
+        old_catalog = core.old_catalog_ports("services:\n  cowrie:\n    ports:\n      - 22:22\n      - 23:23\n")
+        self.assertEqual([p.raw for p in old_catalog["cowrie"]], ["22:22", "23:23"])
+        adoption = core.adopt(self.catalog, text, "HIVE", old_catalog)
+        self.assertEqual(adoption.selection.ports, {("cowrie", 22, "tcp"): 2222})
+        self.assertEqual([line for line in adoption.not_carried if "port" in line], [])
+        self.assertEqual(core.load_text_ports("a: [22:22, 1.5, 12, 0x1f]"), {"a": ["22:22", 1.5, 12, 31]})
+
+    def test_settings_of_a_network_the_release_gives_up_are_named(self):
+        text = v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"])
+        tuned = text.replace("  cowrie_local: null\n",
+                             "  cowrie_local:\n    driver_opts:\n      com.docker.network.driver.mtu: 1400\n", 1)
+        self.assertNotEqual(tuned, text)
+        self.assertEqual(core.adopt(self.catalog, tuned, "HIVE").not_carried, [
+            "network cowrie_local: driver_opts com.docker.network.driver.mtu=1400 "
+            "(the release puts cowrie on honeypot_local)"])
+        self.assertEqual(core.adopt(self.catalog, text, "HIVE").not_carried, [])   # a plain network: no line
+        # settings of a network no kept service was on stay quiet
+        lonely = text.replace("  cowrie_local: null\n", "  cowrie_local: null\n  spare:\n    external: true\n", 1)
+        self.assertEqual(core.adopt(self.catalog, lonely, "HIVE").not_carried, [])
+
+    def test_services_of_the_base_the_file_lacks_are_new_not_added(self):
+        adoption = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"]), "HIVE")
+        for name in ("conpot_beckhoff_cx", "conpot_building_automation", "conpot_hart_gateway",
+                     "conpot_iccp", "conpot_plc_modbus", "dionaea"):
+            self.assertIn(name, adoption.selection.remove)
+            self.assertIn(f"{name} (in this release, not in your file: compose/customizer.py --add {name})",
+                          adoption.new)
+        named = [line.split()[0] for line in adoption.new]
+        for name in ("cowrie", "tpotinit", "logstash", "elasticsearch"):
+            self.assertNotIn(name, named)
+        hidden = [n for n in adoption.selection.remove if self.catalog.flag(n, "hidden")]
+        for name in hidden:
+            self.assertNotIn(name, named)
+        result = core.resolve(self.catalog, adoption.selection)
+        self.assertNotIn("conpot_iccp", result.services)
+        with tempfile.TemporaryDirectory() as tmp:
+            old = self.write(tmp, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"]))
+            code, out, err = self.run_cli("--adopt", old, "--dry-run", "--tpot-type", "HIVE")
+            self.assertEqual(code, 0, out + err)
+            self.assertIn("new: conpot_iccp (in this release, not in your file: compose/customizer.py --add conpot_iccp)",
+                          out.splitlines())
+
+    def test_with_an_old_catalog_only_services_new_in_this_release_are_new(self):
+        old_catalog = dict(MASTER_PORTS, dionaea=[])          # dionaea was there, you left it out
+        adoption = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"]),
+                              "HIVE", old_catalog)
+        named = [line.split()[0] for line in adoption.new]
+        self.assertIn("dionaea", adoption.selection.remove)
+        self.assertNotIn("dionaea", named)
+        for name in ("conpot_beckhoff_cx", "conpot_iccp"):
+            self.assertIn(name, adoption.selection.remove)
+            self.assertIn(name, named)
+        # without the old catalogue every base service the file lacks is named
+        self.assertIn("dionaea", [line.split()[0] for line in core.adopt(
+            self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"]), "HIVE").new])
+
+    def test_a_failed_write_exits_2_with_one_line_and_leaves_no_file(self):
+        text = v1_file(["tpotinit", "logstash", "elasticsearch", "cowrie"])
+        with tempfile.TemporaryDirectory() as tmp:
+            old = self.write(tmp, text)
+            missing = os.path.join(tmp, "nowhere", "new.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", missing, "--report", "--tpot-type", "HIVE")
+            self.assertEqual(code, 2, out + err)
+            self.assertEqual([line for line in err.splitlines() if "is not written" in line], [err.strip()])
+            self.assertFalse(os.path.exists(os.path.dirname(missing)))
+            # docker compose rejects the result: one line, nothing left behind
+            bindir = os.path.join(tmp, "bin")
+            os.mkdir(bindir)
+            with open(os.path.join(bindir, "docker"), "w", encoding="utf-8") as out_file:
+                out_file.write("#!/bin/sh\necho 'service cowrie: bad' >&2\necho 'second line' >&2\nexit 1\n")
+            os.chmod(os.path.join(bindir, "docker"), 0o755)
+            new = os.path.join(tmp, "new.yml")
+            code, out, err = self.run_cli("--adopt", old, "-o", new, "--report", "--tpot-type", "HIVE",
+                                          path=bindir + ":/usr/bin:/bin")
+            self.assertEqual(code, 2, out + err)
+            self.assertEqual(len(err.strip().splitlines()), 1, err)
+            self.assertIn("is not written: docker compose rejects the result: service cowrie: bad second line", err)
+            self.assertEqual(sorted(os.listdir(tmp)), ["bin", "old.yml"])
+
+    def test_type_without_tpot_type(self):
+        sensor = core.render(self.catalog, core.resolve(self.catalog, core.Selection("SENSOR")))
+        self.assertEqual(core.adopt_type(sensor), "SENSOR")                    # v2 file built from SENSOR
+        self.assertEqual(core.adopt_type("# T-Pot: SENSOR\nservices: {}\n"), "SENSOR")
+        self.assertEqual(core.adopt_type(v1_file(["tpotinit"])), "HIVE")
+        self.assertEqual(core.adopt_type(sensor, "hive"), "HIVE")              # .env wins
+        self.assertEqual(core.adopt_type("", "SENSOR"), "SENSOR")
+
+    def test_dropped_services_match_update_sh(self):
+        with open(os.path.join(core.REPO_DIR, "update.sh"), encoding="utf-8") as handle:
+            line = next(line for line in handle if line.startswith("myDROPPED_SERVICES="))
+        self.assertEqual(core.DROPPED_SERVICES, line.split("=", 1)[1].strip().strip('"').split())
+
+    def test_earlier_networks_hold_those_of_this_release(self):
+        for compose in [self.catalog.catalog] + list(self.catalog.editions.values()):
+            for network in compose.networks:
+                self.assertIn(network, core.EARLIER_NETWORKS, compose.path)
+
+
 class CliTest(unittest.TestCase):
 
     def run_cli(self, *args):

@@ -292,6 +292,70 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
                                                     "@@tpot loss backups 2 older backups go to make room.\n")])
         self.assertIn("--accept-data-loss-file", shown[0])
 
+    async def test_update_with_the_elastic_step_names_it_and_passes_its_key(self):
+        update = os.path.join(cli.REPO_DIR, "update.sh")
+        step = ("The data of Elasticsearch 8.18.2 cannot be read by 9.5.4: the update first runs Elasticsearch and "
+                "Kibana 8.19.23 once on it (in /d/elk), then the new release.")
+        loss = (True, [("elastic-step", step)], "")
+        shown, seen, _calls = await self.update_with(loss, "no")
+        self.assertIn("cannot be read by 9.5.4", shown[0])
+        self.assertIn("Yes lets update.sh take the step through Elasticsearch 8.19", shown[0])   # the step named
+        self.assertIn("Kibana 8.19 where the edition has it", shown[0])
+        self.assertEqual(shown[1], "no")
+        self.assertEqual(seen, [])
+        FakeEngine.files.clear()
+        shown, seen, _calls = await self.update_with(loss, "yes")
+        self.assertEqual(seen, [[update, "-y", "--accept-data-loss-file", "FILE"]])
+        self.assertEqual(FakeEngine.files, [(0o600, f"@@tpot loss elastic-step {step}\n")])
+
+    async def test_update_with_a_compose_file_of_your_own_offers_adapt(self):
+        """The compose finding: Adapt passes --adapt-compose (never the file for it), Back runs nothing."""
+        update = os.path.join(cli.REPO_DIR, "update.sh")
+        own = ("Your docker-compose.yml is a compose file of your own: the update adapts it to the release only "
+               "after a yes (--adapt-compose), the backup keeps your file. Not carried over: kibana: mem_limit 1g.")
+        loss = (True, [("compose", own)], "")
+        shown, seen, calls = await self.update_with(loss, "no")
+        self.assertIn("Not carried over: kibana: mem_limit 1g.", shown[0])
+        self.assertIn("Adapt lets update.sh back up your compose file and adapt it to this release", shown[0])
+        self.assertIn("update.sh --adapt-compose", shown[0])
+        self.assertEqual(shown[1], "no")                                  # Back has the focus
+        self.assertEqual(seen, [])
+        FakeEngine.files.clear()
+        shown, seen, _calls = await self.update_with(loss, "yes")
+        self.assertEqual(seen, [[update, "-y", "--adapt-compose"]])
+        self.assertEqual(FakeEngine.files, [])
+        self.assertNotIn("--accept-data-loss-file", shown[0])
+        # with another finding: Adapt confirms that one through the file, as ever, and adapts
+        elastic = "Elasticsearch 8 -> 9 upgrades the data in /d/elk on the next start."
+        loss = (True, [("compose", own), ("elastic", elastic)], "")
+        shown, seen, _calls = await self.update_with(loss, "yes", start=True)
+        self.assertIn(elastic, shown[0])
+        self.assertIn("Adapt confirms these and nothing else", shown[0])
+        self.assertEqual(seen, [[update, "-y", "-s", "--adapt-compose", "--accept-data-loss-file", "FILE"]])
+        self.assertEqual(FakeEngine.files, [(0o600, f"@@tpot loss elastic {elastic}\n")])
+
+    async def test_the_compose_dialog_says_adapt_and_back(self):
+        """Adapt / Back, Back focused; the title names the compose file alone, a neutral one where Adapt
+        also confirms another loss."""
+        own = ("compose", "Your docker-compose.yml is a compose file of your own.")
+        elastic = ("elastic", "Elasticsearch 8 -> 9 upgrades the data.")
+        for items, title in (([own], "Adapt your compose file?"), ([own, elastic], "Go on with these changes?")):
+            with self.subTest(title=title):
+                backend = FakeBackend()
+                backend._loss = (True, items, "")
+                app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+                async with app.run_test(size=(120, 40)) as pilot:
+                    await pilot.pause(0.2)
+                    app.goto("update")
+                    await pilot.pause(0.2)
+                    await pilot.click("#run-update")
+                    await pilot.pause(0.4)
+                    self.assertIsInstance(app.screen, ConfirmDialog)
+                    self.assertEqual(app.screen.title_text, title)
+                    self.assertEqual(str(app.screen.query_one("#yes").label), "Adapt")
+                    self.assertEqual(str(app.screen.query_one("#no").label), "Back")
+                    self.assertEqual(app.focused.id, "no")
+
     async def test_update_without_findings_runs_as_before(self):
         shown, seen, calls = await self.update_with((True, [], ""), "yes")
         self.assertIsNone(shown)

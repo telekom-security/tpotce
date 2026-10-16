@@ -235,10 +235,46 @@ class UpdateShTest(Harness):
                                   r"\s*trap - INT\n", text), text[-900:])
         refused = re.search(r"function fuELASTIC_REFUSED \(\) \{\n\ttrap - INT\n", read("update.sh"))
         self.assertTrue(refused)
-        self.assertEqual(len(re.findall(r"trap .*INT", read("update.sh"))), 5)
+        # the append of the Elasticsearch data (Ctrl+C is a no there as well) puts back the trap it found
+        # on both of its ways out, the rest of update.sh has the five above
+        append = re.search(r"function fuAPPEND_ES_DATA \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        self.assertEqual(len(re.findall(r'eval "\$\{myTRAP:-trap - INT\}"', append)), 2)
+        # the step through 8.19: INT, TERM and HUP only end it, its cleanup cannot be stopped, the traps it
+        # found come back; Ctrl+C from its question up to the step is a refusal, after it the trap goes
+        step = re.search(r"function fuES_STEP_819 \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        self.assertIn("trap 'myES_STEP_STOPPED=\"1\"' INT TERM HUP", step)
+        self.assertTrue(re.search(r"trap '' INT TERM HUP\n\tfuES_STEP_CLEANUP \"\$1\"\n"
+                                  r"\teval \"\$\{myTRAP_INT:-trap - INT\}\"\n\teval \"\$\{myTRAP_TERM:-trap - TERM\}\"\n"
+                                  r"\teval \"\$\{myTRAP_HUP:-trap - HUP\}\"", step), step)
+        block = re.search(r"trap fuES_STEP_REFUSED INT\n\s*fuLOSS_CONFIRM elastic-step .*?\n\s*trap - INT\n"
+                          r"\s*fuDID ok \"Elasticsearch data upgraded", text, re.S)
+        self.assertTrue(block, text[-900:])
+        self.assertEqual(re.findall(r"trap .*INT", block.group(0)), ["trap fuES_STEP_REFUSED INT", "trap - INT"])
+        self.assertTrue(re.search(r"function fuES_STEP_REFUSED \(\) \{\n\ttrap - INT\n", read("update.sh")))
+        # the question about a compose file of your own: Ctrl+C there is a no, the trap it found comes back;
+        # its cancel lets the rollback finish
+        choice = re.search(r"function fuADOPT_ASK \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        self.assertEqual(re.findall(r"trap .*INT", choice), ["trap -p INT", "trap 'myADOPT_INT=\"1\"' INT",
+                                                             "trap - INT"])
+        self.assertIn('eval "${myTRAP:-trap - INT}"', choice)
+        cancel = re.search(r"function fuADOPT_CANCEL \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        self.assertTrue(re.search(r"trap '' INT\n\s*fuROLLBACK_CHECKOUT \|\| myRC=\$\?\n\s*trap - INT\n", cancel), cancel)
+        rest = read("update.sh").replace(append, "").replace(step, "").replace(choice, "").replace(cancel, "")
+        self.assertEqual(len(re.findall(r"trap .*INT", rest)), 8)
 
-    def test_the_refusal_names_full(self):
-        self.assertTrue("--full" in self.check_elastic())
+    def test_the_refusal_never_names_full(self):
+        """The update.sh of the release before makes room for --full by deleting older backups without a
+        question: no hint or summary item of the Elasticsearch check sends anyone there."""
+        text = read("update.sh")
+        for name in ("fuCHECK_ELASTIC", "fuELASTIC_REFUSED", "fuES_ROOM_TEXT", "fuES_ACCEPT_TEXT",
+                     "fuAPPEND_ES_DATA", "fuRESTART_AFTER_REFUSAL", "fuES_STEP_REFUSED_ITEMS", "fuES_STEP_RESTORE_ITEMS",
+                     "fuES_STEP_MANUAL", "fuES_STEP_ROOM", "fuES_STEP_819", "fuES_STEP_RESTORE_TEXT"):
+            body = re.search(rf"function {name} \(\) \{{.*?\n\}}", text, re.S).group(0)
+            said = [line for line in body.splitlines()
+                    if re.search(r"fuUI_(HINT|WARN|ERROR|OK)|fuDID|echo \"|myTEXT=|myES_APPEND_WHY=", line)]
+            with self.subTest(name=name):
+                self.assertTrue(said)
+                self.assertFalse([line for line in said if "--full" in line], said)
 
     def test_restart_into_this_update_sh_keeps_it(self):
         self.assertEqual(self.restart_args(read("update.sh"), "-y", "-B", "/run/f", "-F"),
@@ -1695,10 +1731,24 @@ DF = ('#!/bin/sh\ncase "$*" in\n  *size*) echo "1B-blocks"; cat "$HOME/df_size" 
       '    fi\n    echo "$a" ;;\n'
       '  *pcent*) echo "Use%"; cat "$HOME/df_pcent" 2>/dev/null || echo " 40%" ;;\nesac\n')
 # du -k <file>: the KiB of the file from HOME/sizes ("<name> <kib>" per line); du -scb (fuBACKUP_SIZE)
-# says what HOME/need holds
+# says what HOME/need holds; du -sb (fuES_DATA_FITS, the Elasticsearch data) what HOME/es_need holds,
+# without it the size cannot be read. It answers for any path, also one that does not exist
 DU = ('#!/bin/sh\nfor a; do f="$a"; done\n'
+      'case "$1" in -sb) [ -f "$HOME/es_need" ] || exit 1; printf "%s\\t%s\\n" "$(cat "$HOME/es_need")" "$f"; exit 0 ;; esac\n'
       'case "$1" in -s*b) echo "$(cat "$HOME/need" 2>/dev/null || echo 1)\ttotal"; exit 0 ;; esac\n'
       'k=$(sed -n "s|^${f##*/} ||p" "$HOME/sizes" 2>/dev/null)\necho "${k:-1}\t$f"\n')
+
+
+# The functions of update.sh that put the Elasticsearch data into the archive of the run (fuCHECK_ELASTIC)
+# and start T-Pot again after a refusal
+ES_APPEND = ("fuSAME_DIR", "fuSAME_FS", "fuES_DATA_FITS", "fuARCHIVE_HAS_ES_DATA", "fuARCHIVE_NAME",
+             "fuARCHIVE_LIST", "fuROTATE", "fuARCHIVE_RENAMED", "fuAPPEND_ES_DATA", "fuRESTART_AFTER_REFUSAL",
+             "fuDONE_ROLLED_BACK", "fuES_COPY_TO",
+             "fuES_ROOM_TEXT", "fuES_ACCEPT_TEXT", "fuES_STEP_REFUSED_ITEMS", "fuES_STEP_RESTORE_ITEMS",
+             # the step of the data of an Elasticsearch before 8.19 through 8.19
+             "fuES_NEEDS_STEP", "fuES_STEP_WHAT", "fuES_STEP_RESTORE_TEXT", "fuES_STEP_TEXT", "fuES_STEP_COMMANDS",
+             "fuES_STEP_LINE", "fuES_STEP_MANUAL",
+             "fuES_STEP_REFUSED", "fuES_STEP_ROOM", "fuES_STEP_WAIT", "fuES_STEP_CLEANUP", "fuES_STEP_819")
 
 
 class DataLossTest(Harness):
@@ -1859,8 +1909,8 @@ class DataLossTest(Harness):
         """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS",
                                       "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuELASTIC_REFUSED", "fuOLD_RELEASE_BACKUP",
                                       "fuTMPDIR", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
-                                      "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV",
-                                      "fuCHECK_ELASTIC") \
+                                      "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_MEMBER_NAME", "fuARCHIVE_ENV",
+                                      *ES_APPEND, "fuCHECK_ELASTIC") \
             + stub_confirm + 'fuCHECK_ELASTIC\necho "went on"\n'
 
     def test_elastic_upgrade_without_full_refused_rolls_back(self):
@@ -1872,7 +1922,7 @@ class DataLossTest(Harness):
         self.assertNotIn("ASKED", out)
         self.assertIn("WARN: Elasticsearch 8.19.0 -> 9.1.0 upgrades the data in "
                       f"{self.tpotce}/data/elk on the next start. This cannot be undone and the backup "
-                      "of this run does not hold it (--full does).", out)
+                      "of this run does not hold it.", out)
         self.assertIn("DID: fail: Not updated: the Elasticsearch upgrade was not confirmed, the checkout "
                       "and the configuration are back.", out)
         self.assertLess(out.index("sudo cp -a"), out.index("WARN: Elasticsearch 8.19.0"))   # the copy hint first
@@ -1966,7 +2016,7 @@ class DataLossTest(Harness):
         start = restore.index("\tmyOLDVERSION=$(grep")
         oldversion = restore[start:restore.index("esac\n", start) + 5]
         chain = (f'eval "$(sed -n \'/^fuUI_VERSION_GE () {{/,/^}}/p\' {REPO}/installer/lib/ui.sh)"\n'
-                 + self.functions("fuTMPDIR", "fuOLD_UPDATER_UNREADABLE", "fuOLD_UPDATER_CONFIG")
+                 + self.functions("fuTMPDIR", "fuOLD_UPDATER_NEWEST", "fuOLD_UPDATER_UNREADABLE", "fuOLD_UPDATER_CONFIG")
                  + 'trap \'[ -z "${myTMPDIR}" ] || rm -rf "${myTMPDIR}"\' EXIT\n'
                  + 'myPREPARED=""\nfuOLD_UPDATER_CONFIG\n' + oldversion + 'echo "OLDVERSION=${myOLDVERSION}"\n')
         tail = 'fuCHECK_ELASTIC\necho "went on"\n'
@@ -2085,11 +2135,15 @@ class DataLossTest(Harness):
         self.assertNotIn("STARTED", out)
 
     def test_full_with_a_custom_data_path_needs_no_question(self):
-        result = self.bash(self.elastic(archive_has_data=True, env=f"TPOT_DATA_PATH={self.home}/custom\n"))
+        """The --full archive this run wrote (no handover) holds the data folder that runs, wherever it is."""
+        full = 'myFULL=1 myARCHIVE="$HOME/tpot_backups/20261014101010_tpot_backup_full.tar"\n'
+        result = self.bash(self.elastic(archive_has_data=True, env=f"TPOT_DATA_PATH={self.home}/custom\n",
+                                        extra=full))
         out = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, out)
         self.assertIn("went on", out)
         self.assertNotIn("Not confirmed", out)
+        self.assertIn("OK: The Elasticsearch data is in", out)
 
     def test_no_pause_left(self):
         text = read("update.sh")
@@ -2173,6 +2227,7 @@ class DataLossTest(Harness):
         return origin
 
     CHECK = textwrap.dedent("""
+        fuCOMPOSE_LOSS () { :; }
         docker () {
           local myA=""
           case "$1 $2" in
@@ -2189,11 +2244,11 @@ class DataLossTest(Harness):
         }
     """)
     CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
-                       "fuCHECK_BACKUP_SPACE",
+                       "fuCHECK_BACKUP_SPACE", "fuES_DATA_FITS", "fuSAME_FS", "fuES_NEEDS_STEP", "fuES_STEP_WHAT", "fuES_STEP_TEXT",
                        "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuIMAGE_PULLABLE", "fuSORT_IMAGES",
                        # the archive of 24.04.1 is there to be found, the check must not take it
                        "fuOLD_RELEASE_BACKUP", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
-                       "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV",
+                       "fuOLD_UPDATER_FILE", "fuARCHIVE_MEMBER", "fuARCHIVE_MEMBER_NAME", "fuARCHIVE_ENV",
                        "fuLOCAL_IMAGES_TEXT", "fuUNSURE_IMAGES_TEXT", "fuIMAGES", "fuLOSS_TARGET", "fuCHECK_DATA_LOSS")
 
     def check(self, extra=""):
@@ -2334,6 +2389,30 @@ class DataLossTest(Harness):
         self.assertIn("exit 5", flat)
         # the exit codes of the check: found, nothing found, cannot tell
         self.assertIn("Exit 0: nothing found, 3: found, 1: it cannot tell.", flat)
+
+    def test_help_and_menu_name_adapt_compose(self):
+        """--adapt-compose of update.sh: its help, tpot update -h and the question of the T-Pot Manager say
+        the same: a compose file of your own is adapted after a yes, without a terminal with the option."""
+        result = self.run_script(os.path.join(REPO, "update.sh"), "-h")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(re.search(r"^  --adapt-compose  ", result.stdout, re.M), result.stdout)
+        flat = " ".join(result.stdout.split())
+        self.assertIn("[--accept-data-loss-file <file>] [--adapt-compose]", flat)
+        self.assertIn("For a docker-compose.yml of your own (no edition, not built by compose/customizer.py): back "
+                      "up your compose file and adapt it to this release without a question; what the run lists "
+                      "as kept-out is not carried over. At a terminal the run asks (default: cancel), -y does not "
+                      "choose.", flat)
+        self.assertIn("A file of the customizer before v2 (# T-Pot: CUSTOM EDITION) is rebuilt without a question.",
+                      flat)
+        cli = " ".join(read("tpotctl/cli.py").split())
+        self.assertIn('"your own it adapts after a yes, without a terminal with --adapt-compose)"', cli)
+        app = " ".join(read("tpotctl/app.py").split())
+        self.assertIn("Adapt lets update.sh back up your compose file and adapt it to this release (update.sh "
+                      '" "--adapt-compose)', app)
+        self.assertIn('args = list(args) + ["--adapt-compose"]', app)
+        # the text of the run where the option (or the choice) takes it
+        self.assertIn('"--adapt-compose: back up your compose file and adapt it to this release; the kept-out list '
+                      'above is not carried over."', read("update.sh"))
 
     # --- one data path, the old Elasticsearch under every registry ---------------------------------
 
@@ -2698,8 +2777,8 @@ class OldUpdaterConfigTest(Harness):
     of the checkout."""
 
     HELPERS = DataLossTest.HELPERS
-    FUNCTIONS = ("fuENV_VALUE", "fuTMPDIR", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_FRESH", "fuOLD_UPDATER_READ",
-                 "fuOLD_UPDATER_FILE", "fuOLD_UPDATER_UNREADABLE", "fuARCHIVE_MEMBER", "fuARCHIVE_ENV",
+    FUNCTIONS = ("fuENV_VALUE", "fuTMPDIR", "fuOLD_UPDATER_ARCHIVE", "fuOLD_UPDATER_NEWEST", "fuOLD_UPDATER_FRESH",
+                 "fuOLD_UPDATER_READ", "fuOLD_UPDATER_FILE", "fuOLD_UPDATER_UNREADABLE", "fuARCHIVE_MEMBER", "fuARCHIVE_MEMBER_NAME", "fuARCHIVE_ENV",
                  "fuOLD_UPDATER_CONFIG")
     RELEASE_ENV = "TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\nWEB_USER=\n"
     RELEASE_COMPOSE = "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: x\n"
@@ -3044,6 +3123,116 @@ class OldUpdaterConfigTest(Harness):
         self.assertLess(first, main.index("\nfuCHECK_VERSION\n", update))
         self.assertLess(first, main.index("\nfuBACKUP\n", update))
 
+    # --- the update.sh of 2026-08-24 on master: ~/tpot_backups/*_tpot_backup*.tar, no handover -------
+
+    def tar_archive(self, env=None, compose=None, name="20261014080000_tpot_backup.tar", age=0):
+        """The archive of the update.sh of 2026-08-24 (a1f2c659 to a7099cec): one tar of its stage in
+        ~/tpot_backups, MANIFEST rollback.txt env tracked.patch docker-compose.yml, then the files of
+        data/ it keeps; .env is the member env. It restarted into this script without a handover."""
+        env = self.USER_ENV if env is None else env
+        version = re.search(r"^TPOT_VERSION=(.*)$", env, re.M)
+        manifest = ("T-Pot backup\nCreated:      2026-10-14 08:00:00 +0200\nHostname:     tpot\n"
+                    "Edition:      MINI\nTPOT_TYPE:    \n"
+                    f"TPOT_VERSION: {version.group(1) if version else ''}\n"
+                    "Commit:       0123456789abcdef (master)\n"
+                    "Repository:   https://github.com/telekom-security/tpotce\n\n"
+                    "Restore with 'restore.sh -f <this archive>'.\nTo go back to the commit before the update:\n"
+                    "  cd ~/tpotce && git reset --hard $(cat rollback.txt)\n")
+        members = {"MANIFEST": manifest, "rollback.txt": "0123456789abcdef\n", "env": env, "tracked.patch": ""}
+        if compose is not False:
+            members["docker-compose.yml"] = self.USER_COMPOSE if compose is None else compose
+        members["data/uuid"] = "u\n"
+        path = make_backup(self.home, members, name=name)
+        if age:
+            os.utime(path, (time.time() - age, time.time() - age))
+        return path
+
+    def test_n1_takes_a_fresh_tar_of_the_2026_08_24_updater(self):
+        archive = self.tar_archive()
+        out = self.run_config()
+        self.assertIn("rc=0", out)
+        self.assertEqual(self.get(".env"), self.USER_ENV, out)
+        self.assertEqual(self.get("docker-compose.yml"), self.USER_COMPOSE, out)
+        text = f"Your configuration of 24.04.1 is back from {archive} (the earlier updater had reset it)."
+        self.assertIn(f"OK: {text}", out)
+        self.assertIn(f"DID: ok: {text}", out)
+        self.assertIn("HINT: Put back: .env and docker-compose.yml.", out)
+        # without a compose file in it, .env alone
+        self.commit(self.RELEASE_ENV)
+        os.remove(archive)
+        self.tar_archive(compose=False)
+        out = self.run_config()
+        self.assertEqual(self.get(".env"), self.USER_ENV, out)
+        self.assertEqual(self.get("docker-compose.yml"), self.RELEASE_COMPOSE, out)
+        self.assertIn("HINT: Put back: .env. Other files", out)
+
+    def test_n1_an_old_tar_is_not_opened_nor_named(self):
+        """~/tpot_backups keeps archives of every age: a tar older than a day is never listed or
+        extracted (a large --full one would cost two scans at every update) and no hint names it. A
+        stale tgz of the tag 24.04.1 next to it still gets its hint, as before."""
+        real = shutil.which("tar")
+        calls = os.path.join(self.home, "tar_calls")
+        with open(os.path.join(self.bin, "tar"), "w", encoding="utf-8") as out:
+            out.write(f'#!/bin/sh\necho "$*" >> "{calls}"\nexec {real} "$@"\n')
+        os.chmod(os.path.join(self.bin, "tar"), 0o755)
+        archive = self.tar_archive(age=3 * 24 * 3600)
+        out = self.run_config()
+        self.assertIn("rc=0", out)
+        self.assertReleaseFiles(out)
+        self.assertNotIn(archive, out)
+        self.assertNotIn("WARN", out)
+        named = []
+        if os.path.exists(calls):
+            with open(calls, encoding="utf-8") as handle:
+                named = [line for line in handle.read().splitlines() if archive in line]
+        self.assertEqual(named, [])
+        # the older tgz of the tag 24.04.1 keeps its hint
+        tgz = self.archive(age=4 * 24 * 3600)
+        out = self.run_config()
+        self.assertReleaseFiles(out)
+        self.assertNotIn(archive, out)
+        self.assertIn(f"tar xOf {tgz} .env > ~/tpotce/.env", out)
+
+    def test_n1_prefers_the_newer_of_tgz_and_tar(self):
+        tgz_env = self.USER_ENV.replace("WEB_USER=dXNlcg==", "WEB_USER=dGd6")
+        tar_env = self.USER_ENV.replace("WEB_USER=dXNlcg==", "WEB_USER=dGFy")
+        for newer in ("tar", "tgz"):
+            with self.subTest(newer=newer):
+                self.commit(self.RELEASE_ENV)
+                shutil.rmtree(os.path.join(self.home, "tpot_backups"), ignore_errors=True)
+                tgz = self.archive(env=tgz_env, age=0 if newer == "tgz" else 3600)
+                tar = self.tar_archive(env=tar_env, age=0 if newer == "tar" else 3600)
+                out = self.run_config()
+                self.assertIn("rc=0", out)
+                self.assertEqual(self.get(".env"), tar_env if newer == "tar" else tgz_env, out)
+                self.assertIn(f"is back from {tar if newer == 'tar' else tgz}", out)
+        # a tgz of the tag 24.04.1 that is older than a day does not hide a fresh tar
+        self.commit(self.RELEASE_ENV)
+        shutil.rmtree(os.path.join(self.home, "tpot_backups"))
+        self.archive(env=tgz_env, age=30 * 3600)
+        tar = self.tar_archive(env=tar_env)
+        out = self.run_config()
+        self.assertEqual(self.get(".env"), tar_env, out)
+        self.assertIn(f"is back from {tar}", out)
+
+    def test_n1_tar_with_a_newer_env_version_is_left_alone(self):
+        """The newest tar in ~/tpot_backups is often one of this release (or a later one): its .env names
+        the version of the checkout or a newer one, nothing is taken from it."""
+        for version in ("24.04.2", "24.04.3"):
+            with self.subTest(version=version):
+                self.commit(self.RELEASE_ENV)
+                shutil.rmtree(os.path.join(self.home, "tpot_backups"), ignore_errors=True)
+                archive = self.tar_archive(env=self.USER_ENV.replace("24.04.1", version))
+                out = self.run_config()
+                self.assertIn("rc=0", out)
+                self.assertReleaseFiles(out)
+                self.assertIn(f"tar xOf {archive} env > ~/tpotce/.env", out)
+        # nor from a fresh one of 24.04.1 while the restarted run of a handover runs
+        self.commit(self.RELEASE_ENV)
+        self.tar_archive()
+        out = self.run_config(extra="myPREPARED=1\n")
+        self.assertReleaseFiles(out)
+
 
 class UpdateRepairTest(Harness):
     """The steps of update.sh that used to lose something: a backup that keeps binary changes and the data
@@ -3333,16 +3522,22 @@ class UpdateRepairTest(Harness):
         self.assertEqual(self.read(os.path.join(backups, "update.log")), "the last run\n")
         self.assertFalse(os.path.exists(os.path.join(backups, "update.log.1")))
 
-    def test_unknown_sensor_edition_warns(self):
+    def test_unknown_edition_on_a_sensor_is_not_replaced_by_the_template(self):
+        """A compose file of your own on a SENSOR is adapted as a SENSOR (ComposeAdoptTest); on an older
+        checkout, which is no update, it goes back as it was, never replaced by the SENSOR template."""
+        own = "services: {own: {}}\n"
         self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=SENSOR\n")
-        self.write(os.path.join(self.tpotce, "docker-compose.yml"), "services: {own: {}}\n")
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), "# T-Pot: STANDARD\n")
         self.write(os.path.join(self.tpotce, "compose", "sensor.yml"), "# T-Pot: SENSOR\n")
-        script = (self.functions("fuEDITION_TEMPLATE", "fuRESTORE_EDITION")
-                  + 'myEDITION=UNKNOWN myCOMPOSE_CUSTOMIZED="" myARCHIVE=/b/x_tpot_backup.tar\nfuRESTORE_EDITION\n')
+        archive = make_backup(self.home, {"docker-compose.yml": own})
+        script = (self.functions("fuEDITION_TEMPLATE", "fuCOMPOSE_FROM_ARCHIVE", "fuRESTORE_EDITION")
+                  + 'fuTMPDIR () { [ -n "${myTMPDIR}" ] || myTMPDIR=$(mktemp -d); }\n'
+                  + f'myEDITION=UNKNOWN myCOMPOSE_CUSTOMIZED="" myOLDER_CHECKOUT=1 myARCHIVE="{archive}"\n'
+                  'fuRESTORE_EDITION\n')
         result = self.bash(script)
-        warns = [line for line in result.stdout.splitlines() if line.startswith("WARN:")]
-        self.assertTrue(any("docker-compose.yml" in line and "/b/x_tpot_backup.tar" in line for line in warns), warns)
-        self.assertEqual(self.read(os.path.join(self.tpotce, "docker-compose.yml")), "# T-Pot: SENSOR\n")
+        self.assertEqual(self.read(os.path.join(self.tpotce, "docker-compose.yml")), own, result.stdout)
+        self.assertIn("OK: Your own docker-compose.yml is restored from the backup.", result.stdout)
+        self.assertNotIn("SENSOR edition", result.stdout)
 
     # --- the edition line under a comment of your own ----------------------------------------------
 
@@ -3351,12 +3546,12 @@ class UpdateRepairTest(Harness):
                          "fuCHECK_EDITION", "fuCOMPOSE_FROM_ARCHIVE", "fuRESTORE_EDITION")
     TEMPLATE = "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: new\n"
 
-    def check_edition(self, compose, then=""):
+    def check_edition(self, compose, then="", before=""):
         """fuCHECK_EDITION on HOME/tpotce/docker-compose.yml, with compose/standard.yml as the template."""
         self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\n")
         self.write(os.path.join(self.tpotce, "docker-compose.yml"), compose)
         self.write(os.path.join(self.tpotce, "compose", "standard.yml"), self.TEMPLATE)
-        script = (self.EDITIONS + self.functions(*self.EDITION_FUNCTIONS)
+        script = (self.EDITIONS + self.functions(*self.EDITION_FUNCTIONS) + before
                   + 'fuTMPDIR () { myTMPDIR=$(mktemp -d); }\nmyEDITION="" myCOMPOSE_CUSTOMIZED="" '
                   'myARCHIVE=/b/x_tpot_backup.tar\nfuCHECK_EDITION\n'
                   'echo "edition=${myEDITION} customized=${myCOMPOSE_CUSTOMIZED}"\n' + then)
@@ -3377,9 +3572,11 @@ class UpdateRepairTest(Harness):
         self.assertNotIn("Unable to determine", out)
 
     def test_an_edition_line_after_the_first_yaml_line_is_not_taken(self):
-        out = self.check_edition("services:\n# T-Pot: STANDARD\n  tpotinit:\n    image: old\n")
+        # no edition: a compose file of your own, the adaptation decides (ComposeAdoptTest)
+        out = self.check_edition("services:\n# T-Pot: STANDARD\n  tpotinit:\n    image: old\n",
+                                 before='fuADOPT_COMPOSE () { echo "ADOPT: $*"; }\n')
         self.assertIn("edition=UNKNOWN customized=", out)
-        self.assertIn("WARN: Unable to determine the edition", out)
+        self.assertIn(f"ADOPT: {self.tpotce}/docker-compose.yml check", out)
 
     def custom_file(self, preamble=""):
         body = "\nservices:\n  tpotinit:\n    image: x\n"

@@ -1806,16 +1806,36 @@ def retention_unknown(value: str, host: bool = True) -> str:
             f"the events less long; {then}")
 
 
+# What a yes does for a finding beyond its line (ops.LOSS_KEYS)
+LOSS_NOTES = {
+    "compose": "Adapt lets update.sh back up your compose file and adapt it to this release (update.sh "
+               "--adapt-compose): what the line names as not carried over is not in the new file, the backup "
+               "keeps your file. Back changes nothing; adapt it yourself (tpot edition set, compose/customizer.py "
+               "or by hand), then update again.",
+    "elastic-step": "Yes lets update.sh take the step through Elasticsearch 8.19: the data goes into the backup "
+                    "of the update first, then Elasticsearch 8.19 (and Kibana 8.19 where the edition has it) runs "
+                    "once on it, then the new release. Should the step not go through, the update says how that "
+                    "backup puts the data from before back.",
+}
+
+
 def data_loss_text(items) -> Text:
     """The body of the question before an update that loses data: one line per finding of
-    update.sh --check-data-loss, then what yes means."""
+    update.sh --check-data-loss (with what yes does where LOSS_NOTES says more), then what yes means."""
     text = Text()
-    for _key, line in items:
+    for key, line in items:
         text.append(f"{glyphs.g('fail')} ", style=theme.color("error"))
         text.append(f"{line}\n", style=theme.color("mist"))
-    text.append("\nThe backup of the update cannot bring this back. Yes confirms these and nothing else "
-                "(update.sh --accept-data-loss-file): a loss the run finds beyond them is refused.",
-                style=f"bold {theme.color('wax')}")
+        if key in LOSS_NOTES:
+            text.append(f"  {LOSS_NOTES[key]}\n", style=theme.color("ash"))
+    if any(key != "compose" for key, _line in items):
+        yes = "Adapt" if any(key == "compose" for key, _line in items) else "Yes"
+        text.append(f"\nThe backup of the update cannot bring this back. {yes} confirms these and nothing else "
+                    "(update.sh --accept-data-loss-file): a loss the run finds beyond them is refused.",
+                    style=f"bold {theme.color('wax')}")
+    else:
+        text.append("\nAdapt confirms the adaptation of your compose file and nothing else (update.sh "
+                    "--adapt-compose).", style=f"bold {theme.color('wax')}")
     return text
 
 
@@ -2477,7 +2497,15 @@ class TpotApp(App):
         # a yes confirms what the dialog shows and nothing else: the lines of the check, in a file
         # (--accept-data-loss-file); never the bare --accept-data-loss, which confirms any loss
         confirmed = ""
-        if ok:
+        if ok and any(key == "compose" for key, _line in items):
+            # a compose file of your own: Adapt is --adapt-compose, the other findings go into the file as ever
+            others = [(key, line) for key, line in items if key != "compose"]
+            # Adapt also confirms the other losses: a title that names them all
+            title = "Go on with these changes?" if others else "Adapt your compose file?"
+            dialog = ConfirmDialog(title, data_loss_text(items), yes="Adapt", no="Back")
+            confirmed = loss_lines(others)
+            args = list(args) + ["--adapt-compose"]
+        elif ok:
             dialog = ConfirmDialog("Accept this loss of data?", data_loss_text(items), yes="Update and lose it",
                                    no="Back")
             confirmed = loss_lines(items)
