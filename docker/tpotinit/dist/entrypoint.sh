@@ -74,6 +74,38 @@ create_web_users() {
     done
 }
 
+# The hold of ewsposter (hold, hold.ack) and the lock of the checks (check.lock) in <data>/ews
+# end with every start, so a check that was cut off never keeps ewsposter quiet. The folder is
+# reached by its descriptor, and a name in it is removed, never followed; a folder of that name stays.
+clear_ews_hold() {
+    python3 - "${1:-/data}" <<'PY'
+import os
+import stat
+import sys
+
+data = sys.argv[1]
+try:
+    data_fd = os.open(data, os.O_RDONLY | os.O_DIRECTORY)
+except OSError:
+    sys.exit(0)
+try:
+    ews_fd = os.open("ews", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=data_fd)
+except OSError:
+    sys.exit(0)
+for name in ("hold", "hold.ack", "check.lock"):
+    try:
+        if stat.S_ISDIR(os.stat(name, dir_fd=ews_fd, follow_symlinks=False).st_mode):
+            print(f"# Warning: {data}/ews/{name} is a folder, it stays.")
+            continue
+        os.unlink(name, dir_fd=ews_fd)
+        print(f"# Removed {data}/ews/{name}.")
+    except FileNotFoundError:
+        continue
+    except OSError as error:
+        print(f"# Warning: {data}/ews/{name} could not be removed ({error.strerror}).")
+PY
+}
+
 update_permissions() {
 	echo
 	echo "# Updating permissions ..."
@@ -198,6 +230,9 @@ if [ -f "/data/uuid" ];
     echo
     uuidgen > /data/uuid
 fi
+
+# A hold of ewsposter or a lock of the checks from before this start ends here
+clear_ews_hold /data
 
 # Check if TPOT_BLACKHOLE is enabled
 if [ "${TPOT_OSTYPE}" == "linux" ];

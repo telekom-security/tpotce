@@ -131,12 +131,16 @@ and oversized frames and expects no container to stay busy afterwards, and
 validates the JSON events against the Conpot 1.0 event schema. The OPC UA probe
 runs the `asyncua` client of the image inside the container's network namespace.
 
-The EWSPoster test runs `ews.py` twice in verbose mode with EWS submission
-disabled, first against empty Honeytrap, Endlessh, Heralding and IPPHoney logs,
-then with one line added to the Honeytrap and IPPHoney logs. Both runs must
-finish without a traceback and the second run must report the events from
-line 1. The container needs outbound network access, EWSPoster looks up the
-external IP via `api.ipify.org` on every start.
+The EWSPoster test runs the image with its real entrypoint (the loop of
+`ews.py` passes) and sends EWS submissions to a local sink container that keeps
+every POST. The first pass over empty Honeytrap, Endlessh, Heralding, IPPHoney
+and Cowrie logs sends nothing; then line 1 of the Honeytrap and IPPHoney logs
+and three Cowrie sessions (labelled SSH or Telnet) must arrive. With the hold
+marker `data/ews/hold` EWSPoster writes `data/ews/hold.ack`, its indexes move on
+and nothing is sent; after the hold only new lines arrive, never those of the
+hold. A marker older than 30 minutes is ignored, and `docker stop` ends the
+container at once. The container needs outbound network access, EWSPoster looks
+up the external IP via `api.ipify.org` on every pass.
 
 The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
