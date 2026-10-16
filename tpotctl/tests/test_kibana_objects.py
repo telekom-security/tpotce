@@ -2014,13 +2014,32 @@ class OpsTest(unittest.TestCase):
             with open(path, "w", encoding="utf-8") as handle:
                 handle.write(body)
             os.utime(path, (NOW + n, NOW + n))
-        os.mkfifo(pipe)                         # listed, never waited on
+        os.mkfifo(pipe)                         # left out, never waited on
         os.utime(pipe, (NOW + 3, NOW + 3))
         infos = ops.kibana_export_infos(site.home, site.data)
         self.assertEqual([(i.path, i.origin, i.objects) for i in infos],
-                         [(pipe, "Manager", None), (broken, "Manager", None), (theirs, "T-Pot", 1),
-                          (mine, "Manager", 2)])
+                         [(broken, "Manager", None), (theirs, "T-Pot", 1), (mine, "Manager", 2)])
         self.assertEqual((infos[-1].modified, infos[-1].size), (NOW, len(text)))
+
+    def test_kibana_export_infos_leave_out_links_and_count_no_large_file(self):
+        from tpotctl import ops
+        site = Site(self, [])
+        auto = ko.auto_exports_dir(site.data)
+        os.makedirs(site.exports)
+        os.makedirs(auto)
+        mine = os.path.join(site.exports, "kibana_objects_20261016101010.ndjson")
+        with open(mine, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(dash("a")) + "\n")
+        os.symlink(mine, os.path.join(auto, "auto_20261016101011.ndjson"))        # a link to an export
+        os.mkdir(os.path.join(auto, "auto_20261016101012.ndjson"))                 # a folder of that name
+        large = os.path.join(auto, "auto_20261016101013.ndjson")
+        with open(large, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(dash("b")) + "\n")
+            handle.truncate(ops.KIBANA_COUNT_LIMIT + 1)                            # sparse, never read
+        with unittest.mock.patch("tpotctl.kibana_objects.read_export", wraps=ko.read_export) as read:
+            infos = ops.kibana_export_infos(site.home, site.data)
+        self.assertEqual(sorted((i.path, i.objects) for i in infos), sorted([(mine, 1), (large, None)]))
+        self.assertEqual([c.args[0] for c in read.call_args_list], [mine])
 
 
 class StandaloneTest(unittest.TestCase):

@@ -143,8 +143,10 @@ if textual:
             self.calls.append(("kibana-update", overwrite, confirmed))
             self.kibana_raise("update")
             chosen = self.kibana_plan()
-            done = [(i.type, i.id) for i in chosen.to_import("overwrite" if overwrite else "update")]
-            return chosen, ko.Result(imported=done), "/b/kibana_objects_20261016120000.ndjson"
+            refused = getattr(self, "_kibana_refused", [])      # (type, id, title, reason) Kibana refused
+            done = [(i.type, i.id) for i in chosen.to_import("overwrite" if overwrite else "update")
+                    if (i.type, i.id) not in {(t, n) for t, n, _title, _why in refused}]
+            return chosen, ko.Result(imported=done, errors=list(refused)), "/b/kibana_objects_20261016120000.ndjson"
 
         def kibana_export(self):
             self.calls.append("kibana-export")
@@ -2287,6 +2289,114 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
             await pilot.click("#yes")
             await pilot.pause(0.4)
         self.assertEqual(backend._settings.changes, [{"TPOT_KIBANA_OBJECTS": "overwrite"}])
+
+    def test_every_mode_names_the_first_import_when_kibana_holds_none_of_the_objects(self):
+        from tpotctl import kibana_objects as ko
+        empty = ko.Plan([ko.Item("dashboard:a", "dashboard", "a", "Attacks", "new"),
+                         ko.Item("dashboard:b", "dashboard", "b", "Brand new", "new")])
+        for mode in ko.MODES:
+            with self.subTest(mode=mode):
+                self.assertEqual(tapp.mode_effect(mode, empty), "Kibana holds none of T-Pot's objects: the next "
+                                                                "start imports them, without your advanced settings.")
+        some = ko.Plan(empty.items[:1] + [ko.Item("dashboard:c", "dashboard", "c", "Cowrie", "current")])
+        self.assertEqual(tapp.mode_effect("keep", some), "On the next start: nothing is imported.")
+        self.assertEqual(tapp.mode_effect("add", some),
+                         "On the next start: 1 new Kibana object is imported, nothing is replaced.")
+
+    async def test_a_result_with_errors_lists_them(self):
+        backend = FakeBackend()
+        backend._kibana_refused = [("dashboard", "a", "Attacks", "missing_references")]
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            await self.press(pilot, app, "#kibana-update")
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            result = self.body(app)
+            self.assertIn(f"{tapp.glyphs.g('warn')} 1 new, 0 updated, 1 the same, 1 of yours kept, 1 failed "
+                          "(export: /b/kibana_objects_20261016120000.ndjson).", result)
+            self.assertIn('not imported: dashboard:a "Attacks" (missing_references)', result)
+
+    async def test_the_note_instead_of_the_result_names_what_was_refused(self):
+        import threading
+        release = threading.Event()
+
+        class Slow(FakeBackend):
+            def kibana_update(self, overwrite, confirmed=None):
+                answer = super().kibana_update(overwrite, confirmed)
+                release.wait(5)
+                return answer
+
+        backend = Slow()
+        backend._kibana_refused = [("dashboard", f"x{n}", f"X {n}", "unknown") for n in range(7)]
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        try:
+            async with app.run_test(size=self.SIZE) as pilot:
+                await self.page(pilot, app)
+                await self.press(pilot, app, "#kibana-update")
+                await pilot.click("#yes")
+                await pilot.pause(0.2)
+                other = ConfirmDialog("Something else?")
+                app.push_screen(other)
+                await pilot.pause(0.1)
+                release.set()
+                await pilot.pause(0.4)
+                self.assertIs(app.screen, other)
+                note, severity = self.notes(app)[-1]
+                self.assertEqual(severity, "warning")
+                lines = note.split("\n")
+                self.assertTrue(lines[0].startswith("1 new, 1 updated, 1 the same, 1 of yours kept, 7 failed"), note)
+                self.assertEqual(lines[1:], [f'not imported: dashboard:x{n} "X {n}" (unknown)' for n in range(5)]
+                                 + ["… and 2 more"])
+        finally:
+            release.set()
+
+    async def test_two_saves_of_env_at_once_keep_both(self):
+        """Set of the retention and Save of the mode load .env and write what they loaded: one at a time."""
+        import threading
+        import time as ttime
+
+        class Env:
+            def __init__(self):
+                self.values, self.lock = {"TPOT_ES_RETENTION": "90", "TPOT_KIBANA_OBJECTS": "update"}, threading.Lock()
+
+            def load(self, *args, **kwargs):
+                env, snapshot = self, dict(self.values)
+
+                class Loaded:
+                    values = snapshot
+
+                    def change(self, changes, unlocked=()):
+                        ttime.sleep(0.3)                    # another write in between would be lost
+                        with env.lock:
+                            env.values = {**snapshot, **changes}
+                        return []
+                return Loaded()
+
+        env = Env()
+
+        class Real(FakeBackend):
+            # what Backend.set_retention / set_kibana_mode do: load .env, change one key
+            def set_retention(self, value):
+                self.calls.append(("set", value))
+                env.load().change({"TPOT_ES_RETENTION": value})
+
+            def set_kibana_mode(self, value):
+                self.calls.append(("kibana-mode", value))
+                env.load().change({"TPOT_KIBANA_OBJECTS": value})
+
+        backend = Real()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            app.query_one("#kibana-mode").value = "add"
+            await pilot.pause(0.2)
+            app.query_one("#elastic-value").value = "365"              # longer: no question
+            app.query_one("#kibana-mode-save").press()
+            app.query_one("#elastic-set").press()
+            await pilot.pause(1.2)
+        self.assertEqual(env.values, {"TPOT_ES_RETENTION": "365", "TPOT_KIBANA_OBJECTS": "add"})
 
     async def test_kibana_rows_fit_80_columns(self):
         backend = FakeBackend()

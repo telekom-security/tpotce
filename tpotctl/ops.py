@@ -530,20 +530,30 @@ class KibanaExport:
     objects: Optional[int]
 
 
+# exports larger than this are listed without a count ("?"): the page reads every listed export on each visit
+KIBANA_COUNT_LIMIT = 50 * 2 ** 20
+
+
 def kibana_export_infos(home: Optional[str] = None, data_dir: Optional[str] = None) -> List[KibanaExport]:
-    """kibana_exports with what the table of the Elastic page shows. The objects are counted as a restore
-    reads the file (kibana_objects.read_export: a regular file only, nothing waits on a pipe)."""
+    """kibana_exports with what the table of the Elastic page shows: regular files only (a link, a pipe or a
+    folder of that name is left out, as tpotinit's rotation does). The objects are counted as a restore
+    reads the file (kibana_objects.read_export), up to KIBANA_COUNT_LIMIT bytes."""
+    import stat
     from tpotctl import kibana_objects as ko
     infos = []
     for path in kibana_exports(home, data_dir):
         try:
-            info = os.stat(path)
+            info = os.lstat(path)
         except OSError:
             continue
-        try:
-            count: Optional[int] = len(ko.read_export(path))
-        except ko.KibanaError:
-            count = None
+        if not stat.S_ISREG(info.st_mode):
+            continue
+        count: Optional[int] = None
+        if info.st_size <= KIBANA_COUNT_LIMIT:
+            try:
+                count = len(ko.read_export(path))
+            except ko.KibanaError:
+                count = None
         origin = "T-Pot" if os.path.basename(path).startswith(ko.AUTO_PREFIX) else "Manager"
         infos.append(KibanaExport(path, origin, info.st_mtime, info.st_size, count))
     return infos

@@ -1714,6 +1714,15 @@ class ElasticPane(Vertical):
         if not field.value or (previous is not None and field.value == previous.value):
             field.value = state.value           # not typed in: the value of .env as it is now
 
+    async def write_env(self, change, value: str) -> None:
+        """A write of .env of this page (Set of the retention, Save of the mode), one at a time: each loads
+        .env and writes the text it loaded with its change, two at once would lose one of them."""
+        import asyncio
+        if getattr(self, "_env_lock", None) is None:
+            self._env_lock = asyncio.Lock()
+        async with self._env_lock:
+            await asyncio.to_thread(change, value)
+
     # -- the Kibana objects ---------------------------------------------------------------------------
 
     async def show_kibana(self) -> None:
@@ -1868,10 +1877,9 @@ class ElasticPane(Vertical):
                         severity="warning" if reason == ko.BUSY else "error", timeout=12)
 
     async def save_mode(self, mode: str) -> None:
-        import asyncio
         from tpotctl.settings import SettingsError
         try:
-            await asyncio.to_thread(self.app.backend.set_kibana_mode, mode)
+            await self.write_env(self.app.backend.set_kibana_mode, mode)
         except (SettingsError, OSError) as err:
             self.app.notify(str(err), title="Not saved", severity="error", timeout=10)
             self.revert_mode()
@@ -1972,9 +1980,15 @@ class ElasticPane(Vertical):
         await self.show_kibana()
 
     def kibana_result(self, title: str, lines: List[str], ok: bool) -> None:
-        """What a run did, in a dialog; with another screen open its first line as a note instead."""
+        """What a run did, in a dialog; with another screen open a note instead: its first line and the
+        objects Kibana refused (at most RESULT_REFUSED_SHOWN)."""
         if len(self.app.screen_stack) > 1:
-            self.app.notify(lines[0], title=title, severity="information" if ok else "warning", timeout=12)
+            refused = [line for line in lines[1:] if line.startswith("not imported:")]
+            note = [lines[0]] + refused[:RESULT_REFUSED_SHOWN]
+            if len(refused) > RESULT_REFUSED_SHOWN:
+                note.append(f"… and {len(refused) - RESULT_REFUSED_SHOWN} more")
+            self.app.notify("\n".join(note), title=title, severity="information" if ok else "warning",
+                            timeout=12 if ok else 30)
             return
         text = Text()
         text.append(f"{glyphs.g('ok') if ok else glyphs.g('warn')} {lines[0]}\n",
@@ -2093,7 +2107,7 @@ class ElasticPane(Vertical):
         if waits is None:
             waits = _shortens_env(old, value)
         try:
-            await asyncio.to_thread(self.app.backend.set_retention, value)
+            await self.write_env(self.app.backend.set_retention, value)
         except (SettingsError, OSError) as err:
             self.app.notify(str(err), title="Not set", severity="error", timeout=10)
             return
@@ -2171,6 +2185,9 @@ def kibana_info() -> Text:
     return text
 
 
+# the refused objects a note names when the result dialog cannot be shown (another screen is open)
+RESULT_REFUSED_SHOWN = 5
+
 # the question before the mode overwrite is saved
 OVERWRITE_EVERY_START = ("On every start T-Pot brings each of its Kibana objects back to the shipped version: your "
                          "changes to T-Pot objects are reset each time. An export comes first each time (the newest "
@@ -2183,6 +2200,10 @@ def mode_effect(mode: str, chosen) -> str:
 
     def are(items, what: str) -> str:
         return f"{_objects(len(items), what)} {'is' if len(items) == 1 else 'are'}"
+    if chosen.new and not (chosen.update or chosen.current or chosen.yours):
+        # kibana_objects.needs_first_import: the first import runs again, in every mode
+        return ("Kibana holds none of T-Pot's objects: the next start imports them, without your advanced "
+                "settings.")
     if mode == "keep":
         return "On the next start: nothing is imported."
     todo = chosen.to_import(mode)
