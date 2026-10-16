@@ -1,0 +1,55 @@
+{
+ "source": "iproute2 6.1.0 in ubuntu:24.04 (5.15.0, 6.1.0 of debian:12 and 6.15.0 give the same layout), 2026-10-14: the main table of a Docker network (eth0 172.17.0.2/16, gateway 172.17.0.1), the routes of networkd (table 100), of a static default (table 101) and of a DHCP default without src (table 102) added with ip route add ... table N, the IPv6 routes of a Docker IPv6 network, ip -j route get",
+ "cases": {
+  "networkd": {
+   "ip r": "default via 172.17.0.1 dev eth0 proto dhcp src 172.17.0.2 metric 100 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2 metric 100 \n172.17.0.1 dev eth0 proto dhcp scope link src 172.17.0.2 metric 100 \n",
+   "ip -j r": "[{\"dst\":\"default\",\"gateway\":\"172.17.0.1\",\"dev\":\"eth0\",\"protocol\":\"dhcp\",\"prefsrc\":\"172.17.0.2\",\"metric\":100,\"flags\":[]},{\"dst\":\"172.17.0.0/16\",\"dev\":\"eth0\",\"protocol\":\"kernel\",\"scope\":\"link\",\"prefsrc\":\"172.17.0.2\",\"metric\":100,\"flags\":[]},{\"dst\":\"172.17.0.1\",\"dev\":\"eth0\",\"protocol\":\"dhcp\",\"scope\":\"link\",\"prefsrc\":\"172.17.0.2\",\"metric\":100,\"flags\":[]}]\n",
+   "ip -j -p r": "[ {\n        \"dst\": \"default\",\n        \"gateway\": \"172.17.0.1\",\n        \"dev\": \"eth0\",\n        \"protocol\": \"dhcp\",\n        \"prefsrc\": \"172.17.0.2\",\n        \"metric\": 100,\n        \"flags\": [ ]\n    },{\n        \"dst\": \"172.17.0.0/16\",\n        \"dev\": \"eth0\",\n        \"protocol\": \"kernel\",\n        \"scope\": \"link\",\n        \"prefsrc\": \"172.17.0.2\",\n        \"metric\": 100,\n        \"flags\": [ ]\n    },{\n        \"dst\": \"172.17.0.1\",\n        \"dev\": \"eth0\",\n        \"protocol\": \"dhcp\",\n        \"scope\": \"link\",\n        \"prefsrc\": \"172.17.0.2\",\n        \"metric\": 100,\n        \"flags\": [ ]\n    } ]\n"
+  },
+  "static": {
+   "ip r": "default via 172.17.0.1 dev eth0 proto static \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2 \n",
+   "ip -j r": "[{\"dst\":\"default\",\"gateway\":\"172.17.0.1\",\"dev\":\"eth0\",\"protocol\":\"static\",\"flags\":[]},{\"dst\":\"172.17.0.0/16\",\"dev\":\"eth0\",\"protocol\":\"kernel\",\"scope\":\"link\",\"prefsrc\":\"172.17.0.2\",\"flags\":[]}]\n",
+   "ip -j -p r": "[ {\n        \"dst\": \"default\",\n        \"gateway\": \"172.17.0.1\",\n        \"dev\": \"eth0\",\n        \"protocol\": \"static\",\n        \"flags\": [ ]\n    },{\n        \"dst\": \"172.17.0.0/16\",\n        \"dev\": \"eth0\",\n        \"protocol\": \"kernel\",\n        \"scope\": \"link\",\n        \"prefsrc\": \"172.17.0.2\",\n        \"flags\": [ ]\n    } ]\n"
+  },
+  "nm-old-default": {
+   "ip r": "default via 172.17.0.1 dev eth0 proto dhcp metric 100 \n",
+   "ip -j r": "[{\"dst\":\"default\",\"gateway\":\"172.17.0.1\",\"dev\":\"eth0\",\"protocol\":\"dhcp\",\"metric\":100,\"flags\":[]}]\n",
+   "ip -j -p r": "[ {\n        \"dst\": \"default\",\n        \"gateway\": \"172.17.0.1\",\n        \"dev\": \"eth0\",\n        \"protocol\": \"dhcp\",\n        \"metric\": 100,\n        \"flags\": [ ]\n    } ]\n"
+  },
+  "device": {
+   "ip r": "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2 \n",
+   "ip -j r": "[{\"dst\":\"default\",\"gateway\":\"172.17.0.1\",\"dev\":\"eth0\",\"flags\":[]},{\"dst\":\"172.17.0.0/16\",\"dev\":\"eth0\",\"protocol\":\"kernel\",\"scope\":\"link\",\"prefsrc\":\"172.17.0.2\",\"flags\":[]}]\n",
+   "ip -j -p r": "[ {\n        \"dst\": \"default\",\n        \"gateway\": \"172.17.0.1\",\n        \"dev\": \"eth0\",\n        \"flags\": [ ]\n    },{\n        \"dst\": \"172.17.0.0/16\",\n        \"dev\": \"eth0\",\n        \"protocol\": \"kernel\",\n        \"scope\": \"link\",\n        \"prefsrc\": \"172.17.0.2\",\n        \"flags\": [ ]\n    } ]\n"
+  },
+  "ipv6": {
+   "ip -j -6 r": "[{\"dst\":\"fd00:dead:beef::/64\",\"dev\":\"eth0\",\"protocol\":\"kernel\",\"metric\":256,\"flags\":[],\"pref\":\"medium\"},{\"dst\":\"fe80::/64\",\"dev\":\"eth0\",\"protocol\":\"kernel\",\"metric\":256,\"flags\":[],\"pref\":\"medium\"},{\"dst\":\"default\",\"gateway\":\"fd00:dead:beef::1\",\"dev\":\"eth0\",\"metric\":1024,\"flags\":[],\"pref\":\"medium\"}]\n",
+   "ip -j -p -6 r": "[ {\n        \"dst\": \"fd00:dead:beef::/64\",\n        \"dev\": \"eth0\",\n        \"protocol\": \"kernel\",\n        \"metric\": 256,\n        \"flags\": [ ],\n        \"pref\": \"medium\"\n    },{\n        \"dst\": \"fe80::/64\",\n        \"dev\": \"eth0\",\n        \"protocol\": \"kernel\",\n        \"metric\": 256,\n        \"flags\": [ ],\n        \"pref\": \"medium\"\n    },{\n        \"dst\": \"default\",\n        \"gateway\": \"fd00:dead:beef::1\",\n        \"dev\": \"eth0\",\n        \"metric\": 1024,\n        \"flags\": [ ],\n        \"pref\": \"medium\"\n    } ]\n"
+  },
+  "get": {
+   "8.8.8.8": {
+    "compact": "[{\"dst\":\"8.8.8.8\",\"gateway\":\"172.17.0.1\",\"dev\":\"eth0\",\"prefsrc\":\"172.17.0.2\",\"flags\":[],\"uid\":0,\"cache\":[]}]\n",
+    "pretty": "[ {\n        \"dst\": \"8.8.8.8\",\n        \"gateway\": \"172.17.0.1\",\n        \"dev\": \"eth0\",\n        \"prefsrc\": \"172.17.0.2\",\n        \"flags\": [ ],\n        \"uid\": 0,\n        \"cache\": [ ]\n    } ]\n"
+   },
+   "172.17.0.9": {
+    "compact": "[{\"dst\":\"172.17.0.9\",\"dev\":\"eth0\",\"prefsrc\":\"172.17.0.2\",\"flags\":[],\"uid\":0,\"cache\":[]}]\n",
+    "pretty": "[ {\n        \"dst\": \"172.17.0.9\",\n        \"dev\": \"eth0\",\n        \"prefsrc\": \"172.17.0.2\",\n        \"flags\": [ ],\n        \"uid\": 0,\n        \"cache\": [ ]\n    } ]\n"
+   },
+   "172.17.0.2": {
+    "compact": "[{\"type\":\"local\",\"dst\":\"172.17.0.2\",\"dev\":\"lo\",\"prefsrc\":\"172.17.0.2\",\"flags\":[],\"uid\":0,\"cache\":[\"local\"]}]\n",
+    "pretty": "[ {\n        \"type\": \"local\",\n        \"dst\": \"172.17.0.2\",\n        \"dev\": \"lo\",\n        \"prefsrc\": \"172.17.0.2\",\n        \"flags\": [ ],\n        \"uid\": 0,\n        \"cache\": [ \"local\" ]\n    } ]\n"
+   },
+   "127.0.0.1": {
+    "compact": "[{\"type\":\"local\",\"dst\":\"127.0.0.1\",\"dev\":\"lo\",\"prefsrc\":\"127.0.0.1\",\"flags\":[],\"uid\":0,\"cache\":[\"local\"]}]\n",
+    "pretty": "[ {\n        \"type\": \"local\",\n        \"dst\": \"127.0.0.1\",\n        \"dev\": \"lo\",\n        \"prefsrc\": \"127.0.0.1\",\n        \"flags\": [ ],\n        \"uid\": 0,\n        \"cache\": [ \"local\" ]\n    } ]\n"
+   },
+   "172.17.255.255": {
+    "compact": "[{\"type\":\"broadcast\",\"dst\":\"172.17.255.255\",\"dev\":\"eth0\",\"prefsrc\":\"172.17.0.2\",\"flags\":[],\"uid\":0,\"cache\":[\"local\",\"brd\"]}]\n",
+    "pretty": "[ {\n        \"type\": \"broadcast\",\n        \"dst\": \"172.17.255.255\",\n        \"dev\": \"eth0\",\n        \"prefsrc\": \"172.17.0.2\",\n        \"flags\": [ ],\n        \"uid\": 0,\n        \"cache\": [ \"local\",\"brd\" ]\n    } ]\n"
+   },
+   "8.8.8.8 from 172.17.0.2": {
+    "compact": "[{\"dst\":\"8.8.8.8\",\"from\":\"172.17.0.2\",\"gateway\":\"172.17.0.1\",\"dev\":\"eth0\",\"flags\":[],\"uid\":0,\"cache\":[]}]\n",
+    "pretty": "[ {\n        \"dst\": \"8.8.8.8\",\n        \"from\": \"172.17.0.2\",\n        \"gateway\": \"172.17.0.1\",\n        \"dev\": \"eth0\",\n        \"flags\": [ ],\n        \"uid\": 0,\n        \"cache\": [ ]\n    } ]\n"
+   }
+  }
+ }
+}

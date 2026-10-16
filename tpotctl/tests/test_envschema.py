@@ -150,6 +150,71 @@ class SchemaTest(unittest.TestCase):
         self.assertIn("2 entries", self.envschema.mask("a b"))
 
 
+@unittest.skipUnless(yaml, "PyYAML is not installed")
+class GroupsTest(unittest.TestCase):
+    """groups of a list setting: together every value once, else the schema does not load."""
+
+    def load(self, spec):
+        from tpotctl import envschema
+        rule = {"type": "choice_list", "values": ["a", "b", "c"], "widget": "choice_many"}
+        rule.update(spec)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "env.schema.yml")
+            with open(path, "w", encoding="utf-8") as handle:
+                yaml.safe_dump({"version": 1, "keys": {"LIST": rule}}, handle)
+            return envschema.load_schema(path)["LIST"]
+
+    def test_groups_that_cover_the_values(self):
+        rule = self.load({"groups": {"One": ["a", "b"], "Two": ["c"]}})
+        self.assertEqual(rule.groups, {"One": ["a", "b"], "Two": ["c"]})
+        self.assertEqual(self.load({}).groups, {})
+
+    def test_choices_with_help_or_as_plain_values_leave_choice_many_alone(self):
+        """choices as {value, label, help} or as the values alone load for any widget; the help of a choice
+        is only shown for widget choice, a list setting keeps the help of its key."""
+        try:
+            from tpotctl.widgets import fields
+        except ImportError:
+            self.skipTest("Textual is not installed, run with the venv of tpot")
+        for choices in ([{"value": "a", "label": "A", "help": "a: the first"}, {"value": "b"}], ["a", "b"]):
+            with self.subTest(choices=choices):
+                rule = self.load({"choices": choices, "help": "Pick any.", "groups": {"One": ["a", "b", "c"]}})
+                self.assertEqual([c["value"] for c in rule.choices], ["a", "b"])
+                self.assertEqual(rule.choices[1], {"value": "b", "label": "b", "help": ""})
+                row = fields.SettingRow(rule, "a b", "")
+                self.assertEqual(row.choice_helps(), {})
+                self.assertEqual(row.help_text("a").plain, "Pick any.")
+        rule = self.load({"type": "enum", "widget": "choice", "values": ["a", "b"], "choices": ["a", "b"]})
+        self.assertEqual(rule.choices, [{"value": "a", "label": "a", "help": ""},
+                                        {"value": "b", "label": "b", "help": ""}])
+
+    def test_bad_groups_are_a_schema_error(self):
+        from tpotctl import envschema
+        bad = {
+            "a value in no group": {"groups": {"One": ["a", "b"]}},
+            "a value twice": {"groups": {"One": ["a", "b"], "Two": ["b", "c"]}},
+            "a value not in values": {"groups": {"One": ["a", "b", "c", "d"]}},
+            "a group without values": {"groups": {"One": ["a", "b", "c"], "Two": []}},
+            "no mapping": {"groups": ["a", "b", "c"]},
+            "not a choice_list": {"type": "enum", "groups": {"One": ["a", "b", "c"]}},
+        }
+        for label, spec in bad.items():
+            with self.subTest(label), self.assertRaises(envschema.SchemaError):
+                self.load(spec)
+
+    def test_settings_name_the_schema_error(self):
+        from tpotctl import settings
+        with tempfile.TemporaryDirectory() as tmp:
+            open(os.path.join(tmp, ".env"), "w").close()
+            path = os.path.join(tmp, "env.schema.yml")
+            with open(path, "w", encoding="utf-8") as handle:
+                yaml.safe_dump({"version": 1, "keys": {"LIST": {"type": "choice_list", "values": ["a"],
+                                                                "groups": {"One": ["b"]}}}}, handle)
+            with self.assertRaises(settings.SettingsError) as caught:
+                settings.load(tmp, schema_path=path)
+        self.assertIn("LIST", str(caught.exception))
+
+
 class EnvFileTest(unittest.TestCase):
 
     SAMPLE = ("# T-Pot config file. Do not remove.\n"

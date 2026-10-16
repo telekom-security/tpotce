@@ -219,7 +219,7 @@ cases:
     warnings: [LS_WEB_USER]
   - name: cowrie persona unknown
     services: [tpotinit, cowrie]
-    set: {COWRIE_PERSONA: "fedora-36-vuln"}
+    set: {COWRIE_PERSONA: "no-such-persona"}
     errors: [COWRIE_PERSONA]
     warnings: [LS_WEB_USER]
   - name: cowrie persona twice
@@ -237,6 +237,25 @@ cases:
   - name: cowrie persona not checked without cowrie
     services: [tpotinit, suricata]
     set: {COWRIE_PERSONA: "nope"}
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona rotation in days
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA_ROTATION: "365"}
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona rotation out of range
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA_ROTATION: "366"}
+    errors: [COWRIE_PERSONA_ROTATION]
+    warnings: [LS_WEB_USER]
+    messages: [has to be a number of days from 0 to 365]
+  - name: cowrie persona rotation no number
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA_ROTATION: "-1"}
+    errors: [COWRIE_PERSONA_ROTATION]
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona rotation not checked without cowrie
+    services: [tpotinit, suricata]
+    set: {COWRIE_PERSONA_ROTATION: "999"}
     warnings: [LS_WEB_USER]
   - name: beelzebub provider and url
     services: [beelzebub]

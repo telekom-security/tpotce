@@ -1,0 +1,901 @@
+{
+ "_source": "outputs of ip, ss, netstat and ifconfig in containers of these images with sshd listening (iproute2, net-tools and openssh-server installed) and of busybox images with `busybox httpd -p 8080`, 2026-10-13",
+ "images": {
+  "busybox_1.27.2": {
+   "cases": {
+    "ifconfig lo": [
+     "lo        Link encap:Local Loopback  \n          inet addr:127.0.0.1  Mask:255.0.0.0\n          inet6 addr: ::1/128 Scope:Host\n          UP LOOPBACK RUNNING  MTU:65536  Metric:1\n          RX packets:0 errors:0 dropped:0 overruns:0 frame:0\n          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0\n          collisions:0 txqueuelen:1000 \n          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)\n\n",
+     "",
+     0
+    ],
+    "ifconfig nosuch": [
+     "",
+     "ifconfig: nosuch: error fetching interface information: Device not found\n",
+     1
+    ],
+    "ip -V": [
+     "",
+     "BusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [COMMAND]\n\nOPTIONS := -f[amily] inet|inet6|link | -o[neline]\nCOMMAND :=\nip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\nip route list|flush|add|del|change|append|replace|test ROUTE\nip link set IFACE [up|down] [arp on|off] | show [IFACE]\nip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit]\n\t[remote ADDR] [local ADDR] [ttl TTL]\nip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n",
+     1
+    ],
+    "ip addr show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip addr show dev nosuch": [
+     "",
+     "ip: can't find device 'nosuch'\n",
+     1
+    ],
+    "ip r": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 scope link  src 172.17.0.2 \n",
+     "",
+     0
+    ],
+    "ip x": [
+     "",
+     "BusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [COMMAND]\n\nOPTIONS := -f[amily] inet|inet6|link | -o[neline]\nCOMMAND :=\nip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\nip route list|flush|add|del|change|append|replace|test ROUTE\nip link set IFACE [up|down] [arp on|off] | show [IFACE]\nip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit]\n\t[remote ADDR] [local ADDR] [ttl TTL]\nip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n",
+     1
+    ],
+    "netstat --bogus": [
+     "",
+     "netstat: unrecognized option `--bogus'\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: netstat [-ral] [-tuwx] [-enWp]\n\nDisplay networking information\n\n\t-r\tRouting table\n\t-a\tAll sockets\n\t-l\tListening sockets\n\t\tElse: connected sockets\n\t-t\tTCP sockets\n\t-u\tUDP sockets\n\t-w\tRaw sockets\n\t-x\tUnix sockets\n\t\tElse: all socket types\n\t-e\tOther/more information\n\t-n\tDon't resolve names\n\t-W\tWide display\n\t-p\tShow PID/program name for sockets\n",
+     1
+    ],
+    "netstat -rn": [
+     "Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0\n172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0\n",
+     "",
+     0
+    ],
+    "netstat -tln": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       \ntcp        0      0 :::8080                 :::*                    LISTEN      \n",
+     "",
+     0
+    ],
+    "netstat -tlnp": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 :::8080                 :::*                    LISTEN      9/busybox\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.33.1-musl": {
+   "cases": {
+    "ifconfig lo": [
+     "lo        Link encap:Local Loopback  \n          inet addr:127.0.0.1  Mask:255.0.0.0\n          inet6 addr: ::1/128 Scope:Host\n          UP LOOPBACK RUNNING  MTU:65536  Metric:1\n          RX packets:0 errors:0 dropped:0 overruns:0 frame:0\n          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0\n          collisions:0 txqueuelen:1000 \n          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)\n\n",
+     "",
+     0
+    ],
+    "ifconfig nosuch": [
+     "",
+     "ifconfig: nosuch: error fetching interface information: Device not found\n",
+     1
+    ],
+    "ip -V": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [ARGS]\n\nOPTIONS := -f[amily] inet|inet6|link | -o[neline]\n\nip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\nip route list|flush|add|del|change|append|replace|test ROUTE\nip link set IFACE [up|down] [arp on|off] [multicast on|off]\n\t[promisc on|off] [mtu NUM] [name NAME] [qlen NUM] [address MAC]\n\t[master IFACE | nomaster]\nip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit] [remote ADDR] [local ADDR] [ttl TTL]\nip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n",
+     1
+    ],
+    "ip addr show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip addr show dev nosuch": [
+     "",
+     "ip: can't find device 'nosuch'\n",
+     1
+    ],
+    "ip r": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 scope link  src 172.17.0.2 \n",
+     "",
+     0
+    ],
+    "ip x": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [ARGS]\n\nOPTIONS := -f[amily] inet|inet6|link | -o[neline]\n\nip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\nip route list|flush|add|del|change|append|replace|test ROUTE\nip link set IFACE [up|down] [arp on|off] [multicast on|off]\n\t[promisc on|off] [mtu NUM] [name NAME] [qlen NUM] [address MAC]\n\t[master IFACE | nomaster]\nip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit] [remote ADDR] [local ADDR] [ttl TTL]\nip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n",
+     1
+    ],
+    "netstat --bogus": [
+     "",
+     "netstat: unrecognized option: bogus\nBusyBox v1.33.1 (2021-09-13 17:23:32 UTC) multi-call binary.\n\nUsage: netstat [-ral] [-tuwx] [-enWp]\n\nDisplay networking information\n\n\t-r\tRouting table\n\t-a\tAll sockets\n\t-l\tListening sockets\n\t\tElse: connected sockets\n\t-t\tTCP sockets\n\t-u\tUDP sockets\n\t-w\tRaw sockets\n\t-x\tUnix sockets\n\t\tElse: all socket types\n\t-e\tOther/more information\n\t-n\tDon't resolve names\n\t-W\tWide display\n\t-p\tShow PID/program name for sockets\n",
+     1
+    ],
+    "netstat -rn": [
+     "Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0\n172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0\n",
+     "",
+     0
+    ],
+    "netstat -tln": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       \ntcp        0      0 :::8080                 :::*                    LISTEN      \n",
+     "",
+     0
+    ],
+    "netstat -tlnp": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 :::8080                 :::*                    LISTEN      9/busybox\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.36.1-musl": {
+   "cases": {
+    "ifconfig lo": [
+     "lo        Link encap:Local Loopback  \n          inet addr:127.0.0.1  Mask:255.0.0.0\n          inet6 addr: ::1/128 Scope:Host\n          UP LOOPBACK RUNNING  MTU:65536  Metric:1\n          RX packets:0 errors:0 dropped:0 overruns:0 frame:0\n          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0\n          collisions:0 txqueuelen:1000 \n          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)\n\n",
+     "",
+     0
+    ],
+    "ifconfig nosuch": [
+     "",
+     "ifconfig: nosuch: error fetching interface information: Device not found\n",
+     1
+    ],
+    "ip -V": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [ARGS]\n\nOPTIONS := -f[amily] inet|inet6|link | -o[neline]\n\nip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\nip route list|flush|add|del|change|append|replace|test ROUTE\nip link set IFACE [up|down] [arp on|off] [multicast on|off]\n\t[promisc on|off] [mtu NUM] [name NAME] [qlen NUM] [address MAC]\n\t[master IFACE | nomaster] [netns PID]\nip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit] [remote ADDR] [local ADDR] [ttl TTL]\nip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n",
+     1
+    ],
+    "ip addr show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip addr show dev nosuch": [
+     "",
+     "ip: can't find device 'nosuch'\n",
+     1
+    ],
+    "ip r": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 scope link  src 172.17.0.2 \n",
+     "",
+     0
+    ],
+    "ip x": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [ARGS]\n\nOPTIONS := -f[amily] inet|inet6|link | -o[neline]\n\nip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\nip route list|flush|add|del|change|append|replace|test ROUTE\nip link set IFACE [up|down] [arp on|off] [multicast on|off]\n\t[promisc on|off] [mtu NUM] [name NAME] [qlen NUM] [address MAC]\n\t[master IFACE | nomaster] [netns PID]\nip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit] [remote ADDR] [local ADDR] [ttl TTL]\nip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n",
+     1
+    ],
+    "netstat --bogus": [
+     "",
+     "netstat: unrecognized option: bogus\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: netstat [-ral] [-tuwx] [-enWp]\n\nDisplay networking information\n\n\t-r\tRouting table\n\t-a\tAll sockets\n\t-l\tListening sockets\n\t\tElse: connected sockets\n\t-t\tTCP sockets\n\t-u\tUDP sockets\n\t-w\tRaw sockets\n\t-x\tUnix sockets\n\t\tElse: all socket types\n\t-e\tOther/more information\n\t-n\tDon't resolve names\n\t-W\tWide display\n\t-p\tShow PID/program name for sockets\n",
+     1
+    ],
+    "netstat -rn": [
+     "Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0\n172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0\n",
+     "",
+     0
+    ],
+    "netstat -tln": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       \ntcp        0      0 :::8080                 :::*                    LISTEN      \n",
+     "",
+     0
+    ],
+    "netstat -tlnp": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 :::8080                 :::*                    LISTEN      9/busybox\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.36.1-uclibc": {
+   "cases": {
+    "ifconfig lo": [
+     "lo        Link encap:Local Loopback  \n          inet addr:127.0.0.1  Mask:255.0.0.0\n          inet6 addr: ::1/128 Scope:Host\n          UP LOOPBACK RUNNING  MTU:65536  Metric:1\n          RX packets:0 errors:0 dropped:0 overruns:0 frame:0\n          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0\n          collisions:0 txqueuelen:1000 \n          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)\n\n",
+     "",
+     0
+    ],
+    "ifconfig nosuch": [
+     "",
+     "ifconfig: nosuch: error fetching interface information: Device not found\n",
+     1
+    ],
+    "ip -V": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [ARGS]\n\nOPTIONS := -f[amily] inet|inet6|link | -o[neline]\n\nip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\nip route list|flush|add|del|change|append|replace|test ROUTE\nip link set IFACE [up|down] [arp on|off] [multicast on|off]\n\t[promisc on|off] [mtu NUM] [name NAME] [qlen NUM] [address MAC]\n\t[master IFACE | nomaster] [netns PID]\nip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit] [remote ADDR] [local ADDR] [ttl TTL]\nip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n",
+     1
+    ],
+    "ip addr show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip addr show dev nosuch": [
+     "",
+     "ip: can't find device 'nosuch'\n",
+     1
+    ],
+    "ip r": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 scope link  src 172.17.0.2 \n",
+     "",
+     0
+    ],
+    "ip x": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: ip [OPTIONS] address|route|link|tunnel|neigh|rule [ARGS]\n\nOPTIONS := -f[amily] inet|inet6|link | -o[neline]\n\nip addr add|del IFADDR dev IFACE | show|flush [dev IFACE] [to PREFIX]\nip route list|flush|add|del|change|append|replace|test ROUTE\nip link set IFACE [up|down] [arp on|off] [multicast on|off]\n\t[promisc on|off] [mtu NUM] [name NAME] [qlen NUM] [address MAC]\n\t[master IFACE | nomaster] [netns PID]\nip tunnel add|change|del|show [NAME]\n\t[mode ipip|gre|sit] [remote ADDR] [local ADDR] [ttl TTL]\nip neigh show|flush [to PREFIX] [dev DEV] [nud STATE]\nip rule [list] | add|del SELECTOR ACTION\n",
+     1
+    ],
+    "netstat --bogus": [
+     "",
+     "netstat: unrecognized option `--bogus'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: netstat [-ral] [-tuwx] [-enWp]\n\nDisplay networking information\n\n\t-r\tRouting table\n\t-a\tAll sockets\n\t-l\tListening sockets\n\t\tElse: connected sockets\n\t-t\tTCP sockets\n\t-u\tUDP sockets\n\t-w\tRaw sockets\n\t-x\tUnix sockets\n\t\tElse: all socket types\n\t-e\tOther/more information\n\t-n\tDon't resolve names\n\t-W\tWide display\n\t-p\tShow PID/program name for sockets\n",
+     1
+    ],
+    "netstat -rn": [
+     "Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0\n172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0\n",
+     "",
+     0
+    ],
+    "netstat -tln": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       \ntcp        0      0 :::8080                 :::*                    LISTEN      \n",
+     "",
+     0
+    ],
+    "netstat -tlnp": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 :::8080                 :::*                    LISTEN      9/busybox\n",
+     "",
+     0
+    ]
+   }
+  },
+  "centos_7": {
+   "cases": {
+    "ifconfig -z": [
+     "",
+     "ifconfig: option `-z' not recognised.\nifconfig: `--help' gives usage information.\n",
+     1
+    ],
+    "ifconfig lo": [
+     "lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n        inet 127.0.0.1  netmask 255.0.0.0\n        inet6 ::1  prefixlen 128  scopeid 0x10<host>\n        loop  txqueuelen 1000  (Local Loopback)\n        RX packets 0  bytes 0 (0.0 B)\n        RX errors 0  dropped 0  overruns 0  frame 0\n        TX packets 0  bytes 0 (0.0 B)\n        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n",
+     "",
+     0
+    ],
+    "ifconfig nosuch": [
+     "",
+     "nosuch: error fetching interface information: Device not found\n",
+     1
+    ],
+    "ip": [
+     "",
+     "Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n       ip [ -force ] -batch filename\nwhere  OBJECT := { link | address | addrlabel | route | rule | neigh | ntable |\n                   tunnel | tuntap | maddress | mroute | mrule | monitor | xfrm |\n                   netns | l2tp | fou | macsec | tcp_metrics | token | netconf | ila |\n                   vrf }\n       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n                    -h[uman-readable] | -iec |\n                    -f[amily] { inet | inet6 | ipx | dnet | mpls | bridge | link } |\n                    -4 | -6 | -I | -D | -B | -0 |\n                    -l[oops] { maximum-addr-flush-attempts } | -br[ief] |\n                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n                    -rc[vbuf] [size] | -n[etns] name | -a[ll] | -c[olor]}\n",
+     255
+    ],
+    "ip -6 a": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN qlen 1000\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -V": [
+     "ip utility, iproute2-ss170501\n",
+     "",
+     0
+    ],
+    "ip a show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip addr foo": [
+     "",
+     "Command \"foo\" is unknown, try \"ip address help\".\n",
+     255
+    ],
+    "ip addr show dev nosuch": [
+     "",
+     "Device \"nosuch\" does not exist.\n",
+     1
+    ],
+    "ip foo": [
+     "",
+     "Object \"foo\" is unknown, try \"ip help\".\n",
+     1
+    ],
+    "ip link show dev nosuch": [
+     "",
+     "Device \"nosuch\" does not exist.\n",
+     1
+    ],
+    "ip r": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2 \n",
+     "",
+     0
+    ],
+    "ip rule": [
+     "0:\tfrom all lookup local \n32766:\tfrom all lookup main \n32767:\tfrom all lookup default \n",
+     "",
+     0
+    ],
+    "ip x": [
+     "",
+     "Usage: ip xfrm XFRM-OBJECT { COMMAND | help }\nwhere  XFRM-OBJECT := state | policy | monitor\n",
+     255
+    ],
+    "netstat -V": [
+     "net-tools 2.10-alpha\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Phil Blundell, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n",
+     "",
+     0
+    ],
+    "netstat -rn": [
+     "Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0\n172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0\n",
+     "",
+     0
+    ],
+    "netstat -tln": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State      \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN     \ntcp6       0      0 :::22                   :::*                    LISTEN     \n",
+     "",
+     0
+    ],
+    "netstat -tlnp": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      67/sshd             \ntcp6       0      0 :::22                   :::*                    LISTEN      67/sshd             \n",
+     "",
+     0
+    ],
+    "netstat -tulpn": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      67/sshd             \ntcp6       0      0 :::22                   :::*                    LISTEN      67/sshd             \n",
+     "",
+     0
+    ],
+    "netstat -z": [
+     "",
+     "netstat: invalid option -- 'z'\nusage: netstat [-vWeenNcCF] [<Af>] -r         netstat {-V|--version|-h|--help}\n       netstat [-vWnNcaeol] [<Socket> ...]\n       netstat { [-vWeenNac] -I[<Iface>] | [-veenNac] -i | [-cnNe] -M | -s [-6tuw] } [delay]\n\n        -r, --route              display routing table\n        -I, --interfaces=<Iface> display interface table for <Iface>\n        -i, --interfaces         display interface table\n        -g, --groups             display multicast group memberships\n        -s, --statistics         display networking statistics (like SNMP)\n        -M, --masquerade         display masqueraded connections\n\n        -v, --verbose            be verbose\n        -W, --wide               don't truncate IP addresses\n        -n, --numeric            don't resolve names\n        --numeric-hosts          don't resolve host names\n        --numeric-ports          don't resolve port names\n        --numeric-users          don't resolve user names\n        -N, --symbolic           resolve hardware names\n        -e, --extend             display other/more information\n        -p, --programs           display PID/Program name for sockets\n        -o, --timers             display timers\n        -c, --continuous         continuous listing\n\n        -l, --listening          display listening server sockets\n        -a, --all                display all sockets (default: connected)\n        -F, --fib                display Forwarding Information Base (default)\n        -C, --cache              display routing cache instead of FIB\n        -Z, --context            display SELinux security context for sockets\n\n  <Socket>={-t|--tcp} {-u|--udp} {-U|--udplite} {-S|--sctp} {-w|--raw}\n           {-x|--unix} --ax25 --ipx --netrom\n  <AF>=Use '-6|-4' or '-A <af>' or '--<af>'; default: inet\n  List of possible address families (which support routing):\n    inet (DARPA Internet) inet6 (IPv6) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) ipx (Novell IPX) ddp (Appletalk DDP) \n    x25 (CCITT X.25) \n",
+     3
+    ],
+    "ss -4tln": [
+     "State      Recv-Q Send-Q Local Address:Port               Peer Address:Port              \nLISTEN     0      128          *:22                       *:*                  \n",
+     "",
+     0
+    ],
+    "ss -V": [
+     "ss utility, iproute2-ss170501\n",
+     "",
+     0
+    ],
+    "ss -ltn": [
+     "State      Recv-Q Send-Q Local Address:Port               Peer Address:Port              \nLISTEN     0      128          *:22                       *:*                  \nLISTEN     0      128       [::]:22                    [::]:*                  \n",
+     "",
+     0
+    ],
+    "ss -tln": [
+     "State      Recv-Q Send-Q Local Address:Port               Peer Address:Port              \nLISTEN     0      128          *:22                       *:*                  \nLISTEN     0      128       [::]:22                    [::]:*                  \n",
+     "",
+     0
+    ],
+    "ss -tlnp": [
+     "State      Recv-Q Send-Q Local Address:Port               Peer Address:Port              \nLISTEN     0      128          *:22                       *:*                   users:((\"sshd\",pid=67,fd=3))\nLISTEN     0      128       [::]:22                    [::]:*                   users:((\"sshd\",pid=67,fd=4))\n",
+     "",
+     0
+    ],
+    "ss -tulpn": [
+     "Netid  State      Recv-Q Send-Q Local Address:Port               Peer Address:Port              \ntcp    LISTEN     0      128       *:22                    *:*                   users:((\"sshd\",pid=67,fd=3))\ntcp    LISTEN     0      128    [::]:22                 [::]:*                   users:((\"sshd\",pid=67,fd=4))\n",
+     "",
+     0
+    ],
+    "ss -z": [
+     "",
+     "ss: SELinux is not enabled.\n",
+     1
+    ]
+   },
+   "iproute2": "ss170501"
+  },
+  "debian_12": {
+   "cases": {
+    "ifconfig lo": [
+     "lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n        inet 127.0.0.1  netmask 255.0.0.0\n        inet6 ::1  prefixlen 128  scopeid 0x10<host>\n        loop  txqueuelen 1000  (Local Loopback)\n        RX packets 0  bytes 0 (0.0 B)\n        RX errors 0  dropped 0  overruns 0  frame 0\n        TX packets 0  bytes 0 (0.0 B)\n        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n",
+     "",
+     0
+    ],
+    "ifconfig nosuch": [
+     "",
+     "nosuch: error fetching interface information: Device not found\n",
+     1
+    ],
+    "ip -6 a": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN qlen 1000\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -V": [
+     "ip utility, iproute2-6.1.0, libbpf 1.1.2\n",
+     "",
+     0
+    ],
+    "ip a show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip addr show dev nosuch": [
+     "",
+     "Device \"nosuch\" does not exist.\n",
+     1
+    ],
+    "ip r": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.3 \n",
+     "",
+     0
+    ],
+    "ip x": [
+     "",
+     "Usage: ip xfrm XFRM-OBJECT { COMMAND | help }\nwhere  XFRM-OBJECT := state | policy | monitor\n",
+     255
+    ],
+    "netstat -V": [
+     "net-tools 2.10\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Phil Blundell, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n",
+     "",
+     0
+    ],
+    "netstat -rn": [
+     "Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0\n172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0\n",
+     "",
+     0
+    ],
+    "netstat -tln": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State      \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN     \ntcp6       0      0 :::22                   :::*                    LISTEN     \n",
+     "",
+     0
+    ],
+    "netstat -tlnp": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      1154/sshd: /usr/sbi \ntcp6       0      0 :::22                   :::*                    LISTEN      1154/sshd: /usr/sbi \n",
+     "",
+     0
+    ],
+    "netstat -tulpn": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      1154/sshd: /usr/sbi \ntcp6       0      0 :::22                   :::*                    LISTEN      1154/sshd: /usr/sbi \n",
+     "",
+     0
+    ],
+    "ss -4tln": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*          \n",
+     "",
+     0
+    ],
+    "ss -V": [
+     "ss utility, iproute2-6.1.0\n",
+     "",
+     0
+    ],
+    "ss -ltn": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*          \nLISTEN 0      128             [::]:22           [::]:*          \n",
+     "",
+     0
+    ],
+    "ss -tln": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*          \nLISTEN 0      128             [::]:22           [::]:*          \n",
+     "",
+     0
+    ],
+    "ss -tlnp": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                        \nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:((\"sshd\",pid=1154,fd=3))\nLISTEN 0      128             [::]:22           [::]:*    users:((\"sshd\",pid=1154,fd=4))\n",
+     "",
+     0
+    ],
+    "ss -tulpn": [
+     "Netid State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                        \ntcp   LISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:((\"sshd\",pid=1154,fd=3))\ntcp   LISTEN 0      128             [::]:22           [::]:*    users:((\"sshd\",pid=1154,fd=4))\n",
+     "",
+     0
+    ]
+   },
+   "iproute2": "6.1.0"
+  },
+  "debian_13": {
+   "cases": {
+    "ifconfig -z": [
+     "",
+     "ifconfig: option `-z' not recognised.\nifconfig: `--help' gives usage information.\n",
+     1
+    ],
+    "ifconfig lo": [
+     "lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n        inet 127.0.0.1  netmask 255.0.0.0\n        inet6 ::1  prefixlen 128  scopeid 0x10<host>\n        loop  txqueuelen 1000  (Local Loopback)\n        RX packets 0  bytes 0 (0.0 B)\n        RX errors 0  dropped 0  overruns 0  frame 0\n        TX packets 0  bytes 0 (0.0 B)\n        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n",
+     "",
+     0
+    ],
+    "ifconfig nosuch": [
+     "",
+     "nosuch: error fetching interface information: Device not found\n",
+     1
+    ],
+    "ip": [
+     "",
+     "Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n       ip [ -force ] -batch filename\nwhere  OBJECT := { address | addrlabel | fou | help | ila | ioam | l2tp | link |\n                   macsec | maddress | monitor | mptcp | mroute | mrule |\n                   neighbor | neighbour | netconf | netns | nexthop | ntable |\n                   ntbl | route | rule | sr | stats | tap | tcpmetrics |\n                   token | tunnel | tuntap | vrf | xfrm }\n       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n                    -h[uman-readable] | -iec | -j[son] | -p[retty] |\n                    -f[amily] { inet | inet6 | mpls | bridge | link } |\n                    -4 | -6 | -M | -B | -0 |\n                    -l[oops] { maximum-addr-flush-attempts } | -echo | -br[ief] |\n                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n                    -rc[vbuf] [size] | -n[etns] name | -N[umeric] | -a[ll] |\n                    -c[olor]}\n",
+     255
+    ],
+    "ip -6 a": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN qlen 1000\n    inet6 ::1/128 scope host proto kernel_lo \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -V": [
+     "ip utility, iproute2-6.15.0, libbpf 1.5.0\n",
+     "",
+     0
+    ],
+    "ip a show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host proto kernel_lo \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip addr foo": [
+     "",
+     "Command \"foo\" is unknown, try \"ip address help\".\n",
+     255
+    ],
+    "ip addr show dev nosuch": [
+     "",
+     "Device \"nosuch\" does not exist.\n",
+     1
+    ],
+    "ip foo": [
+     "",
+     "Object \"foo\" is unknown, try \"ip help\".\n",
+     1
+    ],
+    "ip link show dev nosuch": [
+     "",
+     "Device \"nosuch\" does not exist.\n",
+     1
+    ],
+    "ip r": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.3 \n",
+     "",
+     0
+    ],
+    "ip rule": [
+     "0:\tfrom all lookup local\n32766:\tfrom all lookup main\n32767:\tfrom all lookup default\n",
+     "",
+     0
+    ],
+    "ip x": [
+     "",
+     "Usage: ip xfrm XFRM-OBJECT { COMMAND | help }\nwhere  XFRM-OBJECT := state | policy | monitor\n",
+     255
+    ],
+    "netstat -V": [
+     "net-tools 2.10\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Phil Blundell, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n",
+     "",
+     0
+    ],
+    "netstat -rn": [
+     "Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0\n172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0\n",
+     "",
+     0
+    ],
+    "netstat -tln": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State      \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN     \ntcp6       0      0 :::22                   :::*                    LISTEN     \n",
+     "",
+     0
+    ],
+    "netstat -tlnp": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      1127/sshd: /usr/sbi \ntcp6       0      0 :::22                   :::*                    LISTEN      1127/sshd: /usr/sbi \n",
+     "",
+     0
+    ],
+    "netstat -tulpn": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      1127/sshd: /usr/sbi \ntcp6       0      0 :::22                   :::*                    LISTEN      1127/sshd: /usr/sbi \n",
+     "",
+     0
+    ],
+    "netstat -z": [
+     "",
+     "netstat: invalid option -- 'z'\nusage: netstat [-vWeenNcCF] [<Af>] -r         netstat {-V|--version|-h|--help}\n       netstat [-vWnNcaeol] [<Socket> ...]\n       netstat { [-vWeenNac] -i | [-cnNe] -M | -s [-6tuw] }\n\n        -r, --route              display routing table\n        -i, --interfaces         display interface table\n        -g, --groups             display multicast group memberships\n        -s, --statistics         display networking statistics (like SNMP)\n        -M, --masquerade         display masqueraded connections\n\n        -v, --verbose            be verbose\n        -W, --wide               don't truncate IP addresses\n        -n, --numeric            don't resolve names\n        --numeric-hosts          don't resolve host names\n        --numeric-ports          don't resolve port names\n        --numeric-users          don't resolve user names\n        -N, --symbolic           resolve hardware names\n        -e, --extend             display other/more information\n        -p, --programs           display PID/Program name for sockets\n        -o, --timers             display timers\n        -c, --continuous         continuous listing\n\n        -l, --listening          display listening server sockets\n        -a, --all                display all sockets (default: connected)\n        -F, --fib                display Forwarding Information Base (default)\n        -C, --cache              display routing cache instead of FIB\n        -Z, --context            display SELinux security context for sockets\n\n  <Socket>={-t|--tcp} {-u|--udp} {-U|--udplite} {-S|--sctp} {-w|--raw}\n           {-x|--unix} --ax25 --ipx --netrom\n  <AF>=Use '-6|-4' or '-A <af>' or '--<af>'; default: inet\n  List of possible address families (which support routing):\n    inet (DARPA Internet) inet6 (IPv6) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) rose (AMPR ROSE) ipx (Novell IPX) \n    ddp (Appletalk DDP) x25 (CCITT X.25) \n",
+     3
+    ],
+    "ss -4tln": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:Port\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*   \n",
+     "",
+     0
+    ],
+    "ss -V": [
+     "ss utility, iproute2-6.15.0\n",
+     "",
+     0
+    ],
+    "ss -ltn": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:Port\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*   \nLISTEN 0      128             [::]:22           [::]:*   \n",
+     "",
+     0
+    ],
+    "ss -tln": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:Port\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*   \nLISTEN 0      128             [::]:22           [::]:*   \n",
+     "",
+     0
+    ],
+    "ss -tlnp": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                        \nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:((\"sshd\",pid=1127,fd=6))\nLISTEN 0      128             [::]:22           [::]:*    users:((\"sshd\",pid=1127,fd=7))\n",
+     "",
+     0
+    ],
+    "ss -tulpn": [
+     "Netid State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                        \ntcp   LISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:((\"sshd\",pid=1127,fd=6))\ntcp   LISTEN 0      128             [::]:22           [::]:*    users:((\"sshd\",pid=1127,fd=7))\n",
+     "",
+     0
+    ],
+    "ss -z": [
+     "",
+     "ss: SELinux is not enabled.\n",
+     1
+    ]
+   },
+   "iproute2": "6.15.0"
+  },
+  "ubuntu_22.04": {
+   "cases": {
+    "ifconfig -z": [
+     "",
+     "ifconfig: option `-z' not recognised.\nifconfig: `--help' gives usage information.\n",
+     1
+    ],
+    "ifconfig lo": [
+     "lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n        inet 127.0.0.1  netmask 255.0.0.0\n        inet6 ::1  prefixlen 128  scopeid 0x10<host>\n        loop  txqueuelen 1000  (Local Loopback)\n        RX packets 0  bytes 0 (0.0 B)\n        RX errors 0  dropped 0  overruns 0  frame 0\n        TX packets 0  bytes 0 (0.0 B)\n        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n",
+     "",
+     0
+    ],
+    "ifconfig nosuch": [
+     "",
+     "nosuch: error fetching interface information: Device not found\n",
+     1
+    ],
+    "ip": [
+     "",
+     "Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n       ip [ -force ] -batch filename\nwhere  OBJECT := { address | addrlabel | fou | help | ila | ioam | l2tp | link |\n                   macsec | maddress | monitor | mptcp | mroute | mrule |\n                   neighbor | neighbour | netconf | netns | nexthop | ntable |\n                   ntbl | route | rule | sr | tap | tcpmetrics |\n                   token | tunnel | tuntap | vrf | xfrm }\n       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n                    -h[uman-readable] | -iec | -j[son] | -p[retty] |\n                    -f[amily] { inet | inet6 | mpls | bridge | link } |\n                    -4 | -6 | -M | -B | -0 |\n                    -l[oops] { maximum-addr-flush-attempts } | -br[ief] |\n                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n                    -rc[vbuf] [size] | -n[etns] name | -N[umeric] | -a[ll] |\n                    -c[olor]}\n",
+     255
+    ],
+    "ip -6 a": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN qlen 1000\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -V": [
+     "ip utility, iproute2-5.15.0, libbpf 0.5.0\n",
+     "",
+     0
+    ],
+    "ip a show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip addr foo": [
+     "",
+     "Command \"foo\" is unknown, try \"ip address help\".\n",
+     255
+    ],
+    "ip addr show dev nosuch": [
+     "",
+     "Device \"nosuch\" does not exist.\n",
+     1
+    ],
+    "ip foo": [
+     "",
+     "Object \"foo\" is unknown, try \"ip help\".\n",
+     1
+    ],
+    "ip link show dev nosuch": [
+     "",
+     "Device \"nosuch\" does not exist.\n",
+     1
+    ],
+    "ip r": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.3 \n",
+     "",
+     0
+    ],
+    "ip rule": [
+     "0:\tfrom all lookup local\n32766:\tfrom all lookup main\n32767:\tfrom all lookup default\n",
+     "",
+     0
+    ],
+    "ip x": [
+     "",
+     "Usage: ip xfrm XFRM-OBJECT { COMMAND | help }\nwhere  XFRM-OBJECT := state | policy | monitor\n",
+     255
+    ],
+    "netstat -V": [
+     "net-tools 2.10-alpha\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Phil Blundell, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n",
+     "",
+     0
+    ],
+    "netstat -rn": [
+     "Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0\n172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0\n",
+     "",
+     0
+    ],
+    "netstat -tln": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State      \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN     \ntcp6       0      0 :::22                   :::*                    LISTEN     \n",
+     "",
+     0
+    ],
+    "netstat -tlnp": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      3572/sshd: /usr/sbi \ntcp6       0      0 :::22                   :::*                    LISTEN      3572/sshd: /usr/sbi \n",
+     "",
+     0
+    ],
+    "netstat -tulpn": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      3572/sshd: /usr/sbi \ntcp6       0      0 :::22                   :::*                    LISTEN      3572/sshd: /usr/sbi \n",
+     "",
+     0
+    ],
+    "netstat -z": [
+     "",
+     "netstat: invalid option -- 'z'\nusage: netstat [-vWeenNcCF] [<Af>] -r         netstat {-V|--version|-h|--help}\n       netstat [-vWnNcaeol] [<Socket> ...]\n       netstat { [-vWeenNac] -i | [-cnNe] -M | -s [-6tuw] }\n\n        -r, --route              display routing table\n        -i, --interfaces         display interface table\n        -g, --groups             display multicast group memberships\n        -s, --statistics         display networking statistics (like SNMP)\n        -M, --masquerade         display masqueraded connections\n\n        -v, --verbose            be verbose\n        -W, --wide               don't truncate IP addresses\n        -n, --numeric            don't resolve names\n        --numeric-hosts          don't resolve host names\n        --numeric-ports          don't resolve port names\n        --numeric-users          don't resolve user names\n        -N, --symbolic           resolve hardware names\n        -e, --extend             display other/more information\n        -p, --programs           display PID/Program name for sockets\n        -o, --timers             display timers\n        -c, --continuous         continuous listing\n\n        -l, --listening          display listening server sockets\n        -a, --all                display all sockets (default: connected)\n        -F, --fib                display Forwarding Information Base (default)\n        -C, --cache              display routing cache instead of FIB\n        -Z, --context            display SELinux security context for sockets\n\n  <Socket>={-t|--tcp} {-u|--udp} {-U|--udplite} {-S|--sctp} {-w|--raw}\n           {-x|--unix} --ax25 --ipx --netrom\n  <AF>=Use '-6|-4' or '-A <af>' or '--<af>'; default: inet\n  List of possible address families (which support routing):\n    inet (DARPA Internet) inet6 (IPv6) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) ipx (Novell IPX) ddp (Appletalk DDP) \n    x25 (CCITT X.25) \n",
+     3
+    ],
+    "ss -4tln": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*          \n",
+     "",
+     0
+    ],
+    "ss -V": [
+     "ss utility, iproute2-5.15.0\n",
+     "",
+     0
+    ],
+    "ss -ltn": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*          \nLISTEN 0      128             [::]:22           [::]:*          \n",
+     "",
+     0
+    ],
+    "ss -tln": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*          \nLISTEN 0      128             [::]:22           [::]:*          \n",
+     "",
+     0
+    ],
+    "ss -tlnp": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                        \nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:((\"sshd\",pid=3572,fd=3))\nLISTEN 0      128             [::]:22           [::]:*    users:((\"sshd\",pid=3572,fd=4))\n",
+     "",
+     0
+    ],
+    "ss -tulpn": [
+     "Netid State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                        \ntcp   LISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:((\"sshd\",pid=3572,fd=3))\ntcp   LISTEN 0      128             [::]:22           [::]:*    users:((\"sshd\",pid=3572,fd=4))\n",
+     "",
+     0
+    ],
+    "ss -z": [
+     "",
+     "ss: SELinux is not enabled.\n",
+     1
+    ]
+   },
+   "iproute2": "5.15.0"
+  },
+  "ubuntu_24.04": {
+   "cases": {
+    "ifconfig -z": [
+     "",
+     "ifconfig: option `-z' not recognised.\nifconfig: `--help' gives usage information.\n",
+     1
+    ],
+    "ifconfig lo": [
+     "lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n        inet 127.0.0.1  netmask 255.0.0.0\n        inet6 ::1  prefixlen 128  scopeid 0x10<host>\n        loop  txqueuelen 1000  (Local Loopback)\n        RX packets 0  bytes 0 (0.0 B)\n        RX errors 0  dropped 0  overruns 0  frame 0\n        TX packets 0  bytes 0 (0.0 B)\n        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n",
+     "",
+     0
+    ],
+    "ifconfig nosuch": [
+     "",
+     "nosuch: error fetching interface information: Device not found\n",
+     1
+    ],
+    "ip": [
+     "",
+     "Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n       ip [ -force ] -batch filename\nwhere  OBJECT := { address | addrlabel | amt | fou | help | ila | ioam | l2tp |\n                   link | macsec | maddress | monitor | mptcp | mroute | mrule |\n                   neighbor | neighbour | netconf | netns | nexthop | ntable |\n                   ntbl | route | rule | sr | tap | tcpmetrics |\n                   token | tunnel | tuntap | vrf | xfrm }\n       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n                    -h[uman-readable] | -iec | -j[son] | -p[retty] |\n                    -f[amily] { inet | inet6 | mpls | bridge | link } |\n                    -4 | -6 | -M | -B | -0 |\n                    -l[oops] { maximum-addr-flush-attempts } | -br[ief] |\n                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n                    -rc[vbuf] [size] | -n[etns] name | -N[umeric] | -a[ll] |\n                    -c[olor]}\n",
+     255
+    ],
+    "ip -6 a": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN qlen 1000\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip -V": [
+     "ip utility, iproute2-6.1.0, libbpf 1.3.0\n",
+     "",
+     0
+    ],
+    "ip a show dev lo": [
+     "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host \n       valid_lft forever preferred_lft forever\n",
+     "",
+     0
+    ],
+    "ip addr foo": [
+     "",
+     "Command \"foo\" is unknown, try \"ip address help\".\n",
+     255
+    ],
+    "ip addr show dev nosuch": [
+     "",
+     "Device \"nosuch\" does not exist.\n",
+     1
+    ],
+    "ip foo": [
+     "",
+     "Object \"foo\" is unknown, try \"ip help\".\n",
+     1
+    ],
+    "ip link show dev nosuch": [
+     "",
+     "Device \"nosuch\" does not exist.\n",
+     1
+    ],
+    "ip r": [
+     "default via 172.17.0.1 dev eth0 \n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.3 \n",
+     "",
+     0
+    ],
+    "ip rule": [
+     "0:\tfrom all lookup local\n32766:\tfrom all lookup main\n32767:\tfrom all lookup default\n",
+     "",
+     0
+    ],
+    "ip x": [
+     "",
+     "Usage: ip xfrm XFRM-OBJECT { COMMAND | help }\nwhere  XFRM-OBJECT := state | policy | monitor\n",
+     255
+    ],
+    "netstat -V": [
+     "net-tools 2.10\nFred Baumgarten, Alan Cox, Bernd Eckenfels, Phil Blundell, Tuan Hoang, Brian Micek and others\n+NEW_ADDRT +RTF_IRTT +RTF_REJECT +FW_MASQUERADE +I18N +SELINUX\nAF: (inet) +UNIX +INET +INET6 +IPX +AX25 +NETROM +X25 +ATALK +ECONET +ROSE -BLUETOOTH\nHW:  +ETHER +ARC +SLIP +PPP +TUNNEL -TR +AX25 +NETROM +X25 +FR +ROSE +ASH +SIT +FDDI +HIPPI +HDLC/LAPB +EUI64 \n",
+     "",
+     0
+    ],
+    "netstat -rn": [
+     "Kernel IP routing table\nDestination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0\n172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0\n",
+     "",
+     0
+    ],
+    "netstat -tln": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State      \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN     \ntcp6       0      0 :::22                   :::*                    LISTEN     \n",
+     "",
+     0
+    ],
+    "netstat -tlnp": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      3719/sshd: /usr/sbi \ntcp6       0      0 :::22                   :::*                    LISTEN      3719/sshd: /usr/sbi \n",
+     "",
+     0
+    ],
+    "netstat -tulpn": [
+     "Active Internet connections (only servers)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    \ntcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      3719/sshd: /usr/sbi \ntcp6       0      0 :::22                   :::*                    LISTEN      3719/sshd: /usr/sbi \n",
+     "",
+     0
+    ],
+    "netstat -z": [
+     "",
+     "netstat: invalid option -- 'z'\nusage: netstat [-vWeenNcCF] [<Af>] -r         netstat {-V|--version|-h|--help}\n       netstat [-vWnNcaeol] [<Socket> ...]\n       netstat { [-vWeenNac] -i | [-cnNe] -M | -s [-6tuw] }\n\n        -r, --route              display routing table\n        -i, --interfaces         display interface table\n        -g, --groups             display multicast group memberships\n        -s, --statistics         display networking statistics (like SNMP)\n        -M, --masquerade         display masqueraded connections\n\n        -v, --verbose            be verbose\n        -W, --wide               don't truncate IP addresses\n        -n, --numeric            don't resolve names\n        --numeric-hosts          don't resolve host names\n        --numeric-ports          don't resolve port names\n        --numeric-users          don't resolve user names\n        -N, --symbolic           resolve hardware names\n        -e, --extend             display other/more information\n        -p, --programs           display PID/Program name for sockets\n        -o, --timers             display timers\n        -c, --continuous         continuous listing\n\n        -l, --listening          display listening server sockets\n        -a, --all                display all sockets (default: connected)\n        -F, --fib                display Forwarding Information Base (default)\n        -C, --cache              display routing cache instead of FIB\n        -Z, --context            display SELinux security context for sockets\n\n  <Socket>={-t|--tcp} {-u|--udp} {-U|--udplite} {-S|--sctp} {-w|--raw}\n           {-x|--unix} --ax25 --ipx --netrom\n  <AF>=Use '-6|-4' or '-A <af>' or '--<af>'; default: inet\n  List of possible address families (which support routing):\n    inet (DARPA Internet) inet6 (IPv6) ax25 (AMPR AX.25) \n    netrom (AMPR NET/ROM) rose (AMPR ROSE) ipx (Novell IPX) \n    ddp (Appletalk DDP) x25 (CCITT X.25) \n",
+     3
+    ],
+    "ss -4tln": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*          \n",
+     "",
+     0
+    ],
+    "ss -V": [
+     "ss utility, iproute2-6.1.0\n",
+     "",
+     0
+    ],
+    "ss -ltn": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*          \nLISTEN 0      128             [::]:22           [::]:*          \n",
+     "",
+     0
+    ],
+    "ss -tln": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*          \nLISTEN 0      128             [::]:22           [::]:*          \n",
+     "",
+     0
+    ],
+    "ss -tlnp": [
+     "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                        \nLISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:((\"sshd\",pid=3719,fd=3))\nLISTEN 0      128             [::]:22           [::]:*    users:((\"sshd\",pid=3719,fd=4))\n",
+     "",
+     0
+    ],
+    "ss -tulpn": [
+     "Netid State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                        \ntcp   LISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:((\"sshd\",pid=3719,fd=3))\ntcp   LISTEN 0      128             [::]:22           [::]:*    users:((\"sshd\",pid=3719,fd=4))\n",
+     "",
+     0
+    ],
+    "ss -z": [
+     "",
+     "ss: SELinux is not enabled.\n",
+     1
+    ]
+   },
+   "iproute2": "6.1.0"
+  }
+ }
+}

@@ -1,8 +1,12 @@
 """One random identity per container start: release, hardware, host name,
 uptime, installation date and honeytokens, all drawn from one seed and all
-relative to `now`, so the dates of a persona agree with each other."""
+relative to `now`, so the dates of a persona agree with each other. With
+COWRIE_PERSONA_ROTATION the identity of an earlier start comes back
+(restore): drawn again from its seed and its time, only `now` moves on."""
 import calendar
 import dataclasses
+import hashlib
+import json
 import random
 import re
 import string
@@ -33,6 +37,7 @@ class Identity:
     installed_at: int
     pid_seed: int
     tokens: dict
+    chosen_at: int = 0       # when the identity was drawn: now for a fresh one, earlier for a restored one
 
     @property
     def booted_at(self):
@@ -112,6 +117,12 @@ def latest_install(release):
     return 0 if is_medium(release) else stale_at(release)
 
 
+def drawn_at(ident):
+    """When the identity was drawn. Its history (logs, password changes, the
+    login of its shell) ends there, so a restored identity shows the same."""
+    return ident.chosen_at or ident.now
+
+
 def log_window(ident):
     """(first, last) time of package log entries that pull the release's
     versions: from the installation (or the update to the release) until its
@@ -119,7 +130,7 @@ def log_window(ident):
     image after that and never touched its packages."""
     r = ident.release
     first = max(ident.installed_at, updated_at(r))
-    last = ident.now - 3600
+    last = drawn_at(ident) - 3600
     if stale_at(r):
         last = min(last, stale_at(r))
     if first > last:
@@ -230,7 +241,7 @@ def draw(persona, seed, now=None):
     release = specialize(rng.choice(ready or fitting), hardware)
 
     # booted after its last update (and so after its kernel was built), up to 120 / 400 days ago
-    max_up = (400 if persona.kind == "device" else 120) * DAY
+    max_up = max_uptime(persona)
     latest_boot = now - DAY
     earliest_boot = min(max(now - max_up, ready_at(release) + DAY), latest_boot)
     booted_at = rng.randint(earliest_boot, latest_boot)
@@ -253,7 +264,72 @@ def draw(persona, seed, now=None):
         installed_at=installed_at,
         pid_seed=rng.getrandbits(32),
         tokens={name: _token(kind, rng) for name, kind in persona.tokens},
+        chosen_at=now,
     )
+
+
+def max_uptime(persona):
+    """The longest uptime of a fresh draw: 400 days for a device, 120 for a server."""
+    return (400 if persona.kind == "device" else 120) * DAY
+
+
+def is_fresh(ident):
+    """Drawn for this start, not restored from an earlier one."""
+    return ident.chosen_at in (0, ident.now)
+
+
+STATE_VERSION = 1
+_STATE_INTS = ("seed", "chosen_at", "booted_at", "installed_at", "hardware_index")
+
+
+def _plain(value):
+    if callable(value):
+        return f"{value.__module__}.{value.__qualname__}"
+    raise TypeError(f"no catalog value: {type(value).__name__}")
+
+
+def persona_digest(persona):
+    """sha256 of the catalog data of the persona (pools, files to remove, tokens,
+    the builder by name): another image with other data for it does not keep a
+    state made from the old one."""
+    data = json.dumps(dataclasses.asdict(persona), sort_keys=True, default=_plain, ensure_ascii=True)
+    return hashlib.sha256(data.encode("ascii")).hexdigest()
+
+
+def to_state(persona, ident):
+    """What a later start needs to bring the identity back (etc/persona-state.json)."""
+    return {"version": STATE_VERSION, "persona": ident.persona_id, "digest": persona_digest(persona),
+            "seed": ident.seed, "chosen_at": drawn_at(ident), "booted_at": ident.booted_at,
+            "installed_at": ident.installed_at, "release_label": ident.release.label,
+            "hardware_index": persona.hardware.index(ident.hardware), "hostname": ident.hostname}
+
+
+def restore(persona, state, now):
+    """The identity of the state at `now`: drawn again from its seed at chosen_at,
+    so release, hardware, host name, tokens and dates are the same, the boot
+    stays where it was and the uptime has grown. ValueError when the state is
+    no state of this persona or this image draws something else from it."""
+    now = int(now)
+    if not isinstance(state, dict):
+        raise ValueError("no JSON object")
+    if state.get("version") != STATE_VERSION:
+        raise ValueError(f"unknown version {state.get('version')!r}")
+    if state.get("persona") != persona.id:
+        raise ValueError(f"made for {state.get('persona')!r}, not {persona.id}")
+    if state.get("digest") != persona_digest(persona):
+        raise ValueError(f"made from other data of {persona.id}")
+    for key in _STATE_INTS:
+        if type(state.get(key)) is not int or state[key] < 0:
+            raise ValueError(f"{key} is no number")
+    if state["chosen_at"] > now:
+        raise ValueError("chosen after now")
+    ident = draw(persona, state["seed"], state["chosen_at"])
+    index = state["hardware_index"]
+    drawn = (ident.release.label, index < len(persona.hardware) and persona.hardware[index] == ident.hardware,
+             ident.hostname, ident.booted_at, ident.installed_at)
+    if drawn != (state.get("release_label"), True, state.get("hostname"), state["booted_at"], state["installed_at"]):
+        raise ValueError("this image draws another identity from it")
+    return dataclasses.replace(ident, now=now, boot_offset=now - ident.booted_at)
 
 
 def to_json(ident):

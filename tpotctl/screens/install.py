@@ -419,6 +419,11 @@ class InstallApp(ArrowNav, App):
         try:
             self.env_settings = Settings(env_path, EnvFile(env_path), envschema.load_schema(),
                                      envschema.compose_services(compose))
+        except envschema.SchemaError as err:
+            self.env_settings = None
+            self.notify(f"{envschema.SCHEMA_PATH} does not hold together ({err}), the settings stay as they are.",
+                        severity="warning")
+            return
         except OSError as err:
             self.env_settings = None
             self.notify(f"{env_path} cannot be read ({err}), the settings stay as they are.", severity="warning")

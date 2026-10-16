@@ -1,11 +1,13 @@
 import importlib.util
 import shutil
+import subprocess
+import sys
 import unittest
 import unittest.mock
 from pathlib import Path
 
 from tests.helpers import DIST, tmpdir
-from tpot_personas.ssh_profiles import COMPRESSIONS, HOST_KEYS, TWISTED_CIPHERS, TWISTED_MACS
+from tpot_personas.ssh_profiles import COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, TWISTED_CIPHERS, TWISTED_MACS
 
 FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.1"
 # what Twisted 26.4.0 offers (SSHTransportBase.supported*), from the image build
@@ -15,6 +17,10 @@ TWISTED = {
     "public_keys": {"ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521", "rsa-sha2-256",
                     "rsa-sha2-512", "ssh-dss", "ssh-ed25519", "ssh-rsa"},
     "compressions": {"none", "zlib"},
+    # SSHServerTransport._getHostKeys: the key each host key algorithm signs with
+    "key_types": {"ecdsa-sha2-nistp256": "ecdsa-sha2-nistp256", "rsa-sha2-256": "ssh-rsa", "rsa-sha2-512": "ssh-rsa",
+                  "ssh-ed25519": "ssh-ed25519", "ssh-rsa": "ssh-rsa"},
+    "sign_types": True,
 }
 
 
@@ -30,6 +36,9 @@ class SshSupportTest(unittest.TestCase):
         self.check = load()
         self.root = tmpdir(self) / "cowrie"
         shutil.copytree(FIXTURE, self.root)
+        # the image runs the check on the patched Cowrie
+        subprocess.run([sys.executable, str(DIST / "patch_cowrie_persona_support.py"), "--cowrie-root", str(self.root)],
+                       check=True, capture_output=True, text=True)
 
     def problems(self, twisted=None):
         return self.check.problems(twisted or TWISTED, self.root)
@@ -70,6 +79,25 @@ class SshSupportTest(unittest.TestCase):
         self.edit("src/cowrie/ssh/factory.py", 'CowrieConfig.get("ssh", "compression")',
                   'CowrieConfig.get("ssh", "compressions")')
         self.assertEqual(self.problems(), ["compression: Cowrie (ssh/factory.py) does not read [ssh] compression"])
+
+    def test_twisted_without_a_host_key_algorithm(self):
+        twisted = dict(TWISTED, public_keys=TWISTED["public_keys"] - {"rsa-sha2-512"})
+        self.assertEqual(self.problems(twisted), ["host key algorithm not in Twisted: rsa-sha2-512"])
+
+    def test_twisted_signing_an_algorithm_with_another_key(self):
+        self.assertEqual(sorted(TWISTED["key_types"]), sorted(HOST_KEY_ALGORITHMS))
+        twisted = dict(TWISTED, key_types=dict(TWISTED["key_types"], **{"rsa-sha2-256": None}))
+        self.assertEqual(self.problems(twisted), ["host key algorithm rsa-sha2-256 does not sign with ssh-rsa in Twisted"])
+
+    def test_twisted_signing_without_a_signature_type(self):
+        self.assertEqual(self.problems(dict(TWISTED, sign_types=False)),
+                         ["host key algorithms: Twisted's Key.sign takes no signatureType"])
+
+    def test_cowrie_factory_without_the_patch_offers_one_algorithm_per_key(self):
+        shutil.rmtree(self.root)
+        shutil.copytree(FIXTURE, self.root)
+        self.assertEqual(self.problems(),
+                         ["host key algorithms: Cowrie (ssh/factory.py) does not advertise [ssh] host_key_algorithms"])
 
     def test_main_fails_and_names_the_problem(self):
         twisted = dict(TWISTED, public_keys={"ssh-rsa"})

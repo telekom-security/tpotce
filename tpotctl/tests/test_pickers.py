@@ -193,6 +193,17 @@ class SchemaWidgetsTest(unittest.TestCase):
                     self.assertIn(rule.llm["service"], rule.services)
                 if rule.offer:
                     self.assertTrue(rule.services, "an offered key belongs to a service")
+                if rule.widget == "choice_many":
+                    self.assertEqual(rule.type, "choice_list")
+                    self.assertTrue(rule.groups, "a list to tick has its headings")
+                if rule.groups:
+                    grouped = [v for members in rule.groups.values() for v in members]
+                    self.assertEqual(sorted(grouped), sorted(rule.values), "the groups hold every value once")
+                    for members in rule.groups.values():
+                        problems = self.envschema.check(rule, {key: " ".join(members)}, {}, check_host=False)
+                        self.assertEqual(problems, [], f"{members} has to be valid")
+                        self.assertEqual(members, [v for v in rule.values if v in members],
+                                         "a group lists its values in the order of values")
 
     def test_kibana_objects_offers_every_mode_with_its_help(self):
         rule = self.schema["TPOT_KIBANA_OBJECTS"]
@@ -218,6 +229,20 @@ class SchemaWidgetsTest(unittest.TestCase):
             self.assertTrue(self.schema[key].offer, key)
         self.assertEqual(self.schema["GALAH_LLM_SERVER_URL"].widget, "llm_url")
         self.assertEqual(self.schema["BEELZEBUB_LLM_HOST"].widget, "llm_url")
+
+    def test_cowrie_personas_grouped_as_the_catalog(self):
+        """Servers and Devices of COWRIE_PERSONA are the lists docker/cowrie/tests/test_catalog.py
+        holds the persona catalog to."""
+        import ast
+        with open(os.path.join(REPO_DIR, "docker", "cowrie", "tests", "test_catalog.py"), encoding="utf-8") as handle:
+            tree = ast.parse(handle.read())
+        lists = {node.targets[0].id: ast.literal_eval(node.value) for node in tree.body
+                 if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
+                 and node.targets[0].id in ("SERVERS", "DEVICES")}
+        rule = self.schema["COWRIE_PERSONA"]
+        self.assertEqual(rule.widget, "choice_many")
+        self.assertEqual(rule.groups, {"Servers": lists["SERVERS"], "Devices": lists["DEVICES"]})
+        self.assertEqual(rule.values, lists["SERVERS"] + lists["DEVICES"])
 
     def test_show_when(self):
         key_rule = self.schema["GALAH_LLM_API_KEY"]

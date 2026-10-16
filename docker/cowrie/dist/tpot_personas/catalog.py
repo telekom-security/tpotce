@@ -16,6 +16,7 @@ its download or release-note page above it (Release.extra["firmware"]): the
 device was set up with it on or after the day it came out and still runs it, so
 its versions go stale only when the next firmware came out.
 """
+import re
 from dataclasses import replace
 
 from . import PersonaError
@@ -182,7 +183,7 @@ _BOOKWORM_GCC_U1 = "gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binuti
 # unverified: the cross-prefixed compiler name of the trixie kernel builds
 _TRIXIE_GCC = "x86_64-linux-gnu-gcc-14 (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44"
 _BOOKWORM_PKGS = {"apt": "2.6.1", "dpkg": "1.21.22", "htop": "3.2.2-2"}
-_TRIXIE_PKGS = {"apt": "3.0.3", "dpkg": "1.22.21", "htop": "3.4.1-5", "git": "1:2.47.3-0+deb13u1",
+_TRIXIE_PKGS = {"apt": "3.0.3", "dpkg": "1.22.21", "htop": "3.4.1-5",
                 "vim": "2:9.1.1230-2"}
 
 
@@ -206,10 +207,12 @@ def _rhel(updated, minor, kernel, uts, builder, compiler, openssh, openssh_befor
         kernel_build=uts,
         os_version=f"9.{minor} (Plow)",
         os_version_id=f"9.{minor}",
-        packages={"dnf": "4.14.0", "rpm": "4.16.1.3", "openssh-server": openssh, "tmux": "3.2a-5.el9",
-                  **packages},
+        packages={"dnf": "4.14.0", "rpm": "4.16.1.3", "openssh-server": openssh, **packages},
+        # ssh_rsa_sha1: the DEFAULT crypto policy of RHEL 9 has no SHA-1 signatures, sshd offers its RSA
+        #   key as rsa-sha2-512,rsa-sha2-256 only (unverified: from the opensshserver back-end of
+        #   crypto-policies, HostKeyAlgorithms without ssh-rsa)
         extra={"kernel_builder": builder, "kernel_compiler": compiler, "first_install": "2022-05-17",
-               "updated": updated,
+               "updated": updated, "ssh_rsa_sha1": False,
                "upgrades": {"openssh-server": openssh_before}},
     )
 
@@ -251,24 +254,24 @@ _NOBLE_LEVELS = (
     # forgotten since this update (not in the pool: the -aws pool has this time)
     _ubuntu("2025-10-20", "noble", "24.04.3 LTS", "1:9.6p1-3ubuntu13.14", "1:9.6p1-3ubuntu13.13", "6.8.0-87",
             "#88-Ubuntu SMP PREEMPT_DYNAMIC Sat Oct 11 09:28:41 UTC 2025", "lcy02-amd64-034", _NOBLE_GCC,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6",
-                         "git": "1:2.43.0-1ubuntu7.3", "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6", "git": "1:2.43.0-1ubuntu7.3",
+                         "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}),
     _ubuntu("2026-02-25", "noble", "24.04.4 LTS", "1:9.6p1-3ubuntu13.14", "1:9.6p1-3ubuntu13.13", "6.8.0-101",
             "#101-Ubuntu SMP PREEMPT_DYNAMIC Mon Feb  9 10:15:05 UTC 2026", "lcy02-amd64-051", _NOBLE_GCC,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.7",
-                         "git": "1:2.43.0-1ubuntu7.3", "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.7", "git": "1:2.43.0-1ubuntu7.3",
+                         "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}),
     _ubuntu("2026-05-20", "noble", "24.04.4 LTS", "1:9.6p1-3ubuntu13.16", "1:9.6p1-3ubuntu13.15", "6.8.0-117",
             "#117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026", "lcy02-amd64-102", _NOBLE_GCC_1,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.9",
-                         "git": "1:2.43.0-1ubuntu7.3", "vim": "2:9.1.0016-1ubuntu7.13", "htop": "3.3.0-4build1",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.9", "git": "1:2.43.0-1ubuntu7.3",
+                         "vim": "2:9.1.0016-1ubuntu7.13", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}),
     # 13.17 was only in -proposed
     _ubuntu("2026-07-20", "noble", "24.04.4 LTS", "1:9.6p1-3ubuntu13.18", "1:9.6p1-3ubuntu13.16", "6.8.0-136",
             "#136-Ubuntu SMP PREEMPT_DYNAMIC Wed Jul  1 21:53:05 UTC 2026", "lcy02-amd64-041", _NOBLE_GCC_1,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.11",
-                         "git": "1:2.43.0-1ubuntu7.3", "vim": "2:9.1.0016-1ubuntu7.18", "htop": "3.3.0-4build1",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.11", "git": "1:2.43.0-1ubuntu7.3",
+                         "vim": "2:9.1.0016-1ubuntu7.18", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}),
 )
 
@@ -280,13 +283,13 @@ _NOBLE_LEVELS = (
 _NOBLE_AWS_LEVELS = (
     _ubuntu("2025-10-25", "noble", "24.04.3 LTS", "1:9.6p1-3ubuntu13.14", "1:9.6p1-3ubuntu13.13", "6.14.0-1015",
             "#15~24.04.1-Ubuntu SMP Tue Sep 23 22:40:31 UTC 2025", "lcy02-amd64-042", _NOBLE_GCC,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6",
-                         "git": "1:2.43.0-1ubuntu7.3", "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6", "git": "1:2.43.0-1ubuntu7.3",
+                         "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}, flavor="aws", providers=("aws",)),
     _ubuntu("2026-07-20", "noble", "24.04.4 LTS", "1:9.6p1-3ubuntu13.18", "1:9.6p1-3ubuntu13.16", "6.17.0-1019",
             "#19~24.04.1-Ubuntu SMP Tue Jun 23 19:03:52 UTC 2026", "lcy02-amd64-070", _NOBLE_GCC_1,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.11",
-                         "git": "1:2.43.0-1ubuntu7.3", "vim": "2:9.1.0016-1ubuntu7.18", "htop": "3.3.0-4build1",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.11", "git": "1:2.43.0-1ubuntu7.3",
+                         "vim": "2:9.1.0016-1ubuntu7.18", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}, flavor="aws", providers=("aws",)),
 )
 # stale: next linux / openssh in noble-security|updates (Launchpad): 6.8.0-106 / openssh 13.15 2026-03-12,
@@ -385,31 +388,31 @@ _BOOKWORM_LEVELS = (
     _debian("2023-10-10", "bookworm", "12.2", "9.2p1", "1:9.2p1-2+deb12u1", "1:9.2p1-2",
             "6.1.0-13-amd64", "6.1.55-1", "2023-09-29",
             _BOOKWORM_GCC, "OpenSSL 3.0.11 19 Sep 2023",
-            {**_BOOKWORM_PKGS, "curl": "7.88.1-10+deb12u4", "git": "1:2.39.2-1.1", "vim": "2:9.0.1378-2",
+            {**_BOOKWORM_PKGS, "curl": "7.88.1-10+deb12u4", "vim": "2:9.0.1378-2",
              "sudo": "1.9.13p3-1+deb12u1"}),
     # 12.5, installation image
     _debian("2024-02-12", "bookworm", "12.5", "9.2p1", "1:9.2p1-2+deb12u2", "1:9.2p1-2+deb12u1",
             "6.1.0-18-amd64", "6.1.76-1", "2024-02-01",
             _BOOKWORM_GCC, "OpenSSL 3.0.11 19 Sep 2023",
-            {**_BOOKWORM_PKGS, "curl": "7.88.1-10+deb12u5", "git": "1:2.39.2-1.1", "vim": "2:9.0.1378-2",
+            {**_BOOKWORM_PKGS, "curl": "7.88.1-10+deb12u5", "vim": "2:9.0.1378-2",
              "sudo": "1.9.13p3-1+deb12u1"}),
     # 12.11
     _debian("2025-05-20", "bookworm", "12.11", "9.2p1", "1:9.2p1-2+deb12u6", "1:9.2p1-2+deb12u5",
             "6.1.0-36-amd64", "6.1.139-1", "2025-05-18",
             _BOOKWORM_GCC_U1, "OpenSSL 3.0.16 11 Feb 2025",
-            {**_BOOKWORM_PKGS, "curl": "7.88.1-10+deb12u12", "git": "1:2.39.5-0+deb12u2",
+            {**_BOOKWORM_PKGS, "curl": "7.88.1-10+deb12u12",
              "vim": "2:9.0.1378-2+deb12u2", "sudo": "1.9.13p3-1+deb12u1"}),
     # 12.14
     _debian("2026-05-12", "bookworm", "12.14", "9.2p1", "1:9.2p1-2+deb12u10", "1:9.2p1-2+deb12u9",
             "6.1.0-47-amd64", "6.1.170-3", "2026-05-08",
             _BOOKWORM_GCC_U1, "OpenSSL 3.0.20 7 Apr 2026",
-            {**_BOOKWORM_PKGS, "dpkg": "1.21.23", "curl": "7.88.1-10+deb12u15", "git": "1:2.39.5-0+deb12u3",
+            {**_BOOKWORM_PKGS, "dpkg": "1.21.23", "curl": "7.88.1-10+deb12u15",
              "vim": "2:9.0.1378-2+deb12u2", "sudo": "1.9.13p3-1+deb12u4"}),
     # 12.15
     _debian("2026-07-06", "bookworm", "12.15", "9.2p1", "1:9.2p1-2+deb12u10", "1:9.2p1-2+deb12u9",
             "6.1.0-50-amd64", "6.1.176-1", "2026-07-02",
             _BOOKWORM_GCC_U1, "OpenSSL 3.0.20 7 Apr 2026",
-            {**_BOOKWORM_PKGS, "dpkg": "1.21.23", "curl": "7.88.1-10+deb12u15", "git": "1:2.39.5-0+deb12u3",
+            {**_BOOKWORM_PKGS, "dpkg": "1.21.23", "curl": "7.88.1-10+deb12u15",
              "vim": "2:9.0.1378-2+deb12u2", "sudo": "1.9.13p3-1+deb12u4"}),
 )
 # 12.2 and 12.5 are the versions of their installation images: the older OpenSSH patch levels stay installable
@@ -429,27 +432,27 @@ _RHEL9_LEVELS = (
     _rhel("2025-02-20", 4, "5.14.0-427.55.1", "#1 SMP PREEMPT_DYNAMIC Mon Feb 10 12:37:38 EST 2025",
           "mockbuild@x86-64-03.build.eng.rdu2.redhat.com", _RHEL_COMPILER_94, "8.7p1-38.el9_4.4",
           "8.7p1-38.el9_4.1", "OpenSSL 3.0.7 1 Nov 2022",
-          {"curl": "7.76.1-29.el9_4.1", "git": "2.43.5-1.el9_4", "vim-enhanced": "2:8.2.2637-20.el9_1"}),
+          {"curl": "7.76.1-29.el9_4.1", "vim-enhanced": "2:8.2.2637-20.el9_1"}),
     # 9.5 GA kernel; uname -v verbatim from https://www.spec.org/cpu2017/results/res2025q2/cpu2017-20250529-48392.html
     # unverified: builder host and compiler (gcc 11.5.0 of RHEL 9.5)
     _rhel("2024-11-13", 5, "5.14.0-503.11.1", "#1 SMP PREEMPT_DYNAMIC Mon Sep 30 11:54:45 EDT 2024",
           "mockbuild@x86-64-01.build.eng.rdu2.redhat.com",
           "gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-2), GNU ld version 2.35.2-54.el9", "8.7p1-43.el9",
           "8.7p1-38.el9_4.4", "OpenSSL 3.2.2 4 Jun 2024",
-          {"curl": "7.76.1-31.el9", "git": "2.43.5-1.el9_4", "vim-enhanced": "2:8.2.2637-21.el9"}),
+          {"curl": "7.76.1-31.el9", "vim-enhanced": "2:8.2.2637-21.el9"}),
     # 9.6, kernel of 2025-06; unverified: the time of uname -v, builder host and compiler
     _rhel("2025-06-05", 6, "5.14.0-570.18.1", "#1 SMP PREEMPT_DYNAMIC Thu May 15 08:45:21 EDT 2025",
           "mockbuild@x86-64-02.build.eng.rdu2.redhat.com",
           "gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-5), GNU ld version 2.35.2-63.el9", "8.7p1-45.el9",
           "8.7p1-43.el9", "OpenSSL 3.2.2 4 Jun 2024",
-          {"curl": "7.76.1-31.el9", "git": "2.47.1-2.el9_6", "vim-enhanced": "2:8.2.2637-22.el9_6"}),
+          {"curl": "7.76.1-31.el9", "vim-enhanced": "2:8.2.2637-22.el9_6"}),
     # 9.6 EUS, kernel of 2026-08; uname -v verbatim from https://github.com/uxlfoundation/oneDNN/issues/6151
     # unverified: openssh / curl errata of 9.6 EUS after 2025, builder host and compiler
     _rhel("2026-08-25", 6, "5.14.0-570.135.1", "#1 SMP PREEMPT_DYNAMIC Wed Aug 12 22:16:32 EDT 2026",
           "mockbuild@x86-64-02.build.eng.rdu2.redhat.com",
           "gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-5), GNU ld version 2.35.2-63.el9", "8.7p1-45.el9",
           "8.7p1-43.el9", "OpenSSL 3.2.2 4 Jun 2024",
-          {"curl": "7.76.1-31.el9_6.1", "git": "2.47.3-1.el9_6", "vim-enhanced": "2:8.2.2637-22.el9_6.1"}),
+          {"curl": "7.76.1-31.el9_6.1", "vim-enhanced": "2:8.2.2637-22.el9_6.1"}),
 )
 # in update order; 9.5 GA is the 9.5 installation image
 # stale: the next kernel (Rocky vault dates): 503.14.1 2024-11-15, 570.19.1 2025-06-09; unknown for the
@@ -464,17 +467,17 @@ RHEL9 = _chain(_medium(_RHEL9_LEVELS[1]), _RHEL9_LEVELS[0], *_RHEL9_LEVELS[2:],
 _CENTOS7_LEVELS = (
     # 7.9.2009 as installed, never updated
     _centos("2020-11-12", "1160", "#1 SMP Mon Oct 19 16:18:59 UTC 2020", "7.4p1-21.el7", None,
-            {"rpm": "4.11.3-45.el7", "curl": "7.29.0-59.el7", "git": "1.8.3.1-23.el7_8",
+            {"rpm": "4.11.3-45.el7", "curl": "7.29.0-59.el7",
              "vim-enhanced": "2:7.4.629-7.el7"}),
     _centos("2023-03-15", "1160.88.1", "#1 SMP Tue Mar  7 15:41:52 UTC 2023", "7.4p1-22.el7_9", "7.4p1-21.el7",
-            {"rpm": "4.11.3-48.el7_9", "curl": "7.29.0-59.el7_9.1", "git": "1.8.3.1-24.el7_9",
+            {"rpm": "4.11.3-48.el7_9", "curl": "7.29.0-59.el7_9.1",
              "vim-enhanced": "2:7.4.629-8.el7_9"}),
     _centos("2023-12-13", "1160.105.1", "#1 SMP Thu Dec  7 15:39:45 UTC 2023", "7.4p1-23.el7_9", "7.4p1-22.el7_9",
-            {"rpm": "4.11.3-48.el7_9", "curl": "7.29.0-59.el7_9.1", "git": "1.8.3.1-25.el7_9",
+            {"rpm": "4.11.3-48.el7_9", "curl": "7.29.0-59.el7_9.1",
              "vim-enhanced": "2:7.4.629-8.el7_9"}),
     # the last kernel before the end of life on 2024-06-30
     _centos("2024-06-10", "1160.119.1", "#1 SMP Tue Jun  4 14:43:51 UTC 2024", "7.4p1-23.el7_9", "7.4p1-22.el7_9",
-            {"rpm": "4.11.3-48.el7_9", "curl": "7.29.0-59.el7_9.2", "git": "1.8.3.1-25.el7_9",
+            {"rpm": "4.11.3-48.el7_9", "curl": "7.29.0-59.el7_9.2",
              "vim-enhanced": "2:7.4.629-8.el7_9"}),
 )
 # 7.9.2009 as installed is the image; a later install would get the newest updates from the vault
@@ -683,11 +686,14 @@ QNAP_HARDWARE = (
 def _qts(version, number, build, released, superseded, uts, openssh, openssl):
     # unverified: uname -v (built the night of the build date), builder and compiler of the QNAP kernel
     #   (gcc 8.4.0, binutils assumed), the OpenSSH / OpenSSL of each build; a 5.10 kernel names the
-    #   compiler as `cc --version` and the linker (the format of Linux 5.8 and later)
+    #   compiler as `cc --version` and the linker (the format of Linux 5.8 and later); the BusyBox of
+    #   QTS (1.24.1, built the night of the build like the kernel)
+    clock = re.search(r"\d\d:\d\d:\d\d", uts).group()
     return _firmware(f"{version}.{number}", released, superseded, f"SSH-2.0-OpenSSH_{openssh.split('p')[0]}",
                      f"OpenSSH_{openssh}, {openssl}", "5.10.60-qnap", uts, "root@U16BuildServer141",
                      "gcc (GCC) 8.4.0, GNU ld (GNU Binutils) 2.32", f"{version}.{number} build {build}", version,
-                     build=build, number=number)
+                     build=build, number=number,
+                     busybox=f"BusyBox v1.24.1 ({build[:4]}-{build[4:6]}-{build[6:]} {clock} CST)")
 
 
 # QTS 5.2 builds of the release notes; superseded by the next build of the notes

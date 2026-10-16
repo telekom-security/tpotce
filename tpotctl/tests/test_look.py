@@ -94,6 +94,23 @@ class GlyphsTest(unittest.TestCase):
         for key, *_rest in tapp.PANES:
             self.assertIn(f"pane_{key}", glyphs.SETS["nerd"], f"page {key} needs an icon")
 
+    def test_list_to_tick_keeps_one_cell_per_glyph(self):
+        """The marks of the list to tick (ManyPicker): glyphs of the set, one cell each, ASCII in ascii."""
+        if not textual:
+            self.skipTest("Textual is not installed")
+        from rich.cells import cell_len
+        from tpotctl.screens.pickers import ManyPicker
+        picker = ManyPicker("Personas", ["a", "b", "c"], {"One": ["a", "b"], "Two": ["c"]}, current="a")
+        for mode in glyphs.MODES:
+            glyphs.set_mode(mode)
+            with self.subTest(mode=mode):
+                for index in range(len(picker.lines)):
+                    plain = picker.line_text(index).plain
+                    self.assertEqual(cell_len(plain), len(plain), plain)
+                    self.assertTrue(glyphs.g("on") in plain or glyphs.g("off") in plain, plain)
+                    if mode == "ascii":
+                        self.assertTrue(plain.isascii(), plain)
+
     def test_switching(self):
         glyphs.set_mode("ascii")
         self.assertEqual(glyphs.g("on"), "*")
@@ -937,6 +954,40 @@ class ColoursTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.5)
             found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
         return found
+
+    async def picker_colours(self):
+        """The list to tick of a list setting (COWRIE_PERSONA): ticked and not, a heading, the highlight."""
+        import re
+        from tpotctl import app as tapp, envschema
+        from tpotctl.screens.pickers import ManyPicker, many_picker
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.3)
+            app.push_screen(many_picker(envschema.load_schema()["COWRIE_PERSONA"], "raspios ipcam bogus"))
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if isinstance(app.screen, ManyPicker):
+                    break
+            await pilot.pause(0.2)
+            found = set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
+            app.screen.query_one("#many-take").focus()
+            await pilot.pause(0.2)
+            found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
+        return found
+
+    async def test_256_colours_list_to_tick_has_no_red(self):
+        from tpotctl import theme
+        theme.build("256")
+        self.assertEqual({colour for colour in await self.picker_colours() if pure_red(colour)}, set())
+
+    async def test_16_colours_list_to_tick_has_no_maroon(self):
+        from rich.color import Color, ColorSystem
+        from tpotctl import theme
+        theme.build("16")
+        maroon = {colour for colour in await self.picker_colours()
+                  if Color.parse(colour).downgrade(ColorSystem.STANDARD).number == 1}
+        self.assertEqual(maroon, set())
 
     async def test_256_colours_show_no_red_surfaces(self):
         from tpotctl import theme
