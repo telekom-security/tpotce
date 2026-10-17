@@ -16,7 +16,10 @@ The run:
        marker port of its injection, or the probe source with a recorded source port); the probe
        events none of these names stay and are counted (cleanup "left");
     7. the result in ~/.local/share/tpotce/checks/last.json; only then the output of steps 5 and 6.
-       Every line also goes into last.log next to it; a closed stdout never stops the run.
+       Every line also goes into last.log next to it; a closed stdout never stops the run. One
+       line ("Ending the check: ...") goes out at once before the silent end; a signal there is
+       noted once ("Cancel noted, finishing the cleanup first."). Any other fault still writes
+       last.json (result "error", exit 1, the traceback in last.log).
 
 SIGTERM and SIGHUP become an exception like Ctrl+C, so the end of the hold and the cleanup run on
 every way out; the handlers before come back afterwards (they are set before the hold is taken).
@@ -170,16 +173,23 @@ class Signals:
 
     WATCHED = tuple(getattr(signal, name) for name in ("SIGINT", "SIGTERM", "SIGHUP") if hasattr(signal, name))
 
-    def __init__(self):
+    def __init__(self, noted: Optional[Callable[[], None]] = None):
         self.received: List[int] = []
         self.shielded = False
+        self.noted = noted              # called once, for the first signal inside the shield
+        self._told = False
         self._previous: Dict[int, Any] = {}
 
     def handler(self, signum, _frame) -> None:
         self.received.append(signum)
+        if self.shielded:
+            if self.noted is not None and not self._told:
+                self._told = True
+                self.noted()
+            return
         # one exception per run: a second ^C must not cut short the end of the probes (the pool
         # waits for them), the cleanup or the end of the hold
-        if self.shielded or len(self.received) > 1:
+        if len(self.received) > 1:
             return
         if signum == signal.SIGINT:
             raise KeyboardInterrupt
@@ -617,7 +627,7 @@ class Check:
         self.log_timeout = log_timeout
         self.poll = poll
         self.with_token = True          # Elasticsearch takes the token query (else sources only)
-        self.signals = Signals()
+        self.signals = Signals(noted=self._cancel_noted)
         self.watch = LogWatch(self.files)
         self.rows: Dict[str, Row] = {}
         self.results: Dict[str, probes.ProbeResult] = {}
@@ -664,8 +674,13 @@ class Check:
                     print(args[0], flush=True)
             else:
                 self._say(*args)
-        except (OSError, ValueError):       # BrokenPipeError, EIO, a closed file
+        except (OSError, ValueError, RuntimeError):     # BrokenPipeError, EIO, a closed file, reentrant
             pass
+
+    def _cancel_noted(self) -> None:
+        text = "Cancel noted, finishing the cleanup first."
+        self._write_journal(f"warn: {text}")
+        self._out("log", "warn", text)
 
     def flush(self) -> None:
         deferred, self._deferred = self._deferred or [], None
@@ -787,6 +802,16 @@ class Check:
                 report.exit_code, usage = EXIT_CANNOT_ASK, error
             if not self.entered:
                 self.rows = {}
+        except Exception as error:      # a fault of the check itself; the hold ended in _end all the same
+            import traceback
+            self._write_journal("error: " + "".join(traceback.format_exception(type(error), error,
+                                                                               error.__traceback__)).rstrip())
+            report.exit_code, report.result = EXIT_FAILED, "error"
+            report.error = f"{type(error).__name__}: {error}"
+            self._deferred = self._deferred if self._deferred is not None else []
+            self.log("error", f"The check ended with an error: {report.error} (details in {self.journal_file})")
+            if not self.entered:
+                self.rows = {}
         report.ended = report.ended or self.now()
         report.rows = list(self.rows.values())
         if report.exit_code == EXIT_OK and self.signals.received:
@@ -847,10 +872,18 @@ class Check:
         """The end of every run that took the hold: the settle for the last lines, the end of the
         hold, then the cleanup (Elasticsearch only, no log lines). Output waits for last.json, signals
         are only noted."""
-        self._deferred = self._deferred if self._deferred is not None else []
-        if failure is not None:
-            self.log("error", str(failure))
         with self.signals.shield():
+            if self.sent:
+                # no result in it, so it may go out before the hold ends; never a problem for _out
+                seconds = END_SETTLE + (0 if self.sensor or self.options.keep else SECOND_PASS + 5)
+                text = (f"Ending the check: the hold of ewsposter ends, then the cleanup (up to about "
+                        f"{seconds:g} s)." if seconds > END_SETTLE else
+                        f"Ending the check: the hold of ewsposter ends (about {seconds:g} s).")
+                self._write_journal(f"info: {text}")
+                self._out("log", "info", text)
+            self._deferred = self._deferred if self._deferred is not None else []
+            if failure is not None:
+                self.log("error", str(failure))
             try:
                 if self.sent:
                     # the last lines of the honeypots (some write when a connection closes)

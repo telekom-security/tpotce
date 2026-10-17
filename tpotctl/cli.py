@@ -1388,9 +1388,21 @@ def run_check(args) -> int:
         return 1
     try:
         check_summary(report, prefs.load().icons == "ascii")
-    except (OSError, ValueError):       # stdout closed: the result is in last.json and last.log
-        pass
+        sys.stdout.flush()
+    except (OSError, ValueError, SystemExit):
+        # stdout closed (Rich ends with SystemExit(1) on a broken pipe): the result is in last.json
+        # and last.log, the exit code stays the one of the run
+        quiet_stdout()
     return report.exit_code
+
+
+def quiet_stdout() -> None:
+    """A closed stdout must not change the exit code: CPython's last flush of it would fail (120),
+    so what is left goes to /dev/null."""
+    try:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def check_summary(report, ascii_only: bool) -> None:

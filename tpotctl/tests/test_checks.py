@@ -263,9 +263,51 @@ class ChecksCliTest(unittest.TestCase):
     def test_a_closed_stdout_after_the_run_keeps_its_exit_code(self):
         from tpotctl.checks import run as trun
         report = trun.Report(run_id="abc123", exit_code=1, result="failed")
-        with mock.patch("tpotctl.cli.check_summary", side_effect=BrokenPipeError(32, "Broken pipe")):
+        with mock.patch("tpotctl.cli.check_summary", side_effect=BrokenPipeError(32, "Broken pipe")), \
+                mock.patch("tpotctl.cli.quiet_stdout") as quiet:
             code, _text, _made, _check, _asked = self.run_check("honeypots", "-y", check=self.fake_check(report))
         self.assertEqual(code, 1)
+        quiet.assert_called_once_with()
+
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_a_stdout_closed_early_keeps_the_exit_code_of_the_run(self):
+        folder = tempfile.mkdtemp(prefix="tpot-closed-")
+        self.addCleanup(shutil.rmtree, folder)
+        child = os.path.join(folder, "child.py")
+        with open(child, "w", encoding="utf-8") as out:
+            out.write(
+                "import sys, time\n"
+                f"sys.path.insert(0, {REPO!r})\n"
+                "from unittest import mock\n"
+                "from tpotctl.tests import isolate\n"
+                "isolate()\n"
+                "from tpotctl import cli\n"
+                "from tpotctl.checks import run as trun, stages\n"
+                "time.sleep(0.5)\n"           # the parent closes the pipe meanwhile
+                "row = stages.Row('cowrie')\n"
+                "row.set('port', stages.FAILED, 'refused')\n"
+                "report = trun.Report(run_id='abc123', rows=[row], exit_code=3, result='hold failed', "
+                "error='no ack')\n"
+                "check = mock.Mock(sensor=False)\n"
+                "check.run.return_value = report\n"
+                "class Plain:\n"
+                "    def print(self, what):\n"
+                "        print('table', flush=True)\n"
+                "patches = [mock.patch.object(trun, 'Check', return_value=check), "
+                "mock.patch('tpotctl.ops.linux_host', return_value=True)]\n"
+                "if sys.argv[1] == 'plain':\n"
+                "    patches.append(mock.patch('tpotctl.cli._console', return_value=Plain()))\n"
+                "for patch in patches:\n"
+                "    patch.start()\n"
+                "code = cli.main(['check', 'honeypots', '-y'])\n"
+                "sys.exit(code)\n")
+        # neither 120 (the last flush of CPython) nor Rich's own exit 1 on a broken pipe
+        for console in ("rich", "plain"):
+            with self.subTest(console=console):
+                process = subprocess.Popen([sys.executable, child, console], stdout=subprocess.PIPE,
+                                           stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+                process.stdout.close()
+                self.assertEqual(process.wait(timeout=60), 3)
 
     def test_a_honeypot_this_t_pot_does_not_run_is_a_usage_error(self):
         from tpotctl.checks import run as trun
@@ -2950,6 +2992,61 @@ class RunTest(unittest.TestCase):
         with self.assertRaises(run_checks.UsageError):
             world.run()
         self.assertIn("nopot", world.last()["error"])
+
+    def test_a_signal_at_the_start_of_the_end_still_ends_the_hold_and_cleans_up(self):
+        world = self.world(("cowrie", "dionaea"))
+        world.hold = FakeHold(world, lose_after=1)
+        log = world.check.log
+
+        def signalled(kind, text):
+            if kind == "error" and text == ewshold.MARKER_GONE:     # the first line of the end
+                os.kill(os.getpid(), signal.SIGTERM)
+                time.sleep(0.2)
+            log(kind, text)
+
+        world.check.log = signalled
+        report = world.run()
+        self.assertEqual(report.exit_code, 130)
+        self.assertEqual(world.order[-4:], ["release", "delete", "delete", "exit 130"])
+        self.assertEqual(world.last()["result"], "cancelled")
+
+    def test_the_end_is_announced_and_a_cancel_there_is_noted_once(self):
+        world = self.world(("cowrie",))
+        delete = world.es.delete_by_query
+
+        def deleting(body):
+            os.kill(os.getpid(), signal.SIGINT)
+            time.sleep(0.05)
+            return delete(body)
+
+        world.es.delete_by_query = deleting
+        report = world.run()
+        self.assertEqual(report.exit_code, 130)
+        texts = [text for _kind, text in world.said]
+        self.assertIn("Ending the check: the hold of ewsposter ends, then the cleanup (up to about 80 s).", texts)
+        self.assertEqual(texts.count("Cancel noted, finishing the cleanup first."), 1)
+        # the announcement goes out before the hold ends, the result only after last.json
+        self.assertLess(texts.index("Ending the check: the hold of ewsposter ends, then the cleanup (up to about "
+                                    "80 s)."), texts.index("Cancel noted, finishing the cleanup first."))
+        self.assertEqual(report.cleanup["passes"], [2, 0])
+
+    def test_another_fault_after_the_hold_still_writes_last_json(self):
+        world = self.world(("cowrie",))
+
+        def broken(body):
+            world.order.append("delete")
+            raise RuntimeError("boom")
+
+        world.es.delete_by_query = broken
+        report = world.run()
+        self.assertEqual((report.exit_code, report.result), (1, "error"))
+        self.assertIn("release", world.order)
+        last = world.last()
+        self.assertEqual((last["result"], last["exit_code"]), ("error", 1))
+        self.assertEqual(last["error"], "RuntimeError: boom")
+        self.assertEqual([row["name"] for row in last["honeypots"]], ["cowrie"])
+        with open(os.path.join(os.path.dirname(world.result_file), "last.log"), encoding="utf-8") as handle:
+            self.assertIn("Traceback", handle.read())
 
     def test_ports_survive_only_on_an_ipv4_address_of_the_host(self):
         for host, survive in ((HOST, True), ("127.0.0.1", False), ("2001:db8::5", False), ("", False)):
