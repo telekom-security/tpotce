@@ -1437,16 +1437,42 @@ def runs_text(count: int) -> str:
 def run_check_cleanup(args) -> int:
     """tpot check cleanup: the cleanups of earlier checks that did not run through."""
     ops.require_linux_host("check cleanup")
-    import json as tjson
     from tpotctl import system
-    from tpotctl.checks import CheckError, run as trun, stages as tstages
+    from tpotctl.checks import CheckError, run as trun
     from tpotctl.checks.ewshold import EwsHold
-    found, broken = trun.read_pending()
+    from tpotctl.checks.inventory import inventory
+    env = ops.env_values()
+    # the lock of the checks first: the pending file of a check that runs is its own
+    lock = EwsHold(system.data_path(env, REPO_DIR), [], log=lambda kind, text: None, settle=0)
+    try:
+        lock.__enter__()
+    except CheckError:
+        say.info("A check is running: its test events are its own, nothing to do now.")
+        return 0
+    try:
+        return pending_cleanups(args, trun.read_pending(types=sorted({h.logstash_type for h in inventory(REPO_DIR, env)
+                                                                      if h.logstash_type})))
+    except CheckError as err:
+        error(str(err))
+        return 1
+    finally:
+        lock.__exit__(None, None, None)
+
+
+def pending_cleanups(args, pending) -> int:
+    """tpot check cleanup under the lock of the checks: (found, refused) of run.read_pending."""
+    import json as tjson
+    from tpotctl.checks import run as trun, stages as tstages
+    found, broken = pending
     for problem in broken:
-        say.warn(f"A pending cleanup cannot be read and stays: {problem}")
+        say.warn(f"A pending cleanup is refused and stays, nothing of it is deleted: {problem} (remove the file "
+                 f"once you have looked at it)")
     if not found:
+        if broken:
+            error(f"No pending cleanup can run: {len(broken)} file(s) refused.")
+            return 1
         say.ok("No earlier check left test events behind.")
-        return 1 if broken else 0
+        return 0
     if args.dry_run:
         for pending in found:
             body = tstages.cleanup_query(pending.started, pending.end, pending.own, pending.with_token)
@@ -1464,22 +1490,16 @@ def run_check_cleanup(args) -> int:
             say.info("Nothing was removed.")
             return 1
     elastic = trun.Elastic()
-    rc = 0
-    try:
-        # under the lock of the checks: never the events of a check that runs
-        with EwsHold(system.data_path(ops.env_values(), REPO_DIR), [], log=lambda kind, text: None, settle=0):
-            for pending in found:
-                try:
-                    deleted, left, sourceless = trun.run_pending(pending, elastic, say.warn)
-                except trun.ElasticError as err:
-                    error(f"Check {pending.run_id}: the test events stay for now: {err}")
-                    rc = 1
-                    continue
-                say.ok(f"Check {pending.run_id}: {deleted} test events removed"
-                       + (f"; {trun.left_text(left, sourceless)}." if left else "."))
-    except CheckError as err:
-        error(f"{err}; try again once it is over.")
-        return 1
+    rc = 1 if broken else 0
+    for pending in found:
+        try:
+            deleted, left, sourceless = trun.run_pending(pending, elastic, say.warn)
+        except trun.ElasticError as err:
+            error(f"Check {pending.run_id}: the test events stay for now: {err}")
+            rc = 1
+            continue
+        say.ok(f"Check {pending.run_id}: {deleted} test events removed"
+               + (f"; {trun.left_text(left, sourceless)}." if left else "."))
     return rc
 
 

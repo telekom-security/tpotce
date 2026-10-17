@@ -26,9 +26,14 @@ The run:
 Pending cleanups: before the first probe or geo event, the run writes what its cleanup needs into
 checks/pending/<run id>.json (0600, the folder 0700, written whole) and keeps it up to date; the
 file goes after a cleanup that ran through (or with --keep, or when nothing was sent) and stays
-when the cleanup failed or was cut off (Elasticsearch down, a reboot). `tpot check cleanup` runs
-those (one pass, the window up to the end of the run in last.json or the file's time + 2 min), and
-every check runs them first, before it takes the hold, under the lock of the checks.
+when the cleanup failed or was cut off (Elasticsearch down, a reboot); it is fsynced, and one
+that cannot be written before the first probe stops the check (exit 3, nothing probed). `tpot
+check cleanup` runs those (one pass, the window up to the end of the run in last.json or the
+file's time + 2 min, capped), and every check runs them first, before it takes the hold; both
+take the lock of the checks first (a check that runs keeps its own file). A file is bound to its
+run (read_pending, own_from_json): its start to its run id, its source to its host, its types to
+the inventory, its ports and test IPs to what a run records; anything wider is refused, kept and
+named, nothing of it deleted.
 
 SIGTERM and SIGHUP become an exception like Ctrl+C, so the end of the hold and the cleanup run on
 every way out; the handlers before come back afterwards (they are set before the hold is taken).
@@ -70,7 +75,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from tpotctl.checks import CheckError, HoldError, fixtures, logfile, probes, stages
 from tpotctl.checks.inventory import LOGS, PASSIVE_GROUPS, Honeypot
@@ -148,6 +153,10 @@ class Options:
 
 class UsageError(CheckError):
     """An option that does not fit (i.e. --only names a honeypot this T-Pot does not run)."""
+
+
+class PendingError(CheckError):
+    """The pending file of the cleanup could not be written before the first probe: nothing is probed."""
 
 
 class Terminated(BaseException):
@@ -752,11 +761,34 @@ def own_json(own: stages.OwnEvents) -> Dict[str, Any]:
             "geos": [[kind, ip, port] for kind, ip, port in own.geos]}
 
 
-def own_from_json(data: Any) -> stages.OwnEvents:
-    """OwnEvents of a pending file; ValueError when it is not of its form."""
-    def words(value: Any) -> List[str]:
-        if not (isinstance(value, list) and all(isinstance(v, str) and v for v in value)):
-            raise ValueError("a list of names")
+def portless_types() -> List[str]:
+    """The Logstash types whose fixture carries no source port: only their geo events are matched
+    by test IP and type alone (a geo entry without a port)."""
+    return sorted({fixtures.logstash_type(name) for name in fixtures.names()
+                   if name in LOGS and "{src_port}" not in fixtures.template(name)})
+
+
+def known_types() -> List[str]:
+    """Every type the check may name in a cleanup: those of inventory.LOGS but the passive tools."""
+    return sorted({kind for kind, _path in LOGS.values()} - set(stages.NEVER_DELETED))
+
+
+# the most source ports a pending file may name per type (a probe records one per connection)
+PENDING_MAX_PORTS = 128
+
+
+def own_from_json(data: Any, host: str = "", types: Optional[Iterable[str]] = None) -> stages.OwnEvents:
+    """OwnEvents of a pending file, bound to what a run of this check can have sent: the types of
+    `types` (default every known type, never Suricata / P0f), the source empty or the recorded host
+    (IPv4), at most PENDING_MAX_PORTS ports of 1 to 65535 per type, geo events with a test IP and a
+    marker port (no port only for the port-less fixtures); ValueError for anything else."""
+    allowed = set(known_types() if types is None else types) - set(stages.NEVER_DELETED)
+    portless = set(portless_types())
+    markers = range(stages.MARKER_PORT, stages.MARKER_PORT + len(LOGS))
+
+    def kinds(value: Any, what: str) -> List[str]:
+        if not (isinstance(value, list) and all(isinstance(v, str) and v in allowed for v in value)):
+            raise ValueError(f"{what}: a type this T-Pot does not run or the check never removes")
         return list(value)
 
     def port(value: Any) -> bool:
@@ -771,19 +803,30 @@ def own_from_json(data: Any) -> stages.OwnEvents:
     if not isinstance(source, str):
         raise ValueError("source")
     if source:
-        ipaddress.ip_address(source)
+        address = ipaddress.ip_address(source)
+        if source != host or address.version != 4 or address.is_loopback:
+            raise ValueError("source: not the recorded host (an IPv4 address of it)")
     found = data.get("probes", {})
-    if not (isinstance(found, dict) and all(isinstance(k, str) and isinstance(v, list) and all(port(p) for p in v)
-                                            for k, v in found.items())):
-        raise ValueError("probes")
+    if not (isinstance(found, dict) and all(isinstance(v, list) and len(v) <= PENDING_MAX_PORTS
+                                            and all(port(p) for p in v) for v in found.values())):
+        raise ValueError(f"probes: lists of at most {PENDING_MAX_PORTS} ports")
+    kinds(list(found), "probes")
     geos = []
-    for entry in data.get("geos", []):
-        if not (isinstance(entry, list) and len(entry) == 3 and isinstance(entry[0], str) and entry[1] in TEST_IPS
-                and (entry[2] is None or port(entry[2]))):
-            raise ValueError("geos")
+    entries = data.get("geos", [])
+    if not isinstance(entries, list) or len(entries) > len(LOGS):
+        raise ValueError("geos")
+    for entry in entries:
+        if not (isinstance(entry, list) and len(entry) == 3 and isinstance(entry[0], str) and entry[0] in allowed
+                and entry[1] in TEST_IPS):
+            raise ValueError("geos: a type or a test IP the check never uses")
+        if entry[2] is None:
+            if entry[0] not in portless:
+                raise ValueError(f"geos: {entry[0]} logs a source port, its event has a marker port")
+        elif not (port(entry[2]) and entry[2] in markers):
+            raise ValueError("geos: no marker port")
         geos.append(tuple(entry))
-    return stages.OwnEvents(token, source, {k: list(v) for k, v in found.items()}, words(data.get("probed", [])),
-                            words(data.get("token_types", [])), geos)
+    return stages.OwnEvents(token, source, {k: list(v) for k, v in found.items()}, kinds(data.get("probed", []), "probed"),
+                            kinds(data.get("token_types", []), "token_types"), geos)
 
 
 @dataclass
@@ -805,9 +848,28 @@ def _parse_time(text: Any) -> datetime:
     return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
 
 
-def read_pending(result_file: Optional[str] = None) -> Tuple[List[Pending], List[str]]:
-    """The pending cleanups (oldest first) and the files that cannot be read (path: why). The end
-    of a run's window is the end its last.json names, else the time of its file + PENDING_SLACK."""
+# the most a run can last beyond its stages (the probes, the settle, both cleanup passes) plus a
+# margin: the end of a pending window is never later than its start + this + 3 timeouts
+PENDING_RUN_MAX = 120.0 + 15.0 + 60.0 + 2 * 3600.0
+# the timeout a pending file may name at most (for the bound of its window)
+PENDING_TIMEOUT_MAX = 3600.0
+
+
+def run_time(run_id: str) -> datetime:
+    """The UTC time a run id starts with (new_run_id: %Y%m%d%H%M%S + 6 hex digits)."""
+    if not (isinstance(run_id, str) and len(run_id) == 20 and run_id[:14].isdigit()
+            and all(c in "0123456789abcdef" for c in run_id[14:])):
+        raise ValueError("run_id: not of the form of a run id")
+    return datetime.strptime(run_id[:14], "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+
+
+def read_pending(result_file: Optional[str] = None,
+                 types: Optional[Iterable[str]] = None) -> Tuple[List[Pending], List[str]]:
+    """The pending cleanups (oldest first) and the files that are refused (path: why), which stay
+    and delete nothing. A file is bound to its run: its start within 2 minutes of the time of its run
+    id, its host an address, its events those own_from_json takes (`types`: the Logstash types of
+    the inventory). The end of its window is the end its last.json names, else the time of its file
+    + PENDING_SLACK, at most its start + PENDING_RUN_MAX + 3 timeouts."""
     folder = pending_dir(result_file)
     try:
         names = sorted(name for name in os.listdir(folder) if name.endswith(".json") and not name.startswith("."))
@@ -841,15 +903,26 @@ def read_pending(result_file: Optional[str] = None) -> Tuple[List[Pending], List
             if not (isinstance(run_id, str) and probes._RUN_ID.match(run_id) and name == f"{run_id}.json"):
                 raise ValueError("run_id")
             started = _parse_time(data.get("started"))
+            if abs((started - run_time(run_id)).total_seconds()) > 120:
+                raise ValueError("started: not the time of its run id")
+            timeout = data.get("timeout", TIMEOUT)
+            if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 0 < timeout:
+                raise ValueError("timeout")
             if last is not None and last.get("run_id") == run_id and last.get("ended"):
                 end = _parse_time(last["ended"])
             else:
                 end = datetime.fromtimestamp(info.st_mtime, timezone.utc) + timedelta(seconds=PENDING_SLACK)
+            bound = started + timedelta(seconds=PENDING_RUN_MAX + 3 * min(float(timeout), PENDING_TIMEOUT_MAX))
+            end = min(end, bound)
+            if end < started:
+                raise ValueError("the end of its window lies before its start")
             with_token = data.get("with_token", True)
             host = data.get("host", "")
             if not isinstance(with_token, bool) or not isinstance(host, str):
                 raise ValueError("with_token / host")
-            found.append(Pending(run_id, path, started, end, own_from_json(data.get("own")), with_token, host))
+            ipaddress.ip_address(host)
+            found.append(Pending(run_id, path, started, end, own_from_json(data.get("own"), host, types),
+                                 with_token, host))
         except (OSError, ValueError, UnicodeDecodeError) as error:
             broken.append(f"{path}: {getattr(error, 'strerror', None) or error}")
     found.sort(key=lambda pending: pending.started)
@@ -866,8 +939,16 @@ def write_pending(path: str, data: Dict[str, Any]) -> None:
         with os.fdopen(handle, "w", encoding="utf-8") as out:
             json.dump(data, out, indent=1)
             out.write("\n")
-        os.chmod(temp, 0o600)
+            out.flush()
+            os.fchmod(out.fileno(), 0o600)
+            os.fsync(out.fileno())
         os.replace(temp, path)
+        # the rename on disk too: a reboot is the case the file is for
+        folder_fd = os.open(folder, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(folder_fd)
+        finally:
+            os.close(folder_fd)
     except BaseException:
         with contextlib.suppress(OSError):
             os.unlink(temp)
@@ -988,6 +1069,7 @@ class Check:
         # what the cleanup of this run needs, while it has not run through (checks/pending)
         self.pending_file = os.path.join(pending_dir(result_file), f"{self.run_id}.json")
         self._planned: Optional[stages.OwnEvents] = None
+        self._pending_written = False
         self.earlier: Dict[str, Any] = {}       # the pending cleanups this run ran first
 
     # -- output --
@@ -1224,6 +1306,10 @@ class Check:
         except HoldError as error:      # the hold ended during the check: the check stops
             failure = error
             report.error = str(error)
+        except PendingError as error:   # before the first probe: nothing was probed (exit 3)
+            self.mark("fail", "hold")
+            self.log("error", str(error))
+            report.exit_code, report.result, report.error = EXIT_HOLD, "error", str(error)
         finally:
             if held:
                 try:
@@ -1264,16 +1350,27 @@ class Check:
         """The cleanups earlier checks could not finish, before this one takes the hold (they are
         the check's own events by the same rules), under the lock of the checks: never those of a
         check that runs."""
-        found, broken = read_pending(self.result_file)
-        for problem in broken:
-            self.log("warn", f"a pending cleanup cannot be read and stays: {problem}")
-        if not found:
+        try:
+            if not any(name.endswith(".json") and not name.startswith(".")
+                       for name in os.listdir(pending_dir(self.result_file))):
+                return
+        except OSError:
             return
-        self.phase("pending", "Removing the test events of earlier checks")
-        self.log("info", f"An earlier check could not remove its test events ({len(found)} run"
-                         f"{'s' if len(found) != 1 else ''}): this check removes them first.")
         lock = self._make_lock()
-        with lock:
+        try:
+            lock.__enter__()
+        except CheckError:
+            # another check runs (its own file is pending): its hold fails as it does without this
+            return
+        try:
+            found, broken = read_pending(self.result_file, self.inventory_types())
+            for problem in broken:
+                self.log("warn", f"a pending cleanup is refused and stays (nothing deleted): {problem}")
+            if not found:
+                return
+            self.phase("pending", "Removing the test events of earlier checks")
+            self.log("info", f"An earlier check could not remove its test events ({len(found)} run"
+                             f"{'s' if len(found) != 1 else ''}): this check removes them first.")
             deleted = left = 0
             for pending in found:
                 try:
@@ -1285,6 +1382,12 @@ class Check:
                 self.log("ok", f"Check {pending.run_id}: {removed} test events removed"
                                + (f"; {left_text(stay, sourceless)}" if stay else "."))
             self.earlier = {"runs": len(found), "deleted": deleted, "left": left}
+        finally:
+            lock.__exit__(None, None, None)
+
+    def inventory_types(self) -> List[str]:
+        """The Logstash types of the honeypots of this T-Pot: what a pending cleanup may name."""
+        return sorted({h.logstash_type for h in self.honeypots if h.logstash_type})
 
     def _make_lock(self):
         """The lock of the checks alone (no marker): an EwsHold without ewsposter in its names."""
@@ -1322,13 +1425,19 @@ class Check:
         own.geos = sorted(set(own.geos) | set(planned.geos), key=lambda geo: (geo[0], geo[1], geo[2] or 0))
         own.source = own.source or planned.source
         data = {"version": PENDING_VERSION, "run_id": self.run_id, "started": stages.iso(self.started),
-                "host": self.host, "with_token": self.with_token, "written": stages.iso(self.now()),
-                "own": own_json(own)}
+                "host": self.host, "with_token": self.with_token, "timeout": self.options.timeout,
+                "written": stages.iso(self.now()), "own": own_json(own)}
         try:
             write_pending(self.pending_file, data)
         except OSError as error:
-            self.log("warn", f"{self.pending_file} could not be written ({error.strerror or error}): a cleanup "
-                             f"that does not run through cannot be finished later")
+            text = (f"{self.pending_file} could not be written ({error.strerror or error}): a cleanup that does "
+                    f"not run through could not be finished later")
+            if not self._pending_written:
+                # before the first probe: the check does not start
+                raise PendingError(f"{text}; nothing was probed") from None
+            self.log("warn", text)
+            return
+        self._pending_written = True
 
     def _drop_pending(self) -> None:
         with contextlib.suppress(FileNotFoundError):
@@ -1521,7 +1630,7 @@ class Check:
                 continue                    # _leave_alone said why
             row = self.rows[honeypot.name]
             result = self.results.get(honeypot.name)
-            if row.state("port") == OK and result is not None and result.ignored:
+            if row.state("port") == OK and result is not None and result.ignored and self.ports_survive():
                 # the probe ran, but the honeypot does not log its source: the geo event covers the rest
                 why = stages.ignored_text(honeypot.name, result.ignored)
                 row.set("log", NOT_APPLICABLE, why)

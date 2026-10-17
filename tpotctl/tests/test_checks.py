@@ -228,8 +228,8 @@ class ChecksCliTest(unittest.TestCase):
         es.add({"type": "Cowrie", "src_ip": "8.8.8.8", "src_port": 51234, "@timestamp": stages.iso(BASE)})
         es.add({"type": "Cowrie", "src_ip": ATTACKER, "src_port": 51234, "@timestamp": stages.iso(BASE)})
         own = stages.OwnEvents(TOKEN, HOST, {}, ["Cowrie"], ["Cowrie"], [("Cowrie", "8.8.8.8", 51234)])
-        trun.write_pending(os.path.join(trun.pending_dir(result_file), "abc123.json"),
-                           {"version": 1, "run_id": "abc123", "started": stages.iso(BASE), "host": HOST,
+        trun.write_pending(os.path.join(trun.pending_dir(result_file), f"{RID}.json"),
+                           {"version": 1, "run_id": RID, "started": stages.iso(BASE), "host": HOST,
                             "with_token": True, "own": trun.own_json(own)})
         return result_file, es
 
@@ -256,7 +256,8 @@ class ChecksCliTest(unittest.TestCase):
         def run(*argv):
             with mock.patch.object(trun, "result_path", lambda environ=None: result_file), \
                     mock.patch.object(trun, "Elastic", lambda: es), mock.patch("sys.stdin", stdin), \
-                    mock.patch("tpotctl.checks.ewshold.EwsHold", Lock):
+                    mock.patch("tpotctl.checks.ewshold.EwsHold", Lock), \
+                    mock.patch("tpotctl.checks.inventory.inventory", lambda *a, **k: [honeypot("cowrie")]):
                 return self.run_cli("check", "cleanup", *argv)
         code, text = run()
         self.assertEqual(code, 2)
@@ -264,14 +265,14 @@ class ChecksCliTest(unittest.TestCase):
         self.assertEqual(len(es.docs), 2)
         code, text = run("--dry-run")
         self.assertEqual(code, 0)
-        self.assertIn("abc123: 2026-10-17T08:00:00.000Z to ", text)
+        self.assertIn(f"{RID}: 2026-10-17T08:00:00.000Z to ", text)
         self.assertEqual((len(es.docs), es.deletes), (2, []))
         code, text = run("-y")
         self.assertEqual(code, 0, text)
-        self.assertIn("Check abc123: 1 test events removed.", " ".join(text.split()))
+        self.assertIn(f"Check {RID}: 1 test events removed.", " ".join(text.split()))
         self.assertEqual([d["_source"]["src_ip"] for d in es.docs], [ATTACKER])
         self.assertEqual(len(es.deletes), 1)
-        self.assertEqual(locks, [[]])               # the lock of the checks, no hold of ewsposter
+        self.assertTrue(locks and all(names == [] for names in locks))   # the lock of the checks, no hold
         self.assertEqual(os.listdir(trun.pending_dir(result_file)), [])
         code, text = run("-y")
         self.assertEqual(code, 0)
@@ -285,11 +286,93 @@ class ChecksCliTest(unittest.TestCase):
         es.delete_by_query = lambda body: (_ for _ in ()).throw(trun.ElasticError("Elasticsearch is not reachable"))
         with mock.patch.object(trun, "result_path", lambda environ=None: result_file), \
                 mock.patch.object(trun, "Elastic", lambda: es), \
-                mock.patch("tpotctl.checks.ewshold.EwsHold", mock.MagicMock()):
+                mock.patch("tpotctl.checks.ewshold.EwsHold", mock.MagicMock()), \
+                mock.patch("tpotctl.checks.inventory.inventory", lambda *a, **k: [honeypot("cowrie")]):
             code, text = self.run_cli("check", "cleanup", "-y")
         self.assertEqual(code, 1)
         self.assertIn("the test events stay for now", text)
-        self.assertEqual(os.listdir(trun.pending_dir(result_file)), ["abc123.json"])
+        self.assertEqual(os.listdir(trun.pending_dir(result_file)), [f"{RID}.json"])
+
+    def test_the_cleanup_command_while_a_check_runs(self):
+        """The lock of the checks is taken: the pending file is that check's own, nothing to do."""
+        from tpotctl.checks import run as trun
+        result_file, es = self.pending_world()
+
+        class Busy:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                raise CheckError("another check is running")
+
+            def __exit__(self, *exc):
+                return False
+        with mock.patch.object(trun, "result_path", lambda environ=None: result_file), \
+                mock.patch.object(trun, "Elastic", lambda: es), mock.patch("tpotctl.checks.ewshold.EwsHold", Busy):
+            code, text = self.run_cli("check", "cleanup", "-y")
+        self.assertEqual(code, 0)
+        self.assertIn("A check is running", text)
+        self.assertEqual((len(es.docs), es.deletes), (2, []))
+        self.assertEqual(os.listdir(trun.pending_dir(result_file)), [f"{RID}.json"])
+
+    def widened(self, change):
+        """A pending file of the earlier run with one field widened by `change(data)`."""
+        from tpotctl.checks import run as trun
+        result_file, es = self.pending_world()
+        path = os.path.join(trun.pending_dir(result_file), f"{RID}.json")
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        change(data)
+        trun.write_pending(path, data)
+        return trun.read_pending(result_file, ["Cowrie", "Dionaea", "H0neytr4p", "Suricata"])
+
+    def test_a_widened_pending_file_is_refused(self):
+        """Every field is bound to what the run can have sent: anything wider refuses the file (it
+        stays, nothing of it is deleted)."""
+        found, broken = self.widened(lambda data: None)
+        self.assertEqual((len(found), broken), (1, []))
+        self.assertEqual(found[0].started, BASE)
+
+        def own(**values):
+            return lambda data: data["own"].update(values)
+        cases = {
+            "started years before its run id": lambda data: data.update(started="2020-01-01T00:00:00.000Z"),
+            "started after its run id": lambda data: data.update(started="2026-10-17T08:05:00.000Z"),
+            "a run id of another form": lambda data: data.update(run_id="abc123"),
+            "a source that is not the host": own(source="203.0.113.9"),
+            "a source that is IPv6": lambda data: (data.update(host="2001:db8::5"), data["own"].update(
+                source="2001:db8::5")),
+            "a host that is no address": lambda data: data.update(host="tpot.example"),
+            "a type this T-Pot does not run": own(probed=["Cowrie", "Ddospot"]),
+            "a type the check never removes": own(token_types=["Suricata"]),
+            "ports of a type it does not run": own(probes={"Mailoney": [40100]}),
+            "ports out of range": own(probes={"Cowrie": [0, 40100]}),
+            "too many ports": own(probes={"Cowrie": list(range(1, 200))}),
+            "a port that is no number": own(probes={"Cowrie": ["40100"]}),
+            "a test IP that is none": own(geos=[["Cowrie", "203.0.113.9", 51234]]),
+            "no port for a type that logs one": own(geos=[["Cowrie", "8.8.8.8", None]]),
+            "a port that is no marker port": own(geos=[["Cowrie", "8.8.8.8", 443]]),
+            "a timeout that is no number": lambda data: data.update(timeout="long"),
+        }
+        for what, change in cases.items():
+            with self.subTest(what):
+                found, broken = self.widened(change)
+                self.assertEqual(found, [])
+                self.assertEqual(len(broken), 1, broken)
+        # a port-less geo event is fine for a port-less fixture
+        found, broken = self.widened(own(geos=[["H0neytr4p", "8.8.8.8", None]]))
+        self.assertEqual((len(found), broken), (1, []))
+
+    def test_the_window_of_a_pending_file_is_capped(self):
+        from tpotctl.checks import run as trun
+        found, _broken = self.widened(lambda data: data.update(timeout=90))
+        path = found[0].path
+        later = time.time() + 30 * 24 * 3600       # a touch a month ahead
+        os.utime(path, (later, later))
+        found, _broken = trun.read_pending(os.path.dirname(os.path.dirname(path)) + "/last.json",
+                                           ["Cowrie"])
+        self.assertLessEqual(found[0].end, BASE + datetime.timedelta(
+            seconds=trun.PENDING_RUN_MAX + 3 * 90))
 
     def test_without_a_terminal_and_without_yes_it_cannot_ask(self):
         from tpotctl.checks import run as trun
@@ -597,6 +680,14 @@ class EwsHoldTest(HoldFolder):
                 with open(self.ack, "w", encoding="utf-8") as out:
                     out.write("failed: wordpot\n")
                 self.assertEqual(hold.refresh_failed(), ["wordpot"])
+
+    def test_whether_a_check_runs(self):
+        self.assertFalse(ewshold.check_running(self.data))
+        with FakeEwsposter(self.ews):
+            with self.hold():
+                self.assertTrue(ewshold.check_running(self.data))
+        self.assertFalse(ewshold.check_running(self.data))
+        self.assertFalse(ewshold.check_running(os.path.join(self.data, "none")))
 
     def test_a_module_named_later_is_kept(self):
         """A module hold.ack names after the ack (a later round) counts too: failed_modules."""
@@ -2506,6 +2597,8 @@ HOST = "192.0.2.5"
 OWN = [HOST, "127.0.0.1", "::1", "172.17.0.1"]
 BASE = datetime.datetime(2026, 10, 17, 8, 0, 0, tzinfo=datetime.timezone.utc)
 ATTACKER = "203.0.113.9"
+# a run id of the form new_run_id makes (the time of BASE): what a pending file is bound to
+RID = "20261017080000abc123"
 
 
 def es_field(source, name):
@@ -2685,7 +2778,7 @@ class World:
     honeypots and the injection write, the Attack Map, a hold, and a clock that runs on each sleep."""
 
     def __init__(self, test, honeypots, tpot_type="HIVE", hold=None, results=None, probe_logs=True,
-                 probe_docs=True, map_missing=(), sleep_hook=None, host=None, **options):
+                 probe_docs=True, map_missing=(), sleep_hook=None, host=None, run_id="abc123", **options):
         self.test, self.honeypots = test, honeypots
         self.clock, self.order, self.said, self.marks, self.sleeps = 0.0, [], [], [], []
         self.es, self.map_missing = FakeElastic(self.order), set(map_missing)
@@ -2708,7 +2801,7 @@ class World:
             honeypots=lambda: list(self.honeypots),
             compose_names=["tpotinit", "ewsposter", "elasticsearch", "map_redis", "map_web"] + [h.name for h in honeypots],
             hold=lambda data, names: self.hold, run_probes=self.run_probes, elastic=self.es, files=self.files,
-            listener=self.make_listener, addresses=lambda address: list(OWN), run_id="abc123",
+            listener=self.make_listener, addresses=lambda address: list(OWN), run_id=run_id,
             log=lambda kind, text: self.said.append((kind, text)), mark=self.marks.append,
             clock=lambda: self.clock, sleep=self.sleep, now=self.now, web_port=64297,
             result_file=self.result_file, host=lambda: self.host)
@@ -2938,8 +3031,10 @@ class StagesTest(unittest.TestCase):
         # what the probes sent from this host and none of (a) to (c) names: counted, not deleted
         left = stages.leftover_query(BASE, BASE + datetime.timedelta(minutes=5), self.own(), HOST)
         self.assertEqual(es.count(left), 1)
-        self.assertEqual(stages.leftover_kql(self.own(), HOST),
-                         '(src_ip:"192.0.2.5" or not src_ip:*) and type:("ConPot" or "Cowrie")')
+        self.assertEqual(stages.leftover_kql(self.own(), HOST), '(src_ip:"192.0.2.5" and type:("ConPot" or "Cowrie"))')
+        # only the types that log events without a source count those
+        self.assertIsNone(stages.sourceless_query(BASE, BASE, self.own()))
+        self.assertEqual(stages.SOURCELESS_TYPES, ("Dicompot",))
 
     def test_the_kibana_link(self):
         query = stages.run_kql(TOKEN, [HOST, "8.8.8.8"])
@@ -3084,7 +3179,7 @@ class RunTest(unittest.TestCase):
         types and the planned geo events; the source ports after the probes; gone after a cleanup
         that ran through."""
         from tpotctl.checks import run as trun
-        world = self.world(("cowrie", "dionaea"))
+        world = self.world(("cowrie", "dionaea"), run_id=RID)
         seen = {}
         original = world.run_probes
 
@@ -3107,8 +3202,8 @@ class RunTest(unittest.TestCase):
         self.assertEqual(report.cleanup["state"], "done")
         self.assertEqual((seen["mode"], seen["folder"]), ("0o600", "0o700"))
         before = seen["before"]
-        self.assertEqual((before["version"], before["run_id"], before["host"]), (1, "abc123", HOST))
-        self.assertEqual(before["own"]["token"], TOKEN)
+        self.assertEqual((before["version"], before["run_id"], before["host"]), (1, RID, HOST))
+        self.assertEqual(before["own"]["token"], probes.token_for(RID))
         self.assertEqual(before["own"]["probed"], ["Cowrie", "Dionaea"])
         self.assertEqual(before["own"]["probes"], {})
         self.assertIn(["Cowrie", "8.8.8.8", 51234], before["own"]["geos"])
@@ -3120,12 +3215,12 @@ class RunTest(unittest.TestCase):
         self.assertEqual((found, broken), ([], []))
 
     def test_the_pending_cleanup_stays_when_the_cleanup_fails(self):
-        world = self.world(("cowrie",))
+        world = self.world(("cowrie",), run_id=RID)
         world.es.delete_by_query = lambda body: (_ for _ in ()).throw(run_checks.ElasticError(
             "Elasticsearch is not reachable ([Errno 111] Connection refused)"))
         report = world.run()
         self.assertEqual(report.cleanup["state"], "failed")
-        self.assertEqual(self.pending(world), ["abc123.json"])
+        self.assertEqual(self.pending(world), [f"{RID}.json"])
         self.assertTrue(any("tpot check cleanup" in text for _kind, text in world.said))
         found, broken = run_checks.read_pending(world.result_file)
         self.assertEqual(broken, [])
@@ -3138,7 +3233,7 @@ class RunTest(unittest.TestCase):
         (a reboot) it stays."""
         for down in (False, True):
             with self.subTest(down=down):
-                world = self.world(("cowrie",))
+                world = self.world(("cowrie",), run_id=RID)
                 original = world.run_probes
 
                 def interrupted(host, honeypots, token, check=None, into=None, skip=None, o=original):
@@ -3149,22 +3244,22 @@ class RunTest(unittest.TestCase):
                     world.es.delete_by_query = lambda body: (_ for _ in ()).throw(run_checks.ElasticError("down"))
                 report = world.run()
                 self.assertEqual(report.exit_code, 130)
-                self.assertEqual(self.pending(world), ["abc123.json"] if down else [])
+                self.assertEqual(self.pending(world), [f"{RID}.json"] if down else [])
 
     def test_keep_and_a_sensor_write_no_pending_cleanup(self):
         for options in ({"keep": True}, {"tpot_type": "SENSOR"}):
             with self.subTest(**options):
-                world = self.world(("cowrie",), **options)
+                world = self.world(("cowrie",), run_id=RID, **options)
                 world.run()
                 self.assertEqual(self.pending(world), [])
 
     def test_the_next_check_runs_the_pending_cleanups_first(self):
         """A pending cleanup of an earlier run: the next check removes those events first, under the
         lock alone (no marker), before it takes the hold, and says so."""
-        first = self.world(("cowrie",))
+        first = self.world(("cowrie",), run_id=RID)
         first.es.delete_by_query = lambda body: (_ for _ in ()).throw(run_checks.ElasticError("down"))
         first.run()
-        self.assertEqual(self.pending(first), ["abc123.json"])
+        self.assertEqual(self.pending(first), [f"{RID}.json"])
         earlier = [d["_source"] for d in first.es.docs if d["_source"]["src_ip"] != ATTACKER]
         self.assertTrue(earlier)
         second = World(self, [honeypot("cowrie")])
@@ -3177,11 +3272,49 @@ class RunTest(unittest.TestCase):
         self.assertEqual(second.order[:4], ["hold", "delete", "release", "hold"])
         self.assertTrue(any("An earlier check could not remove its test events (1 run)" in text
                             for _kind, text in second.said))
-        self.assertTrue(any(text.startswith("Check abc123: ") for _kind, text in second.said))
+        self.assertTrue(any(text.startswith(f"Check {RID}: ") for _kind, text in second.said))
         self.assertIn("@@tpot phase pending Removing the test events of earlier checks", second.marks)
         self.assertEqual(self.pending(second), [])
         self.assertEqual(report.exit_code, 0)
         self.assertEqual([d["_source"]["src_ip"] for d in second.es.docs], [ATTACKER])
+
+    def test_a_running_check_keeps_its_pending_file(self):
+        """Another check holds the lock (its own file is pending): no announce, nothing deleted, the
+        hold fails as without pending files (exit 3)."""
+        first = self.world(("cowrie",), run_id=RID)
+        first.es.delete_by_query = lambda body: (_ for _ in ()).throw(run_checks.ElasticError("down"))
+        first.run()
+        second = World(self, [honeypot("cowrie")], run_id="20261017080500def456",
+                       hold=None)
+        second.check.result_file = first.result_file
+        second.hold.enter_error = CheckError("another check is running")
+        report = second.run()
+        self.assertEqual(report.exit_code, 3)
+        self.assertFalse(any("An earlier check" in text for _kind, text in second.said))
+        self.assertEqual(second.es.deletes, [])
+        self.assertEqual(self.pending(first), [f"{RID}.json"])
+
+    def test_a_pending_file_that_cannot_be_written_stops_the_check(self):
+        """Before the first probe: exit 3, the hold released, nothing probed or written."""
+        world = self.world(("cowrie",), run_id=RID)
+        with mock.patch.object(run_checks, "write_pending", side_effect=PermissionError(13, "Permission denied")):
+            report = world.run()
+        self.assertEqual(report.exit_code, 3)
+        self.assertNotIn("probes", world.order)
+        self.assertIn("release", world.order)
+        self.assertEqual(world.files.appended, [])
+        self.assertIn("nothing was probed", report.error)
+        self.assertEqual(world.last()["exit_code"], 3)
+
+    def test_an_ignored_source_counts_only_where_the_ports_survive(self):
+        """Behind docker-proxy (loopback) the honeypot sees the bridge, not the probe address: the
+        log stage is looked for as usual."""
+        ignored = probes.ProbeResult("open", True, "9200/tcp: answered", token_sent=True, src_ports=[40100],
+                                     ignored="127.0.0.1")
+        world = self.world(("elasticpot",), host="127.0.0.1", results={"elasticpot": ignored})
+        report = world.run()
+        self.assertNotIn("does not log sources", report.rows[0].stages["log"].detail)
+        self.assertEqual(report.rows[0].state("log"), stages.OK)
 
     def test_a_cancel_after_the_ack_says_ewsposter_held(self):
         """Ctrl+C during the probes: last.json says held (the hold was confirmed before the cancel)."""

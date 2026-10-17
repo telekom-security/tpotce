@@ -2220,6 +2220,13 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             await pilot.click("#yes")
             await pilot.pause(0.5)
             self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "check", "cleanup", "-y"]])
+        # a check runs (it holds the lock, its own file is pending): no line, no button
+        backend.pending_value = -1
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertFalse(app.query_one("#check-pending").display)
+            self.assertFalse(app.query_one("#check-pending-actions").display)
         # a SENSOR keeps no events: no line
         sensor = FakeBackend(kind="SENSOR")
         sensor.pending_value = 2

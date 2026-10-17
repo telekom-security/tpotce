@@ -218,8 +218,12 @@ class Backend:
         return ewshold.ews_state(system.data_path(ops.env_values(), REPO_DIR))
 
     def pending_checks(self) -> int:
-        """How many earlier checks could not remove their test events (checks/pending)."""
-        from tpotctl.checks import run as trun
+        """How many earlier checks could not remove their test events (checks/pending); -1 while a
+        check runs (it holds the lock of the checks, its own file is pending)."""
+        from tpotctl import system
+        from tpotctl.checks import ewshold, run as trun
+        if ewshold.check_running(system.data_path(ops.env_values(), REPO_DIR)):
+            return -1
         return len(trun.read_pending()[0])
 
 
@@ -1830,8 +1834,9 @@ class ChecksPane(Vertical):
         """The line and the button for the test events earlier checks could not remove."""
         line = self.query_one("#check-pending", Static)
         actions = self.query_one("#check-pending-actions", Horizontal)
-        line.display = actions.display = bool(self.pending)
-        if self.pending:
+        # a check that runs holds its own pending file: no line, no button meanwhile
+        line.display = actions.display = self.pending > 0
+        if self.pending > 0:
             line.update(Text(f"{glyphs.g('warn')} {pending_text(self.pending)}", style=theme.color("warn")))
 
     def show_hold(self) -> None:

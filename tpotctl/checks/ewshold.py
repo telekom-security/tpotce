@@ -122,6 +122,36 @@ def ews_state(data_dir: str, now: Callable[[], float] = time.time) -> Tuple[str,
     return match.group(1), max(age, 0.0)
 
 
+def check_running(data_dir: str) -> bool:
+    """Whether a check holds the lock of the checks now (<data>/ews/check.lock): tried without
+    waiting and given back at once; no folder or no lock file is no check (never created here)."""
+    if fcntl is None:
+        return False
+    try:
+        folder = Folder.walk(data_dir, (EWS_DIR,), False)
+    except (KibanaError, OSError):
+        return False
+    if folder is None:
+        return False
+    try:
+        try:
+            handle = os.open(LOCK, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+                             dir_fd=folder.handle)
+        except OSError:
+            return False
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        except OSError:
+            return False
+        finally:
+            os.close(handle)
+        return False
+    finally:
+        folder.close()
+
+
 def ewsposter_runs() -> Optional[bool]:
     """Whether the ewsposter container runs (docker ps); None when docker cannot say, which
     EwsHold takes as running (it waits for the ack)."""

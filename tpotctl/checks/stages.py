@@ -444,20 +444,30 @@ def leftover_query(start: datetime, end: datetime, own: OwnEvents, host: str) ->
                                           {"term": {"src_ip.keyword": host}}]}}}
 
 
+# the types that log events of a connection without its source (dicompot: "Connection Finished"
+# names only the session); only these are counted as probe events without a source
+SOURCELESS_TYPES = ("Dicompot",)
+
+
+def _sourceless(own: OwnEvents) -> List[str]:
+    return sorted(set(_probed(own)) & set(SOURCELESS_TYPES))
+
+
 def sourceless_query(start: datetime, end: datetime, own: OwnEvents) -> Optional[Dict[str, Any]]:
-    """The events of the probed types in the window without a source address (dicompot's
-    "Connection Finished"): they may be the probes' or real ones, so they are counted, never
-    deleted."""
-    if not _probed(own):
+    """The events of the probed types of SOURCELESS_TYPES in the window without a source address:
+    they may be the probes' or real ones, so they are counted, never deleted."""
+    if not _sourceless(own):
         return None
     return {"query": {"bool": {"filter": [{"range": {"@timestamp": cleanup_window(start, end)}},
-                                          {"terms": {"type.keyword": _probed(own)}}],
+                                          {"terms": {"type.keyword": _sourceless(own)}}],
                                "must_not": [{"exists": {"field": "src_ip"}}]}}}
 
 
 def leftover_kql(own: OwnEvents, host: str) -> str:
-    return (f'(src_ip:"{host}" or not src_ip:*) and type:('
-            + " or ".join(f'"{name}"' for name in _probed(own)) + ")")
+    query = f'(src_ip:"{host}" and type:(' + " or ".join(f'"{name}"' for name in _probed(own)) + "))"
+    if _sourceless(own):
+        query += " or (not src_ip:* and type:(" + " or ".join(f'"{name}"' for name in _sourceless(own)) + "))"
+    return query
 
 
 def run_kql(token: str, sources: Iterable[str]) -> str:
