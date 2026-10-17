@@ -1,13 +1,18 @@
 """tpot check and tpot attackers: the host helpers of T-Pot in the look of tpot."""
 
+import base64
 import contextlib
+import fnmatch
 import io
 import json
 import os
 import re
 import shutil
 import signal
+import socket
+import ssl
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -23,9 +28,10 @@ from tpotctl.tests import isolate
 
 isolate()
 
-from tpotctl import events  # noqa: E402
+from tpotctl import events, ops  # noqa: E402
 from tpotctl.checks import CheckError, HoldError  # noqa: E402
-from tpotctl.checks import ewshold  # noqa: E402
+from tpotctl.checks import ewshold, inventory, probes  # noqa: E402
+from tpotctl.checks.inventory import Port  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HPTEST = os.path.join(REPO, "docker", "tpotinit", "dist", "bin", "hptest.sh")
@@ -40,6 +46,10 @@ try:
     import rich  # noqa: F401
 except ImportError:
     rich = None
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 
 class FakeResponse(io.BytesIO):
@@ -1057,6 +1067,634 @@ class ChecksUnderTheHoldTest(unittest.TestCase):
         from tpotctl import cli
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             cli.build_parser().parse_args(["check", "pipeline", "--ips", "192.0.2.1"])
+
+
+# ---------------------------------------------------------------------------
+# inventory and probes (tpotctl.checks.inventory, tpotctl.checks.probes)
+# ---------------------------------------------------------------------------
+
+CATALOGUE = os.path.join(REPO, "compose", "tpot_services.yml")
+LOGSTASH_CONF = os.path.join(REPO, "docker", "elk", "logstash", "dist", "logstash.conf")
+TOKEN = probes.token_for("abc123")
+
+
+def load_catalogue():
+    with open(CATALOGUE, encoding="utf-8") as handle:
+        return yaml.safe_load(handle)["services"]
+
+
+@unittest.skipUnless(yaml, "PyYAML is missing (use the venv)")
+class CoverageTest(unittest.TestCase):
+    """Every honeypot of the catalogue has a probe or is external; a new one without either fails."""
+
+    def setUp(self):
+        self.services = load_catalogue()
+        self.groups = inventory.catalogue_groups(REPO)
+
+    def test_every_honeypot_has_a_probe_or_is_external(self):
+        self.assertEqual(probes.uncovered(inventory.honeypot_names(self.groups)), [])
+        # the nine Conpot services count one by one, not as one image
+        conpot = [name for name, group in self.groups.items() if group == "conpot"]
+        self.assertEqual(len(conpot), 9)
+        for name in conpot:
+            self.assertIn(name, probes.PROBES)
+
+    def test_a_new_honeypot_without_a_probe_fails(self):
+        groups = dict(self.groups, newpot="honeypots", newics="conpot", newllm="llm", newtool="nsm", newdb="elk")
+        self.assertEqual(probes.uncovered(inventory.honeypot_names(groups)), ["newics", "newllm", "newpot", "newtool"])
+
+    def test_no_probe_without_a_honeypot_and_external_is_not_probed(self):
+        honeypots = {name for name, group in self.groups.items() if group in inventory.HONEYPOT_GROUPS}
+        self.assertEqual(set(probes.PROBES) - honeypots, set())
+        self.assertEqual(set(probes.PROBES) & inventory.EXTERNAL, set())
+        self.assertEqual(inventory.EXTERNAL, {"honeytrap", "glutton", "p0f", "suricata"})
+        self.assertEqual(inventory.EXTERNAL_HINT, "seen only for traffic from outside (NFQ / passive capture)")
+        for name in inventory.EXTERNAL:
+            self.assertIn(name, self.groups)
+        for name, group in self.groups.items():
+            if group in inventory.PASSIVE_GROUPS:
+                self.assertIn(name, inventory.EXTERNAL)
+
+    def test_every_port_of_the_catalogue_has_a_handler(self):
+        for name, probe in probes.PROBES.items():
+            targets = {(p.target, p.protocol) for p in inventory.published_ports(self.services[name])}
+            # a new port of a honeypot needs its handler; a handler of a port it lost goes
+            self.assertEqual(set(probe.handlers), targets, name)
+
+    def test_the_logs_are_those_of_logstash(self):
+        with open(LOGSTASH_CONF, encoding="utf-8") as handle:
+            text = handle.read()
+        inputs = text[:text.index("\nfilter {")]
+        found = re.findall(r'path => \["/data/([^"]+)"\]\s*(?:codec => \S+\s*)?type => "([^"]+)"', inputs)
+        self.assertGreater(len(found), 30)
+        types = dict(found)
+        for name in inventory.honeypot_names(self.groups):
+            kind, path = inventory.LOGS[name]
+            matches = [pattern for pattern in types if fnmatch.fnmatch(path, pattern)]
+            self.assertTrue(matches, f"{name}: {path} is no input of logstash.conf")
+            self.assertEqual(types[matches[0]], kind, name)
+
+    def test_the_conpot_logs_are_those_of_the_catalogue(self):
+        for name, group in self.groups.items():
+            if group != "conpot":
+                continue
+            log = [item.split("=", 1)[1] for item in self.services[name]["environment"]
+                   if item.startswith("CONPOT_JSON_LOG=")][0]
+            self.assertEqual("conpot/log/" + os.path.basename(log), inventory.LOGS[name][1])
+
+
+def container(name, state="running"):
+    return ops.Container(name, state, "", "", "", "")
+
+
+def port(target, published=None, protocol="tcp", host_ip=None):
+    entry = {"mode": "ingress", "target": target, "published": str(published or target), "protocol": protocol}
+    if host_ip:
+        entry["host_ip"] = host_ip
+    return entry
+
+
+GROUPS = {"tpotinit": "core", "cowrie": "honeypots", "dionaea": "honeypots", "ciscoasa": "honeypots",
+          "conpot_IEC104": "conpot", "galah": "llm", "glutton": "honeypots", "p0f": "nsm",
+          "elasticsearch": "elk", "nginx": "tools"}
+
+
+class InventoryTest(unittest.TestCase):
+
+    CONFIG = {"services": {
+        "tpotinit": {"container_name": "tpotinit"},
+        # the customizer moved SSH to 2222; Telnet bound to one address
+        "cowrie": {"container_name": "cowrie", "ports": [port(22, 2222), port(23, host_ip="192.0.2.10")]},
+        "dionaea": {"container_name": "dionaea", "ports": [port(21), port(69, protocol="udp"),
+                                                         port(3306, host_ip="127.0.0.1")]},
+        "ciscoasa": {"container_name": "ciscoasa", "ports": [port(500, 15500, "udp"), port(8443)]},
+        "conpot_IEC104": {"container_name": "conpot_iec104", "ports": [port(161, protocol="udp"), port(2404)]},
+        "galah": {"container_name": "galah", "ports": [port(80, host_ip="0.0.0.0"), port(443, host_ip="::")]},
+        "glutton": {"container_name": "glutton", "network_mode": "host"},
+        "p0f": {"container_name": "p0f", "network_mode": "host"},
+        "elasticsearch": {"container_name": "elasticsearch", "ports": [port(9200, 64298, host_ip="127.0.0.1")]},
+        "nginx": {"container_name": "nginx", "ports": [port(64297)]},
+        "mypot": {"container_name": "mypot", "ports": [port(9999)]},
+    }}
+    FOUND = [container("cowrie"), container("dionaea", "exited"), container("ciscoasa"),
+             container("conpot_iec104"), container("glutton"), container("p0f"), container("elasticsearch"),
+             container("other_thing")]
+
+    def take(self):
+        return {h.name: h for h in inventory.inventory(
+            REPO, {"TPOT_DATA_PATH": "/srv/tpot"}, config=self.CONFIG, found=self.FOUND, groups=GROUPS)}
+
+    def test_honeypots_and_their_published_ports(self):
+        found = self.take()
+        self.assertEqual(sorted(found), ["ciscoasa", "conpot_IEC104", "cowrie", "dionaea", "galah", "glutton", "p0f"])
+        self.assertEqual(found["cowrie"].ports, [Port(2222, 22), Port(23, 23, "tcp", "192.0.2.10")])
+        self.assertEqual(found["dionaea"].ports, [Port(21, 21), Port(69, 69, "udp")])
+        self.assertEqual(found["ciscoasa"].ports, [Port(15500, 500, "udp"), Port(8443, 8443)])
+        self.assertEqual(found["galah"].ports, [Port(80, 80), Port(443, 443)])
+        self.assertEqual(found["conpot_IEC104"].container, "conpot_iec104")
+        self.assertEqual(found["conpot_IEC104"].group, "conpot")
+        self.assertEqual(found["conpot_IEC104"].logstash_type, "ConPot")
+        self.assertEqual(found["conpot_IEC104"].log_path, "/srv/tpot/conpot/log/conpot_IEC104.json")
+        self.assertEqual(found["cowrie"].logstash_type, "Cowrie")
+        self.assertEqual(found["cowrie"].log_path, "/srv/tpot/cowrie/log/cowrie.json")
+        self.assertEqual(found["galah"].group, "llm")
+
+    def test_a_stopped_or_missing_container_is_not_running(self):
+        found = self.take()
+        self.assertTrue(found["cowrie"].running)
+        self.assertFalse(found["dionaea"].running)
+        self.assertFalse(found["galah"].running)    # no container at all
+
+    def test_external_ones(self):
+        found = self.take()
+        self.assertTrue(found["glutton"].external)
+        self.assertTrue(found["p0f"].external)
+        self.assertEqual(found["glutton"].ports, [])
+        self.assertFalse(found["cowrie"].external)
+
+    def test_ports_of_the_short_form(self):
+        service = {"ports": ["2222:22", "127.0.0.1:64298:9200", "[::1]:80:80", "192.0.2.1:8080:80/udp",
+                             "64295:22", "5000-5010:5000-5010", 25, "[2001:db8::1]:443:443"]}
+        self.assertEqual(inventory.published_ports(service), [
+            Port(2222, 22), Port(8080, 80, "udp", "192.0.2.1"), Port(25, 25), Port(443, 443, "tcp", "2001:db8::1")])
+
+    def test_compose_config_of_the_compose_file_in_use(self):
+        calls = []
+
+        def run(argv, **kwargs):
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, json.dumps(self.CONFIG), "")
+
+        found = inventory.inventory(REPO, {"TPOT_DOCKER_COMPOSE": "./compose/sensor.yml"}, found=self.FOUND,
+                                    groups=GROUPS, run=run)
+        self.assertEqual(calls, [["docker", "compose", "-f", os.path.join(REPO, "compose", "sensor.yml"),
+                                  "config", "--format", "json"]])
+        self.assertIn("cowrie", [h.name for h in found])
+
+    def test_errors_are_check_errors(self):
+        def failing(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 1, "", "no such file\n")
+
+        with self.assertRaisesRegex(CheckError, r"docker compose config\): no such file"):
+            inventory.inventory(REPO, {}, found=[], groups=GROUPS, run=failing)
+
+        def garbage(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 0, "not json", "")
+
+        with self.assertRaisesRegex(CheckError, "no JSON"):
+            inventory.inventory(REPO, {}, found=[], groups=GROUPS, run=garbage)
+
+        def no_docker(argv, **kwargs):
+            raise FileNotFoundError("docker")
+
+        with self.assertRaisesRegex(CheckError, "Cannot run docker compose"):
+            inventory.inventory(REPO, {}, found=[], groups=GROUPS, run=no_docker)
+
+    @unittest.skipUnless(yaml, "PyYAML is missing (use the venv)")
+    def test_the_sensor_edition(self):
+        with open(os.path.join(REPO, "compose", "sensor.yml"), encoding="utf-8") as handle:
+            config = yaml.safe_load(handle)
+        groups = inventory.catalogue_groups(REPO)
+        names = list(config["services"])
+        running = [container(config["services"][n].get("container_name", n)) for n in names]
+        found = {h.name: h for h in inventory.inventory(REPO, {}, config=config, found=running, groups=groups)}
+        expected = sorted(n for n in names if groups.get(n) in inventory.HONEYPOT_GROUPS + inventory.PASSIVE_GROUPS)
+        self.assertEqual(sorted(found), expected)
+        for name in ("elasticsearch", "kibana", "map_web", "nginx", "logstash", "tpotinit", "ewsposter"):
+            self.assertNotIn(name, found)
+        self.assertEqual(found["adbhoney"].ports, [Port(5555, 5555)])
+        self.assertTrue(all(h.running for h in found.values()))
+        for name, honeypot in found.items():
+            self.assertTrue(honeypot.external or name in probes.PROBES, name)
+            self.assertTrue(honeypot.logstash_type, name)
+            self.assertTrue(honeypot.log_path.startswith(os.path.join(REPO, "data") + os.sep), name)
+
+
+# -- fake servers for the probes ---------------------------------------------
+
+class FakeTcp:
+    """A server on 127.0.0.1 that speaks a script: script[0] (None: nothing) right away, every
+    further entry after a line of the client; it records what the client sent."""
+
+    def __init__(self, script, tls=None):
+        self.script = list(script)
+        self.tls = tls
+        self.received = b""
+        self.peers = []
+        self.sock = socket.socket()
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(5)
+        self.port = self.sock.getsockname()[1]
+        self.thread = threading.Thread(target=self.serve, daemon=True)
+        self.thread.start()
+
+    def serve(self):
+        try:
+            conn, peer = self.sock.accept()
+        except OSError:
+            return
+        self.peers.append(peer[1])
+        if self.tls:
+            try:
+                conn = self.tls.wrap_socket(conn, server_side=True)
+            except OSError:
+                conn.close()
+                return
+        conn.settimeout(3)
+        with conn:
+            script = list(self.script)
+            try:
+                if script and script[0] is not None:
+                    conn.sendall(script[0])
+                script = script[1:]
+                buffer = b""
+                while True:
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        break
+                    self.received += chunk
+                    buffer += chunk
+                    while script and b"\n" in buffer:
+                        _, _, buffer = buffer.partition(b"\n")
+                        conn.sendall(script.pop(0))
+            except OSError:
+                pass
+
+    def close(self):
+        self.sock.close()
+        self.thread.join(5)
+
+
+class FakeBinary(FakeTcp):
+    """A server that answers the first `size` bytes with `answer`."""
+
+    def __init__(self, size, answer):
+        self.size, self.answer = size, answer
+        super().__init__([])
+
+    def serve(self):
+        try:
+            conn, peer = self.sock.accept()
+        except OSError:
+            return
+        self.peers.append(peer[1])
+        conn.settimeout(3)
+        with conn:
+            try:
+                while len(self.received) < self.size:
+                    chunk = conn.recv(self.size - len(self.received))
+                    if not chunk:
+                        return
+                    self.received += chunk
+                conn.sendall(self.answer)
+                conn.recv(1)
+            except OSError:
+                pass
+
+
+class FakeUdp:
+    def __init__(self, answer=b""):
+        self.received = b""
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.settimeout(3)
+        self.port = self.sock.getsockname()[1]
+        self.answer = answer
+        self.thread = threading.Thread(target=self.serve, daemon=True)
+        self.thread.start()
+
+    def serve(self):
+        try:
+            data, peer = self.sock.recvfrom(65535)
+        except OSError:
+            return
+        self.received = data
+        if self.answer:
+            self.sock.sendto(self.answer(data) if callable(self.answer) else self.answer, peer)
+
+    def close(self):
+        self.thread.join(5)
+        self.sock.close()
+
+
+def free_port(kind=socket.SOCK_STREAM):
+    with socket.socket(socket.AF_INET, kind) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def listening():
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(5)
+    return sock
+
+
+class ProbesTest(unittest.TestCase):
+
+    def run_probe(self, name, server, target, protocol="tcp"):
+        self.addCleanup(server.close)
+        result = probes.PROBES[name]("127.0.0.1", [Port(server.port, target, protocol)], TOKEN)
+        server.thread.join(5)
+        return result
+
+    def test_the_token(self):
+        self.assertEqual(TOKEN, "tpot-check-abc123")
+        for wrong in ("", "ABC", "a-b", "x" * 33, "a b"):
+            with self.assertRaises(ValueError):
+                probes.token_for(wrong)
+        with self.assertRaises(ValueError):
+            probes.PROBES["cowrie"]("127.0.0.1", [Port(1, 22)], "not-a-token")
+
+    def test_ssh_banner(self):
+        server = FakeTcp([b"SSH-2.0-OpenSSH_8.4p1\r\n"])
+        result = self.run_probe("cowrie", server, 22)
+        self.assertTrue(result.port_open and result.answered and result.answer_checked, result)
+        self.assertEqual(server.received, b"SSH-2.0-TPotCheck " + TOKEN.encode() + b"\r\n")
+        self.assertTrue(result.token_sent)
+        self.assertEqual(result.src_ports, server.peers)
+        self.assertEqual(result.detail, f"{server.port}/tcp: SSH-2.0-OpenSSH_8.4p1")
+
+    def test_the_tarpit_holds_the_connection(self):
+        server = FakeTcp([None])
+        started = time.monotonic()
+        result = self.run_probe("endlessh", server, 2222)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertTrue(result.answered, result)
+        self.assertIn("holds the connection (tarpit)", result.detail)
+        self.assertIn(TOKEN.encode(), server.received)
+
+    def test_telnet_login(self):
+        server = FakeTcp([b"\xff\xfd\x18login: ", b"Password: ", b"\r\nLogin incorrect\r\n"])
+        result = self.run_probe("cowrie", server, 23)
+        self.assertTrue(result.answered, result)
+        self.assertIn(TOKEN.encode() + b"\r\n", server.received)
+        self.assertIn(b"\xff\xfc\x18", server.received)   # WONT to the DO of the server
+        self.assertIn(b"tpot-check\r\n", server.received)
+
+    def test_http(self):
+        server = FakeTcp([None, b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"])
+        result = self.run_probe("wordpot", server, 80)
+        self.assertTrue(result.answered, result)
+        self.assertTrue(server.received.startswith(b"POST /wp-login.php HTTP/1.1\r\n"))
+        self.assertIn(b"log=" + TOKEN.encode() + b"&pwd=tpot-check", server.received)
+        self.assertIn(b"User-Agent: Mozilla/5.0 (T-Pot check) " + TOKEN.encode(), server.received)
+        self.assertEqual(result.detail, f"{server.port}/tcp: HTTP/1.1 200 OK")
+
+    def test_a_tarpit_that_streams_its_head(self):
+        # a status line and then nothing more: the head is not waited for to the end
+        server = FakeTcp([None, b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n"])
+        started = time.monotonic()
+        result = self.run_probe("hellpot", server, 8080)
+        self.assertLess(time.monotonic() - started, 4)
+        self.assertTrue(result.answered, result)
+        self.assertIn(f"GET /tpot-check/{TOKEN}?probe={TOKEN} HTTP/1.1".encode(), server.received)
+
+    def test_galah_asks_only_the_static_rule(self):
+        server = FakeTcp([None, b"HTTP/1.1 200 OK\r\n\r\n"])
+        result = self.run_probe("galah", server, 8080)
+        self.assertTrue(result.answered, result)
+        self.assertTrue(server.received.startswith(b"GET / HTTP/1.1\r\n"))
+        self.assertIn(TOKEN.encode(), server.received)   # in the User-Agent
+
+    def test_no_http_answer(self):
+        server = FakeTcp([None, b"garbage\r\n"])
+        result = self.run_probe("elasticpot", server, 9200)
+        self.assertTrue(result.port_open)
+        self.assertFalse(result.answered)
+        self.assertIn("no HTTP answer (garbage)", result.detail)
+
+    def test_ftp(self):
+        server = FakeTcp([b"220 FTP ready\r\n", b"331 Password required\r\n", b"530 Login incorrect\r\n",
+                          b"221 Bye\r\n"])
+        result = self.run_probe("dionaea", server, 21)
+        self.assertTrue(result.answered, result)
+        self.assertIn(b"USER " + TOKEN.encode() + b"\r\nPASS tpot-check\r\nQUIT\r\n", server.received)
+
+    def test_smtp_mail_from(self):
+        server = FakeTcp([b"220 mail ESMTP\r\n", b"250-mail\r\n250 AUTH PLAIN LOGIN\r\n", b"250 OK\r\n",
+                          b"250 OK\r\n", b"221 Bye\r\n"])
+        result = self.run_probe("mailoney", server, 25)
+        self.assertTrue(result.answered, result)
+        self.assertEqual(server.received, f"EHLO {TOKEN}.example\r\nMAIL FROM:<{TOKEN}@example.org>\r\n"
+                                          f"RCPT TO:<{TOKEN}@example.net>\r\nQUIT\r\n".encode())
+
+    def test_smtp_auth(self):
+        server = FakeTcp([b"220 mail ESMTP\r\n", b"250 AUTH PLAIN\r\n", b"535 failed\r\n", b"221 Bye\r\n"])
+        result = self.run_probe("heralding", server, 25)
+        self.assertTrue(result.answered, result)
+        self.assertIn(b"AUTH PLAIN " + base64.b64encode(f"\0{TOKEN}\0tpot-check".encode()), server.received)
+
+    def test_pop3_and_imap(self):
+        server = FakeTcp([b"+OK ready\r\n", b"+OK\r\n", b"-ERR no\r\n", b"+OK bye\r\n"])
+        self.assertTrue(self.run_probe("heralding", server, 110).answered)
+        self.assertIn(b"USER " + TOKEN.encode() + b"\r\nPASS tpot-check\r\n", server.received)
+        server = FakeTcp([b"* OK ready\r\n", b"a001 NO authentication failed\r\n", b"* BYE\r\n"])
+        self.assertTrue(self.run_probe("honeypots", server, 143).answered)
+        self.assertIn(f'a001 LOGIN "{TOKEN}" "tpot-check"\r\n'.encode(), server.received)
+
+    def test_socks5(self):
+        server = FakeBinary(3, b"\x05\x02")
+        result = self.run_probe("honeypots", server, 1080)
+        self.assertTrue(result.answered, result)
+        self.assertEqual(server.received, b"\x05\x01\x02")
+
+    def test_a_binary_protocol_is_found_by_its_source_port(self):
+        server = FakeBinary(6, bytes.fromhex("68040b000000"))
+        result = self.run_probe("conpot_IEC104", server, 2404)
+        self.assertTrue(result.answered, result)
+        self.assertEqual(server.received, bytes.fromhex("680407000000"))
+        self.assertFalse(result.token_sent)
+        self.assertEqual(result.src_ports, server.peers)
+
+    def test_a_wrong_binary_answer(self):
+        server = FakeBinary(19, b"\x03\x00\x00\x0b\x06\xe0\x00")   # X.224 CR, not CC
+        result = self.run_probe("rdphoneypot", server, 3389)
+        self.assertTrue(result.port_open)
+        self.assertFalse(result.answered)
+        self.assertIn("no RDP answer", result.detail)
+
+    def test_udp(self):
+        server = FakeUdp(answer=b"!\"#$%&'()*+,-./0123456789\r\n")
+        result = self.run_probe("ddospot", server, 19, "udp")
+        self.assertTrue(result.port_open and result.answered, result)
+        self.assertEqual(server.received, TOKEN.encode() + b"\n")
+        self.assertTrue(result.token_sent)
+        self.assertEqual(len(result.src_ports), 1)
+
+    def test_udp_without_an_answer(self):
+        server = FakeUdp()
+        with mock.patch.object(probes, "PROBE_TIME", 1.0):
+            result = self.run_probe("ddospot", server, 123, "udp")
+        self.assertFalse(result.port_open)
+        self.assertFalse(result.answered)
+        self.assertIn("no NTP answer", result.detail)
+
+    def test_ike_follows_the_published_port(self):
+        server = FakeUdp(answer=lambda data: data[:8] + b"responder" + data[16:])
+        result = self.run_probe("ciscoasa", server, 500, "udp")
+        self.assertTrue(result.answered, result)
+        self.assertTrue(server.received.startswith(b"tpotprob"))
+        server = FakeUdp(answer=lambda data: data[:12] + b"responder")
+        result = self.run_probe("ciscoasa", server, 4500, "udp")
+        self.assertTrue(result.answered, result)
+        self.assertTrue(server.received.startswith(b"\0\0\0\0tpotprob"))
+
+    def test_a_refused_connection_is_a_result(self):
+        for name, target in (("cowrie", 22), ("wordpot", 80), ("medpot", 2575), ("dicompot", 11112),
+                             ("dionaea", 445), ("mailoney", 465), ("conpot_iccp", 102)):
+            result = probes.PROBES[name]("127.0.0.1", [Port(free_port(), target)], TOKEN)
+            self.assertFalse(result.port_open, name)
+            self.assertFalse(result.answered, name)
+            self.assertIn("not open: refused", result.detail, name)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "an ICMP port unreachable from loopback: Linux")
+    def test_a_refused_udp_port_is_a_result(self):
+        result = probes.PROBES["ddospot"]("127.0.0.1", [Port(free_port(socket.SOCK_DGRAM), 123, "udp")], TOKEN)
+        self.assertFalse(result.port_open)
+        self.assertIn("refused", result.detail)
+
+    def test_a_timed_out_connection_is_a_result(self):
+        with mock.patch.object(probes.socket, "create_connection", side_effect=socket.timeout("timed out")):
+            result = probes.PROBES["cowrie"]("192.0.2.1", [Port(22, 22), Port(23, 23)], TOKEN)
+        self.assertFalse(result.port_open)
+        self.assertFalse(result.answered)
+        self.assertEqual(result.detail, "22/tcp: not open: timed out; 23/tcp: not open: timed out")
+
+    def test_the_connect_time_and_the_address_of_a_port(self):
+        seen = []
+
+        def connect(address, timeout):
+            seen.append((address, timeout))
+            raise ConnectionRefusedError()
+
+        with mock.patch.object(probes.socket, "create_connection", side_effect=connect):
+            probes.PROBES["cowrie"]("192.0.2.1", [Port(2222, 22), Port(23, 23, "tcp", "192.0.2.10")], TOKEN)
+        self.assertEqual([address for address, _ in seen], [("192.0.2.1", 2222), ("192.0.2.10", 23)])
+        self.assertTrue(all(0 < timeout <= probes.CONNECT_TIMEOUT for _, timeout in seen))
+
+    def test_a_silent_server_ends_with_the_time_of_the_probe(self):
+        sock = listening()
+        self.addCleanup(sock.close)
+        number = sock.getsockname()[1]
+        started = time.monotonic()
+        with mock.patch.object(probes, "PROBE_TIME", 1.0):
+            result = probes.PROBES["cowrie"]("127.0.0.1", [Port(number, 22), Port(number, 23)], TOKEN)
+        self.assertLess(time.monotonic() - started, 3)
+        self.assertFalse(result.port_open)   # the second port was not reached
+        self.assertFalse(result.answered)
+        self.assertEqual(result.detail, f"{number}/tcp: no SSH banner (nothing); "
+                                        f"{number}/tcp: not reached in the 1 s of the probe")
+
+    def test_port_only(self):
+        sock = listening()
+        self.addCleanup(sock.close)
+        result = probes.PROBES["dicompot"]("127.0.0.1", [Port(sock.getsockname()[1], 11112)], TOKEN)
+        self.assertTrue(result.port_open)
+        self.assertFalse(result.answered)
+        self.assertFalse(result.answer_checked)
+        self.assertIn("DICOM not checked (no DICOM client is used)", result.detail)
+
+    def test_a_port_only_port_next_to_a_checked_one(self):
+        sock = listening()
+        self.addCleanup(sock.close)
+        server = FakeTcp([b"220 FTP ready\r\n", b"530 no\r\n", b"221 Bye\r\n"])
+        self.addCleanup(server.close)
+        result = probes.PROBES["honeypots"]("127.0.0.1", [Port(sock.getsockname()[1], 445), Port(server.port, 21)],
+                                            TOKEN)
+        self.assertTrue(result.port_open and result.answered and result.answer_checked, result)
+        self.assertEqual(result.detail, f"{sock.getsockname()[1]}/tcp: port open (port only); "
+                                        f"{server.port}/tcp: 220 FTP ready")
+
+    @unittest.skipUnless(shutil.which("openssl"), "no openssl")
+    def test_https(self):
+        folder = tempfile.mkdtemp(prefix="tpot-probe-tls-")
+        self.addCleanup(shutil.rmtree, folder)
+        key, cert = os.path.join(folder, "key.pem"), os.path.join(folder, "cert.pem")
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", cert,
+                        "-days", "1", "-subj", "/CN=localhost"], capture_output=True, check=True)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(cert, key)
+        server = FakeTcp([None, b"HTTP/1.1 200 OK\r\n\r\n"], tls=context)
+        result = self.run_probe("h0neytr4p", server, 443)
+        self.assertTrue(result.answered, result)
+        self.assertIn(f"GET /.env?probe={TOKEN} HTTP/1.1".encode(), server.received)
+
+
+class RunProbesTest(unittest.TestCase):
+
+    def honeypot(self, name, running=True, external=False, ports=None):
+        return inventory.Honeypot(name, "honeypots", name, [Port(1, 1)] if ports is None else ports,
+                                  running=running, external=external)
+
+    def test_every_honeypot_gets_a_result_and_external_ones_none(self):
+        calls = []
+
+        def fine(host, ports, token):
+            calls.append((host, ports, token))
+            return probes.ProbeResult(True, True, "ok")
+
+        def broken(host, ports, token):
+            raise RuntimeError("boom")
+
+        found = probes.run_probes("192.0.2.5", [
+            self.honeypot("a"), self.honeypot("b", running=False), self.honeypot("c", external=True),
+            self.honeypot("d", ports=[]), self.honeypot("e"), self.honeypot("f")], TOKEN,
+            probes={"a": fine, "b": fine, "d": fine, "e": broken})
+        self.assertEqual(sorted(found), ["a", "b", "d", "e", "f"])
+        self.assertEqual(calls, [("192.0.2.5", [Port(1, 1)], TOKEN)])
+        self.assertTrue(found["a"].answered)
+        self.assertEqual(found["b"].detail, "not running (container b)")
+        self.assertEqual(found["d"].detail, "no published port")
+        self.assertEqual(found["e"].detail, "probe failed: boom")
+        self.assertEqual(found["f"].detail, "no probe for this honeypot")
+        for name in "bdef":
+            self.assertFalse(found[name].port_open, name)
+            self.assertFalse(found[name].answer_checked, name)
+
+    def test_the_budget(self):
+        def slow(host, ports, token):
+            time.sleep(0.5)
+            return probes.ProbeResult(True, True, "ok")
+
+        started = time.monotonic()
+        found = probes.run_probes("127.0.0.1", [self.honeypot(str(n)) for n in range(4)], TOKEN, budget=0.2,
+                                  workers=1, probes={str(n): slow for n in range(4)})
+        self.assertLess(time.monotonic() - started, 2)
+        self.assertTrue(found["0"].answered)    # it ran: the call waits for it
+        for name in "123":
+            self.assertEqual(found[name].detail, "not probed: the time for the probes ran out")
+
+    def test_no_probe_outlives_the_call(self):
+        running = threading.Event()
+        ended = threading.Event()
+
+        def slow(host, ports, token):
+            running.set()
+            time.sleep(0.5)
+            ended.set()
+            return probes.ProbeResult(True, True, "ok")
+
+        probes.run_probes("127.0.0.1", [self.honeypot("a")], TOKEN, budget=0.05, probes={"a": slow})
+        self.assertTrue(running.is_set())
+        self.assertTrue(ended.is_set())
+
+    def test_a_hold_that_ended_stops_the_probes(self):
+        state = {"calls": 0, "probed": 0}
+
+        def check():
+            state["calls"] += 1
+            if state["calls"] > 1:
+                raise HoldError("the hold of ewsposter ended")
+
+        def fine(host, ports, token):
+            state["probed"] += 1
+            return probes.ProbeResult(True, True, "ok")
+
+        with self.assertRaisesRegex(HoldError, "ended"):
+            probes.run_probes("127.0.0.1", [self.honeypot(str(n)) for n in range(5)], TOKEN, workers=1,
+                              probes={str(n): fine for n in range(5)}, check=check)
+        self.assertEqual(state, {"calls": 2, "probed": 1})
 
 
 if __name__ == "__main__":
