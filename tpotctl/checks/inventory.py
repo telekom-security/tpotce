@@ -98,6 +98,7 @@ class Honeypot:
     external: bool = False  # in EXTERNAL or a passive group: no probe reaches it from this host
     logstash_type: str = ""
     log_path: str = ""      # the log file (a glob for honeypots / ddospot) in the data folder
+    environment: Dict[str, str] = field(default_factory=dict)   # of the compose file (probe variants)
 
 
 def _int(value: Any) -> Optional[int]:
@@ -149,12 +150,14 @@ def published_ports(service: dict) -> List[Port]:
     return ports
 
 
-def compose_config(path: str, run: Callable = subprocess.run) -> dict:
-    """`docker compose config --format json` of the compose file in use."""
+def compose_config(path: str, repo_dir: str, run: Callable = subprocess.run) -> dict:
+    """`docker compose config --format json` of the compose file in use, with the checkout as the
+    project folder and its .env: a compose file below the checkout root (TPOT_DOCKER_COMPOSE)
+    sees the same values as one at the root."""
     try:
-        proc = run(["docker", "compose", "-f", path, "config", "--format", "json"],
-                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
-                   cwd=os.path.dirname(path) or None)
+        proc = run(["docker", "compose", "--project-directory", repo_dir, "--env-file",
+                    os.path.join(repo_dir, ".env"), "-f", path, "config", "--format", "json"],
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, cwd=repo_dir)
     except OSError as exc:
         raise CheckError(f"Cannot run docker compose config: {exc}") from exc
     if proc.returncode != 0:
@@ -194,6 +197,15 @@ def honeypot_names(groups: Dict[str, str]) -> List[str]:
     return sorted(name for name, group in groups.items() if group in HONEYPOT_GROUPS + PASSIVE_GROUPS)
 
 
+def _environment(service: dict) -> Dict[str, str]:
+    """The environment of a service: a mapping (docker compose config) or a list of KEY=value."""
+    raw = service.get("environment") or {}
+    if isinstance(raw, dict):
+        return {str(key): "" if value is None else str(value) for key, value in raw.items()}
+    pairs = (str(item).partition("=") for item in raw if isinstance(item, (str, int)))
+    return {key: value for key, _, value in pairs if key}
+
+
 def _running_names(found: Iterable[Any]) -> set:
     return {c.name for c in found if getattr(c, "state", "") == "running"}
 
@@ -209,7 +221,7 @@ def inventory(repo_dir: str, env: Optional[Dict[str, str]] = None, *,
 
     env = ops.env_values(repo_dir) if env is None else env
     if config is None:
-        config = compose_config(ops.compose_path(repo_dir, env), run)
+        config = compose_config(ops.compose_path(repo_dir, env), repo_dir, run)
     if groups is None:
         groups = catalogue_groups(repo_dir)
     if found is None:
@@ -237,5 +249,6 @@ def inventory(repo_dir: str, env: Optional[Dict[str, str]] = None, *,
             external=name in EXTERNAL or group in PASSIVE_GROUPS,
             logstash_type=logstash_type,
             log_path=os.path.join(data, log_rel) if log_rel else "",
+            environment=_environment(service),
         ))
     return honeypots

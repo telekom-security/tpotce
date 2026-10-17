@@ -8,15 +8,20 @@ the run (`tpot-check-<run id>`) goes in: a login name, a path, a header, an SMTP
 FROM, an SSH client banner, a command; binary protocols are found in the logs by the source port
 of the probe (`ProbeResult.src_ports`).
 
-Each probe has 5 s to connect and 10 s overall; `run_probes` has a budget for all of them. A
-refused or timed-out connection is a result (`port_open=False`), never an exception.
+Every port of a probe has 5 s to connect and 10 s in all, a honeypot 10 s per port up to 60 s;
+a port the time of its honeypot did not reach is "not reached", never closed. `run_probes` has
+a budget for all probes. A refused or timed-out connection is a result (`port_open=False`), never
+an exception. The LLM honeypots (galah, beelzebub) are only knocked at: an answer would call the
+LLM.
 """
 
 import base64
 import re
 import socket
 import ssl
+import shutil
 import struct
+import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -26,7 +31,8 @@ from typing import Callable, Dict, Iterable, List, Optional, Tuple
 from tpotctl.checks.inventory import EXTERNAL, EXTERNAL_HINT, Honeypot, Port
 
 CONNECT_TIMEOUT = 5.0     # seconds to connect
-PROBE_TIME = 10.0         # seconds for a probe, all its ports together
+PORT_TIME = 10.0          # seconds for one port of a probe
+PROBE_TIME_MAX = 60.0     # seconds for a probe at most: PORT_TIME per port up to this
 RUN_BUDGET = 120.0        # seconds for every probe of a run
 WORKERS = 8               # probes at the same time
 PASSWORD = "tpot-check"   # the password of the login attempts
@@ -47,12 +53,17 @@ def token_for(run_id: str) -> str:
 
 @dataclass
 class ProbeResult:
-    port_open: bool         # every probed port took the connection (UDP: answered)
+    port_open: bool         # every port that was tried took the connection (UDP: answered)
     answered: bool          # every port whose answer is checked answered as the honeypot should
     detail: str             # per port what happened
     answer_checked: bool = True   # False: only the ports were checked (e.g. DICOM without a client)
     token_sent: bool = False      # the token went into at least one request
     src_ports: List[int] = field(default_factory=list)  # the source ports of the probe
+    not_reached: List[Port] = field(default_factory=list)  # ports not tried: the time of the probe ran out
+
+
+class _NotTried(Exception):
+    """The port is left alone on purpose (the text says why): like a port not reached, never closed."""
 
 
 class _NoAnswer(Exception):
@@ -65,6 +76,7 @@ class _Outcome:
     open: bool
     answered: Optional[bool]    # None: not checked (port only)
     note: str
+    reached: bool = True        # False: a time cap ran out before the port was tried
 
 
 class _Clock:
@@ -466,6 +478,33 @@ def port_only(why: str) -> Handler:
     return handler
 
 
+LLM_REASON = "an answer would call the LLM"
+# open the TCP connection and close it, nothing sent: no request reaches the LLM (nor Galah's
+# lookup of the source address); the ports of galah and beelzebub are all TCP
+knock = port_only(LLM_REASON)
+P2P_REASON = "P2P mode would share the probe's source with its peers"
+
+
+def _dicom_echo(ctx: _Ctx) -> Tuple[Optional[bool], str]:
+    """A DICOM C-ECHO with echoscu of DCMTK where it is installed, otherwise the port only."""
+    echoscu = shutil.which("echoscu")
+    if not echoscu:
+        return port_only("DICOM not checked (DCMTK echoscu is not installed)")(ctx)
+    with ctx.tcp():
+        pass
+    wait = str(max(1, int(ctx.clock.timeout(PORT_TIME))))
+    argv = [echoscu, "-to", wait, "-ta", wait, "-td", wait, ctx.host, str(ctx.port.published)]
+    try:
+        done = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True, timeout=max(0.5, ctx.clock.left()))
+    except subprocess.TimeoutExpired:
+        raise _NoAnswer("no DICOM C-ECHO answer (echoscu timed out)")
+    if done.returncode != 0:
+        lines = (done.stdout or "").strip().splitlines()
+        raise _NoAnswer("no DICOM C-ECHO answer" + (f" ({lines[-1][:60]})" if lines else ""))
+    return True, "DICOM C-ECHO answer (echoscu)"
+
+
 # ---------------------------------------------------------------------------
 # the requests of the single honeypots, as their smoke tests send them
 # ---------------------------------------------------------------------------
@@ -641,30 +680,39 @@ class PortProbe:
     Every published port of the honeypot is probed with the handler of its target; a port the
     table does not name is only checked to be open (the coverage test wants every port named)."""
 
-    def __init__(self, handlers: Dict[Tuple[int, str], Handler], note: str = ""):
+    def __init__(self, handlers: Dict[Tuple[int, str], Handler], note: str = "",
+                 default: Optional[Handler] = None):
         self.handlers = handlers
         self.note = note
+        self.default = default
 
     def handler_for(self, port: Port) -> Handler:
         found = self.handlers.get((port.target, port.protocol))
         if found:
             return found
+        if self.default is not None:
+            return self.default
         return send_only if port.protocol == "udp" else connect_only
 
     def __call__(self, host: str, ports: List[Port], token: str) -> ProbeResult:
         if not _TOKEN.match(token or ""):
             raise ValueError(f"token {token!r} is not tpot-check-<run id>")
-        clock = _Clock(PROBE_TIME)
+        # every port has PORT_TIME of its own, the honeypot PORT_TIME per port up to PROBE_TIME_MAX
+        total = min(PROBE_TIME_MAX, PORT_TIME * max(1, len(ports)))
+        overall = _Clock(total)
         outcomes: List[_Outcome] = []
         token_sent, src_ports = False, []
         for port in ports:
-            if clock.left() <= 0:
-                outcomes.append(_Outcome(port, False, False, f"not reached in the {PROBE_TIME:g} s of the probe"))
+            if overall.left() <= 0:
+                outcomes.append(_Outcome(port, False, None, f"not reached (the {total:g} s of the probe ran out)",
+                                         reached=False))
                 continue
-            ctx = _Ctx(host, port, token, clock)
+            ctx = _Ctx(host, port, token, _Clock(min(PORT_TIME, overall.left())))
             try:
                 answered, note = self.handler_for(port)(ctx)
                 outcomes.append(_Outcome(port, ctx.opened, answered, note))
+            except _NotTried as exc:
+                outcomes.append(_Outcome(port, False, None, str(exc), reached=False))
             except _NoAnswer as exc:
                 outcomes.append(_Outcome(port, ctx.opened, False, str(exc)))
             except (OSError, ValueError, struct.error, IndexError, UnicodeError) as exc:
@@ -678,17 +726,20 @@ class PortProbe:
 def _combine(outcomes: List[_Outcome], token_sent: bool, src_ports: List[int], note: str = "") -> ProbeResult:
     if not outcomes:
         return ProbeResult(False, False, "no published port", answer_checked=False)
-    checked = [o for o in outcomes if o.answered is not None]
+    reached = [o for o in outcomes if o.reached]
+    checked = [o for o in reached if o.answered is not None]
     detail = "; ".join(f"{o.port}: {o.note}" for o in outcomes)
     if note:
         detail = f"{detail} ({note})"
     return ProbeResult(
-        port_open=all(o.open for o in outcomes),
+        # a port that was not reached is neither open nor closed: it is in not_reached
+        port_open=bool(reached) and all(o.open for o in reached),
         answered=bool(checked) and all(o.answered for o in checked),
         detail=detail,
         answer_checked=bool(checked),
         token_sent=token_sent,
         src_ports=src_ports,
+        not_reached=[o.port for o in outcomes if not o.reached],
     )
 
 
@@ -722,7 +773,8 @@ TCP, UDP = "tcp", "udp"
 
 PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
     "adbhoney": PortProbe({(5555, TCP): adb}),
-    "beelzebub": PortProbe({(22, TCP): ssh_banner}),
+    # every port of the LLM edition too (default): an answer would call the LLM
+    "beelzebub": PortProbe({(22, TCP): knock}, default=knock),
     "ciscoasa": PortProbe({
         (8443, TCP): http("POST", "/+webvpn+/index.html", _LOGIN_FORM,
                           f"username={{token}}&password={PASSWORD}&group_list=Employees", tls=True),
@@ -775,7 +827,7 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         (123, UDP): udp_exchange(b"\x1b" + b"\0" * 47, lambda d: len(d) >= 48 and d[0] & 0x07 == 4, "NTP"),
         (1900, UDP): udp_exchange(_SSDP, lambda d: d.startswith(b"HTTP/1.1 200"), "SSDP", token=True),
     }),
-    "dicompot": PortProbe({(11112, TCP): port_only("DICOM not checked (no DICOM client is used)")}),
+    "dicompot": PortProbe({(11112, TCP): _dicom_echo}),
     "dionaea": PortProbe({
         (20, TCP): connect_only,
         (21, TCP): ftp_login,
@@ -792,13 +844,9 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
     }),
     "elasticpot": PortProbe({(9200, TCP): http("GET", "/_cluster/health?{token}")}),
     "endlessh": PortProbe({(2222, TCP): tarpit}),
-    "galah": PortProbe({
-        # "/" is answered by the static rule of Galah: no request reaches the LLM
-        (80, TCP): http("GET", "/"),
-        (8080, TCP): http("GET", "/"),
-        (443, TCP): http("GET", "/", tls=True),
-        (8443, TCP): http("GET", "/", tls=True),
-    }),
+    # knocked at only, on every port: an answer would call the LLM
+    "galah": PortProbe({(80, TCP): knock, (8080, TCP): knock, (443, TCP): knock, (8443, TCP): knock},
+                       default=knock),
     "go-pot": PortProbe({(8080, TCP): http("GET", "/tpot-check/{token}?probe={token}")}),
     "h0neytr4p": PortProbe({
         (80, TCP): http("GET", "/.env?probe={token}"),
@@ -881,6 +929,26 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
 }
 
 
+def not_tried(why: str) -> Handler:
+    """A port left alone: nothing is sent, not even a connection (UDP has no knock)."""
+    def handler(ctx: _Ctx) -> Tuple[Optional[bool], str]:
+        raise _NotTried(f"not probed, {why}")
+    return handler
+
+
+# sentrypeer with SENTRYPEER_PEER_TO_PEER shares the sources it sees with its peers, so the
+# probe only knocks at the TCP port and leaves the UDP one alone
+SENTRYPEER_P2P = PortProbe({(5060, TCP): port_only(P2P_REASON), (5060, UDP): not_tried(P2P_REASON)},
+                           default=not_tried(P2P_REASON))
+
+
+def _variant(honeypot: Honeypot) -> Optional[Callable[[str, List[Port], str], ProbeResult]]:
+    """Another probe for a honeypot whose settings in the compose file ask for it."""
+    if honeypot.name == "sentrypeer" and "SENTRYPEER_PEER_TO_PEER" in honeypot.environment:
+        return SENTRYPEER_P2P
+    return None
+
+
 def uncovered(names: Iterable[str]) -> List[str]:
     """The honeypots of `names` with neither a probe nor a place in EXTERNAL."""
     return sorted(name for name in names if name not in PROBES and name not in EXTERNAL)
@@ -896,6 +964,8 @@ def probe(honeypot: Honeypot, host: str, token: str,
     if not honeypot.ports:
         return ProbeResult(False, False, "no published port", answer_checked=False)
     function = probes.get(honeypot.name)
+    if function is not None:
+        function = _variant(honeypot) or function
     if function is None:
         return ProbeResult(False, False, "no probe for this honeypot", answer_checked=False)
     try:
@@ -942,7 +1012,7 @@ def run_probes(host: str, honeypots: Iterable[Honeypot], token: str, budget: flo
     try:
         wait([future for future, _ in futures], timeout=max(0.0, end - time.monotonic()))
     finally:
-        # what has not started does not start any more; what runs ends within its PROBE_TIME
+        # what has not started does not start any more; what runs ends within its PROBE_TIME_MAX
         stop.set()
         pool.shutdown(wait=True, cancel_futures=True)
     for future, honeypot in futures:

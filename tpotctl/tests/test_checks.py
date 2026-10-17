@@ -742,14 +742,22 @@ class EwsHoldShellTest(HoldFolder):
     def test_a_signal_to_the_group_keeps_the_lock_until_the_end_of_the_hold(self):
         with FakeEwsposter(self.ews):
             process = self.start_cli("sleep", "30", myEWS_HOLD_SETTLE="3")
-            self.wait_for(lambda: os.path.isfile(self.marker) and os.path.isfile(self.ack))
+            lines = []
+            reader = threading.Thread(target=lambda: lines.extend(process.stdout), daemon=True)
+            reader.start()
+            # the script itself has seen the ack (not only the file is there): the hold began
+            self.wait_for(lambda: any("ewsposter holds" in line for line in lines))
             os.killpg(process.pid, signal.SIGTERM)
             time.sleep(1)
             self.assertIsNone(process.poll())
             self.assertTrue(os.path.isfile(self.marker))
             self.assertFalse(self.lock_is_free(), "the lock was freed while the trap still ended the check")
-            out, err = process.communicate(timeout=30)
-        self.assertEqual(process.returncode, 143, out + err)
+            process.wait(timeout=30)
+            reader.join(5)
+            err = process.stderr.read()
+            process.stdout.close()
+            process.stderr.close()
+        self.assertEqual(process.returncode, 143, "".join(lines) + err)
         self.assertFalse(os.path.exists(self.marker))
         self.assertTrue(self.lock_is_free())
 
@@ -1227,9 +1235,41 @@ class InventoryTest(unittest.TestCase):
 
         found = inventory.inventory(REPO, {"TPOT_DOCKER_COMPOSE": "./compose/sensor.yml"}, found=self.FOUND,
                                     groups=GROUPS, run=run)
-        self.assertEqual(calls, [["docker", "compose", "-f", os.path.join(REPO, "compose", "sensor.yml"),
-                                  "config", "--format", "json"]])
+        # a compose file below the checkout root: the checkout is the project and its .env counts
+        self.assertEqual(calls, [["docker", "compose", "--project-directory", REPO,
+                                  "--env-file", os.path.join(REPO, ".env"),
+                                  "-f", os.path.join(REPO, "compose", "sensor.yml"), "config", "--format", "json"]])
         self.assertIn("cowrie", [h.name for h in found])
+
+    @unittest.skipUnless(shutil.which("docker"), "no docker")
+    def test_a_compose_file_below_the_checkout_takes_its_env(self):
+        checkout = tempfile.mkdtemp(prefix="tpot-inventory-")
+        self.addCleanup(shutil.rmtree, checkout)
+        os.mkdir(os.path.join(checkout, "compose"))
+        with open(os.path.join(checkout, ".env"), "w", encoding="utf-8") as handle:
+            handle.write("TPOT_DATA_PATH=./data\nTPOT_CHECK_PORT=2222\n")
+        with open(os.path.join(checkout, "compose", "mine.yml"), "w", encoding="utf-8") as handle:
+            handle.write("services:\n  cowrie:\n    image: alpine\n    ports:\n     - \"${TPOT_CHECK_PORT}:22\"\n"
+                         "    volumes:\n     - ${TPOT_DATA_PATH}/cowrie/log:/log\n")
+        try:
+            config = inventory.compose_config(os.path.join(checkout, "compose", "mine.yml"), checkout)
+        except CheckError as error:
+            if "Cannot run" in str(error):
+                self.skipTest(str(error))
+            raise
+        self.assertEqual(inventory.published_ports(config["services"]["cowrie"]), [Port(2222, 22)])
+        # ./data of the .env is the data folder of the checkout, not of compose/
+        source = config["services"]["cowrie"]["volumes"][0]["source"]
+        self.assertEqual(os.path.realpath(source), os.path.join(os.path.realpath(checkout), "data", "cowrie", "log"))
+
+    def test_the_environment_of_a_service(self):
+        self.assertEqual(inventory._environment({"environment": {"A": "1", "B": None}}), {"A": "1", "B": ""})
+        self.assertEqual(inventory._environment({"environment": ["A=1", "B=x=y", "C"]}),
+                         {"A": "1", "B": "x=y", "C": ""})
+        config = {"services": {"sentrypeer": {"container_name": "sentrypeer", "ports": [port(5060)],
+                                              "environment": {"SENTRYPEER_PEER_TO_PEER": "1"}}}}
+        found = inventory.inventory(REPO, {}, config=config, found=[], groups={"sentrypeer": "honeypots"})
+        self.assertEqual(found[0].environment, {"SENTRYPEER_PEER_TO_PEER": "1"})
 
     def test_errors_are_check_errors(self):
         def failing(argv, **kwargs):
@@ -1450,12 +1490,19 @@ class ProbesTest(unittest.TestCase):
         self.assertTrue(result.answered, result)
         self.assertIn(f"GET /tpot-check/{TOKEN}?probe={TOKEN} HTTP/1.1".encode(), server.received)
 
-    def test_galah_asks_only_the_static_rule(self):
-        server = FakeTcp([None, b"HTTP/1.1 200 OK\r\n\r\n"])
-        result = self.run_probe("galah", server, 8080)
-        self.assertTrue(result.answered, result)
-        self.assertTrue(server.received.startswith(b"GET / HTTP/1.1\r\n"))
-        self.assertIn(TOKEN.encode(), server.received)   # in the User-Agent
+    def test_the_llm_honeypots_are_only_knocked_at(self):
+        # galah on every port, beelzebub on 22 and on every port of the LLM edition (the default)
+        for name, target in (("galah", 80), ("galah", 8080), ("galah", 443), ("galah", 8443),
+                             ("beelzebub", 22), ("beelzebub", 3306), ("beelzebub", 8081)):
+            server = FakeTcp([b"SSH-2.0-x\r\n" if target == 22 else b"HTTP/1.1 200 OK\r\n\r\n"])
+            result = self.run_probe(name, server, target)
+            self.assertEqual(server.received, b"", (name, target))
+            self.assertEqual(len(server.peers), 1, (name, target))   # the connection was opened
+            self.assertTrue(result.port_open, (name, target))
+            self.assertFalse(result.answer_checked, (name, target))
+            self.assertFalse(result.token_sent, (name, target))
+            self.assertEqual(result.detail, f"{server.port}/tcp: port open, an answer would call the LLM")
+        self.assertIsNotNone(probes.PROBES["beelzebub"].default)
 
     def test_no_http_answer(self):
         server = FakeTcp([None, b"garbage\r\n"])
@@ -1524,7 +1571,7 @@ class ProbesTest(unittest.TestCase):
 
     def test_udp_without_an_answer(self):
         server = FakeUdp()
-        with mock.patch.object(probes, "PROBE_TIME", 1.0):
+        with mock.patch.object(probes, "PORT_TIME", 1.0):
             result = self.run_probe("ddospot", server, 123, "udp")
         self.assertFalse(result.port_open)
         self.assertFalse(result.answered)
@@ -1573,27 +1620,110 @@ class ProbesTest(unittest.TestCase):
         self.assertEqual([address for address, _ in seen], [("192.0.2.1", 2222), ("192.0.2.10", 23)])
         self.assertTrue(all(0 < timeout <= probes.CONNECT_TIMEOUT for _, timeout in seen))
 
-    def test_a_silent_server_ends_with_the_time_of_the_probe(self):
-        sock = listening()
-        self.addCleanup(sock.close)
-        number = sock.getsockname()[1]
+    def test_a_silent_port_takes_only_its_own_time(self):
+        # 23 of heralding stays silent; the ports after it still get their turn and answer
+        silent = listening()
+        self.addCleanup(silent.close)
+        ftp = FakeTcp([b"220 FTP ready\r\n", b"530 no\r\n", b"221 Bye\r\n"])
+        ssh = FakeTcp([b"SSH-2.0-x\r\n"])
+        self.addCleanup(ftp.close)
+        self.addCleanup(ssh.close)
+        number = silent.getsockname()[1]
         started = time.monotonic()
-        with mock.patch.object(probes, "PROBE_TIME", 1.0):
-            result = probes.PROBES["cowrie"]("127.0.0.1", [Port(number, 22), Port(number, 23)], TOKEN)
+        with mock.patch.object(probes, "PORT_TIME", 1.0):
+            result = probes.PROBES["heralding"]("127.0.0.1", [Port(number, 23), Port(ftp.port, 21),
+                                                              Port(ssh.port, 22)], TOKEN)
         self.assertLess(time.monotonic() - started, 3)
-        self.assertFalse(result.port_open)   # the second port was not reached
-        self.assertFalse(result.answered)
-        self.assertEqual(result.detail, f"{number}/tcp: no SSH banner (nothing); "
-                                        f"{number}/tcp: not reached in the 1 s of the probe")
+        self.assertTrue(result.port_open, result)     # every port was tried and took the connection
+        self.assertFalse(result.answered)             # the silent one did not answer
+        self.assertEqual(result.not_reached, [])
+        self.assertEqual(result.detail, f"{number}/tcp: no login: / username: prompt; "
+                                        f"{ftp.port}/tcp: 220 FTP ready; {ssh.port}/tcp: SSH-2.0-x")
 
-    def test_port_only(self):
+    def test_the_time_of_a_honeypot_and_ports_not_reached(self):
+        silent = listening()
+        self.addCleanup(silent.close)
+        number = silent.getsockname()[1]
+        ports = [Port(number, 22), Port(number, 22), Port(free_port(), 23)]
+        self.assertEqual(min(probes.PROBE_TIME_MAX, probes.PORT_TIME * 3), 30)
+        self.assertEqual(min(probes.PROBE_TIME_MAX, probes.PORT_TIME * 29), 60)
+        with mock.patch.object(probes, "PORT_TIME", 0.5), mock.patch.object(probes, "PROBE_TIME_MAX", 0.8):
+            result = probes.PROBES["cowrie"]("127.0.0.1", ports, TOKEN)
+        # the third port is not reached: it does not count as closed (it would be refused)
+        self.assertEqual(result.not_reached, [ports[2]])
+        self.assertTrue(result.port_open, result)
+        self.assertFalse(result.answered)
+        self.assertTrue(result.detail.endswith(f"{ports[2].published}/tcp: not reached (the 0.8 s of the probe ran out)"),
+                        result.detail)
+
+    def test_dicom_without_dcmtk(self):
         sock = listening()
         self.addCleanup(sock.close)
-        result = probes.PROBES["dicompot"]("127.0.0.1", [Port(sock.getsockname()[1], 11112)], TOKEN)
+        with mock.patch.object(probes.shutil, "which", return_value=None):
+            result = probes.PROBES["dicompot"]("127.0.0.1", [Port(sock.getsockname()[1], 11112)], TOKEN)
         self.assertTrue(result.port_open)
         self.assertFalse(result.answered)
         self.assertFalse(result.answer_checked)
-        self.assertIn("DICOM not checked (no DICOM client is used)", result.detail)
+        self.assertIn("DICOM not checked (DCMTK echoscu is not installed)", result.detail)
+
+    def test_dicom_with_dcmtk(self):
+        sock = listening()
+        self.addCleanup(sock.close)
+        number = sock.getsockname()[1]
+        calls = []
+
+        def echoscu(returncode, output=""):
+            def run(argv, **kwargs):
+                calls.append((argv, kwargs))
+                return subprocess.CompletedProcess(argv, returncode, output, None)
+            return run
+
+        with mock.patch.object(probes.shutil, "which", return_value="/usr/bin/echoscu"), \
+                mock.patch.object(probes.subprocess, "run", side_effect=echoscu(0)):
+            result = probes.PROBES["dicompot"]("127.0.0.1", [Port(number, 11112)], TOKEN)
+        self.assertTrue(result.answered and result.answer_checked, result)
+        self.assertEqual(result.detail, f"{number}/tcp: DICOM C-ECHO answer (echoscu)")
+        argv, kwargs = calls[0]
+        self.assertEqual(argv[0], "/usr/bin/echoscu")
+        self.assertEqual(argv[-2:], ["127.0.0.1", str(number)])
+        self.assertLessEqual(kwargs["timeout"], probes.PORT_TIME)
+        with mock.patch.object(probes.shutil, "which", return_value="/usr/bin/echoscu"), \
+                mock.patch.object(probes.subprocess, "run", side_effect=echoscu(1, "E: Association Request Failed\n")):
+            result = probes.PROBES["dicompot"]("127.0.0.1", [Port(number, 11112)], TOKEN)
+        self.assertTrue(result.port_open)
+        self.assertFalse(result.answered)
+        self.assertIn("no DICOM C-ECHO answer (E: Association Request Failed)", result.detail)
+        with mock.patch.object(probes.shutil, "which", return_value="/usr/bin/echoscu"), \
+                mock.patch.object(probes.subprocess, "run", side_effect=subprocess.TimeoutExpired("echoscu", 1)):
+            result = probes.PROBES["dicompot"]("127.0.0.1", [Port(number, 11112)], TOKEN)
+        self.assertIn("echoscu timed out", result.detail)
+
+    def test_sentrypeer_in_p2p_mode_is_only_knocked_at(self):
+        server = FakeTcp([None, b"SIP/2.0 200 OK\r\n\r\n"])
+        self.addCleanup(server.close)
+        udp = FakeUdp(answer=b"SIP/2.0 200 OK\r\n\r\n")
+        honeypot = inventory.Honeypot("sentrypeer", "honeypots", "sentrypeer",
+                                      [Port(server.port, 5060), Port(udp.port, 5060, "udp")], running=True,
+                                      environment={"SENTRYPEER_PEER_TO_PEER": "1"})
+        result = probes.probe(honeypot, "127.0.0.1", TOKEN)
+        server.thread.join(5)
+        udp.sock.close()
+        udp.thread.join(5)
+        self.assertEqual(server.received, b"")
+        self.assertEqual(udp.received, b"")
+        self.assertFalse(result.token_sent)
+        self.assertTrue(result.port_open)
+        self.assertEqual(result.not_reached, [Port(udp.port, 5060, "udp")])
+        reason = "P2P mode would share the probe's source with its peers"
+        self.assertEqual(result.detail, f"{server.port}/tcp: port open, {reason}; "
+                                        f"{udp.port}/udp: not probed, {reason}")
+        # without P2P the SIP OPTIONS go out as the smoke test sends them
+        server = FakeTcp([None, b"SIP/2.0 200 OK\r\n\r\n"])
+        self.addCleanup(server.close)
+        honeypot.ports, honeypot.environment = [Port(server.port, 5060)], {}
+        self.assertTrue(probes.probe(honeypot, "127.0.0.1", TOKEN).answered)
+        server.thread.join(5)
+        self.assertTrue(server.received.startswith(b"OPTIONS sip:1000@127.0.0.1 SIP/2.0\r\n"))
 
     def test_a_port_only_port_next_to_a_checked_one(self):
         sock = listening()
