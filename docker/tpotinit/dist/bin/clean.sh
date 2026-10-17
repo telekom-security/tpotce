@@ -84,9 +84,16 @@ if [ "$(fuEMPTY $myMAILONEYM)" != "0" ]; then tar -I $myPIGZ -cvf $myMAILONEYTGZ
 if [ "$(fuEMPTY $myMINIPRINTU)" != "0" ]; then tar -I $myPIGZ -cvf $myMINIPRINTTGZ $myMINIPRINTU; fi
 if [ "$(fuEMPTY $myWORDPOTP)" != "0" ]; then tar -I $myPIGZ -cvf $myWORDPOTTGZ $myWORDPOTP; fi
 
-# Ensure correct permissions and ownership for previously created archives
-chmod 660 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ
-chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ
+# Ensure correct permissions and ownership for previously created archives: only those that are
+# there (an archive exists once its folder had files), a regular file and no link
+for myTGZ in $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ;
+  do
+    if [ -f "${myTGZ}" ] && [ ! -L "${myTGZ}" ];
+      then
+        chmod 660 "${myTGZ}"
+        chown tpot:tpot "${myTGZ}"
+    fi
+  done
 
 # Need to remove subfolders since too many files cause rm to exit with errors
 rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU $myWORDPOTP

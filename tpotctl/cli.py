@@ -1389,6 +1389,9 @@ def check_options(args):
                         timeout=args.timeout, dry_run=args.dry_run)
 
 
+NOTE_MIN_WIDTH = 18     # the note column of the check table: room for words, never 4-character pieces
+
+
 def check_table(report, ascii_only: bool = False):
     """The stages per honeypot of a check, one row each, the glyphs coloured by their state."""
     from rich import box
@@ -1398,14 +1401,16 @@ def check_table(report, ascii_only: bool = False):
     colours = {tstages.OK: "green", tstages.FAILED: "red", tstages.NOT_APPLICABLE: "bright_black",
                tstages.NOT_REACHED: "bright_black"}
     shown = tstages.SENSOR_STAGES if report.tpot_type == "SENSOR" else tstages.STAGES
-    table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False,
+    # 80 columns: the columns are one space apart (the separator of the box, no padding), the note
+    # keeps room for whole words and wraps by them
+    table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False, padding=(0, 0),
                   caption=" ".join(f"{tstages.SHORT_TITLES[name]}: {tstages.TITLES[name]}." for name in shown
                                    if tstages.SHORT_TITLES[name] != tstages.TITLES[name]),
                   caption_justify="left")
-    table.add_column("Honeypot", no_wrap=True)
+    table.add_column("Honeypot", no_wrap=True, overflow="ellipsis")
     for name in shown:
         table.add_column(tstages.SHORT_TITLES[name], justify="center", no_wrap=True)
-    table.add_column("Note", overflow="fold", ratio=1)
+    table.add_column("Note", overflow="fold", ratio=1, min_width=NOTE_MIN_WIDTH)
     for row in report.rows:
         cells = [Text(row.name)]
         for name in shown:

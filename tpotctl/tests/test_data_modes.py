@@ -60,7 +60,16 @@ class ScriptsTest(unittest.TestCase):
                 self.assertRegex(body, r"fuDATA_(WEB_)?MODES /data/")
 
     def test_archives_and_ews_ip_are_plain_files(self):
-        self.assertIn("chmod 660 $myADBHONEYTGZ", CLEAN.read_text())
+        text = CLEAN.read_text()
+        loop = re.search(r"^for myTGZ in (.*?);\n(.*?)^  done$", text, re.M | re.S)
+        self.assertIsNotNone(loop)
+        archives = re.findall(r"^  local (my[A-Z0-9]+TGZ)=", text, re.M)
+        self.assertEqual(loop.group(1).split(), [f"${name}" for name in archives])
+        # only the archives that are there: no "No such file" on a start without them
+        self.assertIn('if [ -f "${myTGZ}" ] && [ ! -L "${myTGZ}" ];', loop.group(2))
+        self.assertIn('chmod 660 "${myTGZ}"', loop.group(2))
+        self.assertIn('chown tpot:tpot "${myTGZ}"', loop.group(2))
+        self.assertNotIn("chmod 660 $myADBHONEYTGZ", text)
         self.assertIn("chmod 660 /data/ews/conf/ews.ip", UPDATEIP.read_text())
 
 

@@ -439,6 +439,28 @@ class ChecksCliTest(unittest.TestCase):
         self.assertIn("Attack Map: not on Redis", " ".join(text.split()))
 
     @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_the_table_fits_80_columns_and_wraps_the_note_by_words(self):
+        from rich.console import Console
+        from tpotctl import cli
+        from tpotctl.checks import run as trun, stages as tstages
+        row = tstages.Row("conpot_building_automation")
+        for name in tstages.STAGES:
+            row.set(name, tstages.OK)
+        row.set("attack_map", tstages.FAILED, "not shown by the Attack Map (map_data skips events indexed after "
+                                              "newer ones); Elasticsearch had it 12 s after its time")
+        report = trun.Report(run_id="abc123", rows=[row, tstages.Row("cowrie")])
+        console = Console(width=80, record=True, color_system=None, file=io.StringIO())
+        console.print(cli.check_table(report, ascii_only=True))
+        lines = console.export_text().splitlines()
+        self.assertTrue(all(len(line) <= 80 for line in lines), lines)
+        header = next(line for line in lines if "Honeypot" in line)
+        self.assertIn("Note", header.split())
+        self.assertIn("conpot_building_automation", "\n".join(lines))
+        words = set(" ".join(lines).split())
+        for word in ("shown", "Attack", "(map_data", "skips", "indexed", "Elasticsearch"):
+            self.assertIn(word, words)
+
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
     def test_attackers(self):
         found = events.Sources([events.Source("203.0.113.7", 912, "Netherlands", "mass scanner")])
         with mock.patch.object(events, "top_sources", return_value=found):
@@ -3991,8 +4013,27 @@ class WrapperTest(unittest.TestCase):
         self.run_script(PIPELINE)
         self.assertEqual(self.handed(), ["check", "pipeline"])
         os.unlink(self.args)
-        self.run_script(PIPELINE, "--types", "cowrie,Ciscoasa")
-        self.assertEqual(self.handed(), ["check", "pipeline", "--only", "cowrie,ciscoasa"])
+        self.run_script(PIPELINE, "--types", "Cowrie,Ciscoasa,RDPHoneypot")
+        self.assertEqual(self.handed(), ["check", "pipeline", "--only", "cowrie,ciscoasa,rdphoneypot"])
+
+    def test_an_unknown_type_is_the_scripts_own_usage_error(self):
+        """--types with a name this T-Pot runs no honeypot of: exit 1 with tpot's reason, nothing
+        handed over beyond the dry run that asked."""
+        with open(os.path.join(self.checkout, "tpot"), "w", encoding="utf-8") as out:
+            out.write('#!/bin/sh\n'
+                      '[ "$1" = setup ] && exit 0\n'
+                      'case " $* " in *" --dry-run "*nopot*|*nopot*" --dry-run "*)\n'
+                      '  echo "### [ERROR] - not a honeypot of this T-Pot: nopot (it runs cowrie)" >&2; exit 2 ;;\n'
+                      'esac\n'
+                      'printf "%s\\n" "$@" > "$STUB_ARGS"\n'
+                      'exit 7\n')
+        result = self.run_script(PIPELINE, "--types", "Cowrie,NoPot")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("--types: not a honeypot of this T-Pot: nopot (it runs cowrie)", result.stdout + result.stderr)
+        self.assertIsNone(self.handed())
+        result = self.run_script(PIPELINE, "--types", "Cowrie")
+        self.assertEqual(result.returncode, 7)
+        self.assertEqual(self.handed(), ["check", "pipeline", "--only", "cowrie"])
 
     def test_the_pipeline_test_options_still_parse(self):
         for argv, code in ((["--bogus"], 1), (["--types"], 1), (["--timeout", "soon"], 1), (["-h"], 0),

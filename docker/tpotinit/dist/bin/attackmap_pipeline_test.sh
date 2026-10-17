@@ -146,8 +146,12 @@ function fuPARSEARGS {
   fi
 }
 
+function fuLOWER { # the names in lower case (Cowrie, Ciscoasa as the Logstash types write them)
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 function fuCHECKTYPES { # the types this test knows (tpot check pipeline takes every honeypot)
-  myTYPES=${myTYPES//Ciscoasa/ciscoasa}
+  myTYPES=$(fuLOWER "$myTYPES")
   for t in ${myTYPES//,/ }; do
     fuKNOWN "$t" || { fuUI_ERROR "unknown type '$t' (known: $myKNOWNTYPES)"; exit 1; }
   done
@@ -161,13 +165,24 @@ function fuTPOT_READY {
 }
 function fuHANDOVER {
   local -a args=(check pipeline)
-  myTYPES=${myTYPES//Ciscoasa/ciscoasa}
+  local myANSWER="" myRC=0
+  myTYPES=$(fuLOWER "$myTYPES")
   [ "$myTYPES_SET" = 1 ] && args+=(--only "$myTYPES")
   [ "$myTIMEOUT_SET" = 1 ] && args+=(--timeout "$myTIMEOUT")
   [ "$myDRYRUN" = 1 ] && args+=(--dry-run)
   [ -n "$myBECOME_FILE" ] && args+=(--become-file "$myBECOME_FILE")
   [ "$myYES" = 1 ] && args+=(--yes)
   fuTPOT_READY || return 0
+  # a name of --types that is no honeypot of this T-Pot is a wrong option of this script (exit 1):
+  # the dry run of tpot check pipeline knows them (it holds nothing and writes nothing)
+  if [ "$myTYPES_SET" = 1 ]; then
+    myANSWER=$("$myTPOT" check pipeline --only "$myTYPES" --dry-run 2>&1 >/dev/null)
+    myRC=$?
+    if [ "$myRC" = 2 ] && printf '%s' "$myANSWER" | grep -q "not a honeypot of this T-Pot"; then
+      fuUI_ERROR "--types: $(printf '%s' "$myANSWER" | sed -n 's/.*\(not a honeypot of this T-Pot.*\)/\1/p' | head -1)"
+      exit 1
+    fi
+  fi
   exec "$myTPOT" "${args[@]}"
 }
 
