@@ -481,6 +481,9 @@ step_hold_over() {
   rm -f "${DATA_DIR}/ews/hold"
   wait_until 30 ack_absent || test_die "hold.ack is still there"
   test_ok "hold.ack is gone"
+  # the idle round of the end of the hold reads what is there when it runs; a line for the normal
+  # pass is written once that round is over
+  wait_until "$(pass_wait)" state_is normal || test_die "hold.state does not say normal after the hold"
 
   alerts="$(python3 "${CHECK}" count "${SINK_DIR}/posts")"
   cowrie_session c0ffee00b001 198.51.100.31 22 ssh
