@@ -1656,6 +1656,47 @@ class ProbesTest(unittest.TestCase):
         self.assertTrue(result.detail.endswith(f"{ports[2].published}/tcp: not reached (the 0.8 s of the probe ran out)"),
                         result.detail)
 
+    def test_ports_all_not_reached_are_never_closed(self):
+        ports = [Port(free_port(), 22), Port(free_port(), 23)]   # both would be refused
+        with mock.patch.object(probes, "PROBE_TIME_MAX", 0):
+            result = probes.PROBES["cowrie"]("127.0.0.1", ports, TOKEN)
+        self.assertEqual(result.state, "not_reached")
+        self.assertFalse(result.port_open)
+        self.assertEqual(result.not_reached, ports)
+        self.assertNotIn("closed", [state for _, state in result.port_states])
+        self.assertNotIn("not open", result.detail)
+
+    def test_a_connect_cut_short_by_the_cap_is_not_reached(self):
+        timeouts = []
+
+        def slow(address, timeout):
+            timeouts.append(timeout)
+            raise socket.timeout("timed out")
+
+        # 0.3 s left for the port, less than its 5 s connect time: not reached, not closed
+        with mock.patch.object(probes, "PROBE_TIME_MAX", 0.3), \
+                mock.patch.object(probes.socket, "create_connection", side_effect=slow):
+            result = probes.PROBES["cowrie"]("192.0.2.1", [Port(22, 22)], TOKEN)
+        self.assertLess(timeouts[0], probes.CONNECT_TIMEOUT)
+        self.assertEqual(result.state, "not_reached")
+        self.assertEqual(result.port_states, [(Port(22, 22), "not_reached")])
+        self.assertEqual(result.detail, "22/tcp: not reached (cut short: timed out)")
+        # the same time-out on the port's own full clock is closed; a refusal always is
+        with mock.patch.object(probes.socket, "create_connection", side_effect=slow):
+            self.assertEqual(probes.PROBES["cowrie"]("192.0.2.1", [Port(22, 22)], TOKEN).state, "closed")
+        with mock.patch.object(probes, "PROBE_TIME_MAX", 0.3), \
+                mock.patch.object(probes.socket, "create_connection", side_effect=ConnectionRefusedError()):
+            self.assertEqual(probes.PROBES["cowrie"]("192.0.2.1", [Port(22, 22)], TOKEN).state, "closed")
+
+    def test_the_state_of_a_result(self):
+        self.assertTrue(probes.ProbeResult("open", True, "").port_open)
+        for state in ("closed", "not_reached", "skipped"):
+            self.assertFalse(probes.ProbeResult(state, False, "").port_open, state)
+        with self.assertRaises(ValueError):
+            probes.ProbeResult(True, True, "")
+        with self.assertRaises(AttributeError):
+            probes.ProbeResult("open", True, "").port_open = False
+
     def test_dicom_without_dcmtk(self):
         sock = listening()
         self.addCleanup(sock.close)
@@ -1713,7 +1754,14 @@ class ProbesTest(unittest.TestCase):
         self.assertEqual(udp.received, b"")
         self.assertFalse(result.token_sent)
         self.assertTrue(result.port_open)
-        self.assertEqual(result.not_reached, [Port(udp.port, 5060, "udp")])
+        self.assertEqual(result.state, "open")
+        self.assertEqual(result.port_states, [(Port(server.port, 5060), "open"), (Port(udp.port, 5060, "udp"), "skipped")])
+        # only the UDP port published: left alone, never closed
+        only_udp = inventory.Honeypot("sentrypeer", "honeypots", "sentrypeer", [Port(udp.port, 5060, "udp")],
+                                      running=True, environment={"SENTRYPEER_PEER_TO_PEER": "0"})
+        result_udp = probes.probe(only_udp, "127.0.0.1", TOKEN)
+        self.assertEqual(result_udp.state, "skipped")
+        self.assertFalse(result_udp.port_open)
         reason = "P2P mode would share the probe's source with its peers"
         self.assertEqual(result.detail, f"{server.port}/tcp: port open, {reason}; "
                                         f"{udp.port}/udp: not probed, {reason}")
@@ -1762,7 +1810,7 @@ class RunProbesTest(unittest.TestCase):
 
         def fine(host, ports, token):
             calls.append((host, ports, token))
-            return probes.ProbeResult(True, True, "ok")
+            return probes.ProbeResult("open", True, "ok")
 
         def broken(host, ports, token):
             raise RuntimeError("boom")
@@ -1785,7 +1833,7 @@ class RunProbesTest(unittest.TestCase):
     def test_the_budget(self):
         def slow(host, ports, token):
             time.sleep(0.5)
-            return probes.ProbeResult(True, True, "ok")
+            return probes.ProbeResult("open", True, "ok")
 
         started = time.monotonic()
         found = probes.run_probes("127.0.0.1", [self.honeypot(str(n)) for n in range(4)], TOKEN, budget=0.2,
@@ -1803,7 +1851,7 @@ class RunProbesTest(unittest.TestCase):
             running.set()
             time.sleep(0.5)
             ended.set()
-            return probes.ProbeResult(True, True, "ok")
+            return probes.ProbeResult("open", True, "ok")
 
         probes.run_probes("127.0.0.1", [self.honeypot("a")], TOKEN, budget=0.05, probes={"a": slow})
         self.assertTrue(running.is_set())
@@ -1819,7 +1867,7 @@ class RunProbesTest(unittest.TestCase):
 
         def fine(host, ports, token):
             state["probed"] += 1
-            return probes.ProbeResult(True, True, "ok")
+            return probes.ProbeResult("open", True, "ok")
 
         with self.assertRaisesRegex(HoldError, "ended"):
             probes.run_probes("127.0.0.1", [self.honeypot(str(n)) for n in range(5)], TOKEN, workers=1,

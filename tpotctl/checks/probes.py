@@ -9,7 +9,7 @@ FROM, an SSH client banner, a command; binary protocols are found in the logs by
 of the probe (`ProbeResult.src_ports`).
 
 Every port of a probe has 5 s to connect and 10 s in all, a honeypot 10 s per port up to 60 s;
-a port the time of its honeypot did not reach is "not reached", never closed. `run_probes` has
+a port the time of its honeypot did not reach is "not reached", never closed (`ProbeResult.state`). `run_probes` has
 a budget for all probes. A refused or timed-out connection is a result (`port_open=False`), never
 an exception. The LLM honeypots (galah, beelzebub) are only knocked at: an answer would call the
 LLM.
@@ -40,7 +40,7 @@ TOKEN_PREFIX = "tpot-check-"
 _RUN_ID = re.compile(r"^[a-z0-9]{1,32}$")
 _TOKEN = re.compile(r"^tpot-check-[a-z0-9]{1,32}$")
 
-__all__ = ["EXTERNAL", "EXTERNAL_HINT", "PROBES", "ProbeResult", "run_probes", "token_for", "uncovered"]
+__all__ = ["EXTERNAL", "EXTERNAL_HINT", "PROBES", "ProbeResult", "STATES", "run_probes", "token_for", "uncovered"]
 
 
 def token_for(run_id: str) -> str:
@@ -51,19 +51,41 @@ def token_for(run_id: str) -> str:
     return TOKEN_PREFIX + run_id
 
 
+# The state of a port, and of a honeypot (its ports together):
+#   open         the connection was taken (UDP: an answer came)
+#   closed       a connect was refused, or timed out on the port's own, full clock
+#   not_reached  not tried, or cut short: the time of the honeypot or of the run ran out
+#   skipped      left alone on purpose (P2P mode, not running, no port, ...): the detail says why
+OPEN, CLOSED, NOT_REACHED, SKIPPED = "open", "closed", "not_reached", "skipped"
+STATES = (OPEN, CLOSED, NOT_REACHED, SKIPPED)
+
+
 @dataclass
 class ProbeResult:
-    port_open: bool         # every port that was tried took the connection (UDP: answered)
+    state: str              # see STATES: closed when one port is closed, open when the others are open
     answered: bool          # every port whose answer is checked answered as the honeypot should
     detail: str             # per port what happened
     answer_checked: bool = True   # False: only the ports were checked (e.g. DICOM without a client)
     token_sent: bool = False      # the token went into at least one request
     src_ports: List[int] = field(default_factory=list)  # the source ports of the probe
-    not_reached: List[Port] = field(default_factory=list)  # ports not tried: the time of the probe ran out
+    port_states: List[Tuple[Port, str]] = field(default_factory=list)  # every port and its state
+
+    def __post_init__(self) -> None:
+        if self.state not in STATES:
+            raise ValueError(f"state {self.state!r} is none of {', '.join(STATES)}")
+
+    @property
+    def port_open(self) -> bool:
+        """Stage 1: derived from the state only, so "not reached" never reads as closed."""
+        return self.state == OPEN
+
+    @property
+    def not_reached(self) -> List[Port]:
+        return [port for port, state in self.port_states if state == NOT_REACHED]
 
 
 class _NotTried(Exception):
-    """The port is left alone on purpose (the text says why): like a port not reached, never closed."""
+    """The port is left alone on purpose (the text says why): skipped, never closed."""
 
 
 class _NoAnswer(Exception):
@@ -73,10 +95,9 @@ class _NoAnswer(Exception):
 @dataclass
 class _Outcome:
     port: Port
-    open: bool
+    state: str
     answered: Optional[bool]    # None: not checked (port only)
     note: str
-    reached: bool = True        # False: a time cap ran out before the port was tried
 
 
 class _Clock:
@@ -704,42 +725,63 @@ class PortProbe:
         token_sent, src_ports = False, []
         for port in ports:
             if overall.left() <= 0:
-                outcomes.append(_Outcome(port, False, None, f"not reached (the {total:g} s of the probe ran out)",
-                                         reached=False))
+                outcomes.append(_Outcome(port, NOT_REACHED, None, f"not reached (the {total:g} s of the probe ran out)"))
                 continue
-            ctx = _Ctx(host, port, token, _Clock(min(PORT_TIME, overall.left())))
+            allotted = min(PORT_TIME, overall.left())
+            # a port whose clock the honeypot's cap cut below its own connect time had no full try
+            cut = allotted < min(CONNECT_TIMEOUT, PORT_TIME)
+            ctx = _Ctx(host, port, token, _Clock(allotted))
             try:
                 answered, note = self.handler_for(port)(ctx)
-                outcomes.append(_Outcome(port, ctx.opened, answered, note))
+                if ctx.opened:
+                    outcomes.append(_Outcome(port, OPEN, answered, note))
+                elif cut:   # a UDP answer that did not come within a cut-short clock
+                    outcomes.append(_Outcome(port, NOT_REACHED, None, f"not reached (cut short: {note})"))
+                else:       # a UDP answer that did not come within the port's own clock: timed out
+                    outcomes.append(_Outcome(port, CLOSED, answered, note))
             except _NotTried as exc:
-                outcomes.append(_Outcome(port, False, None, str(exc), reached=False))
+                outcomes.append(_Outcome(port, SKIPPED, None, str(exc)))
             except _NoAnswer as exc:
-                outcomes.append(_Outcome(port, ctx.opened, False, str(exc)))
+                outcomes.append(_Outcome(port, OPEN if ctx.opened else CLOSED, False, str(exc)))
             except (OSError, ValueError, struct.error, IndexError, UnicodeError) as exc:
-                text = _error_text(exc)
-                outcomes.append(_Outcome(port, ctx.opened, False, text if ctx.opened else f"not open: {text}"))
+                outcomes.append(_failed(port, exc, ctx.opened, cut))
             token_sent = token_sent or ctx.token_sent
             src_ports += ctx.src_ports
         return _combine(outcomes, token_sent, src_ports, self.note)
 
 
+def _failed(port: Port, exc: BaseException, opened: bool, cut: bool) -> _Outcome:
+    """A port whose handler failed: open when the connection had been taken; closed only when the
+    connect was refused, or timed out on the port's own full clock; not reached otherwise."""
+    text = _error_text(exc)
+    if opened:
+        return _Outcome(port, OPEN, False, text)
+    if isinstance(exc, ConnectionRefusedError) or (isinstance(exc, socket.timeout) and not cut):
+        return _Outcome(port, CLOSED, False, f"not open: {text}")
+    if isinstance(exc, socket.timeout):
+        return _Outcome(port, NOT_REACHED, None, f"not reached (cut short: {text})")
+    return _Outcome(port, NOT_REACHED, None, f"not tried: {text}")
+
+
 def _combine(outcomes: List[_Outcome], token_sent: bool, src_ports: List[int], note: str = "") -> ProbeResult:
     if not outcomes:
-        return ProbeResult(False, False, "no published port", answer_checked=False)
-    reached = [o for o in outcomes if o.reached]
-    checked = [o for o in reached if o.answered is not None]
+        return ProbeResult(SKIPPED, False, "no published port", answer_checked=False)
+    states = {o.state for o in outcomes}
+    # one closed port makes the honeypot closed; open when the others were tried and open;
+    # nothing but ports not reached / skipped is never closed
+    state = next(s for s in (CLOSED, OPEN, NOT_REACHED, SKIPPED) if s in states)
+    checked = [o for o in outcomes if o.state in (OPEN, CLOSED) and o.answered is not None]
     detail = "; ".join(f"{o.port}: {o.note}" for o in outcomes)
     if note:
         detail = f"{detail} ({note})"
     return ProbeResult(
-        # a port that was not reached is neither open nor closed: it is in not_reached
-        port_open=bool(reached) and all(o.open for o in reached),
+        state=state,
         answered=bool(checked) and all(o.answered for o in checked),
         detail=detail,
         answer_checked=bool(checked),
         token_sent=token_sent,
         src_ports=src_ports,
-        not_reached=[o.port for o in outcomes if not o.reached],
+        port_states=[(o.port, o.state) for o in outcomes],
     )
 
 
@@ -960,18 +1002,18 @@ def probe(honeypot: Honeypot, host: str, token: str,
     port or no probe says so in its result."""
     probes = PROBES if probes is None else probes
     if not honeypot.running:
-        return ProbeResult(False, False, f"not running (container {honeypot.container})", answer_checked=False)
+        return ProbeResult(SKIPPED, False, f"not running (container {honeypot.container})", answer_checked=False)
     if not honeypot.ports:
-        return ProbeResult(False, False, "no published port", answer_checked=False)
+        return ProbeResult(SKIPPED, False, "no published port", answer_checked=False)
     function = probes.get(honeypot.name)
     if function is not None:
         function = _variant(honeypot) or function
     if function is None:
-        return ProbeResult(False, False, "no probe for this honeypot", answer_checked=False)
+        return ProbeResult(SKIPPED, False, "no probe for this honeypot", answer_checked=False)
     try:
         return function(host, honeypot.ports, token)
     except Exception as exc:  # a probe must not end the check
-        return ProbeResult(False, False, f"probe failed: {_error_text(exc)}", answer_checked=False)
+        return ProbeResult(SKIPPED, False, f"probe failed: {_error_text(exc)}", answer_checked=False)
 
 
 def run_probes(host: str, honeypots: Iterable[Honeypot], token: str, budget: float = RUN_BUDGET,
@@ -990,8 +1032,8 @@ def run_probes(host: str, honeypots: Iterable[Honeypot], token: str, budget: flo
     end = time.monotonic() + budget
     stop = threading.Event()
     errors: List[BaseException] = []
-    late = ProbeResult(False, False, "not probed: the time for the probes ran out", answer_checked=False)
-    stopped = ProbeResult(False, False, "not probed: the check stopped", answer_checked=False)
+    late = ProbeResult(NOT_REACHED, False, "not probed: the time for the probes ran out", answer_checked=False)
+    stopped = ProbeResult(SKIPPED, False, "not probed: the check stopped", answer_checked=False)
 
     def one(honeypot: Honeypot) -> ProbeResult:
         if stop.is_set():
