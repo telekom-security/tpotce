@@ -535,6 +535,8 @@ fuROUND () {
       fi
       fuIDLE
       myRC=$?
+      # the state first: a check that reads hold.ack never finds a state of the round before
+      fuHOLD_STATE held
       case ${myRC} in
         0)
           fuHOLD_ACK
@@ -559,7 +561,6 @@ fuROUND () {
               fuHOLD_ACK "${myIDLE_FAILED# }"
           fi ;;
       esac
-      fuHOLD_STATE held
       return 0
   fi
   if [ -n "${myHELD}" ];

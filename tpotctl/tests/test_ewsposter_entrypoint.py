@@ -567,6 +567,19 @@ class RoundTest(EntrypointCase):
                 self.assertIn("-m wordpot", " ".join(box.calls()))
                 self.assertEqual([path.name for path in box.data.iterdir() if path.name.startswith("hold.ack.")], [])
 
+    def test_the_state_is_written_before_the_ack(self):
+        """A check that reads hold.ack never finds the state of the round before: hold.state says held
+        when hold.ack is written."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.hold.write_text("")
+                box.state.write_text("normal 1\n")
+                result = box.run(shell, f'fuHOLD_ACK () {{ cut -d" " -f1 "{box.state}" > "{box.base / "seen"}"; }}\n'
+                                        'myHELD=yes; fuROUND')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual((box.base / "seen").read_text(), "held\n")
+
     def test_clean_round_writes_an_empty_ack(self):
         for shell in SHELLS:
             with self.subTest(shell=shell):

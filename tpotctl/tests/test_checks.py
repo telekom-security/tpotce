@@ -1615,6 +1615,10 @@ class HptestUnderTheHoldTest(HoldFolder):
         # ciscoasa writes late: the hold lasts 70 s after the scans
         self.assertIn("Waiting 70 s for the last log lines", result.stdout)
         self.assertTrue(probes.write_hptest(check=True), "the probe table block of hptest.sh is not current")
+        # every variant of the probe table is in the block, with its own list
+        table = probes.hptest_table()
+        self.assertEqual(sorted(table["variants"]), sorted(probes.VARIANTS))
+        self.assertEqual(table["variants"]["sentrypeer"], {"env": "SENTRYPEER_PEER_TO_PEER", "skipped": "*"})
 
     def test_term_during_the_scan(self):
         env = self.env()

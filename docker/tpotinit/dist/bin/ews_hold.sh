@@ -342,7 +342,7 @@ finally:
     os.close(folder)' "${myEWS_HOLD_DIR}" 2>/dev/null
 }
 
-# The epoch seconds of the marker's mtime (0 when it cannot be read: as new)
+# The epoch seconds of the marker's mtime; the time now when it cannot be read (it counts as new)
 fuEWS_MARKER_AGE_BASE () {
   python3 -c 'import os, sys, time
 try:

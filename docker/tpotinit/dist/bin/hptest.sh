@@ -107,7 +107,7 @@ import json, sys
 # >>> probe table >>>
 # generated from tpotctl/checks/probes.py by python3 -m tpotctl.checks.probes --hptest
 skipped = {"beelzebub": "*", "conpot_IEC104": [["20000", "tcp"]], "conpot_beckhoff_cx": [["48898", "tcp"]], "conpot_kamstrup_382": [["1025", "tcp"]], "conpot_plc_modbus": [["502", "tcp"]], "ddospot": "*", "dionaea": [["20", "tcp"], ["42", "tcp"], ["69", "udp"], ["81", "tcp"]], "galah": "*"}
-variants = {"sentrypeer": "SENTRYPEER_PEER_TO_PEER"}
+variants = {"sentrypeer": {"env": "SENTRYPEER_PEER_TO_PEER", "skipped": "*"}}
 late = {"ciscoasa": 60, "ddospot": 60}
 # <<< probe table <<<
 config = json.load(sys.stdin)
@@ -115,14 +115,15 @@ left_out = set(sys.argv[1].split())
 tcp, udp = set(), set()
 wait = 0
 for name, service in (config.get("services") or {}).items():
-    if name in left_out or skipped.get(name) == "*":
-        continue
     environment = service.get("environment") or {}
-    if name in variants and variants[name] in environment:
+    leave = skipped.get(name) or []
+    if name in variants and variants[name]["env"] in environment:
+        leave = variants[name]["skipped"]
+    if name in left_out or leave == "*":
         continue
     scanned = False
     for port in service.get("ports") or []:
-        if [str(port.get("target") or ""), port.get("protocol") or "tcp"] in (skipped.get(name) or []):
+        if [str(port.get("target") or ""), port.get("protocol") or "tcp"] in leave:
             continue
         if port.get("host_ip") in ("127.0.0.1", "::1"):
             continue

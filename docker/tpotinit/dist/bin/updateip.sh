@@ -34,16 +34,27 @@ echo "$myBLACKHOLE_STATUS" >> /tmp/etc/issue
 echo "|" >> /tmp/etc/issue
 echo "\`----" >> /tmp/etc/issue
 echo >> /tmp/etc/issue
-tee /data/ews/conf/ews.ip << EOF
-[MAIN]
-ip = $myEXTIP
-EOF
-tee /data/tpot/etc/compose/elk_environment << EOF
-HONEY_UUID=$myUUID
-MY_EXTIP=$myEXTIP
-MY_INTIP=$myLOCALIP
-MY_HOSTNAME=$HOSTNAME
-EOF
+# the text on stdin into the file $1, in place (ews.ip is bind mounted: no rename) through an
+# O_NOFOLLOW descriptor: a link planted in its place is refused, never followed; truncated, written,
+# synced; a new file gets 0660
+# >>> write in place >>>
+myWRITE_IN_PLACE='import os, stat, sys
+data = sys.stdin.buffer.read()
+handle = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o660)
+try:
+    if not stat.S_ISREG(os.fstat(handle).st_mode):
+        sys.exit("no regular file: " + sys.argv[1])
+    os.ftruncate(handle, 0)
+    os.write(handle, data)
+    os.fsync(handle)
+finally:
+    os.close(handle)'
+# <<< write in place <<<
+printf '[MAIN]\nip = %s\n' "$myEXTIP" | python3 -c "${myWRITE_IN_PLACE}" /data/ews/conf/ews.ip \
+  || echo "# Warning: /data/ews/conf/ews.ip is a link or no regular file, it was not written."
+printf 'HONEY_UUID=%s\nMY_EXTIP=%s\nMY_INTIP=%s\nMY_HOSTNAME=%s\n' "$myUUID" "$myEXTIP" "$myLOCALIP" "$HOSTNAME" \
+  | python3 -c "${myWRITE_IN_PLACE}" /data/tpot/etc/compose/elk_environment \
+  || echo "# Warning: /data/tpot/etc/compose/elk_environment is a link or no regular file, it was not written."
 
 # never through a link (the folder is writable for the group tpot): opened with O_NOFOLLOW and
 # changed through that descriptor

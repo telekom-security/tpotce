@@ -1037,10 +1037,16 @@ SENTRYPEER_P2P = PortProbe({(5060, TCP): port_only(P2P_REASON), (5060, UDP): not
                            default=not_tried(P2P_REASON))
 
 
+# probes of a honeypot whose settings in the compose file ask for another one: name -> (the
+# environment key, the probe); hptest.sh takes the same (hptest_table)
+VARIANTS: Dict[str, Tuple[str, PortProbe]] = {"sentrypeer": ("SENTRYPEER_PEER_TO_PEER", SENTRYPEER_P2P)}
+
+
 def _variant(honeypot: Honeypot) -> Optional[Callable[[str, List[Port], str], ProbeResult]]:
     """Another probe for a honeypot whose settings in the compose file ask for it."""
-    if honeypot.name == "sentrypeer" and "SENTRYPEER_PEER_TO_PEER" in honeypot.environment:
-        return SENTRYPEER_P2P
+    found = VARIANTS.get(honeypot.name)
+    if found is not None and found[0] in honeypot.environment:
+        return found[1]
     return None
 
 
@@ -1140,16 +1146,20 @@ def hptest_table() -> Dict[str, object]:
     """What hptest.sh --nmap takes from the probe table: per honeypot the ports (inside the
     container) it leaves out, or "*" for all of them, and the environment key that makes a variant
     leave all of them out; the late writers and their seconds."""
+    def left_out(name: str, table: PortProbe) -> object:
+        if name in NMAP_LEAVE_OUT or getattr(getattr(table, "default", None), "leave_out", None):
+            return "*"
+        return sorted([str(target), protocol] for (target, protocol), handler in table.handlers.items()
+                      if getattr(handler, "leave_out", None))
+
     skipped: Dict[str, object] = {}
     for name, table in sorted(PROBES.items()):
-        if name in NMAP_LEAVE_OUT or getattr(getattr(table, "default", None), "leave_out", None):
-            skipped[name] = "*"
-            continue
-        ports = sorted([str(target), protocol] for (target, protocol), handler in table.handlers.items()
-                       if getattr(handler, "leave_out", None))
-        if ports:
-            skipped[name] = ports
-    return {"skipped": skipped, "variants": {"sentrypeer": "SENTRYPEER_PEER_TO_PEER"},
+        found = left_out(name, table)
+        if found:
+            skipped[name] = found
+    # a variant: with its environment key in the service, its own list instead
+    variants = {name: {"env": key, "skipped": left_out(name, table)} for name, (key, table) in sorted(VARIANTS.items())}
+    return {"skipped": skipped, "variants": variants,
             "late": {name: int(seconds) for name, seconds in sorted(LATE_WRITE.items())}}
 
 

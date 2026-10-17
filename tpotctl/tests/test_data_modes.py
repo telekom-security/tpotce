@@ -76,6 +76,40 @@ class ScriptsTest(unittest.TestCase):
         self.assertNotIn("\nchmod 660 /data/ews/conf/ews.ip", updateip)
         self.assertNotIn("\nchown tpot:tpot /data/ews/conf/ews.ip", updateip)
 
+    def test_updateip_writes_in_place_and_follows_no_link(self):
+        """ews.ip and elk_environment are written in place (ews.ip is bind mounted) through an
+        O_NOFOLLOW descriptor: the inode stays, a planted link is refused and its target unchanged."""
+        text = UPDATEIP.read_text()
+        code = re.search(r"^myWRITE_IN_PLACE='(.*?)'$", text, re.M | re.S).group(1)
+        self.assertNotIn("\ntee /data/", text)
+        with tempfile.TemporaryDirectory() as folder:
+            path, target, link = (os.path.join(folder, name) for name in ("ews.ip", "target", "elk_environment"))
+            with open(path, "w", encoding="utf-8") as out:
+                out.write("[MAIN]\nip = 192.0.2.1 and more text than the new one\n")
+            inode = os.stat(path).st_ino
+            with open(target, "w", encoding="utf-8") as out:
+                out.write("keep\n")
+            os.symlink(target, link)
+            result = subprocess.run([sys.executable, "-c", code, path], input=b"[MAIN]\nip = 198.51.100.7\n",
+                                    capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with open(path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "[MAIN]\nip = 198.51.100.7\n")
+            self.assertEqual(os.stat(path).st_ino, inode)
+            result = subprocess.run([sys.executable, "-c", code, link], input=b"MY_EXTIP=x\n", capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            with open(target, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "keep\n")
+            new = os.path.join(folder, "new")
+            subprocess.run([sys.executable, "-c", code, new], input=b"x\n", check=True)
+            self.assertEqual(oct(os.stat(new).st_mode & 0o777), oct(0o660 & ~self.umask()))
+
+    @staticmethod
+    def umask():
+        mask = os.umask(0)
+        os.umask(mask)
+        return mask
+
     def test_the_archive_modes_follow_no_link(self):
         """The archives that are there get 660 and the owner; a missing one says nothing, a link in
         place of one is left alone and so is its target."""
