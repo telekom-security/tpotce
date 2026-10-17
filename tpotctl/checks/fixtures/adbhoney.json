@@ -1,1 +1,1 @@
-{"eventid": "adbhoney.command.input", "input": "echo {token}", "src_ip": "{src_ip}", "timestamp": "{ts:%Y-%m-%dT%H:%M:%S.%fZ}", "unixtime": 1760689342, "session": "5a1e3b7c9d2f", "sensor": "adbhoney"}
+{"eventid": "adbhoney.session.connect", "src_ip": "{src_ip}", "src_port": {src_port}, "dest_ip": "172.18.0.2", "dest_port": "{dst_port}", "timestamp": "{ts:%Y-%m-%dT%H:%M:%S.%fZ}", "unixtime": 1760689342, "session": "5a1e3b7c9d2f", "sensor": "adbhoney"}

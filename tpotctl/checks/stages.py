@@ -9,8 +9,10 @@
                      address for conpot_ipmi (it logs the source port of an address's first contact)
     4 elasticsearch  the probe's event in logstash-* (127.0.0.1:64298)
     5 geoip          the injected geo event (a fixture with a fixed test IP): geoip.latitude, no
-                     _geoip_lookup_failure
+                     _geoip_lookup_failure; found by its test IP and marker port (or the token), by
+                     its test IP and type in the window where the honeypot logs no source port
     6 attack_map     the geo event on Redis (attack-map-production) and on the WebSocket of map_web
+                     (n/a for a honeypot that logs no destination port: map_data shows none)
     7 ewsposter      ewsposter confirmed the hold (hold.ack) during the run
 
 Each stage is ✓ ok, ✗ failed, – not applicable or · not reached (a stage before it failed or the
@@ -62,6 +64,9 @@ MAP_SKIPPED = "not shown by the Attack Map (map_data skips events indexed after 
 MAP_SILENT = "nothing came on Redis ({channel}) during the check: does map_data run? (docker logs map_data)"
 # the types the Attack Map leaves out (events.NOT_ATTACKS)
 NOT_ON_THE_MAP = ("Suricata", "P0f", "DdospotTarget")
+# honeypots that never log a destination port (dicompot: only the source in "Connection from"):
+# map_data drops an event without dest_port, so the Attack Map never shows them
+NO_DEST_PORT = ("dicompot",)
 REDIS_CHANNEL = "attack-map-production"
 
 
@@ -81,6 +86,9 @@ class GeoEvent:
     src_ip: str
     src_port: int
     file: str = ""          # the log it went to, relative to the data folder
+    # the honeypot logs a source port, so the event carries the marker port; without one it is
+    # found by its test IP and type in the window (the test IPs are the check's own)
+    marker: bool = True
     line: str = ""          # the line as it was appended ("" when nothing was written)
     es_id: str = ""
     es_index: str = ""
@@ -278,17 +286,16 @@ def probe_query(honeypot: Honeypot, result: ProbeResult, token: str, addresses: 
 
 def geo_query(logstash_type: str, event: GeoEvent, token: str, start: datetime,
               end: Optional[datetime] = None, with_token: bool = True) -> Dict[str, Any]:
-    """Stage 5: the injected event, by its test IP and its marker port (or the token)."""
-    should: List[Dict[str, Any]] = [{"term": {"src_port": event.src_port}}]
-    if with_token:
-        should.append(token_clause(token))
-    return {
-        "size": 1, "_source": SOURCE_FIELDS,
-        "query": {"bool": {
-            "filter": [{"term": {"type.keyword": logstash_type}}, {"term": {"src_ip.keyword": event.src_ip}},
-                       _window(start, end)],
-            "should": should, "minimum_should_match": 1}},
-    }
+    """Stage 5: the injected event, by its test IP and its marker port (or the token); by its test
+    IP and type in the window where the honeypot logs no source port."""
+    query: Dict[str, Any] = {"filter": [{"term": {"type.keyword": logstash_type}},
+                                        {"term": {"src_ip.keyword": event.src_ip}}, _window(start, end)]}
+    if event.marker:
+        should: List[Dict[str, Any]] = [{"term": {"src_port": event.src_port}}]
+        if with_token:
+            should.append(token_clause(token))
+        query.update(should=should, minimum_should_match=1)
+    return {"size": 1, "_source": SOURCE_FIELDS, "query": {"bool": query}}
 
 
 def first_hit(answer: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -340,9 +347,17 @@ def on_the_map(honeypot: Honeypot) -> bool:
     return honeypot.group != "nsm" and honeypot.logstash_type not in NOT_ON_THE_MAP
 
 
-def seen(lines: Iterable[str], src_ip: str, src_port: int) -> bool:
-    """An event of src_ip and src_port in the output of redis-cli SUBSCRIBE or the WebSocket."""
+def no_dest_port_text(name: str) -> str:
+    return f"the Attack Map shows only events with a destination port; {name} logs none"
+
+
+def seen(lines: Iterable[str], src_ip: str, src_port: Optional[int], honeypot: str = "") -> bool:
+    """An event of src_ip and src_port in the output of redis-cli SUBSCRIBE or the WebSocket; with
+    no src_port (a honeypot that logs none: map_data says 0) one of src_ip and the type `honeypot`."""
     ip = re.compile(rf'"src_ip":\s*"{re.escape(src_ip)}"')
+    if src_port is None:
+        kind = re.compile(rf'"honeypot":\s*"{re.escape(honeypot)}"')
+        return any(ip.search(line) and kind.search(line) for line in lines)
     port = re.compile(rf'"src_port":\s*"?{src_port}(?![0-9])')
     return any(ip.search(line) and port.search(line) for line in lines)
 
@@ -364,14 +379,16 @@ NEVER_DELETED = ("Suricata", "P0f")
 @dataclass
 class OwnEvents:
     """What a run sent, the only events its cleanup removes: (a) the token, (b) a test IP with the
-    marker port of its injection, (c) the probe source with a source port the probe recorded, each
-    within the types the run probed or injected."""
+    marker port of its injection (with its type alone where the honeypot logs no source port), (c)
+    the probe source with a source port the probe recorded, each within the types the run probed or
+    injected."""
     token: str
     source: str = ""                                            # the probe source, "" when ports do not survive
     probes: Dict[str, List[int]] = field(default_factory=dict)  # type -> source ports of its probes
     probed: List[str] = field(default_factory=list)             # every type a probe went to
     token_types: List[str] = field(default_factory=list)        # types whose events may carry the token
-    geos: List[tuple] = field(default_factory=list)             # (type, test IP, marker port)
+    # (type, test IP, marker port), the port None where the honeypot logs none (test IP and type then)
+    geos: List[tuple] = field(default_factory=list)
 
     @property
     def types(self) -> List[str]:
@@ -396,8 +413,11 @@ def cleanup_query(start: datetime, end: datetime, own: OwnEvents,
         should.append({"bool": {"filter": [{"terms": {"type.keyword": token_types}}, token_clause(own.token)]}})
     for name, ip, port in own.geos:
         if name in types:
-            should.append({"bool": {"filter": [kind(name), {"term": {"src_ip.keyword": ip}},
-                                               {"term": {"src_port": port}}]}})
+            # a test IP is never a real source: without a marker port its type and the window suffice
+            match = [kind(name), {"term": {"src_ip.keyword": ip}}]
+            if port is not None:
+                match.append({"term": {"src_port": port}})
+            should.append({"bool": {"filter": match}})
     if own.source:
         for name, ports in sorted(own.probes.items()):
             if name in types and ports:

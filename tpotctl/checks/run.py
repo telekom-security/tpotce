@@ -904,7 +904,8 @@ class Check:
         inventory (with a log) gets MARKER_PORT + n and the test IPs in turn."""
         names = sorted(h.name for h in self.honeypots if h.name in LOGS)
         index = names.index(name)
-        return GeoEvent(TEST_IPS[index % len(TEST_IPS)], stages.MARKER_PORT + index, fixtures.log_file(name))
+        return GeoEvent(TEST_IPS[index % len(TEST_IPS)], stages.MARKER_PORT + index, fixtures.log_file(name),
+                        marker="{src_port}" in fixtures.template(name))
 
     # -- the run --
 
@@ -929,7 +930,7 @@ class Check:
                                                        if h.running and not h.external})
             for honeypot in self.geo_targets():
                 event = self.geo_event(honeypot.name)
-                own.geos.append((honeypot.logstash_type, event.src_ip, event.src_port))
+                own.geos.append((honeypot.logstash_type, event.src_ip, event.src_port if event.marker else None))
             body = stages.cleanup_query(start, start, own)
             lines.append("cleanup (with the source ports of the probes besides): POST logstash-*/_delete_by_query "
                          + json.dumps(body))
@@ -1312,6 +1313,8 @@ class Check:
                         row.geo.location = stages.location(hit)
                     if not stages.on_the_map(honeypot):
                         row.set("attack_map", NOT_APPLICABLE, "the Attack Map does not show this type")
+                    elif honeypot.name in stages.NO_DEST_PORT:
+                        row.set("attack_map", NOT_APPLICABLE, stages.no_dest_port_text(honeypot.name))
                     elif not self.map_here():
                         row.set("attack_map", NOT_APPLICABLE, "no Attack Map in this edition")
                     elif row.state("geoip") != OK:
@@ -1324,8 +1327,9 @@ class Check:
                         map_lag[honeypot.name] = self._lag(hit)
             for honeypot in list(pending_map):
                 row = self.rows[honeypot.name]
-                redis = stages.seen(self.map.lines("redis"), row.geo.src_ip, row.geo.src_port)
-                ws = stages.seen(self.map.lines("ws"), row.geo.src_ip, row.geo.src_port)
+                port = row.geo.src_port if row.geo.marker else None
+                redis = stages.seen(self.map.lines("redis"), row.geo.src_ip, port, row.logstash_type)
+                ws = stages.seen(self.map.lines("ws"), row.geo.src_ip, port, row.logstash_type)
                 if redis and ws:
                     row.set("attack_map", OK, "on Redis and on the WebSocket")
                     pending_map.remove(honeypot)
@@ -1390,7 +1394,7 @@ class Check:
                 own.probes.setdefault(kind, []).extend(result.src_ports)
         for row in self.rows.values():
             if row.geo is not None and row.geo.line:
-                own.geos.append((row.logstash_type, row.geo.src_ip, row.geo.src_port))
+                own.geos.append((row.logstash_type, row.geo.src_ip, row.geo.src_port if row.geo.marker else None))
                 if "{token}" in fixtures.template(row.name):
                     own.token_types.append(row.logstash_type)
         own.probed = sorted(set(own.probed))

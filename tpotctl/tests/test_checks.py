@@ -2227,6 +2227,31 @@ class FixturesTest(unittest.TestCase):
                 self.assertIn(FIXTURE_IP, line)
                 self.assertTrue(TOKEN in line or str(FIXTURE_PORT) in line, name)
 
+    def test_elasticpot_writes_its_own_timestamp(self):
+        """ElasticPot writes `+00:00Z` (an offset and Z): the fixture keeps that format, so the
+        smoke test of the fixtures shows what Elasticsearch does with it (its known failure)."""
+        line = json.loads(render_fixture("elasticpot"))
+        self.assertEqual(line["timestamp"], "2026-10-17T08:15:42.123456+00:00Z")
+        with open(FIXTURE_SMOKE, encoding="utf-8") as handle:
+            smoke = handle.read()
+        self.assertIn('KNOWN = {"elasticpot": ("timestamp ", "ElasticPot timestamp, decision pending")}', smoke)
+
+    def test_the_ports_the_attack_map_needs(self):
+        """cowrie (every event of a session carries the ports) and adbhoney (its connect event) log
+        source and destination port; h0neytr4p and honeyaml log no source port, dicompot no
+        destination port (the check knows: GeoEvent.marker, stages.NO_DEST_PORT)."""
+        cowrie = json.loads(render_fixture("cowrie", dst_port=22))
+        self.assertEqual((cowrie["src_port"], cowrie["dst_port"], cowrie["eventid"]),
+                         (FIXTURE_PORT, 22, "cowrie.login.failed"))
+        adbhoney = json.loads(render_fixture("adbhoney", dst_port=5555))
+        self.assertEqual((adbhoney["src_port"], adbhoney["dest_port"], adbhoney["eventid"]),
+                         (FIXTURE_PORT, "5555", "adbhoney.session.connect"))
+        for name in ("h0neytr4p", "honeyaml"):
+            self.assertNotIn("{src_port}", fixtures.template(name))
+            self.assertIn("dest_port", fixtures.template(name))
+        self.assertNotIn("{dst_port}", fixtures.template("dicompot"))
+        self.assertEqual(stages.NO_DEST_PORT, ("dicompot",))
+
     def test_a_json_fixture_renders_valid_json(self):
         found = 0
         for name in fixtures.names():
@@ -2510,7 +2535,9 @@ class FakeListener:
     def lines(self, which):
         if which in self.world.map_missing:
             return []
-        return [json.dumps({"src_ip": d["_source"]["src_ip"], "src_port": d["_source"]["src_port"]})
+        # map_data publishes src_port 0 for an event without one, and the type as honeypot
+        return [json.dumps({"src_ip": d["_source"]["src_ip"], "src_port": d["_source"].get("src_port", 0),
+                            "honeypot": d["_source"]["type"]})
                 for d in self.world.es.docs if d["_source"]["src_ip"] in stages.TEST_IPS]
 
 
@@ -2594,9 +2621,12 @@ class World:
         self.order.append("inject")
         for row in self.check.rows.values():
             if row.geo is not None and row.geo.file == rel:
-                self.es.add({"type": row.logstash_type, "src_ip": row.geo.src_ip, "src_port": row.geo.src_port,
-                             "geoip": {"latitude": 37.751, "longitude": -97.822, "country_name": "United States"},
-                             "tags": [], "@timestamp": stages.iso(self.now())})
+                doc = {"type": row.logstash_type, "src_ip": row.geo.src_ip,
+                       "geoip": {"latitude": 37.751, "longitude": -97.822, "country_name": "United States"},
+                       "tags": [], "@timestamp": stages.iso(self.now())}
+                if row.geo.marker:          # the honeypot logs a source port
+                    doc["src_port"] = row.geo.src_port
+                self.es.add(doc)
 
     def run(self):
         report = self.check.run()
@@ -3227,6 +3257,38 @@ class RunTest(unittest.TestCase):
         self.assertEqual((row.state("log"), row.state("elasticsearch")), (stages.OK, stages.OK), row.stages)
         self.assertIn(41000, world.check.results["conpot_ipmi"].src_ports)
         self.assertNotIn(HOST, [d["_source"]["src_ip"] for d in world.es.docs if d["_source"].get("type") == "ConPot"])
+
+    def test_geo_events_without_ports(self):
+        """h0neytr4p logs no source port: its geo event is found by test IP and type, on the map by
+        test IP and type, removed by test IP and type in the window; dicompot logs no destination
+        port: the Attack Map can never show it (n/a)."""
+        world = self.world(("h0neytr4p", "dicompot", "cowrie"))
+        report = world.run()
+        rows = {row.name: row for row in report.rows}
+        self.assertFalse(rows["h0neytr4p"].geo.marker)
+        self.assertTrue(rows["dicompot"].geo.marker and rows["cowrie"].geo.marker)
+        self.assertEqual((rows["h0neytr4p"].state("geoip"), rows["h0neytr4p"].state("attack_map")),
+                         (stages.OK, stages.OK))
+        self.assertEqual((rows["dicompot"].state("attack_map"), rows["dicompot"].stages["attack_map"].detail),
+                         (stages.NOT_APPLICABLE,
+                          "the Attack Map shows only events with a destination port; dicompot logs none"))
+        self.assertEqual(rows["cowrie"].state("attack_map"), stages.OK)
+        self.assertEqual(report.exit_code, 0, rows)
+        # every test event is gone, the real attack stays
+        self.assertEqual([d["_source"]["src_ip"] for d in world.es.docs], [ATTACKER])
+        clause = {"bool": {"filter": [{"term": {"type.keyword": "H0neytr4p"}},
+                                      {"term": {"src_ip.keyword": rows["h0neytr4p"].geo.src_ip}}]}}
+        self.assertIn(clause, world.es.deletes[0]["query"]["bool"]["should"])
+
+    def test_the_geo_query_without_a_marker(self):
+        event = stages.GeoEvent("8.8.8.8", 51234, marker=False)
+        body = stages.geo_query("H0neytr4p", event, TOKEN, BASE)
+        self.assertNotIn("should", body["query"]["bool"])
+        self.assertIn({"term": {"src_ip.keyword": "8.8.8.8"}}, body["query"]["bool"]["filter"])
+        line = '{"src_ip": "8.8.8.8", "src_port": 0, "honeypot": "H0neytr4p"}'
+        self.assertTrue(stages.seen([line], "8.8.8.8", None, "H0neytr4p"))
+        self.assertFalse(stages.seen([line], "8.8.8.8", None, "Honeyaml"))
+        self.assertFalse(stages.seen([line], "8.8.8.8", 51234))
 
     def test_the_map_gets_the_time_map_data_needs(self):
         """A geo event in Elasticsearch that does not come on Redis fails MAP_WAIT seconds later, not

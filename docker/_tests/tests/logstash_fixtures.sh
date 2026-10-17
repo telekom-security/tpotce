@@ -25,8 +25,14 @@ Usage: $0 [options]
 Feed the sample event of every honeypot (tpotctl/checks/fixtures, rendered by
 tpotctl.checks.fixtures) through T-Pot's Logstash pipeline and check each event:
 the type of its input, no tag ending in "failure" (grok, json, csv, date, GeoIP),
-src_ip set, no columnNN field, the token or marker port of the check in it, the
-time of the event as @timestamp and a GeoIP location.
+src_ip set, no columnNN field, the token or marker port of the check in it (the
+marker port as src_port where the honeypot logs one), dest_port where the Attack
+Map needs it, a timestamp field Elasticsearch takes as a date, the time of the
+event as @timestamp and a GeoIP location.
+
+A known failure (KNOWN in check_events: a defect that waits for a decision) is
+named and does not fail the test; once it no longer fails, the test does, so
+the entry goes.
 
 The pipeline is docker/elk/logstash/dist/logstash.conf of this checkout with its
 inputs and filters as they are; the inputs read the files from the start and the
@@ -101,7 +107,7 @@ import secrets
 import sys
 from datetime import datetime, timedelta, timezone
 
-from tpotctl.checks import fixtures
+from tpotctl.checks import fixtures, stages
 
 repo, root, src_ip = sys.argv[1], sys.argv[2], sys.argv[3]
 data = os.path.join(root, "data")
@@ -121,7 +127,12 @@ for number, name in enumerate(fixtures.names()):
     os.chmod(path, 0o644)
     manifest[name] = {"path": "/data/" + rel, "type": fixtures.logstash_type(name), "src_ip": src_ip,
                       "marker": marker, "token": token,
-                      "second": ts.strftime("%Y-%m-%dT%H:%M:%S")}
+                      "second": ts.strftime("%Y-%m-%dT%H:%M:%S"),
+                      # the honeypot logs a source port: the marker port is its src_port
+                      "logs_src_port": "{src_port}" in fixtures.template(name),
+                      # map_data drops an event without dest_port (the check says n/a for these)
+                      "map": (fixtures.logstash_type(name) not in stages.NOT_ON_THE_MAP
+                              and name not in stages.NO_DEST_PORT)}
 for folder, _, _ in os.walk(data):
     os.chmod(folder, 0o755)
 with open(os.path.join(root, "manifest.json"), "w", encoding="utf-8") as handle:
@@ -234,7 +245,12 @@ for event in events:
         stray.append(event)
 
 COLUMN = re.compile(r"column\d+")
-failed = 0
+# a date Elasticsearch takes for a field that is mapped as date (dynamic date detection of
+# tpot-template.json: strict_date_optional_time): an offset Z, +HH:MM, +HHMM or +HH, not two of them
+ES_DATE = re.compile(r"^\d{4}(-\d{2}(-\d{2}(T\d{2}(:\d{2}(:\d{2}([.,]\d{1,9})?)?)?(Z|[+-]\d{2}(:?\d{2})?)?)?)?)?$")
+# failures known and waiting for a decision: honeypot -> (the start of its problem, why)
+KNOWN = {"elasticpot": ("timestamp ", "ElasticPot timestamp, decision pending")}
+failed = known = 0
 for name, want in sorted(manifest.items()):
     found = by_name.get(name, [])
     problems = []
@@ -255,10 +271,26 @@ for name, want in sorted(manifest.items()):
             problems.append("fields " + ", ".join(columns))
         if want["token"] not in text and event.get("src_port") != want["marker"]:
             problems.append(f"neither the token {want['token']} nor the marker port {want['marker']} in the event")
+        if want["logs_src_port"] and event.get("src_port") != want["marker"]:
+            problems.append(f"src_port {event.get('src_port')!r}, expected the marker port {want['marker']}")
+        if want["map"] and event.get("dest_port") is None:
+            problems.append("no dest_port (the Attack Map drops the event)")
+        stamp = event.get("timestamp")
+        if isinstance(stamp, str) and not ES_DATE.match(stamp):
+            problems.append(f"timestamp {stamp!r} is no date Elasticsearch takes (strict_date_optional_time)")
         if not str(event.get("@timestamp", "")).startswith(want["second"]):
             problems.append(f"@timestamp {event.get('@timestamp')!r}, the event says {want['second']}")
         if "geoip" not in event or "latitude" not in (event.get("geoip") or {}):
             problems.append("no geoip.latitude")
+    expected = KNOWN.get(name)
+    if expected:
+        matching = [problem for problem in problems if problem.startswith(expected[0])]
+        if matching and len(matching) == len(problems):
+            known += 1
+            print(f"[KNOWN] {name}: {expected[1]}: " + "; ".join(problems))
+            continue
+        if not matching:
+            problems.append(f"the known failure ({expected[1]}) no longer shows: remove it from KNOWN")
     if problems:
         failed += 1
         print(f"[FAIL] {name}: " + "; ".join(problems))
@@ -269,7 +301,8 @@ for name, want in sorted(manifest.items()):
 for event in stray:
     print("[FAIL] an event of no fixture (or of more than one): " + json.dumps(event, sort_keys=True)[:1500])
     failed += 1
-print(f"{len(manifest) - failed} of {len(manifest)} fixtures read cleanly")
+print(f"{len(manifest) - failed - known} of {len(manifest)} fixtures read cleanly"
+      + (f", {known} known failure(s)" if known else ""))
 sys.exit(1 if failed else 0)
 PY
 }
