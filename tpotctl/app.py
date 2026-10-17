@@ -20,11 +20,11 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import (Button, Checkbox, ContentSwitcher, DataTable, Footer, Input, Label, ListItem, ListView,
-                             OptionList, Static, TabbedContent, TabPane)
+                             OptionList, Static, Switch, TabbedContent, TabPane)
 from textual.widgets.option_list import Option
 
 from tpotctl.widgets import nav
-from tpotctl.widgets.nav import NavDataTable, NavInput, NavOptionList
+from tpotctl.widgets.nav import DialogTitle, NavDataTable, NavInput, NavModal, NavOptionList, NavScroll
 from tpotctl import glyphs, logo, ops, prefs, theme
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.commands import TpotCommands
@@ -192,6 +192,18 @@ class Backend:
 
     def check_data_loss(self, args: List[str]):
         return ops.check_data_loss(args)
+
+    def check_result(self):
+        """The last check (tpotctl.checks.run.read_result): None before the first, ResultError when it
+        cannot be read."""
+        from tpotctl.checks import run as trun
+        return trun.read_result()
+
+    def ews_state(self):
+        """(state, age) of the hold of ewsposter, ewshold.ews_state of the data folder."""
+        from tpotctl import system
+        from tpotctl.checks import ewshold
+        return ewshold.ews_state(system.data_path(ops.env_values(), REPO_DIR))
 
 
 class Runner:
@@ -1503,68 +1515,378 @@ class SensorsPane(Vertical):
 
 
 
-class ChecksPane(Vertical):
-    """Checks of a running T-Pot: probe the honeypots, test the Attack Map pipeline."""
+# the stages of a check on the Checks page: glyph and colour per state (tpotctl.checks.stages.STATES)
+CHECK_STATES = {"ok": ("stage_ok", "ok"), "failed": ("stage_failed", "error"), "n/a": ("stage_na", "ash"),
+                "not_reached": ("stage_not_reached", "mist")}
+CHECK_STATE_WORDS = {"ok": "ok", "failed": "failed", "n/a": "does not apply", "not_reached": "not reached"}
+NO_CHECK_YET = "No check has run yet."
+CHECK_UNREADABLE = "The last result cannot be read."
+
+
+def check_cell(state: str) -> Text:
+    glyph, colour = CHECK_STATES[state]
+    return Text(glyphs.g(glyph), style=f"bold {theme.color(colour)}" if state == "failed" else theme.color(colour),
+                justify="center")
+
+
+def check_when(stamp: str) -> str:
+    """A time of last.json (UTC, ISO) in the time of this host, to the minute; as it is if it is none."""
+    from datetime import datetime
+    try:
+        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return stamp
+    if moment.tzinfo is None:
+        return stamp
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+def check_cleanup_text(cleanup: Dict) -> Text:
+    """What the cleanup of a check did, as tpot check says it (cli.check_summary); values from last.json
+    stay plain text."""
+    text = Text()
+    state = cleanup.get("state")
+    if state == "done":
+        passes = cleanup.get("passes") or []
+        text.append(f"{glyphs.g('ok')} Removed {cleanup.get('deleted', 0)} test events from Elasticsearch"
+                    + (f" ({' + '.join(str(n) for n in passes)} in two passes)." if len(passes) > 1 else "."),
+                    style=theme.color("mist"))
+        if cleanup.get("left"):
+            text.append(f"\n{glyphs.g('warn')} {cleanup['left']} probe events could not be told apart from real "
+                        f"ones and stay; Kibana: ", style=theme.color("warn"))
+            text.append(cleanup.get("left_kibana") or "-", style=theme.color("glass"))
+    elif state == "kept":
+        text.append("The test events stay in Elasticsearch (no cleanup).", style=theme.color("mist"))
+    elif state == "skipped":
+        text.append("Nothing to clean up here: the events went to the HIVE.", style=theme.color("mist"))
+    elif state == "failed":
+        text.append(f"{glyphs.g('fail')} The test events are still in Elasticsearch: ", style=theme.color("error"))
+        text.append(cleanup.get("detail") or "-", style=theme.color("glass"))
+    return text
+
+
+def check_summary(result: Dict, sensor: bool) -> Text:
+    """The lines above the table: which check ran when, how it ended, the cleanup."""
+    text = Text()
+    what = "pipeline test" if result.get("mode") == "pipeline" else "check of the honeypots"
+    text.append(f"Last {what}: {check_when(result.get('started', ''))}", style=f"bold {theme.color('glass')}")
+    if result.get("host"):
+        text.append(" on ", style=theme.color("mist"))
+        text.append(result["host"], style=theme.color("glass"))
+    text.append("\n")
+    outcome = result.get("result")
+    failed = [row["name"] for row in result["honeypots"]
+              if any(stage["state"] == "failed" for stage in row["stages"].values())]
+    if outcome == "ok":
+        text.append(f"{glyphs.g('ok')} Every stage of every honeypot is ok.", style=f"bold {theme.color('ok')}")
+    elif outcome == "failed":
+        text.append(f"{glyphs.g('fail')} {len(failed)} honeypot(s) with a failed stage: ",
+                    style=f"bold {theme.color('error')}")
+        text.append(", ".join(failed) or "the cleanup", style=theme.color("glass"))
+    elif outcome == "hold failed":
+        text.append(f"{glyphs.g('fail')} Nothing was probed, ewsposter did not confirm its hold: ",
+                    style=f"bold {theme.color('error')}")
+        text.append(result.get("error") or "-", style=theme.color("glass"))
+    elif outcome == "cancelled":
+        text.append(f"{glyphs.g('warn')} The check was cancelled; the hold of ewsposter is lifted.",
+                    style=theme.color("warn"))
+    else:
+        text.append(f"{glyphs.g('fail')} The check ended with an error: ", style=f"bold {theme.color('error')}")
+        text.append(result.get("error") or "-", style=theme.color("glass"))
+    if result["ewsposter"].get("state") == "failed":
+        text.append(f"\n{glyphs.g('fail')} The hold of ewsposter: ", style=theme.color("error"))
+        text.append(result["ewsposter"].get("detail") or "-", style=theme.color("glass"))
+    cleanup = check_cleanup_text(result["cleanup"])
+    if cleanup.plain:
+        text.append("\n")
+        text.append_text(cleanup)
+    if sensor or result.get("tpot_type") == "SENSOR":
+        text.append("\nA SENSOR checks the port, the answer and the log line; the other stages: check on the HIVE.",
+                    style=theme.color("ash"))
+    if result["honeypots"]:
+        text.append("\nenter on a honeypot shows what each stage found and the Kibana link.",
+                    style=theme.color("ash"))
+    return text
+
+
+def check_detail(result: Dict, row: Dict) -> Text:
+    """The detail of one honeypot of a check: every stage with what it found, the ports, its log line and
+    event, the geo event, the Kibana link and the cleanup of the run. Everything from last.json is plain
+    text (Text.append, no markup)."""
+    text = Text()
+
+    def head(title: str) -> None:
+        text.append(f"\n{title}\n", style=f"bold {theme.color('magenta')}")
+
+    def pair(label: str, value: str, width: int = 16) -> None:
+        text.append(f"  {label:<{width}}", style=theme.color("ash"))
+        text.append(f"{value or '-'}\n", style=theme.color("glass"))
+
+    pair("Container", f"{row['container'] or row['name']}, " + ("running" if row["running"] else "not running"))
+    pair("Ports", ", ".join(row["ports"]))
+    pair("Logstash type", row["logstash_type"])
+    if row["external"]:
+        pair("Probed", "by its own tool, not by this check")
+    head("Stages")
+    titles = result["titles"]
+    width = max(len(titles[name]) for name in result["stages"]) + 2
+    for name in result["stages"]:
+        stage = row["stages"][name]
+        glyph, colour = CHECK_STATES[stage["state"]]
+        text.append(f"  {glyphs.g(glyph)} ", style=theme.color(colour))
+        text.append(f"{titles[name]:<{width}}", style=theme.color("glass"))
+        text.append(f"{stage['detail'] or CHECK_STATE_WORDS[stage['state']]}\n", style=theme.color("mist"))
+    head("Log line and event")
+    pair("Log line", row["log_line"])
+    pair("Elasticsearch", " / ".join(part for part in (row["es_index"], row["es_id"]) if part))
+    geo = row["geo"]
+    if geo is not None:
+        head("Geo event")
+        pair("Source", f"{geo['src_ip']}:{geo['src_port']}")
+        pair("Written to", geo["file"])
+        pair("Line", geo["line"] or "nothing was written")
+        pair("Elasticsearch", " / ".join(part for part in (geo["es_index"], geo["es_id"]) if part))
+        location = geo["location"]
+        pair("Location", ", ".join(f"{key} {value}" for key, value in location.items()))
+    head("Kibana")
+    text.append(f"  {result['kibana'] or '-'}\n", style=theme.color("glass"))
+    cleanup = check_cleanup_text(result["cleanup"])
+    if cleanup.plain:
+        head("Cleanup of this check")
+        for line in cleanup.split("\n"):
+            text.append("  ")
+            text.append_text(line)
+            text.append("\n")
+    return _trim(text)
+
+
+def _trim(text: Text) -> Text:
+    """Without the newline before the first heading and after the last line."""
+    plain = text.plain
+    start = len(plain) - len(plain.lstrip("\n"))
+    end = len(plain.rstrip("\n"))
+    return text[start:end]
+
+
+class CheckDetailDialog(NavModal):
+    """One honeypot of the last check: its stages and what they found; esc or Back closes it."""
+
+    BINDINGS = [Binding("escape", "close", "Back")]
+
+    def __init__(self, result: Dict, row: Dict):
+        super().__init__()
+        self.result, self.row = result, row
 
     def compose(self) -> ComposeResult:
-        yield Static("", id="checks-info", classes="info")
-        with Horizontal(classes="actions"):
-            yield NavInput(placeholder="host to probe", id="check-host", compact=True)
-            yield Button("Probe the honeypots", id="check-honeypots", variant="primary")
-        with Horizontal(classes="actions"):
-            yield Button("Test the Attack Map pipeline", id="check-pipeline")
-            yield Button("Dry run", id="check-pipeline-dry")
+        from rich.markup import escape
+        with Vertical(classes="dialog", id="check-detail") as dialog:
+            yield DialogTitle(escape(self.row["name"]))
+            with NavScroll():
+                yield Static(check_detail(self.result, self.row), id="check-detail-body")
+            with Horizontal(classes="actions"):
+                yield Button("Back", id="no")
+        dialog.border_subtitle = "esc back"
 
     def on_mount(self) -> None:
-        self.show()
+        self.query_one("#no", Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        self.dismiss(None)
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
+class ChecksPane(Vertical):
+    """Checks of a running T-Pot: tpot check honeypots / pipeline in the task screen, the stages of the last
+    check from last.json; the service requests and the nmap scan of hptest.sh as an extra."""
+
+    result = None           # the last check as run.result_view gives it, None without one
+    problem = ""            # why last.json cannot be read ("" when it can or there is none)
+    sensor = False
+    row_keys: Dict[str, Dict] = {}
+    columns_for = ()        # the stages the columns of the table were made for
+
+    def compose(self) -> ComposeResult:
+        # the table of the last check and the extra below it do not fit into 24 rows: the page scrolls
+        with NavScroll(id="checks-scroll"):
+            yield Static("", id="checks-info", classes="info")
+            yield Static("", id="check-hold")
+            with Horizontal(classes="actions check-switches"):
+                yield Switch(True, id="check-geo")
+                yield Label("Geo probe", classes="switch-state")
+                yield Switch(True, id="check-cleanup")
+                yield Label("Clean up afterwards", classes="switch-state")
+            # rows of their own: the three do not fit next to the menu at 80 columns
+            with Horizontal(classes="actions"):
+                yield Button("Check the honeypots", id="check-honeypots", variant="primary")
+                yield Button("Dry run", id="check-dry")
+            with Horizontal(classes="actions"):
+                yield Button("Test the Attack Map pipeline", id="check-pipeline")
+            yield Static("", id="check-summary")
+            yield NavDataTable(id="check-results", cursor_type="row", zebra_stripes=True)
+            yield Static("", id="check-extra", classes="info")
+            with Horizontal(classes="actions"):
+                yield NavInput(placeholder="host to probe", id="check-host", compact=True)
+                yield Button("Probe with nmap", id="check-nmap")
+
+    def on_mount(self) -> None:
+        self.row_keys = {}
         self.query_one("#check-host", Input).value = self.app.backend.host_address()
+        self.load()
+        # the state of ewsposter changes with a check started elsewhere (tpot check, hptest.sh)
+        self.set_interval(30, self.show_hold)
+
+    def load(self) -> None:
+        """REPAINT, on_mount, page_shown and the end of a task: last.json and the state of ewsposter anew."""
+        self.sensor = self.app.backend.tpot_type().upper() == "SENSOR"
+        try:
+            self.result, self.problem = self.app.backend.check_result(), ""
+        except Exception as err:            # noqa: BLE001 - a broken file is a line on the page, never a traceback
+            self.result, self.problem = None, str(err) or type(err).__name__
+        self.show()
 
     def show(self) -> None:
-        text = Text()
-        text.append("Probe the honeypots", style=f"bold {theme.color('glass')}")
-        text.append("  sends a few service requests and scans every published port with nmap (hptest.sh). Probe "
-                    "this host or another T-Pot; the probes show up in Kibana as attacks.\n\n",
-                    style=theme.color("mist"))
-        text.append("Test the Attack Map pipeline", style=f"bold {theme.color('glass')}")
-        text.append("  appends a test event with a fixed test IP to the log of every honeypot and follows it "
-                    "through Logstash, Elasticsearch and Redis to the WebSocket of the Attack Map (tpot check "
-                    "pipeline). ewsposter sends nothing meanwhile; the events are removed from Elasticsearch "
-                    "afterwards, the dry run only shows them.",
-                    style=theme.color("mist"))
-        self.query_one("#checks-info", Static).update(text)
+        info = Text()
+        info.append("Check the honeypots", style=f"bold {theme.color('glass')}")
+        info.append("  probes every honeypot of this T-Pot on the address of this host and follows it from the "
+                    "port through its answer, its log line, Elasticsearch and GeoIP to the Attack Map (tpot check "
+                    "honeypots). ewsposter sends nothing during the check, so real attacks of those minutes are "
+                    "not reported either. The geo probe writes one test event with a fixed test IP into the log "
+                    "of every honeypot; cleaning up removes the check's own events from Elasticsearch afterwards, "
+                    "the lines in the logs stay.\n\n", style=theme.color("mist"))
+        info.append("Test the Attack Map pipeline", style=f"bold {theme.color('glass')}")
+        info.append("  the test events only, without the probes (tpot check pipeline).", style=theme.color("mist"))
+        if self.sensor:
+            info.append("\n\nThis is a SENSOR: the check covers the port, the answer and the log line, the rest is "
+                        "checked on its HIVE.", style=theme.color("ash"))
+        self.query_one("#checks-info", Static).update(info)
+        self.query_one("#check-geo", Switch).disabled = self.sensor
+        self.query_one("#check-pipeline", Button).disabled = self.sensor
+        extra = Text()
+        extra.append("Probe with nmap", style=f"bold {theme.color('glass')}")
+        extra.append("  the service requests and the nmap scan of hptest.sh, of this T-Pot or another one; "
+                     "ewsposter of this host sends nothing meanwhile, the probes stay in Kibana.",
+                     style=theme.color("mist"))
+        self.query_one("#check-extra", Static).update(extra)
+        self.show_hold()
+        self.show_result()
+
+    def show_hold(self) -> None:
+        """What ewsposter says of its hold (<data>/ews/hold.state): stuck is a warning."""
+        try:
+            state, age = self.app.backend.ews_state()
+        except Exception:                   # noqa: BLE001 - the line only informs
+            state, age = "unknown", None
+        if state == "normal":
+            text = Text(f"{glyphs.g('ok')} ewsposter sends as usual.", style=theme.color("mist"))
+        elif state == "held":
+            text = Text(f"{glyphs.g('warn')} ewsposter is held: a check runs, nothing is sent meanwhile.",
+                        style=theme.color("warn"))
+        elif state == "stuck":
+            text = Text(f"{glyphs.g('warn')} ewsposter is stuck after a hold: it sends nothing until one of its "
+                        f"idle rounds ends cleanly (docker logs ewsposter says why).",
+                        style=f"bold {theme.color('warn')}")
+        else:
+            text = Text("ewsposter does not say how it is: it does not run here, or its state is older than two "
+                        "minutes.", style=theme.color("ash"))
+        self.query_one("#check-hold", Static).update(text)
+
+    def show_result(self) -> None:
+        table = self.query_one("#check-results", NavDataTable)
+        summary = self.query_one("#check-summary", Static)
+        result = self.result
+        if result is None or not result["honeypots"]:
+            if self.problem:
+                summary.update(Text(CHECK_UNREADABLE, style=theme.color("warn")))
+            elif result is None:
+                summary.update(Text(NO_CHECK_YET, style=theme.color("mist")))
+            else:
+                summary.update(check_summary(result, self.sensor))
+            self.row_keys = {}
+            table.clear()
+            table.display = False
+            return
+        summary.update(check_summary(result, self.sensor))
+        stages = tuple(result["stages"])
+        if stages != self.columns_for:
+            table.clear(columns=True)
+            table.add_column(Text("Honeypot"), key="name")
+            for name in stages:
+                table.add_column(Text(result["titles"][name]), key=name)
+            self.columns_for = stages
+        rows, self.row_keys = [], {}
+        for row in result["honeypots"]:
+            key, number = row["name"], 1
+            while key in self.row_keys:
+                number += 1
+                key = f"{row['name']} ({number})"
+            self.row_keys[key] = row
+            name = Text(row["name"], style=theme.color("glass" if row["running"] else "ash"))
+            rows.append((key, [name] + [check_cell(row["stages"][stage]["state"]) for stage in stages]))
+        table.display = True
+        table.sync_rows(rows)
 
     def enter(self) -> None:
-        self.query_one("#check-host", Input).focus()
+        self.query_one("#check-honeypots", Button).focus()
 
     def on_input_submitted(self, event) -> None:
         """enter in the host field: on to the probe, a second enter starts it."""
         if event.input.id == "check-host":
             event.stop()
-            self.query_one("#check-honeypots", Button).focus()
+            self.query_one("#check-nmap", Button).focus()
+
+    def on_data_table_row_selected(self, event) -> None:
+        if event.data_table.id != "check-results" or self.result is None:
+            return
+        event.stop()
+        row = self.row_keys.get(str(event.row_key.value))
+        if row is not None:
+            self.app.push_screen(CheckDetailDialog(self.result, row))
+
+    def check_command(self, what: str, dry_run: bool = False) -> List[str]:
+        """tpot check honeypots / pipeline with the switches: -y (the page asked), --no-geo, --keep."""
+        geo = self.query_one("#check-geo", Switch).value
+        cleanup = self.query_one("#check-cleanup", Switch).value
+        command = [LAUNCHER, "check", what, "--dry-run" if dry_run else "-y"]
+        if what == "honeypots" and not geo and not self.sensor:
+            command.append("--no-geo")
+        if not cleanup:
+            command.append("--keep")
+        return command
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         from tpotctl import cli
+        from tpotctl.checks import run as trun
         from tpotctl.screens.task import Task
-        if event.button.id == "check-honeypots":
+        button = event.button.id
+        if button == "check-nmap":
             host = self.query_one("#check-host", Input).value.strip()
-            # the service requests and the nmap scan of hptest.sh (tpot check honeypots is its own check)
-            self.app.run_task(Task(f"Probe the honeypots{' on ' + host if host else ''}",
+            # the service requests and the nmap scan of hptest.sh, under the hold of ewsposter
+            self.app.run_task(Task(f"Probe with nmap{' on ' + host if host else ''}",
                                    [cli.HPTEST, "--nmap"] + ([host] if host else []), cwd=os.path.expanduser("~"),
-                                   become="-B", done="The probes are through, Kibana shows them."))
-        elif event.button.id == "check-pipeline-dry":
-            self.app.run_task(Task("Attack Map pipeline, dry run", [cli.PIPELINE, "--dry-run"],
-                                   cwd=os.path.expanduser("~"), autostart=True))
-        elif event.button.id == "check-pipeline":
+                                   become="-B", done="The probes are through, Kibana shows them."),
+                              lambda _code: self.load())
+        elif button == "check-dry":
+            self.app.run_task(Task("Check the honeypots, dry run", self.check_command("honeypots", dry_run=True),
+                                   cwd=REPO_DIR, autostart=True), lambda _code: self.load())
+        elif button in ("check-honeypots", "check-pipeline"):
+            what = "honeypots" if button == "check-honeypots" else "pipeline"
+            options = trun.Options(keep=not self.query_one("#check-cleanup", Switch).value,
+                                   geo=self.query_one("#check-geo", Switch).value, geo_only=what == "pipeline")
+            title = "Check the honeypots" if what == "honeypots" else "Test the Attack Map pipeline"
+            command = self.check_command(what)
+            done = ("Every stage of every honeypot is ok." if what == "honeypots"
+                    else "Every test event reached the Attack Map.")
+
             def confirmed(yes: bool) -> None:
                 if yes:
-                    self.app.run_task(Task("Test the Attack Map pipeline", [cli.PIPELINE, "--yes"],
-                                           cwd=os.path.expanduser("~"), become="--become-file", autostart=True,
-                                           done="Every test event reached the Attack Map."))
-            from tpotctl.checks import run as trun
-            self.app.push_screen(ConfirmDialog(
-                "Inject test events into the honeypot logs?",
-                Text(trun.question(trun.Options(geo_only=True)), style=theme.color("glass")),
-                yes="Inject and test", no="Back"), confirmed)
+                    self.app.run_task(Task(title, command, cwd=REPO_DIR, become="--become-file", autostart=True,
+                                           done=done), lambda _code: self.load())
+            self.app.push_screen(ConfirmDialog(f"{title}?", Text(trun.question(options, self.sensor),
+                                                                  style=theme.color("glass")),
+                                               yes="Start the check", no="Back"), confirmed)
 
 
 class ElasticPane(Vertical):
@@ -2778,11 +3100,15 @@ class TpotApp(App):
 
     def page_shown(self, key: str) -> None:
         """A page comes into view: the pages that show .env read what changed meanwhile; the Elastic
-        page reads its status anew (unless a read is under way: one at a time, ElasticPane.load)."""
+        page reads its status anew (unless a read is under way: one at a time, ElasticPane.load), the
+        Checks page the last check and the state of ewsposter."""
         if key in CONFIG_PAGES:
             self.config_maybe_changed()
         if key == "elastic":
             for pane in self.query(ElasticPane):
+                pane.load()
+        if key == "checks":                     # a check run elsewhere (tpot check) meanwhile
+            for pane in self.query(ChecksPane):
                 pane.load()
 
     def setting_keys(self):

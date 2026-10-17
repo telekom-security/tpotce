@@ -69,6 +69,18 @@ if textual:
         def host_address(self):
             return "192.0.2.5"
 
+        # the Checks page: last.json (None: no check yet; an exception: it cannot be read) and hold.state
+        check_result_value = None
+        ews = ("normal", 4.0)
+
+        def check_result(self):
+            if isinstance(self.check_result_value, BaseException):
+                raise self.check_result_value
+            return self.check_result_value
+
+        def ews_state(self):
+            return self.ews
+
         def backup_infos(self):
             return [ops.BackupInfo("/b/new_tpot_backup.tar", "new_tpot_backup.tar", 2 ** 20, "regular",
                                    ["version: 24.04.2"], ["git", "config"]),
@@ -536,39 +548,6 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             text = str(app.query_one("#top-attackers").render())
         self.assertIn("203.0.113.7", text)
         self.assertIn("Netherlands", text)
-
-    async def test_checks_probe_the_honeypots(self):
-        FakeEngine.seen.clear()
-        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.2)
-            app.goto("checks")
-            await pilot.pause(0.2)
-            self.assertEqual(app.query_one("#check-host").value, "192.0.2.5")
-            await pilot.click("#check-honeypots")
-            await pilot.pause(0.3)
-            await pilot.click("#task-run")
-            await pilot.pause(0.4)
-        self.assertEqual(FakeEngine.seen, [[cli.HPTEST, "--nmap", "192.0.2.5"]])
-
-    async def test_checks_pipeline_asks_first(self):
-        FakeEngine.seen.clear()
-        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.2)
-            app.goto("checks")
-            await pilot.pause(0.2)
-            await pilot.click("#check-pipeline")
-            await pilot.pause(0.3)
-            self.assertIsInstance(app.screen, ConfirmDialog)
-            await pilot.click("#no")
-            await pilot.pause(0.2)
-            self.assertEqual(FakeEngine.seen, [])
-            await pilot.click("#check-pipeline")
-            await pilot.pause(0.3)
-            await pilot.click("#yes")
-            await pilot.pause(0.5)
-        self.assertEqual(FakeEngine.seen, [[cli.PIPELINE, "--yes"]])
 
     async def test_quit_waits_for_a_running_task(self):
         import threading
@@ -1936,6 +1915,288 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
 
 def flat(widget) -> str:
     return " ".join(str(widget.render()).split())
+
+
+def sample_check(**over):
+    """A last.json as tpot check honeypots writes it (run.Report), read back as the page reads it."""
+    import json
+    from datetime import datetime, timezone
+    from tpotctl.checks import run as trun, stages as tstages
+    cowrie = tstages.Row("cowrie", "honeypots", "cowrie", True, False, "Cowrie", ["22/tcp", "23/tcp"])
+    for name in tstages.STAGES:
+        cowrie.set(name, tstages.OK, f"{name} of cowrie")
+    cowrie.log_line = '{"eventid": "cowrie.session.connect", "src_ip": "192.0.2.5"}'
+    cowrie.es_id, cowrie.es_index = "abc123", "logstash-2026.10.17"
+    cowrie.geo = tstages.GeoEvent("8.8.8.8", 51234, "cowrie/log/cowrie.json", '{"src_ip": "8.8.8.8"}', "geo1",
+                                  "logstash-2026.10.17", {"lat": 37.75, "lon": -97.8, "country": "United States",
+                                                          "ip_rep": "known attacker"})
+    dionaea = tstages.Row("dionaea", "honeypots", "dionaea", True, False, "Dionaea", ["21/tcp"])
+    dionaea.set("port", tstages.OK, "21/tcp open")
+    dionaea.set("answer", tstages.FAILED, "no [bold]banner[/bold] in 10 s")
+    dionaea.set("log", tstages.NOT_APPLICABLE, "the knock left no trace")
+    glutton = tstages.Row("glutton", "honeypots", "glutton", False, True, "Glutton", [])
+    glutton.set("port", tstages.NOT_APPLICABLE, "not running")
+    report = trun.Report(run_id="20261017080000a1b2c3", token="tpot-check-20261017080000a1b2c3",
+                         started=datetime(2026, 10, 17, 8, 0, tzinfo=timezone.utc),
+                         ended=datetime(2026, 10, 17, 8, 4, tzinfo=timezone.utc), host="192.0.2.5",
+                         options={"only": [], "geo": True, "keep": False, "timeout": 90.0},
+                         rows=[cowrie, dionaea, glutton], exit_code=1, result="failed",
+                         ewsposter={"state": "held", "detail": ""},
+                         cleanup={"state": "done", "deleted": 12, "passes": [10, 2], "left": 3,
+                                  "left_kibana": "https://192.0.2.5:64297/kibana/app/discover#/?left",
+                                  "detail": ""},
+                         kibana="https://192.0.2.5:64297/kibana/app/discover#/?_g=(run)")
+    data = report.as_json()
+    data.update(over)
+    return trun.result_view(json.loads(json.dumps(data)))
+
+
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
+class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
+    """The Checks page: the switches, the question, tpot check in the task screen, the table of last.json."""
+
+    SIZE = (150, 50)
+
+    def setUp(self):
+        FakeEngine.seen.clear()
+        self.addCleanup(tapp.glyphs.set_mode, "unicode")
+
+    async def open(self, pilot, app):
+        await pilot.pause(0.2)
+        app.goto("checks")
+        await pilot.pause(0.3)
+        return app.query_one("#checks")
+
+    async def until(self, pilot, test):
+        for _ in range(40):
+            if test():
+                return
+            await pilot.pause(0.05)
+
+    async def test_no_check_yet(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertEqual(flat(app.query_one("#check-summary")), tapp.NO_CHECK_YET)
+            self.assertFalse(app.query_one("#check-results").display)
+            info = flat(app.query_one("#checks-info"))
+        for words in ("ewsposter sends nothing", "test event", "removes the check's own events", "tpot check"):
+            self.assertIn(words, info)
+        self.assertNotIn("RDPy", info)
+
+    async def test_a_result_that_cannot_be_read_is_one_line(self):
+        from tpotctl.checks import run as trun
+        for problem in (trun.ResultError("/x/last.json: no JSON"), RuntimeError("anything else")):
+            backend = FakeBackend()
+            backend.check_result_value = problem
+            app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+            async with app.run_test(size=self.SIZE) as pilot:
+                await self.open(pilot, app)
+                with self.subTest(problem=problem):
+                    self.assertEqual(flat(app.query_one("#check-summary")), tapp.CHECK_UNREADABLE)
+                    self.assertFalse(app.query_one("#check-results").display)
+
+    async def test_an_error_before_the_hold_shows_its_text(self):
+        backend = FakeBackend()
+        backend.check_result_value = sample_check(result="error", exit_code=1, honeypots=[],
+                                                  error="no address of this host found to probe")
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertIn("no address of this host found to probe", flat(app.query_one("#check-summary")))
+            self.assertFalse(app.query_one("#check-results").display)
+
+    async def test_the_table_has_a_row_per_honeypot_and_a_column_per_stage(self):
+        from tpotctl import theme
+        from tpotctl.checks import stages as tstages
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            self.assertTrue(table.display)
+            self.assertEqual([str(c.label) for c in table.ordered_columns],
+                             ["Honeypot"] + [tstages.TITLES[name] for name in tstages.STAGES])
+            self.assertEqual([row.key.value for row in table.ordered_rows], ["cowrie", "dionaea", "glutton"])
+            cells = table.get_row("dionaea")
+            self.assertEqual([cell.plain for cell in cells[1:4]], ["✓", "✗", "–"])
+            self.assertEqual(cells[4].plain, "·")
+            self.assertIn(theme.color("error"), str(cells[2].style))
+            self.assertEqual(str(cells[1].style), theme.color("ok"))
+            summary = flat(app.query_one("#check-summary"))
+        self.assertIn("1 honeypot(s) with a failed stage: dionaea", summary)
+        self.assertIn("Removed 12 test events from Elasticsearch (10 + 2 in two passes).", summary)
+        self.assertIn("3 probe events could not be told apart from real ones and stay; Kibana: "
+                      "https://192.0.2.5:64297/kibana/app/discover#/?left", summary)
+
+    async def test_the_glyphs_follow_the_icon_set(self):
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            app.set_icons("ascii")
+            await pilot.pause(0.3)
+            cells = app.query_one("#check-results").get_row("dionaea")
+            app.set_icons("unicode")            # set_icons saves the choice: the other tests take unicode
+        self.assertEqual([cell.plain for cell in cells[1:5]], ["+", "x", "-", "."])
+
+    async def test_a_reload_keeps_the_cursor_and_changes_only_the_cells(self):
+        from tpotctl.checks import stages as tstages
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            pane = await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            table.move_cursor(row=2)
+            later = sample_check()
+            later["honeypots"][2]["stages"]["port"]["state"] = tstages.OK
+            backend.check_result_value = later
+            cleared = []
+            table.clear = lambda *args, **kwargs: cleared.append(args)
+            pane.load()
+            await pilot.pause(0.2)
+            self.assertEqual(cleared, [])
+            self.assertEqual(table.cursor_row, 2)
+            self.assertEqual(table.get_row("glutton")[1].plain, "✓")
+
+    async def test_enter_on_a_row_shows_its_details(self):
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            table.focus()
+            table.move_cursor(row=0)
+            await pilot.press("enter")
+            await self.until(pilot, lambda: isinstance(app.screen, tapp.CheckDetailDialog))
+            self.assertIsInstance(app.screen, tapp.CheckDetailDialog)
+            body = app.screen.query_one("#check-detail-body").render().plain
+            self.assertEqual(app.screen.query_one("#check-detail").border_title, "cowrie")
+            for words in ("22/tcp, 23/tcp", "elasticsearch of cowrie", "Attack Map", "cowrie.session.connect",
+                          "logstash-2026.10.17 / abc123", "8.8.8.8:51234", "cowrie/log/cowrie.json",
+                          "country United States", "ip_rep known attacker",
+                          "https://192.0.2.5:64297/kibana/app/discover#/?_g=(run)",
+                          "Removed 12 test events", "3 probe events", "discover#/?left"):
+                self.assertIn(words, body)
+            await pilot.press("escape")
+            await pilot.pause(0.2)
+            self.assertNotIsInstance(app.screen, tapp.CheckDetailDialog)
+            table.focus()
+            table.move_cursor(row=1)
+            await pilot.press("enter")
+            await self.until(pilot, lambda: isinstance(app.screen, tapp.CheckDetailDialog))
+            body = app.screen.query_one("#check-detail-body").render().plain
+        self.assertIn("no [bold]banner[/bold] in 10 s", body)     # data, no markup
+        self.assertIn("not reached", body)
+
+    async def test_the_check_asks_first_and_runs_tpot_check_with_the_switches(self):
+        from tpotctl.checks import run as trun
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        loads = []
+        async with app.run_test(size=self.SIZE) as pilot:
+            pane = await self.open(pilot, app)
+            original = pane.load
+            pane.load = lambda: (loads.append(1), original())
+            self.assertTrue(app.query_one("#check-geo").value)
+            self.assertTrue(app.query_one("#check-cleanup").value)
+            await pilot.click("#check-honeypots")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertEqual(app.focused.id, "no")
+            self.assertEqual(app.screen.body.plain, trun.question(trun.Options()))
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertEqual(FakeEngine.seen, [])
+            app.query_one("#check-geo").value = False
+            app.query_one("#check-cleanup").value = False
+            await pilot.click("#check-honeypots")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertEqual(app.screen.body.plain, trun.question(trun.Options(keep=True, geo=False)))
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+            self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "check", "honeypots", "-y", "--no-geo", "--keep"]])
+            self.assertEqual(loads, [])
+            await pilot.click("#task-back")
+            await pilot.pause(0.3)
+        self.assertEqual(loads, [1])                # last.json anew after the task screen
+
+    async def test_the_task_takes_a_sudo_password_file(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        tasks = []
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            app.run_task = lambda task, then=None: tasks.append((task, then))
+            for button in ("#check-honeypots", "#check-pipeline"):
+                await pilot.click(button)
+                await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+                await pilot.click("#yes")
+                await pilot.pause(0.2)
+            await pilot.click("#check-dry")
+            await pilot.pause(0.2)
+        self.assertEqual([task.command for task, _then in tasks],
+                         [[tapp.LAUNCHER, "check", "honeypots", "-y"], [tapp.LAUNCHER, "check", "pipeline", "-y"],
+                          [tapp.LAUNCHER, "check", "honeypots", "--dry-run"]])
+        self.assertEqual([task.become for task, _then in tasks], ["--become-file", "--become-file", ""])
+        self.assertTrue(all(task.autostart and then is not None for task, then in tasks))
+
+    async def test_the_pipeline_asks_and_keeps_with_cleanup_off(self):
+        from tpotctl.checks import run as trun
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            app.query_one("#check-cleanup").value = False
+            await pilot.click("#check-pipeline")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertEqual(app.screen.body.plain, trun.question(trun.Options(keep=True, geo_only=True)))
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "check", "pipeline", "-y", "--keep"]])
+
+    async def test_probe_with_nmap_runs_hptest(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertEqual(app.query_one("#check-host").value, "192.0.2.5")
+            await pilot.click("#check-nmap")
+            await pilot.pause(0.3)
+            await pilot.click("#task-run")
+            await pilot.pause(0.4)
+        self.assertEqual(FakeEngine.seen, [[cli.HPTEST, "--nmap", "192.0.2.5"]])
+
+    async def test_a_sensor_checks_three_stages(self):
+        from tpotctl.checks import run as trun
+        app = tapp.TpotApp(backend=FakeBackend(kind="SENSOR"), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertNotIsInstance(app.query_one("#checks"), tapp.LockedPane)
+            self.assertTrue(app.query_one("#check-pipeline").disabled)
+            self.assertTrue(app.query_one("#check-geo").disabled)
+            self.assertIn("SENSOR", flat(app.query_one("#checks-info")))
+            await pilot.click("#check-honeypots")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertEqual(app.screen.body.plain, trun.question(trun.Options(), sensor=True))
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "check", "honeypots", "-y"]])
+
+    async def test_the_state_of_ewsposter(self):
+        from tpotctl import theme
+        for state, words, colour in (("normal", "sends as usual", "mist"), ("held", "is held", "warn"),
+                                     ("stuck", "is stuck after a hold", "warn"), ("unknown", "does not say", "ash")):
+            backend = FakeBackend()
+            backend.ews = (state, 10.0 if state != "unknown" else None)
+            app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+            async with app.run_test(size=self.SIZE) as pilot:
+                await self.open(pilot, app)
+                rendered = app.query_one("#check-hold").render()
+                with self.subTest(state=state):
+                    self.assertIn(words, rendered.plain)
+                    self.assertIn(theme.color(colour), str(rendered.spans))
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")

@@ -21,6 +21,8 @@ _UNICODE = {
     "pane_status": "⬢", "pane_edition": "⬢", "pane_settings": "⬢", "pane_users": "⬢",
     "pane_sensors": "⬢", "pane_images": "⬢", "pane_update": "⬢", "pane_llm": "⬢", "pane_checks": "⬢",
     "pane_elastic": "⬢",
+    # the stages of a check (Checks page): ok, failed, does not apply, not reached
+    "stage_ok": "✓", "stage_failed": "✗", "stage_na": "–", "stage_not_reached": "·",
 }
 
 _NERD = dict(_UNICODE, **{
@@ -44,6 +46,7 @@ _ASCII = {
     "pane_status": "*", "pane_edition": "*", "pane_settings": "*", "pane_users": "*",
     "pane_sensors": "*", "pane_images": "*", "pane_update": "*", "pane_llm": "*", "pane_checks": "*",
     "pane_elastic": "*",
+    "stage_ok": "+", "stage_failed": "x", "stage_na": "-", "stage_not_reached": ".",
 }
 
 SETS: Dict[str, Dict[str, str]] = {"unicode": _UNICODE, "nerd": _NERD, "ascii": _ASCII}

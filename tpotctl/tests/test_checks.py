@@ -2697,6 +2697,11 @@ class RunTest(unittest.TestCase):
         self.assertEqual(last["ewsposter"]["state"], "held")
         self.assertIn(TOKEN, last["kibana"])
         self.assertIn("2026-10-17T08:00:00.000Z", last["kibana"])
+        # the Checks page reads what the run wrote
+        view = run_checks.read_result(world.result_file)
+        self.assertEqual((view["result"], view["honeypots"][0]["name"], view["honeypots"][0]["stages"]["port"]),
+                         ("ok", "cowrie", {"state": "ok", "detail": "22/tcp: answered"}))
+        self.assertEqual(view["titles"], dict(stages.TITLES))
 
     def test_keep_leaves_the_events(self):
         world = self.world(("cowrie",), keep=True)
@@ -2987,6 +2992,7 @@ class RunTest(unittest.TestCase):
         last = world.last()
         self.assertEqual((last["result"], last["error"], last["honeypots"]),
                          ("error", "no address of this host found to probe", []))
+        self.assertEqual(run_checks.read_result(world.result_file)["error"], "no address of this host found to probe")
         self.assertNotIn("hold", world.order)
         world = self.world(("cowrie",), only=["nopot"])
         with self.assertRaises(run_checks.UsageError):
@@ -3084,6 +3090,102 @@ class RunTest(unittest.TestCase):
         self.assertTrue(any(line.startswith("cowrie geo event -> cowrie/log/cowrie.json: ") for line in lines))
         self.assertTrue(any("_delete_by_query" in line for line in lines))
         self.assertFalse(os.path.exists(world.result_file))
+
+
+class ResultViewTest(unittest.TestCase):
+    """last.json as the Checks page reads it: checked, every key in place, never a traceback."""
+
+    def setUp(self):
+        self.folder = tempfile.mkdtemp(prefix="tpot-last-")
+        self.addCleanup(shutil.rmtree, self.folder, ignore_errors=True)
+        self.path = os.path.join(self.folder, "last.json")
+
+    def report(self):
+        row = stages.Row("cowrie", "honeypots", "cowrie", True, False, "Cowrie", ["22/tcp"])
+        row.set("port", stages.OK, "22/tcp: answered")
+        row.geo = stages.GeoEvent("8.8.8.8", 51234, "cowrie/log/cowrie.json", "{}", location={
+            "lat": 1.5, "country": "United States", "ip_rep": ["known attacker", "mass scanner"]})
+        return run_checks.Report(run_id="r1", token="tpot-check-r1", rows=[row], result="ok",
+                                 cleanup={"state": "done", "deleted": 3, "passes": [2, 1], "left": 0, "detail": ""})
+
+    def write(self, data):
+        with open(self.path, "w", encoding="utf-8") as handle:
+            handle.write(data if isinstance(data, str) else json.dumps(data))
+
+    def test_no_check_yet(self):
+        self.assertIsNone(run_checks.read_result(self.path))
+
+    def test_what_the_run_writes(self):
+        run_checks.write_result(self.report(), self.path)
+        view = run_checks.read_result(self.path)
+        self.assertEqual(view["stages"], list(stages.STAGES))
+        cowrie = view["honeypots"][0]
+        self.assertEqual(cowrie["stages"]["port"], {"state": "ok", "detail": "22/tcp: answered"})
+        self.assertEqual(cowrie["stages"]["attack_map"]["state"], stages.NOT_REACHED)
+        self.assertEqual(cowrie["geo"]["location"], {"lat": "1.5", "country": "United States",
+                                                     "ip_rep": "known attacker, mass scanner"})
+        self.assertEqual(view["cleanup"], {"state": "done", "deleted": 3, "passes": [2, 1], "left": 0,
+                                           "left_kibana": "", "detail": ""})
+        self.assertEqual(view["options"], {"geo": True, "keep": False})
+
+    def test_a_stage_the_honeypot_does_not_name_is_not_reached(self):
+        data = self.report().as_json()
+        del data["honeypots"][0]["stages"]["log"]
+        self.write(data)
+        self.assertEqual(run_checks.read_result(self.path)["honeypots"][0]["stages"]["log"],
+                         {"state": stages.NOT_REACHED, "detail": ""})
+
+    def test_what_it_cannot_read(self):
+        good = self.report().as_json()
+
+        def changed(**over):
+            data = json.loads(json.dumps(good))
+            for path, value in over.items():
+                node = data
+                *parents, last = path.split("__")
+                for key in parents:
+                    node = node[int(key)] if isinstance(node, list) else node[key]
+                node[last] = value
+            return data
+        cases = {
+            "not JSON": "{",
+            "not UTF-8": b"\xff\xfe".decode("latin-1"),
+            "a list": [],
+            "another version": changed(version=2),
+            "a version as text": changed(version="1"),
+            "no stages": changed(stages=[]),
+            "stages twice": changed(stages=["port", "port"]),
+            "an unknown result": changed(result="maybe"),
+            "an exit code as text": changed(exit_code="0"),
+            "honeypots as an object": changed(honeypots={}),
+            "a honeypot without a name": changed(honeypots__0__name=""),
+            "an unknown state": changed(honeypots__0__stages__port={"state": "fine", "detail": ""}),
+            "a detail that is no text": changed(honeypots__0__stages__port={"state": "ok", "detail": 3}),
+            "a port that is an object": changed(honeypots__0__ports=[{}]),
+            "running as text": changed(honeypots__0__running="yes"),
+            "a geo port as text": changed(honeypots__0__geo={"src_ip": "8.8.8.8", "src_port": "1"}),
+            "a location of objects": changed(honeypots__0__geo={"src_ip": "8.8.8.8", "location": {"lat": {}}}),
+            "passes of text": changed(cleanup={"state": "done", "passes": ["1"]}),
+        }
+        for label, data in cases.items():
+            with self.subTest(case=label):
+                if label == "not UTF-8":
+                    with open(self.path, "wb") as handle:
+                        handle.write(b"\xff\xfe{")
+                else:
+                    self.write(data)
+                with self.assertRaises(run_checks.ResultError):
+                    run_checks.read_result(self.path)
+
+    def test_a_folder_or_a_huge_file(self):
+        os.mkdir(self.path)
+        with self.assertRaises(run_checks.ResultError):
+            run_checks.read_result(self.path)
+        os.rmdir(self.path)
+        run_checks.write_result(self.report(), self.path)
+        with mock.patch.object(run_checks, "RESULT_MAX", 10):
+            with self.assertRaises(run_checks.ResultError):
+                run_checks.read_result(self.path)
 
 
 class SignalsTest(unittest.TestCase):

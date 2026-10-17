@@ -569,6 +569,144 @@ def write_result(report: Report, path: Optional[str] = None) -> str:
     return path
 
 
+# the results last.json may name, and the most it may hold (the Checks page reads it whole)
+RESULTS = ("ok", "failed", "hold failed", "cancelled", "error")
+RESULT_MAX = 8 * 2 ** 20
+
+
+class ResultError(ValueError):
+    """last.json cannot be read, is of another version or not of its form."""
+
+
+def read_result(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """last.json as the Checks page shows it, checked and with every key in place (result_view);
+    None when no check has run yet."""
+    path = path or result_path()
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read(RESULT_MAX + 1)
+    except FileNotFoundError:
+        return None
+    except OSError as err:
+        raise ResultError(f"{path}: {err.strerror or err}") from None
+    if len(raw) > RESULT_MAX:
+        raise ResultError(f"{path}: larger than {RESULT_MAX} bytes")
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise ResultError(f"{path}: no JSON") from None
+    return result_view(data)
+
+
+def _form(test: bool, what: str) -> None:
+    if not test:
+        raise ResultError(f"no result of version {RESULT_VERSION}: {what}")
+
+
+def _text(data: Dict[str, Any], key: str, what: str) -> str:
+    value = data.get(key, "")
+    _form(isinstance(value, str), f"{what}{key}")
+    return value
+
+
+def _number(data: Dict[str, Any], key: str, what: str) -> int:
+    value = data.get(key, 0)
+    _form(isinstance(value, int) and not isinstance(value, bool), f"{what}{key}")
+    return value
+
+
+def _flag(data: Dict[str, Any], key: str, what: str) -> bool:
+    value = data.get(key, False)
+    _form(isinstance(value, bool), f"{what}{key}")
+    return value
+
+
+def _part(data: Dict[str, Any], key: str, what: str) -> Dict[str, Any]:
+    value = data.get(key)
+    value = {} if value is None else value
+    _form(isinstance(value, dict), f"{what}{key}")
+    return value
+
+
+def result_view(data: Any) -> Dict[str, Any]:
+    """A result as read from last.json, checked against version 1 of its form (ResultError if not):
+    a copy with every key the page uses, of the type it has there; a stage a honeypot does not name
+    is not_reached."""
+    _form(isinstance(data, dict), "no object")
+    _form(data.get("version") == RESULT_VERSION and isinstance(data.get("version"), int), "version")
+    names = data.get("stages")
+    _form(isinstance(names, list) and bool(names) and all(isinstance(n, str) and n for n in names)
+          and len(set(names)) == len(names), "stages")
+    titles = _part(data, "titles", "")
+    _form(all(isinstance(v, str) for v in titles.values()), "titles")
+    result = _text(data, "result", "")
+    _form(result in RESULTS, "result")
+    view: Dict[str, Any] = {key: _text(data, key, "") for key in
+                            ("run_id", "token", "mode", "started", "ended", "host", "tpot_type", "error",
+                             "kibana")}
+    view.update(version=RESULT_VERSION, result=result, exit_code=_number(data, "exit_code", ""),
+                stages=list(names), titles={name: titles.get(name) or name for name in names})
+    options = _part(data, "options", "")
+    view["options"] = {"geo": _flag(dict({"geo": True}, **options), "geo", "options."),
+                       "keep": _flag(options, "keep", "options.")}
+    ews = _part(data, "ewsposter", "")
+    view["ewsposter"] = {"state": _text(ews, "state", "ewsposter."), "detail": _text(ews, "detail", "ewsposter.")}
+    cleanup = _part(data, "cleanup", "")
+    passes = cleanup.get("passes", [])
+    _form(isinstance(passes, list) and all(isinstance(n, int) and not isinstance(n, bool) for n in passes),
+          "cleanup.passes")
+    view["cleanup"] = {"state": _text(cleanup, "state", "cleanup."), "deleted": _number(cleanup, "deleted", "cleanup."),
+                       "passes": list(passes), "left": _number(cleanup, "left", "cleanup."),
+                       "left_kibana": _text(cleanup, "left_kibana", "cleanup."),
+                       "detail": _text(cleanup, "detail", "cleanup.")}
+    rows = data.get("honeypots", [])
+    _form(isinstance(rows, list), "honeypots")
+    view["honeypots"] = [_row_view(row, names) for row in rows]
+    return view
+
+
+def _row_view(row: Any, names: List[str]) -> Dict[str, Any]:
+    _form(isinstance(row, dict), "a honeypot")
+    name = _text(row, "name", "honeypot.")
+    _form(bool(name), "honeypot.name")
+    what = f"{name}."
+    view: Dict[str, Any] = {key: _text(row, key, what) for key in
+                            ("name", "group", "container", "logstash_type", "log_line", "es_id", "es_index")}
+    view.update(running=_flag(row, "running", what), external=_flag(row, "external", what))
+    ports = row.get("ports", [])
+    _form(isinstance(ports, list) and all(isinstance(p, (str, int)) and not isinstance(p, bool) for p in ports),
+          f"{what}ports")
+    view["ports"] = [str(port) for port in ports]
+    found = _part(row, "stages", what)
+    view["stages"] = {}
+    for stage in names:
+        entry = found.get(stage)
+        if entry is None:
+            view["stages"][stage] = {"state": NOT_REACHED, "detail": ""}
+            continue
+        _form(isinstance(entry, dict), f"{what}stages.{stage}")
+        state = _text(entry, "state", f"{what}stages.{stage}.")
+        _form(state in stages.STATES, f"{what}stages.{stage}.state")
+        view["stages"][stage] = {"state": state, "detail": _text(entry, "detail", f"{what}stages.{stage}.")}
+    geo = row.get("geo")
+    if geo is None:
+        view["geo"] = None
+        return view
+    _form(isinstance(geo, dict), f"{what}geo")
+    view["geo"] = {key: _text(geo, key, f"{what}geo.") for key in ("src_ip", "file", "line", "es_id", "es_index")}
+    view["geo"]["src_port"] = _number(geo, "src_port", f"{what}geo.")
+    location = _part(geo, "location", f"{what}geo.")
+    shown = {}
+    for key, value in location.items():
+        # what Elasticsearch had: a number, a text, a list of them (ip_rep)
+        values = value if isinstance(value, list) else [value]
+        _form(all(isinstance(v, (str, int, float)) and not isinstance(v, bool) for v in values),
+              f"{what}geo.location.{key}")
+        shown[key] = ", ".join(str(v) for v in values)
+    view["geo"]["location"] = shown
+    return view
+
+
 # -- the run ------------------------------------------------------------------------------------
 
 class Check:
