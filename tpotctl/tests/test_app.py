@@ -160,6 +160,30 @@ if textual:
                     if (i.type, i.id) not in {(t, n) for t, n, _title, _why in refused}]
             return chosen, ko.Result(imported=done, errors=list(refused)), "/b/kibana_objects_20261016120000.ndjson"
 
+        # the old objects: two of earlier releases, the title of one with markup in it; _kibana_old a list
+        # of its own, _kibana_prune_failed the type:id Kibana refuses to remove
+        def kibana_old(self):
+            from tpotctl import kibana_objects as ko
+            return getattr(self, "_kibana_old", [
+                ko.Item("dashboard:o1", "dashboard", "o1", "Old board", "old"),
+                ko.Item("visualization:o2", "visualization", "o2", "[b]Old[/b] vis", "old")])
+
+        def kibana_prune_preview(self):
+            self.calls.append("kibana-prune-preview")
+            self.kibana_raise("prune-preview")
+            return self.kibana_old()
+
+        def kibana_prune(self, confirmed):
+            from tpotctl import kibana_objects as ko
+            self.calls.append(("kibana-prune", set(confirmed)))
+            self.kibana_raise("prune")
+            refused = getattr(self, "_kibana_prune_failed", set())
+            planned = [i for i in self.kibana_old() if i.key in confirmed]
+            return ko.Prune(planned, removed=[i for i in planned if i.key not in refused],
+                            failed=[(i, "Kibana at http://127.0.0.1:64296 answered 400") for i in planned
+                                    if i.key in refused],
+                            export_path="/b/kibana_objects_20261016120003.ndjson")
+
         def kibana_export(self):
             self.calls.append("kibana-export")
             self.kibana_raise("export")
@@ -2382,6 +2406,93 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
                           self.notes(app))
             self.assertGreater(backend.calls.count("kibana-exports"), before)       # the table read anew
 
+    async def test_prune_lists_the_old_objects_and_asks(self):
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            self.assertEqual(str(app.query_one("#kibana-prune").label), "Remove old T-Pot objects")
+            await self.press(pilot, app, "#kibana-prune")
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIs(app.focused, app.screen.query_one("#no"))
+            self.assertEqual(app.screen.title_text, "Remove 2 old T-Pot objects from Kibana?")
+            self.assertEqual(str(app.screen.query_one("#yes").label), "Remove")
+            body = self.body(app)
+            self.assertIn(cli.KIBANA_PRUNE_TEXT, body)
+            self.assertIn("Old board (dashboard:o1)", body)
+            self.assertIn("[b]Old[/b] vis (visualization:o2)", body)          # plain text, no markup
+            self.assertTrue(app.screen.query("NavScroll"))                    # a long list scrolls
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            self.assertEqual(self.kibana_calls(backend, "kibana-prune"),
+                             [("kibana-prune", {"dashboard:o1", "visualization:o2"})])
+            self.assertIsInstance(app.screen, ConfirmDialog)                    # the result
+            self.assertEqual(app.screen.title_text, "Old T-Pot objects")
+            result = self.body(app)
+            self.assertIn("2 old objects removed (export: /b/kibana_objects_20261016120003.ndjson).", result)
+            self.assertIn('removed: dashboard:o1 "Old board"', result)
+            self.assertFalse(app.screen.query("#yes"))
+        self.assertEqual(self.kibana_calls(backend, "kibana-update"), [])        # it imports nothing
+        self.assertEqual(self.kibana_calls(backend, "kibana-mode"), [])
+
+    async def test_prune_back_removes_nothing(self):
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            await self.press(pilot, app, "#kibana-prune")
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            await pilot.press("enter")                              # #no has the focus
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+            self.assertFalse(app.query_one("#kibana-prune").disabled)
+        self.assertEqual(self.kibana_calls(backend, "kibana-prune"), [])
+
+    async def test_prune_with_nothing_old_or_a_refusal(self):
+        backend = FakeBackend()
+        backend._kibana_old = []
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            await self.press(pilot, app, "#kibana-prune")
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+            self.assertIn(("Kibana holds no old T-Pot objects, nothing to remove.", "information"), self.notes(app))
+        self.assertEqual(self.kibana_calls(backend, "kibana-prune"), [])
+        backend = FakeBackend()
+        backend._kibana_prune_failed = {"dashboard:o1"}
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            await self.press(pilot, app, "#kibana-prune")
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            result = self.body(app)
+            self.assertIn("1 old object removed, 1 failed", result)
+            self.assertIn('not removed: dashboard:o1 "Old board" (Kibana at http://127.0.0.1:64296 answered 400)',
+                          result)
+
+    async def test_prune_errors_are_notes(self):
+        from tpotctl import kibana_objects as ko
+        for name, error, expected in (
+                ("prune-preview", ko.KibanaError("Kibana at http://127.0.0.1:64296 answered 503"),
+                 ("Kibana at http://127.0.0.1:64296 answered 503.", "error")),
+                ("prune", ko.KibanaError(ko.BUSY), (ko.BUSY[:1].upper() + ko.BUSY[1:] + ".", "warning")),
+                ("prune", ko.KibanaError("the export cannot be written into /b: full"),
+                 ("The export cannot be written into /b: full.", "error"))):
+            with self.subTest(name=name, error=str(error)):
+                backend = FakeBackend()
+                backend._kibana_errors = {name: error}
+                app = tapp.TpotApp(backend=backend, runner=Recorder())
+                async with app.run_test(size=self.SIZE) as pilot:
+                    await self.page(pilot, app)
+                    await self.press(pilot, app, "#kibana-prune")
+                    if name == "prune":
+                        await pilot.click("#yes")
+                        await pilot.pause(0.4)
+                    self.assertNotIsInstance(app.screen, ConfirmDialog)
+                    self.assertIn(expected, self.notes(app))
+                    self.assertFalse(app.query_one("#kibana-prune").disabled)
+
     async def test_restore_uses_the_chosen_export(self):
         backend = FakeBackend()
         app = tapp.TpotApp(backend=backend, runner=Recorder())
@@ -2452,7 +2563,7 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=self.SIZE) as pilot:
             await self.page(pilot, app)
             for name in ("#kibana-mode", "#kibana-mode-save", "#kibana-export", "#kibana-update",
-                         "#kibana-overwrite", "#kibana-restore"):
+                         "#kibana-overwrite", "#kibana-prune", "#kibana-restore"):
                 self.assertTrue(app.query_one(name).disabled, name)
             self.assertIn("no Kibana in this edition", flat(app.query_one("#kibana-status")))
             self.assertEqual(app.query_one("#kibana-exports").row_count, 0)
@@ -2478,7 +2589,7 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
                 await self.page(pilot, app)
                 await self.press(pilot, app, "#kibana-update", 0.3)
                 controls = ("#kibana-mode", "#kibana-mode-save", "#kibana-export", "#kibana-update",
-                            "#kibana-overwrite", "#kibana-restore")
+                            "#kibana-overwrite", "#kibana-prune", "#kibana-restore")
                 for name in controls:
                     self.assertTrue(app.query_one(name).disabled, name)
                 self.assertFalse(app.query_one("#elastic-set").disabled)       # the retention is a part of its own
@@ -2514,8 +2625,13 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
                 release.wait(5)
                 return plan
 
+            def kibana_prune_preview(self):
+                old = super().kibana_prune_preview()
+                release.wait(5)
+                return old
+
         for button, label in (("#kibana-update", "Update"), ("#kibana-overwrite", "Overwrite all"),
-                              ("#kibana-restore", "Restore")):
+                              ("#kibana-prune", "Remove old T-Pot objects"), ("#kibana-restore", "Restore")):
             with self.subTest(button=button):
                 release.clear()
                 backend = Slow()
@@ -2534,7 +2650,7 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
                 finally:
                     release.set()
                 self.assertEqual([c for c in backend.calls if isinstance(c, tuple) and c[0] in
-                                  ("kibana-update", "kibana-restore")], [])
+                                  ("kibana-update", "kibana-restore", "kibana-prune")], [])
 
     async def test_mode_select_saves_through_settings(self):
         from tpotctl.tests.test_cli_kibana import FakeSettings
@@ -2713,7 +2829,7 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
             app.query_one("#kibana-mode").value = "add"             # Save can take the focus
             await pilot.pause(0.2)
             for name in ("#kibana-mode", "#kibana-mode-save", "#kibana-export", "#kibana-update",
-                         "#kibana-overwrite", "#kibana-exports", "#kibana-restore"):
+                         "#kibana-overwrite", "#kibana-prune", "#kibana-exports", "#kibana-restore"):
                 with self.subTest(widget=name):
                     widget = app.query_one(name)
                     widget.focus()

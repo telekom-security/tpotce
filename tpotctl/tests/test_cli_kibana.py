@@ -90,7 +90,10 @@ class KibanaCliTest(unittest.TestCase):
 
     def test_the_parser_knows_the_commands_and_the_modes(self):
         parser = cli.build_parser()
-        self.assertEqual(parser.parse_args(["elastic", "import"]).mode, "update")
+        # left out it is update (_kibana_import), so that --prune can tell a --mode given with it
+        self.assertIsNone(parser.parse_args(["elastic", "import"]).mode)
+        args = parser.parse_args(["elastic", "import", "--prune", "--dry-run", "-y"])
+        self.assertEqual((args.prune, args.dry_run, args.yes, args.mode), (True, True, True, None))
         for mode in ("add", "update", "overwrite"):
             self.assertEqual(parser.parse_args(["elastic", "import", "--mode", mode]).mode, mode)
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as stop:
@@ -271,6 +274,102 @@ class KibanaCliTest(unittest.TestCase):
                     self.assertIn("another Kibana import is running (tpotinit or tpot elastic), try again in a "
                                   "minute", self.err.getvalue())
         self.assertEqual((self.kibana.requests, self.site.files()), ([], []))
+
+    # -- import --prune --------------------------------------------------------------------------
+
+    OLD = dash("old", "Old board")
+
+    def with_old(self):
+        """An object of an earlier release, unchanged, in Kibana; this release no longer ships it."""
+        self.site = Site(self, [self.A, self.B, self.C, self.D], old=[self.OLD_A, self.OLD])
+        self.kibana.store["dashboard:old"] = as_in_kibana(self.OLD)
+        self.site.record(NOW, "dashboard:old")
+
+    def test_prune_with_a_mode_is_a_usage_error(self):
+        self.with_old()
+        for mode in ("add", "update", "overwrite"):
+            with self.subTest(mode=mode):
+                self.assertEqual(self.run_cli("import", "--prune", "--mode", mode, "-y"), 2)
+                self.assertIn("--prune removes old objects and imports nothing, it takes no --mode",
+                              self.err.getvalue())
+        self.assertEqual((self.kibana.requests, self.asked), ([], []))
+
+    def test_prune_lists_asks_and_defaults_to_no(self):
+        self.with_old()
+        self.assertEqual(self.run_cli("import", "--prune"), 1)
+        self.assertEqual(self.asked, ["Remove 1 old T-Pot object from Kibana? [y/N] "])
+        text = self.text()
+        self.assertIn(cli.KIBANA_PRUNE_TEXT, text)
+        self.assertIn("Old board (dashboard:old)", text)
+        self.assertNotIn("(dashboard:d)", text)                  # yours
+        self.assertNotIn("(dashboard:a)", text)                  # shipped
+        self.assertIn("Nothing was changed.", text)
+        self.assertEqual((self.kibana.deletes(), self.kibana.imports(), self.site.files()), ([], [], []))
+        self.answers = [""]                                      # enter is no
+        self.assertEqual(self.run_cli("import", "--prune"), 1)
+        self.assertIn("dashboard:old", self.kibana.store)
+
+    def test_prune_removes_after_the_export_and_imports_nothing(self):
+        self.with_old()
+        self.answers = ["y"]
+        self.assertEqual(self.run_cli("import", "--prune"), 0)
+        self.assertNotIn("dashboard:old", self.kibana.store)
+        self.assertEqual(self.kibana.imports(), [])
+        self.assertEqual(self.body("a"), self.OLD_A["attributes"]["panelsJSON"])     # no update with it
+        files = self.site.files()
+        self.assertEqual(len(files), 1)
+        self.assertTrue(files[0].startswith("kibana_objects_"))
+        text = self.text()
+        self.assertIn(f"1 old object removed (export: {os.path.join(self.site.exports, files[0])}).", text)
+        self.assertIn('removed: dashboard:old "Old board"', text)
+        self.assertNotIn("dashboard:old", self.site.records())
+
+    def test_prune_dry_run_and_nothing_old(self):
+        self.with_old()
+        self.assertEqual(self.run_cli("import", "--prune", "--dry-run", terminal=False), 0)
+        self.assertIn("Old board (dashboard:old)", self.text())
+        self.assertIn("Nothing was changed (--dry-run).", self.text())
+        self.assertEqual((self.asked, self.kibana.deletes(), self.site.files()), ([], [], []))
+        del self.kibana.store["dashboard:old"]
+        self.assertEqual(self.run_cli("import", "--prune", terminal=False), 0)
+        self.assertIn("Kibana holds no old T-Pot objects, nothing to remove.", self.text())
+        self.assertEqual((self.asked, self.kibana.deletes(), self.site.files()), ([], [], []))
+
+    def test_prune_without_a_terminal_needs_yes(self):
+        self.with_old()
+        self.assertEqual(self.run_cli("import", "--prune", terminal=False), 2)
+        self.assertIn("--yes", self.err.getvalue())
+        self.assertEqual((self.asked, self.kibana.deletes(), self.site.files()), ([], [], []))
+        self.assertEqual(self.run_cli("import", "--prune", "-y", terminal=False), 0)
+        self.assertEqual(self.asked, [])
+        self.assertNotIn("dashboard:old", self.kibana.store)
+
+    def test_prune_names_what_kibana_refused_and_exits_1(self):
+        self.with_old()
+        self.kibana.refuse_delete = {"dashboard:old"}
+        self.assertEqual(self.run_cli("import", "--prune", "-y"), 1)
+        self.assertIn("0 old objects removed, 1 failed", self.text())
+        self.assertIn('not removed: dashboard:old "Old board" (Kibana at http://127.0.0.1:64296 answered 400',
+                      self.text())
+        self.assertIn("dashboard:old", self.site.records())
+
+    def test_prune_while_another_import_runs(self):
+        self.with_old()
+        os.makedirs(ko.state_dir(self.site.data), exist_ok=True)
+        hold = ("import fcntl, os, sys, time\n"
+                "handle = os.open(sys.argv[1], os.O_RDONLY | os.O_CREAT, 0o660)\n"
+                "fcntl.flock(handle, fcntl.LOCK_EX)\n"
+                "print('held', flush=True)\n"
+                "time.sleep(3)\n")
+        proc = subprocess.Popen([sys.executable, "-c", hold, ko.lock_path(self.site.data)],
+                                stdout=subprocess.PIPE, text=True)
+        self.addCleanup(proc.wait)
+        self.assertEqual(proc.stdout.readline().strip(), "held")
+        proc.stdout.close()
+        with mock.patch.object(ko, "LOCK_WAIT", 0.3):
+            self.assertEqual(self.run_cli("import", "--prune", "-y"), 1)
+        self.assertIn(ko.BUSY, self.err.getvalue())
+        self.assertEqual((self.kibana.deletes(), self.site.files()), ([], []))
 
     # -- restore --------------------------------------------------------------------------------
 

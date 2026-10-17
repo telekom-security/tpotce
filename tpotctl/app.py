@@ -167,6 +167,18 @@ class Backend:
         return ko.run_apply("overwrite" if overwrite else "update", data, objects, ops.kibana_export_dir(),
                             confirmed=confirmed)
 
+    def kibana_prune_preview(self):
+        """The old T-Pot objects in Kibana now (kibana_objects.prune_plan), before the question of Remove old
+        T-Pot objects."""
+        from tpotctl import kibana_objects as ko
+        return ko.prune_preview(*ops.kibana_dirs())
+
+    def kibana_prune(self, confirmed):
+        """kibana_objects.Prune of a removal of the old objects the question named (`confirmed`, type:id)."""
+        from tpotctl import kibana_objects as ko
+        data, objects = ops.kibana_dirs()
+        return ko.run_prune(data, objects, ops.kibana_export_dir(), confirmed)
+
     def kibana_export(self):
         """Every object into ~/tpot_backups: (path, count)."""
         from tpotctl import cli
@@ -1920,7 +1932,8 @@ class ChecksPane(Vertical):
 
 class ElasticPane(Vertical):
     """How long Elasticsearch keeps the events (TPOT_ES_RETENTION and the ILM policy tpot), and T-Pot's
-    Kibana objects: the mode TPOT_KIBANA_OBJECTS, Export, Update, Overwrite all and Restore."""
+    Kibana objects: the mode TPOT_KIBANA_OBJECTS, Export, Update, Overwrite all, Remove old T-Pot objects
+    and Restore."""
 
     status = None           # the elastic.Status the page shows, None before the first read or after an error
     busy = False            # a Set, Apply or Take over is under way: its buttons are disabled
@@ -1929,8 +1942,8 @@ class ElasticPane(Vertical):
     shows = 0               # the number of the latest show() begun, so that an older answer stays out
     shown = 0               # the number of the show() whose answer the page shows
     # the Kibana objects, the same in their own part: the cli.KibanaState shown, a job (Export, Update,
-    # Overwrite all, Restore, Save) under way, a read under way and one wanted after it, the reads begun
-    # and the one shown; the mode of .env as read last (empty is keep)
+    # Overwrite all, Remove old T-Pot objects, Restore, Save) under way, a read under way and one wanted
+    # after it, the reads begun and the one shown; the mode of .env as read last (empty is keep)
     kibana = None
     kibana_busy = False
     kibana_reading = False
@@ -1964,6 +1977,9 @@ class ElasticPane(Vertical):
                 yield Button("Export", id="kibana-export", disabled=True)
                 yield Button("Update", id="kibana-update", variant="primary", disabled=True)
                 yield Button("Overwrite all", id="kibana-overwrite", disabled=True)
+            # a row of its own: next to the three it does not fit at 80 columns
+            with Horizontal(classes="actions"):
+                yield Button(KIBANA_PRUNE_LABEL, id="kibana-prune", disabled=True)
             yield NavDataTable(id="kibana-exports", cursor_type="row", zebra_stripes=True, enter_goes_on=True)
             with Horizontal(classes="actions"):
                 yield Button("Restore", id="kibana-restore", disabled=True)
@@ -2164,7 +2180,7 @@ class ElasticPane(Vertical):
         none while a job runs; Save only for a mode other than the one of .env, Restore with an export."""
         state = self.kibana
         ready = state is not None and state.kibana and not self.kibana_busy
-        for name in ("#kibana-mode", "#kibana-export", "#kibana-update", "#kibana-overwrite"):
+        for name in ("#kibana-mode", "#kibana-export", "#kibana-update", "#kibana-overwrite", "#kibana-prune"):
             self.query_one(name).disabled = not ready
         self.query_one("#kibana-mode-save", Button).disabled = not (
             ready and self.kibana_mode is not None and self.chosen_mode() != self.kibana_mode)
@@ -2200,6 +2216,8 @@ class ElasticPane(Vertical):
             self.start_kibana(self.export_kibana())
         elif button in ("kibana-update", "kibana-overwrite"):
             self.start_kibana(self.ask_import(button == "kibana-overwrite"))
+        elif button == "kibana-prune":
+            self.start_kibana(self.ask_prune())
         elif button == "kibana-restore" and self.selected_export():
             self.start_kibana(self.ask_restore(self.selected_export()))
 
@@ -2311,6 +2329,39 @@ class ElasticPane(Vertical):
         self.kibana_result("Kibana objects", lines, not result.errors)
         await self.show_kibana()
 
+    async def ask_prune(self) -> None:
+        """Remove old T-Pot objects: the old objects of Kibana as it is now (kibana_objects.prune_plan), then
+        the question of tpot elastic import --prune, every one of them named; #no has the focus."""
+        import asyncio
+        from tpotctl import cli, kibana_objects as ko
+        try:
+            old = await asyncio.to_thread(self.app.backend.kibana_prune_preview)
+        except (ko.KibanaError, OSError) as err:
+            self.kibana_failed(err)
+            return
+        if not old:
+            self.app.notify("Kibana holds no old T-Pot objects, nothing to remove.", title="Kibana objects")
+            return
+        if another_screen(self.app, KIBANA_PRUNE_LABEL, "The list of the old Kibana objects is ready"):
+            return
+        text = Text("\n".join(cli.kibana_prune_lines(old)), style=theme.color("mist"))
+        confirmed = {item.key for item in old}
+        self.app.push_screen(ConfirmDialog(cli.kibana_prune_question(len(old)), text, yes="Remove", no="Back"),
+                             lambda yes: self.start_kibana(self.run_prune(confirmed)) if yes else None)
+
+    async def run_prune(self, confirmed) -> None:
+        import asyncio
+        from tpotctl import cli, kibana_objects as ko
+        try:
+            done = await asyncio.to_thread(self.app.backend.kibana_prune, confirmed)
+        except (ko.KibanaError, OSError) as err:
+            self.kibana_failed(err, "Not removed")
+            await self.show_kibana()
+            return
+        self.kibana_result("Old T-Pot objects", cli.kibana_result_lines(ko.prune_summary(done)),
+                           not done.failed and not done.problem)
+        await self.show_kibana()
+
     async def ask_restore(self, path: str) -> None:
         """Restore: the chosen export is read as the restore reads it, then the question of tpot elastic
         restore."""
@@ -2345,7 +2396,7 @@ class ElasticPane(Vertical):
         """What a run did, in a dialog; with another screen open a note instead: its first line and the
         objects Kibana refused (at most RESULT_REFUSED_SHOWN)."""
         if len(self.app.screen_stack) > 1:
-            refused = [line for line in lines[1:] if line.startswith("not imported:")]
+            refused = [line for line in lines[1:] if line.startswith(("not imported:", "not removed:"))]
             note = [lines[0]] + refused[:RESULT_REFUSED_SHOWN]
             if len(refused) > RESULT_REFUSED_SHOWN:
                 note.append(f"… and {len(refused) - RESULT_REFUSED_SHOWN} more")
@@ -2526,6 +2577,9 @@ def another_screen(app, button: str, done: str = "The check of the ILM policy is
     return True
 
 
+KIBANA_PRUNE_LABEL = "Remove old T-Pot objects"
+
+
 def kibana_modes():
     """(value, label, help) of the modes of TPOT_KIBANA_OBJECTS: the choices of env.schema.yml, whose help
     (the pros and cons) the Settings page shows as well."""
@@ -2540,8 +2594,9 @@ def kibana_info() -> Text:
     text = Text()
     text.append("Kibana objects", style=f"bold {theme.color('glass')}")
     text.append("  T-Pot's dashboards, visualizations and searches. Update brings in the ones of this release and "
-                "keeps the ones you changed, Overwrite all replaces those too, Restore brings an export back; each "
-                "asks first and runs once. An export always comes first (Manager: ~/tpot_backups, T-Pot: "
+                "keeps the ones you changed, Overwrite all replaces those too, Remove old T-Pot objects removes the "
+                "unchanged ones of earlier releases that this one no longer ships, Restore brings an export back; "
+                "each asks first and runs once. An export always comes first (Manager: ~/tpot_backups, T-Pot: "
                 "data/kibana_objects/exports). The mode is what T-Pot does on every start.",
                 style=theme.color("mist"))
     return text

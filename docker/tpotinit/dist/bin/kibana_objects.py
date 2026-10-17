@@ -26,6 +26,10 @@ advanced settings. tpotinit runs them:
     python3 kibana_objects.py first --data DIR --objects DIR --exports DIR [--kibana URL]
     python3 kibana_objects.py mark-fresh --data DIR      tpotinit's first run, before /data/uuid
 
+Objects of earlier releases that this one no longer ships stay in Kibana: only the T-Pot
+Manager removes them, and only when you ask (`tpot elastic import --prune`, prune_plan and
+run_prune); tpotinit never does.
+
 The first import (`<data>/kibana_objects/pending`) takes the whole shipped file on its
 first attempt, the advanced settings only on a fresh install; its retries take only what
 mode update would, so they never touch what you changed. Every attempt is counted before
@@ -59,6 +63,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 import zipfile
@@ -105,7 +110,12 @@ SEARCH_DEAD = ("hits", "version")
 
 
 class KibanaError(Exception):
-    """A file, an answer or a manifest that cannot be used; the text says which and why."""
+    """A file, an answer or a manifest that cannot be used; the text says which and why. `status` is the
+    HTTP status of an answer of Kibana, None for anything else (also no answer at all)."""
+
+    def __init__(self, *args, status: Optional[int] = None):
+        super().__init__(*args)
+        self.status = status
 
 
 def key(obj: dict) -> str:
@@ -854,7 +864,8 @@ def _request(method: str, path: str, url: str, opener: Optional[Callable], data:
         finally:
             error.close()
         body = " ".join(body.split())[:200]
-        raise KibanaError(f"Kibana at {url} answered {error.code}" + (f": {body}" if body else "")) from None
+        raise KibanaError(f"Kibana at {url} answered {error.code}" + (f": {body}" if body else ""),
+                          status=error.code) from None
     except (OSError, http.client.HTTPException) as error:    # no connection, a timeout, a broken answer
         raise KibanaError(f"Kibana at {url} is not reachable ({getattr(error, 'reason', error)})") from None
 
@@ -1258,7 +1269,7 @@ class Item:
     type: str
     id: str
     title: str
-    action: str          # new, update, current or yours
+    action: str          # new, update, current or yours; old in prune_plan
 
 
 _MODE_ACTIONS = {"keep": (), "add": ("new",), "update": ("new", "update"),
@@ -1413,6 +1424,110 @@ def run_restore(path: str, data_dir: str, export_dir: str, opener: Optional[Call
         records.drop(result.keys())
         records.save()
     return export_path, result
+
+
+# ---------------------------------------------------------------------------
+# the objects of earlier releases: removed only when you ask (the T-Pot Manager)
+# ---------------------------------------------------------------------------
+
+def prune_plan(installed: List[dict], shipped_objs: List[dict], manifest: Dict[str, Set[str]],
+               records: Optional[Dict[str, str]] = None) -> List[Item]:
+    """The objects of earlier releases that Kibana still holds (action "old"), sorted by type, title and id.
+
+    Listed is only an object whose type:id is in the manifest and not in the shipped file, and whose
+    content is one of the versions T-Pot shipped (its hash in the manifest: nobody changed it). Never
+    listed are the advanced settings, an object you changed or made, one this release ships, and an old
+    one that an object staying in Kibana refers to (its references): removing it would break that
+    object, so it stays, and so does what it refers to. `records` widen nothing: an object whose hash is
+    no shipped version stays, whatever the record of T-Pot's imports says."""
+    ours = {key(o) for o in shipped_objs}
+    old = {}
+    for obj in installed:
+        name = key(obj)
+        if obj["type"] in SKIP_TYPES or name in ours or name not in manifest:
+            continue
+        if digest(obj) in manifest[name]:
+            old[name] = obj
+    while old:
+        wanted = set()
+        for obj in installed:
+            if key(obj) not in old:
+                for ref in obj.get("references") or []:
+                    if isinstance(ref, dict):
+                        wanted.add(f"{ref.get('type')}:{ref.get('id')}")
+        held = wanted & set(old)
+        if not held:
+            break
+        for name in held:
+            del old[name]
+    items = [Item(name, obj["type"], obj["id"], _title(obj), "old") for name, obj in old.items()]
+    return sorted(items, key=lambda i: (i.type, i.title.lower(), i.id))
+
+
+def prune_preview(data_dir: str, objects_dir: str, opener: Optional[Callable] = None, url: str = KIBANA_URL,
+                  timeout: int = TIMEOUT) -> List[Item]:
+    """prune_plan for Kibana as it is now, for the question; nothing is written."""
+    records, manifest, shipped_objs = _local(data_dir, objects_dir)
+    installed = _export(url, opener, allow_empty=True, timeout=timeout)[1]
+    return prune_plan(installed, shipped_objs, manifest, records.objects)
+
+
+@dataclass
+class Prune:
+    """What run_prune did: the objects it was to remove, those Kibana removed (or that were gone already),
+    those it did not remove with the reason, the export before it, and a record that cannot be written."""
+    planned: List[Item]
+    removed: List[Item] = field(default_factory=list)
+    failed: List[Tuple[Item, str]] = field(default_factory=list)
+    export_path: str = ""
+    problem: str = ""
+
+
+def _delete(item: Item, url: str, opener: Optional[Callable]) -> None:
+    path = "/api/saved_objects/{}/{}".format(urllib.parse.quote(item.type, safe=""),
+                                             urllib.parse.quote(item.id, safe=""))
+    _request("DELETE", path, url, opener)
+
+
+@_one_at_a_time
+def run_prune(data_dir: str, objects_dir: str, export_dir: str, confirmed: Set[str],
+              opener: Optional[Callable] = None, now: Optional[float] = None, url: str = KIBANA_URL,
+              prefix: str = EXPORT_PREFIX) -> Prune:
+    """Removes the objects of prune_plan that `confirmed` names (the type:id of the question), under the
+    lock: an object the plan no longer lists (changed, or referred to since the question) stays, and one
+    it lists anew is not removed without a question.
+
+    The export comes first (into `export_dir`); without it nothing is removed. Then one DELETE of
+    /api/saved_objects/<type>/<id> per object, without force: an object shared into other spaces is
+    refused by Kibana and stays. A 404 counts as removed (it is gone). Without an answer of Kibana the
+    rest is not tried. The record entries of what was removed go, those of what failed stay."""
+    records, manifest, shipped_objs = _local(data_dir, objects_dir)
+    text, installed = _export(url, opener, allow_empty=True)
+    done = Prune([i for i in prune_plan(installed, shipped_objs, manifest, records.objects) if i.key in confirmed])
+    if not done.planned:
+        return done
+    done.export_path = save_export(text, export_dir, prefix, now)
+    for number, item in enumerate(done.planned):
+        try:
+            _delete(item, url, opener)
+        except KibanaError as error:
+            if error.status == 404:
+                done.removed.append(item)
+                continue
+            if error.status is None:          # no answer: the next ones would not get one either
+                done.failed += [(i, str(error)) for i in done.planned[number:]]
+                break
+            done.failed.append((item, str(error)))
+            continue
+        done.removed.append(item)
+    gone = [i.key for i in done.removed if i.key in records.objects]
+    if gone:
+        records.drop(gone)
+        try:
+            records.save()
+        except KibanaError as error:
+            done.problem = str(error)
+    return done
 
 
 # The first import is pending until every shipped object is in Kibana. `pending` holds
@@ -1648,6 +1763,22 @@ def summary(mode: str, chosen: Plan, result: Result, export_path: str = "") -> L
     if export_path:
         line += f" (export: {export_path})"
     return [line] + _error_lines(result)
+
+
+def prune_summary(done: Prune) -> List[str]:
+    """One line of what run_prune did, then one line per object it removed and per object it did not."""
+    if not done.planned:
+        return [f"{LOG}nothing removed, Kibana holds none of the listed old objects any more as they were"]
+    line = f"{LOG}{len(done.removed)} old {'object' if len(done.removed) == 1 else 'objects'} removed"
+    if done.failed:
+        line += f", {len(done.failed)} failed"
+    if done.export_path:
+        line += f" (export: {done.export_path})"
+    lines = [line] + [f'{LOG}removed: {i.key} "{i.title}"' for i in done.removed]
+    lines += [f'{LOG}not removed: {i.key} "{i.title}" ({why})' for i, why in done.failed]
+    if done.problem:
+        lines.append(f"{LOG}warning: {done.problem}")
+    return lines
 
 
 def restore_summary(export_path: str, result: Result) -> List[str]:

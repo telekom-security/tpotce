@@ -79,13 +79,19 @@ def build_parser() -> argparse.ArgumentParser:
     kibana_export.add_argument("file", nargs="?", metavar="FILE",
                                help="write the export to FILE instead, a new file (mode 0600)")
     kibana_import = elastic_actions.add_parser("import", help="import T-Pot's Kibana objects as a mode of "
-                                                              "TPOT_KIBANA_OBJECTS does, an export first")
-    kibana_import.add_argument("--mode", choices=KIBANA_IMPORT_MODES, default="update",
+                                                              "TPOT_KIBANA_OBJECTS does, an export first; "
+                                                              "--prune removes old ones instead")
+    kibana_import.add_argument("--mode", choices=KIBANA_IMPORT_MODES, default=None,
                                help="add: only the missing ones; update (default): the missing and the unchanged "
                                     "ones, yours stay; overwrite: all of them, yours too (asks first)")
-    kibana_import.add_argument("--dry-run", action="store_true", help="only show what the mode would import")
+    kibana_import.add_argument("--prune", action="store_true",
+                               help="import nothing, remove the objects of earlier releases that this one no longer "
+                                    "ships and nobody changed (asks first, an export first); not with --mode")
+    kibana_import.add_argument("--dry-run", action="store_true",
+                               help="only show what the mode would import (with --prune: what it would remove)")
     kibana_import.add_argument("-y", "--yes", action="store_true",
-                               help="do not ask before overwrite replaces objects of yours (the export keeps them)")
+                               help="do not ask before overwrite replaces objects of yours or --prune removes old "
+                                    "objects (the export keeps them)")
     kibana_restore = elastic_actions.add_parser("restore", help="import every object of an export, the advanced "
                                                                 "settings too, after a new export")
     kibana_restore.add_argument("file", metavar="FILE", help="the export, i.e. one in ~/tpot_backups")
@@ -597,9 +603,48 @@ def _kibana_export(args, console) -> int:
     return 0
 
 
+KIBANA_PRUNE_TEXT = ("These objects of earlier T-Pot releases are in Kibana: this release no longer ships them, "
+                     "nobody changed them and nothing that stays refers to them. An export comes first, a restore "
+                     "of it brings them back.")
+
+
+def kibana_prune_question(count: int) -> str:
+    return f"Remove {_objects(count, 'old T-Pot objects')} from Kibana?"
+
+
+def kibana_prune_lines(old) -> List[str]:
+    """The text of the question of --prune and of Remove old T-Pot objects: why these, then every one of them
+    (title, type:id), none left out."""
+    return [KIBANA_PRUNE_TEXT] + [f"  {item.title} ({item.key})" for item in old]
+
+
+def _kibana_prune(args, values, console) -> int:
+    """tpot elastic import --prune: the old objects (kibana_objects.prune_plan), the question (default no),
+    then kibana_objects.run_prune with the objects it named; it imports nothing."""
+    from tpotctl import kibana_objects as ko
+    data, objects = ops.kibana_dirs(env=values)
+    old = ko.prune_preview(data, objects)
+    if not old:
+        say.ok("Kibana holds no old T-Pot objects, nothing to remove.", console.file)
+        return 0
+    for line in kibana_prune_lines(old):
+        console.print(line, markup=False)
+    if args.dry_run:
+        say.info("Nothing was changed (--dry-run).", console.file)
+        return 0
+    if not confirm(kibana_prune_question(len(old)), args.yes):
+        say.info("Nothing was changed.", console.file)
+        return 1
+    done = ko.run_prune(data, objects, ops.kibana_export_dir(), {item.key for item in old})
+    _kibana_result(ko.prune_summary(done), not done.failed and not done.problem, console)
+    return 1 if done.failed or done.problem else 0
+
+
 def _kibana_import(args, values, console) -> int:
     from tpotctl import kibana_objects as ko
-    mode = args.mode
+    if args.prune:
+        return _kibana_prune(args, values, console)
+    mode = args.mode or "update"
     data, objects = ops.kibana_dirs(env=values)
     confirmed = None
     if args.dry_run or mode == "overwrite":
@@ -659,6 +704,10 @@ def run_elastic(args) -> int:
     if getattr(args, "adopt", False) and getattr(args, "value", None):
         error("--adopt takes the value of the ILM policy tpot, it takes no VALUE: "
               "tpot elastic retention --adopt, or tpot elastic retention VALUE")
+        return 2
+    if getattr(args, "prune", False) and getattr(args, "mode", None):
+        error("--prune removes old objects and imports nothing, it takes no --mode: "
+              "tpot elastic import --prune, or tpot elastic import --mode MODE")
         return 2
     ops.require_linux_host("tpot elastic")
     current = tsettings.load()
