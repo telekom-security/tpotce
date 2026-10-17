@@ -729,6 +729,39 @@ class EwsHoldShellTest(HoldFolder):
         self.assertIn("rc=0\nPROBE\nMARKER\n", result.stdout, result.stderr)
         self.assertIn("ewsposter is not running", result.stdout)
 
+    def test_a_signal_to_the_group_keeps_the_lock_until_the_end_of_the_hold(self):
+        with FakeEwsposter(self.ews):
+            process = self.start_cli("sleep", "30", myEWS_HOLD_SETTLE="3")
+            self.wait_for(lambda: os.path.isfile(self.marker) and os.path.isfile(self.ack))
+            os.killpg(process.pid, signal.SIGTERM)
+            time.sleep(1)
+            self.assertIsNone(process.poll())
+            self.assertTrue(os.path.isfile(self.marker))
+            self.assertFalse(self.lock_is_free(), "the lock was freed while the trap still ended the check")
+            out, err = process.communicate(timeout=30)
+        self.assertEqual(process.returncode, 143, out + err)
+        self.assertFalse(os.path.exists(self.marker))
+        self.assertTrue(self.lock_is_free())
+
+    def test_a_link_or_fifo_as_the_state_is_unknown(self):
+        state = os.path.join(self.ews, "hold.state")
+        target = os.path.join(self.data, "state")
+        with open(target, "w", encoding="utf-8") as out:
+            out.write(f"stuck {int(time.time())}\n")
+        for kind in ("link", "fifo"):
+            with self.subTest(kind=kind):
+                if os.path.lexists(state):
+                    os.unlink(state)
+                if kind == "link":
+                    os.symlink(target, state)
+                else:
+                    os.mkfifo(state)
+                start = time.monotonic()
+                result = self.begin(myEWS_HOLD_TIMEOUT="0")
+                self.assertLess(time.monotonic() - start, 10)
+                self.assertIn("hold.state is missing or older than", result.stderr)
+                self.assertNotIn("says stuck", result.stderr)
+
     def test_a_fifo_as_the_lock_is_refused_at_once(self):
         os.mkfifo(self.lock)
         start = time.monotonic()
@@ -873,6 +906,7 @@ class HptestUnderTheHoldTest(HoldFolder):
     SCANNER = ('#!/bin/bash\n'
                'case " $* " in *" nmap "*) ;; *) exit 0 ;; esac\n'
                'echo $$ >> "$STUB_SCANS"\n'
+               '[ -n "$STUB_SCAN_QUICK" ] && exit 0\n'
                'trap \'trap "" TERM; sleep 1; if [ -f "$STUB_MARKER" ]; then echo present >> "$STUB_LOG"; '
                'else echo gone >> "$STUB_LOG"; fi; exit 143\' TERM\n'
                'while :; do sleep 0.1; done\n')
@@ -894,7 +928,15 @@ class HptestUnderTheHoldTest(HoldFolder):
             json.dump(config, out)
         self.stub("docker", '#!/bin/sh\n[ "$1" = compose ] && exec cat "$STUB_CONFIG"\necho true\n')
         self.stub("timeout", self.SCANNER)
-        self.stub("sudo", '#!/bin/sh\nwhile [ "${1#-}" != "$1" ]; do [ "$1" = -v ] && exit 0; shift; done\n'
+        self.stub("sudo", '#!/bin/sh\n'
+                          'while [ "${1#-}" != "$1" ]; do\n'
+                          '  case "$1" in\n'
+                          '    -v) exit 0 ;;\n'
+                          '    -n) [ "$STUB_SUDO_N" = fail ] && exit 1 ;;\n'
+                          '    -p) shift ;;\n'
+                          '  esac\n'
+                          '  shift\n'
+                          'done\n'
                           'exec "$@"\n')
         for name in ("nmap", "ncat", "findscu", "getscu", "curl"):
             self.stub(name, "#!/bin/sh\nexit 0\n")
@@ -914,11 +956,27 @@ class HptestUnderTheHoldTest(HoldFolder):
         except OSError:
             return []
 
-    def test_term_during_the_scan(self):
+    def env(self, **extra):
         env = dict(os.environ, PATH=self.bin + os.pathsep + os.environ.get("PATH", ""), TPOT_GUM="off",
                    TPOTCE_DIR=self.checkout, STUB_CONFIG=os.path.join(self.bin, "config.json"),
                    STUB_SCANS=self.scans, STUB_LOG=self.log, STUB_MARKER=self.marker,
                    myEWS_HOLD_SETTLE="0", myEWS_HOLD_POLL="0.05", myEWS_HOLD_TICK="0.1")
+        env.update(extra)
+        return env
+
+    def test_a_skipped_udp_scan_says_so(self):
+        with FakeEwsposter(self.ews):
+            result = subprocess.run([HPTEST, "127.0.0.1"], capture_output=True, universal_newlines=True,
+                                    env=self.env(STUB_SUDO_N="fail", STUB_SCAN_QUICK="1", TPOT_MARKS="1"),
+                                    timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.count("UDP scan skipped: sudo needs a password again."), 1, result.stdout)
+        self.assertIn("@@tpot warn scan UDP scan skipped: sudo needs a password again\n", result.stdout)
+        self.assertEqual(len(self.scanners()), 1)
+        self.assertFalse(os.path.exists(self.marker))
+
+    def test_term_during_the_scan(self):
+        env = self.env()
         with FakeEwsposter(self.ews):
             process = subprocess.Popen([HPTEST, "127.0.0.1"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                        universal_newlines=True, env=env, start_new_session=True)

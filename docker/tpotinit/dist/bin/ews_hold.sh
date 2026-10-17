@@ -116,8 +116,12 @@ fuEWS_RUNS () {
 # through the folder descriptors, opens them with O_NOFOLLOW and O_NONBLOCK, refuses a link, a
 # special file or a file with another name (a hard link), takes flock without waiting and writes
 # what came of it to the file $2: "locked <pid>", "busy", "link <name>", "nodata" or
-# "error <text>". With the lock it reads its stdin until EOF: the pipe from the script.
-myEWS_LOCK_HOLDER='import errno, fcntl, os, stat, sys
+# "error <text>". With the lock it reads its stdin until EOF: the pipe from the script. It ignores
+# TERM, HUP and INT: a signal to the process group of the script must not free the lock while the
+# trap of the script still ends the check; only the end of the hold (or of the script) does.
+myEWS_LOCK_HOLDER='import errno, fcntl, os, signal, stat, sys
+for number in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+    signal.signal(number, signal.SIG_IGN)
 data, result = sys.argv[1], sys.argv[2]
 def say(text):
     with open(result, "w") as out:
@@ -315,16 +319,23 @@ sys.exit(0 if stat.S_ISREG(info.st_mode) and info.st_mtime_ns >= int(sys.argv[2]
 # What hold.state says: normal, held or stuck; unknown when it is missing, no regular file, not of
 # its form or older than myEWS_HOLD_STATE_MAX_AGE
 fuEWS_STATE () {
-  local myFILE="${myEWS_HOLD_DIR}/hold.state"
   local myLINE=""
   local myEPOCH=""
   local myAGE=""
-  if [ ! -f "${myFILE}" ] || [ -L "${myFILE}" ];
-    then
-      echo "unknown"
-      return 0
-  fi
-  myLINE=$(head -c 64 "${myFILE}" 2>/dev/null | head -n 1)
+  # read through the descriptor of the folder, O_NOFOLLOW and O_NONBLOCK: a link or a special
+  # file is no state
+  myLINE=$(python3 -c 'import os, stat, sys
+folder = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK)
+try:
+    handle = os.open("hold.state", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
+    try:
+        if stat.S_ISREG(os.fstat(handle).st_mode):
+            text = os.read(handle, 64).decode("ascii", "replace")
+            print(text.split("\n")[0])
+    finally:
+        os.close(handle)
+finally:
+    os.close(folder)' "${myEWS_HOLD_DIR}" 2>/dev/null)
   case "${myLINE}" in
     "normal "*|"held "*|"stuck "*) ;;
     *) echo "unknown"; return 0 ;;

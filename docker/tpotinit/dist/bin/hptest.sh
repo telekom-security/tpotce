@@ -321,17 +321,28 @@ if fuHAS nmap;
         timeout --foreground "${myTIMEOUT}" nmap -sV -sC -v -p "${myTCPPORTS}" "$myHOST" &
         myPIDS+=("$!")
     fi
-    # a UDP scan needs root: sudo -v first (in the foreground, the -B function refreshes it), then
-    # sudo itself in the background, so the job is sudo and no subshell around it
+    # a UDP scan needs root: sudo itself in the background, so the job is sudo and no subshell
+    # around it; with -B it reads the password from the file, otherwise sudo -v first (in the
+    # foreground) and sudo -n for the scan
     if [ -n "${myUDPPORTS}" ];
       then
-        if sudo -v;
+        if [ -n "${myBECOME_FILE}" ];
           then
+            command sudo -S -p "" timeout --foreground "${myTIMEOUT}" nmap -sU -sV -sC -v -p "${myUDPPORTS}" "$myHOST" < "${myBECOME_FILE}" &
+            myPIDS+=("$!")
+            mySUDO_PIDS+=("$!")
+        elif ! sudo -v;
+          then
+            fuUI_WARN "No sudo, no UDP scan."
+        elif ! sudo -n true 2>/dev/null;
+          then
+            # sudo -v recorded nothing (i.e. timestamp_timeout=0): the scan below could not start
+            fuUI_WARN "UDP scan skipped: sudo needs a password again."
+            fuMARK warn scan UDP scan skipped: sudo needs a password again
+          else
             command sudo -n timeout --foreground "${myTIMEOUT}" nmap -sU -sV -sC -v -p "${myUDPPORTS}" "$myHOST" &
             myPIDS+=("$!")
             mySUDO_PIDS+=("$!")
-          else
-            fuUI_WARN "No sudo, no UDP scan."
         fi
     fi
     [ "${#myPIDS[@]}" -eq 0 ] || wait "${myPIDS[@]}"
