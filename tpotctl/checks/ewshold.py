@@ -183,6 +183,7 @@ class EwsHold:
         # the modules ewsposter could not hold (hold.ack): at the ack, and every one named later on
         self.failed_at_ack: List[str] = []
         self._failed_modules: List[str] = []
+        self._modules_lock = threading.Lock()
         self.note = ""
         self._folder: Optional[Folder] = None
         self._lock: Optional[int] = None
@@ -212,8 +213,16 @@ class EwsHold:
         except (KibanaError, OSError, ValueError):
             return []
         found = failed_modules(text)
-        self._failed_modules = sorted(set(self._failed_modules) | set(found))
+        with self._modules_lock:
+            self._failed_modules = sorted(set(self._failed_modules) | set(found))
         return found
+
+    def refresh_failed(self) -> List[str]:
+        """hold.ack read now (the runner asks before each probe and each geo event): every module
+        it named during this hold."""
+        if self.acked:
+            self._read_failed()
+        return self.failed_modules
 
     @property
     def ews_dir(self) -> str:

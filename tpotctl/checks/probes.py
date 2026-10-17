@@ -1053,13 +1053,16 @@ def run_probes(host: str, honeypots: Iterable[Honeypot], token: str, budget: flo
                workers: int = WORKERS,
                probes: Optional[Dict[str, Callable[[str, List[Port], str], ProbeResult]]] = None,
                check: Optional[Callable[[], None]] = None,
-               into: Optional[Dict[str, ProbeResult]] = None) -> Dict[str, ProbeResult]:
+               into: Optional[Dict[str, ProbeResult]] = None,
+               skip: Optional[Callable[[Honeypot], str]] = None) -> Dict[str, ProbeResult]:
     """Every honeypot that is not external, `workers` at a time; a probe starts only within
     `budget` seconds, one that did not start in time says so. `check` (EwsHold.check) is called
     before each probe starts: when it raises (the hold of ewsposter ended), no further probe
     starts and the error is raised once the probes that run have ended. No probe outlives this
     call, so the hold can end right after it. `into` gets the results also when the call ends by
-    an exception (Ctrl+C, the hold): the cleanup still knows what the probes sent."""
+    an exception (Ctrl+C, the hold): the cleanup still knows what the probes sent. `skip` is asked
+    right before each probe: a reason it gives leaves that honeypot alone (skipped, the reason as
+    detail)."""
     targets = [h for h in honeypots if not h.external]
     results: Dict[str, ProbeResult] = into if into is not None else {}
     if not targets:
@@ -1082,6 +1085,9 @@ def run_probes(host: str, honeypots: Iterable[Honeypot], token: str, budget: flo
                 return stopped
         if time.monotonic() >= end:
             return late
+        why = skip(honeypot) if skip is not None else ""
+        if why:
+            return ProbeResult(SKIPPED, False, why, answer_checked=False)
         return probe(honeypot, host, token, probes)
 
     pool = ThreadPoolExecutor(max_workers=max(1, workers))

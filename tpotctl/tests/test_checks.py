@@ -590,6 +590,14 @@ class EwsHoldTest(HoldFolder):
             with self.hold() as hold:
                 self.assertEqual((hold.failed_at_ack, hold.failed_modules), ([], []))
 
+    def test_refresh_failed_reads_the_ack_now(self):
+        with FakeEwsposter(self.ews):
+            with self.hold(watch=60) as hold:
+                self.assertEqual(hold.refresh_failed(), [])
+                with open(self.ack, "w", encoding="utf-8") as out:
+                    out.write("failed: wordpot\n")
+                self.assertEqual(hold.refresh_failed(), ["wordpot"])
+
     def test_a_module_named_later_is_kept(self):
         """A module hold.ack names after the ack (a later round) counts too: failed_modules."""
         with FakeEwsposter(self.ews):
@@ -2211,6 +2219,19 @@ class RunProbesTest(unittest.TestCase):
             self.assertFalse(found[name].port_open, name)
             self.assertFalse(found[name].answer_checked, name)
 
+    def test_skip_is_asked_right_before_each_probe(self):
+        calls = []
+
+        def fine(host, ports, token):
+            calls.append(host)
+            return probes.ProbeResult("open", True, "ok")
+        found = probes.run_probes("192.0.2.5", [self.honeypot("a"), self.honeypot("b")], TOKEN,
+                                  probes={"a": fine, "b": fine}, workers=1,
+                                  skip=lambda h: "left alone" if h.name == "b" else "")
+        self.assertEqual(calls, ["192.0.2.5"])
+        self.assertEqual((found["b"].state, found["b"].detail), ("skipped", "left alone"))
+        self.assertEqual(found["a"].state, "open")
+
     def test_the_budget(self):
         def slow(host, ports, token):
             time.sleep(0.5)
@@ -2610,6 +2631,12 @@ class FakeHold:
         self.world, self.enter_error, self.lose_after = world, enter, lose_after
         self.acked, self.note, self.checks = acked, note, 0
         self.failed_at_ack, self.failed_modules = [], []
+        self.on_refresh = None          # called on every look at hold.ack (a module failing later)
+
+    def refresh_failed(self):
+        if self.on_refresh is not None:
+            self.on_refresh(self)
+        return list(self.failed_modules)
 
     def __enter__(self):
         self.world.order.append("hold")
@@ -2700,7 +2727,7 @@ class World:
         self.listener = FakeListener(self)
         return self.listener
 
-    def run_probes(self, host, honeypots, token, check=None, into=None):
+    def run_probes(self, host, honeypots, token, check=None, into=None, skip=None):
         self.order.append("probes")
         self.test.assertEqual(host, self.host)
         results = into if into is not None else {}
@@ -2708,6 +2735,10 @@ class World:
             if target.external:
                 continue
             check()
+            why = skip(target) if skip is not None else ""
+            if why:
+                results[target.name] = probes.ProbeResult("skipped", False, why, answer_checked=False)
+                continue
             if not target.running:
                 results[target.name] = probes.ProbeResult("skipped", False, "not running", answer_checked=False)
                 continue
@@ -2972,9 +3003,9 @@ class RunTest(unittest.TestCase):
         probed = []
         original = world.run_probes
 
-        def run_probes(host, honeypots, token, check=None, into=None):
+        def run_probes(host, honeypots, token, check=None, into=None, skip=None):
             probed.extend(h.name for h in honeypots)
-            return original(host, honeypots, token, check=check, into=into)
+            return original(host, honeypots, token, check=check, into=into, skip=skip)
         world.check._run_probes = run_probes
         before = bytes(world.files.logs[fixtures.log_file("redishoneypot")])
         report = world.run()
@@ -2998,9 +3029,45 @@ class RunTest(unittest.TestCase):
         # the cleanup knows nothing of it
         self.assertNotIn("Redishoneypot", json.dumps(world.es.deletes))
 
+    def test_a_module_named_later_is_left_alone_from_then_on(self):
+        """hold.ack names cowrie after the ack, before its probe: no probe, no geo event; dionaea,
+        named after its probe, gets no geo event; both fail their ewsposter stage."""
+        world = self.world(("cowrie", "dionaea", "heralding"))
+        looks = []
+
+        def on_refresh(hold):
+            looks.append(1)
+            # the probes look once per honeypot (cowrie, dionaea, heralding), then the injection
+            hold.failed_modules = ["cowrie"] if len(looks) <= 3 else ["cowrie", "dionaea"]
+        world.hold.on_refresh = on_refresh
+        report = world.run()
+        rows = {row.name: row for row in report.rows}
+        self.assertEqual(world.check.results["cowrie"].state, "skipped")
+        self.assertEqual(world.check.results["cowrie"].detail, ewshold.CANNOT_HOLD)
+        self.assertEqual(world.check.results["dionaea"].state, "open")
+        appended = [rel for rel, _ in world.files.appended]
+        self.assertNotIn(fixtures.log_file("cowrie"), appended)
+        self.assertNotIn(fixtures.log_file("dionaea"), appended)
+        self.assertIn(fixtures.log_file("heralding"), appended)
+        self.assertEqual(rows["cowrie"].stages["port"].detail, ewshold.CANNOT_HOLD)
+        self.assertEqual(rows["dionaea"].stages["geoip"].detail, ewshold.CANNOT_HOLD)
+        self.assertEqual(rows["cowrie"].state("ewsposter"), stages.FAILED)
+        self.assertEqual(rows["dionaea"].state("ewsposter"), stages.FAILED)
+        self.assertFalse(rows["heralding"].failed)
+        self.assertEqual(report.exit_code, 1)
+
+    def test_a_module_of_no_known_honeypot_is_named(self):
+        world = self.world(("cowrie",))
+        world.hold.failed_at_ack = world.hold.failed_modules = ["newpot"]
+        world.run()
+        self.assertTrue(any("newpot, which reads no honeypot the check knows" in text for _kind, text in world.said))
+
     def test_a_module_that_fails_later_fails_the_ewsposter_stage(self):
         world = self.world(("cowrie",))
-        world.hold.failed_at_ack, world.hold.failed_modules = [], ["cowrie"]
+
+        def later(w):
+            w.hold.failed_modules = ["cowrie"]          # named while the stages are polled
+        world.sleep_hook = later
         report = world.run()
         cowrie = report.rows[0]
         self.assertEqual(cowrie.state("ewsposter"), stages.FAILED)
@@ -3021,13 +3088,13 @@ class RunTest(unittest.TestCase):
         seen = {}
         original = world.run_probes
 
-        def run_probes(host, honeypots, token, check=None, into=None):
+        def run_probes(host, honeypots, token, check=None, into=None, skip=None):
             path = world.check.pending_file
             seen["mode"] = oct(os.stat(path).st_mode & 0o777)
             seen["folder"] = oct(os.stat(os.path.dirname(path)).st_mode & 0o777)
             with open(path, encoding="utf-8") as handle:
                 seen["before"] = json.load(handle)
-            return original(host, honeypots, token, check=check, into=into)
+            return original(host, honeypots, token, check=check, into=into, skip=skip)
         world.check._run_probes = run_probes
         appended = []
 
@@ -3074,8 +3141,8 @@ class RunTest(unittest.TestCase):
                 world = self.world(("cowrie",))
                 original = world.run_probes
 
-                def interrupted(host, honeypots, token, check=None, into=None, o=original):
-                    o(host, honeypots, token, check=check, into=into)
+                def interrupted(host, honeypots, token, check=None, into=None, skip=None, o=original):
+                    o(host, honeypots, token, check=check, into=into, skip=skip)
                     raise KeyboardInterrupt
                 world.check._run_probes = interrupted
                 if down:
@@ -3120,7 +3187,7 @@ class RunTest(unittest.TestCase):
         """Ctrl+C during the probes: last.json says held (the hold was confirmed before the cancel)."""
         world = self.world(("cowrie",))
 
-        def interrupted(host, honeypots, token, check=None, into=None):
+        def interrupted(host, honeypots, token, check=None, into=None, skip=None):
             raise KeyboardInterrupt
         world.check._run_probes = interrupted
         report = world.run()
@@ -3267,7 +3334,7 @@ class RunTest(unittest.TestCase):
     def test_ctrl_c_cleans_up_and_ends_the_hold(self):
         world = self.world(("cowrie",))
 
-        def interrupted(host, honeypots, token, check=None, into=None):
+        def interrupted(host, honeypots, token, check=None, into=None, skip=None):
             world.order.append("probes")
             world.es.add({"type": "Cowrie", "src_ip": HOST, "src_port": 40100, "@timestamp": stages.iso(BASE)})
             raise KeyboardInterrupt

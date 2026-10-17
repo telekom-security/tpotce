@@ -64,6 +64,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -979,8 +980,11 @@ class Check:
         self.host = ""
         self.sent = False               # a probe or a geo event went out: the cleanup has work
         self.map: Optional[MapListener] = None
-        # the honeypots whose ewsposter module cannot be held: no probe, no geo event
+        # the honeypots whose ewsposter module cannot be held: no probe, no geo event (named at the
+        # ack, or later: before each probe and each geo event the check asks hold.ack again)
         self.not_held: List[str] = []
+        self._late: List[str] = []
+        self._late_lock = threading.Lock()
         # what the cleanup of this run needs, while it has not run through (checks/pending)
         self.pending_file = os.path.join(pending_dir(result_file), f"{self.run_id}.json")
         self._planned: Optional[stages.OwnEvents] = None
@@ -1342,12 +1346,37 @@ class Check:
         land in their logs (ewsposter could send it later), so they get no probe and no geo event."""
         from tpotctl.checks import ewshold
         modules = list(getattr(hold, "failed_at_ack", None) or [])
-        self.not_held = ewshold.honeypots_of(modules, [h.name for h in self.honeypots])
-        for name in self.not_held:
-            row = self.rows[name]
-            for stage in stages.STAGES[:-1]:
-                if not (self.sensor and stage in stages.STAGES[3:]):
-                    row.set(stage, NOT_APPLICABLE, ewshold.CANNOT_HOLD)
+        names = [h.name for h in self.honeypots]
+        for module in modules:
+            if not ewshold.honeypots_of([module], list(LOGS)):
+                self.log("warn", f"ewsposter cannot hold its module {module}, which reads no honeypot the check "
+                                 f"knows: the check leaves nothing alone for it")
+        self.not_held = []
+        for name in ewshold.honeypots_of(modules, names):
+            self._mark_not_held(name)
+
+    def _mark_not_held(self, name: str) -> None:
+        """A honeypot the check leaves alone from now on: its stages say why."""
+        from tpotctl.checks import ewshold
+        if name in self.not_held:
+            return
+        self.not_held.append(name)
+        row = self.rows[name]
+        for stage in stages.STAGES[:-1]:
+            if not (self.sensor and stage in stages.STAGES[3:]):
+                row.set(stage, NOT_APPLICABLE, ewshold.CANNOT_HOLD)
+
+    def _not_held_now(self, hold, honeypot: Honeypot) -> str:
+        """Why the check must leave `honeypot` alone now ("" for nothing): hold.ack read again names
+        its ewsposter module (I2: a module that fails after the ack)."""
+        from tpotctl.checks import ewshold
+        refresh = getattr(hold, "refresh_failed", None)
+        modules = refresh() if callable(refresh) else list(getattr(hold, "failed_modules", None) or [])
+        if ewshold.honeypots_of(modules, [honeypot.name]):
+            with self._late_lock:
+                self._late.append(honeypot.name)
+            return ewshold.CANNOT_HOLD
+        return ""
 
     def _ewsposter(self, hold, report: Report, failure: Optional[BaseException]) -> None:
         from tpotctl.checks import ewshold
@@ -1395,8 +1424,11 @@ class Check:
                 self.results = {}
                 try:
                     self.results = self._run_probes(self.host, [h for h in self.honeypots if h.name not in self.not_held],
-                                                    self.token, check=hold.check, into=self.results)
+                                                    self.token, check=hold.check, into=self.results,
+                                                    skip=lambda honeypot: self._not_held_now(hold, honeypot))
                 finally:
+                    for name in list(self._late):
+                        self._mark_not_held(name)
                     self._save_pending()        # the source ports of the probes
             self._probe_stages()
             if geo:
@@ -1448,6 +1480,9 @@ class Check:
     def _inject(self, geo: List[Honeypot], hold) -> None:
         for honeypot in geo:
             hold.check()
+            if honeypot.name in self.not_held or self._not_held_now(hold, honeypot):
+                self._mark_not_held(honeypot.name)
+                continue
             row = self.rows[honeypot.name]
             event = self.geo_event(honeypot.name)
             row.geo = event
