@@ -13,7 +13,9 @@ a port the time of its honeypot did not reach is "not reached", never closed (`P
 a budget for all probes. A refused or timed-out connection is a result (`port_open=False`), never
 an exception. The LLM honeypots (galah, beelzebub) are only knocked at: an answer would call the
 LLM. Some ports are left alone (skipped, the reason in the detail): dionaea's FTP data port 20
-(nothing listens) and its mirror port 42 (the mirror service connects back to the source). A
+(nothing listens), its mirror port 42 (the mirror service connects back to the source) and its
+TFTP port 69 (it answers only the first request after a start); its HTTP port 81 is checked for
+being open only (it answers no GET). A
 honeypot that does not log some sources by its configuration names them (`PortProbe.ignores`):
 the probe of an address among them still runs, `ProbeResult.ignored` says which entry holds it.
 """
@@ -845,6 +847,8 @@ def not_tried(why: str) -> Handler:
 TCP, UDP = "tcp", "udp"
 FTP_DATA_REASON = "FTP data port, nothing listens on it"
 MIRROR_REASON = "dionaea mirrors a connection on this port back to its source"
+TFTP_REASON = "dionaea's TFTP answers only the first request after its start, later ones are refused"
+HTTP81_REASON = "dionaea's HTTP service (port 81) closes a GET without an answer"
 # elasticpot, ipphoney and rdphoneypot log no event of a source in `blacklist` of honeypot.cfg; its
 # fallback in honeypot.py (CONFIG.get('honeypot', 'blacklist', fallback=...)) holds while the
 # dist/honeypot.cfg of T-Pot leaves the line commented out
@@ -914,8 +918,11 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         # the mirror service connects back to the source of a connection (dionaea's mirror.py,
         # mirrord on 42): a probe would start a loop of connections, hundreds of events
         (42, TCP): not_tried(MIRROR_REASON),
-        (69, UDP): _tftp,
-        (81, TCP): http("GET", "/{token}.php"),
+        # the TFTP listener answered only the first request after a start of dionaea, every later
+        # one was refused (E2E runs 3 and 3b): the probe could take it down for real attackers
+        (69, UDP): not_tried(TFTP_REASON),
+        # the http service of dionaea (services/http.yaml: ports 81) closes a GET without an answer
+        (81, TCP): port_only(HTTP81_REASON),
         (135, TCP): connect_only,
         (445, TCP): connect_only,
         (1433, TCP): connect_only,

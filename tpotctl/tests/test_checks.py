@@ -277,7 +277,36 @@ class ChecksCliTest(unittest.TestCase):
         code, text = run("-y")
         self.assertEqual(code, 0)
         self.assertIn("No earlier check left test events behind.", text)
-        self.assertIs(trun.result_path, path)
+
+    def test_a_cleanup_done_later_is_noted_in_last_json(self):
+        """last.json of the run whose cleanup failed says done once tpot check cleanup removed the
+        events; the page no longer says they are still there. Another run's last.json stays."""
+        from tpotctl.checks import run as trun
+        result_file, es = self.pending_world()
+        report = trun.Report(run_id=RID, started=BASE, ended=BASE, exit_code=1, result="failed",
+                             cleanup={"state": "failed", "deleted": 0, "passes": [], "left": 0, "detail": "down"})
+        trun.write_result(report, result_file)
+        found, _broken = trun.read_pending(result_file, ["Cowrie"])
+        trun.run_pending(found[0], es, lambda text: None)
+        view = trun.read_result(result_file)
+        self.assertEqual((view["cleanup"]["state"], view["cleanup"]["deleted"]), ("done", 1))
+        self.assertEqual(oct(os.stat(result_file).st_mode & 0o777), "0o600")
+        self.assertEqual((view["result"], view["exit_code"]), ("failed", 1))
+        other = trun.Report(run_id="20261017090000aaaaaa", result="failed",
+                            cleanup={"state": "failed", "deleted": 0, "passes": [], "left": 0, "detail": "down"})
+        trun.write_result(other, result_file)
+        self.assertFalse(trun.note_cleanup(result_file, RID, 5, 0, 0))
+        self.assertEqual(trun.read_result(result_file)["cleanup"]["state"], "failed")
+
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_a_note_that_is_cut_says_so(self):
+        from tpotctl import cli
+        from tpotctl.checks import run as trun, stages as tstages
+        row = tstages.Row("dionaea")
+        row.set("port", tstages.FAILED, "x" * 300)
+        table = cli.check_table(trun.Report(rows=[row]))
+        note = table.columns[-1]._cells[0].plain
+        self.assertEqual((len(note), note[-1]), (160, "…"))
 
     def test_the_cleanup_command_keeps_what_elasticsearch_did_not_take(self):
         from tpotctl.checks import run as trun
@@ -1628,11 +1657,19 @@ class ProbeTableTest(unittest.TestCase):
 
     def test_dionaea_leaves_ftp_data_and_the_mirror_alone(self):
         table = probes.PROBES["dionaea"]
-        for target, why in ((20, probes.FTP_DATA_REASON), (42, probes.MIRROR_REASON)):
+        for target, protocol, why in ((20, "tcp", probes.FTP_DATA_REASON), (42, "tcp", probes.MIRROR_REASON),
+                                      (69, "udp", probes.TFTP_REASON)):
             with self.subTest(port=target):
                 with self.assertRaises(probes._NotTried) as caught:
-                    table.handler_for(Port(target, target))(None)
+                    table.handler_for(Port(target, target, protocol))(None)
                 self.assertEqual(str(caught.exception), f"not probed, {why}")
+        # 81: only whether it is open
+        server = listening()
+        self.addCleanup(server.close)
+        answered, note = table.handler_for(Port(81, 81))(
+            probes._Ctx("127.0.0.1", Port(server.getsockname()[1], 81), TOKEN, probes._Clock(5)))
+        self.assertIsNone(answered)
+        self.assertEqual(note, f"port open, {probes.HTTP81_REASON}")
         self.assertEqual(probes.FTP_DATA_REASON, "FTP data port, nothing listens on it")
         self.assertEqual(probes.MIRROR_REASON, "dionaea mirrors a connection on this port back to its source")
         # skipped ports do not make the honeypot closed

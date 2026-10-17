@@ -73,7 +73,8 @@ class TaskScreen(Screen):
             yield NavInput(placeholder="your sudo password", password=True, id="task-sudo")
             yield Static("", id="task-hint")
             yield Static("", id="task-phases")
-            yield NavRichLog(id="task-log", max_lines=2000, wrap=False, markup=False, highlight=False)
+            # long lines wrap (a result line of tpot check cleanup is longer than 80 columns)
+            yield NavRichLog(id="task-log", max_lines=2000, wrap=True, markup=False, highlight=False)
             yield Static("", id="task-result")
         with Horizontal(id="task-nav"):
             yield Static("", classes="task-spacer")

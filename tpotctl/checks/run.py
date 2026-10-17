@@ -839,6 +839,7 @@ class Pending:
     own: stages.OwnEvents
     with_token: bool = True
     host: str = ""
+    result_file: Optional[str] = None      # last.json of this user: its cleanup is noted there
 
 
 def _parse_time(text: Any) -> datetime:
@@ -922,7 +923,7 @@ def read_pending(result_file: Optional[str] = None,
                 raise ValueError("with_token / host")
             ipaddress.ip_address(host)
             found.append(Pending(run_id, path, started, end, own_from_json(data.get("own"), host, types),
-                                 with_token, host))
+                                 with_token, host, result_file))
         except (OSError, ValueError, UnicodeDecodeError) as error:
             broken.append(f"{path}: {getattr(error, 'strerror', None) or error}")
     found.sort(key=lambda pending: pending.started)
@@ -991,7 +992,39 @@ def run_pending(pending: Pending, elastic: "Elastic", warn: Callable[[str], None
     left, sourceless = left_over(elastic, pending.started, pending.end, pending.own, pending.host)
     with contextlib.suppress(FileNotFoundError):
         os.unlink(pending.path)
+    note_cleanup(pending.result_file, pending.run_id, deleted, left, sourceless)
     return deleted, left, sourceless
+
+
+def note_cleanup(result_file: Optional[str], run_id: str, deleted: int, left: int, sourceless: int) -> bool:
+    """The cleanup of a run done later (tpot check cleanup, the next check): last.json says so when it
+    is that run's, so the Checks page no longer says the test events are still there. True when it
+    was noted; an unreadable or another run's last.json stays as it is."""
+    path = result_file or result_path()
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read(RESULT_MAX + 1)
+        data = json.loads(raw.decode("utf-8")) if len(raw) <= RESULT_MAX else None
+    except (OSError, ValueError, UnicodeDecodeError):
+        return False
+    if not isinstance(data, dict) or data.get("run_id") != run_id:
+        return False
+    data["cleanup"] = {"state": "done", "deleted": deleted, "passes": [deleted], "left": left,
+                       "left_no_source": sourceless, "left_kibana": "",
+                       "detail": "removed later (tpot check cleanup or the next check)"}
+    folder = os.path.dirname(path)
+    handle, temp = tempfile.mkstemp(prefix=".last.", suffix=".json", dir=folder)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            json.dump(data, out, indent=1, ensure_ascii=False)
+            out.write("\n")
+        os.chmod(temp, 0o600)
+        os.replace(temp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temp)
+        raise
+    return True
 
 
 # -- the run ------------------------------------------------------------------------------------

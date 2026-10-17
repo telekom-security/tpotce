@@ -1419,7 +1419,8 @@ def check_table(report, ascii_only: bool = False):
         failed = [f"{tstages.TITLES[name]}: {row.stages[name].detail}" for name in shown
                   if row.state(name) == tstages.FAILED and row.stages[name].detail]
         note = failed[0] if failed else (row.stages["port"].detail if row.external else "")
-        cells.append(Text(note[:160], style="red" if failed else "bright_black"))
+        # a note that is cut says so
+        cells.append(Text(note if len(note) <= 160 else note[:159] + "…", style="red" if failed else "bright_black"))
         table.add_row(*cells)
     return table
 
