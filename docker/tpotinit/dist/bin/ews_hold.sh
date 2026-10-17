@@ -6,18 +6,24 @@
 #   ews_hold.sh [--data DIR] [--compose FILE] [--timeout SEC] [--settle SEC] run -- COMMAND [ARGS ...]
 #
 # The lock is flock on <data>/ews/check.lock, without waiting: one check at a time. When ewsposter
-# is in the compose file and its container runs, the marker <data>/ews/hold is written and the
-# check waits up to 180 s for a <data>/ews/hold.ack written after it (ewsposter then sends nothing,
-# docker/ewsposter/dist/entrypoint.sh); without one the marker goes and nothing is probed. When
-# ewsposter is in the compose file but its container does not run, the marker is set without
-# waiting (ewsposter starts held when it comes up); without ewsposter in the compose file there is
-# no marker. While the hold lasts, the marker is written anew every 5 minutes (ewsposter ignores
-# one older than 30 minutes), by a loop that ends with the helper, also when it is killed; when
-# that fails twice in a row, the loop sends TERM to the script and the check stops. At the end (EXIT, also
-# after INT or TERM) the helper waits a few seconds for the last log lines of the check, removes
-# the marker and gives the lock back. Files in <data>/ews are never reached through a link: the
-# folder is writable for the group tpot. Needs flock (util-linux on the host, busybox in the
-# tpotinit image) and python3 (for the file steps a shell cannot do through a folder descriptor).
+# is in the compose file and its container runs (or docker cannot say), the marker <data>/ews/hold
+# is written and the check waits up to 180 s for a <data>/ews/hold.ack written after it (ewsposter
+# then sends nothing, docker/ewsposter/dist/entrypoint.sh); without one the marker goes and nothing
+# is probed. When ewsposter is in the compose file but its container does not run, the marker is
+# set without waiting (ewsposter starts held when it comes up); without ewsposter in the compose
+# file there is no marker.
+#
+# While the hold lasts, a loop looks every 30 s whether the marker is still there and writes it
+# anew every 5 minutes (ewsposter ignores one older than 30 minutes); it ends with the helper, also
+# when that is killed. When the marker is gone (a start of T-Pot removes hold and check.lock,
+# tpotinit's clear_ews_hold) or two renewals in a row fail, it sends TERM to the script and the
+# check stops. At the end (EXIT, also after INT or TERM) the helper waits a few seconds for the
+# last log lines of the check, removes the marker and gives the lock back.
+#
+# Files in <data>/ews are never reached through a link: the folder is writable for the group
+# tpot. Every create, open and unlink there goes through python3 and the descriptor of the folder
+# (O_NOFOLLOW, O_NONBLOCK); the lock is held by a python3 process that reads a pipe from the
+# script, so it ends with the script, however that ends.
 #
 # Exit codes of the command: those of COMMAND; 2 a wrong option; 3 the lock is taken or ewsposter
 # did not confirm the hold (COMMAND did not run).
@@ -26,8 +32,10 @@
 # idle passes
 myEWS_HOLD_TIMEOUT=${myEWS_HOLD_TIMEOUT:-180}
 myEWS_HOLD_POLL=${myEWS_HOLD_POLL:-1}
-# the marker is written anew after this many seconds; the loop looks at its parent every tick
+# the marker is written anew after this many seconds, looked at after myEWS_HOLD_WATCH seconds;
+# the loop looks at its parent every tick
 myEWS_HOLD_REFRESH=${myEWS_HOLD_REFRESH:-300}
+myEWS_HOLD_WATCH=${myEWS_HOLD_WATCH:-30}
 myEWS_HOLD_TICK=${myEWS_HOLD_TICK:-5}
 # the seconds the end of a hold waits for the last log lines of the check (the honeypots write some
 # when a connection closes)
@@ -41,11 +49,14 @@ myEWS_HOLD_HELD=""
 # myEWS_HOLD_SETTLE seconds then)
 myEWS_HOLD_ACKED=""
 myEWS_HOLD_LOCKED=""
+myEWS_HOLD_LOCK_PID=""
 myEWS_HOLD_TRAPPED=""
 myEWS_HOLD_FINISHED=""
 myEWS_HOLD_REFRESH_PID=""
 myEWS_HOLD_CLEANUP=""
 myEWS_HOLD_CHILD=""
+myEWS_HOLD_FORKING=""
+myEWS_HOLD_LAST=""
 
 # A message in the look of the script that sourced this file, plain text without one
 fuEWS_SAY () {
@@ -86,56 +97,140 @@ fuEWS_IN_COMPOSE () {
   grep -qE "^[[:space:]]*container_name:[[:space:]]*[\"']?ewsposter[\"']?[[:space:]]*(#.*)?$" "$1" 2>/dev/null
 }
 
-# 0 when the ewsposter container runs
+# Whether the ewsposter container runs: 0 yes, 1 no (not running, or no such container), 2 docker
+# cannot say (the hold then waits for the ack as if it ran)
 fuEWS_RUNS () {
-  [ "$(docker inspect -f '{{.State.Running}}' ewsposter 2>/dev/null)" = "true" ]
+  local myOUT=""
+  if myOUT=$(docker inspect -f '{{.State.Running}}' ewsposter 2>&1);
+    then
+      [ "${myOUT}" = "true" ] && return 0
+      return 1
+  fi
+  case "${myOUT}" in
+    *"No such object"*|*"No such container"*) return 1 ;;
+  esac
+  return 2
 }
 
-# 0 when $1 is missing or a regular file, no link
-fuEWS_PLAIN () {
-  [ ! -L "$1" ] && { [ ! -e "$1" ] || [ -f "$1" ]; }
-}
+# The lock holder (python3): makes <data>/ews (0770, the group of <data>) and check.lock (0660)
+# through the folder descriptors, opens them with O_NOFOLLOW and O_NONBLOCK, refuses a link, a
+# special file or a file with another name (a hard link), takes flock without waiting and writes
+# what came of it to the file $2: "locked <pid>", "busy", "link <name>", "nodata" or
+# "error <text>". With the lock it reads its stdin until EOF: the pipe from the script.
+myEWS_LOCK_HOLDER='import errno, fcntl, os, stat, sys
+data, result = sys.argv[1], sys.argv[2]
+def say(text):
+    with open(result, "w") as out:
+        out.write(text + "\n")
+def group(handle, folder):
+    try:
+        os.fchown(handle, -1, os.fstat(folder).st_gid)
+    except OSError:
+        pass
+FLAGS = os.O_NOFOLLOW | os.O_NONBLOCK
+try:
+    try:
+        base = os.open(data, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        say("nodata")
+        sys.exit(0)
+    made = False
+    try:
+        os.mkdir("ews", 0o770, dir_fd=base)
+        made = True
+    except FileExistsError:
+        pass
+    try:
+        ews = os.open("ews", os.O_RDONLY | os.O_DIRECTORY | FLAGS, dir_fd=base)
+    except OSError as error:
+        if error.errno in (errno.ELOOP, errno.ENOTDIR):
+            say("link ews")
+            sys.exit(0)
+        raise
+    if made:
+        os.fchmod(ews, 0o770)
+        group(ews, base)
+    created = False
+    try:
+        lock = os.open("check.lock", os.O_RDWR | os.O_CREAT | os.O_EXCL | FLAGS, 0o660, dir_fd=ews)
+        created = True
+    except FileExistsError:
+        try:
+            lock = os.open("check.lock", os.O_RDWR | FLAGS, dir_fd=ews)
+        except OSError as error:
+            if error.errno in (errno.ELOOP, errno.ENXIO, errno.EISDIR):
+                say("link ews/check.lock")
+                sys.exit(0)
+            raise
+    info = os.fstat(lock)
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        say("link ews/check.lock")
+        sys.exit(0)
+    if created:
+        os.fchmod(lock, 0o660)
+        group(lock, ews)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        say("busy")
+        sys.exit(0)
+    say("locked %d" % os.getpid())
+    while os.read(0, 4096):
+        pass
+except OSError as error:
+    say("error %s" % (error.strerror or error))'
 
-# 0 when fd 9 is the file $1, and that is a regular file, no link, with no other name (no hard link)
-fuEWS_IS_FD9 () {
-  python3 -c 'import os, stat, sys
-opened, named = os.fstat(9), os.lstat(sys.argv[1])
-same = (opened.st_dev, opened.st_ino) == (named.st_dev, named.st_ino)
-sys.exit(0 if same and stat.S_ISREG(named.st_mode) and named.st_nlink == 1 else 1)' "$1" 2>/dev/null
-}
-
-# The lock on fd 9: check.lock made 0660 with O_EXCL (no link followed), opened read-only (no
-# O_CREAT, flock needs no more), then checked to be the regular file of that name with no other
-# name (no link, no hard link); flock without waiting
+# The lock: the holder runs from a process substitution on fd 9 (started in the background there,
+# so it is no child a `wait` of the script waits for); its answer comes through a file of mktemp.
+# Closing fd 9, or any end of the script, ends the holder and frees the lock.
 fuEWS_LOCK () {
-  local myLOCK="${myEWS_HOLD_DIR}/check.lock"
-  if ! fuEWS_PLAIN "${myLOCK}";
+  local myDATA="$1"
+  local myRESULT=""
+  local myANSWER=""
+  local myWAIT=0
+  if ! myRESULT=$(mktemp "${TMPDIR:-/tmp}/tpot-ews-lock.XXXXXX");
     then
-      fuEWS_SAY ERROR "${myLOCK} is a link or no regular file; T-Pot leaves it as it is."
+      fuEWS_SAY ERROR "No temporary file for the lock of the checks."
       return 3
   fi
-  if [ ! -e "${myLOCK}" ];
-    then
-      ( umask 117; set -C; : > "${myLOCK}" ) 2>/dev/null
-  fi
-  if ! { exec 9<"${myLOCK}"; } 2>/dev/null;
-    then
-      fuEWS_SAY ERROR "${myLOCK} cannot be opened."
-      return 3
-  fi
-  if ! fuEWS_IS_FD9 "${myLOCK}";
-    then
-      exec 9>&-
-      fuEWS_SAY ERROR "${myLOCK} is a link or no regular file; T-Pot leaves it as it is."
-      return 3
-  fi
-  if ! flock -n 9;
-    then
-      exec 9>&-
-      fuEWS_SAY ERROR "Another check is running."
-      return 3
-  fi
-  myEWS_HOLD_LOCKED="1"
+  exec 9> >(python3 -c "${myEWS_LOCK_HOLDER}" "${myDATA}" "${myRESULT}" <&0 >/dev/null 2>&1 &)
+  while [ "${myWAIT}" -lt 200 ];
+    do
+      myANSWER=$(cat "${myRESULT}" 2>/dev/null)
+      [ -n "${myANSWER}" ] && break
+      sleep 0.05
+      myWAIT=$(( myWAIT + 1 ))
+    done
+  rm -f "${myRESULT}"
+  case "${myANSWER}" in
+    "locked "*)
+      myEWS_HOLD_LOCK_PID="${myANSWER#locked }"
+      myEWS_HOLD_LOCKED="1"
+      return 0 ;;
+  esac
+  exec 9>&-
+  case "${myANSWER}" in
+    busy) fuEWS_SAY ERROR "Another check is running." ;;
+    "link "*) fuEWS_SAY ERROR "${myDATA}/${myANSWER#link } is a link or no regular file; T-Pot leaves it as it is." ;;
+    nodata) fuEWS_SAY ERROR "The data folder ${myDATA} does not exist." ;;
+    "error "*) fuEWS_SAY ERROR "The lock of the checks in ${myEWS_HOLD_DIR} cannot be taken: ${myANSWER#error }." ;;
+    *) fuEWS_SAY ERROR "The lock of the checks in ${myEWS_HOLD_DIR} cannot be taken (no answer)." ;;
+  esac
+  return 3
+}
+
+# Gives the lock back and waits (at most 5 s) until the holder is gone
+fuEWS_UNLOCK () {
+  local myWAIT=0
+  [ -n "${myEWS_HOLD_LOCKED}" ] || return 0
+  exec 9>&-
+  myEWS_HOLD_LOCKED=""
+  while [ -n "${myEWS_HOLD_LOCK_PID}" ] && kill -0 "${myEWS_HOLD_LOCK_PID}" 2>/dev/null && [ "${myWAIT}" -lt 100 ];
+    do
+      sleep 0.05
+      myWAIT=$(( myWAIT + 1 ))
+    done
+  myEWS_HOLD_LOCK_PID=""
 }
 
 # The marker, written new through the descriptor of the folder (no link on the way): refused when
@@ -145,7 +240,7 @@ fuEWS_LOCK () {
 # is there is written anew, so a renewal never brings back one the end of the hold removed.
 fuEWS_MARKER_WRITE () {
   python3 -c 'import os, stat, sys, time, uuid
-folder = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+folder = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK)
 try:
     try:
         if not stat.S_ISREG(os.stat("hold", dir_fd=folder, follow_symlinks=False).st_mode):
@@ -154,7 +249,8 @@ try:
         if sys.argv[3] == "renew":
             sys.exit(1)
     temp = "hold.%s.tmp" % uuid.uuid4().hex
-    handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder)
+    handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600,
+                     dir_fd=folder)
     try:
         try:
             os.fchmod(handle, 0o660)
@@ -172,6 +268,36 @@ try:
     print(os.stat("hold", dir_fd=folder, follow_symlinks=False).st_mtime_ns)
 finally:
     os.close(folder)' "${myEWS_HOLD_DIR}" "$$" "${1:-new}" 2>/dev/null
+}
+
+# Removes the marker through the descriptor of the folder: 0 removed, 1 not there, 2 a link or no
+# regular file (left as it is), 3 it cannot be removed
+fuEWS_MARKER_REMOVE () {
+  python3 -c 'import os, stat, sys
+try:
+    folder = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK)
+except OSError:
+    sys.exit(3)
+try:
+    try:
+        info = os.stat("hold", dir_fd=folder, follow_symlinks=False)
+    except FileNotFoundError:
+        sys.exit(1)
+    if not stat.S_ISREG(info.st_mode):
+        sys.exit(2)
+    try:
+        os.unlink("hold", dir_fd=folder)
+    except FileNotFoundError:
+        sys.exit(1)
+    except OSError:
+        sys.exit(3)
+finally:
+    os.close(folder)' "${myEWS_HOLD_DIR}" 2>/dev/null
+}
+
+# 0 when the marker is a regular file (no link): the hold is still on
+fuEWS_MARKER_THERE () {
+  [ -f "${myEWS_HOLD_DIR}/hold" ] && [ ! -L "${myEWS_HOLD_DIR}/hold" ]
 }
 
 # 0 when hold.ack is a regular file, no link, written at or after the marker (its mtime in ns,
@@ -242,14 +368,41 @@ fuEWS_ALIVE () {
   return 0
 }
 
-# The renewal of the marker: every myEWS_HOLD_REFRESH seconds while the shell that started it ($1)
-# runs; it looks every myEWS_HOLD_TICK seconds, so it ends soon after a kill of that shell. TERM
-# ends it after the step it is in. When the renewal fails twice in a row (the marker is gone, a
-# link or cannot be written) it sends TERM to that shell: the check stops, its trap ends the hold.
+# 0 while a process of the process group $1 runs; zombies (whose parent does not reap them, i.e.
+# in a container without an init) count as gone, by /proc where there is one
+fuEWS_GROUP_ALIVE () {
+  if [ ! -r /proc/self/stat ];
+    then
+      kill -0 -- "-$1" 2>/dev/null
+      return
+  fi
+  python3 -c 'import os, sys
+for name in os.listdir("/proc"):
+    if not name.isdigit():
+        continue
+    try:
+        with open("/proc/%s/stat" % name) as handle:
+            line = handle.read()
+    except OSError:
+        continue
+    fields = line[line.rfind(")") + 2:].split()
+    if len(fields) > 2 and fields[2] == sys.argv[1] and fields[0] not in ("Z", "X", "x"):
+        sys.exit(0)
+sys.exit(1)' "$1" 2>/dev/null
+}
+
+# The watch of the marker: while the shell that started it ($1) runs (it looks every
+# myEWS_HOLD_TICK seconds, so it ends soon after a kill of that shell), every myEWS_HOLD_WATCH
+# seconds whether the marker is still there, every myEWS_HOLD_REFRESH seconds it is written anew.
+# The end of the hold stops this loop before it removes the marker, so a missing marker means
+# someone else removed it (a start of T-Pot): then, and when the renewal fails twice in a row, it
+# sends TERM to that shell, the check stops and its trap ends the hold. TERM ends the loop after
+# the step it is in.
 fuEWS_REFRESH_LOOP () {
   local myPARENT="$1"
   local mySTOP=""
   local myNEXT=$(( $(date +%s) + myEWS_HOLD_REFRESH ))
+  local myLOOK=$(( $(date +%s) + myEWS_HOLD_WATCH ))
   local mySLEEP=""
   local myFAILED=0
   trap 'mySTOP="1"' TERM
@@ -262,6 +415,16 @@ fuEWS_REFRESH_LOOP () {
       kill "${mySLEEP}" 2>/dev/null
       [ -z "${mySTOP}" ] || break
       fuEWS_ALIVE "${myPARENT}" || break
+      if [ "$(date +%s)" -ge "${myLOOK}" ];
+        then
+          myLOOK=$(( $(date +%s) + myEWS_HOLD_WATCH ))
+          if ! fuEWS_MARKER_THERE;
+            then
+              fuEWS_SAY ERROR "The hold marker was removed (T-Pot restarted?), the check stops."
+              kill -TERM "${myPARENT}" 2>/dev/null
+              break
+          fi
+      fi
       if [ "$(date +%s)" -ge "${myNEXT}" ];
         then
           myNEXT=$(( $(date +%s) + myEWS_HOLD_REFRESH ))
@@ -282,15 +445,15 @@ fuEWS_REFRESH_LOOP () {
     done
 }
 
-# The renewal in the background, without the lock (fd 9) and disowned: a plain `wait` of the
-# script that sourced this file never waits for it
+# The loop in the background, without the lock (fd 9) and disowned: a plain `wait` of the script
+# that sourced this file never waits for it
 fuEWS_REFRESH_START () {
   fuEWS_REFRESH_LOOP "$$" 9>&- < /dev/null &
   myEWS_HOLD_REFRESH_PID=$!
   disown "${myEWS_HOLD_REFRESH_PID}" 2>/dev/null
 }
 
-# Ends the renewal and waits until it is gone (disowned, so by kill -0), at most 10 s
+# Ends the loop and waits until it is gone (disowned, so by kill -0), at most 10 s
 fuEWS_REFRESH_STOP () {
   local myWAIT=0
   [ -n "${myEWS_HOLD_REFRESH_PID}" ] || return 0
@@ -348,28 +511,16 @@ fuEWS_HOLD_BEGIN () {
   local myDATA="$1"
   local myCOMPOSE="$2"
   local myDEADLINE=""
+  local myRUNS=0
   myEWS_HOLD_DIR="${myDATA}/ews"
-  if [ ! -d "${myDATA}" ];
-    then
-      fuEWS_SAY ERROR "The data folder ${myDATA} does not exist."
-      return 3
-  fi
-  if [ -L "${myEWS_HOLD_DIR}" ] || { [ -e "${myEWS_HOLD_DIR}" ] && [ ! -d "${myEWS_HOLD_DIR}" ]; };
-    then
-      fuEWS_SAY ERROR "${myEWS_HOLD_DIR} is a link or no folder; T-Pot leaves it as it is."
-      return 3
-  fi
-  if [ ! -d "${myEWS_HOLD_DIR}" ] && ! mkdir -m 770 "${myEWS_HOLD_DIR}" 2>/dev/null;
-    then
-      fuEWS_SAY ERROR "${myEWS_HOLD_DIR} cannot be made."
-      return 3
-  fi
-  fuEWS_LOCK || return 3
+  fuEWS_LOCK "${myDATA}" || return 3
   if ! fuEWS_IN_COMPOSE "${myCOMPOSE}";
     then
       fuEWS_SAY INFO "ewsposter does not run here, nothing to hold."
       return 0
   fi
+  fuEWS_RUNS
+  myRUNS=$?
   # held before the write: a signal during it still ends with the marker removed
   myEWS_HOLD_HELD="1"
   if ! myEWS_HOLD_MARKER_NS=$(fuEWS_MARKER_WRITE) || [ -z "${myEWS_HOLD_MARKER_NS}" ];
@@ -379,12 +530,16 @@ fuEWS_HOLD_BEGIN () {
       return 3
   fi
   # a container that is down starts held when it comes up (its entrypoint sees the marker)
-  if ! fuEWS_RUNS;
+  if [ "${myRUNS}" -eq 1 ];
     then
       myEWS_HOLD_ACKED="1"
       fuEWS_SAY INFO "ewsposter is not running; the hold marker is set, so it starts held if it comes up during the check."
       fuEWS_REFRESH_START
       return 0
+  fi
+  if [ "${myRUNS}" -eq 2 ];
+    then
+      fuEWS_SAY WARN "docker cannot say whether ewsposter runs; the check waits for its confirmation as if it ran."
   fi
   fuEWS_SAY INFO "Holding ewsposter: it sends nothing until the check is over (up to ${myEWS_HOLD_TIMEOUT} s for its confirmation) ..."
   myDEADLINE=$(( $(date +%s) + myEWS_HOLD_TIMEOUT ))
@@ -405,8 +560,9 @@ fuEWS_HOLD_BEGIN () {
 }
 
 # The end of the hold, once (also from the EXIT trap): wait for the last log lines, stop the
-# renewal, remove the marker, give the lock back. INT and TERM wait until it is through.
+# loop, remove the marker, give the lock back. INT and TERM wait until it is through.
 fuEWS_HOLD_END () {
+  local myRC=0
   trap '' INT TERM
   if [ -n "${myEWS_HOLD_ACKED}" ] && [ "${myEWS_HOLD_SETTLE}" != "0" ];
     then
@@ -418,24 +574,15 @@ fuEWS_HOLD_END () {
   if [ -n "${myEWS_HOLD_HELD}" ];
     then
       myEWS_HOLD_HELD=""
-      if [ -f "${myEWS_HOLD_DIR}/hold" ] && [ ! -L "${myEWS_HOLD_DIR}/hold" ];
-        then
-          if rm -f "${myEWS_HOLD_DIR}/hold";
-            then
-              fuEWS_SAY INFO "The hold of ewsposter is lifted, it sends again after its next round."
-            else
-              fuEWS_SAY WARN "${myEWS_HOLD_DIR}/hold could not be removed; ewsposter ignores it after 30 minutes."
-          fi
-      elif [ -e "${myEWS_HOLD_DIR}/hold" ] || [ -L "${myEWS_HOLD_DIR}/hold" ];
-        then
-          fuEWS_SAY WARN "${myEWS_HOLD_DIR}/hold is a link or no regular file now; T-Pot leaves it as it is."
-      fi
+      fuEWS_MARKER_REMOVE
+      myRC=$?
+      case "${myRC}" in
+        0) fuEWS_SAY INFO "The hold of ewsposter is lifted, it sends again after its next round." ;;
+        2) fuEWS_SAY WARN "${myEWS_HOLD_DIR}/hold is a link or no regular file now; T-Pot leaves it as it is." ;;
+        3) fuEWS_SAY WARN "${myEWS_HOLD_DIR}/hold could not be removed; ewsposter ignores it after 30 minutes." ;;
+      esac
   fi
-  if [ -n "${myEWS_HOLD_LOCKED}" ];
-    then
-      exec 9>&-
-      myEWS_HOLD_LOCKED=""
-  fi
+  fuEWS_UNLOCK
   if [ -n "${myEWS_HOLD_TRAPPED}" ];
     then
       trap 'fuEWS_HOLD_SIGNAL 130' INT
@@ -450,7 +597,9 @@ fuEWS_HOLD_USAGE () {
 Usage: ews_hold.sh [--data DIR] [--compose FILE] [--timeout SEC] [--settle SEC] run -- COMMAND [ARGS ...]
 
 Runs COMMAND while ewsposter sends nothing (the hold of the checks of T-Pot),
-one check at a time.
+one check at a time. COMMAND runs in a process group of its own and does not
+read the terminal; when the check ends early, the whole group is stopped
+before the hold ends.
 
   --data DIR       The data folder, default: TPOT_DATA_PATH of ~/tpotce/.env
   --compose FILE   The compose file in use, default: ~/tpotce/docker-compose.yml
@@ -462,6 +611,14 @@ Exit codes: those of COMMAND; 2 a wrong option; 3 another check is running or
 ewsposter did not confirm the hold (COMMAND did not run).
 EOF
 }
+
+# COMMAND in a process group of its own (python3: setpgid, INT back to its default, exec), in the
+# background, so a TERM of the loop stops the check at once; it reads no terminal (a background
+# group that reads one is stopped), otherwise the stdin of the helper
+myEWS_HOLD_GROUP='import os, signal, sys
+os.setpgid(0, 0)
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+os.execvp(sys.argv[1], sys.argv[1:])'
 
 fuEWS_HOLD_MAIN () {
   local myDIR="${TPOTCE_DIR:-${HOME}/tpotce}"
@@ -494,23 +651,44 @@ fuEWS_HOLD_MAIN () {
   esac
   [ -n "${myDATA}" ] || myDATA=$(fuEWS_DATA_PATH "${myDIR}")
   [ -n "${myCOMPOSE}" ] || myCOMPOSE="${myDIR}/docker-compose.yml"
-  # the command runs in the background (wait ends at once on a signal, so a TERM of the renewal
-  # stops the check at once), its stdin is that of the helper; the traps end it before the hold
   fuEWS_HOLD_TRAPS fuEWS_HOLD_STOP_CHILD
   fuEWS_HOLD_BEGIN "${myDATA}" "${myCOMPOSE}" || exit 3
-  "$@" 9>&- 0<&0 &
+  # a trap between the fork and the assignment finds the child as $! (FORKING, LAST)
+  myEWS_HOLD_LAST="${!:-}"
+  myEWS_HOLD_FORKING="1"
+  if [ -t 0 ];
+    then
+      python3 -c "${myEWS_HOLD_GROUP}" "$@" 9>&- < /dev/null &
+    else
+      python3 -c "${myEWS_HOLD_GROUP}" "$@" 9>&- 0<&0 &
+  fi
   myEWS_HOLD_CHILD=$!
+  myEWS_HOLD_FORKING=""
   wait "${myEWS_HOLD_CHILD}"
   myRC=$?
   myEWS_HOLD_CHILD=""
   exit "${myRC}"
 }
 
-# The command of `run` when the check ends early (Ctrl+C, TERM)
+# The command of `run` when the check ends early (Ctrl+C, TERM): TERM to its whole process group,
+# then wait for it and for the rest of the group (at most 30 s, then KILL)
 fuEWS_HOLD_STOP_CHILD () {
-  [ -n "${myEWS_HOLD_CHILD:-}" ] || return 0
-  kill -TERM "${myEWS_HOLD_CHILD}" 2>/dev/null
-  wait "${myEWS_HOLD_CHILD}" 2>/dev/null
+  local myPID="${myEWS_HOLD_CHILD}"
+  local myWAIT=0
+  if [ -z "${myPID}" ] && [ -n "${myEWS_HOLD_FORKING}" ] && [ "${!:-}" != "${myEWS_HOLD_LAST}" ];
+    then
+      myPID="${!}"
+  fi
+  [ -n "${myPID}" ] || return 0
+  kill -TERM -- "-${myPID}" 2>/dev/null || kill -TERM "${myPID}" 2>/dev/null
+  wait "${myPID}" 2>/dev/null
+  while fuEWS_GROUP_ALIVE "${myPID}" && [ "${myWAIT}" -lt 300 ];
+    do
+      sleep 0.1
+      myWAIT=$(( myWAIT + 1 ))
+    done
+  kill -KILL -- "-${myPID}" 2>/dev/null
+  myEWS_HOLD_CHILD=""
 }
 
 case "${0##*/}" in

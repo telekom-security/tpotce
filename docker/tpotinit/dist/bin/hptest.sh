@@ -158,14 +158,30 @@ function fuOWN_ADDRESS {   # host -> 0 when it is an address of this host (or a 
 	return 1
 }
 
-function fuSTOP_PROBES {   # the probes still in the background (after Ctrl+C), before the hold ends
-	local myJOBS=""
+# the scans in the background: their own pids (timeout, or sudo for the UDP scan), so a signal
+# reaches the scanner itself and a wait really waits for it
+myPIDS=()
+mySUDO_PIDS=()
+
+function fuSTOP_PROBES {   # the probes still running (Ctrl+C, TERM) end before the hold does
+	local myPID="" myJOBS="" myWAIT=0
 	myJOBS=$(jobs -p)
-	[ -n "${myJOBS}" ] || return 0
 	# shellcheck disable=SC2086
-	kill ${myJOBS} 2>/dev/null
-	# shellcheck disable=SC2086
-	wait ${myJOBS} 2>/dev/null
+	kill ${myJOBS} "${myPIDS[@]}" 2>/dev/null
+	# the UDP scan runs as root: when sudo did not end by the TERM above, root ends it (sudo passes
+	# it on to timeout, timeout to nmap), with the credentials of the sudo -v before the scan
+	for myPID in "${mySUDO_PIDS[@]}";
+	  do
+	    myWAIT=0
+	    while kill -0 "${myPID}" 2>/dev/null && [ "${myWAIT}" -lt 10 ];
+	      do
+	        sleep 0.1
+	        myWAIT=$(( myWAIT + 1 ))
+	      done
+	    kill -0 "${myPID}" 2>/dev/null && sudo -n kill -TERM "${myPID}" 2>/dev/null
+	  done
+	# every probe and scan, however long it takes to end (the scans at most myTIMEOUT)
+	wait
 }
 
 function fuCHECKDEPS {
@@ -300,10 +316,27 @@ fuMARK phase scan Scanning every published port
 if fuHAS nmap;
   then
     fuUI_INFO "Scanning the UDP / TCP ports of ${myDOCKERCOMPOSEYML} (up to ${myTIMEOUT}s) ..."
-    [ -n "${myTCPPORTS}" ] && timeout --foreground "${myTIMEOUT}" nmap -sV -sC -v -p "${myTCPPORTS}" "$myHOST" &
-    # a UDP scan needs root; sudo first, so the -B function refreshes it
-    [ -n "${myUDPPORTS}" ] && sudo timeout --foreground "${myTIMEOUT}" nmap -sU -sV -sC -v -p "${myUDPPORTS}" "$myHOST" &
-    wait
+    if [ -n "${myTCPPORTS}" ];
+      then
+        timeout --foreground "${myTIMEOUT}" nmap -sV -sC -v -p "${myTCPPORTS}" "$myHOST" &
+        myPIDS+=("$!")
+    fi
+    # a UDP scan needs root: sudo -v first (in the foreground, the -B function refreshes it), then
+    # sudo itself in the background, so the job is sudo and no subshell around it
+    if [ -n "${myUDPPORTS}" ];
+      then
+        if sudo -v;
+          then
+            command sudo -n timeout --foreground "${myTIMEOUT}" nmap -sU -sV -sC -v -p "${myUDPPORTS}" "$myHOST" &
+            myPIDS+=("$!")
+            mySUDO_PIDS+=("$!")
+          else
+            fuUI_WARN "No sudo, no UDP scan."
+        fi
+    fi
+    [ "${#myPIDS[@]}" -eq 0 ] || wait "${myPIDS[@]}"
+    myPIDS=()
+    mySUDO_PIDS=()
     fuUI_OK "Scan done."
   else
     fuUI_WARN "nmap is not there (openSUSE has none in its repositories), no scan."

@@ -40,6 +40,10 @@ CONTAINER = "ewsposter"
 TIMEOUT = 180.0
 # ewsposter ignores a marker older than 30 minutes; it is written anew every 5 minutes
 REFRESH = 300.0
+# how often the renewal looks whether the marker is still there (seconds)
+WATCH = 30.0
+# the end of a hold waits this long for the last log lines of the check (as ews_hold.sh)
+SETTLE = 10.0
 # hold.state is written after every round; an older one says nothing about ewsposter
 STATE_MAX_AGE = 120.0
 STATES = ("normal", "held", "stuck")
@@ -48,6 +52,8 @@ NOT_HERE = "ewsposter does not run here, nothing to hold"
 NOT_RUNNING = ("ewsposter is not running; the hold marker is set, so it starts held if it comes up "
                "during the check")
 REFRESH_FAILED = "the hold marker could not be refreshed, the check stops"
+MARKER_GONE = "the hold marker was removed (T-Pot restarted?), the check stops"
+UNKNOWN_RUNS = "docker cannot say whether ewsposter runs; the check waits for its confirmation as if it ran"
 # a renewal that fails this many times in a row stops the check (check())
 REFRESH_FAILURES = 2
 MARKER_MODE = 0o660
@@ -83,13 +89,14 @@ def ews_state(data_dir: str, now: Callable[[], float] = time.time) -> Tuple[str,
     return match.group(1), max(age, 0.0)
 
 
-def ewsposter_runs() -> bool:
-    """The ewsposter container runs (docker ps)."""
+def ewsposter_runs() -> Optional[bool]:
+    """Whether the ewsposter container runs (docker ps); None when docker cannot say, which
+    EwsHold takes as running (it waits for the ack)."""
     from tpotctl import ops
     try:
         return any(c.name == CONTAINER and c.state == "running" for c in ops.containers())
-    except ops.OpsError as error:
-        raise CheckError(f"docker cannot say whether ewsposter runs ({error}); nothing was probed") from None
+    except ops.OpsError:
+        return None
 
 
 class EwsHold:
@@ -101,23 +108,30 @@ class EwsHold:
     `timeout` seconds for a `hold.ack` written after it (HoldError, the marker removed and the
     lock given back: nothing may be probed then). When it is in the compose file but its
     container does not run, the marker is written all the same and no ack is awaited: ewsposter
-    starts held when it comes up during the check (`note` and the log say so). Without ewsposter
-    in the compose file there is no marker, `note` and the log say so, and the lock is held all
-    the same. While the hold lasts, the marker is written anew every `refresh` seconds, so the
-    30 minutes of ewsposter never end a long check.
+    starts held when it comes up during the check (`note` and the log say so). When docker
+    cannot say (`running` returns None), ewsposter counts as running. Without ewsposter in the
+    compose file there is no marker, `note` and the log say so, and the lock is held all the
+    same. While the hold lasts, a thread looks every `watch` seconds whether the marker is still
+    there and writes it anew every `refresh` seconds, so the 30 minutes of ewsposter never end a
+    long check.
 
-    `check()` raises HoldError once the renewal failed REFRESH_FAILURES times in a row: the
-    runner calls it between its probes and stops the check then (leaving the `with` block).
+    `check()` raises HoldError when the marker is gone or no regular file any more and this hold
+    did not remove it (a start of T-Pot removes `hold` and `check.lock`, tpotinit's
+    clear_ews_hold), or once the renewal failed REFRESH_FAILURES times in a row. The runner
+    calls it between its probes and stops the check then (it leaves the `with` block).
 
-    `__exit__` (also on an exception or Ctrl+C) waits `settle` seconds, removes the marker and
-    gives the lock back. The contract of the caller: it leaves the `with` block only after the
-    last log line of the check is written: its probes answered or timed out, its injected lines
-    appended. A line written after the marker is gone may be sent.
+    `__exit__` (also on an exception or Ctrl+C) waits `settle` seconds (10, as ews_hold.sh: the
+    honeypots write lines when a connection closes), removes the marker and gives the lock back.
+    The contract of the caller: it leaves the `with` block only after the last log line of the
+    check is written: its probes answered or timed out, its injected lines appended. A line
+    written after the marker is gone may be sent. A SIGTERM or SIGHUP that Python does not turn
+    into an exception skips `__exit__`; the runner installs handlers for them (ewsposter would
+    end the hold only after 30 minutes otherwise).
     """
 
     def __init__(self, data_dir: str, compose_names: Iterable[str], timeout: float = TIMEOUT,
-                 ack_poll: float = 1.0, *, running: Optional[Callable[[], bool]] = None,
-                 refresh: float = REFRESH, settle: float = 0.0,
+                 ack_poll: float = 1.0, *, running: Optional[Callable[[], Optional[bool]]] = None,
+                 refresh: float = REFRESH, watch: float = WATCH, settle: float = SETTLE,
                  log: Callable[[str, str], None] = _say,
                  clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep):
         self.data_dir = data_dir
@@ -125,6 +139,7 @@ class EwsHold:
         self.timeout = timeout
         self.ack_poll = ack_poll
         self.refresh = refresh
+        self.watch = watch
         self.settle = settle
         self._running = running or ewsposter_runs
         self._log = log
@@ -139,14 +154,14 @@ class EwsHold:
         self._stop = threading.Event()
         self._writing = threading.Lock()
         self._refresher: Optional[threading.Thread] = None
-        self._refresh_failed = threading.Event()
+        self._failed = ""           # why the hold is over before the check (check())
 
     def check(self) -> None:
-        """HoldError when the marker could not be renewed REFRESH_FAILURES times in a row: the
-        hold may end before the check does, so the check stops. The runner calls it between
-        probes."""
-        if self._refresh_failed.is_set():
-            raise HoldError(REFRESH_FAILED)
+        """HoldError when the hold is over before the check: the marker was removed by someone
+        else (MARKER_GONE) or could not be renewed REFRESH_FAILURES times in a row
+        (REFRESH_FAILED). The runner calls it between probes."""
+        if self._failed:
+            raise HoldError(self._failed)
 
     @property
     def ews_dir(self) -> str:
@@ -156,14 +171,17 @@ class EwsHold:
         if fcntl is None or not kibana_objects.DIR_FD:
             raise CheckError("this system cannot lock a check or hold ewsposter, checks need a Linux T-Pot host")
         self._stop = threading.Event()
-        self._refresh_failed = threading.Event()
+        self._failed = ""
         try:
             self._open()
             if CONTAINER not in self.compose_names:
                 self.note = NOT_HERE
                 self._log("info", NOT_HERE)
                 return self
-            if not self._running():
+            runs = self._running()
+            if runs is None:
+                self._log("warn", UNKNOWN_RUNS)
+            if runs is False:
                 self._write_marker()
                 self.note = NOT_RUNNING
                 self._log("info", NOT_RUNNING)
@@ -276,12 +294,31 @@ class EwsHold:
         self._refresher = threading.Thread(target=self._refresh_loop, name="ews-hold", daemon=True)
         self._refresher.start()
 
+    def _fail(self, text: str) -> None:
+        self._log("error", text)
+        self._failed = text
+
     def _refresh_loop(self) -> None:
+        """Every `watch` seconds: the marker still a regular file (else MARKER_GONE); every
+        `refresh` seconds it is written anew (only one that is there, so the end of the hold is
+        never undone). Both under the lock of the writes, which the end takes before it removes
+        the marker."""
         failures = 0
-        while not self._stop.wait(self.refresh):
+        due = self._clock() + self.refresh
+        while not self._stop.wait(max(0.0, min(self.watch, due - self._clock()))):
             with self._writing:
                 if self._stop.is_set():
                     return
+                try:
+                    info = self._folder.lstat(MARKER)
+                except OSError:
+                    info = None
+                if info is None or not stat.S_ISREG(info.st_mode):
+                    self._fail(MARKER_GONE)
+                    return
+                if self._clock() < due:
+                    continue
+                due = self._clock() + self.refresh
                 try:
                     self._put_marker()
                     failures = 0
@@ -289,8 +326,7 @@ class EwsHold:
                     failures += 1
                     self._log("warn", f"{self.ews_dir}/{MARKER} could not be written anew: {error}")
                     if failures >= REFRESH_FAILURES:
-                        self._log("error", REFRESH_FAILED)
-                        self._refresh_failed.set()
+                        self._fail(REFRESH_FAILED)
                         return
 
     # -- the end ------------------------------------------------------------------------------

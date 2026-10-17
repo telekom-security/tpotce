@@ -186,6 +186,20 @@ class ChecksCliTest(unittest.TestCase):
         self.assertIn("Netherlands", text)
 
 
+def gone(pid: int) -> bool:
+    """The process has ended: no such process, or a zombie nobody reaps (a container without an init)."""
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return True
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as handle:
+            line = handle.read()
+    except OSError:
+        return False
+    return line[line.rfind(")") + 2:].split()[0] in ("Z", "X", "x")
+
+
 class FakeEwsposter:
     """ewsposter as far as the hold goes: once the marker is there, hold.ack is touched (after it)."""
 
@@ -260,6 +274,7 @@ class EwsHoldTest(HoldFolder):
         options.setdefault("timeout", 3)
         options.setdefault("ack_poll", 0.01)
         options.setdefault("running", lambda: True)
+        options.setdefault("settle", 0)
         return ewshold.EwsHold(self.data, names, log=lambda kind, text: self.said.append((kind, text)), **options)
 
     def test_the_marker_comes_first_then_the_ack(self):
@@ -356,37 +371,86 @@ class EwsHoldTest(HoldFolder):
         self.assertFalse(os.path.exists(self.marker))
         self.assertTrue(self.lock_is_free())
 
+    def wait_for_stop(self, hold, text):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                hold.check()
+            except HoldError as error:
+                self.assertEqual(str(error), text)
+                return
+            time.sleep(0.02)
+        self.fail("the check went on")
+
     def test_a_failing_refresh_stops_the_check(self):
-        target = os.path.join(self.data, "elsewhere")
-        with open(target, "w", encoding="utf-8") as out:
-            out.write("keep\n")
+        text = "the hold marker could not be refreshed, the check stops"
         with FakeEwsposter(self.ews):
             with self.hold(refresh=0.05) as hold:
                 hold.check()
-                os.unlink(self.marker)
-                os.symlink(target, self.marker)
-                deadline = time.monotonic() + 5
-                while time.monotonic() < deadline:
-                    try:
-                        hold.check()
-                    except HoldError as error:
-                        self.assertEqual(str(error), "the hold marker could not be refreshed, the check stops")
-                        break
-                    time.sleep(0.02)
-                else:
-                    self.fail("the check went on")
-                self.assertIn(("error", "the hold marker could not be refreshed, the check stops"), self.said)
+
+                def failing():
+                    raise OSError("no space left")
+                hold._put_marker = failing
+                self.wait_for_stop(hold, text)
+                self.assertIn(("error", text), self.said)
                 self.assertEqual(sum(1 for kind, _text in self.said if kind == "warn"), 2)
-        self.assertTrue(os.path.islink(self.marker))
+                self.assertTrue(os.path.isfile(self.marker))
+        self.assertFalse(os.path.exists(self.marker))
+        self.assertTrue(self.lock_is_free())
+
+    def test_a_removed_marker_stops_the_check(self):
+        text = "the hold marker was removed (T-Pot restarted?), the check stops"
+        target = os.path.join(self.data, "elsewhere")
+        with open(target, "w", encoding="utf-8") as out:
+            out.write("keep\n")
+        for replace in (False, True):
+            with self.subTest(link=replace), FakeEwsposter(self.ews):
+                with self.hold(watch=0.05) as hold:
+                    hold.check()
+                    os.unlink(self.marker)
+                    if replace:
+                        os.symlink(target, self.marker)
+                    self.wait_for_stop(hold, text)
+                    self.assertIn(("error", text), self.said)
+                    time.sleep(0.2)
+                    self.assertEqual(os.path.islink(self.marker), replace)
+                    self.assertTrue(replace or not os.path.exists(self.marker), "the marker came back")
+                if replace:
+                    self.assertTrue(os.path.islink(self.marker))
+                    os.unlink(self.marker)
+                self.assertTrue(self.lock_is_free())
         with open(target, encoding="utf-8") as handle:
             self.assertEqual(handle.read(), "keep\n")
-        self.assertTrue(self.lock_is_free())
+
+    def test_the_end_of_the_hold_is_no_removed_marker(self):
+        with FakeEwsposter(self.ews):
+            with self.hold(watch=0.01, refresh=0.02) as hold:
+                time.sleep(0.2)
+                hold.check()
+        self.assertNotIn(("error", "the hold marker was removed (T-Pot restarted?), the check stops"), self.said)
+
+    def test_docker_that_cannot_say_counts_as_running(self):
+        text = "docker cannot say whether ewsposter runs; the check waits for its confirmation as if it ran"
+        with self.assertRaises(HoldError):
+            with self.hold(running=lambda: None, timeout=0.2):
+                self.fail("probed")
+        self.assertIn(("warn", text), self.said)
+        self.assertFalse(os.path.exists(self.marker))
+        with FakeEwsposter(self.ews):
+            with self.hold(running=lambda: None) as hold:
+                self.assertTrue(hold.acked)
+        with mock.patch("tpotctl.ops.containers", side_effect=__import__("tpotctl.ops").ops.OpsError("denied")):
+            self.assertIsNone(ewshold.ewsposter_runs())
+
+    def test_the_end_settles_10_s_by_default(self):
+        self.assertEqual(ewshold.EwsHold(self.data, ()).settle, 10)
 
     def test_one_failed_refresh_is_tried_again(self):
         with FakeEwsposter(self.ews):
             with self.hold(refresh=0.05) as hold:
                 real = hold._put_marker
                 calls = []
+                hold.watch = 1000
 
                 def flaky():
                     calls.append(True)
@@ -491,20 +555,20 @@ class EwsHoldTest(HoldFolder):
 
 @unittest.skipUnless(fcntl and shutil.which("bash") and shutil.which("python3"), "no bash or flock")
 class EwsHoldShellTest(HoldFolder):
-    """ews_hold.sh with a flock of fcntl (same lock as util-linux / busybox) and a docker stub."""
+    """ews_hold.sh with a docker stub; its lock is the flock of its python3 holder, the same lock as
+    EwsHold takes."""
 
     def setUp(self):
         super().setUp()
         self.bin = tempfile.mkdtemp(prefix="tpot-hold-bin-")
         self.addCleanup(shutil.rmtree, self.bin)
-        self.stub("flock", "#!/bin/sh\n"
-                           "[ \"$1\" = \"-n\" ] || exit 64\n"
-                           "exec python3 -c 'import fcntl, sys\n"
-                           "try:\n"
-                           "    fcntl.flock(int(sys.argv[1]), fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
-                           "except BlockingIOError:\n"
-                           "    sys.exit(1)' \"$2\"\n")
-        self.stub("docker", "#!/bin/sh\necho \"$*\" >> \"$STUB_CALLS\"\necho \"${STUB_EWS_RUNNING:-true}\"\n")
+        self.stub("docker", "#!/bin/sh\n"
+                            "echo \"$*\" >> \"$STUB_CALLS\"\n"
+                            "case \"${STUB_EWS_RUNNING:-true}\" in\n"
+                            "  fail) echo 'permission denied while trying to connect to the docker API' >&2; exit 1 ;;\n"
+                            "  absent) echo 'Error: No such object: ewsposter' >&2; exit 1 ;;\n"
+                            "esac\n"
+                            "echo \"${STUB_EWS_RUNNING:-true}\"\n")
         self.calls = os.path.join(self.bin, "calls")
         self.compose = os.path.join(self.data, "docker-compose.yml")
         self.write_compose(True)
@@ -615,7 +679,7 @@ class EwsHoldShellTest(HoldFolder):
             process = subprocess.Popen(
                 [EWS_HOLD, "--data", self.data, "--compose", self.compose, "run", "--", "sleep", "30"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
-                env=self.env(myEWS_HOLD_REFRESH="1"), start_new_session=True)
+                env=self.env(myEWS_HOLD_REFRESH="1", myEWS_HOLD_WATCH="1000"), start_new_session=True)
             self.addCleanup(lambda: os.killpg(process.pid, signal.SIGKILL) if process.poll() is None else None)
             self.wait_for(lambda: os.path.isfile(self.marker) and os.path.isfile(self.ack))
             time.sleep(0.3)
@@ -629,6 +693,69 @@ class EwsHoldShellTest(HoldFolder):
         with open(target, encoding="utf-8") as handle:
             self.assertEqual(handle.read(), "keep\n")
         self.assertTrue(self.lock_is_free())
+
+    def start_cli(self, *command, **extra):
+        process = subprocess.Popen(
+            [EWS_HOLD, "--data", self.data, "--compose", self.compose, "run", "--"] + list(command),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, env=self.env(**extra),
+            start_new_session=True)
+        self.addCleanup(lambda: os.killpg(process.pid, signal.SIGKILL) if process.poll() is None else None)
+        return process
+
+    def test_a_removed_marker_stops_the_check(self):
+        with FakeEwsposter(self.ews):
+            process = self.start_cli("sleep", "30", myEWS_HOLD_WATCH="1")
+            self.wait_for(lambda: os.path.isfile(self.marker) and os.path.isfile(self.ack))
+            os.unlink(self.marker)
+            start = time.monotonic()
+            out, err = process.communicate(timeout=20)
+        self.assertLess(time.monotonic() - start, 10)
+        self.assertEqual(process.returncode, 143, out + err)
+        self.assertIn("The hold marker was removed (T-Pot restarted?), the check stops.", err)
+        self.assertFalse(os.path.exists(self.marker))
+        self.assertTrue(self.lock_is_free())
+
+    def test_docker_that_cannot_say_counts_as_running(self):
+        result = self.begin(STUB_EWS_RUNNING="fail")
+        self.assertIn("rc=3", result.stdout)
+        self.assertNotIn("PROBE", result.stdout)
+        self.assertIn("docker cannot say whether ewsposter runs", result.stdout)
+        self.assertIn("did not confirm the hold", result.stderr)
+        with FakeEwsposter(self.ews):
+            result = self.begin(STUB_EWS_RUNNING="fail")
+        self.assertIn("rc=0\nPROBE\nMARKER\n", result.stdout, result.stderr)
+        self.assertIn("ewsposter holds", result.stdout)
+        result = self.begin(STUB_EWS_RUNNING="absent")
+        self.assertIn("rc=0\nPROBE\nMARKER\n", result.stdout, result.stderr)
+        self.assertIn("ewsposter is not running", result.stdout)
+
+    def test_a_fifo_as_the_lock_is_refused_at_once(self):
+        os.mkfifo(self.lock)
+        start = time.monotonic()
+        result = self.begin()
+        self.assertLess(time.monotonic() - start, 10)
+        self.assertIn("rc=3", result.stdout)
+        self.assertIn("check.lock is a link or no regular file", result.stderr)
+
+    def test_the_group_of_the_command_ends_before_the_hold(self):
+        grandchild = os.path.join(self.data, "grandchild")
+        log = os.path.join(self.data, "log")
+        script = (f'sh -c \'trap "" TERM; sleep 1; test -f "{self.marker}" && echo present >> "{log}"\' & '
+                  f'echo $! > "{grandchild}"; wait')
+        with FakeEwsposter(self.ews):
+            process = self.start_cli("sh", "-c", script)
+            self.wait_for(lambda: os.path.isfile(grandchild) and os.path.getsize(grandchild) > 0)
+            with open(grandchild, encoding="utf-8") as handle:
+                pid = int(handle.read())
+            os.kill(process.pid, signal.SIGTERM)
+            start = time.monotonic()
+            out, err = process.communicate(timeout=60)
+        self.assertEqual(process.returncode, 143, out + err)
+        self.assertLess(time.monotonic() - start, 20)
+        self.assertTrue(gone(pid))
+        with open(log, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "present\n")
+        self.assertFalse(os.path.exists(self.marker))
 
     def test_links_are_refused(self):
         target = os.path.join(self.data, "elsewhere")
@@ -736,6 +863,81 @@ class EwsHoldShellTest(HoldFolder):
                     out.write(text)
                 result = self.source('fuEWS_DATA_PATH "$CO"', CO=checkout)
                 self.assertEqual(result.stdout.strip(), expected)
+
+
+@unittest.skipUnless(fcntl and shutil.which("bash") and shutil.which("python3"), "no bash")
+class HptestUnderTheHoldTest(HoldFolder):
+    """A TERM during the scans: the hold ends only after the scanners (stubs of timeout and nmap that
+    keep running and take a second to end) are gone."""
+
+    SCANNER = ('#!/bin/bash\n'
+               'case " $* " in *" nmap "*) ;; *) exit 0 ;; esac\n'
+               'echo $$ >> "$STUB_SCANS"\n'
+               'trap \'trap "" TERM; sleep 1; if [ -f "$STUB_MARKER" ]; then echo present >> "$STUB_LOG"; '
+               'else echo gone >> "$STUB_LOG"; fi; exit 143\' TERM\n'
+               'while :; do sleep 0.1; done\n')
+
+    def setUp(self):
+        super().setUp()
+        self.bin = tempfile.mkdtemp(prefix="tpot-hptest-bin-")
+        self.addCleanup(shutil.rmtree, self.bin)
+        self.checkout = tempfile.mkdtemp(prefix="tpot-hptest-co-")
+        self.addCleanup(shutil.rmtree, self.checkout)
+        with open(os.path.join(self.checkout, ".env"), "w", encoding="utf-8") as out:
+            out.write(f"TPOT_DATA_PATH={self.data}\n")
+        with open(os.path.join(self.checkout, "docker-compose.yml"), "w", encoding="utf-8") as out:
+            out.write("services:\n  cowrie:\n    container_name: cowrie\n"
+                      "  ewsposter:\n    container_name: ewsposter\n")
+        config = {"services": {"cowrie": {"ports": [{"target": 22, "published": "22", "protocol": "tcp"},
+                                                    {"target": 69, "published": "69", "protocol": "udp"}]}}}
+        with open(os.path.join(self.bin, "config.json"), "w", encoding="utf-8") as out:
+            json.dump(config, out)
+        self.stub("docker", '#!/bin/sh\n[ "$1" = compose ] && exec cat "$STUB_CONFIG"\necho true\n')
+        self.stub("timeout", self.SCANNER)
+        self.stub("sudo", '#!/bin/sh\nwhile [ "${1#-}" != "$1" ]; do [ "$1" = -v ] && exit 0; shift; done\n'
+                          'exec "$@"\n')
+        for name in ("nmap", "ncat", "findscu", "getscu", "curl"):
+            self.stub(name, "#!/bin/sh\nexit 0\n")
+        self.scans = os.path.join(self.bin, "scans")
+        self.log = os.path.join(self.bin, "log")
+
+    def stub(self, name, text):
+        path = os.path.join(self.bin, name)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(text)
+        os.chmod(path, 0o755)
+
+    def scanners(self):
+        try:
+            with open(self.scans, encoding="utf-8") as handle:
+                return [int(line) for line in handle.read().split()]
+        except OSError:
+            return []
+
+    def test_term_during_the_scan(self):
+        env = dict(os.environ, PATH=self.bin + os.pathsep + os.environ.get("PATH", ""), TPOT_GUM="off",
+                   TPOTCE_DIR=self.checkout, STUB_CONFIG=os.path.join(self.bin, "config.json"),
+                   STUB_SCANS=self.scans, STUB_LOG=self.log, STUB_MARKER=self.marker,
+                   myEWS_HOLD_SETTLE="0", myEWS_HOLD_POLL="0.05", myEWS_HOLD_TICK="0.1")
+        with FakeEwsposter(self.ews):
+            process = subprocess.Popen([HPTEST, "127.0.0.1"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       universal_newlines=True, env=env, start_new_session=True)
+            self.addCleanup(lambda: os.killpg(process.pid, signal.SIGKILL) if process.poll() is None else None)
+            deadline = time.monotonic() + 30
+            while len(self.scanners()) < 2:
+                if time.monotonic() > deadline or process.poll() is not None:
+                    self.fail("no scan: " + "".join(process.communicate()))
+                time.sleep(0.05)
+            self.assertTrue(os.path.isfile(self.marker))
+            os.kill(process.pid, signal.SIGTERM)
+            out, err = process.communicate(timeout=60)
+        self.assertEqual(process.returncode, 143, out + err)
+        with open(self.log, encoding="utf-8") as handle:
+            self.assertEqual(handle.read().split(), ["present", "present"])
+        for pid in self.scanners():
+            self.assertTrue(gone(pid))
+        self.assertFalse(os.path.exists(self.marker))
+        self.assertTrue(self.lock_is_free())
 
 
 class ChecksUnderTheHoldTest(unittest.TestCase):
