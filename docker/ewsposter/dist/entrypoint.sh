@@ -9,10 +9,14 @@
 # sent, not even later. /data/ews/hold.ack says that ewsposter holds: it is written after each
 # idle round that ended cleanly (every pass with rc 0, no module behind) and removed when the hold
 # is over. A module whose idle pass keeps failing (also on its own, -m) does not keep the others
-# from being held: the round counts as clean for them, and hold.ack names it in one line
-# "failed: <module> ...", so the check leaves its honeypots alone. Normal passes come back only
-# after such a round without the marker; until then the hold is stuck (no module can be held),
-# which /data/ews/hold.state says (normal, held or stuck). A hold that is on when
+# from being held: hold.ack names it in one line "failed: <module> ...", so the check leaves its
+# honeypots alone. Such a round counts as clean only for the modules named in the first ack of the
+# hold that failed in every round since (the check left exactly those alone): a module that was
+# held at the first ack and fails later, or any failing module of a hold that began without an ack
+# (ewsposter started while the marker was there), keeps the hold stuck after the marker is gone, as
+# a round that failed does; hold.ack still names it, so the check leaves it alone from then on.
+# Normal passes come back only after a clean round without the marker; until then the hold is
+# stuck, which /data/ews/hold.state says (normal, held or stuck). A hold that is on when
 # ewsposter starts goes on with idle passes at once. The marker only counts as a regular file
 # (no link) younger than 30 minutes, so a check that was cut off never keeps ewsposter quiet for
 # good.
@@ -51,6 +55,13 @@ myIDLE_RETRY_PAUSE=5
 myCHILD=""
 # the modules whose idle passes failed in the last round (fuIDLE), one space before each
 myIDLE_FAILED=""
+# this hold: its first ack was written (yes), it began without one (ewsposter started held: yes),
+# the modules of the first ack that failed in every round since, and whether a round failed a
+# module outside them (yes: the hold is stuck after the marker until a round is clean)
+myHOLD_ACKED=""
+myHOLD_NOACK=""
+myHOLD_SKIPPED=""
+myHOLD_DIRTY=""
 mySTUCK_SINCE=""
 mySTUCK_SAID=0
 
@@ -255,9 +266,9 @@ fuIDLE () {
   if [ -n "${myFAILED}" ];
     then
       echo " => [WARN] Idle passes failed for:${myFAILED}."
+      myIDLE_FAILED="${myFAILED}"
       # no module could be held
       [ -n "${myCLEAN}" ] || return 1
-      myIDLE_FAILED="${myFAILED}"
   fi
   if [ -n "${myBEHIND}" ];
     then
@@ -265,6 +276,47 @@ fuIDLE () {
   fi
   [ -z "${myIDLE_FAILED}" ] || return 3
   return 0
+}
+
+# 0 when every word of $1 is one of $2
+fuSUBSET () {
+  local myWORD=""
+  for myWORD in $1;
+    do
+      case " $2 " in
+        *" ${myWORD} "*) ;;
+        *) return 1 ;;
+      esac
+  done
+  return 0
+}
+
+# The words of $1 that are in $2, one space before each
+fuINTERSECT () {
+  local myWORD=""
+  local myOUT=""
+  for myWORD in $1;
+    do
+      case " $2 " in
+        *" ${myWORD} "*) myOUT="${myOUT} ${myWORD}" ;;
+      esac
+  done
+  echo "${myOUT}"
+}
+
+# After a round of the hold (rc $1 of fuIDLE): the first ack sets the modules the check leaves
+# alone; every later round (and every round of a hold that began without an ack) keeps only those
+# that failed again, and a failed module outside them, or a round that failed, makes the hold dirty
+fuHOLD_TRACK () {
+  if [ -z "${myHOLD_ACKED}" ] && [ -z "${myHOLD_NOACK}" ];
+    then
+      return 0
+  fi
+  if [ "$1" -eq 1 ] || ! fuSUBSET "${myIDLE_FAILED}" "${myHOLD_SKIPPED}";
+    then
+      myHOLD_DIRTY="yes"
+  fi
+  myHOLD_SKIPPED=$(fuINTERSECT "${myHOLD_SKIPPED}" "${myIDLE_FAILED}")
 }
 
 # hold.ack, a new file renamed into place (a link of that name is replaced, never followed):
@@ -340,15 +392,33 @@ fuROUND () {
       fi
       fuIDLE
       myRC=$?
+      fuHOLD_TRACK ${myRC}
       case ${myRC} in
-        0) fuHOLD_ACK ;;
+        0)
+          fuHOLD_ACK
+          myHOLD_ACKED="yes" ;;
         3)
           # the others are held; the check leaves the honeypots of these modules alone
           echo " => [WARN] hold.ack without the modules whose idle passes fail:${myIDLE_FAILED}; the check leaves their honeypots alone."
-          fuHOLD_ACK "${myIDLE_FAILED# }" ;;
+          if [ -z "${myHOLD_ACKED}" ] && [ -z "${myHOLD_NOACK}" ];
+            then
+              myHOLD_SKIPPED="${myIDLE_FAILED}"
+          fi
+          fuHOLD_ACK "${myIDLE_FAILED# }"
+          myHOLD_ACKED="yes" ;;
         2) echo " => [WARN] No hold.ack yet: a module is still behind, the idle rounds go on in ${myHOLD_INTERVAL} s." ;;
-        *) echo " => [WARN] No hold.ack: the idle round did not end cleanly, it runs again in ${myHOLD_INTERVAL} s." ;;
+        *)
+          echo " => [WARN] No hold.ack: the idle round did not end cleanly, it runs again in ${myHOLD_INTERVAL} s."
+          # a check that holds already learns which modules fail from now on
+          if [ -n "${myIDLE_FAILED}" ] && { [ -n "${myHOLD_ACKED}" ] || [ -n "${myHOLD_NOACK}" ]; };
+            then
+              fuHOLD_ACK "${myIDLE_FAILED# }"
+          fi ;;
       esac
+      if [ -n "${myHOLD_DIRTY}" ];
+        then
+          echo " => [WARN] A module that was held fails now (or the hold began without an ack): after the hold ewsposter stays idle until a round is clean."
+      fi
       fuHOLD_STATE held
       return 0
   fi
@@ -357,9 +427,11 @@ fuROUND () {
       rm -f "${myHOLD_ACK}"
       fuIDLE
       myRC=$?
-      # a module that cannot be held is no reason to stay idle for the others
-      if [ ${myRC} -eq 3 ];
+      # a module the check left alone (the first ack, failed in every round since) is no reason to
+      # stay idle for the others; any other failing module is
+      if [ ${myRC} -eq 3 ] && [ -z "${myHOLD_DIRTY}" ] && fuSUBSET "${myIDLE_FAILED}" "${myHOLD_SKIPPED}";
         then
+          echo " => [WARN] The modules the check left alone still fail:${myIDLE_FAILED}; the others send again."
           myRC=0
       fi
       if [ ${myRC} -ne 0 ];
@@ -371,6 +443,7 @@ fuROUND () {
       fi
       myHELD=""
       mySTUCK_SINCE=""
+      fuHOLD_RESET
       echo " => The hold is over, ewsposter sends again."
   fi
   fuPASS
@@ -381,14 +454,24 @@ fuROUND () {
 # The state at the start: an ack of an earlier run would tell a new check that ewsposter holds
 # before it does; a hold that is on at the start has been probing for a while already, so it goes
 # on with idle passes at once, without the normal pass a new hold starts with
+fuHOLD_RESET () {
+  myHOLD_ACKED=""
+  myHOLD_NOACK=""
+  myHOLD_SKIPPED=""
+  myHOLD_DIRTY=""
+}
+
 fuSTART () {
   myHELD=""
   mySTUCK_SINCE=""
+  fuHOLD_RESET
   rm -f "${myHOLD_ACK}"
   if fuHOLD_ON;
     then
       echo " => The hold for the check of T-Pot is on at the start: idle passes only, nothing is sent."
       myHELD="yes"
+      # no first ack tells which modules the check leaves alone: every failing module keeps it stuck
+      myHOLD_NOACK="yes"
       fuHOLD_STATE held
     else
       fuHOLD_STATE normal

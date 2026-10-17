@@ -327,15 +327,15 @@ class PassCountTest(EntrypointCase):
                 self.assertIn("Idle passes failed for: cowrie.", result.stdout)
 
     def test_every_module_failing_fails_the_round(self):
-        """No module can be held (every pass of every module fails): the round failed (1), no
-        module is named as the only one that failed."""
+        """No module can be held (every pass of every module fails): the round failed (1); the
+        modules are named (a check that holds already learns them from hold.ack)."""
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 box = self.sandbox(Path(shell).name)
                 result = box.run(shell, 'fuIDLE; rc=$?; echo "failed=[$myIDLE_FAILED]"; exit $rc',
                                  STUB_STARTED=1, STUB_RC=1)
                 self.assertEqual(result.returncode, 1)
-                self.assertIn("failed=[]", result.stdout)
+                self.assertIn("failed=[ adbhoney beelzebub ", result.stdout)
                 self.assertTrue(any(" -m " in call for call in box.calls()))
 
     def test_failed_module_and_a_module_behind_is_behind(self):
@@ -550,19 +550,76 @@ class RoundTest(EntrypointCase):
                 self.assertEqual(box.ack.read_text(), "")
 
     def test_end_of_hold_with_a_module_that_fails_goes_normal(self):
-        """After the marker is gone, a module that fails on its own keeps nobody idle: the
-        normal pass follows the idle round."""
+        """After the marker is gone, a module the check left alone (named in the first ack, failed
+        in every round since) keeps nobody idle: the normal pass follows the idle round."""
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 box = self.sandbox(Path(shell).name)
                 box.ack.write_text("failed: redishoneypot\n")
-                result = box.run(shell, 'myHELD=yes; fuROUND; echo "interval=$myINTERVAL held=$myHELD"',
+                result = box.run(shell, 'myHELD=yes; myHOLD_ACKED=yes; myHOLD_SKIPPED=" redishoneypot"; fuROUND; '
+                                        'echo "interval=$myINTERVAL held=$myHELD"',
                                  STUB_STARTED=1, STUB_CRASH="redishoneypot")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("interval=42 held=\n", result.stdout)
                 self.assertFalse(os.path.lexists(box.ack))
                 self.assertEqual(box.state_word(), "normal")
                 self.assertEqual(self.kinds(box)[-1], "normal")
+
+    HOLD_ROUNDS = ('myHELD=yes\n'
+                   'export STUB_CRASH="$CRASH1"; fuROUND\n'
+                   'export STUB_CRASH="$CRASH2"; fuROUND\n'
+                   'echo "ack2=[$(cat "$ACK")] dirty=[$myHOLD_DIRTY] skipped=[$myHOLD_SKIPPED]"\n'
+                   'rm -f "$MARKER"\n'
+                   'export STUB_CRASH="$CRASH2"; fuROUND; echo "interval=$myINTERVAL held=$myHELD"\n')
+
+    def hold_rounds(self, box, shell, crash1, crash2, start=""):
+        box.hold.write_text("")
+        return box.run(shell, start + self.HOLD_ROUNDS, STUB_STARTED=1, CRASH1=crash1, CRASH2=crash2,
+                       ACK=box.ack, MARKER=box.hold)
+
+    def test_a_module_of_the_first_ack_that_keeps_failing_goes_normal(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = self.hold_rounds(box, shell, "redishoneypot", "redishoneypot")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("ack2=[failed: redishoneypot] dirty=[] skipped=[ redishoneypot]", result.stdout)
+                self.assertIn("interval=42 held=\n", result.stdout)
+                self.assertEqual(box.state_word(), "normal")
+
+    def test_a_module_held_at_the_first_ack_that_fails_later_keeps_it_stuck(self):
+        """cowrie was held at the first ack (its honeypot was probed), then fails: the ack names it
+        for the check, and after the marker the hold stays stuck, no normal pass."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = self.hold_rounds(box, shell, "", "cowrie")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("ack2=[failed: cowrie] dirty=[yes]", result.stdout)
+                self.assertIn("interval=5 held=yes\n", result.stdout)
+                self.assertEqual(box.state_word(), "stuck")
+                self.assertNotIn("normal", RoundTest.kinds(box))
+
+    def test_a_second_module_failing_after_the_first_ack_keeps_it_stuck(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                # the stand-in fails one module at a time: first redishoneypot, then cowrie
+                result = self.hold_rounds(box, shell, "redishoneypot", "cowrie")
+                self.assertIn("dirty=[yes]", result.stdout)
+                self.assertEqual(box.state_word(), "stuck")
+
+    def test_a_hold_that_began_without_an_ack_and_a_failing_module_stays_stuck(self):
+        """ewsposter started while the marker was there (no first ack, the check did not wait for
+        one): every failing module keeps the hold stuck after the marker."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = self.hold_rounds(box, shell, "redishoneypot", "redishoneypot", start="fuSTART\n")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("dirty=[yes]", result.stdout)
+                self.assertIn("interval=5 held=yes\n", result.stdout)
+                self.assertEqual(box.state_word(), "stuck")
 
     def test_failed_round_writes_no_ack(self):
         for shell in SHELLS:
