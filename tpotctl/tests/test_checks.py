@@ -222,8 +222,10 @@ class ChecksCliTest(unittest.TestCase):
         from tpotctl.checks import run as trun
         self.assertEqual(trun.QUESTION,
                          "During the check (a few minutes) ewsposter sends nothing; real attacks from this window "
-                         "are not reported either. Test events are written to the honeypot logs and removed from "
-                         "Elasticsearch afterwards (--keep keeps them).")
+                         "are not reported either. The probes and one test event per honeypot with a fixed test IP "
+                         "are written to the honeypot logs; afterwards the check removes its own events from "
+                         "Elasticsearch, the log lines stay.")
+        self.assertEqual(trun.question(trun.Options()), trun.QUESTION)
         code, text, _made, check, asked = self.run_check("honeypots", tty=True, answer="n")
         self.assertEqual(code, 1)
         asked.assert_called_once()
@@ -234,6 +236,24 @@ class ChecksCliTest(unittest.TestCase):
         check.run.assert_called_once_with()
         self.assertIn("stay in Elasticsearch", trun.question(trun.Options(keep=True)))
         self.assertIn("HIVE", trun.question(trun.Options(), sensor=True))
+
+    def test_the_question_names_behaviour_not_options(self):
+        """No option names in the question (the page has switches), and no test events with the geo probe off."""
+        from tpotctl.checks import run as trun
+        texts = {(geo, geo_only, keep): trun.question(trun.Options(geo=geo, geo_only=geo_only, keep=keep))
+                 for geo in (True, False) for geo_only in (True, False) for keep in (True, False)}
+        texts["sensor"] = trun.question(trun.Options(), sensor=True)
+        for key, text in texts.items():
+            with self.subTest(case=key):
+                self.assertNotIn("--", text)
+                self.assertTrue(text.startswith(trun.QUESTION_HOLD))
+        self.assertEqual(texts[(False, False, False)],
+                         f"{trun.QUESTION_HOLD} The probes are written to the honeypot logs; afterwards the check "
+                         f"removes its own events from Elasticsearch, the log lines stay.")
+        self.assertNotIn("test event", texts[(False, False, True)])
+        self.assertTrue(texts[(False, False, True)].endswith("logs and stay in Elasticsearch."))
+        self.assertIn("One test event per honeypot", texts[(True, True, False)])
+        self.assertNotIn("probes", texts[(True, True, False)])
 
     def test_the_dry_run_asks_nothing_and_touches_nothing(self):
         code, text, _made, check, asked = self.run_check("pipeline", "--dry-run")

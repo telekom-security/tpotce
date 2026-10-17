@@ -1523,6 +1523,20 @@ NO_CHECK_YET = "No check has run yet."
 CHECK_UNREADABLE = "The last result cannot be read."
 
 
+def check_short_title(result: Dict, name: str) -> str:
+    """The column title of a stage: short (stages.SHORT_TITLES, as tpot check prints it) so that the table fits
+    next to the menu at 80 columns; a stage of another release by its title of last.json."""
+    from tpotctl.checks import stages as tstages
+    return tstages.SHORT_TITLES.get(name) or result["titles"][name]
+
+
+def check_legend(result: Dict) -> Text:
+    """What the short column titles stand for, the full titles of last.json (plain text)."""
+    parts = [f"{short}: {result['titles'][name]}." for name in result["stages"]
+             for short in [check_short_title(result, name)] if short != result["titles"][name]]
+    return Text(" ".join(parts), style=theme.color("ash"))
+
+
 def check_cell(state: str) -> Text:
     glyph, colour = CHECK_STATES[state]
     return Text(glyphs.g(glyph), style=f"bold {theme.color(colour)}" if state == "failed" else theme.color(colour),
@@ -1725,7 +1739,9 @@ class ChecksPane(Vertical):
             with Horizontal(classes="actions"):
                 yield Button("Test the Attack Map pipeline", id="check-pipeline")
             yield Static("", id="check-summary")
-            yield NavDataTable(id="check-results", cursor_type="row", zebra_stripes=True)
+            # the name stays when the table scrolls sideways (80 columns)
+            yield NavDataTable(id="check-results", cursor_type="row", zebra_stripes=True, fixed_columns=1)
+            yield Static("", id="check-legend")
             yield Static("", id="check-extra", classes="info")
             with Horizontal(classes="actions"):
                 yield NavInput(placeholder="host to probe", id="check-host", compact=True)
@@ -1762,7 +1778,11 @@ class ChecksPane(Vertical):
             info.append("\n\nThis is a SENSOR: the check covers the port, the answer and the log line, the rest is "
                         "checked on its HIVE.", style=theme.color("ash"))
         self.query_one("#checks-info", Static).update(info)
-        self.query_one("#check-geo", Switch).disabled = self.sensor
+        # a SENSOR writes no test events with a test IP and keeps no events: its HIVE has them
+        geo, cleanup = self.query_one("#check-geo", Switch), self.query_one("#check-cleanup", Switch)
+        geo.disabled = cleanup.disabled = self.sensor
+        geo.tooltip = "A SENSOR writes no test events with a test IP: check the HIVE." if self.sensor else None
+        cleanup.tooltip = "A SENSOR keeps no events, they are in Elasticsearch of its HIVE." if self.sensor else None
         self.query_one("#check-pipeline", Button).disabled = self.sensor
         extra = Text()
         extra.append("Probe with nmap", style=f"bold {theme.color('glass')}")
@@ -1799,7 +1819,10 @@ class ChecksPane(Vertical):
         result = self.result
         if result is None or not result["honeypots"]:
             if self.problem:
-                summary.update(Text(CHECK_UNREADABLE, style=theme.color("warn")))
+                text = Text(CHECK_UNREADABLE, style=theme.color("warn"))
+                # why, in one line of plain text (a path, "no JSON", another version)
+                text.append("\n" + " ".join(self.problem.split()), style=theme.color("ash"))
+                summary.update(text)
             elif result is None:
                 summary.update(Text(NO_CHECK_YET, style=theme.color("mist")))
             else:
@@ -1807,6 +1830,7 @@ class ChecksPane(Vertical):
             self.row_keys = {}
             table.clear()
             table.display = False
+            self.query_one("#check-legend", Static).display = False
             return
         summary.update(check_summary(result, self.sensor))
         stages = tuple(result["stages"])
@@ -1814,8 +1838,11 @@ class ChecksPane(Vertical):
             table.clear(columns=True)
             table.add_column(Text("Honeypot"), key="name")
             for name in stages:
-                table.add_column(Text(result["titles"][name]), key=name)
+                table.add_column(Text(check_short_title(result, name)), key=name)
             self.columns_for = stages
+        legend = self.query_one("#check-legend", Static)
+        legend.update(check_legend(result))
+        legend.display = True
         rows, self.row_keys = [], {}
         for row in result["honeypots"]:
             key, number = row["name"], 1
@@ -1823,7 +1850,9 @@ class ChecksPane(Vertical):
                 number += 1
                 key = f"{row['name']} ({number})"
             self.row_keys[key] = row
-            name = Text(row["name"], style=theme.color("glass" if row["running"] else "ash"))
+            # the colour as a span: a change of running repaints the cell (sync_rows compares the spans too)
+            name = Text(row["name"])
+            name.stylize(theme.color("glass" if row["running"] else "ash"))
             rows.append((key, [name] + [check_cell(row["stages"][stage]["state"]) for stage in stages]))
         table.display = True
         table.sync_rows(rows)
@@ -1852,7 +1881,7 @@ class ChecksPane(Vertical):
         command = [LAUNCHER, "check", what, "--dry-run" if dry_run else "-y"]
         if what == "honeypots" and not geo and not self.sensor:
             command.append("--no-geo")
-        if not cleanup:
+        if not cleanup and not self.sensor:
             command.append("--keep")
         return command
 

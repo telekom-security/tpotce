@@ -928,6 +928,10 @@ Button.-error:disabled {
     margin-top: 1;
 }
 
+#check-legend {
+    margin-top: 0;
+}
+
 #check-extra {
     margin-top: 1;
 }

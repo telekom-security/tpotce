@@ -615,6 +615,17 @@ class SyncRowsTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.2)
             self.assertEqual(table.scroll_y, scroll)
 
+    async def test_a_cell_whose_colour_changes_is_repainted(self):
+        """Rich Text equals a Text of another style: the colour of the whole cell counts as a change."""
+        from rich.text import Text
+        app = self.table_app()
+        async with app.run_test(size=(60, 20)) as pilot:
+            table = app.query_one("#t")
+            table.sync_rows([("a", (Text("a", style="red"), "x"))])
+            await pilot.pause(0.1)
+            table.sync_rows([("a", (Text("a", style="blue"), "x"))])
+            self.assertEqual(str(table.get_row("a")[0].style), "blue")
+
     async def test_new_rows_keep_the_cursor_on_its_row_and_the_scroll_position(self):
         names = [f"honeypot{n:02d}" for n in range(43)]
         app = self.table_app()

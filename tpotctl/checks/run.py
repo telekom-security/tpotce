@@ -79,12 +79,16 @@ SECOND_PASS = 60.0
 MAP_CONTAINERS = ("map_redis", "map_web")
 RESULT_VERSION = 1
 
-QUESTION = ("During the check (a few minutes) ewsposter sends nothing; real attacks from this window are not "
-            "reported either. Test events are written to the honeypot logs and removed from Elasticsearch "
-            "afterwards (--keep keeps them).")
-QUESTION_KEEP = ("During the check (a few minutes) ewsposter sends nothing; real attacks from this window are "
-                 "not reported either. Test events are written to the honeypot logs and stay in Elasticsearch "
-                 "(--keep).")
+# the question before a check: what it does to this host, in words of behaviour (the page asks it too)
+QUESTION_HOLD = ("During the check (a few minutes) ewsposter sends nothing; real attacks from this window are not "
+                 "reported either.")
+QUESTION_WRITTEN = {"probes": "The probes are written to the honeypot logs",
+                    "both": "The probes and one test event per honeypot with a fixed test IP are written to the "
+                            "honeypot logs",
+                    "events": "One test event per honeypot with a fixed test IP is written to the honeypot logs"}
+QUESTION_CLEANUP = "; afterwards the check removes its own events from Elasticsearch, the log lines stay."
+QUESTION_KEPT = " and stay in Elasticsearch."
+QUESTION = f"{QUESTION_HOLD} {QUESTION_WRITTEN['both']}{QUESTION_CLEANUP}"
 QUESTION_SENSOR = ("During the check (a few minutes) ewsposter sends nothing; real attacks from this window are "
                    "not reported either. The probes are written to the honeypot logs and sent to the HIVE, where "
                    "they stay in Elasticsearch (a SENSOR checks the port, the answer and the log line).")
@@ -146,7 +150,8 @@ def question(options: Options, sensor: bool = False) -> str:
     """What the check does to this host, asked before it starts."""
     if sensor:
         return QUESTION_SENSOR
-    return QUESTION_KEEP if options.keep else QUESTION
+    written = QUESTION_WRITTEN["events" if options.geo_only else "both" if options.geo else "probes"]
+    return f"{QUESTION_HOLD} {written}{QUESTION_KEPT if options.keep else QUESTION_CLEANUP}"
 
 
 def now_utc() -> datetime:

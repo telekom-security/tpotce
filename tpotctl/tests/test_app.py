@@ -1993,7 +1993,7 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             async with app.run_test(size=self.SIZE) as pilot:
                 await self.open(pilot, app)
                 with self.subTest(problem=problem):
-                    self.assertEqual(flat(app.query_one("#check-summary")), tapp.CHECK_UNREADABLE)
+                    self.assertEqual(flat(app.query_one("#check-summary")), f"{tapp.CHECK_UNREADABLE} {problem}")
                     self.assertFalse(app.query_one("#check-results").display)
 
     async def test_an_error_before_the_hold_shows_its_text(self):
@@ -2017,7 +2017,12 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             table = app.query_one("#check-results")
             self.assertTrue(table.display)
             self.assertEqual([str(c.label) for c in table.ordered_columns],
-                             ["Honeypot"] + [tstages.TITLES[name] for name in tstages.STAGES])
+                             ["Honeypot"] + [tstages.SHORT_TITLES[name] for name in tstages.STAGES])
+            self.assertEqual(table.fixed_columns, 1)
+            legend = flat(app.query_one("#check-legend"))
+            for name in tstages.STAGES:
+                if tstages.SHORT_TITLES[name] != tstages.TITLES[name]:
+                    self.assertIn(f"{tstages.SHORT_TITLES[name]}: {tstages.TITLES[name]}.", legend)
             self.assertEqual([row.key.value for row in table.ordered_rows], ["cowrie", "dionaea", "glutton"])
             cells = table.get_row("dionaea")
             self.assertEqual([cell.plain for cell in cells[1:4]], ["✓", "✗", "–"])
@@ -2036,10 +2041,11 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
         app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
         async with app.run_test(size=self.SIZE) as pilot:
             await self.open(pilot, app)
+            # set_icons saves the choice: the other tests take unicode, also when this one fails
+            self.addCleanup(tapp.prefs.save, tapp.prefs.Prefs("unicode"))
             app.set_icons("ascii")
             await pilot.pause(0.3)
             cells = app.query_one("#check-results").get_row("dionaea")
-            app.set_icons("unicode")            # set_icons saves the choice: the other tests take unicode
         self.assertEqual([cell.plain for cell in cells[1:5]], ["+", "x", "-", "."])
 
     async def test_a_reload_keeps_the_cursor_and_changes_only_the_cells(self):
@@ -2061,6 +2067,36 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cleared, [])
             self.assertEqual(table.cursor_row, 2)
             self.assertEqual(table.get_row("glutton")[1].plain, "✓")
+
+    async def test_the_table_fits_at_80_columns(self):
+        """80 x 24 next to the menu: every stage column in view, the name stays when it scrolls sideways."""
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            table.focus()
+            await pilot.pause(0.3)
+            self.assertEqual(table.max_scroll_x, 0, (table.virtual_size, table.size))
+            self.assertEqual(table.fixed_columns, 1)
+
+    async def test_a_change_of_running_repaints_the_name(self):
+        from tpotctl import theme
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            pane = await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            self.assertIn(theme.color("ash"), str(table.get_row("glutton")[0].spans))
+            later = sample_check()
+            later["honeypots"][2]["running"] = True
+            backend.check_result_value = later
+            pane.load()
+            await pilot.pause(0.2)
+            self.assertIn(theme.color("glass"), str(table.get_row("glutton")[0].spans))
+            self.assertNotIn(theme.color("ash"), str(table.get_row("glutton")[0].spans))
 
     async def test_enter_on_a_row_shows_its_details(self):
         backend = FakeBackend()
@@ -2176,7 +2212,10 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             self.assertNotIsInstance(app.query_one("#checks"), tapp.LockedPane)
             self.assertTrue(app.query_one("#check-pipeline").disabled)
             self.assertTrue(app.query_one("#check-geo").disabled)
+            self.assertTrue(app.query_one("#check-cleanup").disabled)
+            self.assertIn("HIVE", str(app.query_one("#check-cleanup").tooltip))
             self.assertIn("SENSOR", flat(app.query_one("#checks-info")))
+            app.query_one("#check-cleanup").value = False       # as it may be from before: no --keep there
             await pilot.click("#check-honeypots")
             await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
             self.assertEqual(app.screen.body.plain, trun.question(trun.Options(), sensor=True))
