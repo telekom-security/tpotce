@@ -3,8 +3,11 @@
 ewsposter (docker/ewsposter/dist/entrypoint.sh) holds while `<data>/ews/hold` is a regular file
 younger than 30 minutes: after one normal pass for the lines from before the hold, its passes
 are idle, nothing is built, spooled or sent, its indexes move on. `hold.ack` says that an idle
-round ended cleanly with no module behind; only an ack written after the marker counts.
-`hold.state` is one line `<normal|held|stuck> <epoch seconds>`, written after every round.
+round ended cleanly with no module behind; only an ack written after the marker counts. A module
+whose idle passes keep failing (an ewsposter module that cannot read its honeypot's log) is named
+in it, one line `failed: <module> ...` (the sections of ews.cfg): the others are held, the check
+leaves the honeypots of those modules alone (`honeypots_of`). `hold.state` is one line
+`<normal|held|stuck> <epoch seconds>`, written after every round.
 
     with EwsHold(data_dir, ops.compose_names()) as hold:
         ...                       # probes and injected lines; leave only after the last of them
@@ -19,7 +22,7 @@ import re
 import stat
 import threading
 import time
-from typing import Callable, Iterable, Optional, Tuple
+from typing import Callable, Iterable, List, Optional, Tuple
 
 try:
     import fcntl
@@ -57,6 +60,36 @@ UNKNOWN_RUNS = "docker cannot say whether ewsposter runs; the check waits for it
 # a renewal that fails this many times in a row stops the check (check())
 REFRESH_FAILURES = 2
 MARKER_MODE = 0o660
+# the most of hold.ack that is read (it holds one line of module names)
+ACK_MAX = 4096
+# why the check leaves a honeypot alone whose ewsposter module cannot be held
+CANNOT_HOLD = "ewsposter cannot hold its module (its idle pass fails; docker logs ewsposter)"
+# the modules of ews.cfg (its sections, lower case) whose honeypots have other service names;
+# conpot is every template (conpot_*), every other module is the honeypot of its name
+MODULE_HONEYPOTS = {"citrix": ("citrixhoneypot",), "gopot": ("go-pot",)}
+
+
+def failed_modules(text: Optional[str]) -> List[str]:
+    """The modules a hold.ack names (`failed: <module> ...`), sorted; none for an empty one."""
+    found = set()
+    for line in (text or "")[:ACK_MAX].splitlines():
+        key, _, rest = line.partition(":")
+        if key.strip() != "failed":
+            continue
+        found.update(word.lower() for word in rest.split() if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", word))
+    return sorted(found)
+
+
+def honeypots_of(modules: Iterable[str], names: Iterable[str]) -> List[str]:
+    """The honeypots among `names` (service names) that the ewsposter modules `modules` read."""
+    names = list(names)
+    found = set()
+    for module in modules:
+        if module == "conpot":
+            found.update(name for name in names if name.startswith("conpot_"))
+        else:
+            found.update(name for name in MODULE_HONEYPOTS.get(module, (module,)) if name in names)
+    return sorted(found)
 
 
 def _say(kind: str, text: str) -> None:
@@ -147,6 +180,9 @@ class EwsHold:
         self._sleep = sleep
         self.held = False           # the marker is there
         self.acked = False          # ewsposter confirmed it
+        # the modules ewsposter could not hold (hold.ack): at the ack, and every one named later on
+        self.failed_at_ack: List[str] = []
+        self._failed_modules: List[str] = []
         self.note = ""
         self._folder: Optional[Folder] = None
         self._lock: Optional[int] = None
@@ -164,6 +200,22 @@ class EwsHold:
             raise HoldError(self._failed)
 
     @property
+    def failed_modules(self) -> List[str]:
+        """Every module a hold.ack of this hold named: those of the ack and those of a later round
+        (read with the look at the marker, every `watch` seconds)."""
+        return list(self._failed_modules)
+
+    def _read_failed(self) -> List[str]:
+        """The modules of hold.ack now (a missing or unreadable one names none)."""
+        try:
+            text = self._folder.read(ACK) if self._folder is not None else None
+        except (KibanaError, OSError, ValueError):
+            return []
+        found = failed_modules(text)
+        self._failed_modules = sorted(set(self._failed_modules) | set(found))
+        return found
+
+    @property
     def ews_dir(self) -> str:
         return os.path.join(self.data_dir, EWS_DIR)
 
@@ -172,6 +224,7 @@ class EwsHold:
             raise CheckError("this system cannot lock a check or hold ewsposter, checks need a Linux T-Pot host")
         self._stop = threading.Event()
         self._failed = ""
+        self.failed_at_ack, self._failed_modules = [], []
         try:
             self._open()
             if CONTAINER not in self.compose_names:
@@ -268,7 +321,12 @@ class EwsHold:
         while True:
             if self.acknowledged():
                 self.acked = True
+                self.failed_at_ack = self._read_failed()
                 self._log("ok", "ewsposter holds, nothing leaves this host during the check.")
+                if self.failed_at_ack:
+                    self._log("warn", f"ewsposter cannot hold its module(s) {', '.join(self.failed_at_ack)} (their "
+                                      f"idle passes fail; docker logs ewsposter): the check leaves their honeypots "
+                                      f"alone.")
                 return
             if self._clock() >= deadline:
                 raise HoldError(self._timeout_text())
@@ -316,6 +374,8 @@ class EwsHold:
                 if info is None or not stat.S_ISREG(info.st_mode):
                     self._fail(MARKER_GONE)
                     return
+                if self.acked:
+                    self._read_failed()
                 if self._clock() < due:
                     continue
                 due = self._clock() + self.refresh

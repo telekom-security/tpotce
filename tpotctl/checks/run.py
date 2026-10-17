@@ -3,7 +3,9 @@
 The run:
     1. the inventory: the honeypots of the compose file in use (tpotctl.checks.inventory);
     2. the hold of ewsposter and the lock of the checks (EwsHold): nothing leaves the host from
-       here on, and a hold that is not confirmed ends the run before the first probe (exit 3);
+       here on, and a hold that is not confirmed ends the run before the first probe (exit 3); a
+       honeypot whose ewsposter module cannot be held (hold.ack names it) gets neither a probe nor
+       a geo event, its row says why and its ewsposter stage fails;
     3. the probes against the host's own address (not 127.0.0.1: docker-proxy would change the
        source port), then one geo event per running honeypot (not the passive tools), a fixture
        with a fixed test IP (IPv4) and the marker port 51234 + n appended to its real log;
@@ -779,6 +781,8 @@ class Check:
         self.host = ""
         self.sent = False               # a probe or a geo event went out: the cleanup has work
         self.map: Optional[MapListener] = None
+        # the honeypots whose ewsposter module cannot be held: no probe, no geo event
+        self.not_held: List[str] = []
 
     # -- output --
 
@@ -882,7 +886,8 @@ class Check:
             return []
         names = set(fixtures.names())
         return [h for h in self.honeypots
-                if h.running and h.name in names and h.name in LOGS and h.group not in PASSIVE_GROUPS]
+                if h.running and h.name in names and h.name in LOGS and h.group not in PASSIVE_GROUPS
+                and h.name not in self.not_held]
 
     def geo_event(self, name: str) -> GeoEvent:
         """The test IP and the marker port of a honeypot's geo event: the n-th honeypot of the
@@ -1007,9 +1012,11 @@ class Check:
             report.error = str(error)
         finally:
             if held:
-                self._end(hold, report, failure)
-        if held:
-            self._ewsposter(hold, report, failure)
+                try:
+                    self._end(hold, report, failure)
+                finally:
+                    # also after a cancel: last.json says whether ewsposter held
+                    self._ewsposter(hold, report, failure)
 
     def _end(self, hold, report: Report, failure: Optional[BaseException]) -> None:
         """The end of every run that took the hold: the settle for the last lines, the end of the
@@ -1046,6 +1053,18 @@ class Check:
         # the run settles itself before its cleanup (END_SETTLE), the hold ends right after it
         return EwsHold(self.data_dir, self.compose_names(), log=self.log, settle=0)
 
+    def _leave_alone(self, hold) -> None:
+        """The honeypots whose ewsposter module hold.ack names as not held: nothing of the check may
+        land in their logs (ewsposter could send it later), so they get no probe and no geo event."""
+        from tpotctl.checks import ewshold
+        modules = list(getattr(hold, "failed_at_ack", None) or [])
+        self.not_held = ewshold.honeypots_of(modules, [h.name for h in self.honeypots])
+        for name in self.not_held:
+            row = self.rows[name]
+            for stage in stages.STAGES[:-1]:
+                if not (self.sensor and stage in stages.STAGES[3:]):
+                    row.set(stage, NOT_APPLICABLE, ewshold.CANNOT_HOLD)
+
     def _ewsposter(self, hold, report: Report, failure: Optional[BaseException]) -> None:
         from tpotctl.checks import ewshold
         if failure is not None:
@@ -1057,14 +1076,24 @@ class Check:
         else:
             note = getattr(hold, "note", "") or ewshold.NOT_HERE
             state, stage = {"state": "not_here", "detail": note}, (NOT_APPLICABLE, note)
+        if getattr(hold, "failed_modules", None):
+            state["failed_modules"] = list(hold.failed_modules)
         report.ewsposter = state
-        if self.sensor:
-            return
+        later = [name for name in ewshold.honeypots_of(getattr(hold, "failed_modules", None) or [], self.rows)
+                 if name not in self.not_held]
         for row in self.rows.values():
-            row.set("ewsposter", *stage)
+            if row.name in self.not_held:
+                row.set("ewsposter", FAILED, ewshold.CANNOT_HOLD)
+            elif row.name in later:
+                row.set("ewsposter", FAILED, "ewsposter could not hold its module during the check (its idle "
+                                             "pass fails; docker logs ewsposter)")
+            elif not self.sensor:
+                row.set("ewsposter", *stage)
 
     def _held(self, hold, report: Report) -> None:
-        targets = [h for h in self.honeypots if h.running and not h.external and h.name in LOGS]
+        self._leave_alone(hold)
+        targets = [h for h in self.honeypots if h.running and not h.external and h.name in LOGS
+                   and h.name not in self.not_held]
         for honeypot in targets:
             self.watch.mark(LOGS[honeypot.name][1])
         geo = self.geo_targets()
@@ -1077,8 +1106,8 @@ class Check:
                 self.sent = True
                 # filled also when the probes end by an exception: the cleanup still knows what they sent
                 self.results = {}
-                self.results = self._run_probes(self.host, self.honeypots, self.token, check=hold.check,
-                                                into=self.results)
+                self.results = self._run_probes(self.host, [h for h in self.honeypots if h.name not in self.not_held],
+                                                self.token, check=hold.check, into=self.results)
             self._probe_stages()
             if geo:
                 self.phase("inject", "Writing the geo events")
@@ -1105,6 +1134,8 @@ class Check:
 
     def _probe_stages(self) -> None:
         for honeypot in self.honeypots:
+            if honeypot.name in self.not_held:
+                continue                    # _leave_alone said why
             row = self.rows[honeypot.name]
             if self.options.geo_only:
                 for name in ("port", "answer", "log", "elasticsearch"):
@@ -1158,6 +1189,8 @@ class Check:
         window = self.started
         pending_log, pending_es, pending_geo, pending_map = [], [], [], []
         for honeypot in self.honeypots:
+            if honeypot.name in self.not_held:
+                continue                    # _leave_alone said why
             row = self.rows[honeypot.name]
             result = self.results.get(honeypot.name)
             if row.state("port") == OK and result is not None:

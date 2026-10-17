@@ -74,6 +74,8 @@ mySTART="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 myKNOWNTYPES="cowrie dionaea honeytrap rdphoneypot ciscoasa"
 myINJECTEDTYPES=""
+# the types left alone because ewsposter cannot hold their module (they fail the test)
+myNOTHELDTYPES=""
 
 # Per-type lookups as functions (no associative arrays: portable to bash 3).
 function fuKNOWN { case "$1" in cowrie|dionaea|honeytrap|rdphoneypot|ciscoasa) return 0 ;; *) return 1 ;; esac; }
@@ -252,6 +254,11 @@ function fuINJECT {
     fuUI_HINT "[$t] -> $file"
     fuUI_HINT "    $line"
     if [ "$myDRYRUN" = 1 ]; then continue; fi
+    if ! fuEWS_HOLDS "$t"; then
+      fuUI_WARN "[$t] ewsposter cannot hold its module (its idle pass fails; docker logs ewsposter), nothing injected"
+      myNOTHELDTYPES="$myNOTHELDTYPES $t"
+      continue
+    fi
     if [ ! -d "$(dirname "$file")" ]; then
       fuUI_WARN "$(dirname "$file") does not exist (honeypot not part of this compose file)"
       continue
@@ -355,7 +362,10 @@ function fuREPORT {
       case "$(fuGETRES ES "$t")$(fuGETRES REDIS "$t")$(fuGETRES WS "$t")" in *FAIL*) rc=1 ;; esac
       ;;
       *)
-      printf '%-14s %-16s %-10s %-26s\n' "$t" "$(fuTESTIP "$t")" "skipped" "-"
+      case " $myNOTHELDTYPES " in
+        *" $t "*) printf '%-14s %-16s %-10s %-26s\n' "$t" "$(fuTESTIP "$t")" "no" "FAIL (ewsposter cannot hold it)"; rc=1 ;;
+        *) printf '%-14s %-16s %-10s %-26s\n' "$t" "$(fuTESTIP "$t")" "skipped" "-" ;;
+      esac
       ;;
     esac
   done

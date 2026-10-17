@@ -64,6 +64,8 @@ IN2|ID1551001|SSN12345678
 ROL|45^RECORDER^ROLE MASTER LIST|AD|RO|KATE^ELLEN|199505011201"
 # containers whose state the probes change, restarted afterwards (if they run here)
 myRESTART="adbhoney conpot_guardian_ast conpot_kamstrup_382 dionaea"
+# the ports of the honeypots that get no probe ("T:2575,U:623"): their ewsposter module is not held
+myLEFTOUT=""
 
 function fuTOOLS_FOR {   # $1 = os-release file -> "<package manager> <packages>"
 	local myID="" myLIKE=""
@@ -94,12 +96,15 @@ function fuCOMMAND_OF {   # package -> the command it brings
 	esac
 }
 
-function fuPORTS {   # docker compose config --format json on stdin -> "T:22,..." and "U:69,..."
+function fuPORTS {   # docker compose config --format json on stdin -> "T:22,..." and "U:69,..."; $1 the services left out
 	python3 -c '
 import json, sys
 config = json.load(sys.stdin)
+left_out = set(sys.argv[1].split())
 tcp, udp = set(), set()
-for service in (config.get("services") or {}).values():
+for name, service in (config.get("services") or {}).items():
+    if name in left_out:
+        continue
     for port in service.get("ports") or []:
         if port.get("host_ip") in ("127.0.0.1", "::1"):
             continue
@@ -110,7 +115,22 @@ for service in (config.get("services") or {}).values():
         (udp if port.get("protocol") == "udp" else tcp).add(int(published))
 print(",".join(f"T:{p}" for p in sorted(tcp)))
 print(",".join(f"U:{p}" for p in sorted(udp)))
-'
+' "${1:-}"
+}
+
+function fuNOT_HELD {   # docker compose config --format json on stdin -> the services whose ewsposter module is not held
+	local myNAME=""
+	for myNAME in $(python3 -c 'import json, sys; print(" ".join(sorted((json.load(sys.stdin).get("services") or {}))))');
+	  do
+	    fuEWS_HOLDS "${myNAME}" || printf '%s ' "${myNAME}"
+	  done
+}
+
+function fuPROBE_TO {   # protocol (T or U) port -> 0 unless the port belongs to a service left out
+	case ",${myLEFTOUT}," in
+	  *",$1:$2,"*) return 1 ;;
+	esac
+	return 0
 }
 
 function fuIKEPORTS {   # compose JSON -> Ciscoasa published port and NAT-T marker flag
@@ -307,6 +327,20 @@ fuEWS_HOLD_BEGIN "$(fuEWS_DATA_PATH "${myTPOTCE}")" "${myDOCKERCOMPOSEYML}" || {
 if ! fuOWN_ADDRESS "${myHOST}";
   then
     fuUI_WARN "${myHOST} is no address of this host: if it is another T-Pot, its ewsposter is not held and reports the probes."
+  elif [ -n "${myEWS_HOLD_FAILED}" ];
+    then
+      # the honeypots whose ewsposter module is not held get no probe: their ports are left out
+      myCONFIG=$(docker compose -f "${myDOCKERCOMPOSEYML}" config --format json 2>/dev/null)
+      myNOTHELD=$(echo "${myCONFIG}" | fuNOT_HELD)
+      if [ -n "${myNOTHELD}" ];
+        then
+          myALLPORTS="${myTCPPORTS},${myUDPPORTS}"
+          myPORTS=$(echo "${myCONFIG}" | fuPORTS "${myNOTHELD}")
+          myTCPPORTS=$(echo "${myPORTS}" | sed -n 1p)
+          myUDPPORTS=$(echo "${myPORTS}" | sed -n 2p)
+          myLEFTOUT=$(python3 -c 'import sys; keep = set(sys.argv[2].split(",")); print(",".join(p for p in sys.argv[1].split(",") if p and p not in keep))' "${myALLPORTS}" "${myTCPPORTS},${myUDPPORTS}")
+          fuUI_WARN "No probe for ${myNOTHELD% }: ewsposter cannot hold its module (its idle pass fails; docker logs ewsposter)."
+      fi
 fi
 
 fuMARK phase probe Probing some services on "${myHOST}"
@@ -316,13 +350,16 @@ fuHAS nc && myNC="nc"
 fuHAS ncat && myNC="ncat"
 if [ -n "${myNC}" ];
   then
-    echo "$myMEDPOTPACKET" | timeout 5 "${myNC}" "$myHOST" 2575 >/dev/null 2>&1 &
-    echo "I20100" | timeout 3 "${myNC}" "$myHOST" 10001 >/dev/null 2>&1 &
-    timeout 3 "${myNC}" "$myHOST" 3299 </dev/null >/dev/null 2>&1 &
+    fuPROBE_TO T 2575 && { echo "$myMEDPOTPACKET" | timeout 5 "${myNC}" "$myHOST" 2575 >/dev/null 2>&1 & }
+    fuPROBE_TO T 10001 && { echo "I20100" | timeout 3 "${myNC}" "$myHOST" 10001 >/dev/null 2>&1 & }
+    fuPROBE_TO T 3299 && { timeout 3 "${myNC}" "$myHOST" 3299 </dev/null >/dev/null 2>&1 & }
 fi
-curl -s -m 5 -XGET "http://$myHOST:9200/logstash-*/_search" >/dev/null 2>&1 &
-curl -s -m 5 -XPOST -H "Content-Type: application/json" -d '{"name":"test","email":"test@test.com"}' "http://$myHOST:9200/test" >/dev/null 2>&1 &
-if fuHAS findscu;
+if fuPROBE_TO T 9200;
+  then
+    curl -s -m 5 -XGET "http://$myHOST:9200/logstash-*/_search" >/dev/null 2>&1 &
+    curl -s -m 5 -XPOST -H "Content-Type: application/json" -d '{"name":"test","email":"test@test.com"}' "http://$myHOST:9200/test" >/dev/null 2>&1 &
+fi
+if fuHAS findscu && fuPROBE_TO T 11112;
   then
     timeout 10 findscu -P -k PatientName="*" "$myHOST" 11112 >/dev/null 2>&1 &
     timeout 10 getscu -P -k PatientName="*" "$myHOST" 11112 >/dev/null 2>&1 &
@@ -331,6 +368,7 @@ myIKEPORTS=$(docker compose -f "${myDOCKERCOMPOSEYML}" config --format json 2>/d
 while read -r myIKEPORT myNATT;
   do
     [ -n "${myIKEPORT}" ] || continue
+    fuPROBE_TO U "${myIKEPORT}" || continue
     if fuIKEPROBE "$myHOST" "$myIKEPORT" "$myNATT";
       then fuUI_OK "Ciscoasa IKE answered on ${myIKEPORT}/udp."
       else fuUI_WARN "Ciscoasa IKE did not answer on ${myIKEPORT}/udp."

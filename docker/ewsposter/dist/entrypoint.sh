@@ -8,8 +8,11 @@
 # builds, spools and sends no alert, its indexes move on, so the lines of the check are never
 # sent, not even later. /data/ews/hold.ack says that ewsposter holds: it is written after each
 # idle round that ended cleanly (every pass with rc 0, no module behind) and removed when the hold
-# is over. Normal passes come back only after such a round without the marker; until then the
-# hold is stuck, which /data/ews/hold.state says (normal, held or stuck). A hold that is on when
+# is over. A module whose idle pass keeps failing (also on its own, -m) does not keep the others
+# from being held: the round counts as clean for them, and hold.ack names it in one line
+# "failed: <module> ...", so the check leaves its honeypots alone. Normal passes come back only
+# after such a round without the marker; until then the hold is stuck (no module can be held),
+# which /data/ews/hold.state says (normal, held or stuck). A hold that is on when
 # ewsposter starts goes on with idle passes at once. The marker only counts as a regular file
 # (no link) younger than 30 minutes, so a check that was cut off never keeps ewsposter quiet for
 # good.
@@ -46,6 +49,8 @@ myIDLE_MODULE_TEXT=" => Starting "
 myIDLE_RETRIES=3
 myIDLE_RETRY_PAUSE=5
 myCHILD=""
+# the modules whose idle passes failed in the last round (fuIDLE), one space before each
+myIDLE_FAILED=""
 mySTUCK_SINCE=""
 mySTUCK_SAID=0
 
@@ -216,12 +221,15 @@ fuIDLE_MODULES () {
 # module that keeps failing does not keep the others from moving on. When no module was started
 # (the start of ews.py failed: config, lock, the lookup of the address), one by one would fail the
 # same way and is left out. 0 only when the round ended cleanly and no module is behind, 2 when
-# it ended cleanly but a module is behind (the cap of myIDLE_PASSES), 1 when it failed.
+# it ended cleanly but a module is behind (the cap of myIDLE_PASSES), 3 when it ended cleanly for
+# every module but those in myIDLE_FAILED, 1 when it failed (also when every module failed).
 fuIDLE () {
   local myMODULE=""
   local myFAILED=""
   local myBEHIND=""
+  local myCLEAN=""
   local myRC=0
+  myIDLE_FAILED=""
   if ! fuIDLE_CONFIG;
     then
       echo " => [WARN] The config of the idle passes could not be written to ${myIDLE_CFG}."
@@ -240,28 +248,35 @@ fuIDLE () {
       fuIDLE_PASSES "${myMODULE}"
       case $? in
         1) myFAILED="${myFAILED} ${myMODULE}" ;;
-        2) myBEHIND="${myBEHIND} ${myMODULE}" ;;
+        2) myBEHIND="${myBEHIND} ${myMODULE}"; myCLEAN="yes" ;;
+        *) myCLEAN="yes" ;;
       esac
   done
   if [ -n "${myFAILED}" ];
     then
       echo " => [WARN] Idle passes failed for:${myFAILED}."
-      return 1
+      # no module could be held
+      [ -n "${myCLEAN}" ] || return 1
+      myIDLE_FAILED="${myFAILED}"
   fi
   if [ -n "${myBEHIND}" ];
     then
       return 2
   fi
+  [ -z "${myIDLE_FAILED}" ] || return 3
   return 0
 }
 
-# hold.ack, written new (a link in its place is removed, never followed)
+# hold.ack, a new file renamed into place (a link of that name is replaced, never followed):
+# empty, or with the modules $1 that could not be held, one line "failed: <module> ..."
 fuHOLD_ACK () {
-  if [ -L "${myHOLD_ACK}" ];
+  local myTMP="${myHOLD_ACK}.$$"
+  rm -f "${myTMP}"
+  if ! { if [ -n "${1:-}" ]; then echo "failed: $1"; fi > "${myTMP}" && mv -f "${myTMP}" "${myHOLD_ACK}"; } 2>/dev/null;
     then
-      rm -f "${myHOLD_ACK}"
+      rm -f "${myTMP}" 2>/dev/null
+      echo " => [WARN] ${myHOLD_ACK} could not be written."
   fi
-  touch "${myHOLD_ACK}" 2>/dev/null || echo " => [WARN] ${myHOLD_ACK} could not be written."
 }
 
 # hold.state: "$1 <epoch seconds>", a new file renamed into place (a link of that name is
@@ -305,10 +320,11 @@ fuPASS () {
 }
 
 # One round of the loop. While the hold is on: idle passes, and hold.ack once they ended
-# cleanly with no module behind (the first round of a hold starts with a normal pass). When it is
-# over: hold.ack removed, one more idle round, and only when that ended cleanly with no module
-# behind the normal pass; until then the rounds stay idle (stuck). Sets myINTERVAL, the pause
-# after the round, and writes hold.state.
+# cleanly with no module behind (the first round of a hold starts with a normal pass); modules
+# that fail on their own are named in it. When it is over: hold.ack removed, one more idle round,
+# and only when that ended cleanly with no module behind (modules that fail on their own aside)
+# the normal pass; until then the rounds stay idle (stuck). Sets myINTERVAL, the pause after the
+# round, and writes hold.state.
 fuROUND () {
   local myRC=0
   myINTERVAL=${myHOLD_INTERVAL}
@@ -326,6 +342,10 @@ fuROUND () {
       myRC=$?
       case ${myRC} in
         0) fuHOLD_ACK ;;
+        3)
+          # the others are held; the check leaves the honeypots of these modules alone
+          echo " => [WARN] hold.ack without the modules whose idle passes fail:${myIDLE_FAILED}; the check leaves their honeypots alone."
+          fuHOLD_ACK "${myIDLE_FAILED# }" ;;
         2) echo " => [WARN] No hold.ack yet: a module is still behind, the idle rounds go on in ${myHOLD_INTERVAL} s." ;;
         *) echo " => [WARN] No hold.ack: the idle round did not end cleanly, it runs again in ${myHOLD_INTERVAL} s." ;;
       esac
@@ -337,6 +357,11 @@ fuROUND () {
       rm -f "${myHOLD_ACK}"
       fuIDLE
       myRC=$?
+      # a module that cannot be held is no reason to stay idle for the others
+      if [ ${myRC} -eq 3 ];
+        then
+          myRC=0
+      fi
       if [ ${myRC} -ne 0 ];
         then
           echo " => [WARN] The hold is over, but its idle round did not end cleanly or a module is still behind: idle again in ${myHOLD_INTERVAL} s, nothing is sent."

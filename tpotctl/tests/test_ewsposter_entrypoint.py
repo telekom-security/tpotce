@@ -303,7 +303,8 @@ class PassCountTest(EntrypointCase):
 
     def test_module_crash_falls_back_to_one_pass_per_module(self):
         """A module that keeps failing: after the tries, every module of the idle config has its
-        own pass (-m), so the others move on; the round still failed."""
+        own pass (-m), so the others move on; the round is clean for them (3) and names the one
+        that failed (myIDLE_FAILED)."""
         config = configparser.RawConfigParser()
         config.read(EWS_CFG)
         modules = sorted(section.lower() for section in config.sections()
@@ -313,8 +314,10 @@ class PassCountTest(EntrypointCase):
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 box = self.sandbox(Path(shell).name)
-                result = box.run(shell, "fuIDLE", STUB_STARTED=1, STUB_CRASH="cowrie")
-                self.assertEqual(result.returncode, 1)
+                result = box.run(shell, 'fuIDLE; rc=$?; echo "failed=[$myIDLE_FAILED]"; exit $rc',
+                                 STUB_STARTED=1, STUB_CRASH="cowrie")
+                self.assertEqual(result.returncode, 3)
+                self.assertIn("failed=[ cowrie]", result.stdout)
                 calls = box.calls()
                 self.assertEqual(len([call for call in calls if " -m " not in call]), 4)
                 per_module = [call.rsplit(" -m ", 1)[1] for call in calls if " -m " in call]
@@ -322,6 +325,27 @@ class PassCountTest(EntrypointCase):
                 self.assertEqual(per_module.count("cowrie"), 4)
                 self.assertTrue(all(per_module.count(name) == 1 for name in modules if name != "cowrie"))
                 self.assertIn("Idle passes failed for: cowrie.", result.stdout)
+
+    def test_every_module_failing_fails_the_round(self):
+        """No module can be held (every pass of every module fails): the round failed (1), no
+        module is named as the only one that failed."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = box.run(shell, 'fuIDLE; rc=$?; echo "failed=[$myIDLE_FAILED]"; exit $rc',
+                                 STUB_STARTED=1, STUB_RC=1)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("failed=[]", result.stdout)
+                self.assertTrue(any(" -m " in call for call in box.calls()))
+
+    def test_failed_module_and_a_module_behind_is_behind(self):
+        """One module fails, another is still behind: no ack until it caught up (2)."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                # the four tries of the full pass fail (cowrie), then every pass says the limit
+                result = box.run(shell, "myIDLE_PASSES=2; fuIDLE", STUB_STARTED=1, STUB_CRASH="cowrie", STUB_LIMITED=10000)
+                self.assertEqual(result.returncode, 2)
 
     def test_unwritable_config_folder_fails_the_round(self):
         for shell in SHELLS:
@@ -494,6 +518,51 @@ class RoundTest(EntrypointCase):
                 box.hold.write_text("")
                 box.run(shell, "fuSTART")
                 self.assertEqual(box.state_word(), "held")
+
+    def test_module_that_fails_is_named_in_the_ack(self):
+        """A module whose idle passes keep failing: hold.ack is written all the same, with one
+        line naming it; hold.state stays held, not stuck."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.hold.write_text("")
+                result = box.run(shell, 'myHELD=yes; fuROUND; echo "interval=$myINTERVAL"',
+                                 STUB_STARTED=1, STUB_CRASH="redishoneypot")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("interval=5", result.stdout)
+                self.assertTrue(box.ack.is_file())
+                self.assertEqual(box.ack.read_text(), "failed: redishoneypot\n")
+                self.assertEqual(box.state_word(), "held")
+                self.assertIn("leaves their honeypots alone", result.stdout)
+                # the other modules had their idle pass, nothing was sent
+                self.assertTrue(all(" -E " in call for call in box.calls()))
+                self.assertIn("-m wordpot", " ".join(box.calls()))
+                self.assertEqual([path.name for path in box.data.iterdir() if path.name.startswith("hold.ack.")], [])
+
+    def test_clean_round_writes_an_empty_ack(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.hold.write_text("")
+                box.ack.write_text("failed: cowrie\n")
+                result = box.run(shell, "myHELD=yes; fuROUND")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(box.ack.read_text(), "")
+
+    def test_end_of_hold_with_a_module_that_fails_goes_normal(self):
+        """After the marker is gone, a module that fails on its own keeps nobody idle: the
+        normal pass follows the idle round."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.ack.write_text("failed: redishoneypot\n")
+                result = box.run(shell, 'myHELD=yes; fuROUND; echo "interval=$myINTERVAL held=$myHELD"',
+                                 STUB_STARTED=1, STUB_CRASH="redishoneypot")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("interval=42 held=\n", result.stdout)
+                self.assertFalse(os.path.lexists(box.ack))
+                self.assertEqual(box.state_word(), "normal")
+                self.assertEqual(self.kinds(box)[-1], "normal")
 
     def test_failed_round_writes_no_ack(self):
         for shell in SHELLS:

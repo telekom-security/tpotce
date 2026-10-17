@@ -380,10 +380,11 @@ def gone(pid: int) -> bool:
 
 
 class FakeEwsposter:
-    """ewsposter as far as the hold goes: once the marker is there, hold.ack is touched (after it)."""
+    """ewsposter as far as the hold goes: once the marker is there, hold.ack is touched (after it);
+    with `text` it is written with that text (the modules it cannot hold)."""
 
-    def __init__(self, ews_dir: str, delay: float = 0.05):
-        self.ews_dir, self.delay = ews_dir, delay
+    def __init__(self, ews_dir: str, delay: float = 0.05, text=None):
+        self.ews_dir, self.delay, self.text = ews_dir, delay, text
         self.stop = threading.Event()
         self.thread = threading.Thread(target=self.loop, daemon=True)
 
@@ -391,8 +392,9 @@ class FakeEwsposter:
         marker, ack = os.path.join(self.ews_dir, "hold"), os.path.join(self.ews_dir, "hold.ack")
         while not self.stop.wait(self.delay):
             if os.path.isfile(marker):
-                with open(ack, "a", encoding="utf-8"):
-                    pass
+                with open(ack, "a" if self.text is None else "w", encoding="utf-8") as out:
+                    if self.text is not None:
+                        out.write(self.text)
                 os.utime(ack, None)
 
     def __enter__(self):
@@ -467,6 +469,32 @@ class EwsHoldTest(HoldFolder):
         self.assertFalse(os.path.exists(self.marker))
         self.assertTrue(self.lock_is_free())
         self.assertEqual(oct(os.stat(self.lock).st_mode & 0o777), oct(0o660))
+
+    def test_the_modules_it_cannot_hold(self):
+        """hold.ack names modules whose idle passes fail: the hold holds, EwsHold names them and says
+        so once."""
+        with FakeEwsposter(self.ews, text="failed: redishoneypot conpot\n"):
+            with self.hold() as hold:
+                self.assertTrue(hold.acked)
+                self.assertEqual(hold.failed_at_ack, ["conpot", "redishoneypot"])
+                self.assertEqual(hold.failed_modules, ["conpot", "redishoneypot"])
+        self.assertIn(("warn", "ewsposter cannot hold its module(s) conpot, redishoneypot (their idle passes "
+                               "fail; docker logs ewsposter): the check leaves their honeypots alone."), self.said)
+        os.unlink(self.ack)
+        with FakeEwsposter(self.ews):
+            with self.hold() as hold:
+                self.assertEqual((hold.failed_at_ack, hold.failed_modules), ([], []))
+
+    def test_a_module_named_later_is_kept(self):
+        """A module hold.ack names after the ack (a later round) counts too: failed_modules."""
+        with FakeEwsposter(self.ews):
+            with self.hold(watch=0.05) as hold:
+                with open(self.ack, "w", encoding="utf-8") as out:
+                    out.write("failed: wordpot\n")
+                deadline = time.monotonic() + 5
+                while not hold.failed_modules and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertEqual((hold.failed_at_ack, hold.failed_modules), ([], ["wordpot"]))
 
     def test_no_ack_means_no_probe(self):
         probed = []
@@ -795,6 +823,24 @@ class EwsHoldShellTest(HoldFolder):
         self.assertIn("ewsposter holds", result.stdout)
         self.assertIn("GONE", result.stdout)
         self.assertTrue(self.lock_is_free())
+
+    def test_the_modules_it_cannot_hold(self):
+        """hold.ack names modules whose idle passes fail: myEWS_HOLD_FAILED has them, fuEWS_HOLDS
+        says which honeypots are held (conpot is every template, citrix citrixhoneypot)."""
+        script = ('fuEWS_HOLD_BEGIN "$DATA" "$COMPOSE"; echo "rc=$? failed=[${myEWS_HOLD_FAILED}]"\n'
+                  'for name in cowrie redishoneypot conpot_ipmi citrixhoneypot go-pot; do\n'
+                  '  fuEWS_HOLDS "$name" && echo "held $name" || echo "free $name"; done\n'
+                  'fuEWS_HOLD_END\n')
+        with FakeEwsposter(self.ews, text="failed: redishoneypot conpot citrix\n"):
+            result = self.source(script, DATA=self.data, COMPOSE=self.compose)
+        self.assertIn("rc=0 failed=[citrix conpot redishoneypot]", result.stdout, result.stderr)
+        self.assertIn("held cowrie\nfree redishoneypot\nfree conpot_ipmi\nfree citrixhoneypot\nheld go-pot\n",
+                      result.stdout)
+        self.assertIn("ewsposter cannot hold its module(s) citrix, conpot, redishoneypot", result.stdout)
+        with FakeEwsposter(self.ews, text=""):
+            result = self.source(script, DATA=self.data, COMPOSE=self.compose)
+        self.assertIn("rc=0 failed=[]", result.stdout)
+        self.assertNotIn("free ", result.stdout)
 
     def test_no_ack_means_no_probe(self):
         result = self.begin()
@@ -1161,6 +1207,26 @@ class HptestUnderTheHoldTest(HoldFolder):
         self.assertIn("@@tpot warn scan UDP scan skipped: sudo needs a password again\n", result.stdout)
         self.assertEqual(len(self.scanners()), 1)
         self.assertFalse(os.path.exists(self.marker))
+
+    def test_a_honeypot_ewsposter_cannot_hold_gets_no_probe(self):
+        """hold.ack names redishoneypot: its ports are left out of the scans of this host."""
+        config = {"services": {"cowrie": {"ports": [{"target": 22, "published": "22", "protocol": "tcp"}]},
+                               "redishoneypot": {"ports": [{"target": 6379, "published": "6379", "protocol": "tcp"}]},
+                               "ciscoasa": {"ports": [{"target": 8443, "published": "8443", "protocol": "tcp"},
+                                                      {"target": 500, "published": "500", "protocol": "udp"}]}}}
+        with open(os.path.join(self.bin, "config.json"), "w", encoding="utf-8") as out:
+            json.dump(config, out)
+        self.stub("timeout", '#!/bin/sh\necho "$*" >> "$STUB_LOG"\nexit 0\n')
+        with FakeEwsposter(self.ews, text="failed: redishoneypot ciscoasa\n"):
+            result = subprocess.run([HPTEST, "127.0.0.1"], capture_output=True, universal_newlines=True,
+                                    env=self.env(), timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("No probe for ciscoasa redishoneypot: ewsposter cannot hold its module", result.stdout)
+        with open(self.log, encoding="utf-8") as handle:
+            scans = [line for line in handle.read().splitlines() if " nmap " in f" {line} "]
+        self.assertTrue(any("-p T:22 " in line for line in scans), scans)
+        self.assertFalse(any("6379" in line or "8443" in line or "U:500" in line for line in scans), scans)
+        self.assertNotIn("Ciscoasa IKE", result.stdout)
 
     def test_term_during_the_scan(self):
         env = self.env()
@@ -2370,6 +2436,7 @@ class FakeHold:
     def __init__(self, world, enter=None, lose_after=None, acked=True, note=""):
         self.world, self.enter_error, self.lose_after = world, enter, lose_after
         self.acked, self.note, self.checks = acked, note, 0
+        self.failed_at_ack, self.failed_modules = [], []
 
     def __enter__(self):
         self.world.order.append("hold")
@@ -2648,12 +2715,96 @@ class StagesTest(unittest.TestCase):
                 self.assertFalse(run_checks.ElasticError("x", status, body).token_refused)
 
 
+class EwsModulesTest(unittest.TestCase):
+    """The ewsposter modules of hold.ack and the honeypots they read."""
+
+    def test_failed_modules(self):
+        self.assertEqual(ewshold.failed_modules(""), [])
+        self.assertEqual(ewshold.failed_modules(None), [])
+        self.assertEqual(ewshold.failed_modules("failed: redishoneypot Conpot\n"), ["conpot", "redishoneypot"])
+        self.assertEqual(ewshold.failed_modules("other: cowrie\nfailed:  wordpot\nfailed: a/b ok\n"),
+                         ["ok", "wordpot"])
+
+    def test_honeypots_of(self):
+        names = ["cowrie", "conpot_ipmi", "conpot_iccp", "citrixhoneypot", "go-pot", "wordpot"]
+        self.assertEqual(ewshold.honeypots_of(["conpot", "citrix", "gopot"], names),
+                         ["citrixhoneypot", "conpot_iccp", "conpot_ipmi", "go-pot"])
+        self.assertEqual(ewshold.honeypots_of(["redishoneypot", "cowrie"], names), ["cowrie"])
+
+    def test_every_module_of_ews_cfg_reads_a_honeypot(self):
+        """The sections of ews.cfg are the module names of hold.ack: each one names honeypots T-Pot
+        knows (inventory.LOGS), so a module that cannot be held always leaves its honeypots alone."""
+        import configparser
+        config = configparser.RawConfigParser()
+        config.read(os.path.join(REPO, "docker", "ewsposter", "dist", "ews.cfg"))
+        modules = [section.lower() for section in config.sections()
+                   if section not in ("MAIN", "EWS", "HPFEED", "EWSJSON", "INFLUXDB")]
+        self.assertIn("redishoneypot", modules)
+        for module in modules:
+            with self.subTest(module=module):
+                self.assertTrue(ewshold.honeypots_of([module], list(inventory.LOGS)), module)
+
+
 class RunTest(unittest.TestCase):
 
     HONEYPOTS = ("cowrie", "dionaea", "honeytrap", "p0f")
 
     def world(self, names=HONEYPOTS, **options):
         return World(self, [honeypot(name) for name in names], **options)
+
+    def test_a_honeypot_ewsposter_cannot_hold_is_left_alone(self):
+        """hold.ack names the module of redishoneypot: no probe, no geo event, nothing in its log; its
+        row says why and its ewsposter stage fails (exit 1); the others are checked."""
+        world = self.world(("cowrie", "redishoneypot"))
+        world.hold.failed_at_ack = world.hold.failed_modules = ["redishoneypot"]
+        probed = []
+        original = world.run_probes
+
+        def run_probes(host, honeypots, token, check=None, into=None):
+            probed.extend(h.name for h in honeypots)
+            return original(host, honeypots, token, check=check, into=into)
+        world.check._run_probes = run_probes
+        before = bytes(world.files.logs[fixtures.log_file("redishoneypot")])
+        report = world.run()
+        self.assertEqual(report.exit_code, 1)
+        self.assertEqual(probed, ["cowrie"])
+        self.assertEqual(bytes(world.files.logs[fixtures.log_file("redishoneypot")]), before)
+        self.assertEqual([rel for rel, _ in world.files.appended], [fixtures.log_file("cowrie")])
+        rows = {row.name: row for row in report.rows}
+        redis = rows["redishoneypot"]
+        for name in stages.STAGES[:-1]:
+            self.assertEqual((redis.state(name), redis.stages[name].detail),
+                             (stages.NOT_APPLICABLE, ewshold.CANNOT_HOLD))
+        self.assertEqual((redis.state("ewsposter"), redis.stages["ewsposter"].detail),
+                         (stages.FAILED, ewshold.CANNOT_HOLD))
+        self.assertEqual(ewshold.CANNOT_HOLD,
+                         "ewsposter cannot hold its module (its idle pass fails; docker logs ewsposter)")
+        self.assertIsNone(redis.geo)
+        self.assertFalse(rows["cowrie"].failed)
+        self.assertEqual([row.name for row in report.failed], ["redishoneypot"])
+        self.assertEqual(world.last()["ewsposter"]["failed_modules"], ["redishoneypot"])
+        # the cleanup knows nothing of it
+        self.assertNotIn("Redishoneypot", json.dumps(world.es.deletes))
+
+    def test_a_module_that_fails_later_fails_the_ewsposter_stage(self):
+        world = self.world(("cowrie",))
+        world.hold.failed_at_ack, world.hold.failed_modules = [], ["cowrie"]
+        report = world.run()
+        cowrie = report.rows[0]
+        self.assertEqual(cowrie.state("ewsposter"), stages.FAILED)
+        self.assertIn("during the check", cowrie.stages["ewsposter"].detail)
+        self.assertEqual(report.exit_code, 1)
+
+    def test_a_cancel_after_the_ack_says_ewsposter_held(self):
+        """Ctrl+C during the probes: last.json says held (the hold was confirmed before the cancel)."""
+        world = self.world(("cowrie",))
+
+        def interrupted(host, honeypots, token, check=None, into=None):
+            raise KeyboardInterrupt
+        world.check._run_probes = interrupted
+        report = world.run()
+        self.assertEqual(report.exit_code, 130)
+        self.assertEqual(world.last()["ewsposter"], {"state": "held", "detail": "hold.ack seen"})
 
     def test_every_honeypot_from_the_port_to_the_attack_map(self):
         world = self.world()
@@ -3468,6 +3619,9 @@ class HptestFallbackTest(HptestUnderTheHoldTest):
         pass        # HptestUnderTheHoldTest has it
 
     def test_a_skipped_udp_scan_says_so(self):
+        pass        # HptestUnderTheHoldTest has it
+
+    def test_a_honeypot_ewsposter_cannot_hold_gets_no_probe(self):
         pass        # HptestUnderTheHoldTest has it
 
     def scan(self, *argv):

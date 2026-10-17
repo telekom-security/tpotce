@@ -11,7 +11,9 @@
 # then sends nothing, docker/ewsposter/dist/entrypoint.sh); without one the marker goes and nothing
 # is probed. When ewsposter is in the compose file but its container does not run, the marker is
 # set without waiting (ewsposter starts held when it comes up); without ewsposter in the compose
-# file there is no marker.
+# file there is no marker. A hold.ack may name ewsposter modules that cannot be held (one line
+# "failed: <module> ...", their idle passes fail): myEWS_HOLD_FAILED has them, fuEWS_HOLDS tells
+# whether the module of a honeypot is held, and the check leaves the others alone.
 #
 # While the hold lasts, a loop looks every 30 s whether the marker is still there and writes it
 # anew every 5 minutes (ewsposter ignores one older than 30 minutes); it ends with the helper, also
@@ -48,6 +50,8 @@ myEWS_HOLD_HELD=""
 # the hold is on for the check: acknowledged, or set for an ewsposter that is down (the end waits
 # myEWS_HOLD_SETTLE seconds then)
 myEWS_HOLD_ACKED=""
+# the ewsposter modules hold.ack names as not held (their idle passes fail), one space between them
+myEWS_HOLD_FAILED=""
 myEWS_HOLD_LOCKED=""
 myEWS_HOLD_LOCK_PID=""
 myEWS_HOLD_TRAPPED=""
@@ -316,6 +320,43 @@ sys.exit(0 if stat.S_ISREG(info.st_mode) and info.st_mtime_ns >= int(sys.argv[2]
     "${myEWS_HOLD_DIR}/hold.ack" "${myEWS_HOLD_MARKER_NS}" 2>/dev/null
 }
 
+# The modules hold.ack names as not held ("failed: <module> ..."), one space between them; none for
+# an empty, missing or unreadable one (read through the descriptor of the folder, no link)
+fuEWS_ACK_FAILED () {
+  python3 -c 'import os, re, stat, sys
+folder = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK)
+try:
+    handle = os.open("hold.ack", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
+    try:
+        text = os.read(handle, 4096).decode("ascii", "replace") if stat.S_ISREG(os.fstat(handle).st_mode) else ""
+    finally:
+        os.close(handle)
+finally:
+    os.close(folder)
+found = set()
+for line in text.splitlines():
+    key, _, rest = line.partition(":")
+    if key.strip() == "failed":
+        found.update(word.lower() for word in rest.split() if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", word))
+print(" ".join(sorted(found)))' "${myEWS_HOLD_DIR}" 2>/dev/null
+}
+
+# 0 when ewsposter holds the module of the honeypot $1 (a service name): its module is not one of
+# myEWS_HOLD_FAILED (conpot is every conpot_* template, citrix citrixhoneypot, gopot go-pot)
+fuEWS_HOLDS () {
+  local myMODULE=""
+  case "$1" in
+    conpot_*) myMODULE="conpot" ;;
+    citrixhoneypot) myMODULE="citrix" ;;
+    go-pot) myMODULE="gopot" ;;
+    *) myMODULE="$1" ;;
+  esac
+  case " ${myEWS_HOLD_FAILED} " in
+    *" ${myMODULE} "*) return 1 ;;
+  esac
+  return 0
+}
+
 # What hold.state says: normal, held or stuck; unknown when it is missing, no regular file, not of
 # its form or older than myEWS_HOLD_STATE_MAX_AGE
 fuEWS_STATE () {
@@ -524,6 +565,7 @@ fuEWS_HOLD_BEGIN () {
   local myDEADLINE=""
   local myRUNS=0
   myEWS_HOLD_DIR="${myDATA}/ews"
+  myEWS_HOLD_FAILED=""
   fuEWS_LOCK "${myDATA}" || return 3
   if ! fuEWS_IN_COMPOSE "${myCOMPOSE}";
     then
@@ -565,7 +607,12 @@ fuEWS_HOLD_BEGIN () {
       sleep "${myEWS_HOLD_POLL}"
     done
   myEWS_HOLD_ACKED="1"
+  myEWS_HOLD_FAILED=$(fuEWS_ACK_FAILED)
   fuEWS_SAY OK "ewsposter holds, nothing leaves this host during the check."
+  if [ -n "${myEWS_HOLD_FAILED}" ];
+    then
+      fuEWS_SAY WARN "ewsposter cannot hold its module(s) ${myEWS_HOLD_FAILED// /, } (their idle passes fail; docker logs ewsposter): the check leaves their honeypots alone."
+  fi
   fuEWS_REFRESH_START
   return 0
 }
