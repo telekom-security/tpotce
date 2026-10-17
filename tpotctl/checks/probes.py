@@ -1019,14 +1019,16 @@ def probe(honeypot: Honeypot, host: str, token: str,
 def run_probes(host: str, honeypots: Iterable[Honeypot], token: str, budget: float = RUN_BUDGET,
                workers: int = WORKERS,
                probes: Optional[Dict[str, Callable[[str, List[Port], str], ProbeResult]]] = None,
-               check: Optional[Callable[[], None]] = None) -> Dict[str, ProbeResult]:
+               check: Optional[Callable[[], None]] = None,
+               into: Optional[Dict[str, ProbeResult]] = None) -> Dict[str, ProbeResult]:
     """Every honeypot that is not external, `workers` at a time; a probe starts only within
     `budget` seconds, one that did not start in time says so. `check` (EwsHold.check) is called
     before each probe starts: when it raises (the hold of ewsposter ended), no further probe
     starts and the error is raised once the probes that run have ended. No probe outlives this
-    call, so the hold can end right after it."""
+    call, so the hold can end right after it. `into` gets the results also when the call ends by
+    an exception (Ctrl+C, the hold): the cleanup still knows what the probes sent."""
     targets = [h for h in honeypots if not h.external]
-    results: Dict[str, ProbeResult] = {}
+    results: Dict[str, ProbeResult] = into if into is not None else {}
     if not targets:
         return results
     end = time.monotonic() + budget
@@ -1057,11 +1059,11 @@ def run_probes(host: str, honeypots: Iterable[Honeypot], token: str, budget: flo
         # what has not started does not start any more; what runs ends within its PROBE_TIME_MAX
         stop.set()
         pool.shutdown(wait=True, cancel_futures=True)
-    for future, honeypot in futures:
-        if future.cancelled():
-            results[honeypot.name] = late
-        else:
-            results[honeypot.name] = future.result()
+        for future, honeypot in futures:
+            if future.cancelled() or not future.done():
+                results[honeypot.name] = late
+            else:
+                results[honeypot.name] = future.result()
     if errors:
         raise errors[0]
     return results

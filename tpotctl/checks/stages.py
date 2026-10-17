@@ -317,29 +317,92 @@ def cleanup_window(start: datetime, end: datetime) -> Dict[str, str]:
     return {"gte": iso(start.replace(microsecond=0)), "lte": iso(end + CLEANUP_SLACK)}
 
 
-def cleanup_query(start: datetime, end: datetime, addresses: Iterable[str], token: str,
-                  with_token: bool = True) -> Dict[str, Any]:
-    """The body of _delete_by_query on logstash-*: the run's window, and a source among the own
-    addresses and the test IPs, or the run's token in a text field. A real attacker's event in the
-    same window has neither."""
-    sources = sorted(set(addresses) | set(TEST_IPS))
-    should: List[Dict[str, Any]] = [{"terms": {"src_ip.keyword": sources}}]
-    if with_token:
-        should.append(token_clause(token))
-    return {"query": {"bool": {"filter": [{"range": {"@timestamp": cleanup_window(start, end)}}],
+# never deleted: the passive tools see the host's own traffic (DNS, pulls) and get no test event
+NEVER_DELETED = ("Suricata", "P0f")
+
+
+@dataclass
+class OwnEvents:
+    """What a run sent, the only events its cleanup removes: (a) the token, (b) a test IP with the
+    marker port of its injection, (c) the probe source with a source port the probe recorded, each
+    within the types the run probed or injected."""
+    token: str
+    source: str = ""                                            # the probe source, "" when ports do not survive
+    probes: Dict[str, List[int]] = field(default_factory=dict)  # type -> source ports of its probes
+    probed: List[str] = field(default_factory=list)             # every type a probe went to
+    token_types: List[str] = field(default_factory=list)        # types whose events may carry the token
+    geos: List[tuple] = field(default_factory=list)             # (type, test IP, marker port)
+
+    @property
+    def types(self) -> List[str]:
+        found = set(self.probed) | {geo[0] for geo in self.geos}
+        return sorted(found - set(NEVER_DELETED))
+
+
+def cleanup_query(start: datetime, end: datetime, own: OwnEvents,
+                  with_token: bool = True) -> Optional[Dict[str, Any]]:
+    """The body of _delete_by_query on logstash-*, None when the run sent nothing it can name. Every
+    condition is within the run's window and its types; never by an own address alone."""
+    types = own.types
+    if not types:
+        return None
+
+    def kind(name: str) -> Dict[str, Any]:
+        return {"term": {"type.keyword": name}}
+
+    should: List[Dict[str, Any]] = []
+    token_types = sorted(set(own.token_types) & set(types))
+    if with_token and token_types:
+        should.append({"bool": {"filter": [{"terms": {"type.keyword": token_types}}, token_clause(own.token)]}})
+    for name, ip, port in own.geos:
+        if name in types:
+            should.append({"bool": {"filter": [kind(name), {"term": {"src_ip.keyword": ip}},
+                                               {"term": {"src_port": port}}]}})
+    if own.source:
+        for name, ports in sorted(own.probes.items()):
+            if name in types and ports:
+                should.append({"bool": {"filter": [kind(name), {"term": {"src_ip.keyword": own.source}},
+                                                   {"terms": {"src_port": sorted(set(ports))}}]}})
+    if not should:
+        return None
+    return {"query": {"bool": {"filter": [{"range": {"@timestamp": cleanup_window(start, end)}},
+                                          {"terms": {"type.keyword": types}}],
                                "should": should, "minimum_should_match": 1}}}
+
+
+def _probed(own: OwnEvents) -> List[str]:
+    return sorted(set(own.probed) - set(NEVER_DELETED))
+
+
+def leftover_query(start: datetime, end: datetime, own: OwnEvents, host: str) -> Optional[Dict[str, Any]]:
+    """The probe events the cleanup could not tell apart from real ones: the probed types, from the
+    probe address, in the window (counted after the cleanup)."""
+    if not _probed(own) or not host:
+        return None
+    return {"query": {"bool": {"filter": [{"range": {"@timestamp": cleanup_window(start, end)}},
+                                          {"terms": {"type.keyword": _probed(own)}},
+                                          {"term": {"src_ip.keyword": host}}]}}}
+
+
+def leftover_kql(own: OwnEvents, host: str) -> str:
+    return f'src_ip:"{host}" and type:(' + " or ".join(f'"{name}"' for name in _probed(own)) + ")"
+
+
+def run_kql(token: str, sources: Iterable[str]) -> str:
+    """The run in Kibana: its token or its sources."""
+    sources = sorted(set(sources))
+    query = f'"{token}"'
+    if sources:
+        query += " or src_ip:(" + " or ".join(f'"{source}"' for source in sources) + ")"
+    return query
 
 
 def _rison(text: str) -> str:
     return "'" + text.replace("!", "!!").replace("'", "!'") + "'"
 
 
-def kibana_link(host: str, port: int, token: str, sources: Iterable[str], start: datetime, end: datetime) -> str:
-    """Discover in Kibana, filtered on the run's token or its source addresses, in its window."""
-    sources = sorted(set(sources))
-    query = f'"{token}"'
-    if sources:
-        query += " or src_ip:(" + " or ".join(f'"{source}"' for source in sources) + ")"
+def kibana_link(host: str, port: int, query: str, start: datetime, end: datetime) -> str:
+    """Discover in Kibana with a KQL query, in the run's window."""
     window = cleanup_window(start, end)
     state = (f"_g=(time:(from:{_rison(window['gte'])},to:{_rison(window['lte'])}))"
              f"&_a=(query:(language:kuery,query:{_rison(query)}))")

@@ -165,8 +165,10 @@ def build_parser() -> argparse.ArgumentParser:
                     "answer, log line, Elasticsearch, GeoIP / ip_rep of a test event with a fixed test IP, "
                     "Attack Map (Redis, WebSocket), ewsposter held. A SENSOR checks the first three. Exit "
                     "codes: 0 all ok, 1 a stage failed, 2 it cannot ask (no terminal, no --yes), 3 ewsposter "
-                    "did not confirm its hold (nothing probed), 130 cancelled. The result is in "
-                    "~/.local/share/tpotce/checks/last.json.")
+                    "did not confirm its hold (nothing probed), 130 cancelled (Ctrl+C, SIGTERM, SIGHUP). The "
+                    "result is in ~/.local/share/tpotce/checks/last.json, its output in last.log next to it. "
+                    "The cleanup removes only events that are the check's own beyond doubt (its token, a "
+                    "test IP with its marker port, the probe source with a source port of the probe).")
     pipe = check_actions.add_parser(
         "pipeline", help="only the test events with a fixed test IP: from the honeypot logs through Logstash, "
                          "Elasticsearch and Redis to the WebSocket of the Attack Map (check honeypots without "
@@ -1362,8 +1364,8 @@ def run_check(args) -> int:
     from tpotctl import prefs
     from tpotctl.checks import CheckError, run as trun
     options = check_options(args)
-    check = trun.Check(options)
     try:
+        check = trun.Check(options)
         if options.dry_run:
             for line in check.plan():
                 print(line)
@@ -1384,16 +1386,32 @@ def run_check(args) -> int:
     except CheckError as err:
         error(str(err))
         return 1
-    console = _console()
-    console.print(check_table(report, prefs.load().icons == "ascii"))
+    try:
+        check_summary(report, prefs.load().icons == "ascii")
+    except (OSError, ValueError):       # stdout closed: the result is in last.json and last.log
+        pass
+    return report.exit_code
+
+
+def check_summary(report, ascii_only: bool) -> None:
+    if report.result == "error":
+        error(report.error)
+        return
+    _console().print(check_table(report, ascii_only))
     if report.result == "hold failed":
         error(f"Nothing was probed: {report.error}")
     elif report.result == "cancelled":
         say.warn("The check was cancelled; the hold of ewsposter is lifted.")
-    if report.cleanup.get("state") == "done":
-        say.ok(f"Removed {report.cleanup.get('deleted', 0)} test events from Elasticsearch.")
-    elif report.cleanup.get("state") == "failed":
-        error(f"The test events are still in Elasticsearch: {report.cleanup.get('detail')}")
+    cleanup = report.cleanup
+    if cleanup.get("state") == "done":
+        passes = cleanup.get("passes") or []
+        say.ok(f"Removed {cleanup.get('deleted', 0)} test events from Elasticsearch"
+               + (f" ({' + '.join(str(n) for n in passes)} in two passes)." if len(passes) > 1 else "."))
+        if cleanup.get("left"):
+            say.warn(f"{cleanup['left']} probe events could not be told apart from real ones and stay; "
+                     f"Kibana: {cleanup.get('left_kibana', '')}")
+    elif cleanup.get("state") == "failed":
+        error(f"The test events are still in Elasticsearch: {cleanup.get('detail')}")
     if report.kibana:
         say.hint(f"Kibana: {report.kibana}")
     if report.written:
@@ -1403,7 +1421,6 @@ def run_check(args) -> int:
     elif report.exit_code == 1:
         say.error(f"{len(report.failed)} honeypot(s) with a failed stage: "
                   f"{', '.join(row.name for row in report.failed) or 'the cleanup'}.")
-    return report.exit_code
 
 
 def run_attackers(args) -> int:

@@ -8,24 +8,30 @@ The run:
        source port), then one geo event per running honeypot (not the passive tools), a fixture
        with a fixed test IP (IPv4) and the marker port 51234 + n appended to its real log;
     4. the stages, polled until each one is decided or its time is up (tpotctl.checks.stages);
-    5. END_SETTLE seconds for the last lines (written when a connection closes) and their way into
-       Elasticsearch, then the cleanup unless --keep: _delete_by_query on logstash-* for the run's
-       window and its own sources or token;
-    6. the end of the hold, right after the cleanup (the settle of step 5 is the one of the hold);
-    7. the result in ~/.local/share/tpotce/checks/last.json.
+    5. END_SETTLE seconds for the last lines (written when a connection closes), then the end of
+       the hold (its settle is this one);
+    6. the cleanup unless --keep, Elasticsearch only: _delete_by_query on logstash-*, twice
+       (SECOND_PASS later for events indexed late), for the events that are the run's own beyond
+       doubt (stages.cleanup_query: its window and types, and its token, or a test IP with the
+       marker port of its injection, or the probe source with a recorded source port); the probe
+       events none of these names stay and are counted (cleanup "left");
+    7. the result in ~/.local/share/tpotce/checks/last.json; only then the output of steps 5 and 6.
+       Every line also goes into last.log next to it; a closed stdout never stops the run.
 
-SIGTERM and SIGHUP become an exception like Ctrl+C, so the cleanup and the end of the hold run on
-every way out; the handlers before come back afterwards. Only the first signal is raised, a later
-one (and one during the end) is noted. Exit codes: 0 every stage ok, 1 a stage failed or the
-cleanup failed, 3 the hold failed (nothing probed), 130 Ctrl+C (128 + n for signal n); 2 (cannot
-ask, or an option that does not fit) is the CLI's.
+SIGTERM and SIGHUP become an exception like Ctrl+C, so the end of the hold and the cleanup run on
+every way out; the handlers before come back afterwards (they are set before the hold is taken).
+Only the first signal is raised, a later one (and one during the end) is noted. Exit codes: 0
+every stage ok, 1 a stage or the cleanup failed or an error before the hold (last.json then has
+the error and no honeypots), 2 an option that does not fit (and the CLI: it cannot ask), 3 the
+hold failed (nothing probed), 130 cancelled (Ctrl+C, SIGTERM, SIGHUP).
 
 last.json (version 1), for the Checks page:
     {"version": 1, "run_id", "token", "mode": "honeypots"|"pipeline", "started", "ended" (UTC ISO),
      "host", "tpot_type", "options": {"only", "geo", "keep", "timeout"},
-     "exit_code", "result": "ok"|"failed"|"hold failed"|"cancelled", "error",
+     "exit_code", "result": "ok"|"failed"|"hold failed"|"cancelled"|"error", "error",
      "ewsposter": {"state": "held"|"not_here"|"not_running"|"failed"|"none", "detail"},
-     "cleanup": {"state": "done"|"kept"|"skipped"|"failed"|"none", "deleted", "detail"},
+     "cleanup": {"state": "done"|"kept"|"skipped"|"failed"|"none", "deleted" (the sum),
+                 "passes": [first, second], "left" (probe events that stay), "left_kibana", "detail"},
      "kibana": the Discover link of the run's window and token / sources,
      "stages": the names in order, "titles": name -> column title,
      "honeypots": [{"name", "group", "container", "running", "external", "logstash_type", "ports",
@@ -36,6 +42,7 @@ last.json (version 1), for the Checks page:
 """
 
 import contextlib
+import ipaddress
 import json
 import os
 import secrets
@@ -64,6 +71,8 @@ POLL = 3.0              # seconds between two looks
 # the refresh of Elasticsearch (5 s); also the settle of the hold (EwsHold.SETTLE is 10 s), which ends
 # right after the cleanup
 END_SETTLE = 15.0
+# seconds between the two passes of the cleanup: events Logstash indexes late
+SECOND_PASS = 60.0
 MAP_CONTAINERS = ("map_redis", "map_web")
 RESULT_VERSION = 1
 
@@ -80,7 +89,9 @@ QUESTION_SENSOR = ("During the check (a few minutes) ewsposter sends nothing; re
 # the WebSocket client inside map_web (python3 and aiohttp are in the image), as in
 # attackmap_pipeline_test.sh, with a time limit of its own: a docker exec that ends leaves its
 # process in the container running otherwise
+WS_MARK = "tpot-check-ws-client"
 WS_CLIENT = """
+# tpot-check-ws-client
 import asyncio, os, aiohttp
 async def listen():
     url = os.environ.get("WS_URL", "ws://127.0.0.1:64299/websocket")
@@ -202,9 +213,25 @@ class Signals:
 # -- Elasticsearch ------------------------------------------------------------------------------
 
 class ElasticError(CheckError):
-    def __init__(self, text: str, status: int = 0):
+    def __init__(self, text: str, status: int = 0, body: str = ""):
         super().__init__(text)
         self.status = status
+        self.body = body
+
+    @property
+    def token_refused(self) -> bool:
+        """Elasticsearch cannot run the token query over every field (it cannot parse it, a field
+        is not searchable, or the fields are too many); only then the check goes on without it."""
+        if self.status != 400:
+            return False
+        text = self.body.lower()
+        return any(part in text for part in TOKEN_REFUSED)
+
+
+# what Elasticsearch answers when the query_string of the token cannot run over every field
+TOKEN_REFUSED = ("failed to create query", "cannot be parsed", "not searchable", "field expansion",
+                 "too many fields", "maxclausecount", "too_many_nested_clauses", "too_many_clauses")
+DELETE_TIMEOUT = 60.0       # seconds for one _delete_by_query; every other request has 5 s
 
 
 class Elastic:
@@ -215,30 +242,36 @@ class Elastic:
         self.opener = opener
         self.timeout = timeout
 
-    def request(self, method: str, path: str, body: Optional[dict] = None) -> dict:
+    def request(self, method: str, path: str, body: Optional[dict] = None,
+                timeout: Optional[float] = None) -> dict:
         data = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(self.url + path, data=data, method=method,
                                          headers={"Content-Type": "application/json"})
         try:
-            with self.opener(request, timeout=self.timeout) as response:
+            with self.opener(request, timeout=timeout or self.timeout) as response:
                 return json.loads(response.read().decode("utf-8") or "{}")
         except urllib.error.HTTPError as error:
             try:
-                text = error.read().decode("utf-8", "replace")[:300]
+                text = error.read().decode("utf-8", "replace")[:4000]
             except OSError:
                 text = ""
-            raise ElasticError(f"Elasticsearch answered {error.code} {text}".strip(), error.code) from None
+            raise ElasticError(f"Elasticsearch answered {error.code} {text[:300]}".strip(), error.code,
+                               text) from None
         except (OSError, ValueError) as error:
             raise ElasticError(f"Elasticsearch is not reachable ({getattr(error, 'reason', error)})") from None
 
     def search(self, body: dict) -> dict:
         return self.request("POST", "/logstash-*/_search", body)
 
+    def count(self, body: dict) -> int:
+        return int(self.request("POST", "/logstash-*/_count", body).get("count") or 0)
+
     def refresh(self) -> None:
         self.request("POST", "/logstash-*/_refresh")
 
     def delete_by_query(self, body: dict) -> int:
-        answer = self.request("POST", "/logstash-*/_delete_by_query?conflicts=proceed&refresh=true", body)
+        answer = self.request("POST", "/logstash-*/_delete_by_query?conflicts=proceed&refresh=true"
+                                      "&wait_for_completion=true", body, timeout=DELETE_TIMEOUT)
         return int(answer.get("deleted") or 0)
 
 
@@ -373,10 +406,12 @@ class LogWatch:
 class MapListener:
     """redis-cli SUBSCRIBE in map_redis and a WebSocket client in map_web, each into a file."""
 
-    def __init__(self, folder: str, seconds: float, popen: Callable = subprocess.Popen):
+    def __init__(self, folder: str, seconds: float, popen: Callable = subprocess.Popen,
+                 run: Callable = subprocess.run):
         self.folder = folder
         self.seconds = seconds
         self.popen = popen
+        self.run = run
         self.procs: Dict[str, Any] = {}
         self.error = ""
 
@@ -385,7 +420,9 @@ class MapListener:
 
     def start(self) -> None:
         commands = {
-            "redis": ["docker", "exec", "map_redis", "redis-cli", "SUBSCRIBE", stages.REDIS_CHANNEL],
+            # bounded inside the container: a docker exec that ends leaves its process running there
+            "redis": ["docker", "exec", "map_redis", "timeout", str(int(self.seconds)), "redis-cli", "SUBSCRIBE",
+                      stages.REDIS_CHANNEL],
             "ws": ["docker", "exec", "-e", f"WS_SECONDS={int(self.seconds)}", "map_web", "python3", "-c", WS_CLIENT],
         }
         for which, command in commands.items():
@@ -404,6 +441,8 @@ class MapListener:
             return []
 
     def stop(self) -> None:
+        """The docker exec clients, then the listeners inside the containers (one check at a time,
+        so the patterns are the check's own)."""
         for proc in self.procs.values():
             if proc.poll() is None:
                 proc.terminate()
@@ -413,7 +452,19 @@ class MapListener:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
+        if self.procs:
+            for command in self.kill_commands():
+                try:
+                    self.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, timeout=10)
+                except (OSError, subprocess.SubprocessError):
+                    pass
         self.procs = {}
+
+    @staticmethod
+    def kill_commands() -> List[List[str]]:
+        return [["docker", "exec", "map_redis", "pkill", "-f", f"redis-cli SUBSCRIBE {stages.REDIS_CHANNEL}"],
+                ["docker", "exec", "map_web", "pkill", "-f", WS_MARK]]
 
 
 # -- addresses ----------------------------------------------------------------------------------
@@ -467,7 +518,8 @@ class Report:
     result: str = "ok"
     error: str = ""
     ewsposter: Dict[str, Any] = field(default_factory=lambda: {"state": "none", "detail": ""})
-    cleanup: Dict[str, Any] = field(default_factory=lambda: {"state": "none", "deleted": 0, "detail": ""})
+    cleanup: Dict[str, Any] = field(default_factory=lambda: {"state": "none", "deleted": 0, "passes": [], "left": 0,
+                                                             "detail": ""})
     kibana: str = ""
     written: str = ""
 
@@ -525,6 +577,7 @@ class Check:
                  addresses: Optional[Callable[[str], List[str]]] = None,
                  run_id: Optional[str] = None,
                  log: Callable[[str, str], None] = _say,
+                 journal: Optional[str] = None,
                  mark: Optional[Callable[[str], None]] = None,
                  clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], None] = time.sleep,
@@ -550,8 +603,12 @@ class Check:
         self._addresses = addresses
         self.run_id = run_id or new_run_id()
         self.token = probes.token_for(self.run_id)
-        self.log = log
+        self._say = log
         self._mark = mark
+        self.journal_file = journal or os.path.join(os.path.dirname(result_file or result_path()), "last.log")
+        self._journal = None
+        self._deferred: Optional[List[tuple]] = None   # the end of the run: output after last.json
+        self.entered = False            # the hold was taken: the run got past its start
         self.clock = clock
         self.sleep = sleep
         self.now = now
@@ -572,12 +629,63 @@ class Check:
 
     # -- output --
 
+    # Every line goes into last.log, then to stdout / the say of the CLI. A closed stdout (the
+    # Manager killed, an SSH hang-up) never stops the run: the end of the hold and the cleanup go
+    # on. During the end, output waits until last.json is written (flush()).
+
+    def _open_journal(self) -> None:
+        try:
+            os.makedirs(os.path.dirname(self.journal_file), mode=0o700, exist_ok=True)
+            handle = os.open(self.journal_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+                             0o600)
+            self._journal = os.fdopen(handle, "w", encoding="utf-8", buffering=1)
+        except OSError:
+            self._journal = None
+
+    def _close_journal(self) -> None:
+        if self._journal is not None:
+            with contextlib.suppress(OSError):
+                self._journal.close()
+            self._journal = None
+
+    def _write_journal(self, line: str) -> None:
+        if self._journal is not None:
+            try:
+                self._journal.write(f"{datetime.now(timezone.utc).strftime('%H:%M:%S')} {line}\n")
+            except (OSError, ValueError):
+                self._journal = None
+
+    def _out(self, what: str, *args: str) -> None:
+        try:
+            if what == "mark":
+                if self._mark is not None:
+                    self._mark(args[0])
+                elif os.environ.get("TPOT_MARKS") == "1":
+                    print(args[0], flush=True)
+            else:
+                self._say(*args)
+        except (OSError, ValueError):       # BrokenPipeError, EIO, a closed file
+            pass
+
+    def flush(self) -> None:
+        deferred, self._deferred = self._deferred or [], None
+        for item in deferred:
+            self._out(*item)
+
+    def log(self, kind: str, text: str) -> None:
+        self._write_journal(f"{kind}: {text}")
+        if self._deferred is not None:
+            self._deferred.append(("log", kind, text))
+        else:
+            self._out("log", kind, text)
+
     def mark(self, *words: str) -> None:
         line = "@@tpot " + " ".join(words)
-        if self._mark is not None:
-            self._mark(line)
-        elif os.environ.get("TPOT_MARKS") == "1":
-            print(line, flush=True)
+        self._write_journal(line)
+        if self._deferred is not None:
+            self._deferred.append(("mark", line))
+        else:
+            self._out("mark", line)
 
     def phase(self, key: str, title: str) -> None:
         self.mark("phase", key, title)
@@ -642,8 +750,16 @@ class Check:
             line = self.render(honeypot, event, start)
             lines.append(f"{honeypot.name} geo event -> {event.file}: {line}")
         if not self.options.keep and not self.sensor:
-            body = stages.cleanup_query(start, start, (self._addresses or own_addresses)(self.host), self.token)
-            lines.append("cleanup: POST logstash-*/_delete_by_query " + json.dumps(body))
+            own = stages.OwnEvents(self.token)
+            if not self.options.geo_only:
+                own.probed = own.token_types = sorted({h.logstash_type for h in self.honeypots
+                                                       if h.running and not h.external})
+            for honeypot in self.geo_targets():
+                event = self.geo_event(honeypot.name)
+                own.geos.append((honeypot.logstash_type, event.src_ip, event.src_port))
+            body = stages.cleanup_query(start, start, own)
+            lines.append("cleanup (with the source ports of the probes besides): POST logstash-*/_delete_by_query "
+                         + json.dumps(body))
         return lines
 
     def render(self, honeypot: Honeypot, event: GeoEvent, moment: datetime) -> str:
@@ -657,25 +773,36 @@ class Check:
                                  "keep": self.options.keep, "timeout": self.options.timeout})
         report.started = self.now()
         self.started = report.started
+        self._open_journal()
+        usage: Optional[UsageError] = None
         try:
+            # the handlers come first: a signal from here on ends the hold it may have taken
             with self.signals:
                 self._run(report)
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, Terminated):
             report.exit_code, report.result = EXIT_CANCELLED, "cancelled"
-        except Terminated as stop:
-            report.exit_code, report.result = 128 + stop.signum, "cancelled"
+        except CheckError as error:     # before the hold (inventory, address, hold set-up)
+            report.exit_code, report.result, report.error = EXIT_FAILED, "error", str(error)
+            if isinstance(error, UsageError):
+                report.exit_code, usage = EXIT_CANNOT_ASK, error
+            if not self.entered:
+                self.rows = {}
         report.ended = report.ended or self.now()
         report.rows = list(self.rows.values())
         if report.exit_code == EXIT_OK and self.signals.received:
-            signum = self.signals.received[0]
-            report.exit_code, report.result = 128 + signum, "cancelled"
+            report.exit_code, report.result = EXIT_CANCELLED, "cancelled"
         if report.exit_code == EXIT_OK and (report.failed or report.cleanup.get("state") == "failed"):
             report.exit_code, report.result = EXIT_FAILED, "failed"
         try:
             report.written = write_result(report, self.result_file)
         except OSError as error:
+            self._deferred = self._deferred if self._deferred is not None else []
             self.log("warn", f"the result could not be written: {error}")
+        self.flush()
         self.phase("done", "Done")
+        self._close_journal()
+        if usage is not None:
+            raise usage
         return report
 
     def _run(self, report: Report) -> None:
@@ -692,34 +819,49 @@ class Check:
 
         self.phase("hold", "Holding ewsposter")
         hold = self._make_hold()
-        try:
-            hold.__enter__()
-        except CheckError as error:
-            self.mark("fail", "hold")
-            self.log("error", str(error))
-            report.exit_code, report.result, report.error = EXIT_HOLD, "hold failed", str(error)
-            report.ewsposter = {"state": "failed", "detail": str(error)}
-            return
+        held = False
         failure: Optional[BaseException] = None
         try:
+            try:
+                held = True     # from here on the end runs, however the enter ends (EwsHold gives back itself)
+                hold.__enter__()
+            except CheckError as error:
+                held = False
+                self.mark("fail", "hold")
+                self.log("error", str(error))
+                report.exit_code, report.result, report.error = EXIT_HOLD, "hold failed", str(error)
+                report.ewsposter = {"state": "failed", "detail": str(error)}
+                return
+            self.entered = True
             self._held(hold, report)
         except HoldError as error:      # the hold ended during the check: the check stops
             failure = error
-            self.log("error", str(error))
             report.error = str(error)
         finally:
-            with self.signals.shield():
+            if held:
+                self._end(hold, report, failure)
+        if held:
+            self._ewsposter(hold, report, failure)
+
+    def _end(self, hold, report: Report, failure: Optional[BaseException]) -> None:
+        """The end of every run that took the hold: the settle for the last lines, the end of the
+        hold, then the cleanup (Elasticsearch only, no log lines). Output waits for last.json, signals
+        are only noted."""
+        self._deferred = self._deferred if self._deferred is not None else []
+        if failure is not None:
+            self.log("error", str(failure))
+        with self.signals.shield():
+            try:
+                if self.sent:
+                    # the last lines of the honeypots (some write when a connection closes)
+                    self.sleep(END_SETTLE)
+            finally:
                 try:
-                    if self.sent:
-                        # the last lines of the honeypots (some write when a connection closes) and
-                        # their way into Elasticsearch, before the cleanup and the end of the hold
-                        self.sleep(END_SETTLE)
-                    self._cleanup(report)
-                finally:
-                    self.phase("release", "Lifting the hold of ewsposter")
-                    report.ended = self.now()
                     hold.__exit__(None, None, None)
-        self._ewsposter(hold, report, failure)
+                finally:
+                    report.ended = self.now()
+                    self.phase("release", "Lifting the hold of ewsposter")
+                    self._cleanup(report)
 
     def _make_hold(self):
         if self._hold is not None:
@@ -757,7 +899,10 @@ class Check:
             if not self.options.geo_only:
                 self.phase("probe", f"Probing the honeypots on {self.host}")
                 self.sent = True
-                self.results = self._run_probes(self.host, self.honeypots, self.token, check=hold.check)
+                # filled also when the probes end by an exception: the cleanup still knows what they sent
+                self.results = {}
+                self.results = self._run_probes(self.host, self.honeypots, self.token, check=hold.check,
+                                                into=self.results)
             self._probe_stages()
             if geo:
                 self.phase("inject", "Writing the geo events")
@@ -823,7 +968,7 @@ class Check:
         try:
             return stages.first_hit(self.elastic.search(build(self.with_token)))
         except ElasticError as error:
-            if error.status != 400 or not self.with_token:
+            if not (error.token_refused and self.with_token):
                 raise
             self.with_token = False          # this Elasticsearch takes no query over every field
             self.log("warn", "Elasticsearch refused the token query, the check looks by source only")
@@ -958,40 +1103,98 @@ class Check:
 
     # -- the cleanup --
 
+    def ports_survive(self) -> bool:
+        """The source ports of the probes reach the honeypots: the probes go to an IPv4 address of
+        this host through Docker's DNAT; through docker-proxy (loopback, IPv6) they do not."""
+        try:
+            address = ipaddress.ip_address(self.host)
+        except ValueError:
+            return False
+        return address.version == 4 and not address.is_loopback
+
+    def own_events(self) -> stages.OwnEvents:
+        """What this run sent, by which (a) token, (b) test IP + marker port, (c) probe source +
+        source port its events can be told apart from real ones."""
+        reliable = self.ports_survive()
+        own = stages.OwnEvents(self.token, self.host if reliable else "")
+        by_name = {h.name: h for h in self.honeypots}
+        for name, result in sorted(self.results.items()):
+            honeypot = by_name.get(name)
+            if honeypot is None or not honeypot.logstash_type:
+                continue
+            if result.state == probes.SKIPPED and not result.src_ports and not result.token_sent:
+                continue            # nothing went out
+            kind = honeypot.logstash_type
+            own.probed.append(kind)
+            if result.token_sent:
+                own.token_types.append(kind)
+            if reliable and result.src_ports:
+                own.probes.setdefault(kind, []).extend(result.src_ports)
+        for row in self.rows.values():
+            if row.geo is not None and row.geo.line:
+                own.geos.append((row.logstash_type, row.geo.src_ip, row.geo.src_port))
+                if "{token}" in fixtures.template(row.name):
+                    own.token_types.append(row.logstash_type)
+        own.probed = sorted(set(own.probed))
+        own.token_types = sorted(set(own.token_types))
+        return own
+
+    def _delete(self, own: stages.OwnEvents, end: datetime) -> int:
+        body = stages.cleanup_query(self.started, end, own, self.with_token)
+        if body is None:
+            return 0
+        try:
+            return self.elastic.delete_by_query(body)
+        except ElasticError as error:
+            if not (error.token_refused and self.with_token):
+                raise
+            self.with_token = False
+            self.log("warn", "Elasticsearch refused the token query, the cleanup goes by test IP, marker port "
+                             "and source port only")
+            body = stages.cleanup_query(self.started, end, own, False)
+            return self.elastic.delete_by_query(body) if body is not None else 0
+
     def _cleanup(self, report: Report) -> None:
         if self.sensor:
-            report.cleanup = {"state": "skipped", "deleted": 0,
+            report.cleanup = {"state": "skipped", "deleted": 0, "passes": [], "left": 0,
                               "detail": "Elasticsearch is on the HIVE, the probes stay there"}
             return
         if not self.sent:
-            report.cleanup = {"state": "none", "deleted": 0, "detail": "nothing was sent"}
+            report.cleanup = {"state": "none", "deleted": 0, "passes": [], "left": 0, "detail": "nothing was sent"}
             return
         end = self.now()
-        sources = [self.host] + list(TEST_IPS)
         from tpotctl import ops
         port = self._web_port if self._web_port is not None else ops.web_port(self.repo_dir, self.env)
-        report.kibana = stages.kibana_link(self.host, port, self.token, sources, self.started, end)
+        report.kibana = stages.kibana_link(self.host, port, stages.run_kql(self.token, [self.host] + list(TEST_IPS)),
+                                           self.started, end)
         if self.options.keep:
-            report.cleanup = {"state": "kept", "deleted": 0, "detail": "--keep: the test events stay"}
+            report.cleanup = {"state": "kept", "deleted": 0, "passes": [], "left": 0, "detail": "--keep: the test events stay"}
             self.log("info", "The test events stay in Elasticsearch (--keep).")
             return
         self.phase("cleanup", "Removing the test events from Elasticsearch")
+        own = self.own_events()
+        passes: List[int] = []
         try:
-            with contextlib.suppress(ElasticError):
-                self.elastic.refresh()
-            try:
-                deleted = self.elastic.delete_by_query(
-                    stages.cleanup_query(self.started, end, self.addresses, self.token, self.with_token))
-            except ElasticError as error:
-                if error.status != 400 or not self.with_token:
-                    raise
-                self.with_token = False
-                deleted = self.elastic.delete_by_query(
-                    stages.cleanup_query(self.started, end, self.addresses, self.token, False))
+            for second in (False, True):
+                if second:
+                    # events Logstash indexes late (a session that closed after the first pass)
+                    self.sleep(SECOND_PASS)
+                end = self.now()
+                with contextlib.suppress(ElasticError):
+                    self.elastic.refresh()
+                passes.append(self._delete(own, end))
+            left_query = stages.leftover_query(self.started, end, own, self.host)
+            left = self.elastic.count(left_query) if left_query is not None else 0
         except ElasticError as error:
             self.mark("fail", "cleanup")
             self.log("error", f"The test events could not be removed: {error}")
-            report.cleanup = {"state": "failed", "deleted": 0, "detail": str(error)}
+            report.cleanup = {"state": "failed", "deleted": sum(passes), "passes": passes, "left": 0,
+                              "detail": str(error)}
             return
-        report.cleanup = {"state": "done", "deleted": deleted, "detail": ""}
-        self.log("ok", f"{deleted} test events removed from Elasticsearch.")
+        report.cleanup = {"state": "done", "deleted": sum(passes), "passes": passes, "left": left, "detail": ""}
+        self.log("ok", f"{sum(passes)} test events removed from Elasticsearch "
+                       f"({' + '.join(str(n) for n in passes)}, the second pass {SECOND_PASS:g} s later).")
+        if left:
+            link = stages.kibana_link(self.host, port, stages.leftover_kql(own, self.host), self.started, end)
+            report.cleanup["left_kibana"] = link
+            self.log("warn", f"{left} probe events could not be told apart from real ones and stay; Kibana: {link}")

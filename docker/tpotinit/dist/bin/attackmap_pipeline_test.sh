@@ -159,6 +159,7 @@ function fuTPOT_READY {
 }
 function fuHANDOVER {
   local -a args=(check pipeline)
+  myTYPES=${myTYPES//Ciscoasa/ciscoasa}
   [ "$myTYPES_SET" = 1 ] && args+=(--only "$myTYPES")
   [ "$myTIMEOUT_SET" = 1 ] && args+=(--timeout "$myTIMEOUT")
   [ "$myDRYRUN" = 1 ] && args+=(--dry-run)

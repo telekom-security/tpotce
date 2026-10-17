@@ -252,6 +252,21 @@ class ChecksCliTest(unittest.TestCase):
                                                                     check=self.fake_check(report))
                 self.assertEqual(code, exit_code)
 
+    def test_an_error_before_the_hold_is_said_without_a_table(self):
+        from tpotctl.checks import run as trun
+        report = trun.Report(run_id="abc123", exit_code=1, result="error", error="no address of this host found")
+        code, text, _made, _check, _asked = self.run_check("honeypots", "-y", check=self.fake_check(report))
+        self.assertEqual(code, 1)
+        self.assertIn("no address of this host found", text)
+        self.assertNotIn("Honeypot", text)
+
+    def test_a_closed_stdout_after_the_run_keeps_its_exit_code(self):
+        from tpotctl.checks import run as trun
+        report = trun.Report(run_id="abc123", exit_code=1, result="failed")
+        with mock.patch("tpotctl.cli.check_summary", side_effect=BrokenPipeError(32, "Broken pipe")):
+            code, _text, _made, _check, _asked = self.run_check("honeypots", "-y", check=self.fake_check(report))
+        self.assertEqual(code, 1)
+
     def test_a_honeypot_this_t_pot_does_not_run_is_a_usage_error(self):
         from tpotctl.checks import run as trun
         check = self.fake_check()
@@ -1961,10 +1976,40 @@ class RunProbesTest(unittest.TestCase):
             state["probed"] += 1
             return probes.ProbeResult("open", True, "ok")
 
+        into = {}
         with self.assertRaisesRegex(HoldError, "ended"):
             probes.run_probes("127.0.0.1", [self.honeypot(str(n)) for n in range(5)], TOKEN, workers=1,
-                              probes={str(n): fine for n in range(5)}, check=check)
+                              probes={str(n): fine for n in range(5)}, check=check, into=into)
         self.assertEqual(state, {"calls": 2, "probed": 1})
+        # what ran is known all the same: the cleanup names its events
+        self.assertEqual(into["0"].state, "open")
+        self.assertEqual(sorted(into), [str(n) for n in range(5)])
+
+    def test_the_map_listeners_are_bounded_in_their_containers(self):
+        started, ran = [], []
+
+        class Proc:
+            def poll(self):
+                return None
+
+            def terminate(self):
+                pass
+
+            def wait(self, timeout=None):
+                return 0
+
+        folder = tempfile.mkdtemp(prefix="tpot-map-")
+        self.addCleanup(shutil.rmtree, folder)
+        listener = run_checks.MapListener(folder, 330, popen=lambda argv, **kw: started.append(argv) or Proc(),
+                                          run=lambda argv, **kw: ran.append(argv))
+        listener.start()
+        self.assertEqual(started[0], ["docker", "exec", "map_redis", "timeout", "330", "redis-cli", "SUBSCRIBE",
+                                      "attack-map-production"])
+        self.assertEqual(started[1][:5], ["docker", "exec", "-e", "WS_SECONDS=330", "map_web"])
+        self.assertIn(run_checks.WS_MARK, started[1][-1])
+        listener.stop()
+        self.assertEqual(ran, [["docker", "exec", "map_redis", "pkill", "-f", "redis-cli SUBSCRIBE attack-map-production"],
+                               ["docker", "exec", "map_web", "pkill", "-f", run_checks.WS_MARK]])
 
 
 # ---------------------------------------------------------------------------
@@ -2181,12 +2226,19 @@ def es_match(query, source):
     raise AssertionError(f"query the fake does not know: {query}")
 
 
+REFUSED = ('{"error":{"root_cause":[{"type":"query_shard_exception","reason":"failed to create query: '
+           'field expansion matches too many fields, limit: 1024"}]},"status":400}')
+
+
 class FakeElastic:
-    def __init__(self):
+    def __init__(self, order=None):
         self.docs, self.searches, self.deletes = [], [], []
         self.refuse_token = False
+        self.refuse_other = False
         self.down = False
         self.attempts = 0
+        self.order = order if order is not None else []
+        self.after_delete = None        # called after each pass: a late document
 
     def add(self, source):
         self.docs.append({"_id": f"doc{len(self.docs)}", "_index": "logstash-2026.10.17", "_source": source})
@@ -2195,22 +2247,34 @@ class FakeElastic:
         self.attempts += 1
         if self.down:
             raise run_checks.ElasticError("Elasticsearch is not reachable (refused)")
-        if self.refuse_token and "query_string" in json.dumps(body):
-            raise run_checks.ElasticError("Elasticsearch answered 400 too many fields", 400)
+        self.refused(body)
         self.searches.append(body)
         hits = sorted((d for d in self.docs if es_match(body["query"], d["_source"])),
                       key=lambda d: d["_source"].get("@timestamp", ""))
         return {"hits": {"hits": hits[:body.get("size", 10)]}}
 
+    def refused(self, body):
+        if "query_string" in json.dumps(body):
+            if self.refuse_token:
+                raise run_checks.ElasticError("Elasticsearch answered 400", 400, REFUSED)
+            if self.refuse_other:
+                raise run_checks.ElasticError("Elasticsearch answered 400", 400,
+                                              '{"error":{"type":"illegal_argument_exception"},"status":400}')
+
     def refresh(self):
         pass
 
+    def count(self, body):
+        return sum(1 for d in self.docs if es_match(body["query"], d["_source"]))
+
     def delete_by_query(self, body):
-        if self.refuse_token and "query_string" in json.dumps(body):
-            raise run_checks.ElasticError("Elasticsearch answered 400 too many fields", 400)
+        self.refused(body)
+        self.order.append("delete")
         self.deletes.append(body)
         keep = [d for d in self.docs if not es_match(body["query"], d["_source"])]
         deleted, self.docs = len(self.docs) - len(keep), keep
+        if self.after_delete:
+            self.after_delete(self)
         return deleted
 
 
@@ -2290,10 +2354,10 @@ class World:
     honeypots and the injection write, the Attack Map, a hold, and a clock that runs on each sleep."""
 
     def __init__(self, test, honeypots, tpot_type="HIVE", hold=None, results=None, probe_logs=True,
-                 probe_docs=True, map_missing=(), sleep_hook=None, **options):
+                 probe_docs=True, map_missing=(), sleep_hook=None, host=None, **options):
         self.test, self.honeypots = test, honeypots
         self.clock, self.order, self.said, self.marks, self.sleeps = 0.0, [], [], [], []
-        self.es, self.map_missing = FakeElastic(), set(map_missing)
+        self.es, self.map_missing = FakeElastic(self.order), set(map_missing)
         self.results, self.probe_logs, self.probe_docs = results or {}, probe_logs, probe_docs
         self.sleep_hook = sleep_hook
         logs = {fixtures.log_file(h.name): b"an older line\n" for h in honeypots}
@@ -2306,16 +2370,17 @@ class World:
         self.result_file = os.path.join(folder, "checks", "last.json")
         # a real attack in the window of the check: it must survive the cleanup
         self.es.add({"type": "Cowrie", "src_ip": ATTACKER, "src_port": 40001, "@timestamp": stages.iso(BASE)})
+        self.host = host or HOST
         self.check = run_checks.Check(
             run_checks.Options(**options), folder,
             env={"TPOT_TYPE": tpot_type, "TPOT_DATA_PATH": os.path.join(folder, "data")},
             honeypots=lambda: list(self.honeypots),
             compose_names=["tpotinit", "ewsposter", "elasticsearch", "map_redis", "map_web"] + [h.name for h in honeypots],
             hold=lambda data, names: self.hold, run_probes=self.run_probes, elastic=self.es, files=self.files,
-            listener=self.make_listener, host=lambda: HOST, addresses=lambda host: list(OWN), run_id="abc123",
+            listener=self.make_listener, addresses=lambda address: list(OWN), run_id="abc123",
             log=lambda kind, text: self.said.append((kind, text)), mark=self.marks.append,
             clock=lambda: self.clock, sleep=self.sleep, now=self.now, web_port=64297,
-            result_file=self.result_file)
+            result_file=self.result_file, host=lambda: self.host)
 
     def now(self):
         return BASE + datetime.timedelta(seconds=self.clock)
@@ -2331,10 +2396,10 @@ class World:
         self.listener = FakeListener(self)
         return self.listener
 
-    def run_probes(self, host, honeypots, token, check=None):
+    def run_probes(self, host, honeypots, token, check=None, into=None):
         self.order.append("probes")
-        self.test.assertEqual(host, HOST)
-        results = {}
+        self.test.assertEqual(host, self.host)
+        results = into if into is not None else {}
         for index, target in enumerate(honeypots):
             if target.external:
                 continue
@@ -2433,39 +2498,92 @@ class StagesTest(unittest.TestCase):
         self.assertFalse(stages.on_the_map(honeypot("p0f")))
         self.assertTrue(stages.on_the_map(honeypot("cowrie")))
 
+    def own(self):
+        return stages.OwnEvents(TOKEN, HOST, probes={"Cowrie": [40100, 40101], "ConPot": [40200]},
+                                probed=["ConPot", "Cowrie", "P0f"], token_types=["Cowrie"],
+                                geos=[("Cowrie", "8.8.8.8", 51234), ("Dionaea", "208.67.222.222", 51235)])
+
     def test_the_cleanup_query(self):
         end = BASE + datetime.timedelta(minutes=4, seconds=3, microseconds=500000)
         start = BASE + datetime.timedelta(microseconds=750000)
-        self.assertEqual(stages.cleanup_query(start, end, OWN, TOKEN), {"query": {"bool": {
-            "filter": [{"range": {"@timestamp": {"gte": "2026-10-17T08:00:00.000Z",
-                                                 "lte": "2026-10-17T08:05:03.500Z"}}}],
-            "should": [{"terms": {"src_ip.keyword": ["127.0.0.1", "172.17.0.1", "192.0.2.5", "208.67.222.222",
-                                                     "4.2.2.2", "8.8.4.4", "8.8.8.8", "::1"]}},
-                       {"query_string": {"query": f'"{TOKEN}"', "lenient": True}}],
-            "minimum_should_match": 1}}})
-        self.assertNotIn("query_string", json.dumps(stages.cleanup_query(start, end, OWN, TOKEN, with_token=False)))
 
-    def test_the_cleanup_leaves_a_real_attack_alone(self):
+        def kind(name):
+            return {"term": {"type.keyword": name}}
+
+        self.assertEqual(stages.cleanup_query(start, end, self.own()), {"query": {"bool": {
+            "filter": [{"range": {"@timestamp": {"gte": "2026-10-17T08:00:00.000Z",
+                                                 "lte": "2026-10-17T08:05:03.500Z"}}},
+                       {"terms": {"type.keyword": ["ConPot", "Cowrie", "Dionaea"]}}],
+            "should": [
+                {"bool": {"filter": [{"terms": {"type.keyword": ["Cowrie"]}},
+                                     {"query_string": {"query": f'"{TOKEN}"', "lenient": True}}]}},
+                {"bool": {"filter": [kind("Cowrie"), {"term": {"src_ip.keyword": "8.8.8.8"}},
+                                     {"term": {"src_port": 51234}}]}},
+                {"bool": {"filter": [kind("Dionaea"), {"term": {"src_ip.keyword": "208.67.222.222"}},
+                                     {"term": {"src_port": 51235}}]}},
+                {"bool": {"filter": [kind("ConPot"), {"term": {"src_ip.keyword": HOST}},
+                                     {"terms": {"src_port": [40200]}}]}},
+                {"bool": {"filter": [kind("Cowrie"), {"term": {"src_ip.keyword": HOST}},
+                                     {"terms": {"src_port": [40100, 40101]}}]}}],
+            "minimum_should_match": 1}}})
+        body = json.dumps(stages.cleanup_query(start, end, self.own(), with_token=False))
+        self.assertNotIn("query_string", body)
+        # never by an own address alone, never the passive tools
+        for gone in ("172.17.0.1", "127.0.0.1", '"P0f"', "Suricata"):
+            self.assertNotIn(gone, json.dumps(stages.cleanup_query(start, end, self.own())))
+        self.assertIsNone(stages.cleanup_query(start, end, stages.OwnEvents(TOKEN)))
+        # ports that do not survive (docker-proxy): no source clause at all
+        own = self.own()
+        own.source = ""
+        self.assertNotIn(HOST, json.dumps(stages.cleanup_query(start, end, own)))
+
+    def test_the_cleanup_leaves_every_real_event_alone(self):
         es = FakeElastic()
         inside, after = stages.iso(BASE + datetime.timedelta(minutes=1)), stages.iso(BASE + datetime.timedelta(hours=1))
-        es.add({"type": "Cowrie", "src_ip": ATTACKER, "src_port": 40100, "@timestamp": inside})       # real
-        es.add({"type": "Cowrie", "src_ip": HOST, "src_port": 40100, "@timestamp": after})            # later
-        es.add({"type": "Cowrie", "src_ip": HOST, "src_port": 40100, "@timestamp": inside})           # probe
-        es.add({"type": "Cowrie", "src_ip": "8.8.8.8", "src_port": 51234, "@timestamp": inside})      # geo
-        es.add({"type": "Galah", "src_ip": "10.0.0.9", "user_agent": f"x {TOKEN}", "@timestamp": inside})
-        deleted = es.delete_by_query(stages.cleanup_query(BASE, BASE + datetime.timedelta(minutes=5), OWN, TOKEN))
-        self.assertEqual(deleted, 3)
-        self.assertEqual(sorted((d["_source"]["src_ip"], d["_source"]["@timestamp"]) for d in es.docs),
-                         [(HOST, after), (ATTACKER, inside)])
+        real = [
+            {"type": "Cowrie", "src_ip": ATTACKER, "src_port": 40100, "@timestamp": inside},
+            {"type": "Cowrie", "src_ip": "172.20.0.1", "src_port": 40100, "@timestamp": inside},   # IPv6 attack
+            {"type": "Cowrie", "src_ip": HOST, "src_port": 50999, "@timestamp": inside},          # another port
+            {"type": "Cowrie", "src_ip": "8.8.8.8", "src_port": 40100, "@timestamp": inside},     # test IP, other port
+            {"type": "Cowrie", "src_ip": HOST, "src_port": 40100, "@timestamp": after},           # later
+            {"type": "Suricata", "src_ip": "8.8.8.8", "src_port": 51234, "event_type": "dns", "@timestamp": inside},
+            {"type": "Suricata", "src_ip": HOST, "src_port": 40100, "@timestamp": inside},
+            {"type": "P0f", "src_ip": HOST, "src_port": 40100, "user": TOKEN, "@timestamp": inside},
+            {"type": "Heralding", "src_ip": HOST, "src_port": 40100, "@timestamp": inside},       # not probed
+            {"type": "Dionaea", "src_ip": "8.8.8.8", "src_port": 51235, "@timestamp": inside},    # other IP's port
+        ]
+        own = [
+            {"type": "Cowrie", "src_ip": "10.0.0.9", "user": f"x {TOKEN}", "@timestamp": inside},       # (a)
+            {"type": "Cowrie", "src_ip": "8.8.8.8", "src_port": 51234, "@timestamp": inside},           # (b)
+            {"type": "Dionaea", "src_ip": "208.67.222.222", "src_port": 51235, "@timestamp": inside},   # (b)
+            {"type": "Cowrie", "src_ip": HOST, "src_port": 40101, "@timestamp": inside},                # (c)
+            {"type": "ConPot", "src_ip": HOST, "src_port": 40200, "@timestamp": inside},                # (c)
+        ]
+        for source in real + own:
+            es.add(source)
+        body = stages.cleanup_query(BASE, BASE + datetime.timedelta(minutes=5), self.own())
+        self.assertEqual(es.delete_by_query(body), len(own))
+        self.assertEqual([d["_source"] for d in es.docs], real)
+        # what the probes sent from this host and none of (a) to (c) names: counted, not deleted
+        left = stages.leftover_query(BASE, BASE + datetime.timedelta(minutes=5), self.own(), HOST)
+        self.assertEqual(es.count(left), 1)
+        self.assertEqual(stages.leftover_kql(self.own(), HOST), 'src_ip:"192.0.2.5" and type:("ConPot" or "Cowrie")')
 
     def test_the_kibana_link(self):
-        link = stages.kibana_link(HOST, 64297, TOKEN, [HOST, "8.8.8.8"], BASE, BASE + datetime.timedelta(minutes=2))
+        query = stages.run_kql(TOKEN, [HOST, "8.8.8.8"])
+        link = stages.kibana_link(HOST, 64297, query, BASE, BASE + datetime.timedelta(minutes=2))
         self.assertTrue(link.startswith("https://192.0.2.5:64297/kibana/app/discover#/?_g=(time:(from:"), link)
         self.assertIn("2026-10-17T08:00:00.000Z", link)
         self.assertIn("2026-10-17T08:03:00.000Z", link)
         self.assertIn(TOKEN, link)
         self.assertNotIn(" ", link)
-        self.assertTrue(stages.kibana_link("2001:db8::5", 64297, TOKEN, [], BASE, BASE).startswith("https://[2001:db8::5]:"))
+        self.assertTrue(stages.kibana_link("2001:db8::5", 64297, query, BASE, BASE).startswith("https://[2001:db8::5]:"))
+
+    def test_only_the_refusal_of_the_token_query_drops_it(self):
+        self.assertTrue(run_checks.ElasticError("x", 400, REFUSED).token_refused)
+        for status, body in ((400, '{"error":{"type":"illegal_argument_exception"}}'), (500, REFUSED), (0, "")):
+            with self.subTest(status=status):
+                self.assertFalse(run_checks.ElasticError("x", status, body).token_refused)
 
 
 class RunTest(unittest.TestCase):
@@ -2496,10 +2614,12 @@ class RunTest(unittest.TestCase):
         self.assertIsNone(rows["p0f"].geo)
         # the order: the hold, the probes, the geo events, the cleanup, the end of the hold
         self.assertEqual(world.order[:2], ["hold", "probes"])
-        self.assertEqual(world.order[-2:], ["release", "exit 0"])
+        self.assertEqual(world.order[-4:], ["release", "delete", "delete", "exit 0"])
         self.assertLess(world.order.index("probes"), world.order.index("inject"))
-        self.assertEqual(len(world.es.deletes), 1)
+        self.assertEqual(len(world.es.deletes), 2)
         self.assertEqual(report.cleanup["state"], "done")
+        self.assertEqual(report.cleanup["passes"], [5, 0])
+        self.assertEqual(report.cleanup["left"], 0)
         # the probes (from this host) and the geo events (test IPs) are gone, the real attack stays
         self.assertEqual([d["_source"]["src_ip"] for d in world.es.docs], [ATTACKER])
         self.assertEqual(report.cleanup["deleted"], 2 + 3)
@@ -2547,10 +2667,15 @@ class RunTest(unittest.TestCase):
     def test_the_cleanup_body_is_the_one_of_the_run(self):
         world = self.world(("cowrie",))
         report = world.run()
-        self.assertEqual(world.es.deletes, [stages.cleanup_query(report.started, report.ended, OWN, TOKEN)])
-        window = world.es.deletes[0]["query"]["bool"]["filter"][0]["range"]["@timestamp"]
+        own = stages.OwnEvents(TOKEN, HOST, probes={"Cowrie": [40100]}, probed=["Cowrie"], token_types=["Cowrie"],
+                               geos=[("Cowrie", "8.8.8.8", 51234)])
+        first = report.ended
+        second = first + datetime.timedelta(seconds=run_checks.SECOND_PASS)
+        self.assertEqual(world.es.deletes, [stages.cleanup_query(report.started, first, own),
+                                            stages.cleanup_query(report.started, second, own)])
+        window = world.es.deletes[1]["query"]["bool"]["filter"][0]["range"]["@timestamp"]
         self.assertEqual(window["gte"], "2026-10-17T08:00:00.000Z")
-        self.assertEqual(window["lte"], stages.iso(report.ended + datetime.timedelta(minutes=1)))
+        self.assertEqual(window["lte"], stages.iso(second + datetime.timedelta(minutes=1)))
 
     def test_a_sensor_runs_the_first_three_stages(self):
         world = self.world(("cowrie", "honeytrap"), tpot_type="SENSOR")
@@ -2603,7 +2728,7 @@ class RunTest(unittest.TestCase):
     def test_ctrl_c_cleans_up_and_ends_the_hold(self):
         world = self.world(("cowrie",))
 
-        def interrupted(host, honeypots, token, check=None):
+        def interrupted(host, honeypots, token, check=None, into=None):
             world.order.append("probes")
             world.es.add({"type": "Cowrie", "src_ip": HOST, "src_port": 40100, "@timestamp": stages.iso(BASE)})
             raise KeyboardInterrupt
@@ -2612,8 +2737,9 @@ class RunTest(unittest.TestCase):
         report = world.run()
         self.assertEqual(report.exit_code, 130)
         self.assertEqual(world.order, ["hold", "probes", "release", "exit 130"])
-        self.assertEqual(len(world.es.deletes), 1)
-        self.assertEqual([d["_source"]["src_ip"] for d in world.es.docs], [ATTACKER])
+        # the probes ended without results: nothing names their events, they stay (no delete by address)
+        self.assertEqual(world.es.deletes, [])
+        self.assertEqual([d["_source"]["src_ip"] for d in world.es.docs], [ATTACKER, HOST])
         self.assertEqual(world.last()["result"], "cancelled")
 
     @unittest.skipUnless(hasattr(signal, "SIGTERM") and hasattr(signal, "SIGHUP"), "no SIGTERM / SIGHUP")
@@ -2633,9 +2759,8 @@ class RunTest(unittest.TestCase):
 
                 world.check._run_probes = signalled
                 report = world.run()
-                self.assertEqual(report.exit_code, 128 + signum)
-                self.assertEqual(world.order[-2:], ["release", f"exit {128 + signum}"])
-                self.assertEqual(len(world.es.deletes), 1)
+                self.assertEqual(report.exit_code, 130)        # every cancel, as tpot does elsewhere
+                self.assertEqual(world.order[-4:], ["release", "delete", "delete", "exit 130"])
                 self.assertEqual((signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGHUP),
                                   signal.getsignal(signal.SIGINT)), before)
 
@@ -2649,7 +2774,7 @@ class RunTest(unittest.TestCase):
 
         world.es.delete_by_query = deleting
         report = world.run()
-        self.assertEqual(world.order[-2:], ["release", "exit 143"])
+        self.assertEqual(world.order[-4:], ["release", "delete", "delete", "exit 130"])
         self.assertEqual(report.cleanup["state"], "done")
 
     def test_a_hold_lost_during_the_check_stops_it(self):
@@ -2660,7 +2785,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(report.ewsposter["state"], "failed")
         for row in report.rows:
             self.assertEqual(row.state("ewsposter"), stages.FAILED)
-        self.assertEqual(world.order[-2:], ["release", "exit 1"])
+        self.assertEqual(world.order[-4:], ["release", "delete", "delete", "exit 1"])
 
     def test_ewsposter_that_does_not_run_here(self):
         world = self.world(("cowrie",))
@@ -2731,6 +2856,107 @@ class RunTest(unittest.TestCase):
         self.assertEqual(report.exit_code, 0, report.rows[0].stages)
         self.assertNotIn("query_string", json.dumps(world.es.deletes))
         self.assertTrue(any("token query" in text for _kind, text in world.said))
+        self.assertEqual([d["_source"]["src_ip"] for d in world.es.docs], [ATTACKER])
+
+    def test_another_400_keeps_the_token_query_and_fails(self):
+        world = self.world(("cowrie",))
+        world.es.refuse_other = True
+        report = world.run()
+        self.assertEqual(report.exit_code, 1)
+        self.assertIn("400", report.rows[0].stages["elasticsearch"].detail)
+        self.assertEqual(report.cleanup["state"], "failed")
+
+    def test_the_second_pass_takes_what_was_indexed_late(self):
+        world = self.world(("cowrie",))
+
+        def late(es):
+            if len(es.deletes) == 1:        # a session that closed after the first pass
+                es.add({"type": "Cowrie", "src_ip": HOST, "src_port": 40100, "eventid": "cowrie.session.closed",
+                        "@timestamp": stages.iso(world.now())})
+
+        world.es.after_delete = late
+        report = world.run()
+        self.assertEqual(report.cleanup["passes"], [2, 1])
+        self.assertEqual(report.cleanup["deleted"], 3)
+        self.assertEqual(world.last()["cleanup"]["passes"], [2, 1])
+        self.assertIn(run_checks.SECOND_PASS, world.sleeps)
+        self.assertTrue(any("2 + 1" in text for _kind, text in world.said))
+
+    def test_probe_events_through_docker_proxy_stay_and_are_counted(self):
+        knock = probes.ProbeResult("open", True, "2404/tcp: answered", src_ports=[40100])
+        world = self.world(("conpot_IEC104",), host="127.0.0.1", results={"conpot_IEC104": knock}, geo=False)
+        report = world.run()
+        self.assertEqual(world.es.deletes, [])      # nothing it can name
+        self.assertEqual(report.cleanup["left"], 1)
+        self.assertIn("src_ip", report.cleanup["left_kibana"])
+        self.assertTrue(any(text.startswith("1 probe events could not be told apart from real ones and stay; "
+                                            "Kibana: https://") for _kind, text in world.said))
+        self.assertEqual(world.last()["cleanup"]["left"], 1)
+
+    def test_a_closed_stdout_stops_nothing(self):
+        world = self.world(("cowrie",))
+
+        def broken(*args):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        world.check._mark = broken
+        world.check._say = broken
+        report = world.run()
+        self.assertEqual(report.exit_code, 0)
+        self.assertEqual(world.order[-4:], ["release", "delete", "delete", "exit 0"])
+        self.assertEqual(world.last()["result"], "ok")
+        with open(os.path.join(os.path.dirname(world.result_file), "last.log"), encoding="utf-8") as handle:
+            journal = handle.read()
+        self.assertIn("@@tpot phase release", journal)
+        self.assertIn("test events removed", journal)
+
+    def test_marks_through_a_stdout_that_raises(self):
+        world = self.world(("cowrie",))
+        world.check._mark = None
+
+        class Closed(io.StringIO):
+            def write(self, text):
+                raise BrokenPipeError(32, "Broken pipe")
+
+        with mock.patch.dict(os.environ, {"TPOT_MARKS": "1"}), mock.patch("sys.stdout", Closed()):
+            report = world.run()
+        self.assertEqual(report.exit_code, 0)
+        self.assertIn("release", world.order)
+        self.assertEqual(len(world.es.deletes), 2)
+
+    def test_the_end_writes_last_json_before_its_output(self):
+        world = self.world(("cowrie",))
+        seen = []
+        world.check._mark = lambda line: seen.append((line, os.path.exists(world.result_file)))
+        world.run()
+        release = [exists for line, exists in seen if line.startswith("@@tpot phase release")]
+        self.assertEqual(release, [True])
+        self.assertEqual([exists for line, exists in seen if "phase hold" in line], [False])
+
+    def test_an_error_before_the_hold_writes_last_json(self):
+        world = self.world(("cowrie",))
+
+        def no_address():
+            raise CheckError("no address of this host found to probe")
+
+        world.check._host = no_address
+        report = world.run()
+        self.assertEqual((report.exit_code, report.result), (1, "error"))
+        last = world.last()
+        self.assertEqual((last["result"], last["error"], last["honeypots"]),
+                         ("error", "no address of this host found to probe", []))
+        self.assertNotIn("hold", world.order)
+        world = self.world(("cowrie",), only=["nopot"])
+        with self.assertRaises(run_checks.UsageError):
+            world.run()
+        self.assertIn("nopot", world.last()["error"])
+
+    def test_ports_survive_only_on_an_ipv4_address_of_the_host(self):
+        for host, survive in ((HOST, True), ("127.0.0.1", False), ("2001:db8::5", False), ("", False)):
+            with self.subTest(host=host):
+                world = self.world(("cowrie",))
+                world.check.host = host
+                self.assertEqual(world.check.ports_survive(), survive)
 
     def test_elasticsearch_down(self):
         world = self.world(("cowrie", "dionaea"))
@@ -2987,6 +3213,9 @@ class WrapperTest(unittest.TestCase):
         os.unlink(self.args)
         self.run_script(PIPELINE)
         self.assertEqual(self.handed(), ["check", "pipeline"])
+        os.unlink(self.args)
+        self.run_script(PIPELINE, "--types", "cowrie,Ciscoasa")
+        self.assertEqual(self.handed(), ["check", "pipeline", "--only", "cowrie,ciscoasa"])
 
     def test_the_pipeline_test_options_still_parse(self):
         for argv, code in ((["--bogus"], 1), (["--types"], 1), (["--timeout", "soon"], 1), (["-h"], 0),
