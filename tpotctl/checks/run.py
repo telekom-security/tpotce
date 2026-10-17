@@ -15,7 +15,8 @@ The run:
     6. the cleanup unless --keep, Elasticsearch only: _delete_by_query on logstash-*, twice
        (SECOND_PASS later for events indexed late), for the events that are the run's own beyond
        doubt (stages.cleanup_query: its window and types, and its token, or a test IP with the
-       marker port of its injection, or the probe source with a recorded source port); the probe
+       marker port of its injection (with its type alone for the port-less fixtures: go-pot,
+       hellpot, h0neytr4p, honeyaml), or the probe source with a recorded source port); the probe
        events none of these names stay and are counted (cleanup "left");
     7. the result in ~/.local/share/tpotce/checks/last.json; only then the output of steps 5 and 6.
        Every line also goes into last.log next to it; a closed stdout never stops the run. One
@@ -856,6 +857,18 @@ PENDING_RUN_MAX = 120.0 + 15.0 + 60.0 + 2 * 3600.0
 PENDING_TIMEOUT_MAX = 3600.0
 
 
+def cleanup_types(repo_dir: Optional[str] = None, env: Optional[Dict[str, str]] = None) -> Optional[List[str]]:
+    """The Logstash types of the honeypots of this T-Pot (the inventory): what a pending cleanup may
+    name, the same for `tpot check cleanup`, the next check and the Checks page; None when the
+    inventory cannot be read (read_pending then takes every type the check knows)."""
+    from tpotctl.checks.inventory import inventory
+    from tpotctl.bootstrap import REPO_DIR
+    try:
+        return sorted({h.logstash_type for h in inventory(repo_dir or REPO_DIR, env) if h.logstash_type})
+    except CheckError:
+        return None
+
+
 def run_time(run_id: str) -> datetime:
     """The UTC time a run id starts with (new_run_id: %Y%m%d%H%M%S + 6 hex digits)."""
     if not (isinstance(run_id, str) and len(run_id) == 20 and run_id[:14].isdigit()
@@ -1101,8 +1114,9 @@ class Check:
         # the honeypots whose ewsposter module cannot be held: no probe, no geo event (named at the
         # ack, or later: before each probe and each geo event the check asks hold.ack again)
         self.not_held: List[str] = []
-        self._late: List[str] = []
+        self._named_late: List[str] = []
         self._late_lock = threading.Lock()
+        self.probes_ended: Optional[float] = None   # clock() when the last probe was through
         # what the cleanup of this run needs, while it has not run through (checks/pending)
         self.pending_file = os.path.join(pending_dir(result_file), f"{self.run_id}.json")
         self._planned: Optional[stages.OwnEvents] = None
@@ -1362,10 +1376,10 @@ class Check:
         with self.signals.shield():
             if self.sent:
                 # no result in it, so it may go out before the hold ends; never a problem for _out
-                seconds = END_SETTLE + (0 if self.sensor or self.options.keep else SECOND_PASS + 5)
+                seconds = self._settle() + (0 if self.sensor or self.options.keep else SECOND_PASS + 5)
                 text = (f"Ending the check: the hold of ewsposter ends, then the cleanup (up to about "
-                        f"{seconds:g} s)." if seconds > END_SETTLE else
-                        f"Ending the check: the hold of ewsposter ends (about {seconds:g} s).")
+                        f"{seconds:.0f} s)." if seconds > self._settle() else
+                        f"Ending the check: the hold of ewsposter ends (about {seconds:.0f} s).")
                 self._write_journal(f"info: {text}")
                 self._out("log", "info", text)
             self._deferred = self._deferred if self._deferred is not None else []
@@ -1374,7 +1388,7 @@ class Check:
             try:
                 if self.sent:
                     # the last lines of the honeypots (some write when a connection closes)
-                    self.sleep(END_SETTLE)
+                    self.sleep(self._settle())
             finally:
                 try:
                     hold.__exit__(None, None, None)
@@ -1480,6 +1494,24 @@ class Check:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(self.pending_file)
 
+    def _late(self, name: str) -> float:
+        """The seconds after the last probe until which a honeypot may still write its line (0: at
+        once): probes.LATE_WRITE + LATE_MARGIN for one the check probed."""
+        result = self.results.get(name)
+        if name not in probes.LATE_WRITE or result is None:
+            return 0.0
+        if result.state == probes.SKIPPED and not result.src_ports and not result.token_sent:
+            return 0.0              # nothing went out
+        return probes.LATE_WRITE[name] + probes.LATE_MARGIN
+
+    def _settle(self) -> float:
+        """The seconds before the end of the hold: END_SETTLE, or until the latest late writer of
+        the probes may have written its line."""
+        late = max([self._late(name) for name in self.results] or [0.0])
+        if not late or self.probes_ended is None:
+            return END_SETTLE
+        return max(END_SETTLE, self.probes_ended + late - self.clock())
+
     def _make_hold(self):
         if self._hold is not None:
             return self._hold(self.data_dir, self.compose_names())
@@ -1521,7 +1553,7 @@ class Check:
         modules = refresh() if callable(refresh) else list(getattr(hold, "failed_modules", None) or [])
         if ewshold.honeypots_of(modules, [honeypot.name]):
             with self._late_lock:
-                self._late.append(honeypot.name)
+                self._named_late.append(honeypot.name)
             return ewshold.CANNOT_HOLD
         return ""
 
@@ -1574,7 +1606,8 @@ class Check:
                                                     self.token, check=hold.check, into=self.results,
                                                     skip=lambda honeypot: self._not_held_now(hold, honeypot))
                 finally:
-                    for name in list(self._late):
+                    self.probes_ended = self.clock()
+                    for name in list(self._named_late):
                         self._mark_not_held(name)
                     self._save_pending()        # the source ports of the probes
             self._probe_stages()
@@ -1737,7 +1770,7 @@ class Check:
                     row.log_line = line
                     row.set("log", OK, line[:200])
                     pending_log.remove(honeypot)
-                elif now >= log_end:
+                elif now >= max(log_end, (self.probes_ended or start) + self._late(honeypot.name)):
                     error = self.watch.errors.get(LOGS.get(honeypot.name, ("", ""))[1], "")
                     if error:
                         row.set("log", FAILED, error)

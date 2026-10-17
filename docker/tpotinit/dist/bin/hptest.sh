@@ -96,21 +96,33 @@ function fuCOMMAND_OF {   # package -> the command it brings
 	esac
 }
 
-function fuPORTS {   # docker compose config --format json on stdin -> "T:22,..." and "U:69,..."; $1 the services left out
+# docker compose config --format json on stdin -> "T:22,...", "U:69,..." and the seconds the
+# scanned honeypots may still write lines after the last probe; $1 the services left out. What
+# the probe table of tpot check leaves alone is left out here too: the ports it never sends to or
+# only knocks at (by the port inside the container), whole honeypots (the LLM honeypots, ddospot),
+# sentrypeer in P2P mode; the block is generated from tpotctl/checks/probes.py
+function fuPORTS {
 	python3 -c '
 import json, sys
+# >>> probe table >>>
+# generated from tpotctl/checks/probes.py by python3 -m tpotctl.checks.probes --hptest
+skipped = {"beelzebub": "*", "conpot_IEC104": [["20000", "tcp"]], "conpot_beckhoff_cx": [["48898", "tcp"]], "conpot_kamstrup_382": [["1025", "tcp"]], "conpot_plc_modbus": [["502", "tcp"]], "ddospot": "*", "dionaea": [["20", "tcp"], ["42", "tcp"], ["69", "udp"], ["81", "tcp"]], "galah": "*"}
+variants = {"sentrypeer": "SENTRYPEER_PEER_TO_PEER"}
+late = {"ciscoasa": 60, "ddospot": 60}
+# <<< probe table <<<
 config = json.load(sys.stdin)
 left_out = set(sys.argv[1].split())
-# the ports the probe table of tpot check leaves alone (tpotctl/checks/probes.py not_tried), by
-# the port inside the container: dionaea 20 (FTP data, nothing listens), 42 (its mirror connects
-# back to the source), 69/udp (its TFTP answers only the first request after a start)
-skipped = {"dionaea": {("20", "tcp"), ("42", "tcp"), ("69", "udp")}}
 tcp, udp = set(), set()
+wait = 0
 for name, service in (config.get("services") or {}).items():
-    if name in left_out:
+    if name in left_out or skipped.get(name) == "*":
         continue
+    environment = service.get("environment") or {}
+    if name in variants and variants[name] in environment:
+        continue
+    scanned = False
     for port in service.get("ports") or []:
-        if (str(port.get("target") or ""), port.get("protocol") or "tcp") in skipped.get(name, set()):
+        if [str(port.get("target") or ""), port.get("protocol") or "tcp"] in (skipped.get(name) or []):
             continue
         if port.get("host_ip") in ("127.0.0.1", "::1"):
             continue
@@ -119,8 +131,12 @@ for name, service in (config.get("services") or {}).items():
         if not published.isdigit() or 64290 <= int(published) <= 64309:
             continue
         (udp if port.get("protocol") == "udp" else tcp).add(int(published))
+        scanned = True
+    if scanned:
+        wait = max(wait, late.get(name, 0))
 print(",".join(f"T:{p}" for p in sorted(tcp)))
 print(",".join(f"U:{p}" for p in sorted(udp)))
+print(wait)
 ' "${1:-}"
 }
 
@@ -348,6 +364,13 @@ if ! fuOWN_ADDRESS "${myHOST}";
           fuUI_WARN "No probe for ${myNOTHELD% }: ewsposter cannot hold its module (its idle pass fails; docker logs ewsposter)."
       fi
 fi
+# a honeypot that writes its lines late (ddospot, ciscoasa: a minute after the probe): the hold
+# (of the ports really scanned) lasts that long after the last scan, plus a margin
+myLATE=$(echo "${myPORTS}" | sed -n 3p)
+case "${myLATE}" in
+  ''|*[!0-9]*|0) ;;
+  *) [ $(( myLATE + 10 )) -gt "${myEWS_HOLD_SETTLE}" ] && myEWS_HOLD_SETTLE=$(( myLATE + 10 )) ;;
+esac
 
 fuMARK phase probe Probing some services on "${myHOST}"
 fuUI_INFO "Probing some services on ${myHOST} ..."

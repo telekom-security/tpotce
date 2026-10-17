@@ -83,6 +83,8 @@ class Sandbox:
         for folder in (self.ews, self.data):
             folder.mkdir(parents=True)
         shutil.copy(EWS_CFG, self.ews / "ews.cfg")
+        # the index of ews.py (homedir): a container that has run before
+        (self.ews / "ews.idx").write_text("")
         self.stub.write_text(STUB)
         self.stub.chmod(0o755)
 
@@ -616,7 +618,7 @@ class RoundTest(EntrypointCase):
         last = self.normal_calls(box)[-1]
         self.assertIn(f"-c {box.base / 'normal'}/", last)
         self.assertIn(f"\n{module} = false\n", (box.base / "normal" / "ews.cfg").read_text())
-        self.assertIn(f"except {module}: they send only once", result.stdout)
+        self.assertIn(f"except {module}: it sends only once", result.stdout)
 
     def test_a_module_that_failed_in_the_last_round_is_quarantined(self):
         """redishoneypot fails in every round (named in the first ack): after the marker it stays
@@ -666,6 +668,29 @@ class RoundTest(EntrypointCase):
                     self.assertFalse((box.data / "catchup").exists())
                     self.assertEqual(box.state_word(), "normal")
                     self.assertIn(f"-c {box.base / 'normal'}/", [c for c in box.calls() if " -E " not in c][0])
+
+    def test_a_new_container_reads_the_logs_idle_first(self):
+        """No ews.idx (a recreated container, its indexes start at line 1): the start runs the idle
+        round of the end of a hold first and says so; nothing is sent before it."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                (box.ews / "ews.idx").unlink()
+                result = box.run(shell, 'fuSTART; echo "held=$myHELD"; fuROUND; echo "q=[$myQUARANTINE]"')
+                self.assertIn("held=yes", result.stdout)
+                self.assertIn("No ews.idx (a new container): one idle round first", result.stdout)
+                self.assertEqual(RoundTest.kinds(box), ["idle", "normal"])
+                self.assertEqual(box.state_word(), "normal")
+
+    def test_the_texts_of_one_module(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = box.run(shell, 'myHELD=yes; fuROUND', STUB_STARTED=1, STUB_CRASH="redishoneypot")
+                self.assertIn("except redishoneypot: it sends only once an idle pass of its own", result.stdout)
+                result = box.run(shell, 'myQUARANTINE=" cowrie"; fuROUND', STUB_STARTED=1, STUB_CRASH="cowrie")
+                self.assertIn("The idle pass of cowrie ended with rc=1.", result.stdout)
+                self.assertNotIn("after 0 more tries", result.stdout)
 
     def test_a_normal_start_sends_at_once(self):
         for shell in SHELLS:
@@ -884,6 +909,22 @@ class TpotinitClearTest(unittest.TestCase):
             (self.ews / name).write_text("")
         self.clear()
         self.assertEqual(sorted(p.name for p in self.ews.iterdir()), ["conf", "hold.old"])
+
+    def test_a_lock_held_by_a_running_check_stays(self):
+        import fcntl
+        lock = self.ews / "check.lock"
+        lock.write_text("")
+        (self.ews / "hold").write_text("")
+        handle = os.open(lock, os.O_RDWR)
+        self.addCleanup(os.close, handle)
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        output = self.clear()
+        self.assertIn("check.lock is held by a running check, it stays.", output)
+        self.assertTrue(lock.exists())
+        self.assertFalse((self.ews / "hold").exists())
+        fcntl.flock(handle, fcntl.LOCK_UN)
+        self.clear()
+        self.assertFalse(lock.exists())
 
     def test_links_are_removed_not_followed(self):
         outside = Path(self.tmp.name) / "outside"

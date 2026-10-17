@@ -223,14 +223,17 @@ class Backend:
         from tpotctl.checks import ewshold
         return ewshold.ews_quarantine(system.data_path(ops.env_values(), REPO_DIR))
 
-    def pending_checks(self) -> int:
-        """How many earlier checks could not remove their test events (checks/pending); -1 while a
-        check runs (it holds the lock of the checks, its own file is pending)."""
+    def pending_checks(self):
+        """(how many earlier checks could not remove their test events, the pending files that are
+        refused with why), read as `tpot check cleanup` reads them (the types of the inventory);
+        (-1, []) while a check runs (it holds the lock of the checks, its own file is pending)."""
         from tpotctl import system
         from tpotctl.checks import ewshold, run as trun
-        if ewshold.check_running(system.data_path(ops.env_values(), REPO_DIR)):
-            return -1
-        return len(trun.read_pending()[0])
+        env = ops.env_values()
+        if ewshold.check_running(system.data_path(env, REPO_DIR)):
+            return -1, []
+        found, broken = trun.read_pending(types=trun.cleanup_types(REPO_DIR, env))
+        return len(found), broken
 
 
 class Runner:
@@ -1584,7 +1587,8 @@ def check_when(stamp: str) -> str:
 
 def quarantine_text(modules) -> str:
     """The ewsposter line of the Checks page while modules catch up after a hold."""
-    return f"ewsposter sends, except {', '.join(modules)} (they catch up first)."
+    return (f"ewsposter sends, except {', '.join(modules)} "
+            f"({'they catch' if len(modules) > 1 else 'it catches'} up first).")
 
 
 def pending_text(count: int) -> str:
@@ -1757,6 +1761,7 @@ class ChecksPane(Vertical):
     result = None           # the last check as run.result_view gives it, None without one
     problem = ""            # why last.json cannot be read ("" when it can or there is none)
     pending = 0             # earlier checks whose test events are still in Elasticsearch
+    refused: List[str] = []     # pending files tpot check cleanup refuses (path: why)
     sensor = False
     row_keys: Dict[str, Dict] = {}
     columns_for = ()        # the stages the columns of the table were made for
@@ -1805,9 +1810,9 @@ class ChecksPane(Vertical):
         except Exception as err:            # noqa: BLE001 - a broken file is a line on the page, never a traceback
             self.result, self.problem = None, str(err) or type(err).__name__
         try:
-            self.pending = 0 if self.sensor else self.app.backend.pending_checks()
+            self.pending, self.refused = (0, []) if self.sensor else self.app.backend.pending_checks()
         except Exception:                   # noqa: BLE001 - the line only informs
-            self.pending = 0
+            self.pending, self.refused = 0, []
         self.show()
 
     def show(self) -> None:
@@ -1846,9 +1851,19 @@ class ChecksPane(Vertical):
         line = self.query_one("#check-pending", Static)
         actions = self.query_one("#check-pending-actions", Horizontal)
         # a check that runs holds its own pending file: no line, no button meanwhile
-        line.display = actions.display = self.pending > 0
+        actions.display = self.pending > 0
+        line.display = self.pending > 0 or bool(self.refused)
+        text = Text()
         if self.pending > 0:
-            line.update(Text(f"{glyphs.g('warn')} {pending_text(self.pending)}", style=theme.color("warn")))
+            text.append(f"{glyphs.g('warn')} {pending_text(self.pending)}", style=theme.color("warn"))
+        for problem in self.refused:
+            # a file that is no pending cleanup of this T-Pot: named, never offered for removal
+            text.append(("\n" if text.plain else "") + f"{glyphs.g('warn')} A pending cleanup is refused, nothing of "
+                        f"it is deleted: ", style=theme.color("warn"))
+            text.append(" ".join(problem.split()), style=theme.color("ash"))
+            text.append(" (remove the file once you have looked at it).", style=theme.color("warn"))
+        if line.display:
+            line.update(text)
 
     def show_hold(self) -> None:
         """What ewsposter says of its hold (<data>/ews/hold.state): stuck is a warning."""

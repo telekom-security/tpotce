@@ -342,6 +342,15 @@ finally:
     os.close(folder)' "${myEWS_HOLD_DIR}" 2>/dev/null
 }
 
+# The epoch seconds of the marker's mtime (0 when it cannot be read: as new)
+fuEWS_MARKER_AGE_BASE () {
+  python3 -c 'import os, sys, time
+try:
+    print(int(os.lstat(sys.argv[1]).st_mtime))
+except OSError:
+    print(int(time.time()))' "${myEWS_HOLD_DIR}/hold" 2>/dev/null || date +%s
+}
+
 # 0 when the marker is a regular file (no link): the hold is still on
 fuEWS_MARKER_THERE () {
   [ -f "${myEWS_HOLD_DIR}/hold" ] && [ ! -L "${myEWS_HOLD_DIR}/hold" ]
@@ -515,6 +524,20 @@ fuEWS_REFRESH_LOOP () {
               kill -TERM "${myPARENT}" 2>/dev/null
               break
           fi
+          # ewsposter takes a marker younger than 30 minutes: past 25 (a suspend, a step of the
+          # clock) or a hold.state that says normal while the check holds, the check stops
+          if [ $(( $(date +%s) - $(fuEWS_MARKER_AGE_BASE) )) -gt 1500 ];
+            then
+              fuEWS_SAY ERROR "The hold marker is older than ewsposter takes it (a suspend or a step of the clock), the check stops."
+              kill -TERM "${myPARENT}" 2>/dev/null
+              break
+          fi
+          if [ -n "${myEWS_HOLD_CONFIRMED}" ] && [ "$(fuEWS_STATE)" = "normal" ];
+            then
+              fuEWS_SAY ERROR "ewsposter says its hold is over (hold.state normal) while the check holds it, the check stops."
+              kill -TERM "${myPARENT}" 2>/dev/null
+              break
+          fi
       fi
       if [ "$(date +%s)" -ge "${myNEXT}" ];
         then
@@ -622,9 +645,11 @@ fuEWS_HOLD_BEGIN () {
       fuEWS_HOLD_END
       return 3
   fi
-  # a container that is down starts held when it comes up (its entrypoint sees the marker)
+  # a container that is down starts held when it comes up (its entrypoint sees the marker); the
+  # catch-up flag at once, so a check cut off later (-9) leaves it too
   if [ "${myRUNS}" -eq 1 ];
     then
+      fuEWS_CATCHUP "1"
       myEWS_HOLD_ACKED="1"
       fuEWS_SAY INFO "ewsposter is not running; the hold marker is set, so it starts held if it comes up during the check."
       fuEWS_REFRESH_START

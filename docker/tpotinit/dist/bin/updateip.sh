@@ -45,5 +45,13 @@ MY_INTIP=$myLOCALIP
 MY_HOSTNAME=$HOSTNAME
 EOF
 
-chown tpot:tpot /data/ews/conf/ews.ip
-chmod 660 /data/ews/conf/ews.ip
+# never through a link (the folder is writable for the group tpot): opened with O_NOFOLLOW and
+# changed through that descriptor
+python3 -c 'import grp, os, pwd, stat, sys
+handle = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+try:
+    if stat.S_ISREG(os.fstat(handle).st_mode):
+        os.fchmod(handle, 0o660)
+        os.fchown(handle, pwd.getpwnam("tpot").pw_uid, grp.getgrnam("tpot").gr_gid)
+finally:
+    os.close(handle)' /data/ews/conf/ews.ip || echo "# Warning: /data/ews/conf/ews.ip is no regular file or cannot be changed."

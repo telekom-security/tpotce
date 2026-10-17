@@ -69,7 +69,12 @@ class ScriptsTest(unittest.TestCase):
         self.assertEqual(call.group(1).split(), [f"${name}" for name in archives])
         self.assertNotIn("chmod 660 $myADBHONEYTGZ", text)
         self.assertNotIn("chown tpot:tpot $myADBHONEYTGZ", text)
-        self.assertIn("chmod 660 /data/ews/conf/ews.ip", UPDATEIP.read_text())
+        updateip = UPDATEIP.read_text()
+        # through a descriptor, no link followed
+        self.assertIn("os.O_NOFOLLOW", updateip)
+        self.assertIn("os.fchmod(handle, 0o660)", updateip)
+        self.assertNotIn("\nchmod 660 /data/ews/conf/ews.ip", updateip)
+        self.assertNotIn("\nchown tpot:tpot /data/ews/conf/ews.ip", updateip)
 
     def test_the_archive_modes_follow_no_link(self):
         """The archives that are there get 660 and the owner; a missing one says nothing, a link in

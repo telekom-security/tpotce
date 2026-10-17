@@ -174,7 +174,8 @@ def build_parser() -> argparse.ArgumentParser:
                     "did not confirm its hold (nothing probed), 130 cancelled (Ctrl+C, SIGTERM, SIGHUP). The "
                     "result is in ~/.local/share/tpotce/checks/last.json, its output in last.log next to it. "
                     "The cleanup removes only events that are the check's own beyond doubt (its token, a "
-                    "test IP with its marker port, the probe source with a source port of the probe); one that "
+                    "test IP with its marker port, or with its type in the window for the honeypots that log "
+                    "no source port, the probe source with a source port of the probe); one that "
                     "does not run through stays pending (tpot check cleanup), and every check runs the pending "
                     "ones first. A honeypot whose ewsposter module cannot be held gets no probe and no test "
                     "event.")
@@ -192,8 +193,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Removes from Elasticsearch the test events of earlier checks whose cleanup did not run "
                     "through (~/.local/share/tpotce/checks/pending): only the check's own events, by the rules of "
                     "its cleanup, in the window of that check. Asks first (-y confirms; without a terminal it "
-                    "needs -y, exit 2). Exit codes: 0 done or nothing to do, 1 Elasticsearch failed (the runs stay "
-                    "pending) or another check is running, 2 it cannot ask, 130 cancelled.")
+                    "needs -y, exit 2). While a check runs it does nothing (its events are its own) and ends "
+                    "with exit 0. Exit codes: 0 done, nothing to do or a check is running, 1 Elasticsearch failed "
+                    "(the runs stay pending), a file is refused or the lock cannot be taken, 2 it cannot ask, 130 "
+                    "cancelled.")
     tidy.add_argument("--dry-run", action="store_true", help="show the pending runs and their queries, remove nothing")
     tidy.add_argument("-y", "--yes", action="store_true", help="remove without asking")
     for action in (probe, pipe):
@@ -1427,8 +1430,9 @@ def check_table(report, ascii_only: bool = False):
 
 PIPELINE_ON_A_SENSOR = "The pipeline test runs on the HIVE (Elasticsearch and the Attack Map are there)."
 CLEANUP_QUESTION = ("Earlier checks could not remove their test events ({runs}). Remove them from Elasticsearch "
-                    "now? Only the check's own events go: its token, a test IP with its marker port, the probe "
-                    "source with a source port of the probe, in the window of that check.")
+                    "now? Only the check's own events go: its token, a test IP with its marker port (or with its "
+                    "type alone for the honeypots that log no source port), the probe source with a source port "
+                    "of the probe, in the window of that check.")
 
 
 def runs_text(count: int) -> str:
@@ -1440,16 +1444,19 @@ def run_check_cleanup(args) -> int:
     ops.require_linux_host("check cleanup")
     from tpotctl import system
     from tpotctl.checks import CheckError, run as trun
-    from tpotctl.checks.ewshold import EwsHold
+    from tpotctl.checks.ewshold import EwsHold, LockBusy
     from tpotctl.checks.inventory import inventory
     env = ops.env_values()
     # the lock of the checks first: the pending file of a check that runs is its own
     lock = EwsHold(system.data_path(env, REPO_DIR), [], log=lambda kind, text: None, settle=0)
     try:
         lock.__enter__()
-    except CheckError:
+    except LockBusy:
         say.info("A check is running: its test events are its own, nothing to do now.")
         return 0
+    except CheckError as err:
+        error(f"The lock of the checks cannot be taken: {err}")
+        return 1
     try:
         return pending_cleanups(args, trun.read_pending(types=sorted({h.logstash_type for h in inventory(REPO_DIR, env)
                                                                       if h.logstash_type})))

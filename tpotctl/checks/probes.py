@@ -22,6 +22,7 @@ the probe of an address among them still runs, `ProbeResult.ignored` says which 
 
 import base64
 import ipaddress
+import os
 import re
 import socket
 import ssl
@@ -506,6 +507,7 @@ def port_only(why: str) -> Handler:
         with ctx.tcp():
             pass
         return None, f"port open, {why}"
+    handler.leave_out = why     # hptest.sh --nmap sends nothing to it either (hptest_table)
     return handler
 
 
@@ -841,10 +843,21 @@ def not_tried(why: str) -> Handler:
     """A port left alone: nothing is sent, not even a connection (UDP has no knock)."""
     def handler(ctx: _Ctx) -> Tuple[Optional[bool], str]:
         raise _NotTried(f"not probed, {why}")
+    handler.leave_out = why     # hptest.sh --nmap sends nothing to it either (hptest_table)
     return handler
 
 
 TCP, UDP = "tcp", "udp"
+# Honeypots that write the line of a probe well after it: the check keeps the hold (and waits for
+# the log line) this many seconds after its last probe, plus LATE_MARGIN. ddospot v2 writes the
+# scanner event of a source only `Classify` seconds after its first packet (internal/app/config.go,
+# default 60 s, written by the 1 s tick of internal/limit); ciscoasa v2 writes the ike.ratelimit
+# summaries of a source a minute later (internal/ike/summary.go).
+LATE_WRITE = {"ddospot": 60.0, "ciscoasa": 60.0}
+LATE_MARGIN = 10.0
+# Honeypots hptest.sh --nmap leaves out as a whole although the check probes them: nmap's default
+# scripts (dns-recursion) make ddospot ask Quad9, so they would leave the host
+NMAP_LEAVE_OUT = {"ddospot": "nmap's DNS scripts make it recurse to Quad9 (DDOSPOT_DNS_RECURSION)"}
 FTP_DATA_REASON = "FTP data port, nothing listens on it"
 MIRROR_REASON = "dionaea mirrors a connection on this port back to its source"
 TFTP_REASON = "dionaea's TFTP answers only the first request after its start, later ones are refused"
@@ -1113,3 +1126,69 @@ def run_probes(host: str, honeypots: Iterable[Honeypot], token: str, budget: flo
     if errors:
         raise errors[0]
     return results
+
+
+# -- hptest.sh: the same table ------------------------------------------------------------------
+
+HPTEST = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                      "docker", "tpotinit", "dist", "bin", "hptest.sh")
+HPTEST_BEGIN = "# >>> probe table >>>"
+HPTEST_END = "# <<< probe table <<<"
+
+
+def hptest_table() -> Dict[str, object]:
+    """What hptest.sh --nmap takes from the probe table: per honeypot the ports (inside the
+    container) it leaves out, or "*" for all of them, and the environment key that makes a variant
+    leave all of them out; the late writers and their seconds."""
+    skipped: Dict[str, object] = {}
+    for name, table in sorted(PROBES.items()):
+        if name in NMAP_LEAVE_OUT or getattr(getattr(table, "default", None), "leave_out", None):
+            skipped[name] = "*"
+            continue
+        ports = sorted([str(target), protocol] for (target, protocol), handler in table.handlers.items()
+                       if getattr(handler, "leave_out", None))
+        if ports:
+            skipped[name] = ports
+    return {"skipped": skipped, "variants": {"sentrypeer": "SENTRYPEER_PEER_TO_PEER"},
+            "late": {name: int(seconds) for name, seconds in sorted(LATE_WRITE.items())}}
+
+
+def hptest_block() -> str:
+    """The generated lines between HPTEST_BEGIN and HPTEST_END (python of fuPORTS, no single quote)."""
+    import json
+    data = hptest_table()
+    lines = [HPTEST_BEGIN,
+             "# generated from tpotctl/checks/probes.py by python3 -m tpotctl.checks.probes --hptest",
+             "skipped = " + json.dumps(data["skipped"], sort_keys=True),
+             "variants = " + json.dumps(data["variants"], sort_keys=True),
+             "late = " + json.dumps(data["late"], sort_keys=True),
+             HPTEST_END]
+    text = "\n".join(lines)
+    assert "'" not in text
+    return text
+
+
+def write_hptest(path: str = HPTEST, check: bool = False) -> bool:
+    """Writes the block into hptest.sh (in place); with `check` only compares. True when it is current."""
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    start, end = text.index(HPTEST_BEGIN), text.index(HPTEST_END) + len(HPTEST_END)
+    new = text[:start] + hptest_block() + text[end:]
+    if new == text:
+        return True
+    if check:
+        return False
+    with open(path, "r+", encoding="utf-8") as handle:
+        handle.write(new)
+        handle.truncate()
+    return True
+
+
+if __name__ == "__main__":
+    import sys
+    if sys.argv[1:2] != ["--hptest"]:
+        sys.exit("usage: python3 -m tpotctl.checks.probes --hptest [--check]")
+    current = write_hptest(check="--check" in sys.argv)
+    if not current:
+        print(f"{HPTEST}: the probe table block is not current, run python3 -m tpotctl.checks.probes --hptest")
+    sys.exit(0 if current else 1)

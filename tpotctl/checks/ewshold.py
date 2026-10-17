@@ -56,6 +56,11 @@ NOT_RUNNING = ("ewsposter is not running; the hold marker is set, so it starts h
                "during the check")
 REFRESH_FAILED = "the hold marker could not be refreshed, the check stops"
 MARKER_GONE = "the hold marker was removed (T-Pot restarted?), the check stops"
+# ewsposter takes a marker younger than 30 minutes (its entrypoint); the check stops before that
+MARKER_MAX_AGE = 25 * 60.0
+MARKER_OLD = ("the hold marker is older than ewsposter takes it (a suspend or a step of the clock), the check "
+              "stops")
+STATE_NORMAL = "ewsposter says its hold is over (hold.state normal) while the check holds it, the check stops"
 UNKNOWN_RUNS = "docker cannot say whether ewsposter runs; the check waits for its confirmation as if it ran"
 # a renewal that fails this many times in a row stops the check (check())
 REFRESH_FAILURES = 2
@@ -90,6 +95,10 @@ def honeypots_of(modules: Iterable[str], names: Iterable[str]) -> List[str]:
         else:
             found.update(name for name in MODULE_HONEYPOTS.get(module, (module,)) if name in names)
     return sorted(found)
+
+
+class LockBusy(CheckError):
+    """Another check holds the lock of the checks."""
 
 
 def _say(kind: str, text: str) -> None:
@@ -225,7 +234,8 @@ class EwsHold:
                  ack_poll: float = 1.0, *, running: Optional[Callable[[], Optional[bool]]] = None,
                  refresh: float = REFRESH, watch: float = WATCH, settle: float = SETTLE,
                  log: Callable[[str, str], None] = _say,
-                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep):
+                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
+                 wall: Callable[[], float] = time.time):
         self.data_dir = data_dir
         self.compose_names = list(compose_names)
         self.timeout = timeout
@@ -237,6 +247,7 @@ class EwsHold:
         self._log = log
         self._clock = clock
         self._sleep = sleep
+        self._wall = wall
         self.held = False           # the marker is there
         self.acked = False          # ewsposter confirmed it
         # the modules ewsposter could not hold (hold.ack): at the ack, and every one named later on
@@ -255,9 +266,26 @@ class EwsHold:
 
     def check(self) -> None:
         """HoldError when the hold is over before the check: the marker was removed by someone
-        else (MARKER_GONE) or could not be renewed REFRESH_FAILURES times in a row
-        (REFRESH_FAILED). The runner calls it between probes."""
+        else (MARKER_GONE), could not be renewed REFRESH_FAILURES times in a row (REFRESH_FAILED),
+        is older than ewsposter takes a marker (MARKER_OLD: a suspend, a step of the clock), or
+        ewsposter says its hold is over while it should hold (STATE_NORMAL). The runner calls it
+        between probes and polls; it looks at the marker itself."""
         if self._failed:
+            raise HoldError(self._failed)
+        if not self.held or self._folder is None:
+            return
+        try:
+            info = self._folder.lstat(MARKER)
+        except OSError:
+            info = None
+        if info is None or not stat.S_ISREG(info.st_mode):
+            self._failed = MARKER_GONE
+        elif self._wall() - info.st_mtime > MARKER_MAX_AGE:
+            self._failed = MARKER_OLD
+        elif self.acked and ews_state(self.data_dir, self._wall)[0] == "normal":
+            self._failed = STATE_NORMAL
+        if self._failed:
+            self._log("error", self._failed)
             raise HoldError(self._failed)
 
     @property
@@ -306,6 +334,8 @@ class EwsHold:
                 self._log("warn", UNKNOWN_RUNS)
             if runs is False:
                 self._write_marker()
+                # a check cut off later (-9) leaves it: ewsposter catches up first when it runs again
+                self._write_catchup()
                 self.note = NOT_RUNNING
                 self._log("info", NOT_RUNNING)
                 self._start_refresh()
@@ -356,7 +386,7 @@ class EwsHold:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             os.close(handle)
-            raise CheckError("another check is running") from None
+            raise LockBusy("another check is running") from None
         except BaseException:
             os.close(handle)
             raise
@@ -451,6 +481,10 @@ class EwsHold:
                 if self._clock() < due:
                     continue
                 due = self._clock() + self.refresh
+                if self._wall() - info.st_mtime > MARKER_MAX_AGE:
+                    # ewsposter may have ended the hold already: a renewal would start a new one
+                    self._fail(MARKER_OLD)
+                    return
                 try:
                     self._put_marker()
                     failures = 0
@@ -494,13 +528,20 @@ class EwsHold:
             runs = None
         if runs is True and self.acked:
             return
-        try:
-            self._folder.write(CATCHUP, f"{int(time.time())} tpot check {os.getpid()}\n", MARKER_MODE, CATCHUP + ".")
+        if self._write_catchup():
             self._log("info", "ewsposter did not confirm the hold at the end of the check: it catches up first "
                               "when it runs again (nothing of the check is sent).")
+
+    def _write_catchup(self) -> bool:
+        """<data>/ews/catchup (through the folder, no link followed); ewsposter removes it once it
+        caught up after the hold."""
+        try:
+            self._folder.write(CATCHUP, f"{int(time.time())} tpot check {os.getpid()}\n", MARKER_MODE, CATCHUP + ".")
+            return True
         except (KibanaError, OSError) as error:
             self._log("warn", f"{self.ews_dir}/{CATCHUP} could not be written ({error}); ewsposter may send "
                               f"lines of the check when it runs again")
+            return False
 
     def _remove_marker(self) -> None:
         if not self.held:

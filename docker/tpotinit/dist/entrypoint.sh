@@ -79,6 +79,7 @@ create_web_users() {
 # reached by its descriptor, and a name in it is removed, never followed; a folder of that name stays.
 clear_ews_hold() {
     python3 - "${1:-/data}" <<'PY'
+import fcntl
 import os
 import stat
 import sys
@@ -100,8 +101,24 @@ except OSError as error:
     sys.exit(0)
 for name in ("hold", "hold.ack", "check.lock", "quarantine", "catchup"):
     try:
-        if stat.S_ISDIR(os.stat(name, dir_fd=ews_fd, follow_symlinks=False).st_mode):
+        info = os.stat(name, dir_fd=ews_fd, follow_symlinks=False)
+        if stat.S_ISDIR(info.st_mode):
             print(f"# Warning: {data}/ews/{name} is a folder, it stays.")
+            continue
+        if name == "check.lock" and stat.S_ISREG(info.st_mode):
+            # a check that runs holds its flock: its lock stays (it stops by itself once the
+            # marker is gone)
+            handle = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=ews_fd)
+            try:
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    print(f"# {data}/ews/{name} is held by a running check, it stays.")
+                    continue
+                os.unlink(name, dir_fd=ews_fd)
+            finally:
+                os.close(handle)
+            print(f"# Removed {data}/ews/{name}.")
             continue
         os.unlink(name, dir_fd=ews_fd)
         print(f"# Removed {data}/ews/{name}.")

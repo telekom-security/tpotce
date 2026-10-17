@@ -20,8 +20,9 @@
 # round can run (no module started), the hold is stuck: nothing is sent. /data/ews/hold.state
 # says normal, held or stuck. A check that ends while ewsposter does not run (or never confirmed
 # its hold) leaves /data/ews/catchup: ewsposter then starts as if its hold just ended (so does a
-# start that finds hold.state "held" without a marker: the container stopped during a hold), runs
-# the idle round, quarantines what does not catch up, and removes the flag. A hold that is on when
+# start that finds hold.state "held" without a marker: the container stopped during a hold, and a
+# start without ews.idx: a new container reads every log from line 1), runs the idle round,
+# quarantines what does not catch up, and removes the flag. A hold that is on when
 # ewsposter starts goes on with idle passes at once. The marker only counts as a regular file
 # (no link) younger than 30 minutes, so a check that was cut off never keeps ewsposter quiet for
 # good.
@@ -201,7 +202,12 @@ fuIDLE_PASSES () {
         then
           if [ ${myTRY} -ge ${myIDLE_RETRIES} ];
             then
-              echo " => [WARN] The idle pass ${1:+of $1 }ended with rc=${myRC}, also after ${myIDLE_RETRIES} more tries."
+              if [ ${myIDLE_RETRIES} -gt 0 ];
+                then
+                  echo " => [WARN] The idle pass ${1:+of $1 }ended with rc=${myRC}, also after ${myIDLE_RETRIES} more tries."
+                else
+                  echo " => [WARN] The idle pass ${1:+of $1 }ended with rc=${myRC}."
+              fi
               return 1
           fi
           myTRY=$(( myTRY + 1 ))
@@ -593,7 +599,10 @@ fuROUND () {
       fi
       if [ -n "${myQUARANTINE}" ];
         then
-          echo " => [WARN] The hold is over, ewsposter sends again, except${myQUARANTINE}: they send only once an idle pass of their own is clean and caught up."
+          case "${myQUARANTINE# }" in
+            *" "*) echo " => [WARN] The hold is over, ewsposter sends again, except${myQUARANTINE}: they send only once an idle pass of their own is clean and caught up." ;;
+            *) echo " => [WARN] The hold is over, ewsposter sends again, except${myQUARANTINE}: it sends only once an idle pass of its own is clean and caught up." ;;
+          esac
         else
           echo " => The hold is over, ewsposter sends again."
       fi
@@ -638,6 +647,14 @@ fuSTART () {
       # a check ended while ewsposter did not run, or the container stopped during a hold: the
       # idle round of the end of a hold comes first, nothing is sent before it
       echo " => A check of T-Pot ran while ewsposter did not (or its hold did not end here): idle round first, nothing is sent before it."
+      myHELD="yes"
+      myHOLD_NOACK="yes"
+      fuHOLD_STATE held
+  elif [ ! -f "${myEWS}/ews.idx" ];
+    then
+      # a new container: its indexes start at line 1 of logs that may hold lines of a check (and
+      # lines sent before); the idle round of the end of a hold reads them first, nothing is sent
+      echo " => No ews.idx (a new container): one idle round first, nothing of the logs as they are is sent (again)."
       myHELD="yes"
       myHOLD_NOACK="yes"
       fuHOLD_STATE held

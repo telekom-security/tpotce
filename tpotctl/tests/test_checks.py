@@ -116,7 +116,8 @@ class HptestTest(unittest.TestCase):
             "elasticsearch": {"ports": [{"host_ip": "127.0.0.1", "target": 9200, "published": "64298",
                                          "protocol": "tcp"}]},
             "tpotinit": {}}}
-        self.assertEqual(self.call("fuPORTS", json.dumps(config)).split("\n"), ["T:22,T:23,T:8443", "U:500,U:4500"])
+        # the third line: the seconds a scanned honeypot may write late (ciscoasa, LATE_WRITE)
+        self.assertEqual(self.call("fuPORTS", json.dumps(config)).split("\n"), ["T:22,T:23,T:8443", "U:500,U:4500", "60"])
 
     def test_ike_ports_follow_published_overrides(self):
         config = {"services": {"ciscoasa": {"ports": [
@@ -314,6 +315,30 @@ class ChecksCliTest(unittest.TestCase):
         note = table.columns[-1]._cells[0].plain
         self.assertEqual((len(note), note[-1]), (160, "…"))
 
+    def test_the_cleanup_command_tells_a_lock_error_from_a_running_check(self):
+        from tpotctl.checks import run as trun
+        result_file, es = self.pending_world()
+
+        class Broken:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                raise CheckError("the data folder /x does not exist")
+
+            def __exit__(self, *exc):
+                return False
+        with mock.patch.object(trun, "result_path", lambda environ=None: result_file), \
+                mock.patch("tpotctl.checks.ewshold.EwsHold", Broken):
+            code, text = self.run_cli("check", "cleanup", "-y")
+        self.assertEqual(code, 1)
+        self.assertIn("The lock of the checks cannot be taken: the data folder /x does not exist", text)
+        from tpotctl import cli
+        help_text = " ".join(cli.build_parser()._subparsers._group_actions[0].choices["check"]
+                             ._subparsers._group_actions[0].choices["cleanup"].format_help().split())
+        self.assertIn("While a check runs it does nothing", help_text)
+        self.assertIn("0 done, nothing to do or a check is running", help_text)
+
     def test_the_cleanup_command_keeps_what_elasticsearch_did_not_take(self):
         from tpotctl.checks import run as trun
         result_file, es = self.pending_world()
@@ -338,7 +363,7 @@ class ChecksCliTest(unittest.TestCase):
                 pass
 
             def __enter__(self):
-                raise CheckError("another check is running")
+                raise ewshold.LockBusy("another check is running")
 
             def __exit__(self, *exc):
                 return False
@@ -741,6 +766,40 @@ class EwsHoldTest(HoldFolder):
                 pass
         self.assertFalse(os.path.exists(flag))
 
+    def test_check_looks_at_the_marker_the_clock_and_hold_state(self):
+        """check() stops the check when the marker is gone (at once, not only with the watch), older
+        than ewsposter takes it (a suspend, a step of the clock), or hold.state says normal."""
+        with FakeEwsposter(self.ews):
+            with self.hold(watch=60) as hold:
+                hold.check()
+                os.unlink(self.marker)
+                with self.assertRaises(HoldError) as caught:
+                    hold.check()
+                self.assertEqual(str(caught.exception), ewshold.MARKER_GONE)
+        later = {"t": time.time()}
+        with FakeEwsposter(self.ews):
+            with self.hold(watch=60, wall=lambda: later["t"]) as hold:
+                hold.check()
+                later["t"] += 26 * 60
+                with self.assertRaises(HoldError) as caught:
+                    hold.check()
+                self.assertEqual(str(caught.exception), ewshold.MARKER_OLD)
+        with FakeEwsposter(self.ews):
+            with self.hold(watch=60) as hold:
+                self.write_state("held")
+                hold.check()
+                self.write_state("normal")
+                with self.assertRaises(HoldError) as caught:
+                    hold.check()
+                self.assertEqual(str(caught.exception), ewshold.STATE_NORMAL)
+
+    def test_the_catch_up_flag_is_there_from_the_start_without_ewsposter(self):
+        """ewsposter does not run when the hold starts: the flag is written at once, so a check
+        killed with -9 leaves it."""
+        flag = os.path.join(self.ews, "catchup")
+        with self.hold(running=lambda: False):
+            self.assertTrue(os.path.isfile(flag))
+
     def test_the_quarantine_of_ewsposter(self):
         path = os.path.join(self.ews, "quarantine")
         self.assertEqual(ewshold.ews_quarantine(self.data), [])
@@ -946,9 +1005,11 @@ class EwsHoldTest(HoldFolder):
                         raise OSError("busy")
                     real()
                 hold._put_marker = flaky
-                deadline = time.monotonic() + 3
+                deadline = time.monotonic() + 10
                 while len(calls) < 6 and time.monotonic() < deadline:
                     time.sleep(0.02)
+                # the renewals really ran, every failed one was tried again, and the hold goes on
+                self.assertGreaterEqual(len(calls), 4)
                 hold.check()
 
     def test_no_compose_entry_asks_no_docker(self):
@@ -1305,15 +1366,16 @@ class EwsHoldShellTest(HoldFolder):
         script = (f'sh -c \'trap "" TERM; sleep 1; test -f "{self.marker}" && echo present >> "{log}"\' & '
                   f'echo $! > "{grandchild}"; wait')
         with FakeEwsposter(self.ews):
-            process = self.start_cli("sh", "-c", script)
-            self.wait_for(lambda: os.path.isfile(grandchild) and os.path.getsize(grandchild) > 0)
+            # bounds wide enough for a loaded host; the property: the group ends before the hold
+            process = self.start_cli("sh", "-c", script, myEWS_HOLD_TIMEOUT="30")
+            self.wait_for(lambda: os.path.isfile(grandchild) and os.path.getsize(grandchild) > 0, 30)
             with open(grandchild, encoding="utf-8") as handle:
                 pid = int(handle.read())
             os.kill(process.pid, signal.SIGTERM)
             start = time.monotonic()
-            out, err = process.communicate(timeout=60)
+            out, err = process.communicate(timeout=120)
         self.assertEqual(process.returncode, 143, out + err)
-        self.assertLess(time.monotonic() - start, 20)
+        self.assertLess(time.monotonic() - start, 60)
         self.assertTrue(gone(pid))
         with open(log, encoding="utf-8") as handle:
             self.assertEqual(handle.read(), "present\n")
@@ -1525,34 +1587,34 @@ class HptestUnderTheHoldTest(HoldFolder):
         self.assertNotIn("Ciscoasa IKE", result.stdout)
 
     def test_the_ports_the_probe_table_leaves_alone_are_not_scanned(self):
-        """dionaea 20, 42 (its mirror) and 69/udp: hptest.sh leaves them out like tpot check."""
-        ports = [{"target": target, "published": str(target), "protocol": protocol}
-                 for target, protocol in ((20, "tcp"), (21, "tcp"), (42, "tcp"), (69, "udp"), (445, "tcp"))]
+        """hptest.sh leaves out what tpot check never sends to or only knocks at (dionaea 20, 42,
+        69/udp, 81; the LLM honeypots; ddospot; sentrypeer in P2P mode), from the block generated
+        from the probe table; a late writer (ciscoasa) keeps the hold its time + 10 s."""
+        def ports(*pairs):
+            return [{"target": t, "published": str(t), "protocol": proto} for t, proto in pairs]
+        config = {"services": {
+            "dionaea": {"ports": ports((20, "tcp"), (21, "tcp"), (42, "tcp"), (69, "udp"), (81, "tcp"), (445, "tcp"))},
+            "galah": {"ports": ports((8080, "tcp"))},
+            "ddospot": {"ports": ports((53, "udp"), (123, "udp"))},
+            "sentrypeer": {"ports": ports((5060, "tcp"), (5060, "udp")),
+                           "environment": {"SENTRYPEER_PEER_TO_PEER": "1"}},
+            "ciscoasa": {"ports": ports((8443, "tcp"))}}}
         with open(os.path.join(self.bin, "config.json"), "w", encoding="utf-8") as out:
-            json.dump({"services": {"dionaea": {"ports": ports}}}, out)
+            json.dump(config, out)
         self.stub("timeout", '#!/bin/sh\necho "$*" >> "$STUB_LOG"\nexit 0\n')
+        self.stub("sleep", '#!/bin/sh\necho "sleep $*" >> "$STUB_LOG"\nexit 0\n')
         with FakeEwsposter(self.ews):
             result = subprocess.run([HPTEST, "127.0.0.1"], capture_output=True, universal_newlines=True,
                                     env=self.env(), timeout=60)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         with open(self.log, encoding="utf-8") as handle:
-            scans = [line for line in handle.read().splitlines() if " nmap " in f" {line} "]
-        self.assertTrue(any("-p T:21,T:445 " in line for line in scans), scans)
-        self.assertFalse(any("U:69" in line or "T:42" in line or "T:20," in line for line in scans), scans)
-        # the same ports as the probe table
-        with open(HPTEST, encoding="utf-8") as handle:
-            text = handle.read()
-        listed = set(re.findall(r'\("(\d+)", "(tcp|udp)"\)', re.search(r"skipped = \{.*\}", text).group(0)))
-        table = probes.PROBES["dionaea"]
-        left_alone = set()
-        for (target, protocol), handler in table.handlers.items():
-            try:
-                handler(None)
-            except probes._NotTried:
-                left_alone.add((str(target), protocol))
-            except Exception:       # noqa: BLE001 - a real handler needs a context
-                pass
-        self.assertEqual(listed, left_alone)
+            log = handle.read().splitlines()
+        scans = [line for line in log if " nmap " in f" {line} "]
+        self.assertTrue(any("-p T:21,T:445,T:8443 " in line for line in scans), scans)
+        self.assertFalse(any("U:" in line for line in scans), scans)
+        # ciscoasa writes late: the hold lasts 70 s after the scans
+        self.assertIn("Waiting 70 s for the last log lines", result.stdout)
+        self.assertTrue(probes.write_hptest(check=True), "the probe table block of hptest.sh is not current")
 
     def test_term_during_the_scan(self):
         env = self.env()
@@ -3283,6 +3345,38 @@ class RunTest(unittest.TestCase):
         self.assertEqual(rows["dionaea"].state("ewsposter"), stages.FAILED)
         self.assertFalse(rows["heralding"].failed)
         self.assertEqual(report.exit_code, 1)
+
+    def test_a_late_writer_keeps_the_hold_and_its_log_stage_waits(self):
+        """ddospot writes the line of a probe 60 s later (its Classify time): the log stage waits for
+        it (no false fail), and the hold ends only LATE_WRITE + LATE_MARGIN after the last probe."""
+        result = probes.ProbeResult("open", True, "53/udp: DNS answer", src_ports=[40100])
+        world = self.world(("ddospot",), results={"ddospot": result}, probe_logs=False, probe_docs=False, geo=False,
+                           keep=True)
+        line = json.dumps({"src_ip": HOST, "src_port": 40100, "event": "scanner"})
+        moments = {}
+
+        def late(w):
+            if "probes" in w.order and "written" not in moments and w.clock >= 60:
+                moments["written"] = w.clock
+                rel = fixtures.log_file("ddospot")
+                w.files.logs[rel] += (line + "\n").encode()
+        world.sleep_hook = late
+        exit_hold = world.hold.__exit__
+
+        def released(*exc):
+            moments["released"] = world.clock
+            return exit_hold(*exc)
+        world.hold.__exit__ = released
+        report = world.run()
+        row = report.rows[0]
+        self.assertEqual(row.state("log"), stages.OK, row.stages["log"])
+        self.assertGreaterEqual(moments["released"], probes.LATE_WRITE["ddospot"] + probes.LATE_MARGIN)
+        self.assertEqual(probes.LATE_WRITE, {"ddospot": 60.0, "ciscoasa": 60.0})
+
+    def test_without_a_late_writer_the_settle_is_the_usual_one(self):
+        world = self.world(("cowrie",), geo=False, keep=True)
+        world.run()
+        self.assertEqual(world.check._settle(), run_checks.END_SETTLE)
 
     def test_a_module_of_no_known_honeypot_is_named(self):
         world = self.world(("cowrie",))

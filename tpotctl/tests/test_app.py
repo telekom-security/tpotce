@@ -88,8 +88,10 @@ if textual:
         def ews_quarantine(self):
             return list(self.quarantine_value)
 
+        refused_value = []
+
         def pending_checks(self):
-            return self.pending_value
+            return self.pending_value, list(self.refused_value)
 
         def backup_infos(self):
             return [ops.BackupInfo("/b/new_tpot_backup.tar", "new_tpot_backup.tar", 2 ** 20, "regular",
@@ -2203,6 +2205,8 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             await self.open(pilot, app)
             self.assertIn("ewsposter sends, except conpot, redishoneypot (they catch up first).",
                           flat(app.query_one("#check-hold")))
+        self.assertEqual(tapp.quarantine_text(["redishoneypot"]),
+                         "ewsposter sends, except redishoneypot (it catches up first).")
 
     async def test_earlier_checks_that_left_test_events(self):
         """Pending cleanups: a line and Remove them now, which asks (#no first) and runs tpot check
@@ -2240,6 +2244,15 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             await self.open(pilot, app)
             self.assertFalse(app.query_one("#check-pending").display)
             self.assertFalse(app.query_one("#check-pending-actions").display)
+        # a file tpot check cleanup refuses: named with why, no button
+        backend.pending_value, backend.refused_value = 0, ["/x/pending/abc.json: probed: a type this T-Pot does not run"]
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertTrue(app.query_one("#check-pending").display)
+            self.assertFalse(app.query_one("#check-pending-actions").display)
+            self.assertIn("A pending cleanup is refused, nothing of it is deleted: /x/pending/abc.json",
+                          flat(app.query_one("#check-pending")))
         # a SENSOR keeps no events: no line
         sensor = FakeBackend(kind="SENSOR")
         sensor.pending_value = 2
