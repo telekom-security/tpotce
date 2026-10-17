@@ -164,7 +164,6 @@ def build_parser() -> argparse.ArgumentParser:
     pipe = check_actions.add_parser("pipeline", help="inject test events and follow them to the Attack Map "
                                                      "(runs attackmap_pipeline_test.sh); they stay in Kibana")
     pipe.add_argument("--types", help="comma list of cowrie, dionaea, honeytrap, rdphoneypot")
-    pipe.add_argument("--ips", help="test source IPs, one per type")
     pipe.add_argument("--dry-run", action="store_true", help="show the events only, inject nothing")
     pipe.add_argument("--become-file", metavar="FILE", default="", help="the sudo password in a file")
     pipe.add_argument("-y", "--yes", action="store_true", help="do not ask")
@@ -1298,9 +1297,8 @@ def check_command(args) -> List[str]:
             command += ["-B", args.become_file]
         return command + ([args.host] if args.host else [])
     command = [PIPELINE]
-    for option in ("types", "ips"):
-        if getattr(args, option):
-            command += [f"--{option}", getattr(args, option)]
+    if args.types:
+        command += ["--types", args.types]
     if args.dry_run:
         command.append("--dry-run")
     if args.become_file:

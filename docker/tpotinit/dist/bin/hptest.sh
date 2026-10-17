@@ -3,6 +3,8 @@
 # ~/tpotce/docker-compose.yml on host (default: the address of this host), a few
 # service specific requests first, then nmap over every published port. The
 # probes are real attacks as far as T-Pot can tell, they show up in Kibana.
+# ewsposter of this host sends nothing while they run (ews_hold.sh), and one
+# check runs at a time.
 # `tpot check honeypots` runs it, also from the Checks page of the menu.
 
 # an exported CDPATH turns a cd into a search that prints the folder it found
@@ -26,11 +28,19 @@ if ! source "${myHERE}/../../../../installer/lib/ui.sh" 2>/dev/null && \
 # <<< plain fallback
 fi
 fuUI_INIT
+# the hold of ewsposter and the lock of the checks
+# shellcheck source=docker/tpotinit/dist/bin/ews_hold.sh
+if ! source "${myHERE}/ews_hold.sh";
+  then
+    fuUI_ERROR "${myHERE}/ews_hold.sh is missing, the probes do not run without the hold of ewsposter."
+    exit 1
+fi
 
 myHOST=""
 myTOOLS_ONLY=""
 myBECOME_FILE=""
-myDOCKERCOMPOSEYML="$HOME/tpotce/docker-compose.yml"
+myTPOTCE="${TPOTCE_DIR:-$HOME/tpotce}"
+myDOCKERCOMPOSEYML="${myTPOTCE}/docker-compose.yml"
 myTIMEOUT=180
 myMEDPOTPACKET="
 MSH|^~\&|ADT1|MCM|LABADT|MCM|198808181126|SECURITY|ADT^A01|MSG00001-|P|2.6
@@ -136,6 +146,28 @@ function fuHAS {   # command
 	command -v "$1" >/dev/null 2>&1
 }
 
+function fuOWN_ADDRESS {   # host -> 0 when it is an address of this host (or a name of it)
+	local myADDR=""
+	case "$1" in
+	  localhost|127.*|::1|"$(hostname 2>/dev/null)") return 0 ;;
+	esac
+	for myADDR in $(ip -o addr show 2>/dev/null | awk '{print $4}');
+	  do
+	    [ "${myADDR%/*}" = "$1" ] && return 0
+	  done
+	return 1
+}
+
+function fuSTOP_PROBES {   # the probes still in the background (after Ctrl+C), before the hold ends
+	local myJOBS=""
+	myJOBS=$(jobs -p)
+	[ -n "${myJOBS}" ] || return 0
+	# shellcheck disable=SC2086
+	kill ${myJOBS} 2>/dev/null
+	# shellcheck disable=SC2086
+	wait ${myJOBS} 2>/dev/null
+}
+
 function fuCHECKDEPS {
 	local myTOOLS="" myMANAGER="" myPACKAGE="" myMISSING=()
 	myTOOLS=$(fuTOOLS_FOR /etc/os-release)
@@ -171,7 +203,8 @@ function fuUSAGE {
 Usage: $0 [-B <file>] [--tools-only] [host]
 
 Probes the honeypots of ${myDOCKERCOMPOSEYML} on host, default: the address of
-this host. The probes are real attacks as far as T-Pot can tell.
+this host. The probes are real attacks as far as T-Pot can tell; ewsposter of
+this host sends nothing while they run, one check runs at a time.
 
   -B <file>      Read the sudo password from a file (installing the tools)
   --tools-only   Only install nmap, ncat and the DICOM tools, then end
@@ -224,6 +257,15 @@ fi
 myTCPPORTS=$(echo "${myPORTS}" | sed -n 1p)
 myUDPPORTS=$(echo "${myPORTS}" | sed -n 2p)
 
+# ewsposter of this host sends nothing from here on, until the last probe is logged
+fuMARK phase hold Holding ewsposter
+fuEWS_HOLD_TRAPS fuSTOP_PROBES
+fuEWS_HOLD_BEGIN "$(fuEWS_DATA_PATH "${myTPOTCE}")" "${myDOCKERCOMPOSEYML}" || { fuMARK fail hold; exit 3; }
+if ! fuOWN_ADDRESS "${myHOST}";
+  then
+    fuUI_WARN "${myHOST} is no address of this host: if it is another T-Pot, its ewsposter is not held and reports the probes."
+fi
+
 fuMARK phase probe Probing some services on "${myHOST}"
 fuUI_INFO "Probing some services on ${myHOST} ..."
 myNC=""
@@ -273,6 +315,8 @@ for myCONTAINER in ${myRESTART};
     grep -qE "^  ${myCONTAINER}:" "${myDOCKERCOMPOSEYML}" 2>/dev/null || continue
     docker restart "${myCONTAINER}" >/dev/null 2>&1 && fuUI_OK "${myCONTAINER} restarted."
   done
+fuMARK phase release Lifting the hold of ewsposter
+fuEWS_HOLD_END
 # nmap can leave the terminal in a strange state, not a log
 [ -t 1 ] && [ "${TPOT_MARKS}" != "1" ] && reset
 fuMARK phase "done" Done

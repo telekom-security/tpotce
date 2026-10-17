@@ -10,16 +10,15 @@
 # inside the existing containers, so the host needs only bash + docker).
 # Test events are appended to the real honeypot log files and become
 # ordinary events in Elasticsearch/Kibana afterwards (no cleanup by design).
+# ewsposter sends nothing while the test runs (ews_hold.sh), and one check
+# runs at a time.
 #
 # Usage: attackmap_pipeline_test.sh [--types cowrie,dionaea,honeytrap,rdphoneypot]
-#                                   [--ips A,B,C,D] [--timeout SECONDS] [--dry-run]
-#   --types     comma list of honeypot formats to inject (default: all four)
-#   --ips       test source IPs, one per type in --types order. Default: IPv4
-#               addresses that Elasticsearch ALREADY geolocated in the last 24 h
-#               (so they are known to resolve in this host's GeoLite2 City DB),
-#               padded from a built-in fallback list. Anycast resolvers such as
-#               1.1.1.1 or 9.9.9.9 have NO city entry -> _geoip_lookup_failure
-#               -> DataServer skips the event; the ES stage reports that.
+#                                   [--timeout SECONDS] [--dry-run]
+#   --types     comma list of honeypot formats to inject (default: all four).
+#               The test source IPs are the fixed ones of T-Pot, never addresses
+#               from Elasticsearch: 8.8.8.8 208.67.222.222 8.8.4.4 4.2.2.2, one
+#               per type in --types order (from the start again for a fifth).
 #   --timeout   seconds to wait per stage (default: 90)
 #   --dry-run   print the events and commands only, touch nothing
 #   -B, --become-file FILE
@@ -47,10 +46,16 @@ if ! source "${myHERE}/../../../../installer/lib/ui.sh" 2>/dev/null && \
 # <<< plain fallback
 fi
 fuUI_INIT
+# the hold of ewsposter and the lock of the checks
+# shellcheck source=docker/tpotinit/dist/bin/ews_hold.sh
+if ! source "${myHERE}/ews_hold.sh";
+  then
+    fuUI_ERROR "${myHERE}/ews_hold.sh is missing, the test does not run without the hold of ewsposter."
+    exit 1
+fi
 
 myBECOME_FILE=""
 myTYPES="cowrie,dionaea,honeytrap,rdphoneypot"
-myIPS=""
 myFALLBACKIPS="8.8.8.8 208.67.222.222 8.8.4.4 4.2.2.2"
 myTIMEOUT=90
 myDRYRUN=0
@@ -66,7 +71,7 @@ myINJECTEDTYPES=""
 
 # Per-type lookups as functions (no associative arrays: portable to bash 3).
 function fuKNOWN { case "$1" in cowrie|dionaea|honeytrap|rdphoneypot|ciscoasa) return 0 ;; *) return 1 ;; esac; }
-# test source IP per type, assigned by fuPICKIPS into myIP_<type>
+# test source IP per type (the fixed ones of myFALLBACKIPS), assigned by fuPICKIPS into myIP_<type>
 function fuTESTIP { eval "printf '%s' \"\${myIP_$1:-}\""; }
 # fixed, unusual source port per type: together with the IP it identifies OUR
 # event unambiguously in ES, Redis and WebSocket output (real traffic from the
@@ -104,7 +109,7 @@ asyncio.run(main())
 PY
 
 function fuUSAGE {
-  sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -112,7 +117,6 @@ function fuPARSEARGS {
   while [ $# -gt 0 ]; do
     case "$1" in
       --types) myTYPES="$2"; shift 2 ;;
-      --ips) myIPS="$2"; shift 2 ;;
       --timeout) myTIMEOUT="$2"; shift 2 ;;
       --dry-run) myDRYRUN=1; shift ;;
       -B|--become-file) myBECOME_FILE="$2"; shift 2 ;;
@@ -155,33 +159,17 @@ function fuDATAPATH {
 }
 
 function fuPICKIPS {
-  local picked=""
-  if [ -n "$myIPS" ]; then
-    picked="${myIPS//,/ }"
-  elif [ "$myDRYRUN" = 0 ]; then
-    # IPv4 sources Elasticsearch geolocated within the last 24 h: guaranteed
-    # to resolve in this host's GeoLite2 City database
-    picked=$(docker exec elasticsearch curl -s -H 'Content-Type: application/json' \
-      "localhost:9200/logstash-*/_search" \
-      -d '{"size":0,"query":{"bool":{"filter":[{"exists":{"field":"geoip.latitude"}},{"range":{"@timestamp":{"gte":"now-24h"}}}]}},"aggs":{"ips":{"terms":{"field":"src_ip.keyword","size":40}}}}' \
-      | grep -o '"key":"[0-9.]*"' | cut -d'"' -f4 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -8 | tr '\n' ' ')
-  fi
-  # pad with the fallback list, then assign one IP per type (in --types order)
-  local pool="$picked $myFALLBACKIPS" i=0 t ip
+  # only the fixed test IPs, one per type in --types order, from the start again when there are
+  # more types than IPs: the source port of a type tells its event apart
+  local -a pool
+  local i=0 t
+  read -r -a pool <<< "$myFALLBACKIPS"
   for t in ${myTYPES//,/ }; do
+    eval "myIP_$t=\"\${pool[$(( i % ${#pool[@]} ))]}\""
     i=$((i + 1))
-    ip=$(printf '%s\n' $pool | awk -v n="$i" 'NF && !seen[$1]++ {c++; if (c==n) {print $1; exit}}')
-    [ -n "$ip" ] || { fuUI_ERROR "not enough test IPs (need one per type, use --ips)."; exit 1; }
-    eval "myIP_$t=\"$ip\""
   done
   fuUI_INFO "test source IPs:$(for t in ${myTYPES//,/ }; do printf ' %s=%s' "$t" "$(fuTESTIP "$t")"; done)"
-  if [ -n "$myIPS" ]; then
-    fuUI_HINT "(given via --ips)"
-  elif [ -n "$picked" ]; then
-    fuUI_HINT "(taken from sources Elasticsearch geolocated in the last 24 h)"
-  else
-    fuUI_HINT "(no geolocated events in Elasticsearch yet — fresh installation? — using the built-in fallback list)"
-  fi
+  fuUI_HINT "(the fixed test IPs of T-Pot, no addresses of real attackers)"
 }
 
 function fuEVENT { # type ip timestamp -> one JSON line (fields the Logstash filter expects)
@@ -265,7 +253,7 @@ function fuWAITES {
         local missing=""
         if printf '%s' "$res" | grep -q '_geoip_lookup_failure'; then
           fuSETRES ES "$t" "FAIL (GeoIP lookup failed)"
-          fuUI_HINT "[$t] indexed, but GeoIP lookup FAILED for $(fuTESTIP "$t") (no GeoLite2 City entry) -> DataServer will skip it; pick another IP (--ips)"
+          fuUI_HINT "[$t] indexed, but GeoIP lookup FAILED for $(fuTESTIP "$t") (no GeoLite2 City entry) -> DataServer will skip it"
           continue
         fi
         printf '%s' "$res" | grep -q '"geoip":{[^}]*"latitude"' || missing="$missing geoip.latitude"
@@ -347,7 +335,7 @@ function fuREPORT {
 function fuCLEANUP {
   [ -n "${myPID_REDIS:-}" ] && kill "$myPID_REDIS" 2>/dev/null
   [ -n "${myPID_WS:-}" ] && kill "$myPID_WS" 2>/dev/null
-  wait 2>/dev/null
+  wait ${myPID_REDIS:-} ${myPID_WS:-} 2>/dev/null
 }
 
 # Main
@@ -368,7 +356,10 @@ if [ "$myDRYRUN" = 1 ]; then
   fuMARK phase "done" Done
   exit 0
 fi
-trap fuCLEANUP EXIT INT TERM
+# at the end the listeners, then the hold of ewsposter (after the last injected line)
+fuEWS_HOLD_TRAPS fuCLEANUP
+fuMARK phase hold Holding ewsposter
+fuEWS_HOLD_BEGIN "$myDATA" "$myTPOTCE/docker-compose.yml" || { fuMARK fail hold; exit 3; }
 fuMARK phase inject Injecting the test events
 fuSTARTLISTENERS
 fuINJECT
@@ -377,5 +368,8 @@ fuMARK phase elasticsearch Waiting for Elasticsearch
 fuWAITES
 fuMARK phase map Waiting for the Attack Map
 fuWAITMAP
+fuMARK phase release Lifting the hold of ewsposter
+fuCLEANUP
+fuEWS_HOLD_END
 fuMARK phase "done" Done
 fuREPORT
