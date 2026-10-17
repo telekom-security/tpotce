@@ -112,14 +112,16 @@ for name in ("hold", "hold.ack", "check.lock"):
 PY
 }
 
+# Folders 770, files 660 (no execute bit), nginx conf and cert 774 / 664; links are not followed
+. /opt/tpot/bin/data_modes.sh
+
 update_permissions() {
 	echo
 	echo "# Updating permissions ..."
 	echo
 	chown -R tpot:tpot /data
-	chmod -R 770 /data
-	chmod 774 -R /data/nginx/conf
-	chmod 774 -R /data/nginx/cert
+	fuDATA_MODES /data
+	fuDATA_WEB_MODES /data/nginx/conf /data/nginx/cert
 }
 
 # Update permissions

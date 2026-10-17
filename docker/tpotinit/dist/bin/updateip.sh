@@ -46,4 +46,4 @@ MY_HOSTNAME=$HOSTNAME
 EOF
 
 chown tpot:tpot /data/ews/conf/ews.ip
-chmod 770 /data/ews/conf/ews.ip
+chmod 660 /data/ews/conf/ews.ip

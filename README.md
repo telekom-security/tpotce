@@ -633,7 +633,7 @@ sudo openssl req \
     -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' \
     -addext "subjectAltName = IP:192.168.1.200, IP:1.2.3.4, DNS:my.primary.domain, DNS:my.secondary.domain"
     
-sudo chmod 774 $HOME/tpotce/data/nginx/cert/*
+sudo chmod 664 $HOME/tpotce/data/nginx/cert/*
 sudo chown tpot:tpot $HOME/tpotce/data/nginx/cert/*
 
 sudo systemctl start tpot

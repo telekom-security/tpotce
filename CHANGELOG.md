@@ -63,6 +63,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * Docker images now use **Alpine 3.24**, **Go 1.26** or **Scratch** wherever possible; **Log4Pot** moved from Ubuntu to Alpine.
 * **Installer** supports unattended installations and has been tested with **Alma 10**, **Debian 13**, **Fedora 44**, **OpenSuse Tumbleweed**, **Rocky 10**, **RHEL 10** and **Ubuntu 26.04** (sudo-rs).
 * **Persistence** cycles for logrotate are configurable through `TPOT_PERSISTENCE_CYCLES` in `.env`.
+* **Data Folder** modes are set by tpotinit on every start: folders 770, files 660 (the `conf` and `cert` folders of nginx 774 / 664). Files no longer get an execute bit, links are neither followed nor changed.
 * **Beelzebub** and **Honeypots** log their status as text (i.e. `Stateless`, `failed`), it is now indexed as `status_text`. So far Elasticsearch could not index it in the numeric `status` field, some values ended up as `0` and with 24.04.1 part of these events were not indexed at all.
 * **Kibana** >T-Pot Username / Password tag clouds now include the logins of **Honeypots** (import the Kibana objects of this release). **Heralding** no longer indexes the header row of `auth.csv` as a login with username `username` and password `password`.
 * **Fatt** has been removed, see [Breaking Changes](#fatt).
