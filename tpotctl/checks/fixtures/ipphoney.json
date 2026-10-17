@@ -1,0 +1,1 @@
+{"eventid":"ipphoney.connect","timestamp":"{ts:%Y-%m-%dT%H:%M:%S.%f+00:00Z}","url":"/printers/{token}","src_ip":"{src_ip}","src_port":{src_port},"dst_port":{dst_port},"sensor":"ipphoney","request":"GET","user_agent":"{token}","dst_ip":"172.20.0.10"}

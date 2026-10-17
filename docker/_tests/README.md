@@ -28,6 +28,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh honeyaml
 ./docker/_tests/run.sh honeypots
 ./docker/_tests/run.sh log4pot
+./docker/_tests/run.sh logstash_fixtures
 ./docker/_tests/run.sh mailoney
 ./docker/_tests/run.sh medpot
 ./docker/_tests/run.sh miniprint
@@ -92,6 +93,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/honeypots.sh --image dtagdevsec/honeypots:24.04.2
 ./docker/_tests/tests/log4pot.sh
 ./docker/_tests/tests/log4pot.sh --image log4pot:alpine-check --http-port 18080
+./docker/_tests/tests/logstash_fixtures.sh
+./docker/_tests/tests/logstash_fixtures.sh --image docker.elastic.co/logstash/logstash:9.5.4
 ./docker/_tests/tests/mailoney.sh
 ./docker/_tests/tests/mailoney.sh --image mailoney:test --smtp-port 10025 --smtps-port 10465 --submission-port 10587
 ./docker/_tests/tests/medpot.sh
@@ -121,6 +124,17 @@ mounts a temporary config without `services/sip.yaml`, and skips the SIP ports
 `5060/tcp`, `5060/udp`, and `5061/tcp`. The `--ftp-port` option pins only the
 host-side FTP control port; every other tested Dionaea port remains dynamically
 assigned.
+
+The Logstash fixture test renders the sample event of every honeypot
+(`tpotctl/checks/fixtures`, the line a `tpot check` writes into the honeypot's
+log) and feeds each through `docker/elk/logstash/dist/logstash.conf` of the
+checkout, with its inputs and filters as they are and a file as output, in a
+container without network. Every event must keep the type of its input, carry
+no tag ending in `failure` (grok, json, csv, date, GeoIP) and no `columnNN`
+field, have `src_ip`, the token or marker port of the check, the time of the
+line as `@timestamp` and a GeoIP location. It takes the T-Pot Logstash image
+when it is built here, otherwise the official image of its `LS_VER`; an image
+without the Listbot dictionaries gets small stand-ins for them.
 
 The Conpot test starts all nine deployed templates in one Docker network on
 dynamic loopback ports (`--<key>-port` pins one, see `--help`). The probes

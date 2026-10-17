@@ -1,0 +1,1 @@
+{"eventid":"elasticpot.recon","message":"Scan","url":"/{token}/_search","timestamp":"{ts:%Y-%m-%dT%H:%M:%S.%f+00:00Z}","src_ip":"{src_ip}","src_port":{src_port},"dst_port":{dst_port},"sensor":"elasticpot","request":"GET","user_agent":"{token}","dst_ip":"172.20.0.9"}

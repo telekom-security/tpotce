@@ -1,0 +1,1 @@
+{"eventid":"cowrie.login.failed","username":"{token}","password":"tpot-check","message":"login attempt [{token}/tpot-check] failed","sensor":"cowrie","uuid":"0f6e2a4c-8b1d-4e3f-9a5c-7d2e1b0c3f4a","timestamp":"{ts:%Y-%m-%dT%H:%M:%S.%f+0000}","src_ip":"{src_ip}","session":"4b7d9e2a1c3f","protocol":"ssh"}

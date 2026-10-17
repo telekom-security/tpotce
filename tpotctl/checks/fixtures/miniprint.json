@@ -1,0 +1,1 @@
+{"timestamp": "{ts:%Y-%m-%dT%H:%M:%S.%fZ}", "info": "Connection opened", "persona": "brother", "session_id": "f1248666-e923-400c-a7a0-5e1d8e048a72", "src_ip": "{src_ip}", "src_port": {src_port}, "dest_ip": "172.20.0.12", "dest_port": {dst_port}, "session_start": "{ts:%Y-%m-%dT%H:%M:%S.%fZ}", "protocol": "pjl", "action": "open_conn", "event": "connection"}

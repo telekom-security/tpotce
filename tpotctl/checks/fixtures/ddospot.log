@@ -1,0 +1,1 @@
+{"dns_cls":"IN","dns_name":"{token}.example.","dns_type":"A","opcode":0,"packets":1,"persona":"debian11","proto":"udp","req_pkt":"AAEBAAABAAAAAAAAB2V4YW1wbGUAAAEAAQ==","req_size":40,"resp_size":56,"role":"scanner","src_ip":"{src_ip}","src_port":{src_port},"time":"{ts:%Y-%m-%d %H:%M:%S.%f}","verified":false}

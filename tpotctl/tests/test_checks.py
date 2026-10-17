@@ -2,6 +2,8 @@
 
 import base64
 import contextlib
+import csv
+import datetime
 import fnmatch
 import io
 import json
@@ -30,7 +32,7 @@ isolate()
 
 from tpotctl import events, ops  # noqa: E402
 from tpotctl.checks import CheckError, HoldError  # noqa: E402
-from tpotctl.checks import ewshold, inventory, probes  # noqa: E402
+from tpotctl.checks import ewshold, fixtures, inventory, probes  # noqa: E402
 from tpotctl.checks.inventory import Port  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -1873,6 +1875,163 @@ class RunProbesTest(unittest.TestCase):
             probes.run_probes("127.0.0.1", [self.honeypot(str(n)) for n in range(5)], TOKEN, workers=1,
                               probes={str(n): fine for n in range(5)}, check=check)
         self.assertEqual(state, {"calls": 2, "probed": 1})
+
+
+# ---------------------------------------------------------------------------
+# fixtures (tpotctl.checks.fixtures): one sample event per honeypot
+# ---------------------------------------------------------------------------
+
+FIXTURE_TS = datetime.datetime(2026, 10, 17, 8, 15, 42, 123456, tzinfo=datetime.timezone.utc)
+FIXTURE_IP = "8.8.8.8"
+FIXTURE_PORT = 51234
+FIXTURE_SMOKE = os.path.join(REPO, "docker", "_tests", "tests", "logstash_fixtures.sh")
+
+
+def render_fixture(name, ts=FIXTURE_TS, src_ip=FIXTURE_IP, src_port=FIXTURE_PORT, dst_port=8080, token=TOKEN):
+    return fixtures.render(name, ts, src_ip, src_port, dst_port, token)
+
+
+class FixturesTest(unittest.TestCase):
+
+    def test_every_honeypot_with_a_logstash_input_has_a_fixture(self):
+        self.assertEqual(fixtures.names(), sorted(inventory.LOGS))
+        for name in inventory.LOGS:
+            self.assertTrue(os.path.isfile(fixtures.fixture_path(name)), name)
+            self.assertEqual(fixtures.logstash_type(name), inventory.LOGS[name][0])
+
+    @unittest.skipUnless(yaml, "PyYAML is missing (use the venv)")
+    def test_every_honeypot_of_the_catalogue_has_a_fixture(self):
+        names = inventory.honeypot_names(inventory.catalogue_groups(REPO))
+        self.assertEqual(sorted(set(names) - set(fixtures.names())), [])
+
+    def test_every_fixture_renders_to_one_line(self):
+        for name in fixtures.names():
+            with self.subTest(name=name):
+                line = render_fixture(name)
+                self.assertNotIn("\n", line)
+                self.assertIsNone(fixtures.PLACEHOLDER.search(line), line)
+                self.assertNotIn("{token}", line)
+
+    def test_every_fixture_carries_the_source_and_the_token_or_the_marker_port(self):
+        for name in fixtures.names():
+            with self.subTest(name=name):
+                text = fixtures.template(name)
+                self.assertIn("{src_ip}", text)
+                self.assertTrue("{token}" in text or "{src_port}" in text, name)
+                self.assertIn("{ts:", text)
+                line = render_fixture(name)
+                self.assertIn(FIXTURE_IP, line)
+                self.assertTrue(TOKEN in line or str(FIXTURE_PORT) in line, name)
+
+    def test_a_json_fixture_renders_valid_json(self):
+        found = 0
+        for name in fixtures.names():
+            if not re.match(r'\{\s*"', fixtures.template(name)):
+                continue
+            found += 1
+            with self.subTest(name=name):
+                event = json.loads(render_fixture(name))
+                self.assertIsInstance(event, dict)
+                self.assertIn(FIXTURE_IP, json.dumps(event))
+        self.assertEqual(found, len(fixtures.names()) - 2)   # endlessh (text) and heralding (csv)
+
+    def test_every_json_fixture_is_named_json_or_log(self):
+        for name in fixtures.names():
+            ext = os.path.splitext(fixtures.fixture_path(name))[1]
+            self.assertIn(ext, (".json", ".log", ".csv"), name)
+
+    def test_the_time_is_written_in_the_format_of_the_honeypot(self):
+        cases = {
+            "cowrie": '"timestamp":"2026-10-17T08:15:42.123456+0000"',
+            "dionaea": '"timestamp": "2026-10-17T08:15:42.123456"',
+            "elasticpot": '"timestamp":"2026-10-17T08:15:42.123456+00:00Z"',
+            "endlessh": "2026-10-17T08:15:42.123Z ACCEPT ",
+            "heralding": "2026-10-17 08:15:42.123456,",
+            "p0f": '"timestamp": "2026/10/17 08:15:42"',
+            "sentrypeer": '"event_timestamp":"2026-10-17 08:15:42.123456000"',
+            "go-pot": '"ts":1792224942.123456,',
+            "citrixhoneypot": '"asctime": "2026-10-17 08:15:42,123"',
+            "dicompot": '"time":"2026-10-17 08:15:42"',
+            "ddospot": '"time":"2026-10-17 08:15:42.123456"',
+        }
+        for name, text in cases.items():
+            with self.subTest(name=name):
+                self.assertIn(text, render_fixture(name))
+
+    def test_a_time_counts_as_utc(self):
+        naive = FIXTURE_TS.replace(tzinfo=None)
+        other = FIXTURE_TS.astimezone(datetime.timezone(datetime.timedelta(hours=2)))
+        self.assertEqual(render_fixture("cowrie", ts=naive), render_fixture("cowrie"))
+        self.assertEqual(render_fixture("cowrie", ts=other), render_fixture("cowrie"))
+        self.assertNotEqual(render_fixture("cowrie", ts=FIXTURE_TS + datetime.timedelta(seconds=1)),
+                            render_fixture("cowrie"))
+
+    def test_the_values_go_where_the_honeypot_logs_them(self):
+        event = json.loads(render_fixture("cowrie", token="tpot-check-x1"))
+        self.assertEqual((event["src_ip"], event["username"]), (FIXTURE_IP, "tpot-check-x1"))
+        event = json.loads(render_fixture("honeytrap", src_port=51240, dst_port=2222))
+        self.assertEqual(event["attack_connection"]["remote_ip"], FIXTURE_IP)
+        self.assertEqual(event["attack_connection"]["remote_port"], 51240)
+        self.assertEqual(event["attack_connection"]["local_port"], 2222)
+        event = json.loads(render_fixture("sentrypeer", src_port=51240))
+        self.assertEqual(event["source_ip"], f"{FIXTURE_IP}:51240")
+        self.assertIn(TOKEN, event["sip_message"])
+
+    def test_heralding_has_the_eleven_columns_of_the_fork(self):
+        row = next(csv.reader(io.StringIO(render_fixture("heralding"))))
+        self.assertEqual(len(row), 11)
+        self.assertEqual((row[3], row[4], row[6], row[8]), (FIXTURE_IP, str(FIXTURE_PORT), "8080", TOKEN))
+
+    def test_the_log_file_of_a_glob_input_is_one_of_its_files(self):
+        for name in fixtures.names():
+            with self.subTest(name=name):
+                path = fixtures.log_file(name)
+                self.assertFalse(any(char in path for char in "*?["), path)
+                self.assertTrue(fnmatch.fnmatch(path, inventory.LOGS[name][1]), path)
+        self.assertEqual(fixtures.log_file("ddospot"), "ddospot/log/dnspot.log")
+        self.assertEqual(fixtures.log_file("honeypots"), "honeypots/log/http.log")
+
+    def test_render_refuses_values_that_do_not_fit(self):
+        for token in ("", "a b", 'a"b', "a,b", "a/b", "a\nb", "-a", "x" * 64):
+            with self.subTest(token=token), self.assertRaises(ValueError):
+                render_fixture("cowrie", token=token)
+        for src_ip in ("", "8.8.8", "host.example"):
+            with self.subTest(src_ip=src_ip), self.assertRaises(ValueError):
+                render_fixture("cowrie", src_ip=src_ip)
+        for value in (-1, 65536, "80", True, None):
+            with self.subTest(port=value), self.assertRaises(ValueError):
+                render_fixture("cowrie", src_port=value)
+            with self.subTest(port=value), self.assertRaises(ValueError):
+                render_fixture("cowrie", dst_port=value)
+        with self.assertRaises(KeyError):
+            fixtures.render("nopot", FIXTURE_TS, FIXTURE_IP, 1, 2, TOKEN)
+
+    def test_the_fixtures_keep_to_harmless_text(self):
+        for name in fixtures.names():
+            text = fixtures.template(name).lower()
+            for word in ("/dev/tcp", "pty.spawn", "/bin/sh", "jndi:", "wget ", "curl "):
+                self.assertNotIn(word, text, name)
+
+    def test_glutton_takes_the_time_of_its_slog_line_in_both_pipelines(self):
+        blocks = []
+        for conf in ("logstash.conf", "http_output.conf"):
+            with open(os.path.join(os.path.dirname(LOGSTASH_CONF), conf), encoding="utf-8") as handle:
+                text = handle.read()
+            start = text.index('  if [type] == "Glutton" {')
+            blocks.append(text[start:text.index("\n  }\n", start) + 4])
+        self.assertEqual(blocks[0], blocks[1])
+        self.assertIn('match => [ "time", "ISO8601" ]', blocks[0])
+        self.assertIn('match => [ "ts", "UNIX" ]', blocks[0])
+        self.assertIn('"time":"{ts:', fixtures.template("glutton"))
+
+    def test_the_smoke_test_feeds_every_fixture_through_logstash(self):
+        self.assertTrue(os.access(FIXTURE_SMOKE, os.X_OK))
+        with open(FIXTURE_SMOKE, encoding="utf-8") as handle:
+            text = handle.read()
+        for needed in ("fixtures.names()", "fixtures.render(", "fixtures.log_file(", "logstash.conf",
+                       "network_mode: none", 'endswith("failure")', 'COLUMN = re.compile(r"column\\d+")',
+                       'event.get("src_ip") != want["src_ip"]', "start_position", "sincedb_path"):
+            self.assertIn(needed, text)
 
 
 if __name__ == "__main__":

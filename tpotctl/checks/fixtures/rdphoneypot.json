@@ -1,0 +1,1 @@
+{"dst_ip":"172.20.0.8","dst_port":{dst_port},"eventid":"rdphoneypot.session.connect","message":"Connection from {src_ip}:{src_port} [session: 6c8e0a2b4d1f].","sensor":"rdphoneypot","session":"6c8e0a2b4d1f","src_ip":"{src_ip}","src_port":{src_port},"timestamp":"{ts:%Y-%m-%dT%H:%M:%S.%f+00:00Z}"}

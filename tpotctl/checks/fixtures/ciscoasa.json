@@ -1,0 +1,1 @@
+{"timestamp":"{ts:%Y-%m-%dT%H:%M:%S.%fZ}","event_type":"http.request","src_ip":"{src_ip}","src_port":{src_port},"dest_port":{dst_port},"protocol":"tcp","cve":null,"payload":"","asa":{"http":{"method":"GET","uri":"/+CSCOE+/logon.html?{token}","user_agent":"{token}"},"profile":{"version":"9.16(4)","hostname":"asa-k3"}}}

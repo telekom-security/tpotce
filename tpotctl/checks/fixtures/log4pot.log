@@ -1,0 +1,1 @@
+{"reason": "request", "timestamp": "{ts:%Y-%m-%dT%H:%M:%S.%f}", "correlation_id": "8e2f4a6c-1b3d-4e5f-a7c9-0d2e4f6a8b1c", "server_port": {dst_port}, "client": "{src_ip}", "port": {src_port}, "request": "GET /{token} HTTP/1.1", "headers": {"Host": "192.0.2.1", "User-Agent": "{token}"}}
