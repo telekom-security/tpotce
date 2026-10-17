@@ -3,6 +3,8 @@ files 660, nginx conf and cert 774 / 664, links neither followed nor changed. Th
 busybox chmod in the tpotinit image; the smoke test docker/_tests/tests/tpotinit_modes.sh checks
 them there, these tests run them with the chmod of this host where it reads X the same way."""
 import re
+import sys
+import os
 import subprocess
 import tempfile
 import unittest
@@ -61,16 +63,34 @@ class ScriptsTest(unittest.TestCase):
 
     def test_archives_and_ews_ip_are_plain_files(self):
         text = CLEAN.read_text()
-        loop = re.search(r"^for myTGZ in (.*?);\n(.*?)^  done$", text, re.M | re.S)
-        self.assertIsNotNone(loop)
+        call = re.search(r'^python3 -c "\$\{myARCHIVE_MODES\}" tpot:tpot (.*)$', text, re.M)
+        self.assertIsNotNone(call)
         archives = re.findall(r"^  local (my[A-Z0-9]+TGZ)=", text, re.M)
-        self.assertEqual(loop.group(1).split(), [f"${name}" for name in archives])
-        # only the archives that are there: no "No such file" on a start without them
-        self.assertIn('if [ -f "${myTGZ}" ] && [ ! -L "${myTGZ}" ];', loop.group(2))
-        self.assertIn('chmod 660 "${myTGZ}"', loop.group(2))
-        self.assertIn('chown tpot:tpot "${myTGZ}"', loop.group(2))
+        self.assertEqual(call.group(1).split(), [f"${name}" for name in archives])
         self.assertNotIn("chmod 660 $myADBHONEYTGZ", text)
+        self.assertNotIn("chown tpot:tpot $myADBHONEYTGZ", text)
         self.assertIn("chmod 660 /data/ews/conf/ews.ip", UPDATEIP.read_text())
+
+    def test_the_archive_modes_follow_no_link(self):
+        """The archives that are there get 660 and the owner; a missing one says nothing, a link in
+        place of one is left alone and so is its target."""
+        import getpass
+        code = re.search(r"^myARCHIVE_MODES='(.*?)'$", CLEAN.read_text(), re.M | re.S).group(1)
+        with tempfile.TemporaryDirectory() as folder:
+            archive, target, link = (os.path.join(folder, name) for name in ("a.tgz", "target", "b.tgz"))
+            for path in (archive, target):
+                with open(path, "w", encoding="utf-8") as out:
+                    out.write("x")
+                os.chmod(path, 0o644)
+            os.symlink(target, link)
+            import grp
+            owner = f"{getpass.getuser()}:{grp.getgrgid(os.getgid()).gr_name}"
+            result = subprocess.run([sys.executable, "-c", code, owner, archive, link,
+                                     os.path.join(folder, "missing.tgz")], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stderr), (0, ""))
+            self.assertEqual(oct(os.stat(archive).st_mode & 0o777), "0o660")
+            self.assertEqual(oct(os.stat(target).st_mode & 0o777), "0o644")
+            self.assertTrue(os.path.islink(link))
 
 
 @unittest.skipUnless(chmod_takes_x_from_the_new_mode(),

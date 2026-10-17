@@ -85,15 +85,25 @@ if [ "$(fuEMPTY $myMINIPRINTU)" != "0" ]; then tar -I $myPIGZ -cvf $myMINIPRINTT
 if [ "$(fuEMPTY $myWORDPOTP)" != "0" ]; then tar -I $myPIGZ -cvf $myWORDPOTTGZ $myWORDPOTP; fi
 
 # Ensure correct permissions and ownership for previously created archives: only those that are
-# there (an archive exists once its folder had files), a regular file and no link
-for myTGZ in $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ;
-  do
-    if [ -f "${myTGZ}" ] && [ ! -L "${myTGZ}" ];
-      then
-        chmod 660 "${myTGZ}"
-        chown tpot:tpot "${myTGZ}"
-    fi
-  done
+# there (an archive exists once its folder had files), opened with O_NOFOLLOW and changed through
+# that descriptor (fchmod, fchown), so a link put in place of one is never followed
+# >>> archive modes >>>
+myARCHIVE_MODES='import grp, os, pwd, stat, sys
+user, _, group = sys.argv[1].partition(":")
+uid, gid = pwd.getpwnam(user).pw_uid, grp.getgrnam(group or user).gr_gid
+for path in sys.argv[2:]:
+    try:
+        handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        continue
+    try:
+        if stat.S_ISREG(os.fstat(handle).st_mode):
+            os.fchmod(handle, 0o660)
+            os.fchown(handle, uid, gid)
+    finally:
+        os.close(handle)'
+# <<< archive modes <<<
+python3 -c "${myARCHIVE_MODES}" tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ
 
 # Need to remove subfolders since too many files cause rm to exit with errors
 rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU $myWORDPOTP
