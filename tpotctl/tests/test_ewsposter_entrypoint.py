@@ -123,6 +123,7 @@ class Sandbox:
             f'myHOLD_STATE="{self.state}"\n'
             f'myIDLE_CFG="{self.idle}"\n'
             f'myQUARANTINE_FILE="{self.quarantine}"\n'
+            f'myCATCHUP="{self.data / "catchup"}"\n'
             f'myNORMAL_CFG="{self.base / "normal"}"\n'
             'mySLEEP=42\n'
             'myHELD=""\n'
@@ -347,6 +348,17 @@ class PassCountTest(EntrypointCase):
                 self.assertIn("failed=[ adbhoney beelzebub ", result.stdout)
                 self.assertTrue(any(" -m " in call for call in box.calls()))
 
+    def test_no_module_to_try_one_by_one_fails_closed(self):
+        """The full pass failed after a module started, but the config names none to try alone:
+        the round is not clean (1)."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                result = box.run(shell, 'fuIDLE_MODULES () { :; }; fuIDLE; echo "rc=$?"',
+                                 STUB_STARTED=1, STUB_RC=1)
+                self.assertIn("rc=1", result.stdout)
+                self.assertIn("names no module to try one by one", result.stdout)
+
     def test_failed_module_and_a_module_behind_is_behind(self):
         """One module fails, another is still behind: no ack until it caught up (2)."""
         for shell in SHELLS:
@@ -564,13 +576,13 @@ class RoundTest(EntrypointCase):
                 self.assertEqual(box.ack.read_text(), "")
 
     def test_end_of_hold_with_a_module_that_fails_goes_normal(self):
-        """After the marker is gone, a module the check left alone (named in the first ack, failed
-        in every round since) keeps nobody idle: the normal pass follows the idle round."""
+        """After the marker is gone, a module that fails keeps nobody idle: it is quarantined and the
+        normal pass of the others follows the idle round."""
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 box = self.sandbox(Path(shell).name)
                 box.ack.write_text("failed: redishoneypot\n")
-                result = box.run(shell, 'myHELD=yes; myHOLD_ACKED=yes; myHOLD_SKIPPED=" redishoneypot"; fuROUND; '
+                result = box.run(shell, 'myHELD=yes; myHOLD_ACKED=yes; fuROUND; '
                                         'echo "interval=$myINTERVAL held=$myHELD"',
                                  STUB_STARTED=1, STUB_CRASH="redishoneypot")
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -632,6 +644,48 @@ class RoundTest(EntrypointCase):
                 box = self.sandbox(Path(shell).name)
                 result = self.hold_rounds(box, shell, "redishoneypot", "redishoneypot", start="fuSTART\n")
                 self.assert_quarantined(box, result, "redishoneypot")
+
+    def test_a_start_after_a_check_without_ewsposter_catches_up_first(self):
+        """The catch-up flag of a check (ewsposter did not run at its end), or hold.state "held"
+        without a marker (the container stopped during a hold): the start runs the idle round of
+        the end of a hold first, quarantines what fails, removes the flag, then sends."""
+        for shell in SHELLS:
+            for case in ("catchup", "held", "stuck"):
+                with self.subTest(shell=shell, case=case):
+                    box = self.sandbox(f"{Path(shell).name}-{case}")
+                    if case == "catchup":
+                        (box.data / "catchup").write_text("1792233828 tpot check\n")
+                    else:
+                        box.state.write_text(f"{case} 1792233828\n")
+                    result = box.run(shell, 'fuSTART; echo "held=$myHELD"; fuROUND; echo "q=[$myQUARANTINE]"',
+                                     STUB_STARTED=1, STUB_CRASH="cowrie")
+                    self.assertIn("held=yes", result.stdout, result.stdout + result.stderr)
+                    self.assertIn("q=[ cowrie]", result.stdout)
+                    kinds = RoundTest.kinds(box)
+                    self.assertEqual(kinds[0], "idle")       # nothing sent before the idle round
+                    self.assertFalse((box.data / "catchup").exists())
+                    self.assertEqual(box.state_word(), "normal")
+                    self.assertIn(f"-c {box.base / 'normal'}/", [c for c in box.calls() if " -E " not in c][0])
+
+    def test_a_normal_start_sends_at_once(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.state.write_text("normal 1792233828\n")
+                result = box.run(shell, 'fuSTART; echo "held=[$myHELD]"')
+                self.assertIn("held=[]", result.stdout)
+
+    def test_a_failed_and_a_behind_module_name_the_failed_one_at_once(self):
+        """After the ack, a round where one module fails and another is behind rewrites hold.ack
+        with the failed module (the check reads it again), no ack of a clean round."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.hold.write_text("")
+                result = box.run(shell, "myHELD=yes; myHOLD_ACKED=yes; myIDLE_PASSES=2; fuROUND; echo rc=$?",
+                                 STUB_STARTED=1, STUB_CRASH="cowrie", STUB_LIMITED=10000)
+                self.assertIn("rc=0", result.stdout, result.stderr)
+                self.assertEqual(box.ack.read_text(), "failed: cowrie\n")
 
     def test_a_quarantined_module_sends_only_after_its_own_clean_pass(self):
         """Each normal round gives it one idle pass of its own (no tries again); while that fails it
@@ -803,7 +857,7 @@ class RoundTest(EntrypointCase):
 
 
 class TpotinitClearTest(unittest.TestCase):
-    """tpotinit removes hold, hold.ack, check.lock and quarantine in <data>/ews on every start (the logs
+    """tpotinit removes hold, hold.ack, check.lock, quarantine and catchup in <data>/ews on every start (the logs
     are rotated and ewsposter starts with new indexes then), never through a link."""
 
     def setUp(self):
@@ -825,8 +879,8 @@ class TpotinitClearTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout
 
-    def test_removes_the_four_names_only(self):
-        for name in ("hold", "hold.ack", "check.lock", "quarantine", "hold.old", "conf"):
+    def test_removes_the_five_names_only(self):
+        for name in ("hold", "hold.ack", "check.lock", "quarantine", "catchup", "hold.old", "conf"):
             (self.ews / name).write_text("")
         self.clear()
         self.assertEqual(sorted(p.name for p in self.ews.iterdir()), ["conf", "hold.old"])

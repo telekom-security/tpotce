@@ -292,6 +292,12 @@ class ChecksCliTest(unittest.TestCase):
         self.assertEqual((view["cleanup"]["state"], view["cleanup"]["deleted"]), ("done", 1))
         self.assertEqual(oct(os.stat(result_file).st_mode & 0o777), "0o600")
         self.assertEqual((view["result"], view["exit_code"]), ("failed", 1))
+        # last.json that cannot be written: the events are gone all the same, a warning says so
+        found, _broken = self.widened(lambda data: None)
+        warned = []
+        with mock.patch.object(trun, "note_cleanup", side_effect=PermissionError(13, "Permission denied")):
+            self.assertEqual(trun.run_pending(found[0], FakeElastic(), warned.append)[0], 0)
+        self.assertTrue(warned and "could not note the cleanup" in warned[0])
         other = trun.Report(run_id="20261017090000aaaaaa", result="failed",
                             cleanup={"state": "failed", "deleted": 0, "passes": [], "left": 0, "detail": "down"})
         trun.write_result(other, result_file)
@@ -710,6 +716,31 @@ class EwsHoldTest(HoldFolder):
                     out.write("failed: wordpot\n")
                 self.assertEqual(hold.refresh_failed(), ["wordpot"])
 
+    def test_the_catch_up_flag(self):
+        """The check ends while no running ewsposter confirmed its hold: <data>/ews/catchup (0660,
+        no link followed); not after a confirmed hold, and not when the hold never began."""
+        flag = os.path.join(self.ews, "catchup")
+        with FakeEwsposter(self.ews):
+            with self.hold():
+                pass
+        self.assertFalse(os.path.exists(flag))
+        with self.hold(running=lambda: False):
+            pass
+        self.assertTrue(os.path.isfile(flag))
+        self.assertEqual(oct(os.stat(flag).st_mode & 0o777), "0o660")
+        os.unlink(flag)
+        # ewsposter acked, but does not run at the end (stopped during the check)
+        state = {"runs": True}
+        with FakeEwsposter(self.ews):
+            with self.hold(running=lambda: state["runs"]):
+                state["runs"] = False
+        self.assertTrue(os.path.isfile(flag))
+        os.unlink(flag)
+        with self.assertRaises(HoldError):
+            with self.hold(timeout=0.1):
+                pass
+        self.assertFalse(os.path.exists(flag))
+
     def test_the_quarantine_of_ewsposter(self):
         path = os.path.join(self.ews, "quarantine")
         self.assertEqual(ewshold.ews_quarantine(self.data), [])
@@ -1073,6 +1104,21 @@ class EwsHoldShellTest(HoldFolder):
         self.assertIn("ewsposter holds", result.stdout)
         self.assertIn("GONE", result.stdout)
         self.assertTrue(self.lock_is_free())
+
+    def test_the_catch_up_flag(self):
+        flag = os.path.join(self.ews, "catchup")
+        with FakeEwsposter(self.ews):
+            result = self.begin()
+        self.assertIn("rc=0", result.stdout, result.stderr)
+        self.assertFalse(os.path.exists(flag))
+        result = self.begin(STUB_EWS_RUNNING="false")
+        self.assertIn("rc=0", result.stdout, result.stderr)
+        self.assertTrue(os.path.isfile(flag), result.stdout)
+        self.assertIn("catches up first", result.stdout)
+        os.unlink(flag)
+        result = self.begin()           # no ack: nothing probed, no flag
+        self.assertIn("rc=3", result.stdout)
+        self.assertFalse(os.path.exists(flag))
 
     def test_the_modules_it_cannot_hold(self):
         """hold.ack names modules whose idle passes fail: myEWS_HOLD_FAILED has them, fuEWS_HOLDS
@@ -1477,6 +1523,36 @@ class HptestUnderTheHoldTest(HoldFolder):
         self.assertTrue(any("-p T:22 " in line for line in scans), scans)
         self.assertFalse(any("6379" in line or "8443" in line or "U:500" in line for line in scans), scans)
         self.assertNotIn("Ciscoasa IKE", result.stdout)
+
+    def test_the_ports_the_probe_table_leaves_alone_are_not_scanned(self):
+        """dionaea 20, 42 (its mirror) and 69/udp: hptest.sh leaves them out like tpot check."""
+        ports = [{"target": target, "published": str(target), "protocol": protocol}
+                 for target, protocol in ((20, "tcp"), (21, "tcp"), (42, "tcp"), (69, "udp"), (445, "tcp"))]
+        with open(os.path.join(self.bin, "config.json"), "w", encoding="utf-8") as out:
+            json.dump({"services": {"dionaea": {"ports": ports}}}, out)
+        self.stub("timeout", '#!/bin/sh\necho "$*" >> "$STUB_LOG"\nexit 0\n')
+        with FakeEwsposter(self.ews):
+            result = subprocess.run([HPTEST, "127.0.0.1"], capture_output=True, universal_newlines=True,
+                                    env=self.env(), timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with open(self.log, encoding="utf-8") as handle:
+            scans = [line for line in handle.read().splitlines() if " nmap " in f" {line} "]
+        self.assertTrue(any("-p T:21,T:445 " in line for line in scans), scans)
+        self.assertFalse(any("U:69" in line or "T:42" in line or "T:20," in line for line in scans), scans)
+        # the same ports as the probe table
+        with open(HPTEST, encoding="utf-8") as handle:
+            text = handle.read()
+        listed = set(re.findall(r'\("(\d+)", "(tcp|udp)"\)', re.search(r"skipped = \{.*\}", text).group(0)))
+        table = probes.PROBES["dionaea"]
+        left_alone = set()
+        for (target, protocol), handler in table.handlers.items():
+            try:
+                handler(None)
+            except probes._NotTried:
+                left_alone.add((str(target), protocol))
+            except Exception:       # noqa: BLE001 - a real handler needs a context
+                pass
+        self.assertEqual(listed, left_alone)
 
     def test_term_during_the_scan(self):
         env = self.env()
@@ -3200,6 +3276,9 @@ class RunTest(unittest.TestCase):
         self.assertIn(fixtures.log_file("heralding"), appended)
         self.assertEqual(rows["cowrie"].stages["port"].detail, ewshold.CANNOT_HOLD)
         self.assertEqual(rows["dionaea"].stages["geoip"].detail, ewshold.CANNOT_HOLD)
+        # dionaea's probe ran before its module was named: its port and answer stages stay
+        self.assertEqual((rows["dionaea"].state("port"), rows["dionaea"].state("answer")), (stages.OK, stages.OK))
+        self.assertEqual(rows["dionaea"].stages["log"].detail, ewshold.CANNOT_HOLD)
         self.assertEqual(rows["cowrie"].state("ewsposter"), stages.FAILED)
         self.assertEqual(rows["dionaea"].state("ewsposter"), stages.FAILED)
         self.assertFalse(rows["heralding"].failed)
@@ -4324,6 +4403,9 @@ class HptestFallbackTest(HptestUnderTheHoldTest):
         pass        # HptestUnderTheHoldTest has it
 
     def test_a_honeypot_ewsposter_cannot_hold_gets_no_probe(self):
+        pass        # HptestUnderTheHoldTest has it
+
+    def test_the_ports_the_probe_table_leaves_alone_are_not_scanned(self):
         pass        # HptestUnderTheHoldTest has it
 
     def scan(self, *argv):

@@ -52,6 +52,8 @@ myEWS_HOLD_HELD=""
 myEWS_HOLD_ACKED=""
 # the ewsposter modules hold.ack names as not held (their idle passes fail), one space between them
 myEWS_HOLD_FAILED=""
+# ewsposter wrote hold.ack for this hold (myEWS_HOLD_ACKED is set for an ewsposter that is down too)
+myEWS_HOLD_CONFIRMED=""
 myEWS_HOLD_LOCKED=""
 myEWS_HOLD_LOCK_PID=""
 myEWS_HOLD_TRAPPED=""
@@ -276,6 +278,43 @@ try:
     print(os.stat("hold", dir_fd=folder, follow_symlinks=False).st_mtime_ns)
 finally:
     os.close(folder)' "${myEWS_HOLD_DIR}" "$$" "${1:-new}" 2>/dev/null
+}
+
+# The catch-up flag <data>/ews/catchup (through the descriptor of the folder, a temporary file
+# renamed into place, no link followed) when no running ewsposter confirmed the hold: it does not
+# run now, docker cannot say, or it never wrote hold.ack. Its next start catches up first.
+fuEWS_CATCHUP () {
+  local myRUNS=0
+  # $1: the hold began; else (no ack, nothing probed) nothing of the check was written
+  [ -n "${1:-}" ] || return 0
+  fuEWS_RUNS
+  myRUNS=$?
+  if [ "${myRUNS}" -eq 0 ] && [ -n "${myEWS_HOLD_CONFIRMED}" ];
+    then
+      return 0
+  fi
+  if python3 -c 'import os, sys, time, uuid
+folder = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK)
+try:
+    temp = "catchup.%s.tmp" % uuid.uuid4().hex
+    handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=folder)
+    try:
+        try:
+            os.fchmod(handle, 0o660)
+            os.write(handle, ("%d tpot check %s\n" % (time.time(), sys.argv[2])).encode())
+        finally:
+            os.close(handle)
+        os.replace(temp, "catchup", src_dir_fd=folder, dst_dir_fd=folder)
+    except BaseException:
+        os.unlink(temp, dir_fd=folder)
+        raise
+finally:
+    os.close(folder)' "${myEWS_HOLD_DIR}" "$$" 2>/dev/null;
+    then
+      fuEWS_SAY INFO "ewsposter did not confirm the hold at the end of the check: it catches up first when it runs again (nothing of the check is sent)."
+    else
+      fuEWS_SAY WARN "${myEWS_HOLD_DIR}/catchup could not be written; ewsposter may send lines of the check when it runs again."
+  fi
 }
 
 # Removes the marker through the descriptor of the folder: 0 removed, 1 not there, 2 a link or no
@@ -566,6 +605,7 @@ fuEWS_HOLD_BEGIN () {
   local myRUNS=0
   myEWS_HOLD_DIR="${myDATA}/ews"
   myEWS_HOLD_FAILED=""
+  myEWS_HOLD_CONFIRMED=""
   fuEWS_LOCK "${myDATA}" || return 3
   if ! fuEWS_IN_COMPOSE "${myCOMPOSE}";
     then
@@ -607,6 +647,7 @@ fuEWS_HOLD_BEGIN () {
       sleep "${myEWS_HOLD_POLL}"
     done
   myEWS_HOLD_ACKED="1"
+  myEWS_HOLD_CONFIRMED="1"
   myEWS_HOLD_FAILED=$(fuEWS_ACK_FAILED)
   fuEWS_SAY OK "ewsposter holds, nothing leaves this host during the check."
   if [ -n "${myEWS_HOLD_FAILED}" ];
@@ -627,11 +668,14 @@ fuEWS_HOLD_END () {
       fuEWS_SAY INFO "Waiting ${myEWS_HOLD_SETTLE} s for the last log lines of the check, then ewsposter sends again ..."
       sleep "${myEWS_HOLD_SETTLE}"
   fi
+  local myBEGUN="${myEWS_HOLD_ACKED}"
   myEWS_HOLD_ACKED=""
   fuEWS_REFRESH_STOP
   if [ -n "${myEWS_HOLD_HELD}" ];
     then
       myEWS_HOLD_HELD=""
+      # the flag first: there is no moment without the marker and without the flag
+      fuEWS_CATCHUP "${myBEGUN}"
       fuEWS_MARKER_REMOVE
       myRC=$?
       case "${myRC}" in

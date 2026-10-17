@@ -101,11 +101,17 @@ function fuPORTS {   # docker compose config --format json on stdin -> "T:22,...
 import json, sys
 config = json.load(sys.stdin)
 left_out = set(sys.argv[1].split())
+# the ports the probe table of tpot check leaves alone (tpotctl/checks/probes.py not_tried), by
+# the port inside the container: dionaea 20 (FTP data, nothing listens), 42 (its mirror connects
+# back to the source), 69/udp (its TFTP answers only the first request after a start)
+skipped = {"dionaea": {("20", "tcp"), ("42", "tcp"), ("69", "udp")}}
 tcp, udp = set(), set()
 for name, service in (config.get("services") or {}).items():
     if name in left_out:
         continue
     for port in service.get("ports") or []:
+        if (str(port.get("target") or ""), port.get("protocol") or "tcp") in skipped.get(name, set()):
+            continue
         if port.get("host_ip") in ("127.0.0.1", "::1"):
             continue
         published = str(port.get("published") or port.get("target") or "")

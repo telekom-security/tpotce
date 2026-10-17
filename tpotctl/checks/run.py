@@ -992,7 +992,11 @@ def run_pending(pending: Pending, elastic: "Elastic", warn: Callable[[str], None
     left, sourceless = left_over(elastic, pending.started, pending.end, pending.own, pending.host)
     with contextlib.suppress(FileNotFoundError):
         os.unlink(pending.path)
-    note_cleanup(pending.result_file, pending.run_id, deleted, left, sourceless)
+    try:
+        note_cleanup(pending.result_file, pending.run_id, deleted, left, sourceless)
+    except OSError as error:
+        # the events are gone all the same; only last.json does not say so
+        warn(f"last.json could not note the cleanup of {pending.run_id} ({error.strerror or error})")
     return deleted, left, sourceless
 
 
@@ -1497,14 +1501,15 @@ class Check:
         for name in ewshold.honeypots_of(modules, names):
             self._mark_not_held(name)
 
-    def _mark_not_held(self, name: str) -> None:
-        """A honeypot the check leaves alone from now on: its stages say why."""
+    def _mark_not_held(self, name: str, probed: bool = False) -> None:
+        """A honeypot the check leaves alone from now on: its stages say why; one whose probe ran
+        before its module was named keeps its port and answer stages."""
         from tpotctl.checks import ewshold
         if name in self.not_held:
             return
         self.not_held.append(name)
         row = self.rows[name]
-        for stage in stages.STAGES[:-1]:
+        for stage in stages.STAGES[2 if probed else 0:-1]:
             if not (self.sensor and stage in stages.STAGES[3:]):
                 row.set(stage, NOT_APPLICABLE, ewshold.CANNOT_HOLD)
 
@@ -1623,7 +1628,8 @@ class Check:
         for honeypot in geo:
             hold.check()
             if honeypot.name in self.not_held or self._not_held_now(hold, honeypot):
-                self._mark_not_held(honeypot.name)
+                result = self.results.get(honeypot.name)
+                self._mark_not_held(honeypot.name, probed=result is not None and result.state != probes.SKIPPED)
                 continue
             row = self.rows[honeypot.name]
             event = self.geo_event(honeypot.name)

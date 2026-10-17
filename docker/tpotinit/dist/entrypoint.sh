@@ -98,7 +98,7 @@ except OSError as error:
     else:
         print(f"# Warning: {data}/ews could not be opened ({error.strerror}), the hold of ewsposter is not cleared.")
     sys.exit(0)
-for name in ("hold", "hold.ack", "check.lock", "quarantine"):
+for name in ("hold", "hold.ack", "check.lock", "quarantine", "catchup"):
     try:
         if stat.S_ISDIR(os.stat(name, dir_fd=ews_fd, follow_symlinks=False).st_mode):
             print(f"# Warning: {data}/ews/{name} is a folder, it stays.")

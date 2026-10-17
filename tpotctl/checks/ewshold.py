@@ -153,6 +153,7 @@ def check_running(data_dir: str) -> bool:
 
 
 QUARANTINE = "quarantine"
+CATCHUP = "catchup"
 
 
 def ews_quarantine(data_dir: str, now: Callable[[], float] = time.time) -> List[str]:
@@ -250,6 +251,7 @@ class EwsHold:
         self._writing = threading.Lock()
         self._refresher: Optional[threading.Thread] = None
         self._failed = ""           # why the hold is over before the check (check())
+        self._begun = False         # the hold began: the check may write its lines from now on
 
     def check(self) -> None:
         """HoldError when the hold is over before the check: the marker was removed by someone
@@ -291,6 +293,7 @@ class EwsHold:
             raise CheckError("this system cannot lock a check or hold ewsposter, checks need a Linux T-Pot host")
         self._stop = threading.Event()
         self._failed = ""
+        self._begun = False
         self.failed_at_ack, self._failed_modules = [], []
         try:
             self._open()
@@ -306,12 +309,14 @@ class EwsHold:
                 self.note = NOT_RUNNING
                 self._log("info", NOT_RUNNING)
                 self._start_refresh()
+                self._begun = True
                 return self
             self._write_marker()
             self._log("info", f"Holding ewsposter: it sends nothing until the check is over "
                               f"(up to {self.timeout:g} s for its confirmation).")
             self._wait()
             self._start_refresh()
+            self._begun = True
         except KibanaError as error:
             self._release()
             raise CheckError(str(error)) from None
@@ -477,9 +482,31 @@ class EwsHold:
                 self._folder.close()
                 self._folder = None
 
+    def _catch_up(self) -> None:
+        """The catch-up flag (<data>/ews/catchup) when no running ewsposter confirmed this hold:
+        it does not run now, or it never wrote hold.ack (it came up during the check). Its next
+        start, or its next round, then runs the idle round of the end of a hold before it sends."""
+        if not self.held or not self._begun or CONTAINER not in self.compose_names:
+            return              # the hold never began: nothing of the check was written
+        try:
+            runs = self._running()
+        except Exception:               # noqa: BLE001 - docker cannot say: as not confirmed
+            runs = None
+        if runs is True and self.acked:
+            return
+        try:
+            self._folder.write(CATCHUP, f"{int(time.time())} tpot check {os.getpid()}\n", MARKER_MODE, CATCHUP + ".")
+            self._log("info", "ewsposter did not confirm the hold at the end of the check: it catches up first "
+                              "when it runs again (nothing of the check is sent).")
+        except (KibanaError, OSError) as error:
+            self._log("warn", f"{self.ews_dir}/{CATCHUP} could not be written ({error}); ewsposter may send "
+                              f"lines of the check when it runs again")
+
     def _remove_marker(self) -> None:
         if not self.held:
             return
+        # the flag first: there is no moment without the marker and without the flag
+        self._catch_up()
         self.held = False
         try:
             if self._folder.remove(MARKER):

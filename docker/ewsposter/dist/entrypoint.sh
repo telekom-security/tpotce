@@ -18,7 +18,10 @@
 # never catches up never sends; /data/ews/quarantine names the quarantined modules (one line
 # "<epoch seconds> <module> ...", written every round, gone when none is). When not even that
 # round can run (no module started), the hold is stuck: nothing is sent. /data/ews/hold.state
-# says normal, held or stuck. A hold that is on when
+# says normal, held or stuck. A check that ends while ewsposter does not run (or never confirmed
+# its hold) leaves /data/ews/catchup: ewsposter then starts as if its hold just ended (so does a
+# start that finds hold.state "held" without a marker: the container stopped during a hold), runs
+# the idle round, quarantines what does not catch up, and removes the flag. A hold that is on when
 # ewsposter starts goes on with idle passes at once. The marker only counts as a regular file
 # (no link) younger than 30 minutes, so a check that was cut off never keeps ewsposter quiet for
 # good.
@@ -66,6 +69,8 @@ myHOLD_NOACK=""
 # the modules that send nothing until an idle pass of their own is clean and caught up
 myQUARANTINE=""
 myQUARANTINE_FILE="/data/ews/quarantine"
+# left by a check that ended while ewsposter did not run: the next start catches up first
+myCATCHUP="/data/ews/catchup"
 # the config folder of the normal passes while modules are quarantined
 myNORMAL_CFG="/tmp/ews-normal"
 mySTUCK_SINCE=""
@@ -265,8 +270,10 @@ fuIDLE () {
       return 1
   fi
   echo " => [WARN] The idle round failed, now module by module."
+  local myRAN=""
   for myMODULE in $(fuIDLE_MODULES);
     do
+      myRAN="yes"
       fuIDLE_PASSES "${myMODULE}"
       case $? in
         1) myFAILED="${myFAILED} ${myMODULE}" ;;
@@ -274,6 +281,12 @@ fuIDLE () {
         *) myCLEAN="yes" ;;
       esac
   done
+  if [ -z "${myRAN}" ];
+    then
+      # the full pass failed, but no module of the config had a pass of its own: not clean
+      echo " => [WARN] The idle round failed and the config names no module to try one by one."
+      return 1
+  fi
   if [ -n "${myFAILED}" ];
     then
       echo " => [WARN] Idle passes failed for:${myFAILED}."
@@ -525,7 +538,13 @@ fuROUND () {
           echo " => [WARN] hold.ack without the modules whose idle passes fail:${myIDLE_FAILED}; the check leaves their honeypots alone."
           fuHOLD_ACK "${myIDLE_FAILED# }"
           myHOLD_ACKED="yes" ;;
-        2) echo " => [WARN] No hold.ack yet: a module is still behind, the idle rounds go on in ${myHOLD_INTERVAL} s." ;;
+        2)
+          echo " => [WARN] No hold.ack yet: a module is still behind, the idle rounds go on in ${myHOLD_INTERVAL} s."
+          # a check that holds already learns at once which modules fail
+          if [ -n "${myIDLE_FAILED}" ] && { [ -n "${myHOLD_ACKED}" ] || [ -n "${myHOLD_NOACK}" ]; };
+            then
+              fuHOLD_ACK "${myIDLE_FAILED# }"
+          fi ;;
         *)
           echo " => [WARN] No hold.ack: the idle round did not end cleanly, it runs again in ${myHOLD_INTERVAL} s."
           # a check that holds already learns which modules fail from now on
@@ -568,6 +587,10 @@ fuROUND () {
       myHOLD_ACKED=""
       myHOLD_NOACK=""
       fuQUARANTINE_SAVE
+      if [ -e "${myCATCHUP}" ] || [ -L "${myCATCHUP}" ];
+        then
+          rm -f "${myCATCHUP}" && echo " => Caught up after a check that ended while ewsposter did not run."
+      fi
       if [ -n "${myQUARANTINE}" ];
         then
           echo " => [WARN] The hold is over, ewsposter sends again, except${myQUARANTINE}: they send only once an idle pass of their own is clean and caught up."
@@ -591,15 +614,30 @@ fuROUND () {
 # on with idle passes at once, without the normal pass a new hold starts with. Modules that were
 # quarantined (the container started again, tpotinit did not run) stay so.
 fuSTART () {
+  local myLAST=""
   myHELD=""
   mySTUCK_SINCE=""
   myHOLD_ACKED=""
   myHOLD_NOACK=""
   rm -f "${myHOLD_ACK}"
   fuQUARANTINE_LOAD
+  # the state of the last round (a regular file, no link): "held" means a hold this container did
+  # not end
+  if [ -f "${myHOLD_STATE}" ] && [ ! -L "${myHOLD_STATE}" ];
+    then
+      myLAST=$(cut -d" " -f1 "${myHOLD_STATE}" 2>/dev/null)
+  fi
   if fuHOLD_ON;
     then
       echo " => The hold for the check of T-Pot is on at the start: idle passes only, nothing is sent."
+      myHELD="yes"
+      myHOLD_NOACK="yes"
+      fuHOLD_STATE held
+  elif [ -f "${myCATCHUP}" ] || [ "${myLAST}" = "held" ] || [ "${myLAST}" = "stuck" ];
+    then
+      # a check ended while ewsposter did not run, or the container stopped during a hold: the
+      # idle round of the end of a hold comes first, nothing is sent before it
+      echo " => A check of T-Pot ran while ewsposter did not (or its hold did not end here): idle round first, nothing is sent before it."
       myHELD="yes"
       myHOLD_NOACK="yes"
       fuHOLD_STATE held
