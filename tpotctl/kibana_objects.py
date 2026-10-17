@@ -1430,6 +1430,24 @@ def run_restore(path: str, data_dir: str, export_dir: str, opener: Optional[Call
 # the objects of earlier releases: removed only when you ask (the T-Pot Manager)
 # ---------------------------------------------------------------------------
 
+_ROUTE_DASHBOARD = re.compile(r"/app/dashboards#/view/([^/?&#]+)")
+
+
+def _named_by(obj: dict) -> Set[str]:
+    """The type:id of the objects `obj` names: its references, and in the advanced settings (config,
+    config-global) the data view of defaultIndex and the dashboard of defaultRoute."""
+    named = {f"{ref.get('type')}:{ref.get('id')}" for ref in obj.get("references") or [] if isinstance(ref, dict)}
+    attributes = obj.get("attributes") if isinstance(obj.get("attributes"), dict) else {}
+    if obj["type"] in SKIP_TYPES:
+        if isinstance(attributes.get("defaultIndex"), str) and attributes["defaultIndex"]:
+            named.add(f"index-pattern:{attributes['defaultIndex']}")
+        route = _ROUTE_DASHBOARD.search(attributes.get("defaultRoute") or "") \
+            if isinstance(attributes.get("defaultRoute"), str) else None
+        if route:
+            named.add(f"dashboard:{urllib.parse.unquote(route.group(1))}")
+    return named
+
+
 def prune_plan(installed: List[dict], shipped_objs: List[dict], manifest: Dict[str, Set[str]],
                records: Optional[Dict[str, str]] = None) -> List[Item]:
     """The objects of earlier releases that Kibana still holds (action "old"), sorted by type, title and id.
@@ -1437,8 +1455,9 @@ def prune_plan(installed: List[dict], shipped_objs: List[dict], manifest: Dict[s
     Listed is only an object whose type:id is in the manifest and not in the shipped file, and whose
     content is one of the versions T-Pot shipped (its hash in the manifest: nobody changed it). Never
     listed are the advanced settings, an object you changed or made, one this release ships, and an old
-    one that an object staying in Kibana refers to (its references): removing it would break that
-    object, so it stays, and so does what it refers to. `records` widen nothing: an object whose hash is
+    one that an object staying in Kibana names (its references; the defaultIndex and defaultRoute of the
+    advanced settings, _named_by): removing it would break that object, so it stays, and so does what it
+    names. `records` widen nothing: an object whose hash is
     no shipped version stays, whatever the record of T-Pot's imports says."""
     ours = {key(o) for o in shipped_objs}
     old = {}
@@ -1452,9 +1471,7 @@ def prune_plan(installed: List[dict], shipped_objs: List[dict], manifest: Dict[s
         wanted = set()
         for obj in installed:
             if key(obj) not in old:
-                for ref in obj.get("references") or []:
-                    if isinstance(ref, dict):
-                        wanted.add(f"{ref.get('type')}:{ref.get('id')}")
+                wanted |= _named_by(obj)
         held = wanted & set(old)
         if not held:
             break

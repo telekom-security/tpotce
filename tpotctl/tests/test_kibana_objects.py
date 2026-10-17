@@ -2334,6 +2334,24 @@ class PrunePlanTest(unittest.TestCase):
         global_config = {"type": "config-global", "id": "9.5.4", "attributes": {}, "references": []}
         self.assertEqual(self.plan_of([CONFIG, global_config], old=[CONFIG, global_config], shipped=[self.A]), [])
 
+    def test_an_old_object_the_advanced_settings_name_is_never_listed(self):
+        old_view = {"type": "index-pattern", "id": "old-view", "references": [],
+                    "attributes": {"title": "old-*", "name": "Old view"}}
+        settings = dict(CONFIG, attributes={"defaultIndex": "old-view",
+                                            "defaultRoute": "/app/dashboards#/view/old?_g=()"})
+        self.assertEqual(keys(self.plan_of([old_view, self.OLD], old=[old_view])),
+                         ["dashboard:old", "index-pattern:old-view"])
+        self.assertEqual(self.plan_of([settings, old_view, self.OLD], old=[old_view]), [])
+        for kind in ("config", "config-global"):
+            with self.subTest(kind=kind):
+                only_index = {"type": kind, "id": "9.5.4", "references": [],
+                              "attributes": {"defaultIndex": "old-view"}}
+                self.assertEqual(keys(self.plan_of([only_index, old_view], old=[old_view])), [])
+        # a route that names no dashboard, and an index of another id, hold nothing back
+        other = dict(CONFIG, attributes={"defaultIndex": "logstash-*", "defaultRoute": "/app/discover"})
+        self.assertEqual(keys(self.plan_of([other, old_view, self.OLD], old=[old_view])),
+                         ["dashboard:old", "index-pattern:old-view"])
+
     def test_an_old_object_that_something_staying_refers_to_is_never_listed(self):
         old_vis, older_vis = vis("ov", "Old vis"), vis("ow", "Older vis")
         old_board = dash("old", "Old board")
