@@ -23,6 +23,13 @@ The run:
        noted once ("Cancel noted, finishing the cleanup first."). Any other fault still writes
        last.json (result "error", exit 1, the traceback in last.log).
 
+Pending cleanups: before the first probe or geo event, the run writes what its cleanup needs into
+checks/pending/<run id>.json (0600, the folder 0700, written whole) and keeps it up to date; the
+file goes after a cleanup that ran through (or with --keep, or when nothing was sent) and stays
+when the cleanup failed or was cut off (Elasticsearch down, a reboot). `tpot check cleanup` runs
+those (one pass, the window up to the end of the run in last.json or the file's time + 2 min), and
+every check runs them first, before it takes the hold, under the lock of the checks.
+
 SIGTERM and SIGHUP become an exception like Ctrl+C, so the end of the hold and the cleanup run on
 every way out; the handlers before come back afterwards (they are set before the hold is taken).
 Only the first signal is raised, a later one (and one during the end) is noted. Exit codes: 0
@@ -53,6 +60,7 @@ import json
 import os
 import secrets
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -60,8 +68,8 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from tpotctl.checks import CheckError, HoldError, fixtures, logfile, probes, stages
 from tpotctl.checks.inventory import LOGS, PASSIVE_GROUPS, Honeypot
@@ -724,6 +732,186 @@ def _row_view(row: Any, names: List[str]) -> Dict[str, Any]:
     return view
 
 
+# -- pending cleanups ---------------------------------------------------------------------------
+
+PENDING_VERSION = 1
+PENDING_MAX = 2 ** 20
+# the window of a run whose last.json is gone: up to the time of its file + this
+PENDING_SLACK = 120.0
+
+
+def pending_dir(result_file: Optional[str] = None) -> str:
+    """checks/pending next to last.json."""
+    return os.path.join(os.path.dirname(result_file or result_path()), "pending")
+
+
+def own_json(own: stages.OwnEvents) -> Dict[str, Any]:
+    return {"token": own.token, "source": own.source, "probes": {k: sorted(set(v)) for k, v in own.probes.items()},
+            "probed": list(own.probed), "token_types": list(own.token_types),
+            "geos": [[kind, ip, port] for kind, ip, port in own.geos]}
+
+
+def own_from_json(data: Any) -> stages.OwnEvents:
+    """OwnEvents of a pending file; ValueError when it is not of its form."""
+    def words(value: Any) -> List[str]:
+        if not (isinstance(value, list) and all(isinstance(v, str) and v for v in value)):
+            raise ValueError("a list of names")
+        return list(value)
+
+    def port(value: Any) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and 0 < value <= 65535
+
+    if not isinstance(data, dict):
+        raise ValueError("no object")
+    token = data.get("token")
+    if not (isinstance(token, str) and token.startswith(probes.TOKEN_PREFIX) and fixtures.TOKEN.fullmatch(token)):
+        raise ValueError("token")
+    source = data.get("source", "")
+    if not isinstance(source, str):
+        raise ValueError("source")
+    if source:
+        ipaddress.ip_address(source)
+    found = data.get("probes", {})
+    if not (isinstance(found, dict) and all(isinstance(k, str) and isinstance(v, list) and all(port(p) for p in v)
+                                            for k, v in found.items())):
+        raise ValueError("probes")
+    geos = []
+    for entry in data.get("geos", []):
+        if not (isinstance(entry, list) and len(entry) == 3 and isinstance(entry[0], str) and entry[1] in TEST_IPS
+                and (entry[2] is None or port(entry[2]))):
+            raise ValueError("geos")
+        geos.append(tuple(entry))
+    return stages.OwnEvents(token, source, {k: list(v) for k, v in found.items()}, words(data.get("probed", [])),
+                            words(data.get("token_types", [])), geos)
+
+
+@dataclass
+class Pending:
+    """The cleanup of an earlier run that did not run through."""
+    run_id: str
+    path: str
+    started: datetime
+    end: datetime
+    own: stages.OwnEvents
+    with_token: bool = True
+    host: str = ""
+
+
+def _parse_time(text: Any) -> datetime:
+    if not isinstance(text, str) or not text:
+        raise ValueError("time")
+    moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def read_pending(result_file: Optional[str] = None) -> Tuple[List[Pending], List[str]]:
+    """The pending cleanups (oldest first) and the files that cannot be read (path: why). The end
+    of a run's window is the end its last.json names, else the time of its file + PENDING_SLACK."""
+    folder = pending_dir(result_file)
+    try:
+        names = sorted(name for name in os.listdir(folder) if name.endswith(".json") and not name.startswith("."))
+    except FileNotFoundError:
+        return [], []
+    except OSError as error:
+        return [], [f"{folder}: {error.strerror or error}"]
+    try:
+        last = read_result(result_file)
+    except ResultError:
+        last = None
+    found: List[Pending] = []
+    broken: List[str] = []
+    for name in names:
+        path = os.path.join(folder, name)
+        try:
+            handle = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+            try:
+                info = os.fstat(handle)
+                if not stat.S_ISREG(info.st_mode):
+                    raise ValueError("no regular file")
+                raw = os.read(handle, PENDING_MAX + 1)
+            finally:
+                os.close(handle)
+            if len(raw) > PENDING_MAX:
+                raise ValueError(f"larger than {PENDING_MAX} bytes")
+            data = json.loads(raw.decode("utf-8"))
+            if not isinstance(data, dict) or data.get("version") != PENDING_VERSION:
+                raise ValueError(f"no pending cleanup of version {PENDING_VERSION}")
+            run_id = data.get("run_id")
+            if not (isinstance(run_id, str) and probes._RUN_ID.match(run_id) and name == f"{run_id}.json"):
+                raise ValueError("run_id")
+            started = _parse_time(data.get("started"))
+            if last is not None and last.get("run_id") == run_id and last.get("ended"):
+                end = _parse_time(last["ended"])
+            else:
+                end = datetime.fromtimestamp(info.st_mtime, timezone.utc) + timedelta(seconds=PENDING_SLACK)
+            with_token = data.get("with_token", True)
+            host = data.get("host", "")
+            if not isinstance(with_token, bool) or not isinstance(host, str):
+                raise ValueError("with_token / host")
+            found.append(Pending(run_id, path, started, end, own_from_json(data.get("own")), with_token, host))
+        except (OSError, ValueError, UnicodeDecodeError) as error:
+            broken.append(f"{path}: {getattr(error, 'strerror', None) or error}")
+    found.sort(key=lambda pending: pending.started)
+    return found, broken
+
+
+def write_pending(path: str, data: Dict[str, Any]) -> None:
+    """A pending file, written whole (temp file + replace), 0600 in a folder 0700."""
+    folder = os.path.dirname(path)
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    os.chmod(folder, 0o700)
+    handle, temp = tempfile.mkstemp(prefix=".pending.", suffix=".json", dir=folder)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            json.dump(data, out, indent=1)
+            out.write("\n")
+        os.chmod(temp, 0o600)
+        os.replace(temp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temp)
+        raise
+
+
+def delete_own(elastic: "Elastic", started: datetime, end: datetime, own: stages.OwnEvents, with_token: bool,
+               warn: Callable[[str], None]) -> Tuple[int, bool]:
+    """One _delete_by_query of a run's own events; (deleted, with_token): without the token clause
+    once Elasticsearch refuses it (ElasticError.token_refused)."""
+    body = stages.cleanup_query(started, end, own, with_token)
+    if body is None:
+        return 0, with_token
+    try:
+        return elastic.delete_by_query(body), with_token
+    except ElasticError as error:
+        if not (error.token_refused and with_token):
+            raise
+        warn("Elasticsearch refused the token query, the cleanup goes by test IP, marker port and source port only")
+        body = stages.cleanup_query(started, end, own, False)
+        return (elastic.delete_by_query(body) if body is not None else 0), False
+
+
+def left_over(elastic: "Elastic", started: datetime, end: datetime, own: stages.OwnEvents,
+              host: str) -> Tuple[int, int]:
+    """(left, of them without a source): the probe events a cleanup could not tell apart."""
+    query = stages.leftover_query(started, end, own, host)
+    left = elastic.count(query) if query is not None else 0
+    query = stages.sourceless_query(started, end, own)
+    sourceless = elastic.count(query) if query is not None else 0
+    return left + sourceless, sourceless
+
+
+def run_pending(pending: Pending, elastic: "Elastic", warn: Callable[[str], None]) -> Tuple[int, int, int]:
+    """The cleanup of an earlier run, one pass (its events are indexed long since); the file goes
+    when it ran through. (deleted, left, of them without a source); ElasticError when it did not."""
+    with contextlib.suppress(ElasticError):
+        elastic.refresh()
+    deleted, _with_token = delete_own(elastic, pending.started, pending.end, pending.own, pending.with_token, warn)
+    left, sourceless = left_over(elastic, pending.started, pending.end, pending.own, pending.host)
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(pending.path)
+    return deleted, left, sourceless
+
+
 # -- the run ------------------------------------------------------------------------------------
 
 class Check:
@@ -793,6 +981,10 @@ class Check:
         self.map: Optional[MapListener] = None
         # the honeypots whose ewsposter module cannot be held: no probe, no geo event
         self.not_held: List[str] = []
+        # what the cleanup of this run needs, while it has not run through (checks/pending)
+        self.pending_file = os.path.join(pending_dir(result_file), f"{self.run_id}.json")
+        self._planned: Optional[stages.OwnEvents] = None
+        self.earlier: Dict[str, Any] = {}       # the pending cleanups this run ran first
 
     # -- output --
 
@@ -913,6 +1105,10 @@ class Check:
         """--dry-run: what the check would do, nothing is touched (no hold, no probe, no line)."""
         self.honeypots = self.inventory()
         lines = [f"Run id {self.run_id}, token {self.token}"]
+        found, _broken = read_pending(self.result_file) if not self.sensor else ([], [])
+        if found:
+            lines.append("first the test events of earlier checks whose cleanup did not run through: "
+                         + ", ".join(pending.run_id for pending in found))
         for honeypot in self.honeypots:
             what = "external: " + stages.EXTERNAL_HINT if honeypot.external else (
                 "not running" if not honeypot.running else
@@ -1001,6 +1197,9 @@ class Check:
                 for name in stages.STAGES[3:]:
                     row.set(name, NOT_APPLICABLE, ON_THE_HIVE)
 
+        if not self.sensor:
+            self._earlier_cleanups()
+
         self.phase("hold", "Holding ewsposter")
         hold = self._make_hold()
         held = False
@@ -1057,6 +1256,80 @@ class Check:
                     self.phase("release", "Lifting the hold of ewsposter")
                     self._cleanup(report)
 
+    def _earlier_cleanups(self) -> None:
+        """The cleanups earlier checks could not finish, before this one takes the hold (they are
+        the check's own events by the same rules), under the lock of the checks: never those of a
+        check that runs."""
+        found, broken = read_pending(self.result_file)
+        for problem in broken:
+            self.log("warn", f"a pending cleanup cannot be read and stays: {problem}")
+        if not found:
+            return
+        self.phase("pending", "Removing the test events of earlier checks")
+        self.log("info", f"An earlier check could not remove its test events ({len(found)} run"
+                         f"{'s' if len(found) != 1 else ''}): this check removes them first.")
+        lock = self._make_lock()
+        with lock:
+            deleted = left = 0
+            for pending in found:
+                try:
+                    removed, stay, sourceless = run_pending(pending, self.elastic, lambda text: self.log("warn", text))
+                except ElasticError as error:
+                    self.log("warn", f"The test events of the check {pending.run_id} stay for now: {error}")
+                    continue
+                deleted, left = deleted + removed, left + stay
+                self.log("ok", f"Check {pending.run_id}: {removed} test events removed"
+                               + (f"; {left_text(stay, sourceless)}" if stay else "."))
+            self.earlier = {"runs": len(found), "deleted": deleted, "left": left}
+
+    def _make_lock(self):
+        """The lock of the checks alone (no marker): an EwsHold without ewsposter in its names."""
+        if self._hold is not None:
+            return self._hold(self.data_dir, [])
+        from tpotctl.checks.ewshold import EwsHold
+        return EwsHold(self.data_dir, [], log=lambda kind, text: None, settle=0)
+
+    # -- the pending file of this run --
+
+    def _plan_own(self) -> stages.OwnEvents:
+        """What this run is about to send (its probes and geo events), before it sends anything: every
+        probed type may carry the token; the source ports come with the probes."""
+        own = stages.OwnEvents(self.token, self.host if self.ports_survive() else "")
+        if not self.options.geo_only:
+            kinds = {h.logstash_type for h in self.honeypots if h.running and not h.external and h.logstash_type
+                     and h.name not in self.not_held}
+            own.probed, own.token_types = sorted(kinds), sorted(kinds)
+        for honeypot in self.geo_targets():
+            event = self.geo_event(honeypot.name)
+            own.geos.append((honeypot.logstash_type, event.src_ip, event.src_port if event.marker else None))
+            if "{token}" in fixtures.template(honeypot.name):
+                own.token_types = sorted(set(own.token_types) | {honeypot.logstash_type})
+        return own
+
+    def _save_pending(self) -> None:
+        """checks/pending/<run id>.json with what the cleanup needs now: the plan and what was sent."""
+        if self.sensor or self.options.keep:
+            return
+        if self._planned is None:
+            self._planned = self._plan_own()
+        own, planned = self.own_events(), self._planned
+        own.probed = sorted(set(own.probed) | set(planned.probed))
+        own.token_types = sorted(set(own.token_types) | set(planned.token_types))
+        own.geos = sorted(set(own.geos) | set(planned.geos), key=lambda geo: (geo[0], geo[1], geo[2] or 0))
+        own.source = own.source or planned.source
+        data = {"version": PENDING_VERSION, "run_id": self.run_id, "started": stages.iso(self.started),
+                "host": self.host, "with_token": self.with_token, "written": stages.iso(self.now()),
+                "own": own_json(own)}
+        try:
+            write_pending(self.pending_file, data)
+        except OSError as error:
+            self.log("warn", f"{self.pending_file} could not be written ({error.strerror or error}): a cleanup "
+                             f"that does not run through cannot be finished later")
+
+    def _drop_pending(self) -> None:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(self.pending_file)
+
     def _make_hold(self):
         if self._hold is not None:
             return self._hold(self.data_dir, self.compose_names())
@@ -1112,17 +1385,26 @@ class Check:
             self.map = self._make_listener()
             self.map.start()
         try:
+            # before the first probe or geo event: a cleanup cut off later can be finished
+            if not self.options.geo_only or geo:
+                self._save_pending()
             if not self.options.geo_only:
                 self.phase("probe", f"Probing the honeypots on {self.host}")
                 self.sent = True
                 # filled also when the probes end by an exception: the cleanup still knows what they sent
                 self.results = {}
-                self.results = self._run_probes(self.host, [h for h in self.honeypots if h.name not in self.not_held],
-                                                self.token, check=hold.check, into=self.results)
+                try:
+                    self.results = self._run_probes(self.host, [h for h in self.honeypots if h.name not in self.not_held],
+                                                    self.token, check=hold.check, into=self.results)
+                finally:
+                    self._save_pending()        # the source ports of the probes
             self._probe_stages()
             if geo:
                 self.phase("inject", "Writing the geo events")
-                self._inject(geo, hold)
+                try:
+                    self._inject(geo, hold)
+                finally:
+                    self._save_pending()
             self.phase("stages", "Following the events to the Attack Map" if not self.sensor else
                        "Looking for the log lines")
             self._poll(hold)
@@ -1268,6 +1550,7 @@ class Check:
                     if port is not None and port not in result.src_ports:
                         # the source port the honeypot logs for this host: the probe's (Elasticsearch, cleanup)
                         result.src_ports.append(port)
+                        self._save_pending()
                     row.log_line = line
                     row.set("log", OK, line[:200])
                     pending_log.remove(honeypot)
@@ -1402,19 +1685,9 @@ class Check:
         return own
 
     def _delete(self, own: stages.OwnEvents, end: datetime) -> int:
-        body = stages.cleanup_query(self.started, end, own, self.with_token)
-        if body is None:
-            return 0
-        try:
-            return self.elastic.delete_by_query(body)
-        except ElasticError as error:
-            if not (error.token_refused and self.with_token):
-                raise
-            self.with_token = False
-            self.log("warn", "Elasticsearch refused the token query, the cleanup goes by test IP, marker port "
-                             "and source port only")
-            body = stages.cleanup_query(self.started, end, own, False)
-            return self.elastic.delete_by_query(body) if body is not None else 0
+        deleted, self.with_token = delete_own(self.elastic, self.started, end, own, self.with_token,
+                                              lambda text: self.log("warn", text))
+        return deleted
 
     def _cleanup(self, report: Report) -> None:
         if self.sensor:
@@ -1422,6 +1695,7 @@ class Check:
                               "detail": "Elasticsearch is on the HIVE, the probes stay there"}
             return
         if not self.sent:
+            self._drop_pending()
             report.cleanup = {"state": "none", "deleted": 0, "passes": [], "left": 0, "detail": "nothing was sent"}
             return
         end = self.now()
@@ -1430,6 +1704,7 @@ class Check:
         report.kibana = stages.kibana_link(self.host, port, stages.run_kql(self.token, [self.host] + list(TEST_IPS)),
                                            self.started, end)
         if self.options.keep:
+            self._drop_pending()
             report.cleanup = {"state": "kept", "deleted": 0, "passes": [], "left": 0, "detail": "--keep: the test events stay"}
             self.log("info", "The test events stay in Elasticsearch (--keep).")
             return
@@ -1445,18 +1720,17 @@ class Check:
                 with contextlib.suppress(ElasticError):
                     self.elastic.refresh()
                 passes.append(self._delete(own, end))
-            left_query = stages.leftover_query(self.started, end, own, self.host)
-            left = self.elastic.count(left_query) if left_query is not None else 0
-            # events of a probed type without a source (dicompot): counted, never deleted
-            sourceless_query = stages.sourceless_query(self.started, end, own)
-            sourceless = self.elastic.count(sourceless_query) if sourceless_query is not None else 0
+            # events of a probed type without a source (dicompot) are counted with them, never deleted
+            left, sourceless = left_over(self.elastic, self.started, end, own, self.host)
         except ElasticError as error:
             self.mark("fail", "cleanup")
             self.log("error", f"The test events could not be removed: {error}")
+            self._save_pending()            # the pending file stays: tpot check cleanup, or the next check
+            self.log("info", "They are removed by the next check, or now with: tpot check cleanup")
             report.cleanup = {"state": "failed", "deleted": sum(passes), "passes": passes, "left": 0,
                               "detail": str(error)}
             return
-        left += sourceless
+        self._drop_pending()
         report.cleanup = {"state": "done", "deleted": sum(passes), "passes": passes, "left": left,
                           "left_no_source": sourceless, "detail": ""}
         self.log("ok", f"{sum(passes)} test events removed from Elasticsearch "

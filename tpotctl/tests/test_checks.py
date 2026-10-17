@@ -208,6 +208,89 @@ class ChecksCliTest(unittest.TestCase):
             from tpotctl import cli
             cli.build_parser().parse_args(["check", "pipeline", "--no-geo"])
 
+    def test_the_pipeline_test_on_a_sensor_is_refused(self):
+        from tpotctl import cli
+        code, text, _made, check, _asked = self.run_check("pipeline", "-y", check=self.fake_check(sensor=True))
+        self.assertEqual(code, 2)
+        check.run.assert_not_called()
+        check.plan.assert_not_called()
+        self.assertIn(cli.PIPELINE_ON_A_SENSOR, " ".join(text.split()))
+        self.assertEqual(cli.PIPELINE_ON_A_SENSOR,
+                         "The pipeline test runs on the HIVE (Elasticsearch and the Attack Map are there).")
+
+    def pending_world(self):
+        """A folder of results with one pending cleanup of an earlier run, and its test events."""
+        from tpotctl.checks import run as trun
+        folder = tempfile.mkdtemp(prefix="tpot-pending-")
+        self.addCleanup(shutil.rmtree, folder)
+        result_file = os.path.join(folder, "checks", "last.json")
+        es = FakeElastic()
+        es.add({"type": "Cowrie", "src_ip": "8.8.8.8", "src_port": 51234, "@timestamp": stages.iso(BASE)})
+        es.add({"type": "Cowrie", "src_ip": ATTACKER, "src_port": 51234, "@timestamp": stages.iso(BASE)})
+        own = stages.OwnEvents(TOKEN, HOST, {}, ["Cowrie"], ["Cowrie"], [("Cowrie", "8.8.8.8", 51234)])
+        trun.write_pending(os.path.join(trun.pending_dir(result_file), "abc123.json"),
+                           {"version": 1, "run_id": "abc123", "started": stages.iso(BASE), "host": HOST,
+                            "with_token": True, "own": trun.own_json(own)})
+        return result_file, es
+
+    def test_the_cleanup_command(self):
+        """tpot check cleanup: asks (no terminal, no -y: 2), removes the earlier run's own events in
+        one pass under the lock, says deleted / left, and the pending file goes."""
+        from tpotctl.checks import run as trun
+        result_file, es = self.pending_world()
+        locks = []
+
+        class Lock:
+            def __init__(self, data, names, **_kw):
+                locks.append(list(names))
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+        stdin = mock.Mock()
+        stdin.isatty.return_value = False
+        path = trun.result_path
+
+        def run(*argv):
+            with mock.patch.object(trun, "result_path", lambda environ=None: result_file), \
+                    mock.patch.object(trun, "Elastic", lambda: es), mock.patch("sys.stdin", stdin), \
+                    mock.patch("tpotctl.checks.ewshold.EwsHold", Lock):
+                return self.run_cli("check", "cleanup", *argv)
+        code, text = run()
+        self.assertEqual(code, 2)
+        self.assertIn("--yes", text)
+        self.assertEqual(len(es.docs), 2)
+        code, text = run("--dry-run")
+        self.assertEqual(code, 0)
+        self.assertIn("abc123: 2026-10-17T08:00:00.000Z to ", text)
+        self.assertEqual((len(es.docs), es.deletes), (2, []))
+        code, text = run("-y")
+        self.assertEqual(code, 0, text)
+        self.assertIn("Check abc123: 1 test events removed.", " ".join(text.split()))
+        self.assertEqual([d["_source"]["src_ip"] for d in es.docs], [ATTACKER])
+        self.assertEqual(len(es.deletes), 1)
+        self.assertEqual(locks, [[]])               # the lock of the checks, no hold of ewsposter
+        self.assertEqual(os.listdir(trun.pending_dir(result_file)), [])
+        code, text = run("-y")
+        self.assertEqual(code, 0)
+        self.assertIn("No earlier check left test events behind.", text)
+        self.assertIs(trun.result_path, path)
+
+    def test_the_cleanup_command_keeps_what_elasticsearch_did_not_take(self):
+        from tpotctl.checks import run as trun
+        result_file, es = self.pending_world()
+        es.down = True
+        es.delete_by_query = lambda body: (_ for _ in ()).throw(trun.ElasticError("Elasticsearch is not reachable"))
+        with mock.patch.object(trun, "result_path", lambda environ=None: result_file), \
+                mock.patch.object(trun, "Elastic", lambda: es), \
+                mock.patch("tpotctl.checks.ewshold.EwsHold", mock.MagicMock()):
+            code, text = self.run_cli("check", "cleanup", "-y")
+        self.assertEqual(code, 1)
+        self.assertIn("the test events stay for now", text)
+        self.assertEqual(os.listdir(trun.pending_dir(result_file)), ["abc123.json"])
+
     def test_without_a_terminal_and_without_yes_it_cannot_ask(self):
         from tpotctl.checks import run as trun
         code, text, _made, check, asked = self.run_check("honeypots")
@@ -2901,6 +2984,115 @@ class RunTest(unittest.TestCase):
         self.assertEqual(cowrie.state("ewsposter"), stages.FAILED)
         self.assertIn("during the check", cowrie.stages["ewsposter"].detail)
         self.assertEqual(report.exit_code, 1)
+
+    def pending(self, world):
+        from tpotctl.checks import run as trun
+        folder = trun.pending_dir(world.result_file)
+        return sorted(os.listdir(folder)) if os.path.isdir(folder) else []
+
+    def test_the_pending_cleanup_is_written_before_the_first_probe(self):
+        """checks/pending/<run id>.json before the probes (0600, folder 0700), with the token, the
+        types and the planned geo events; the source ports after the probes; gone after a cleanup
+        that ran through."""
+        from tpotctl.checks import run as trun
+        world = self.world(("cowrie", "dionaea"))
+        seen = {}
+        original = world.run_probes
+
+        def run_probes(host, honeypots, token, check=None, into=None):
+            path = world.check.pending_file
+            seen["mode"] = oct(os.stat(path).st_mode & 0o777)
+            seen["folder"] = oct(os.stat(os.path.dirname(path)).st_mode & 0o777)
+            with open(path, encoding="utf-8") as handle:
+                seen["before"] = json.load(handle)
+            return original(host, honeypots, token, check=check, into=into)
+        world.check._run_probes = run_probes
+        appended = []
+
+        def on_append(rel, text):
+            with open(world.check.pending_file, encoding="utf-8") as handle:
+                appended.append(json.load(handle))
+            world.logstash(rel, text)
+        world.files.on_append = on_append
+        report = world.run()
+        self.assertEqual(report.cleanup["state"], "done")
+        self.assertEqual((seen["mode"], seen["folder"]), ("0o600", "0o700"))
+        before = seen["before"]
+        self.assertEqual((before["version"], before["run_id"], before["host"]), (1, "abc123", HOST))
+        self.assertEqual(before["own"]["token"], TOKEN)
+        self.assertEqual(before["own"]["probed"], ["Cowrie", "Dionaea"])
+        self.assertEqual(before["own"]["probes"], {})
+        self.assertIn(["Cowrie", "8.8.8.8", 51234], before["own"]["geos"])
+        # after the probes: their source ports
+        self.assertEqual(appended[0]["own"]["probes"], {"Cowrie": [40100], "Dionaea": [40101]})
+        self.assertEqual(self.pending(world), [])
+        # its own events by the file as well (the same rules as the cleanup)
+        found, broken = trun.read_pending(world.result_file)
+        self.assertEqual((found, broken), ([], []))
+
+    def test_the_pending_cleanup_stays_when_the_cleanup_fails(self):
+        world = self.world(("cowrie",))
+        world.es.delete_by_query = lambda body: (_ for _ in ()).throw(run_checks.ElasticError(
+            "Elasticsearch is not reachable ([Errno 111] Connection refused)"))
+        report = world.run()
+        self.assertEqual(report.cleanup["state"], "failed")
+        self.assertEqual(self.pending(world), ["abc123.json"])
+        self.assertTrue(any("tpot check cleanup" in text for _kind, text in world.said))
+        found, broken = run_checks.read_pending(world.result_file)
+        self.assertEqual(broken, [])
+        self.assertEqual(found[0].own.probes, {"Cowrie": [40100]})
+        # the window ends where last.json says the run ended
+        self.assertEqual(found[0].end, report.ended.replace(microsecond=report.ended.microsecond // 1000 * 1000))
+
+    def test_the_pending_cleanup_after_a_cancel(self):
+        """Ctrl+C during the probes: the cleanup still runs (the file goes); with Elasticsearch gone
+        (a reboot) it stays."""
+        for down in (False, True):
+            with self.subTest(down=down):
+                world = self.world(("cowrie",))
+                original = world.run_probes
+
+                def interrupted(host, honeypots, token, check=None, into=None, o=original):
+                    o(host, honeypots, token, check=check, into=into)
+                    raise KeyboardInterrupt
+                world.check._run_probes = interrupted
+                if down:
+                    world.es.delete_by_query = lambda body: (_ for _ in ()).throw(run_checks.ElasticError("down"))
+                report = world.run()
+                self.assertEqual(report.exit_code, 130)
+                self.assertEqual(self.pending(world), ["abc123.json"] if down else [])
+
+    def test_keep_and_a_sensor_write_no_pending_cleanup(self):
+        for options in ({"keep": True}, {"tpot_type": "SENSOR"}):
+            with self.subTest(**options):
+                world = self.world(("cowrie",), **options)
+                world.run()
+                self.assertEqual(self.pending(world), [])
+
+    def test_the_next_check_runs_the_pending_cleanups_first(self):
+        """A pending cleanup of an earlier run: the next check removes those events first, under the
+        lock alone (no marker), before it takes the hold, and says so."""
+        first = self.world(("cowrie",))
+        first.es.delete_by_query = lambda body: (_ for _ in ()).throw(run_checks.ElasticError("down"))
+        first.run()
+        self.assertEqual(self.pending(first), ["abc123.json"])
+        earlier = [d["_source"] for d in first.es.docs if d["_source"]["src_ip"] != ATTACKER]
+        self.assertTrue(earlier)
+        second = World(self, [honeypot("cowrie")])
+        second.check.result_file = first.result_file
+        second.check.pending_file = os.path.join(os.path.dirname(first.check.pending_file), "def456.json")
+        second.check.run_id = "def456"
+        for source in earlier:
+            second.es.add(dict(source))
+        report = second.run()
+        self.assertEqual(second.order[:4], ["hold", "delete", "release", "hold"])
+        self.assertTrue(any("An earlier check could not remove its test events (1 run)" in text
+                            for _kind, text in second.said))
+        self.assertTrue(any(text.startswith("Check abc123: ") for _kind, text in second.said))
+        self.assertIn("@@tpot phase pending Removing the test events of earlier checks", second.marks)
+        self.assertEqual(self.pending(second), [])
+        self.assertEqual(report.exit_code, 0)
+        self.assertEqual([d["_source"]["src_ip"] for d in second.es.docs], [ATTACKER])
 
     def test_a_cancel_after_the_ack_says_ewsposter_held(self):
         """Ctrl+C during the probes: last.json says held (the hold was confirmed before the cancel)."""

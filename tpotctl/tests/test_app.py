@@ -81,6 +81,12 @@ if textual:
         def ews_state(self):
             return self.ews
 
+        # earlier checks whose cleanup did not run through
+        pending_value = 0
+
+        def pending_checks(self):
+            return self.pending_value
+
         def backup_infos(self):
             return [ops.BackupInfo("/b/new_tpot_backup.tar", "new_tpot_backup.tar", 2 ** 20, "regular",
                                    ["version: 24.04.2"], ["git", "config"]),
@@ -2184,6 +2190,43 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             await pilot.click("#task-back")
             await pilot.pause(0.3)
         self.assertEqual(loads, [1])                # last.json anew after the task screen
+
+    async def test_earlier_checks_that_left_test_events(self):
+        """Pending cleanups: a line and Remove them now, which asks (#no first) and runs tpot check
+        cleanup -y in the task screen; none: neither."""
+        from tpotctl import cli
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertFalse(app.query_one("#check-pending").display)
+            self.assertFalse(app.query_one("#check-pending-actions").display)
+        backend.pending_value = 2
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertTrue(app.query_one("#check-pending").display)
+            self.assertIn("An earlier check could not remove its test events (2 runs).",
+                          flat(app.query_one("#check-pending")))
+            await pilot.click("#check-pending-run")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertEqual(app.focused.id, "no")
+            self.assertEqual(app.screen.body.plain, cli.CLEANUP_QUESTION.format(runs="2 runs"))
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertEqual(FakeEngine.seen, [])
+            await pilot.click("#check-pending-run")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+            self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "check", "cleanup", "-y"]])
+        # a SENSOR keeps no events: no line
+        sensor = FakeBackend(kind="SENSOR")
+        sensor.pending_value = 2
+        app = tapp.TpotApp(backend=sensor, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertFalse(app.query_one("#check-pending").display)
 
     async def test_the_task_takes_a_sudo_password_file(self):
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)

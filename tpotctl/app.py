@@ -217,6 +217,11 @@ class Backend:
         from tpotctl.checks import ewshold
         return ewshold.ews_state(system.data_path(ops.env_values(), REPO_DIR))
 
+    def pending_checks(self) -> int:
+        """How many earlier checks could not remove their test events (checks/pending)."""
+        from tpotctl.checks import run as trun
+        return len(trun.read_pending()[0])
+
 
 class Runner:
     """Run a command in the normal terminal, the app is suspended meanwhile."""
@@ -1567,6 +1572,11 @@ def check_when(stamp: str) -> str:
     return moment.astimezone().strftime("%Y-%m-%d %H:%M")
 
 
+def pending_text(count: int) -> str:
+    """The line of the Checks page while earlier checks left test events behind."""
+    return f"An earlier check could not remove its test events ({count} run{'s' if count != 1 else ''})."
+
+
 def check_cleanup_text(cleanup: Dict) -> Text:
     """What the cleanup of a check did, as tpot check says it (cli.check_summary); values from last.json
     stay plain text."""
@@ -1731,6 +1741,7 @@ class ChecksPane(Vertical):
 
     result = None           # the last check as run.result_view gives it, None without one
     problem = ""            # why last.json cannot be read ("" when it can or there is none)
+    pending = 0             # earlier checks whose test events are still in Elasticsearch
     sensor = False
     row_keys: Dict[str, Dict] = {}
     columns_for = ()        # the stages the columns of the table were made for
@@ -1740,6 +1751,10 @@ class ChecksPane(Vertical):
         with NavScroll(id="checks-scroll"):
             yield Static("", id="checks-info", classes="info")
             yield Static("", id="check-hold")
+            # shown while earlier checks left test events behind (their cleanup did not run through)
+            yield Static("", id="check-pending")
+            with Horizontal(classes="actions", id="check-pending-actions"):
+                yield Button("Remove them now", id="check-pending-run")
             with Horizontal(classes="actions check-switches"):
                 yield Switch(True, id="check-geo")
                 yield Label("Geo probe", classes="switch-state")
@@ -1774,6 +1789,10 @@ class ChecksPane(Vertical):
             self.result, self.problem = self.app.backend.check_result(), ""
         except Exception as err:            # noqa: BLE001 - a broken file is a line on the page, never a traceback
             self.result, self.problem = None, str(err) or type(err).__name__
+        try:
+            self.pending = 0 if self.sensor else self.app.backend.pending_checks()
+        except Exception:                   # noqa: BLE001 - the line only informs
+            self.pending = 0
         self.show()
 
     def show(self) -> None:
@@ -1804,7 +1823,16 @@ class ChecksPane(Vertical):
                      style=theme.color("mist"))
         self.query_one("#check-extra", Static).update(extra)
         self.show_hold()
+        self.show_pending()
         self.show_result()
+
+    def show_pending(self) -> None:
+        """The line and the button for the test events earlier checks could not remove."""
+        line = self.query_one("#check-pending", Static)
+        actions = self.query_one("#check-pending-actions", Horizontal)
+        line.display = actions.display = bool(self.pending)
+        if self.pending:
+            line.update(Text(f"{glyphs.g('warn')} {pending_text(self.pending)}", style=theme.color("warn")))
 
     def show_hold(self) -> None:
         """What ewsposter says of its hold (<data>/ews/hold.state): stuck is a warning."""
@@ -1910,6 +1938,17 @@ class ChecksPane(Vertical):
                                    [cli.HPTEST, "--nmap"] + ([host] if host else []), cwd=os.path.expanduser("~"),
                                    become="-B", done="The probes are through, Kibana shows them."),
                               lambda _code: self.load())
+        elif button == "check-pending-run":
+            def remove(yes: bool) -> None:
+                if yes:
+                    self.app.run_task(Task("Remove the test events of earlier checks", [LAUNCHER, "check", "cleanup", "-y"],
+                                           cwd=REPO_DIR, autostart=True,
+                                           done="The test events of the earlier checks are removed."),
+                                      lambda _code: self.load())
+            question = cli.CLEANUP_QUESTION.format(runs=cli.runs_text(self.pending))
+            self.app.push_screen(ConfirmDialog("Remove the test events of earlier checks?",
+                                               Text(question, style=theme.color("glass")), yes="Remove them",
+                                               no="Back"), remove)
         elif button == "check-dry":
             self.app.run_task(Task("Check the honeypots, dry run", self.check_command("honeypots", dry_run=True),
                                    cwd=REPO_DIR, autostart=True), lambda _code: self.load())

@@ -120,6 +120,7 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
         for kind in ("HIVE", "SENSOR"):
             backend = FakeBackend(kind=kind)
             backend.check_result_value = sample_check()
+            backend.pending_value = 1          # the button of the pending cleanups is reached too
             with self.subTest(kind=kind):
                 await self.check_page("checks", backend=backend)
 

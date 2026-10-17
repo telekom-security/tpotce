@@ -86,13 +86,13 @@ class GeoEvent:
     src_ip: str
     src_port: int
     file: str = ""          # the log it went to, relative to the data folder
-    # the honeypot logs a source port, so the event carries the marker port; without one it is
-    # found by its test IP and type in the window (the test IPs are the check's own)
-    marker: bool = True
     line: str = ""          # the line as it was appended ("" when nothing was written)
     es_id: str = ""
     es_index: str = ""
     location: Dict[str, Any] = field(default_factory=dict)     # lat, lon, country, ip_rep
+    # the honeypot logs a source port, so the event carries the marker port; without one it is
+    # found by its test IP and type in the window (the test IPs are the check's own)
+    marker: bool = True
 
 
 @dataclass

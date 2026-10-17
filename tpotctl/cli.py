@@ -174,14 +174,28 @@ def build_parser() -> argparse.ArgumentParser:
                     "did not confirm its hold (nothing probed), 130 cancelled (Ctrl+C, SIGTERM, SIGHUP). The "
                     "result is in ~/.local/share/tpotce/checks/last.json, its output in last.log next to it. "
                     "The cleanup removes only events that are the check's own beyond doubt (its token, a "
-                    "test IP with its marker port, the probe source with a source port of the probe).")
+                    "test IP with its marker port, the probe source with a source port of the probe); one that "
+                    "does not run through stays pending (tpot check cleanup), and every check runs the pending "
+                    "ones first. A honeypot whose ewsposter module cannot be held gets no probe and no test "
+                    "event.")
     pipe = check_actions.add_parser(
         "pipeline", help="only the test events with a fixed test IP: from the honeypot logs through Logstash, "
                          "Elasticsearch and Redis to the WebSocket of the Attack Map (check honeypots without "
                          "probes); removed from Elasticsearch afterwards",
         description="Writes one test event with a fixed test IP into the log of every honeypot and follows it "
                     "through Logstash, Elasticsearch (GeoIP, ip_rep) and Redis to the WebSocket of the Attack "
-                    "Map. The same as check honeypots without the probes, with its exit codes.")
+                    "Map. The same as check honeypots without the probes, with its exit codes. A SENSOR refuses "
+                    "it (exit 2): Elasticsearch and the Attack Map are on its HIVE.")
+    tidy = check_actions.add_parser(
+        "cleanup", help="remove the test events earlier checks could not remove (their cleanup failed or was cut "
+                        "off: Elasticsearch down, a reboot); every check does it first as well",
+        description="Removes from Elasticsearch the test events of earlier checks whose cleanup did not run "
+                    "through (~/.local/share/tpotce/checks/pending): only the check's own events, by the rules of "
+                    "its cleanup, in the window of that check. Asks first (-y confirms; without a terminal it "
+                    "needs -y, exit 2). Exit codes: 0 done or nothing to do, 1 Elasticsearch failed (the runs stay "
+                    "pending) or another check is running, 2 it cannot ask, 130 cancelled.")
+    tidy.add_argument("--dry-run", action="store_true", help="show the pending runs and their queries, remove nothing")
+    tidy.add_argument("-y", "--yes", action="store_true", help="remove without asking")
     for action in (probe, pipe):
         action.add_argument("--only", "--types", dest="only", metavar="A,B",
                             help="these honeypots only (service names, comma list)")
@@ -1405,16 +1419,80 @@ def check_table(report, ascii_only: bool = False):
     return table
 
 
+PIPELINE_ON_A_SENSOR = "The pipeline test runs on the HIVE (Elasticsearch and the Attack Map are there)."
+CLEANUP_QUESTION = ("Earlier checks could not remove their test events ({runs}). Remove them from Elasticsearch "
+                    "now? Only the check's own events go: its token, a test IP with its marker port, the probe "
+                    "source with a source port of the probe, in the window of that check.")
+
+
+def runs_text(count: int) -> str:
+    return f"{count} run{'s' if count != 1 else ''}"
+
+
+def run_check_cleanup(args) -> int:
+    """tpot check cleanup: the cleanups of earlier checks that did not run through."""
+    ops.require_linux_host("check cleanup")
+    import json as tjson
+    from tpotctl import system
+    from tpotctl.checks import CheckError, run as trun, stages as tstages
+    from tpotctl.checks.ewshold import EwsHold
+    found, broken = trun.read_pending()
+    for problem in broken:
+        say.warn(f"A pending cleanup cannot be read and stays: {problem}")
+    if not found:
+        say.ok("No earlier check left test events behind.")
+        return 1 if broken else 0
+    if args.dry_run:
+        for pending in found:
+            body = tstages.cleanup_query(pending.started, pending.end, pending.own, pending.with_token)
+            print(f"{pending.run_id}: {tstages.iso(pending.started)} to {tstages.iso(pending.end)}: "
+                  f"POST logstash-*/_delete_by_query {tjson.dumps(body)}")
+        say.info("Nothing was removed (--dry-run).")
+        return 0
+    text = CLEANUP_QUESTION.format(runs=runs_text(len(found)))
+    if not args.yes and not sys.stdin.isatty():
+        error(f"{text} Add --yes to remove them without a terminal.")
+        return 2
+    if not args.yes:
+        say.info(text)
+        if not confirm("Remove them now?", False):
+            say.info("Nothing was removed.")
+            return 1
+    elastic = trun.Elastic()
+    rc = 0
+    try:
+        # under the lock of the checks: never the events of a check that runs
+        with EwsHold(system.data_path(ops.env_values(), REPO_DIR), [], log=lambda kind, text: None, settle=0):
+            for pending in found:
+                try:
+                    deleted, left, sourceless = trun.run_pending(pending, elastic, say.warn)
+                except trun.ElasticError as err:
+                    error(f"Check {pending.run_id}: the test events stay for now: {err}")
+                    rc = 1
+                    continue
+                say.ok(f"Check {pending.run_id}: {deleted} test events removed"
+                       + (f"; {trun.left_text(left, sourceless)}." if left else "."))
+    except CheckError as err:
+        error(f"{err}; try again once it is over.")
+        return 1
+    return rc
+
+
 def run_check(args) -> int:
     if args.check_command is None:
         build_parser().parse_args(["check", "-h"])
         return 2
+    if args.check_command == "cleanup":
+        return run_check_cleanup(args)
     ops.require_linux_host(f"check {args.check_command}")
     from tpotctl import prefs
     from tpotctl.checks import CheckError, run as trun
     options = check_options(args)
     try:
         check = trun.Check(options)
+        if options.geo_only and check.sensor:
+            error(PIPELINE_ON_A_SENSOR)
+            return trun.EXIT_CANNOT_ASK
         if options.dry_run:
             for line in check.plan():
                 print(line)
