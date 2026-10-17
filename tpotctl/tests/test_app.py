@@ -549,7 +549,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             await pilot.click("#task-run")
             await pilot.pause(0.4)
-        self.assertEqual(FakeEngine.seen, [[cli.HPTEST, "192.0.2.5"]])
+        self.assertEqual(FakeEngine.seen, [[cli.HPTEST, "--nmap", "192.0.2.5"]])
 
     async def test_checks_pipeline_asks_first(self):
         FakeEngine.seen.clear()
@@ -568,7 +568,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             await pilot.click("#yes")
             await pilot.pause(0.5)
-        self.assertEqual(FakeEngine.seen, [[cli.PIPELINE]])
+        self.assertEqual(FakeEngine.seen, [[cli.PIPELINE, "--yes"]])
 
     async def test_quit_waits_for_a_running_task(self):
         import threading

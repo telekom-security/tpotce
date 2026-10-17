@@ -1526,9 +1526,10 @@ class ChecksPane(Vertical):
                     "this host or another T-Pot; the probes show up in Kibana as attacks.\n\n",
                     style=theme.color("mist"))
         text.append("Test the Attack Map pipeline", style=f"bold {theme.color('glass')}")
-        text.append("  appends test events to the logs of Cowrie, Dionaea, Honeytrap and RDPy and follows them "
-                    "through Logstash, Elasticsearch and Redis to the WebSocket of the Attack Map "
-                    "(attackmap_pipeline_test.sh). The events stay in Kibana; the dry run only shows them.",
+        text.append("  appends a test event with a fixed test IP to the log of every honeypot and follows it "
+                    "through Logstash, Elasticsearch and Redis to the WebSocket of the Attack Map (tpot check "
+                    "pipeline). ewsposter sends nothing meanwhile; the events are removed from Elasticsearch "
+                    "afterwards, the dry run only shows them.",
                     style=theme.color("mist"))
         self.query_one("#checks-info", Static).update(text)
 
@@ -1546,8 +1547,9 @@ class ChecksPane(Vertical):
         from tpotctl.screens.task import Task
         if event.button.id == "check-honeypots":
             host = self.query_one("#check-host", Input).value.strip()
+            # the service requests and the nmap scan of hptest.sh (tpot check honeypots is its own check)
             self.app.run_task(Task(f"Probe the honeypots{' on ' + host if host else ''}",
-                                   [cli.HPTEST] + ([host] if host else []), cwd=os.path.expanduser("~"),
+                                   [cli.HPTEST, "--nmap"] + ([host] if host else []), cwd=os.path.expanduser("~"),
                                    become="-B", done="The probes are through, Kibana shows them."))
         elif event.button.id == "check-pipeline-dry":
             self.app.run_task(Task("Attack Map pipeline, dry run", [cli.PIPELINE, "--dry-run"],
@@ -1555,13 +1557,14 @@ class ChecksPane(Vertical):
         elif event.button.id == "check-pipeline":
             def confirmed(yes: bool) -> None:
                 if yes:
-                    self.app.run_task(Task("Test the Attack Map pipeline", [cli.PIPELINE],
+                    self.app.run_task(Task("Test the Attack Map pipeline", [cli.PIPELINE, "--yes"],
                                            cwd=os.path.expanduser("~"), become="--become-file", autostart=True,
                                            done="Every test event reached the Attack Map."))
+            from tpotctl.checks import run as trun
             self.app.push_screen(ConfirmDialog(
                 "Inject test events into the honeypot logs?",
-                Text("They become ordinary events in Kibana and the Attack Map and stay there.",
-                     style=theme.color("glass")), yes="Inject and test", no="Back"), confirmed)
+                Text(trun.question(trun.Options(geo_only=True)), style=theme.color("glass")),
+                yes="Inject and test", no="Back"), confirmed)
 
 
 class ElasticPane(Vertical):

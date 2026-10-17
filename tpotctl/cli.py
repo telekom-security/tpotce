@@ -154,19 +154,40 @@ def build_parser() -> argparse.ArgumentParser:
                        ("test", "send a short prompt to the model of a honeypot, from this host")):
         action = llm_actions.add_parser(name, help=text)
         action.add_argument("service", nargs="?", choices=["beelzebub", "galah"], default="galah")
-    check = sub.add_parser("check", help="checks of a running T-Pot: probe the honeypots, test the Attack Map "
-                                         "pipeline")
+    check = sub.add_parser("check", help="checks of a running T-Pot: every honeypot from its port to the Attack "
+                                         "Map")
     check_actions = check.add_subparsers(dest="check_command", metavar="CHECK")
-    probe = check_actions.add_parser("honeypots", help="probe the honeypots: service requests, then nmap over every "
-                                                       "published port (runs hptest.sh)")
-    probe.add_argument("--host", default="", help="the host to probe, default: the address of this host")
-    probe.add_argument("--become-file", metavar="FILE", default="", help="the sudo password in a file")
-    pipe = check_actions.add_parser("pipeline", help="inject test events and follow them to the Attack Map "
-                                                     "(runs attackmap_pipeline_test.sh); they stay in Kibana")
-    pipe.add_argument("--types", help="comma list of cowrie, dionaea, honeytrap, rdphoneypot")
-    pipe.add_argument("--dry-run", action="store_true", help="show the events only, inject nothing")
-    pipe.add_argument("--become-file", metavar="FILE", default="", help="the sudo password in a file")
-    pipe.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    probe = check_actions.add_parser(
+        "honeypots", help="probe every honeypot of this T-Pot and follow it from the port through its answer, "
+                          "its log line, Elasticsearch and GeoIP to the Attack Map; ewsposter sends nothing "
+                          "meanwhile, the test events are removed from Elasticsearch afterwards",
+        description="Probes every honeypot of this T-Pot on the address of this host and follows it: port, "
+                    "answer, log line, Elasticsearch, GeoIP / ip_rep of a test event with a fixed test IP, "
+                    "Attack Map (Redis, WebSocket), ewsposter held. A SENSOR checks the first three. Exit "
+                    "codes: 0 all ok, 1 a stage failed, 2 it cannot ask (no terminal, no --yes), 3 ewsposter "
+                    "did not confirm its hold (nothing probed), 130 cancelled. The result is in "
+                    "~/.local/share/tpotce/checks/last.json.")
+    pipe = check_actions.add_parser(
+        "pipeline", help="only the test events with a fixed test IP: from the honeypot logs through Logstash, "
+                         "Elasticsearch and Redis to the WebSocket of the Attack Map (check honeypots without "
+                         "probes); removed from Elasticsearch afterwards",
+        description="Writes one test event with a fixed test IP into the log of every honeypot and follows it "
+                    "through Logstash, Elasticsearch (GeoIP, ip_rep) and Redis to the WebSocket of the Attack "
+                    "Map. The same as check honeypots without the probes, with its exit codes.")
+    for action in (probe, pipe):
+        action.add_argument("--only", "--types", dest="only", metavar="A,B",
+                            help="these honeypots only (service names, comma list)")
+        if action is probe:
+            action.add_argument("--no-geo", action="store_true",
+                                help="no test events with a test IP: no GeoIP and no Attack Map stage")
+        action.add_argument("--keep", action="store_true", help="leave the test events in Elasticsearch")
+        action.add_argument("--timeout", type=float, default=90.0, metavar="SECONDS",
+                            help="seconds for Elasticsearch, and again for the Attack Map (default 90)")
+        action.add_argument("--dry-run", action="store_true",
+                            help="show what the check would do: no hold, no probe, no test event")
+        action.add_argument("-B", "--become-file", metavar="FILE", default="",
+                            help="the sudo password in a file, for a log only root may read or append to")
+        action.add_argument("-y", "--yes", action="store_true", help="start without asking")
     attackers = sub.add_parser("attackers", help="the source IPs with the most attacks, with country and "
                                                  "reputation (was mytopips.sh)")
     attackers.add_argument("--hours", type=int, default=24, help="of the last HOURS hours (default 24)")
@@ -1289,21 +1310,48 @@ HPTEST = os.path.join(CHECKS, "hptest.sh")
 PIPELINE = os.path.join(CHECKS, "attackmap_pipeline_test.sh")
 
 
-def check_command(args) -> List[str]:
-    """The script of a check with its options, the menu runs the same."""
-    if args.check_command == "honeypots":
-        command = [HPTEST]
-        if args.become_file:
-            command += ["-B", args.become_file]
-        return command + ([args.host] if args.host else [])
-    command = [PIPELINE]
-    if args.types:
-        command += ["--types", args.types]
-    if args.dry_run:
-        command.append("--dry-run")
-    if args.become_file:
-        command += ["--become-file", args.become_file]
-    return command
+def check_options(args):
+    """The options of tpot check honeypots / pipeline for tpotctl.checks.run."""
+    from tpotctl.checks import run as trun
+    only = [name.strip() for name in (args.only or "").split(",") if name.strip()]
+    if args.timeout <= 0:
+        fail("--timeout takes seconds above 0", 2)
+    if args.become_file and not os.access(args.become_file, os.R_OK):
+        fail(f"cannot read the sudo password from {args.become_file}")
+    return trun.Options(only=only, geo=not getattr(args, "no_geo", False),
+                        geo_only=args.check_command == "pipeline", keep=args.keep,
+                        become_file=os.path.abspath(args.become_file) if args.become_file else "",
+                        timeout=args.timeout, dry_run=args.dry_run)
+
+
+def check_table(report, ascii_only: bool = False):
+    """The stages per honeypot of a check, one row each, the glyphs coloured by their state."""
+    from rich import box
+    from rich.table import Table
+    from rich.text import Text
+    from tpotctl.checks import stages as tstages
+    colours = {tstages.OK: "green", tstages.FAILED: "red", tstages.NOT_APPLICABLE: "bright_black",
+               tstages.NOT_REACHED: "bright_black"}
+    shown = tstages.SENSOR_STAGES if report.tpot_type == "SENSOR" else tstages.STAGES
+    table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False,
+                  caption=" ".join(f"{tstages.SHORT_TITLES[name]}: {tstages.TITLES[name]}." for name in shown
+                                   if tstages.SHORT_TITLES[name] != tstages.TITLES[name]),
+                  caption_justify="left")
+    table.add_column("Honeypot", no_wrap=True)
+    for name in shown:
+        table.add_column(tstages.SHORT_TITLES[name], justify="center", no_wrap=True)
+    table.add_column("Note", overflow="fold", ratio=1)
+    for row in report.rows:
+        cells = [Text(row.name)]
+        for name in shown:
+            state = row.state(name)
+            cells.append(Text(tstages.glyph(state, ascii_only), style=colours[state]))
+        failed = [f"{tstages.TITLES[name]}: {row.stages[name].detail}" for name in shown
+                  if row.state(name) == tstages.FAILED and row.stages[name].detail]
+        note = failed[0] if failed else (row.stages["port"].detail if row.external else "")
+        cells.append(Text(note[:160], style="red" if failed else "bright_black"))
+        table.add_row(*cells)
+    return table
 
 
 def run_check(args) -> int:
@@ -1311,17 +1359,51 @@ def run_check(args) -> int:
         build_parser().parse_args(["check", "-h"])
         return 2
     ops.require_linux_host(f"check {args.check_command}")
-    if args.check_command == "pipeline" and not args.dry_run:
+    from tpotctl import prefs
+    from tpotctl.checks import CheckError, run as trun
+    options = check_options(args)
+    check = trun.Check(options)
+    try:
+        if options.dry_run:
+            for line in check.plan():
+                print(line)
+            return 0
+        text = trun.question(options, check.sensor)
         if not args.yes and not sys.stdin.isatty():
-            error("add --yes to inject the test events without a terminal")
-            return 2
-        if not confirm("Inject test events into the honeypot logs? They become ordinary events in Kibana and "
-                       "stay there.", args.yes):
-            return 1
-    command = check_command(args)
-    os.chdir(os.path.expanduser("~"))
-    os.execv(command[0], command)
-    return 0    # not reached
+            error(f"{text} Add --yes to start the check without a terminal.")
+            return trun.EXIT_CANNOT_ASK
+        if not args.yes:
+            say.info(text)
+            if not confirm("Start the check?", False):
+                say.info("Nothing was checked.")
+                return 1
+        report = check.run()
+    except trun.UsageError as err:
+        error(str(err))
+        return 2
+    except CheckError as err:
+        error(str(err))
+        return 1
+    console = _console()
+    console.print(check_table(report, prefs.load().icons == "ascii"))
+    if report.result == "hold failed":
+        error(f"Nothing was probed: {report.error}")
+    elif report.result == "cancelled":
+        say.warn("The check was cancelled; the hold of ewsposter is lifted.")
+    if report.cleanup.get("state") == "done":
+        say.ok(f"Removed {report.cleanup.get('deleted', 0)} test events from Elasticsearch.")
+    elif report.cleanup.get("state") == "failed":
+        error(f"The test events are still in Elasticsearch: {report.cleanup.get('detail')}")
+    if report.kibana:
+        say.hint(f"Kibana: {report.kibana}")
+    if report.written:
+        say.hint(f"Result: {report.written}")
+    if report.exit_code == 0:
+        say.ok("Every stage of every honeypot is ok.")
+    elif report.exit_code == 1:
+        say.error(f"{len(report.failed)} honeypot(s) with a failed stage: "
+                  f"{', '.join(row.name for row in report.failed) or 'the cleanup'}.")
+    return report.exit_code
 
 
 def run_attackers(args) -> int:

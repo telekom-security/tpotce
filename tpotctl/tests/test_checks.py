@@ -170,23 +170,113 @@ class ChecksCliTest(unittest.TestCase):
             code = cli.main(list(argv))
         return code, out.getvalue() + err.getvalue()
 
-    def test_honeypots_runs_hptest(self):
-        with mock.patch("os.execv") as execv, mock.patch("os.chdir"):
-            self.run_cli("check", "honeypots", "--host", "192.0.2.5")
-        command = execv.call_args[0][1]
-        self.assertEqual(command[0], HPTEST)
-        self.assertEqual(command[-1], "192.0.2.5")
+    def fake_check(self, report=None, sensor=False):
+        from tpotctl.checks import run as trun
+        check = mock.Mock()
+        check.sensor = sensor
+        check.plan.return_value = ["Run id abc123, token tpot-check-abc123", "cowrie: probe 22/tcp"]
+        check.run.return_value = report or trun.Report(run_id="abc123", rows=[])
+        return check
 
-    def test_pipeline_needs_a_yes_without_a_terminal(self):
-        with mock.patch("sys.stdin", io.StringIO("")), mock.patch("os.execv") as execv:
-            code, _text = self.run_cli("check", "pipeline")
+    def run_check(self, *argv, check=None, tty=False, answer="n"):
+        from tpotctl.checks import run as trun
+        check = check or self.fake_check()
+        stdin = mock.Mock()
+        stdin.isatty.return_value = tty
+        with mock.patch.object(trun, "Check", return_value=check) as made, mock.patch("sys.stdin", stdin), \
+                mock.patch("tpotctl.cli.ask", return_value=answer) as asked:
+            code, text = self.run_cli("check", *argv)
+        return code, text, made, check, asked
+
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_the_honeypots_check_runs_the_check_of_tpotctl(self):
+        from tpotctl.checks import run as trun
+        code, _text, made, check, _asked = self.run_check("honeypots", "-y", "--only", "cowrie,dionaea", "--keep")
+        self.assertEqual(code, 0)
+        options = made.call_args[0][0]
+        self.assertEqual((options.only, options.geo, options.geo_only, options.keep), (["cowrie", "dionaea"], True,
+                                                                                         False, True))
+        self.assertIsInstance(options, trun.Options)
+        check.run.assert_called_once_with()
+
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_the_pipeline_is_the_check_without_probes(self):
+        _code, _text, made, _check, _asked = self.run_check("pipeline", "-y", "--types", "cowrie")
+        options = made.call_args[0][0]
+        self.assertEqual((options.only, options.geo_only, options.geo), (["cowrie"], True, True))
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            from tpotctl import cli
+            cli.build_parser().parse_args(["check", "pipeline", "--no-geo"])
+
+    def test_without_a_terminal_and_without_yes_it_cannot_ask(self):
+        from tpotctl.checks import run as trun
+        code, text, _made, check, asked = self.run_check("honeypots")
         self.assertEqual(code, 2)
-        execv.assert_not_called()
+        check.run.assert_not_called()
+        asked.assert_not_called()
+        self.assertIn(trun.QUESTION, " ".join(text.split()))
+        self.assertIn("--yes", text)
 
-    def test_pipeline_dry_run_needs_no_yes(self):
-        with mock.patch("sys.stdin", io.StringIO("")), mock.patch("os.execv") as execv, mock.patch("os.chdir"):
-            self.run_cli("check", "pipeline", "--dry-run")
-        self.assertIn("--dry-run", execv.call_args[0][1])
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_the_question_names_ewsposter_the_test_events_and_the_cleanup(self):
+        from tpotctl.checks import run as trun
+        self.assertEqual(trun.QUESTION,
+                         "During the check (a few minutes) ewsposter sends nothing; real attacks from this window "
+                         "are not reported either. Test events are written to the honeypot logs and removed from "
+                         "Elasticsearch afterwards (--keep keeps them).")
+        code, text, _made, check, asked = self.run_check("honeypots", tty=True, answer="n")
+        self.assertEqual(code, 1)
+        asked.assert_called_once()
+        check.run.assert_not_called()
+        self.assertIn(trun.QUESTION, " ".join(text.split()))
+        code, _text, _made, check, _asked = self.run_check("honeypots", tty=True, answer="y")
+        self.assertEqual(code, 0)
+        check.run.assert_called_once_with()
+        self.assertIn("stay in Elasticsearch", trun.question(trun.Options(keep=True)))
+        self.assertIn("HIVE", trun.question(trun.Options(), sensor=True))
+
+    def test_the_dry_run_asks_nothing_and_touches_nothing(self):
+        code, text, _made, check, asked = self.run_check("pipeline", "--dry-run")
+        self.assertEqual(code, 0)
+        check.run.assert_not_called()
+        asked.assert_not_called()
+        self.assertIn("cowrie: probe 22/tcp", text)
+
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_the_exit_code_is_the_one_of_the_run(self):
+        from tpotctl.checks import run as trun
+        for exit_code, result in ((1, "failed"), (3, "hold failed"), (130, "cancelled")):
+            with self.subTest(exit_code=exit_code):
+                report = trun.Report(run_id="abc123", exit_code=exit_code, result=result, error="no ack")
+                code, _text, _made, _check, _asked = self.run_check("honeypots", "-y",
+                                                                    check=self.fake_check(report))
+                self.assertEqual(code, exit_code)
+
+    def test_a_honeypot_this_t_pot_does_not_run_is_a_usage_error(self):
+        from tpotctl.checks import run as trun
+        check = self.fake_check()
+        check.run.side_effect = trun.UsageError("not a honeypot of this T-Pot: nopot")
+        code, text, _made, _check, _asked = self.run_check("honeypots", "-y", "--only", "nopot", check=check)
+        self.assertEqual(code, 2)
+        self.assertIn("nopot", text)
+
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_the_table_has_a_column_per_stage(self):
+        from tpotctl.checks import run as trun, stages as tstages
+        row = tstages.Row("cowrie")
+        for name in tstages.STAGES:
+            row.set(name, tstages.OK)
+        row.set("attack_map", tstages.FAILED, "not on Redis")
+        report = trun.Report(run_id="abc123", rows=[row], exit_code=1, result="failed",
+                             cleanup={"state": "done", "deleted": 7, "detail": ""})
+        code, text, _made, _check, _asked = self.run_check("honeypots", "-y", check=self.fake_check(report))
+        self.assertEqual(code, 1)
+        for title in ("Honeypot", "Port", "Answer", "Log", "ES", "Geo", "Map", "Held", "Note"):
+            self.assertIn(title, text)
+        self.assertIn("ES: Elasticsearch.", " ".join(text.split()))
+        self.assertIn("✗", text)
+        self.assertIn("Removed 7 test events", text)
+        self.assertIn("Attack Map: not on Redis", " ".join(text.split()))
 
     @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
     def test_attackers(self):
@@ -2032,6 +2122,926 @@ class FixturesTest(unittest.TestCase):
                        "network_mode: none", 'endswith("failure")', 'COLUMN = re.compile(r"column\\d+")',
                        'event.get("src_ip") != want["src_ip"]', "start_position", "sincedb_path"):
             self.assertIn(needed, text)
+
+    def test_an_injected_event_takes_an_ipv4_test_ip_only(self):
+        for src_ip in ("2001:db8::1", "::ffff:8.8.8.8", "::1"):
+            with self.subTest(src_ip=src_ip), self.assertRaisesRegex(ValueError, "IPv4"):
+                render_fixture("cowrie", src_ip=src_ip)
+        for src_ip in run_checks.TEST_IPS:
+            self.assertIn(src_ip, render_fixture("dionaea", src_ip=src_ip))
+
+
+# ---------------------------------------------------------------------------
+# stages, cleanup, result (tpotctl.checks.stages, tpotctl.checks.run)
+# ---------------------------------------------------------------------------
+
+from tpotctl.checks import logfile, run as run_checks, stages  # noqa: E402
+
+HOST = "192.0.2.5"
+OWN = [HOST, "127.0.0.1", "::1", "172.17.0.1"]
+BASE = datetime.datetime(2026, 10, 17, 8, 0, 0, tzinfo=datetime.timezone.utc)
+ATTACKER = "203.0.113.9"
+
+
+def es_field(source, name):
+    name = name[:-len(".keyword")] if name.endswith(".keyword") else name
+    if name in source:
+        return source[name]
+    value = source
+    for part in name.split("."):
+        if not isinstance(value, dict) or part not in value:
+            return None
+        value = value[part]
+    return value
+
+
+def es_match(query, source):
+    """The part of the Elasticsearch query DSL the checks use, over one document."""
+    if "bool" in query:
+        clauses = query["bool"]
+        if not all(es_match(q, source) for q in clauses.get("filter", []) + clauses.get("must", [])):
+            return False
+        if any(es_match(q, source) for q in clauses.get("must_not", [])):
+            return False
+        should = clauses.get("should", [])
+        need = clauses.get("minimum_should_match", 0 if clauses.get("filter") or clauses.get("must") else 1)
+        return sum(1 for q in should if es_match(q, source)) >= need
+    if "term" in query:
+        (name, value), = query["term"].items()
+        return es_field(source, name) == value
+    if "terms" in query:
+        (name, values), = query["terms"].items()
+        return es_field(source, name) in values
+    if "range" in query:
+        (name, window), = query["range"].items()
+        value = es_field(source, name)
+        return value is not None and window.get("gte", "") <= value <= window.get("lte", "9999")
+    if "query_string" in query:
+        return query["query_string"]["query"].strip('"') in json.dumps(source)
+    raise AssertionError(f"query the fake does not know: {query}")
+
+
+class FakeElastic:
+    def __init__(self):
+        self.docs, self.searches, self.deletes = [], [], []
+        self.refuse_token = False
+        self.down = False
+        self.attempts = 0
+
+    def add(self, source):
+        self.docs.append({"_id": f"doc{len(self.docs)}", "_index": "logstash-2026.10.17", "_source": source})
+
+    def search(self, body):
+        self.attempts += 1
+        if self.down:
+            raise run_checks.ElasticError("Elasticsearch is not reachable (refused)")
+        if self.refuse_token and "query_string" in json.dumps(body):
+            raise run_checks.ElasticError("Elasticsearch answered 400 too many fields", 400)
+        self.searches.append(body)
+        hits = sorted((d for d in self.docs if es_match(body["query"], d["_source"])),
+                      key=lambda d: d["_source"].get("@timestamp", ""))
+        return {"hits": {"hits": hits[:body.get("size", 10)]}}
+
+    def refresh(self):
+        pass
+
+    def delete_by_query(self, body):
+        if self.refuse_token and "query_string" in json.dumps(body):
+            raise run_checks.ElasticError("Elasticsearch answered 400 too many fields", 400)
+        self.deletes.append(body)
+        keep = [d for d in self.docs if not es_match(body["query"], d["_source"])]
+        deleted, self.docs = len(self.docs) - len(keep), keep
+        return deleted
+
+
+class FakeFiles:
+    def __init__(self, logs):
+        self.logs = {rel: bytearray(text) for rel, text in logs.items()}
+        self.appended = []
+        self.on_append = None
+
+    def size(self, rel):
+        return len(self.logs[rel]) if rel in self.logs else None
+
+    def read_from(self, rel, offset):
+        data = bytes(self.logs[rel])
+        return data[offset:] if len(data) >= offset else data
+
+    def append(self, rel, text):
+        if rel not in self.logs:
+            raise CheckError(f"{rel} does not exist")
+        self.logs[rel] += text.encode()
+        self.appended.append((rel, text))
+        if self.on_append:
+            self.on_append(rel, text)
+
+    def listing(self, rel_dir, pattern):
+        return sorted(rel for rel in self.logs if os.path.dirname(rel) == rel_dir
+                      and fnmatch.fnmatch(os.path.basename(rel), pattern))
+
+
+class FakeHold:
+    def __init__(self, world, enter=None, lose_after=None, acked=True, note=""):
+        self.world, self.enter_error, self.lose_after = world, enter, lose_after
+        self.acked, self.note, self.checks = acked, note, 0
+
+    def __enter__(self):
+        self.world.order.append("hold")
+        if self.enter_error:
+            raise self.enter_error
+        return self
+
+    def __exit__(self, *exc):
+        self.world.order.append("release")
+        return False
+
+    def check(self):
+        self.checks += 1
+        if self.lose_after is not None and self.checks > self.lose_after:
+            raise HoldError(ewshold.MARKER_GONE)
+
+
+class FakeListener:
+    def __init__(self, world):
+        self.world, self.error, self.started, self.stopped = world, "", False, False
+
+    def start(self):
+        self.started = True
+
+    def stop(self):
+        self.stopped = True
+
+    def lines(self, which):
+        if which in self.world.map_missing:
+            return []
+        return [json.dumps({"src_ip": d["_source"]["src_ip"], "src_port": d["_source"]["src_port"]})
+                for d in self.world.es.docs if d["_source"]["src_ip"] in stages.TEST_IPS]
+
+
+def honeypot(name, ports=None, running=True, group="honeypots"):
+    return inventory.Honeypot(name, "nsm" if name in ("p0f", "suricata") else group, name,
+                              [Port(22, 22)] if ports is None else ports, running,
+                              name in inventory.EXTERNAL, inventory.LOGS[name][0],
+                              "/data/" + inventory.LOGS[name][1])
+
+
+class World:
+    """A T-Pot as far as a check sees it: logs, Elasticsearch with a Logstash that indexes what the
+    honeypots and the injection write, the Attack Map, a hold, and a clock that runs on each sleep."""
+
+    def __init__(self, test, honeypots, tpot_type="HIVE", hold=None, results=None, probe_logs=True,
+                 probe_docs=True, map_missing=(), sleep_hook=None, **options):
+        self.test, self.honeypots = test, honeypots
+        self.clock, self.order, self.said, self.marks, self.sleeps = 0.0, [], [], [], []
+        self.es, self.map_missing = FakeElastic(), set(map_missing)
+        self.results, self.probe_logs, self.probe_docs = results or {}, probe_logs, probe_docs
+        self.sleep_hook = sleep_hook
+        logs = {fixtures.log_file(h.name): b"an older line\n" for h in honeypots}
+        self.files = FakeFiles(logs)
+        self.files.on_append = self.logstash
+        self.hold = hold or FakeHold(self)
+        self.listener = None
+        folder = tempfile.mkdtemp(prefix="tpot-check-run-")
+        test.addCleanup(shutil.rmtree, folder)
+        self.result_file = os.path.join(folder, "checks", "last.json")
+        # a real attack in the window of the check: it must survive the cleanup
+        self.es.add({"type": "Cowrie", "src_ip": ATTACKER, "src_port": 40001, "@timestamp": stages.iso(BASE)})
+        self.check = run_checks.Check(
+            run_checks.Options(**options), folder,
+            env={"TPOT_TYPE": tpot_type, "TPOT_DATA_PATH": os.path.join(folder, "data")},
+            honeypots=lambda: list(self.honeypots),
+            compose_names=["tpotinit", "ewsposter", "elasticsearch", "map_redis", "map_web"] + [h.name for h in honeypots],
+            hold=lambda data, names: self.hold, run_probes=self.run_probes, elastic=self.es, files=self.files,
+            listener=self.make_listener, host=lambda: HOST, addresses=lambda host: list(OWN), run_id="abc123",
+            log=lambda kind, text: self.said.append((kind, text)), mark=self.marks.append,
+            clock=lambda: self.clock, sleep=self.sleep, now=self.now, web_port=64297,
+            result_file=self.result_file)
+
+    def now(self):
+        return BASE + datetime.timedelta(seconds=self.clock)
+
+    def sleep(self, seconds):
+        self.clock += seconds
+        self.sleeps.append(seconds)
+        if self.sleep_hook:
+            self.sleep_hook(self)
+
+    def make_listener(self, folder, seconds):
+        shutil.rmtree(folder, ignore_errors=True)
+        self.listener = FakeListener(self)
+        return self.listener
+
+    def run_probes(self, host, honeypots, token, check=None):
+        self.order.append("probes")
+        self.test.assertEqual(host, HOST)
+        results = {}
+        for index, target in enumerate(honeypots):
+            if target.external:
+                continue
+            check()
+            if not target.running:
+                results[target.name] = probes.ProbeResult("skipped", False, "not running", answer_checked=False)
+                continue
+            port = 40100 + index
+            result = self.results.get(target.name) or probes.ProbeResult(
+                "open", True, "22/tcp: answered", token_sent=True, src_ports=[port])
+            results[target.name] = result
+            line = {"src_ip": host, "src_port": port, "user": token if result.token_sent else "-"}
+            if self.probe_logs and fixtures.log_file(target.name) in self.files.logs:
+                self.files.logs[fixtures.log_file(target.name)] += (json.dumps(line) + "\n").encode()
+            if self.probe_docs:
+                self.es.add(dict(line, type=target.logstash_type, **{"@timestamp": stages.iso(self.now())}))
+        return results
+
+    def logstash(self, rel, text):
+        self.order.append("inject")
+        for row in self.check.rows.values():
+            if row.geo is not None and row.geo.file == rel:
+                self.es.add({"type": row.logstash_type, "src_ip": row.geo.src_ip, "src_port": row.geo.src_port,
+                             "geoip": {"latitude": 37.751, "longitude": -97.822, "country_name": "United States"},
+                             "tags": [], "@timestamp": stages.iso(self.now())})
+
+    def run(self):
+        report = self.check.run()
+        self.order.append(f"exit {report.exit_code}")
+        return report
+
+    def last(self):
+        with open(self.result_file, encoding="utf-8") as handle:
+            return json.load(handle)
+
+
+class StagesTest(unittest.TestCase):
+
+    def result(self, **fields):
+        fields.setdefault("token_sent", False)
+        return probes.ProbeResult("open", True, "answered", **fields)
+
+    def test_the_port_and_the_answer(self):
+        cowrie = honeypot("cowrie")
+        cases = [(probes.ProbeResult("open", True, "ok"), stages.OK, stages.OK),
+                 (probes.ProbeResult("open", False, "no banner"), stages.OK, stages.FAILED),
+                 (probes.ProbeResult("open", False, "port only", answer_checked=False), stages.OK,
+                  stages.NOT_APPLICABLE),
+                 (probes.ProbeResult("closed", False, "refused"), stages.FAILED, stages.NOT_REACHED),
+                 (probes.ProbeResult("not_reached", False, "time ran out"), stages.NOT_REACHED, stages.NOT_REACHED),
+                 (probes.ProbeResult("skipped", False, "no published port", answer_checked=False),
+                  stages.NOT_APPLICABLE, stages.NOT_APPLICABLE),
+                 (probes.ProbeResult("skipped", False, "probe failed: boom", answer_checked=False), stages.FAILED,
+                  stages.NOT_REACHED)]
+        for result, port, answer in cases:
+            with self.subTest(detail=result.detail):
+                stage = stages.port_stage(cowrie, result)
+                self.assertEqual((stage.state, stages.answer_stage(result, stage).state), (port, answer))
+        self.assertEqual(stages.port_stage(honeypot("cowrie", running=False), None).state, stages.FAILED)
+        self.assertEqual(stages.port_stage(honeypot("honeytrap"), None).detail, inventory.EXTERNAL_HINT)
+
+    def test_a_log_line_by_the_token_by_address_and_port_or_by_the_time_window(self):
+        token = TOKEN
+        lines = ['{"src_ip": "198.51.100.1", "src_port": 40100, "user": "x"}',
+                 '{"src_ip": "192.0.2.55", "src_port": 40100}',
+                 '{"src_ip": "::ffff:192.0.2.5", "src_port": 40100}']
+        self.assertEqual(stages.match_line("dionaea", self.result(src_ports=[40100]), lines, token, OWN), lines[2])
+        self.assertEqual(stages.match_line("dionaea", self.result(src_ports=[40101]), lines, token, OWN), "")
+        with_token = lines + [f'{{"user": "{token}"}}']
+        self.assertEqual(stages.match_line("cowrie", self.result(token_sent=True), with_token, token, OWN),
+                         with_token[-1])
+        # the injected geo event carries the token too: it never counts as the probe's line
+        self.assertEqual(stages.match_line("cowrie", self.result(token_sent=True), with_token, token, OWN,
+                                           skip=[with_token[-1]]), "")
+        self.assertEqual(stages.match_line("dicompot", self.result(src_ports=[]), ["", "Connection from x"],
+                                           token, OWN), "Connection from x")
+
+    def test_geoip(self):
+        self.assertEqual(stages.geo_stage(None, 90).state, stages.FAILED)
+        failed = {"_source": {"tags": ["_geoip_lookup_failure"], "geoip": {}}}
+        self.assertIn("_geoip_lookup_failure", stages.geo_stage(failed, 90).detail)
+        self.assertEqual(stages.geo_stage({"_source": {"geoip": {"longitude": 1}}}, 90).state, stages.FAILED)
+        found = {"_source": {"geoip": {"latitude": 37.751, "longitude": -97.822, "country_name": "United States"},
+                             "ip_rep": "known attacker"}}
+        stage = stages.geo_stage(found, 90)
+        self.assertEqual(stage.state, stages.OK)
+        self.assertIn("United States", stage.detail)
+        self.assertEqual(stages.location(found), {"lat": 37.751, "lon": -97.822, "country": "United States",
+                                                  "ip_rep": "known attacker"})
+
+    def test_the_attack_map_by_ip_and_port(self):
+        lines = ['message', 'attack-map-production', '{"src_ip": "8.8.8.8", "src_port": 51234, "dst_port": 22}']
+        self.assertTrue(stages.seen(lines, "8.8.8.8", 51234))
+        self.assertFalse(stages.seen(lines, "8.8.8.8", 5123))
+        self.assertFalse(stages.seen(lines, "8.8.4.4", 51234))
+        self.assertFalse(stages.on_the_map(honeypot("p0f")))
+        self.assertTrue(stages.on_the_map(honeypot("cowrie")))
+
+    def test_the_cleanup_query(self):
+        end = BASE + datetime.timedelta(minutes=4, seconds=3, microseconds=500000)
+        start = BASE + datetime.timedelta(microseconds=750000)
+        self.assertEqual(stages.cleanup_query(start, end, OWN, TOKEN), {"query": {"bool": {
+            "filter": [{"range": {"@timestamp": {"gte": "2026-10-17T08:00:00.000Z",
+                                                 "lte": "2026-10-17T08:05:03.500Z"}}}],
+            "should": [{"terms": {"src_ip.keyword": ["127.0.0.1", "172.17.0.1", "192.0.2.5", "208.67.222.222",
+                                                     "4.2.2.2", "8.8.4.4", "8.8.8.8", "::1"]}},
+                       {"query_string": {"query": f'"{TOKEN}"', "lenient": True}}],
+            "minimum_should_match": 1}}})
+        self.assertNotIn("query_string", json.dumps(stages.cleanup_query(start, end, OWN, TOKEN, with_token=False)))
+
+    def test_the_cleanup_leaves_a_real_attack_alone(self):
+        es = FakeElastic()
+        inside, after = stages.iso(BASE + datetime.timedelta(minutes=1)), stages.iso(BASE + datetime.timedelta(hours=1))
+        es.add({"type": "Cowrie", "src_ip": ATTACKER, "src_port": 40100, "@timestamp": inside})       # real
+        es.add({"type": "Cowrie", "src_ip": HOST, "src_port": 40100, "@timestamp": after})            # later
+        es.add({"type": "Cowrie", "src_ip": HOST, "src_port": 40100, "@timestamp": inside})           # probe
+        es.add({"type": "Cowrie", "src_ip": "8.8.8.8", "src_port": 51234, "@timestamp": inside})      # geo
+        es.add({"type": "Galah", "src_ip": "10.0.0.9", "user_agent": f"x {TOKEN}", "@timestamp": inside})
+        deleted = es.delete_by_query(stages.cleanup_query(BASE, BASE + datetime.timedelta(minutes=5), OWN, TOKEN))
+        self.assertEqual(deleted, 3)
+        self.assertEqual(sorted((d["_source"]["src_ip"], d["_source"]["@timestamp"]) for d in es.docs),
+                         [(HOST, after), (ATTACKER, inside)])
+
+    def test_the_kibana_link(self):
+        link = stages.kibana_link(HOST, 64297, TOKEN, [HOST, "8.8.8.8"], BASE, BASE + datetime.timedelta(minutes=2))
+        self.assertTrue(link.startswith("https://192.0.2.5:64297/kibana/app/discover#/?_g=(time:(from:"), link)
+        self.assertIn("2026-10-17T08:00:00.000Z", link)
+        self.assertIn("2026-10-17T08:03:00.000Z", link)
+        self.assertIn(TOKEN, link)
+        self.assertNotIn(" ", link)
+        self.assertTrue(stages.kibana_link("2001:db8::5", 64297, TOKEN, [], BASE, BASE).startswith("https://[2001:db8::5]:"))
+
+
+class RunTest(unittest.TestCase):
+
+    HONEYPOTS = ("cowrie", "dionaea", "honeytrap", "p0f")
+
+    def world(self, names=HONEYPOTS, **options):
+        return World(self, [honeypot(name) for name in names], **options)
+
+    def test_every_honeypot_from_the_port_to_the_attack_map(self):
+        world = self.world()
+        report = world.run()
+        self.assertEqual(report.exit_code, 0, [(r.name, r.stages) for r in report.rows])
+        rows = {row.name: row for row in report.rows}
+        self.assertEqual({name: rows["cowrie"].state(name) for name in stages.STAGES},
+                         {name: stages.OK for name in stages.STAGES})
+        self.assertIn(TOKEN, rows["cowrie"].log_line)
+        self.assertTrue(rows["cowrie"].es_id)
+        # the n-th honeypot: the test IPs in turn, marker port 51234 + n
+        self.assertEqual((rows["cowrie"].geo.src_ip, rows["cowrie"].geo.src_port), ("8.8.8.8", 51234))
+        self.assertEqual((rows["dionaea"].geo.src_ip, rows["dionaea"].geo.src_port), ("208.67.222.222", 51235))
+        self.assertEqual(rows["cowrie"].geo.location["country"], "United States")
+        # honeytrap only sees traffic from outside: no probe, the geo event all the same
+        self.assertEqual([rows["honeytrap"].state(name) for name in stages.STAGES],
+                         [stages.NOT_APPLICABLE] * 4 + [stages.OK, stages.OK, stages.OK])
+        # a passive tool writes its log without a pause: no test event in it
+        self.assertEqual([rows["p0f"].state(name) for name in stages.STAGES[:6]], [stages.NOT_APPLICABLE] * 6)
+        self.assertIsNone(rows["p0f"].geo)
+        # the order: the hold, the probes, the geo events, the cleanup, the end of the hold
+        self.assertEqual(world.order[:2], ["hold", "probes"])
+        self.assertEqual(world.order[-2:], ["release", "exit 0"])
+        self.assertLess(world.order.index("probes"), world.order.index("inject"))
+        self.assertEqual(len(world.es.deletes), 1)
+        self.assertEqual(report.cleanup["state"], "done")
+        # the probes (from this host) and the geo events (test IPs) are gone, the real attack stays
+        self.assertEqual([d["_source"]["src_ip"] for d in world.es.docs], [ATTACKER])
+        self.assertEqual(report.cleanup["deleted"], 2 + 3)
+        self.assertTrue(world.listener.started and world.listener.stopped)
+        self.assertIn("@@tpot phase hold Holding ewsposter", world.marks)
+        self.assertIn("@@tpot phase cleanup Removing the test events from Elasticsearch", world.marks)
+        # every injected line is a fixture with a test IP, in the honeypot's own log
+        for rel, text in world.files.appended:
+            self.assertTrue(text.endswith("\n") and text.count("\n") == 1)
+            self.assertTrue(any(ip in text for ip in stages.TEST_IPS), text)
+            self.assertNotIn(HOST, text)
+
+    def test_last_json(self):
+        world = self.world(("cowrie",))
+        world.run()
+        last = world.last()
+        self.assertEqual(oct(os.stat(world.result_file).st_mode & 0o777), "0o600")
+        for key in ("version", "run_id", "token", "mode", "started", "ended", "host", "tpot_type", "options",
+                    "exit_code", "result", "error", "ewsposter", "cleanup", "kibana", "stages", "titles",
+                    "honeypots"):
+            self.assertIn(key, last)
+        self.assertEqual((last["version"], last["run_id"], last["token"], last["mode"], last["result"]),
+                         (1, "abc123", TOKEN, "honeypots", "ok"))
+        self.assertEqual(last["stages"], list(stages.STAGES))
+        self.assertEqual(last["started"], "2026-10-17T08:00:00.000Z")
+        cowrie = last["honeypots"][0]
+        self.assertEqual(cowrie["name"], "cowrie")
+        self.assertEqual(set(cowrie["stages"]), set(stages.STAGES))
+        self.assertEqual(cowrie["stages"]["port"], {"state": "ok", "detail": "22/tcp: answered"})
+        self.assertTrue(cowrie["es_id"])
+        self.assertEqual(cowrie["geo"]["src_ip"], "8.8.8.8")
+        self.assertIn(TOKEN, cowrie["geo"]["line"])
+        self.assertEqual(last["ewsposter"]["state"], "held")
+        self.assertIn(TOKEN, last["kibana"])
+        self.assertIn("2026-10-17T08:00:00.000Z", last["kibana"])
+
+    def test_keep_leaves_the_events(self):
+        world = self.world(("cowrie",), keep=True)
+        report = world.run()
+        self.assertEqual(report.exit_code, 0)
+        self.assertEqual(world.es.deletes, [])
+        self.assertEqual(report.cleanup["state"], "kept")
+        self.assertEqual(len(world.es.docs), 3)
+
+    def test_the_cleanup_body_is_the_one_of_the_run(self):
+        world = self.world(("cowrie",))
+        report = world.run()
+        self.assertEqual(world.es.deletes, [stages.cleanup_query(report.started, report.ended, OWN, TOKEN)])
+        window = world.es.deletes[0]["query"]["bool"]["filter"][0]["range"]["@timestamp"]
+        self.assertEqual(window["gte"], "2026-10-17T08:00:00.000Z")
+        self.assertEqual(window["lte"], stages.iso(report.ended + datetime.timedelta(minutes=1)))
+
+    def test_a_sensor_runs_the_first_three_stages(self):
+        world = self.world(("cowrie", "honeytrap"), tpot_type="SENSOR")
+        report = world.run()
+        self.assertEqual(report.exit_code, 0)
+        cowrie = {row.name: row for row in report.rows}["cowrie"]
+        self.assertEqual([cowrie.state(name) for name in stages.SENSOR_STAGES], [stages.OK] * 3)
+        for name in stages.STAGES[3:]:
+            self.assertEqual((cowrie.state(name), cowrie.stages[name].detail), (stages.NOT_APPLICABLE,
+                                                                                 stages.ON_THE_HIVE))
+        self.assertEqual((world.es.searches, world.es.deletes, world.files.appended), ([], [], []))
+        self.assertIsNone(world.listener)
+        self.assertEqual(report.cleanup["state"], "skipped")
+        self.assertEqual(world.last()["tpot_type"], "SENSOR")
+
+    def test_a_hold_that_is_not_confirmed_probes_nothing(self):
+        world = self.world(("cowrie",))
+        world.hold = FakeHold(world, enter=HoldError("ewsposter did not confirm the hold within 180 s"))
+        report = world.run()
+        self.assertEqual(report.exit_code, 3)
+        self.assertEqual(world.order, ["hold", "exit 3"])
+        self.assertEqual((world.files.appended, world.es.deletes), ([], []))
+        self.assertIn("@@tpot fail hold", world.marks)
+        self.assertEqual(world.last()["result"], "hold failed")
+        world = self.world(("cowrie",))
+        world.hold = FakeHold(world, enter=CheckError("another check is running"))
+        self.assertEqual(world.run().exit_code, 3)
+        self.assertNotIn("probes", world.order)
+
+    def test_a_stage_that_fails_is_exit_1(self):
+        world = self.world(("cowrie", "dionaea"), probe_docs=False, map_missing=("ws",))
+        report = world.run()
+        self.assertEqual(report.exit_code, 1)
+        rows = {row.name: row for row in report.rows}
+        self.assertEqual(rows["cowrie"].state("elasticsearch"), stages.FAILED)
+        self.assertIn("within 90 s", rows["cowrie"].stages["elasticsearch"].detail)
+        self.assertEqual(rows["cowrie"].state("attack_map"), stages.FAILED)
+        self.assertEqual(rows["cowrie"].stages["attack_map"].detail, "on Redis, not on the WebSocket")
+        self.assertIn("@@tpot fail stages", world.marks)
+        self.assertTrue(any(mark.startswith("@@tpot warn stages cowrie ") for mark in world.marks))
+        self.assertEqual(world.last()["result"], "failed")
+
+    def test_the_geo_line_is_not_taken_for_the_probe_line(self):
+        world = self.world(("cowrie",), probe_logs=False)
+        report = world.run()
+        cowrie = report.rows[0]
+        self.assertEqual(cowrie.state("log"), stages.FAILED)
+        self.assertEqual(cowrie.log_line, "")
+
+    def test_ctrl_c_cleans_up_and_ends_the_hold(self):
+        world = self.world(("cowrie",))
+
+        def interrupted(host, honeypots, token, check=None):
+            world.order.append("probes")
+            world.es.add({"type": "Cowrie", "src_ip": HOST, "src_port": 40100, "@timestamp": stages.iso(BASE)})
+            raise KeyboardInterrupt
+
+        world.check._run_probes = interrupted
+        report = world.run()
+        self.assertEqual(report.exit_code, 130)
+        self.assertEqual(world.order, ["hold", "probes", "release", "exit 130"])
+        self.assertEqual(len(world.es.deletes), 1)
+        self.assertEqual([d["_source"]["src_ip"] for d in world.es.docs], [ATTACKER])
+        self.assertEqual(world.last()["result"], "cancelled")
+
+    @unittest.skipUnless(hasattr(signal, "SIGTERM") and hasattr(signal, "SIGHUP"), "no SIGTERM / SIGHUP")
+    def test_term_and_hup_end_the_hold_and_the_handlers_come_back(self):
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            with self.subTest(signal=signum):
+                before = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGHUP),
+                          signal.getsignal(signal.SIGINT))
+                world = self.world(("cowrie",))
+                probe = world.run_probes
+
+                def signalled(*args, s=signum, **kwargs):
+                    results = probe(*args, **kwargs)
+                    os.kill(os.getpid(), s)
+                    time.sleep(0.5)
+                    return results
+
+                world.check._run_probes = signalled
+                report = world.run()
+                self.assertEqual(report.exit_code, 128 + signum)
+                self.assertEqual(world.order[-2:], ["release", f"exit {128 + signum}"])
+                self.assertEqual(len(world.es.deletes), 1)
+                self.assertEqual((signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGHUP),
+                                  signal.getsignal(signal.SIGINT)), before)
+
+    def test_a_signal_during_the_end_does_not_cut_it_short(self):
+        world = self.world(("cowrie",))
+        delete = world.es.delete_by_query
+
+        def deleting(body):
+            os.kill(os.getpid(), signal.SIGTERM)
+            return delete(body)
+
+        world.es.delete_by_query = deleting
+        report = world.run()
+        self.assertEqual(world.order[-2:], ["release", "exit 143"])
+        self.assertEqual(report.cleanup["state"], "done")
+
+    def test_a_hold_lost_during_the_check_stops_it(self):
+        world = self.world(("cowrie", "dionaea"))
+        world.hold = FakeHold(world, lose_after=1)
+        report = world.run()
+        self.assertEqual(report.exit_code, 1)
+        self.assertEqual(report.ewsposter["state"], "failed")
+        for row in report.rows:
+            self.assertEqual(row.state("ewsposter"), stages.FAILED)
+        self.assertEqual(world.order[-2:], ["release", "exit 1"])
+
+    def test_ewsposter_that_does_not_run_here(self):
+        world = self.world(("cowrie",))
+        world.hold = FakeHold(world, acked=False, note=ewshold.NOT_HERE)
+        report = world.run()
+        self.assertEqual(report.exit_code, 0)
+        self.assertEqual(report.rows[0].state("ewsposter"), stages.NOT_APPLICABLE)
+        self.assertEqual(report.ewsposter["state"], "not_here")
+
+    def test_the_pipeline_has_no_probes(self):
+        world = self.world(("cowrie", "honeytrap"), geo_only=True)
+        report = world.run()
+        self.assertEqual(report.exit_code, 0)
+        self.assertNotIn("probes", world.order)
+        for row in report.rows:
+            self.assertEqual([row.state(name) for name in stages.STAGES[:4]], [stages.NOT_APPLICABLE] * 4)
+            self.assertEqual(row.state("geoip"), stages.OK)
+            self.assertEqual(row.state("attack_map"), stages.OK)
+        self.assertEqual(world.last()["mode"], "pipeline")
+
+    def test_no_geo_injects_nothing(self):
+        world = self.world(("cowrie",), geo=False)
+        report = world.run()
+        self.assertEqual(report.exit_code, 0)
+        self.assertEqual(world.files.appended, [])
+        self.assertEqual((report.rows[0].state("geoip"), report.rows[0].state("attack_map")),
+                         (stages.NOT_APPLICABLE, stages.NOT_APPLICABLE))
+
+    def test_only(self):
+        world = self.world(("cowrie", "dionaea"), only=["dionaea"])
+        report = world.run()
+        self.assertEqual([row.name for row in report.rows], ["dionaea"])
+        world = self.world(("cowrie",), only=["nopot"])
+        with self.assertRaises(run_checks.UsageError):
+            world.run()
+
+    def test_a_honeypot_that_does_not_run(self):
+        world = self.world(("cowrie",))
+        world.honeypots = [honeypot("cowrie", running=False)]
+        report = world.run()
+        self.assertEqual(report.exit_code, 1)
+        row = report.rows[0]
+        self.assertEqual(row.stages["port"].detail, "not running (container cowrie)")
+        self.assertEqual(row.state("geoip"), stages.NOT_REACHED)
+        self.assertEqual(world.files.appended, [])
+
+    def test_a_knock_may_leave_no_trace(self):
+        knock = probes.ProbeResult("open", False, "22/tcp: open (only knocked)", answer_checked=False,
+                                   src_ports=[40100])
+        world = self.world(("beelzebub",), results={"beelzebub": knock}, probe_logs=False, probe_docs=False)
+        report = world.run()
+        self.assertEqual(report.exit_code, 0, report.rows[0].stages)
+        row = report.rows[0]
+        self.assertEqual([row.state(name) for name in ("port", "answer", "log", "elasticsearch")],
+                         [stages.OK, stages.NOT_APPLICABLE, stages.NOT_APPLICABLE, stages.NOT_APPLICABLE])
+
+    def test_dicompot_by_its_time_window(self):
+        echo = probes.ProbeResult("open", True, "11112/tcp: C-ECHO answered", src_ports=[])
+        world = self.world(("dicompot",), results={"dicompot": echo})
+        report = world.run()
+        self.assertEqual(report.rows[0].state("log"), stages.OK)
+        self.assertEqual(report.rows[0].state("elasticsearch"), stages.OK)
+
+    def test_an_elasticsearch_without_the_token_query_is_asked_by_source(self):
+        world = self.world(("cowrie",))
+        world.es.refuse_token = True
+        report = world.run()
+        self.assertEqual(report.exit_code, 0, report.rows[0].stages)
+        self.assertNotIn("query_string", json.dumps(world.es.deletes))
+        self.assertTrue(any("token query" in text for _kind, text in world.said))
+
+    def test_elasticsearch_down(self):
+        world = self.world(("cowrie", "dionaea"))
+        world.es.down = True
+        report = world.run()
+        self.assertEqual(report.exit_code, 1)
+        for row in report.rows:
+            self.assertIn("not reachable", row.stages["elasticsearch"].detail)
+            self.assertIn("not reachable", row.stages["geoip"].detail)
+        # one question per round while Elasticsearch does not answer, not one per honeypot and stage
+        rounds = world.sleeps.count(run_checks.POLL) + 1
+        self.assertEqual(world.es.attempts, rounds)
+        # the settle before the cleanup
+        self.assertIn(run_checks.END_SETTLE, world.sleeps)
+
+    def test_a_missing_log_injects_nothing(self):
+        world = self.world(("cowrie",))
+        del world.files.logs["cowrie/log/cowrie.json"]
+        report = world.run()
+        self.assertEqual(report.rows[0].state("geoip"), stages.FAILED)
+        self.assertIn("does not exist", report.rows[0].stages["geoip"].detail)
+
+    def test_the_dry_run_touches_nothing(self):
+        world = self.world(("cowrie", "honeytrap"), dry_run=True)
+        lines = world.check.plan()
+        self.assertEqual(world.order, [])
+        self.assertEqual(world.files.appended, [])
+        self.assertTrue(any(line.startswith("cowrie geo event -> cowrie/log/cowrie.json: ") for line in lines))
+        self.assertTrue(any("_delete_by_query" in line for line in lines))
+        self.assertFalse(os.path.exists(world.result_file))
+
+
+class SignalsTest(unittest.TestCase):
+
+    @unittest.skipUnless(hasattr(signal, "SIGHUP"), "no SIGHUP")
+    def test_a_shield_notes_a_signal(self):
+        handler = run_checks.Signals()
+        with handler:
+            with handler.shield():
+                os.kill(os.getpid(), signal.SIGHUP)
+                time.sleep(0.01)
+            self.assertEqual(handler.received, [signal.SIGHUP])
+        self.assertEqual(signal.getsignal(signal.SIGHUP), signal.SIG_DFL)
+
+    @unittest.skipUnless(hasattr(signal, "SIGHUP"), "no SIGHUP")
+    def test_one_exception_per_run(self):
+        handler = run_checks.Signals()
+        with handler:
+            with self.assertRaises(run_checks.Terminated):
+                os.kill(os.getpid(), signal.SIGHUP)
+                time.sleep(0.5)
+            os.kill(os.getpid(), signal.SIGHUP)      # the end of the run goes on
+            time.sleep(0.01)
+            self.assertEqual(handler.received, [signal.SIGHUP, signal.SIGHUP])
+
+    def test_outside_the_main_thread_nothing_changes(self):
+        seen = []
+
+        def thread():
+            with run_checks.Signals() as handler:
+                seen.append(handler._previous)
+
+        worker = threading.Thread(target=thread)
+        worker.start()
+        worker.join()
+        self.assertEqual(seen, [{}])
+
+
+@unittest.skipUnless(getattr(os, "O_NOFOLLOW", 0) and os.open in getattr(os, "supports_dir_fd", ()),
+                     "no folder descriptors here")
+class LogFileTest(unittest.TestCase):
+
+    def setUp(self):
+        self.data = tempfile.mkdtemp(prefix="tpot-logfile-")
+        self.addCleanup(shutil.rmtree, self.data)
+        os.makedirs(os.path.join(self.data, "cowrie", "log"))
+        self.log = os.path.join(self.data, "cowrie", "log", "cowrie.json")
+        with open(self.log, "w", encoding="utf-8") as out:
+            out.write("one\n")
+
+    def test_append_and_read(self):
+        logfile.append(self.data, "cowrie/log/cowrie.json", b"two\n")
+        self.assertEqual(logfile.size(self.data, "cowrie/log/cowrie.json"), 8)
+        self.assertEqual(logfile.read_from(self.data, "cowrie/log/cowrie.json", 4), b"two\n")
+        # shorter than the offset: rotated, read from the start
+        self.assertEqual(logfile.read_from(self.data, "cowrie/log/cowrie.json", 100), b"one\ntwo\n")
+
+    def test_nothing_is_created(self):
+        with self.assertRaises(FileNotFoundError):
+            logfile.append(self.data, "cowrie/log/new.json", b"x\n")
+        self.assertFalse(os.path.exists(os.path.join(self.data, "cowrie", "log", "new.json")))
+        self.assertIsNone(logfile.size(self.data, "cowrie/log/new.json"))
+        self.assertIsNone(logfile.size(self.data, "nopot/log/x.json"))
+
+    def test_links_are_refused(self):
+        target = os.path.join(self.data, "elsewhere")
+        with open(target, "w", encoding="utf-8") as out:
+            out.write("keep\n")
+        os.symlink(target, os.path.join(self.data, "cowrie", "log", "link.json"))
+        with self.assertRaises(logfile.LogFileError):
+            logfile.append(self.data, "cowrie/log/link.json", b"x\n")
+        os.link(target, os.path.join(self.data, "cowrie", "log", "hard.json"))
+        with self.assertRaises(logfile.LogFileError):
+            logfile.append(self.data, "cowrie/log/hard.json", b"x\n")
+        os.symlink(os.path.join(self.data, "cowrie"), os.path.join(self.data, "linked"))
+        with self.assertRaises(logfile.LogFileError):
+            logfile.append(self.data, "linked/log/cowrie.json", b"x\n")
+        with open(target, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "keep\n")
+        for rel in ("../x", "/etc/passwd", "cowrie//log", "", "cowrie/./log"):
+            with self.subTest(rel=rel), self.assertRaises(logfile.LogFileError):
+                logfile.append(self.data, rel, b"x\n")
+        self.assertEqual(logfile.listing(self.data, "cowrie/log", "*.json"), ["cowrie/log/cowrie.json",
+                                                                              "cowrie/log/hard.json"])
+
+    def test_the_files_of_a_check_as_the_user(self):
+        files = run_checks.Files(self.data, lambda argv: self.fail(f"no sudo needed: {argv}"))
+        watch = run_checks.LogWatch(files)
+        watch.mark("cowrie/log/cowrie.json")
+        files.append("cowrie/log/cowrie.json", "two\n")
+        self.assertEqual(watch.new_lines("cowrie/log/cowrie.json"), ["two"])
+        self.assertEqual(files.listing("cowrie/log", "*.json"), ["cowrie/log/cowrie.json"])
+        with self.assertRaises(CheckError):
+            os.symlink(self.log, os.path.join(self.data, "cowrie", "log", "link.json"))
+            files.append("cowrie/log/link.json", "x\n")
+
+    def test_the_script_appends_its_argument(self):
+        result = subprocess.run([sys.executable, "-I", logfile.__file__, "append", self.data,
+                                 "cowrie/log/cowrie.json", "two\n"], capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = subprocess.run([sys.executable, "-I", logfile.__file__, "read", self.data,
+                                 "cowrie/log/cowrie.json", "0"], capture_output=True)
+        self.assertEqual(result.stdout, b"one\ntwo\n")
+        result = subprocess.run([sys.executable, "-I", logfile.__file__, "size", self.data, "cowrie/log/none"],
+                                capture_output=True, universal_newlines=True)
+        self.assertEqual(result.stdout, "-\n")
+
+
+class FilesTest(unittest.TestCase):
+
+    def test_root_through_sudo_where_the_user_may_not(self):
+        calls = []
+
+        def sudo_run(argv, **kwargs):
+            stdin = kwargs.get("stdin")
+            calls.append((argv, getattr(stdin, "name", stdin)))
+            return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+        folder = tempfile.mkdtemp(prefix="tpot-become-")
+        self.addCleanup(shutil.rmtree, folder)
+        password = os.path.join(folder, "pw")
+        with open(password, "w", encoding="utf-8") as out:
+            out.write("s3cret-password\n")
+        files = run_checks.Files("/data", run_checks.Sudo(password, run=sudo_run))
+        with mock.patch.object(logfile, "append", side_effect=PermissionError(13, "denied")):
+            files.append("cowrie/log/cowrie.json", "line\n")
+        argv, stdin = calls[-1]
+        self.assertEqual(argv[:4], ["sudo", "-S", "-p", ""])
+        self.assertEqual(argv[5:], ["-I", os.path.abspath(logfile.__file__), "append", "/data",
+                                    "cowrie/log/cowrie.json", "line\n"])
+        self.assertEqual(stdin, password)
+        self.assertNotIn("s3cret-password", " ".join(argv))
+        calls.clear()
+        files = run_checks.Files("/data", run_checks.Sudo("", run=sudo_run, interactive=lambda: False))
+        with mock.patch.object(logfile, "size", side_effect=PermissionError(13, "denied")):
+            files.size("cowrie/log/cowrie.json")
+        self.assertEqual(calls[0][0][:2], ["sudo", "-n"])
+
+    def test_a_link_is_no_case_for_sudo(self):
+        calls = []
+        files = run_checks.Files("/data", lambda argv: calls.append(argv))
+        with mock.patch.object(logfile, "append", side_effect=logfile.LogFileError("a link")):
+            with self.assertRaisesRegex(CheckError, "a link"):
+                files.append("cowrie/log/cowrie.json", "line\n")
+        self.assertEqual(calls, [])
+
+
+class LogWatchTest(unittest.TestCase):
+
+    def test_new_whole_lines_since_the_mark(self):
+        files = FakeFiles({"cowrie/log/cowrie.json": b"old\n", "honeypots/log/http.log": b"old\n"})
+        watch = run_checks.LogWatch(files)
+        watch.mark("cowrie/log/cowrie.json")
+        watch.mark("honeypots/log/*.log")
+        files.logs["cowrie/log/cowrie.json"] += b"one\ntw"
+        self.assertEqual(watch.new_lines("cowrie/log/cowrie.json"), ["one"])
+        files.logs["cowrie/log/cowrie.json"] += b"o\n"
+        self.assertEqual(watch.new_lines("cowrie/log/cowrie.json"), ["one", "two"])
+        files.logs["cowrie/log/cowrie.json"] = bytearray(b"new\n")     # rotated
+        self.assertEqual(watch.new_lines("cowrie/log/cowrie.json")[-1], "new")
+        # a file of a glob that came up during the check is read from its start
+        files.logs["honeypots/log/ftp.log"] = bytearray(b"ftp line\n")
+        files.logs["honeypots/log/http.log"] += b"http line\n"
+        self.assertEqual(sorted(watch.new_lines("honeypots/log/*.log")), ["ftp line", "http line"])
+
+
+class WrapperTest(unittest.TestCase):
+    """hptest.sh and the pipeline test hand over to tpot check where the T-Pot Manager runs."""
+
+    TPOT = ('#!/bin/sh\n'
+            '[ "$1" = setup ] && exit "${STUB_SETUP_RC:-0}"\n'
+            'printf "%s\\n" "$@" > "$STUB_ARGS"\n'
+            'exit 7\n')
+
+    def setUp(self):
+        self.checkout = tempfile.mkdtemp(prefix="tpot-wrapper-")
+        self.addCleanup(shutil.rmtree, self.checkout)
+        path = os.path.join(self.checkout, "tpot")
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(self.TPOT)
+        os.chmod(path, 0o755)
+        with open(os.path.join(self.checkout, ".env"), "w", encoding="utf-8") as out:
+            out.write(f"TPOT_DATA_PATH={self.checkout}/data\n")
+        self.args = os.path.join(self.checkout, "args")
+        self.password = os.path.join(self.checkout, "pw")
+        with open(self.password, "w", encoding="utf-8") as out:
+            out.write("pw\n")
+
+    def run_script(self, script, *argv, **extra):
+        env = dict(os.environ, TPOTCE_DIR=self.checkout, STUB_ARGS=self.args, TPOT_GUM="off", **extra)
+        return subprocess.run([script] + list(argv), capture_output=True, universal_newlines=True, env=env,
+                              timeout=60, stdin=subprocess.DEVNULL)
+
+    def handed(self):
+        try:
+            with open(self.args, encoding="utf-8") as handle:
+                return handle.read().splitlines()
+        except OSError:
+            return None
+
+    def test_hptest_is_tpot_check_honeypots(self):
+        result = self.run_script(HPTEST, "-B", self.password, "-y")
+        self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
+        self.assertEqual(self.handed(), ["check", "honeypots", "--become-file", self.password, "--yes"])
+        os.unlink(self.args)
+        self.run_script(HPTEST, "127.0.0.1")
+        self.assertEqual(self.handed(), ["check", "honeypots"])
+
+    def test_hptest_options_still_parse(self):
+        for argv, code in ((["--bogus"], 1), (["-B"], 1), (["-B", os.path.join(self.checkout, "none")], 1),
+                           (["-h"], 0)):
+            with self.subTest(argv=argv):
+                result = self.run_script(HPTEST, *argv)
+                self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+                self.assertIsNone(self.handed())
+        self.assertIn("--nmap", self.run_script(HPTEST, "-h").stdout)
+
+    def test_the_pipeline_test_is_tpot_check_pipeline(self):
+        result = self.run_script(PIPELINE, "--types", "cowrie,dionaea", "--timeout", "30", "--dry-run", "-y",
+                                 "-B", self.password)
+        self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
+        self.assertEqual(self.handed(), ["check", "pipeline", "--only", "cowrie,dionaea", "--timeout", "30",
+                                         "--dry-run", "--become-file", self.password, "--yes"])
+        os.unlink(self.args)
+        self.run_script(PIPELINE)
+        self.assertEqual(self.handed(), ["check", "pipeline"])
+
+    def test_the_pipeline_test_options_still_parse(self):
+        for argv, code in ((["--bogus"], 1), (["--types"], 1), (["--timeout", "soon"], 1), (["-h"], 0),
+                           (["-B", os.path.join(self.checkout, "none")], 1)):
+            with self.subTest(argv=argv):
+                result = self.run_script(PIPELINE, *argv)
+                self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+                self.assertIsNone(self.handed())
+
+    def test_without_tpot_the_old_test_runs(self):
+        result = self.run_script(PIPELINE, "--dry-run", STUB_SETUP_RC="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("DRY RUN", result.stdout)
+        self.assertIsNone(self.handed())
+        result = self.run_script(PIPELINE, "--dry-run", "--types", "nopot", STUB_SETUP_RC="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unknown type", result.stdout + result.stderr)
+
+
+class HptestFallbackTest(HptestUnderTheHoldTest):
+    """--nmap and another host keep the probes of hptest.sh, under the hold, also where tpot runs."""
+
+    def setUp(self):
+        super().setUp()
+        with open(os.path.join(self.checkout, "tpot"), "w", encoding="utf-8") as out:
+            out.write(WrapperTest.TPOT)
+        os.chmod(os.path.join(self.checkout, "tpot"), 0o755)
+        self.args = os.path.join(self.bin, "args")
+
+    def test_term_during_the_scan(self):
+        pass        # HptestUnderTheHoldTest has it
+
+    def test_a_skipped_udp_scan_says_so(self):
+        pass        # HptestUnderTheHoldTest has it
+
+    def scan(self, *argv):
+        with FakeEwsposter(self.ews):
+            return subprocess.run([HPTEST] + list(argv), capture_output=True, universal_newlines=True,
+                                  env=self.env(STUB_SCAN_QUICK="1", STUB_ARGS=self.args, TPOT_MARKS="1"),
+                                  timeout=60)
+
+    def test_nmap_keeps_the_old_probes_under_the_hold(self):
+        result = self.scan("--nmap", "127.0.0.1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(os.path.exists(self.args))
+        self.assertIn("@@tpot phase hold", result.stdout)
+        self.assertIn("@@tpot phase release", result.stdout)
+        self.assertEqual(len(self.scanners()), 2)
+        self.assertFalse(os.path.exists(self.marker))
+        self.assertTrue(self.lock_is_free())
+
+    def test_another_host_keeps_the_old_probes(self):
+        result = self.scan("198.51.100.7")
+        self.assertFalse(os.path.exists(self.args))
+        self.assertIn("is no address of this host", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

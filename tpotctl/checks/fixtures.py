@@ -94,7 +94,9 @@ def render(name: str, ts: datetime, src_ip: str, src_port: int, dst_port: int, t
 
     `ts` is a datetime (a naive one counts as UTC). `token` is a plain word (letters, digits,
     . _ -), so it fits every format: a JSON string, a CSV field, a path, a DNS label."""
-    ipaddress.ip_address(src_ip)
+    if ipaddress.ip_address(src_ip).version != 4:
+        # several formats take an IPv4 address only (dionaea writes ::ffff:<v4>, sentrypeer ip:port)
+        raise ValueError(f"the source of an injected event is an IPv4 address (a test IP), not {src_ip}")
     for label, value in (("src_port", src_port), ("dst_port", dst_port)):
         if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 65535:
             raise ValueError(f"{label} is no port: {value!r}")

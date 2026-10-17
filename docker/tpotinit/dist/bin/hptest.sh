@@ -1,11 +1,13 @@
 #!/bin/bash
-# hptest.sh [-B <file>] [--tools-only] [host]: probes the honeypots of
-# ~/tpotce/docker-compose.yml on host (default: the address of this host), a few
-# service specific requests first, then nmap over every published port. The
-# probes are real attacks as far as T-Pot can tell, they show up in Kibana.
-# ewsposter of this host sends nothing while they run (ews_hold.sh), and one
-# check runs at a time.
-# `tpot check honeypots` runs it, also from the Checks page of the menu.
+# hptest.sh [-B <file>] [-y] [--nmap] [--tools-only] [host]: checks the honeypots
+# of ~/tpotce/docker-compose.yml. Where the T-Pot Manager runs, this is
+# `tpot check honeypots` (every honeypot from its port to the Attack Map, the test
+# events removed from Elasticsearch afterwards); it asks first, -y confirms.
+# Otherwise, for another host, with --nmap or --tools-only, the probes of old: a
+# few service specific requests on host (default: the address of this host),
+# then nmap over every published port. They are real attacks as far as T-Pot can
+# tell and show up in Kibana. ewsposter of this host sends nothing while they run
+# (ews_hold.sh), and one check runs at a time.
 
 # an exported CDPATH turns a cd into a search that prints the folder it found
 unset CDPATH
@@ -38,6 +40,8 @@ fi
 
 myHOST=""
 myTOOLS_ONLY=""
+myNMAP=""
+myYES=""
 myBECOME_FILE=""
 myTPOTCE="${TPOTCE_DIR:-$HOME/tpotce}"
 myDOCKERCOMPOSEYML="${myTPOTCE}/docker-compose.yml"
@@ -216,17 +220,23 @@ function fuCHECKDEPS {
 
 function fuUSAGE {
 	cat <<EOF
-Usage: $0 [-B <file>] [--tools-only] [host]
+Usage: $0 [-B <file>] [-y] [--nmap] [--tools-only] [host]
 
-Probes the honeypots of ${myDOCKERCOMPOSEYML} on host, default: the address of
-this host. The probes are real attacks as far as T-Pot can tell; ewsposter of
-this host sends nothing while they run, one check runs at a time.
+Checks the honeypots of ${myDOCKERCOMPOSEYML}. Where the T-Pot Manager
+runs, this is tpot check honeypots: every honeypot of this host from its port
+to the Attack Map, the test events removed from Elasticsearch afterwards.
+For another host, with --nmap or --tools-only, or without the T-Pot Manager:
+service requests, then nmap over every published port of host (default: the
+address of this host); those probes are real attacks as far as T-Pot can tell.
+ewsposter of this host sends nothing during a check, one check runs at a time.
 
-  -B <file>      Read the sudo password from a file (installing the tools)
+  -B <file>      Read the sudo password from a file
+  -y             Start the check without asking (tpot check honeypots asks)
+  --nmap         The service requests and the nmap scan, not tpot check
   --tools-only   Only install nmap, ncat and the DICOM tools, then end
   -h             Show this help message
 EOF
-	exit 1
+	exit "${1:-1}"
 }
 
 # sourced by the tests for its functions
@@ -235,9 +245,12 @@ EOF
 while [ $# -gt 0 ];
   do
     case "$1" in
-      -B) myBECOME_FILE="$2"; shift 2 ;;
+      -B) [ $# -ge 2 ] || { fuUI_ERROR "-B needs a file."; fuUSAGE; }
+          myBECOME_FILE="$2"; shift 2 ;;
       --tools-only) myTOOLS_ONLY="1"; shift ;;
-      -h|--help) fuUSAGE ;;
+      --nmap) myNMAP="1"; shift ;;
+      -y|--yes) myYES="1"; shift ;;
+      -h|--help) fuUSAGE 0 ;;
       -*) fuUI_ERROR "Unknown option $1."; fuUSAGE ;;
       *) myHOST="$1"; shift ;;
     esac
@@ -248,6 +261,20 @@ if [ -n "${myBECOME_FILE}" ];
     [ -r "${myBECOME_FILE}" ] || { fuUI_ERROR "Cannot read the sudo password from ${myBECOME_FILE}."; exit 1; }
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
     sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
+fi
+
+# the check of this host is tpot check honeypots of the T-Pot Manager where it runs (as genuser.sh
+# hands over to tpot users add); another host, --nmap and --tools-only stay here
+myTPOT="${myTPOTCE}/tpot"
+function fuTPOT_READY {
+	[ -x "${myTPOT}" ] && "${myTPOT}" setup >/dev/null 2>&1
+}
+if [ -z "${myNMAP}" ] && [ -z "${myTOOLS_ONLY}" ] && { [ -z "${myHOST}" ] || fuOWN_ADDRESS "${myHOST}"; } && fuTPOT_READY;
+  then
+    myARGS=(check honeypots)
+    [ -n "${myBECOME_FILE}" ] && myARGS+=(--become-file "${myBECOME_FILE}")
+    [ -n "${myYES}" ] && myARGS+=(--yes)
+    exec "${myTPOT}" "${myARGS[@]}"
 fi
 
 fuUI_BANNER "Honeypot probe" "Probes the honeypots of this T-Pot: service requests, then nmap over every port."
