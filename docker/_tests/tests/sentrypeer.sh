@@ -17,6 +17,7 @@ JSON_LOG_FILE=""
 DB_FILE=""
 MAPPED_TCP_PORT=""
 MAPPED_UDP_PORT=""
+PROCESS_BASELINE=""
 
 usage() {
   cat <<EOF
@@ -154,8 +155,9 @@ run_sip_probe() {
   local transport="$1"
   local port="$2"
   local token="$3"
+  local packet_kind="${4:-options}"
 
-  python3 - "${TEST_BIND_IP}" "${port}" "${transport}" "${token}" "${TEST_TIMEOUT}" <<'PY'
+  python3 - "${TEST_BIND_IP}" "${port}" "${transport}" "${token}" "${TEST_TIMEOUT}" "${packet_kind}" <<'PY'
 import socket
 import sys
 import time
@@ -165,10 +167,15 @@ port = int(sys.argv[2])
 transport = sys.argv[3]
 token = sys.argv[4]
 timeout = int(sys.argv[5])
+packet_kind = sys.argv[6]
 called_number = "1000"
 
+start_line = f"OPTIONS sip:{called_number}@127.0.0.1 SIP/2.0\r\n"
+if packet_kind == "response":
+  start_line = "SIP/2.0 200 OK\r\n"
+
 request = (
-    f"OPTIONS sip:{called_number}@127.0.0.1 SIP/2.0\r\n"
+  start_line +
     f"Via: SIP/2.0/{transport} 127.0.0.1:50999;branch=z9hG4bK-{token}\r\n"
     "Max-Forwards: 70\r\n"
     f"From: \"Smoke\" <sip:smoke@127.0.0.1>;tag={token}\r\n"
@@ -180,6 +187,11 @@ request = (
     "Content-Length: 0\r\n"
     "\r\n"
 ).encode("ascii")
+
+if packet_kind == "null-method":
+  request = b"SIP/2.0 100 x\r\n"
+elif packet_kind not in ("options", "response"):
+  raise RuntimeError(f"Unsupported packet kind: {packet_kind}")
 
 def validate_response(response):
     if not response.startswith(b"SIP/2.0 "):
@@ -194,6 +206,9 @@ try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(min(timeout, 3))
             sock.sendto(request, (host, port))
+            if packet_kind != "options":
+              print(f"{transport} {packet_kind}: sent {len(request)} bytes")
+              sys.exit(0)
             response, _ = sock.recvfrom(4096)
             validate_response(response)
     elif transport == "TCP":
@@ -201,6 +216,10 @@ try:
         with socket.create_connection((host, port), timeout=timeout) as sock:
             sock.settimeout(1)
             sock.sendall(request)
+            if packet_kind != "options":
+              sock.shutdown(socket.SHUT_WR)
+              print(f"{transport} {packet_kind}: sent {len(request)} bytes")
+              sys.exit(0)
             chunks = []
             while time.monotonic() < deadline:
                 try:
@@ -243,8 +262,9 @@ run_probe_with_retries() {
 wait_for_json_event() {
   local transport="$1"
   local token="$2"
+  local method="${3:-OPTIONS}"
 
-  python3 - "${JSON_LOG_FILE}" "${transport}" "${token}" "${TEST_TIMEOUT}" <<'PY'
+  python3 - "${JSON_LOG_FILE}" "${transport}" "${token}" "${TEST_TIMEOUT}" "${method}" <<'PY'
 import json
 import sys
 import time
@@ -254,6 +274,7 @@ path = Path(sys.argv[1])
 transport = sys.argv[2]
 token = sys.argv[3]
 timeout = int(sys.argv[4])
+method = sys.argv[5]
 deadline = time.monotonic() + timeout
 expected_user_agent = f"tpot-sentrypeer-smoke/{token}"
 last_error = None
@@ -299,7 +320,7 @@ while time.monotonic() < deadline:
             "app_name": "sentrypeer",
             "collected_method": "responsive",
             "called_number": "1000",
-            "sip_method": "OPTIONS",
+            "sip_method": method,
         }
         for field, expected in required.items():
             if event.get(field) != expected:
@@ -340,8 +361,41 @@ sys.exit(1)
 PY
 }
 
+container_process_state() {
+  docker inspect -f '{{.State.Running}}|{{.State.Pid}}|{{.State.StartedAt}}|{{.RestartCount}}' "${TEST_CONTAINER_NAME}"
+}
+
+assert_process_unchanged() {
+  local description="$1"
+  local current=""
+  current="$(container_process_state)" || test_die "Could not inspect SentryPeer ${description}"
+  [[ "${current}" == "${PROCESS_BASELINE}" ]] || test_die "SentryPeer process changed ${description}: baseline=${PROCESS_BASELINE}, current=${current}"
+}
+
+run_response_regression() {
+  local transport="$1"
+  local port="$2"
+  local packet_kind="$3"
+  local token="sentrypeer-${transport}-${packet_kind}-$(date +%s)-$$"
+
+  assert_process_unchanged "before ${transport} ${packet_kind}"
+  test_info "Sending ${transport} ${packet_kind} regression input"
+  run_sip_probe "${transport}" "${port}" "${token}" "${packet_kind}" || test_die "Could not send ${transport} ${packet_kind}"
+  assert_process_unchanged "after sending ${transport} ${packet_kind}"
+  if [[ "${packet_kind}" == "response" ]]; then
+    wait_for_json_event "${transport}" "${token}" "NOT_FOUND" || test_die "${transport} response event with sip_method=NOT_FOUND was not found"
+    assert_process_unchanged "after logging ${transport} ${packet_kind}"
+  fi
+
+  run_sip_probe "${transport}" "${port}" "${token}-after" || test_die "Fresh ${transport} OPTIONS failed after ${packet_kind}"
+  wait_for_json_event "${transport}" "${token}-after" || test_die "Fresh ${transport} OPTIONS JSON was not found after ${packet_kind}"
+  assert_process_unchanged "after fresh ${transport} OPTIONS following ${packet_kind}"
+  assert_no_runtime_errors
+  test_ok "${transport} ${packet_kind}: same running process and fresh OPTIONS JSON"
+}
+
 assert_no_runtime_errors() {
-  if test_compose logs --no-color 2>/dev/null | grep -Ei "panic|segmentation fault|Traceback|Exception" >/dev/null 2>&1; then
+  if test_compose logs --no-color 2>/dev/null | grep -Ei "panic|segmentation fault|Traceback|Exception|Assertion .*failed|assertion failed:|(^|[|[:space:]])Aborted([[:space:](]|$)|SIGABRT" >/dev/null 2>&1; then
     test_die "SentryPeer runtime error found in Docker logs"
   fi
 }
@@ -366,6 +420,8 @@ main() {
   test_compose up -d --no-build >/dev/null
 
   test_wait_for_container || test_die "SentryPeer container did not stay running"
+  PROCESS_BASELINE="$(container_process_state)" || test_die "Could not capture SentryPeer process baseline"
+  [[ "${PROCESS_BASELINE}" =~ ^true\|[1-9][0-9]*\|[^\|]+\|0$ ]] || test_die "Unexpected SentryPeer process baseline: ${PROCESS_BASELINE}"
   test_ok "Container is running"
 
   MAPPED_TCP_PORT="$(test_get_mapped_port "${TEST_NAME}" "5060/tcp")" || test_die "Could not resolve mapped host port for 5060/tcp"
@@ -379,16 +435,19 @@ main() {
 
   test_info "Running UDP SIP OPTIONS probe with token: ${udp_token}"
   run_probe_with_retries "UDP SIP OPTIONS" run_sip_probe "UDP" "${MAPPED_UDP_PORT}" "${udp_token}" || test_die "UDP SIP probe failed on ${TEST_BIND_IP}:${MAPPED_UDP_PORT}"
-  test_wait_for_container || test_die "SentryPeer container stopped after UDP probe"
+  wait_for_json_event "UDP" "${udp_token}" || test_die "UDP SIP event was not found in sentrypeer.json"
+  assert_process_unchanged "after UDP probe"
 
   test_info "Running TCP SIP OPTIONS probe with token: ${tcp_token}"
   run_probe_with_retries "TCP SIP OPTIONS" run_sip_probe "TCP" "${MAPPED_TCP_PORT}" "${tcp_token}" || test_die "TCP SIP probe failed on ${TEST_BIND_IP}:${MAPPED_TCP_PORT}"
-  test_wait_for_container || test_die "SentryPeer container stopped after TCP probe"
-
-  test_info "Waiting for SentryPeer JSON log events"
-  wait_for_json_event "UDP" "${udp_token}" || test_die "UDP SIP event was not found in sentrypeer.json"
   wait_for_json_event "TCP" "${tcp_token}" || test_die "TCP SIP event was not found in sentrypeer.json"
+  assert_process_unchanged "after TCP probe"
   test_ok "SIP probes were written to sentrypeer.json"
+
+  run_response_regression "UDP" "${MAPPED_UDP_PORT}" "null-method"
+  run_response_regression "UDP" "${MAPPED_UDP_PORT}" "response"
+  run_response_regression "TCP" "${MAPPED_TCP_PORT}" "null-method"
+  run_response_regression "TCP" "${MAPPED_TCP_PORT}" "response"
 
   [[ -s "${DB_FILE}" ]] || test_die "SentryPeer database was not created at ${DB_FILE}"
   test_ok "SentryPeer database was created"
