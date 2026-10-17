@@ -217,6 +217,12 @@ class Backend:
         from tpotctl.checks import ewshold
         return ewshold.ews_state(system.data_path(ops.env_values(), REPO_DIR))
 
+    def ews_quarantine(self):
+        """The modules ewsposter keeps from sending until they caught up (ewshold.ews_quarantine)."""
+        from tpotctl import system
+        from tpotctl.checks import ewshold
+        return ewshold.ews_quarantine(system.data_path(ops.env_values(), REPO_DIR))
+
     def pending_checks(self) -> int:
         """How many earlier checks could not remove their test events (checks/pending); -1 while a
         check runs (it holds the lock of the checks, its own file is pending)."""
@@ -1576,6 +1582,11 @@ def check_when(stamp: str) -> str:
     return moment.astimezone().strftime("%Y-%m-%d %H:%M")
 
 
+def quarantine_text(modules) -> str:
+    """The ewsposter line of the Checks page while modules catch up after a hold."""
+    return f"ewsposter sends, except {', '.join(modules)} (they catch up first)."
+
+
 def pending_text(count: int) -> str:
     """The line of the Checks page while earlier checks left test events behind."""
     return f"An earlier check could not remove its test events ({count} run{'s' if count != 1 else ''})."
@@ -1845,7 +1856,13 @@ class ChecksPane(Vertical):
             state, age = self.app.backend.ews_state()
         except Exception:                   # noqa: BLE001 - the line only informs
             state, age = "unknown", None
-        if state == "normal":
+        try:
+            quarantined = self.app.backend.ews_quarantine() if state == "normal" else []
+        except Exception:                   # noqa: BLE001 - the line only informs
+            quarantined = []
+        if state == "normal" and quarantined:
+            text = Text(f"{glyphs.g('warn')} {quarantine_text(quarantined)}", style=theme.color("warn"))
+        elif state == "normal":
             text = Text(f"{glyphs.g('ok')} ewsposter sends as usual.", style=theme.color("mist"))
         elif state == "held":
             text = Text(f"{glyphs.g('warn')} ewsposter is held: a check runs, nothing is sent meanwhile.",

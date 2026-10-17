@@ -681,6 +681,23 @@ class EwsHoldTest(HoldFolder):
                     out.write("failed: wordpot\n")
                 self.assertEqual(hold.refresh_failed(), ["wordpot"])
 
+    def test_the_quarantine_of_ewsposter(self):
+        path = os.path.join(self.ews, "quarantine")
+        self.assertEqual(ewshold.ews_quarantine(self.data), [])
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(f"{int(time.time())} conpot redishoneypot\n")
+        self.assertEqual(ewshold.ews_quarantine(self.data), ["conpot", "redishoneypot"])
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(f"{int(time.time()) - 600} conpot\n")
+        self.assertEqual(ewshold.ews_quarantine(self.data), [])          # ewsposter does not run its loop
+        for text in ("", "x conpot\n", f"{int(time.time())}\n", f"{int(time.time())} Con/pot\n"):
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(text)
+            self.assertEqual(ewshold.ews_quarantine(self.data), [], text)
+        os.unlink(path)
+        os.symlink(os.path.join(self.data, "elsewhere"), path)
+        self.assertEqual(ewshold.ews_quarantine(self.data), [])
+
     def test_whether_a_check_runs(self):
         self.assertFalse(ewshold.check_running(self.data))
         with FakeEwsposter(self.ews):

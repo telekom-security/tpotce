@@ -83,6 +83,10 @@ if textual:
 
         # earlier checks whose cleanup did not run through
         pending_value = 0
+        quarantine_value = []
+
+        def ews_quarantine(self):
+            return list(self.quarantine_value)
 
         def pending_checks(self):
             return self.pending_value
@@ -2190,6 +2194,15 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             await pilot.click("#task-back")
             await pilot.pause(0.3)
         self.assertEqual(loads, [1])                # last.json anew after the task screen
+
+    async def test_the_modules_ewsposter_keeps_back(self):
+        backend = FakeBackend()
+        backend.quarantine_value = ["conpot", "redishoneypot"]
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertIn("ewsposter sends, except conpot, redishoneypot (they catch up first).",
+                          flat(app.query_one("#check-hold")))
 
     async def test_earlier_checks_that_left_test_events(self):
         """Pending cleanups: a line and Remove them now, which asks (#no first) and runs tpot check

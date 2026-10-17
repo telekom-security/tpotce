@@ -95,6 +95,13 @@ class Sandbox:
         return self.data / "hold.ack"
 
     @property
+    def quarantine(self):
+        return self.data / "quarantine"
+
+    def quarantined(self):
+        return self.quarantine.read_text().split()[1:] if self.quarantine.exists() else []
+
+    @property
     def state(self):
         return self.data / "hold.state"
 
@@ -115,6 +122,8 @@ class Sandbox:
             f'myHOLD_ACK="{self.ack}"\n'
             f'myHOLD_STATE="{self.state}"\n'
             f'myIDLE_CFG="{self.idle}"\n'
+            f'myQUARANTINE_FILE="{self.quarantine}"\n'
+            f'myNORMAL_CFG="{self.base / "normal"}"\n'
             'mySLEEP=42\n'
             'myHELD=""\n'
             'myIDLE_RETRY_PAUSE=0\n'
@@ -464,24 +473,29 @@ class RoundTest(EntrypointCase):
                 self.assertTrue(box.ack.is_file())
                 self.assertEqual(box.state_word(), "held")
 
-    def test_cap_at_the_end_of_a_hold_keeps_it_idle(self):
-        """A module still behind when the marker is gone: no normal pass, stuck, an error; the
-        next round catches up and the normal pass follows."""
+    def test_cap_at_the_end_of_a_hold_quarantines_the_module_behind(self):
+        """A module still behind when the marker is gone: quarantined (off in the normal passes),
+        the others send; the next round its own idle pass catches up and it sends again."""
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 box = self.sandbox(Path(shell).name)
                 script = (
-                    'myHELD=yes; fuROUND; echo "interval=$myINTERVAL held=$myHELD"\n'
-                    f'echo "state=$(cut -d" " -f1 "{box.state}")"\n'
-                    'fuROUND; echo "interval=$myINTERVAL held=$myHELD"\n'
+                    'myHELD=yes; fuROUND; echo "interval=$myINTERVAL held=$myHELD q=[$myQUARANTINE]"\n'
+                    f'echo "file=$(cut -d" " -f2- "{box.quarantine}")"\n'
+                    'fuROUND; echo "interval=$myINTERVAL q=[$myQUARANTINE]"\n'
                 )
                 result = box.run(shell, script, STUB_LIMITED=20)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(re.findall(r"^interval=(\d+) held=(\w*)$", result.stdout, re.M),
-                                 [("5", "yes"), ("42", "")])
-                self.assertIn("state=stuck", result.stdout)
-                self.assertEqual(self.kinds(box), ["idle"] * 21 + ["normal"])
-                self.assertEqual(result.stdout.count("[ERROR]"), 1)
+                self.assertIn("interval=42 held= q=[ cowrie]", result.stdout)
+                self.assertIn("file=cowrie", result.stdout)
+                self.assertIn("interval=42 q=[]", result.stdout)
+                calls = box.calls()
+                normal = [call for call in calls if " -E " not in call]
+                # the first normal pass with the copy that has cowrie off, the second as usual
+                self.assertIn(f"-c {box.base / 'normal'}/", normal[0])
+                self.assertEqual(normal[1], f"-u {box.ews}/ews.py -l 0")
+                self.assertIn("cowrie = false", (box.base / "normal" / "ews.cfg").read_text())
+                self.assertFalse(box.quarantine.exists())
                 self.assertEqual(box.state_word(), "normal")
 
     def test_stuck_says_so_as_error_every_ten_minutes(self):
@@ -568,58 +582,121 @@ class RoundTest(EntrypointCase):
     HOLD_ROUNDS = ('myHELD=yes\n'
                    'export STUB_CRASH="$CRASH1"; fuROUND\n'
                    'export STUB_CRASH="$CRASH2"; fuROUND\n'
-                   'echo "ack2=[$(cat "$ACK")] dirty=[$myHOLD_DIRTY] skipped=[$myHOLD_SKIPPED]"\n'
+                   'echo "ack2=[$(cat "$ACK")]"\n'
                    'rm -f "$MARKER"\n'
-                   'export STUB_CRASH="$CRASH2"; fuROUND; echo "interval=$myINTERVAL held=$myHELD"\n')
+                   'export STUB_CRASH="$CRASH2"; fuROUND; echo "interval=$myINTERVAL held=$myHELD q=[$myQUARANTINE]"\n')
 
     def hold_rounds(self, box, shell, crash1, crash2, start=""):
         box.hold.write_text("")
         return box.run(shell, start + self.HOLD_ROUNDS, STUB_STARTED=1, CRASH1=crash1, CRASH2=crash2,
                        ACK=box.ack, MARKER=box.hold)
 
-    def test_a_module_of_the_first_ack_that_keeps_failing_goes_normal(self):
+    @staticmethod
+    def normal_calls(box):
+        return [call for call in box.calls() if " -E " not in call]
+
+    def assert_quarantined(self, box, result, module):
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"interval=42 held= q=[ {module}]", result.stdout)
+        self.assertEqual(box.quarantined(), [module])
+        self.assertEqual(box.state_word(), "normal")
+        # the normal pass after the hold runs with the module off
+        last = self.normal_calls(box)[-1]
+        self.assertIn(f"-c {box.base / 'normal'}/", last)
+        self.assertIn(f"\n{module} = false\n", (box.base / "normal" / "ews.cfg").read_text())
+        self.assertIn(f"except {module}: they send only once", result.stdout)
+
+    def test_a_module_that_failed_in_the_last_round_is_quarantined(self):
+        """redishoneypot fails in every round (named in the first ack): after the marker it stays
+        idle-only, the others send."""
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 box = self.sandbox(Path(shell).name)
                 result = self.hold_rounds(box, shell, "redishoneypot", "redishoneypot")
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("ack2=[failed: redishoneypot] dirty=[] skipped=[ redishoneypot]", result.stdout)
-                self.assertIn("interval=42 held=\n", result.stdout)
-                self.assertEqual(box.state_word(), "normal")
+                self.assertIn("ack2=[failed: redishoneypot]", result.stdout)
+                self.assert_quarantined(box, result, "redishoneypot")
 
-    def test_a_module_held_at_the_first_ack_that_fails_later_keeps_it_stuck(self):
+    def test_a_module_held_at_the_first_ack_that_fails_later_is_quarantined(self):
         """cowrie was held at the first ack (its honeypot was probed), then fails: the ack names it
-        for the check, and after the marker the hold stays stuck, no normal pass."""
+        for the check, and after the marker it sends nothing until it caught up."""
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 box = self.sandbox(Path(shell).name)
                 result = self.hold_rounds(box, shell, "", "cowrie")
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("ack2=[failed: cowrie] dirty=[yes]", result.stdout)
-                self.assertIn("interval=5 held=yes\n", result.stdout)
-                self.assertEqual(box.state_word(), "stuck")
-                self.assertNotIn("normal", RoundTest.kinds(box))
+                self.assertIn("ack2=[failed: cowrie]", result.stdout)
+                self.assert_quarantined(box, result, "cowrie")
 
-    def test_a_second_module_failing_after_the_first_ack_keeps_it_stuck(self):
-        for shell in SHELLS:
-            with self.subTest(shell=shell):
-                box = self.sandbox(Path(shell).name)
-                # the stand-in fails one module at a time: first redishoneypot, then cowrie
-                result = self.hold_rounds(box, shell, "redishoneypot", "cowrie")
-                self.assertIn("dirty=[yes]", result.stdout)
-                self.assertEqual(box.state_word(), "stuck")
-
-    def test_a_hold_that_began_without_an_ack_and_a_failing_module_stays_stuck(self):
-        """ewsposter started while the marker was there (no first ack, the check did not wait for
-        one): every failing module keeps the hold stuck after the marker."""
+    def test_a_hold_that_began_without_an_ack_quarantines_a_failing_module(self):
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 box = self.sandbox(Path(shell).name)
                 result = self.hold_rounds(box, shell, "redishoneypot", "redishoneypot", start="fuSTART\n")
+                self.assert_quarantined(box, result, "redishoneypot")
+
+    def test_a_quarantined_module_sends_only_after_its_own_clean_pass(self):
+        """Each normal round gives it one idle pass of its own (no tries again); while that fails it
+        is in no normal pass; once it is clean and caught up it sends again and the file goes."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                script = ('myQUARANTINE=" cowrie"\n'
+                          'export STUB_CRASH=cowrie; fuROUND; echo "q1=[$myQUARANTINE]"\n'
+                          'fuROUND; echo "q2=[$myQUARANTINE]"\n'
+                          'export STUB_CRASH=; fuROUND; echo "q3=[$myQUARANTINE]"\n')
+                result = box.run(shell, script, STUB_STARTED=1)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("dirty=[yes]", result.stdout)
-                self.assertIn("interval=5 held=yes\n", result.stdout)
-                self.assertEqual(box.state_word(), "stuck")
+                self.assertIn("q1=[ cowrie]\n", result.stdout)
+                self.assertIn("q2=[ cowrie]\n", result.stdout)
+                self.assertIn("q3=[]\n", result.stdout)
+                self.assertIn("cowrie caught up after the hold, it sends again.", result.stdout)
+                calls = box.calls()
+                idle_cowrie = [call for call in calls if " -E " in call and call.endswith("-m cowrie")]
+                self.assertEqual(len(idle_cowrie), 3)          # one per round, no tries again
+                normal = self.normal_calls(box)
+                self.assertTrue(all(f"-c {box.base / 'normal'}/" in call for call in normal[:2]), normal)
+                self.assertEqual(normal[2], f"-u {box.ews}/ews.py -l 0")
+                self.assertFalse(box.quarantine.exists())
+
+    def test_a_module_that_never_catches_up_stays_quarantined(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                script = 'myQUARANTINE=" cowrie"\n' + 'fuROUND\n' * 4 + 'echo "q=[$myQUARANTINE]"\n'
+                result = box.run(shell, script, STUB_STARTED=1, STUB_CRASH="cowrie")
+                self.assertIn("q=[ cowrie]", result.stdout)
+                self.assertEqual(box.quarantined(), ["cowrie"])
+                self.assertTrue(all(f"-c {box.base / 'normal'}/" in call for call in self.normal_calls(box)))
+
+    def test_an_expired_marker_quarantines_too(self):
+        """A marker older than 30 minutes (a check that was cut off) ends the hold the same way."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.hold.write_text("")
+                old = time.time() - 31 * 60
+                os.utime(box.hold, (old, old))
+                result = box.run(shell, 'myHELD=yes; fuROUND; echo "interval=$myINTERVAL held=$myHELD q=[$myQUARANTINE]"',
+                                 STUB_STARTED=1, STUB_CRASH="redishoneypot")
+                self.assert_quarantined(box, result, "redishoneypot")
+
+    def test_the_quarantine_survives_a_start_of_the_container(self):
+        """ewsposter started again without tpotinit (it clears the file with the hold): the modules
+        stay quarantined; a link in place of the file is never followed."""
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                box = self.sandbox(Path(shell).name)
+                box.quarantine.write_text("1792233828 cowrie wordpot\n")
+                result = box.run(shell, 'fuSTART; echo "q=[$myQUARANTINE]"')
+                self.assertIn("q=[ cowrie wordpot]", result.stdout)
+                target = box.base / "elsewhere"
+                target.write_text("1 keep\n")
+                box.quarantine.unlink()
+                box.quarantine.symlink_to(target)
+                result = box.run(shell, 'fuSTART; echo "q=[$myQUARANTINE]"; myQUARANTINE=" cowrie"; fuQUARANTINE_SAVE')
+                self.assertIn("q=[]", result.stdout)
+                self.assertFalse(box.quarantine.is_symlink())
+                self.assertEqual(target.read_text(), "1 keep\n")
+                self.assertEqual(box.quarantined(), ["cowrie"])
 
     def test_failed_round_writes_no_ack(self):
         for shell in SHELLS:
@@ -717,7 +794,7 @@ class RoundTest(EntrypointCase):
         entrypoint.sh."""
         text = ENTRYPOINT.read_text()
         self.assertIn("trap fuSTOP INT TERM", text)
-        self.assertEqual(len(re.findall(r'fuRUN "\$\{myPYTHON\}" -u "\$\{myEWS\}/ews.py"', text)), 2)
+        self.assertEqual(len(re.findall(r'fuRUN "\$\{myPYTHON\}" -u "\$\{myEWS\}/ews.py"', text)), 3)
         self.assertIn('fuRUN sleep "${myINTERVAL}"', text)
         self.assertIn('fuRUN sleep "${myIDLE_RETRY_PAUSE}"', text)
         self.assertNotIn("exec ", text)
@@ -726,7 +803,8 @@ class RoundTest(EntrypointCase):
 
 
 class TpotinitClearTest(unittest.TestCase):
-    """tpotinit removes hold, hold.ack and check.lock in <data>/ews on every start, never through a link."""
+    """tpotinit removes hold, hold.ack, check.lock and quarantine in <data>/ews on every start (the logs
+    are rotated and ewsposter starts with new indexes then), never through a link."""
 
     def setUp(self):
         if not shutil.which("bash"):
@@ -747,8 +825,8 @@ class TpotinitClearTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout
 
-    def test_removes_the_three_names_only(self):
-        for name in ("hold", "hold.ack", "check.lock", "hold.old", "conf"):
+    def test_removes_the_four_names_only(self):
+        for name in ("hold", "hold.ack", "check.lock", "quarantine", "hold.old", "conf"):
             (self.ews / name).write_text("")
         self.clear()
         self.assertEqual(sorted(p.name for p in self.ews.iterdir()), ["conf", "hold.old"])

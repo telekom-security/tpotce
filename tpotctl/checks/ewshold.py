@@ -152,6 +152,34 @@ def check_running(data_dir: str) -> bool:
         folder.close()
 
 
+QUARANTINE = "quarantine"
+
+
+def ews_quarantine(data_dir: str, now: Callable[[], float] = time.time) -> List[str]:
+    """The modules ewsposter keeps from sending after a hold until they caught up (<data>/ews/
+    quarantine: "<epoch> <module> ...", written every round); none when it is missing, no regular
+    file, not of its form or older than STATE_MAX_AGE (ewsposter does not run its loop)."""
+    try:
+        folder = Folder.walk(data_dir, (EWS_DIR,), False)
+    except (KibanaError, OSError):
+        return []
+    if folder is None:
+        return []
+    try:
+        text = folder.read(QUARANTINE)
+    except (KibanaError, OSError, ValueError):
+        return []
+    finally:
+        folder.close()
+    match = re.fullmatch(r"([0-9]{1,12})((?: [a-z0-9_-]{1,64})+)\n?", text or "")
+    if match is None:
+        return []
+    age = now() - int(match.group(1))
+    if age > STATE_MAX_AGE or age < -60:
+        return []
+    return match.group(2).split()
+
+
 def ewsposter_runs() -> Optional[bool]:
     """Whether the ewsposter container runs (docker ps); None when docker cannot say, which
     EwsHold takes as running (it waits for the ack)."""

@@ -10,13 +10,15 @@
 # idle round that ended cleanly (every pass with rc 0, no module behind) and removed when the hold
 # is over. A module whose idle pass keeps failing (also on its own, -m) does not keep the others
 # from being held: hold.ack names it in one line "failed: <module> ...", so the check leaves its
-# honeypots alone. Such a round counts as clean only for the modules named in the first ack of the
-# hold that failed in every round since (the check left exactly those alone): a module that was
-# held at the first ack and fails later, or any failing module of a hold that began without an ack
-# (ewsposter started while the marker was there), keeps the hold stuck after the marker is gone, as
-# a round that failed does; hold.ack still names it, so the check leaves it alone from then on.
-# Normal passes come back only after a clean round without the marker; until then the hold is
-# stuck, which /data/ews/hold.state says (normal, held or stuck). A hold that is on when
+# honeypots alone (a later round names a module that fails later, the check reads it again).
+# When the marker is gone (removed, or older than 30 minutes) one more idle round runs; every
+# module that was not clean and caught up in it is quarantined: it stays idle-only (false in the
+# config copy of the normal passes, an idle pass of its own each round) until one idle pass of
+# its own is clean and caught up, then it sends again; the others send at once. A module that
+# never catches up never sends; /data/ews/quarantine names the quarantined modules (one line
+# "<epoch seconds> <module> ...", written every round, gone when none is). When not even that
+# round can run (no module started), the hold is stuck: nothing is sent. /data/ews/hold.state
+# says normal, held or stuck. A hold that is on when
 # ewsposter starts goes on with idle passes at once. The marker only counts as a regular file
 # (no link) younger than 30 minutes, so a check that was cut off never keeps ewsposter quiet for
 # good.
@@ -55,13 +57,17 @@ myIDLE_RETRY_PAUSE=5
 myCHILD=""
 # the modules whose idle passes failed in the last round (fuIDLE), one space before each
 myIDLE_FAILED=""
-# this hold: its first ack was written (yes), it began without one (ewsposter started held: yes),
-# the modules of the first ack that failed in every round since, and whether a round failed a
-# module outside them (yes: the hold is stuck after the marker until a round is clean)
+# the modules still behind in the last round (fuIDLE), one space before each
+myIDLE_BEHIND=""
+# this hold: an ack was written (yes), it began without one (ewsposter started held: yes); either
+# way a later round that fails names its modules in hold.ack for the check
 myHOLD_ACKED=""
 myHOLD_NOACK=""
-myHOLD_SKIPPED=""
-myHOLD_DIRTY=""
+# the modules that send nothing until an idle pass of their own is clean and caught up
+myQUARANTINE=""
+myQUARANTINE_FILE="/data/ews/quarantine"
+# the config folder of the normal passes while modules are quarantined
+myNORMAL_CFG="/tmp/ews-normal"
 mySTUCK_SINCE=""
 mySTUCK_SAID=0
 
@@ -241,6 +247,7 @@ fuIDLE () {
   local myCLEAN=""
   local myRC=0
   myIDLE_FAILED=""
+  myIDLE_BEHIND=""
   if ! fuIDLE_CONFIG;
     then
       echo " => [WARN] The config of the idle passes could not be written to ${myIDLE_CFG}."
@@ -248,6 +255,10 @@ fuIDLE () {
   fi
   fuIDLE_PASSES
   myRC=$?
+  if [ ${myRC} -eq 2 ];
+    then
+      myIDLE_BEHIND=$(fuLIMIT_MODULES)
+  fi
   [ ${myRC} -eq 1 ] || return ${myRC}
   if ! grep -qF -- "${myIDLE_MODULE_TEXT}" "${myIDLE_CFG}/pass.log" 2>/dev/null;
     then
@@ -272,51 +283,152 @@ fuIDLE () {
   fi
   if [ -n "${myBEHIND}" ];
     then
+      myIDLE_BEHIND="${myBEHIND}"
       return 2
   fi
   [ -z "${myIDLE_FAILED}" ] || return 3
   return 0
 }
 
-# 0 when every word of $1 is one of $2
-fuSUBSET () {
-  local myWORD=""
-  for myWORD in $1;
+# The modules the last idle pass stopped at the limit (ews.py names them in upper case), one space
+# before each
+fuLIMIT_MODULES () {
+  local myMODULE=""
+  for myMODULE in $(sed -n "s/.*${myIDLE_LIMIT_TEXT} \([A-Za-z0-9_-]*\) reached.*/\1/p" "${myIDLE_CFG}/pass.log" 2>/dev/null | tr 'A-Z' 'a-z' | sort -u);
     do
-      case " $2 " in
-        *" ${myWORD} "*) ;;
-        *) return 1 ;;
-      esac
+      printf ' %s' "${myMODULE}"
   done
-  return 0
 }
 
-# The words of $1 that are in $2, one space before each
-fuINTERSECT () {
+# 0 when the word $1 is one of $2
+fuHAS () {
+  case " $2 " in
+    *" $1 "*) return 0 ;;
+  esac
+  return 1
+}
+
+# The words of $1 and $2 without repeats, one space before each
+fuUNION () {
   local myWORD=""
   local myOUT=""
-  for myWORD in $1;
+  for myWORD in $1 $2;
     do
-      case " $2 " in
-        *" ${myWORD} "*) myOUT="${myOUT} ${myWORD}" ;;
-      esac
+      fuHAS "${myWORD}" "${myOUT}" || myOUT="${myOUT} ${myWORD}"
   done
   echo "${myOUT}"
 }
 
-# After a round of the hold (rc $1 of fuIDLE): the first ack sets the modules the check leaves
-# alone; every later round (and every round of a hold that began without an ack) keeps only those
-# that failed again, and a failed module outside them, or a round that failed, makes the hold dirty
-fuHOLD_TRACK () {
-  if [ -z "${myHOLD_ACKED}" ] && [ -z "${myHOLD_NOACK}" ];
+# /data/ews/quarantine: "<epoch> $1" through the folder, O_NOFOLLOW, a temporary file renamed into
+# place (a link of that name is replaced, never followed); removed when $1 is empty
+myQUARANTINE_WRITE='import os, stat, sys, time
+folder, name, text = os.path.dirname(sys.argv[1]), os.path.basename(sys.argv[1]), sys.argv[2].split()
+fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    if not text:
+        try:
+            if not stat.S_ISDIR(os.stat(name, dir_fd=fd, follow_symlinks=False).st_mode):
+                os.unlink(name, dir_fd=fd)
+        except FileNotFoundError:
+            pass
+        sys.exit(0)
+    temp = ".%s.%d" % (name, os.getpid())
+    handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o660, dir_fd=fd)
+    try:
+        os.write(handle, ("%d %s\n" % (time.time(), " ".join(text))).encode())
+        os.fchmod(handle, 0o660)
+    finally:
+        os.close(handle)
+    os.rename(temp, name, src_dir_fd=fd, dst_dir_fd=fd)
+finally:
+    os.close(fd)'
+# the modules of /data/ews/quarantine (a regular file, never a link), one space before each
+myQUARANTINE_READ='import os, re, stat, sys
+folder, name = os.path.dirname(sys.argv[1]), os.path.basename(sys.argv[1])
+try:
+    fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        handle = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+        try:
+            text = os.read(handle, 4096).decode("ascii", "replace") if stat.S_ISREG(os.fstat(handle).st_mode) else ""
+        finally:
+            os.close(handle)
+    finally:
+        os.close(fd)
+except OSError:
+    sys.exit(0)
+words = text.split("\n")[0].split()[1:]
+print("".join(" " + word for word in words if re.fullmatch(r"[a-z0-9_-]{1,64}", word)))'
+
+fuQUARANTINE_SAVE () {
+  python3 -c "${myQUARANTINE_WRITE}" "${myQUARANTINE_FILE}" "${myQUARANTINE}" 2>/dev/null \
+    || echo " => [WARN] ${myQUARANTINE_FILE} could not be written."
+}
+
+fuQUARANTINE_LOAD () {
+  myQUARANTINE=$(python3 -c "${myQUARANTINE_READ}" "${myQUARANTINE_FILE}" 2>/dev/null)
+}
+
+# Prints the ews.cfg $1 with the module key of the sections in $2 set to false; every other line
+# stays as it is
+fuNORMAL_CONFIG_REWRITE () {
+  awk -v off="$2" '
+    BEGIN { n = split(off, list, " "); for (i = 1; i <= n; i++) skip[list[i]] = 1 }
+    /^\[/ {
+      section = tolower(substr($0, 2, index($0, "]") - 2))
+      print
+      next
+    }
+    (section in skip) && tolower($0) ~ ("^" section "[ \t]*[=:]") {
+      print section " = false"
+      next
+    }
+    { print }
+  ' "$1"
+}
+
+# The config folder of the normal passes with the quarantined modules off, ews.ip and ews.uuid as
+# links to those of ewsposter
+fuNORMAL_CONFIG () {
+  local myFILE=""
+  mkdir -p "${myNORMAL_CFG}" || return 1
+  fuNORMAL_CONFIG_REWRITE "${myEWS}/ews.cfg" "${myQUARANTINE}" > "${myNORMAL_CFG}/ews.cfg.new" || return 1
+  mv -f "${myNORMAL_CFG}/ews.cfg.new" "${myNORMAL_CFG}/ews.cfg" || return 1
+  for myFILE in ews.ip ews.uuid;
+    do
+      if [ -e "${myEWS}/${myFILE}" ];
+        then
+          ln -sf "${myEWS}/${myFILE}" "${myNORMAL_CFG}/${myFILE}" || return 1
+        else
+          rm -f "${myNORMAL_CFG}/${myFILE}"
+      fi
+  done
+}
+
+# The quarantined modules, each with an idle pass of its own: one that is clean and caught up
+# leaves the quarantine. 1 when the idle config cannot be written (nothing may be sent then).
+fuQUARANTINE_ROUND () {
+  local myMODULE=""
+  local myLEFT=""
+  # one pass each round, no tries again: a module that keeps failing waits for the next round
+  local myIDLE_RETRIES=0
+  [ -n "${myQUARANTINE}" ] || return 0
+  if ! fuIDLE_CONFIG;
     then
-      return 0
+      echo " => [WARN] The config of the idle passes could not be written to ${myIDLE_CFG}: no normal pass while${myQUARANTINE} catch up."
+      return 1
   fi
-  if [ "$1" -eq 1 ] || ! fuSUBSET "${myIDLE_FAILED}" "${myHOLD_SKIPPED}";
-    then
-      myHOLD_DIRTY="yes"
-  fi
-  myHOLD_SKIPPED=$(fuINTERSECT "${myHOLD_SKIPPED}" "${myIDLE_FAILED}")
+  for myMODULE in ${myQUARANTINE};
+    do
+      if fuIDLE_PASSES "${myMODULE}";
+        then
+          echo " => ${myMODULE} caught up after the hold, it sends again."
+        else
+          myLEFT="${myLEFT} ${myMODULE}"
+      fi
+  done
+  myQUARANTINE="${myLEFT}"
+  fuQUARANTINE_SAVE
 }
 
 # hold.ack, a new file renamed into place (a link of that name is replaced, never followed):
@@ -359,10 +471,21 @@ fuSTUCK () {
   fi
 }
 
-# One normal pass
+# One normal pass; with quarantined modules, through the config copy that has them off (no copy:
+# no pass)
 fuPASS () {
   local myRC=0
-  fuRUN "${myPYTHON}" -u "${myEWS}/ews.py" -l 0
+  if [ -n "${myQUARANTINE}" ];
+    then
+      if ! fuNORMAL_CONFIG;
+        then
+          echo " => [WARN] The config of the normal passes could not be written to ${myNORMAL_CFG}: no normal pass."
+          return 0
+      fi
+      fuRUN "${myPYTHON}" -u "${myEWS}/ews.py" -c "${myNORMAL_CFG}/" -l 0
+    else
+      fuRUN "${myPYTHON}" -u "${myEWS}/ews.py" -l 0
+  fi
   myRC=$?
   if [ ${myRC} -ne 0 ];
     then
@@ -374,8 +497,9 @@ fuPASS () {
 # One round of the loop. While the hold is on: idle passes, and hold.ack once they ended
 # cleanly with no module behind (the first round of a hold starts with a normal pass); modules
 # that fail on their own are named in it. When it is over: hold.ack removed, one more idle round,
-# and only when that ended cleanly with no module behind (modules that fail on their own aside)
-# the normal pass; until then the rounds stay idle (stuck). Sets myINTERVAL, the pause after the
+# and every module that was not clean and caught up in it is quarantined, the others send at once
+# (when that round could not run at all, the rounds stay idle: stuck). Each normal round first
+# gives every quarantined module an idle pass of its own. Sets myINTERVAL, the pause after the
 # round, and writes hold.state.
 fuROUND () {
   local myRC=0
@@ -392,7 +516,6 @@ fuROUND () {
       fi
       fuIDLE
       myRC=$?
-      fuHOLD_TRACK ${myRC}
       case ${myRC} in
         0)
           fuHOLD_ACK
@@ -400,10 +523,6 @@ fuROUND () {
         3)
           # the others are held; the check leaves the honeypots of these modules alone
           echo " => [WARN] hold.ack without the modules whose idle passes fail:${myIDLE_FAILED}; the check leaves their honeypots alone."
-          if [ -z "${myHOLD_ACKED}" ] && [ -z "${myHOLD_NOACK}" ];
-            then
-              myHOLD_SKIPPED="${myIDLE_FAILED}"
-          fi
           fuHOLD_ACK "${myIDLE_FAILED# }"
           myHOLD_ACKED="yes" ;;
         2) echo " => [WARN] No hold.ack yet: a module is still behind, the idle rounds go on in ${myHOLD_INTERVAL} s." ;;
@@ -415,10 +534,6 @@ fuROUND () {
               fuHOLD_ACK "${myIDLE_FAILED# }"
           fi ;;
       esac
-      if [ -n "${myHOLD_DIRTY}" ];
-        then
-          echo " => [WARN] A module that was held fails now (or the hold began without an ack): after the hold ewsposter stays idle until a round is clean."
-      fi
       fuHOLD_STATE held
       return 0
   fi
@@ -427,24 +542,44 @@ fuROUND () {
       rm -f "${myHOLD_ACK}"
       fuIDLE
       myRC=$?
-      # a module the check left alone (the first ack, failed in every round since) is no reason to
-      # stay idle for the others; any other failing module is
-      if [ ${myRC} -eq 3 ] && [ -z "${myHOLD_DIRTY}" ] && fuSUBSET "${myIDLE_FAILED}" "${myHOLD_SKIPPED}";
-        then
-          echo " => [WARN] The modules the check left alone still fail:${myIDLE_FAILED}; the others send again."
-          myRC=0
-      fi
-      if [ ${myRC} -ne 0 ];
-        then
-          echo " => [WARN] The hold is over, but its idle round did not end cleanly or a module is still behind: idle again in ${myHOLD_INTERVAL} s, nothing is sent."
-          fuSTUCK
-          fuHOLD_STATE stuck
-          return 0
-      fi
+      case ${myRC} in
+        0) ;;
+        2|3)
+          myQUARANTINE=$(fuUNION "${myIDLE_FAILED}" "${myIDLE_BEHIND}")
+          if [ -z "${myQUARANTINE}" ];
+            then
+              # behind, but the pass named no module: every module catches up first
+              myQUARANTINE=$(fuUNION "$(fuIDLE_MODULES)" "")
+          fi ;;
+        *)
+          if [ -n "${myIDLE_FAILED}" ];
+            then
+              myQUARANTINE="${myIDLE_FAILED}"
+            else
+              # no module started (config, lock, the lookup of the address): idle again, nothing sent
+              echo " => [WARN] The hold is over, but its idle round did not run: idle again in ${myHOLD_INTERVAL} s, nothing is sent."
+              fuSTUCK
+              fuHOLD_STATE stuck
+              return 0
+          fi ;;
+      esac
       myHELD=""
       mySTUCK_SINCE=""
-      fuHOLD_RESET
-      echo " => The hold is over, ewsposter sends again."
+      myHOLD_ACKED=""
+      myHOLD_NOACK=""
+      fuQUARANTINE_SAVE
+      if [ -n "${myQUARANTINE}" ];
+        then
+          echo " => [WARN] The hold is over, ewsposter sends again, except${myQUARANTINE}: they send only once an idle pass of their own is clean and caught up."
+        else
+          echo " => The hold is over, ewsposter sends again."
+      fi
+    else
+      if ! fuQUARANTINE_ROUND;
+        then
+          fuHOLD_STATE normal
+          return 0
+      fi
   fi
   fuPASS
   myINTERVAL=${mySLEEP}
@@ -453,24 +588,19 @@ fuROUND () {
 
 # The state at the start: an ack of an earlier run would tell a new check that ewsposter holds
 # before it does; a hold that is on at the start has been probing for a while already, so it goes
-# on with idle passes at once, without the normal pass a new hold starts with
-fuHOLD_RESET () {
-  myHOLD_ACKED=""
-  myHOLD_NOACK=""
-  myHOLD_SKIPPED=""
-  myHOLD_DIRTY=""
-}
-
+# on with idle passes at once, without the normal pass a new hold starts with. Modules that were
+# quarantined (the container started again, tpotinit did not run) stay so.
 fuSTART () {
   myHELD=""
   mySTUCK_SINCE=""
-  fuHOLD_RESET
+  myHOLD_ACKED=""
+  myHOLD_NOACK=""
   rm -f "${myHOLD_ACK}"
+  fuQUARANTINE_LOAD
   if fuHOLD_ON;
     then
       echo " => The hold for the check of T-Pot is on at the start: idle passes only, nothing is sent."
       myHELD="yes"
-      # no first ack tells which modules the check leaves alone: every failing module keeps it stuck
       myHOLD_NOACK="yes"
       fuHOLD_STATE held
     else
