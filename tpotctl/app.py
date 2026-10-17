@@ -1578,8 +1578,9 @@ def check_cleanup_text(cleanup: Dict) -> Text:
                     + (f" ({' + '.join(str(n) for n in passes)} in two passes)." if len(passes) > 1 else "."),
                     style=theme.color("mist"))
         if cleanup.get("left"):
-            text.append(f"\n{glyphs.g('warn')} {cleanup['left']} probe events could not be told apart from real "
-                        f"ones and stay; Kibana: ", style=theme.color("warn"))
+            from tpotctl.checks import run as trun
+            text.append(f"\n{glyphs.g('warn')} {trun.left_text(cleanup['left'], cleanup.get('left_no_source', 0))}; "
+                        f"Kibana: ", style=theme.color("warn"))
             text.append(cleanup.get("left_kibana") or "-", style=theme.color("glass"))
     elif state == "kept":
         text.append("The test events stay in Elasticsearch (no cleanup).", style=theme.color("mist"))

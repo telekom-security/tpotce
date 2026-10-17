@@ -12,10 +12,14 @@ Every port of a probe has 5 s to connect and 10 s in all, a honeypot 10 s per po
 a port the time of its honeypot did not reach is "not reached", never closed (`ProbeResult.state`). `run_probes` has
 a budget for all probes. A refused or timed-out connection is a result (`port_open=False`), never
 an exception. The LLM honeypots (galah, beelzebub) are only knocked at: an answer would call the
-LLM.
+LLM. Some ports are left alone (skipped, the reason in the detail): dionaea's FTP data port 20
+(nothing listens) and its mirror port 42 (the mirror service connects back to the source). A
+honeypot that does not log some sources by its configuration names them (`PortProbe.ignores`):
+the probe of an address among them still runs, `ProbeResult.ignored` says which entry holds it.
 """
 
 import base64
+import ipaddress
 import re
 import socket
 import ssl
@@ -73,6 +77,10 @@ class ProbeResult:
     def __post_init__(self) -> None:
         if self.state not in STATES:
             raise ValueError(f"state {self.state!r} is none of {', '.join(STATES)}")
+
+    # the range of the source addresses the honeypot does not log (its configuration) that holds
+    # the probe address: the probe still runs, its log line and event never come ("" for none)
+    ignored: str = ""
 
     @property
     def port_open(self) -> bool:
@@ -702,10 +710,24 @@ class PortProbe:
     table does not name is only checked to be open (the coverage test wants every port named)."""
 
     def __init__(self, handlers: Dict[Tuple[int, str], Handler], note: str = "",
-                 default: Optional[Handler] = None):
+                 default: Optional[Handler] = None, ignores: Iterable[str] = ()):
         self.handlers = handlers
         self.note = note
         self.default = default
+        # the sources the honeypot does not log by its configuration (addresses or networks)
+        self.ignores = tuple(ignores)
+
+    def ignored(self, host: str) -> str:
+        """The entry of `ignores` that holds the address `host`, "" for none (or a name)."""
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            return ""
+        for entry in self.ignores:
+            network = ipaddress.ip_network(entry, strict=False)
+            if address.version == network.version and address in network:
+                return entry
+        return ""
 
     def handler_for(self, port: Port) -> Handler:
         found = self.handlers.get((port.target, port.protocol))
@@ -747,7 +769,9 @@ class PortProbe:
                 outcomes.append(_failed(port, exc, ctx.opened, cut))
             token_sent = token_sent or ctx.token_sent
             src_ports += ctx.src_ports
-        return _combine(outcomes, token_sent, src_ports, self.note)
+        result = _combine(outcomes, token_sent, src_ports, self.note)
+        result.ignored = self.ignored(host)
+        return result
 
 
 def _failed(port: Port, exc: BaseException, opened: bool, cut: bool) -> _Outcome:
@@ -811,7 +835,20 @@ def _tftp(ctx: _Ctx) -> Tuple[Optional[bool], str]:
     return None, "TFTP request taken (port only)"
 
 
+def not_tried(why: str) -> Handler:
+    """A port left alone: nothing is sent, not even a connection (UDP has no knock)."""
+    def handler(ctx: _Ctx) -> Tuple[Optional[bool], str]:
+        raise _NotTried(f"not probed, {why}")
+    return handler
+
+
 TCP, UDP = "tcp", "udp"
+FTP_DATA_REASON = "FTP data port, nothing listens on it"
+MIRROR_REASON = "dionaea mirrors a connection on this port back to its source"
+# elasticpot, ipphoney and rdphoneypot log no event of a source in `blacklist` of honeypot.cfg; its
+# fallback in honeypot.py (CONFIG.get('honeypot', 'blacklist', fallback=...)) holds while the
+# dist/honeypot.cfg of T-Pot leaves the line commented out
+BLACKLIST_FALLBACK = ("127.0.0.1", "192.168.0.0/16")
 
 PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
     "adbhoney": PortProbe({(5555, TCP): adb}),
@@ -871,9 +908,12 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
     }),
     "dicompot": PortProbe({(11112, TCP): _dicom_echo}),
     "dionaea": PortProbe({
-        (20, TCP): connect_only,
+        # the source port of FTP data in active mode: nothing listens on it
+        (20, TCP): not_tried(FTP_DATA_REASON),
         (21, TCP): ftp_login,
-        (42, TCP): connect_only,
+        # the mirror service connects back to the source of a connection (dionaea's mirror.py,
+        # mirrord on 42): a probe would start a loop of connections, hundreds of events
+        (42, TCP): not_tried(MIRROR_REASON),
         (69, UDP): _tftp,
         (81, TCP): http("GET", "/{token}.php"),
         (135, TCP): connect_only,
@@ -884,7 +924,7 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         (3306, TCP): _mysql_greeting,
         (27017, TCP): connect_only,
     }),
-    "elasticpot": PortProbe({(9200, TCP): http("GET", "/_cluster/health?{token}")}),
+    "elasticpot": PortProbe({(9200, TCP): http("GET", "/_cluster/health?{token}")}, ignores=BLACKLIST_FALLBACK),
     "endlessh": PortProbe({(2222, TCP): tarpit}),
     # knocked at only, on every port: an answer would call the LLM
     "galah": PortProbe({(80, TCP): knock, (8080, TCP): knock, (443, TCP): knock, (8443, TCP): knock},
@@ -950,7 +990,7 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         (9200, TCP): _qhp_elastic,
         (11211, TCP): connect_only,
     }),
-    "ipphoney": PortProbe({(631, TCP): http("GET", "/tpot-check/{token}")}),
+    "ipphoney": PortProbe({(631, TCP): http("GET", "/tpot-check/{token}")}, ignores=BLACKLIST_FALLBACK),
     "log4pot": PortProbe({(8080, TCP): http("GET", "/tpot-check/{token}?probe={token}")}),
     "mailoney": PortProbe({
         (25, TCP): smtp(mail=True),
@@ -962,20 +1002,13 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         (9100, TCP): _pjl,
         (8000, TCP): http("POST", "/login", _LOGIN_FORM, f"username={{token}}&password={PASSWORD}"),
     }),
-    "rdphoneypot": PortProbe({(3389, TCP): _rdp}),
+    "rdphoneypot": PortProbe({(3389, TCP): _rdp}, ignores=BLACKLIST_FALLBACK),
     "redishoneypot": PortProbe({(6379, TCP): _redis}),
     "sentrypeer": PortProbe({(5060, TCP): _sip_options(udp=False), (5060, UDP): _sip_options(udp=True)}),
     "wordpot": PortProbe({
         (80, TCP): http("POST", "/wp-login.php", _LOGIN_FORM, f"log={{token}}&pwd={PASSWORD}&wp-submit=Log+In"),
     }),
 }
-
-
-def not_tried(why: str) -> Handler:
-    """A port left alone: nothing is sent, not even a connection (UDP has no knock)."""
-    def handler(ctx: _Ctx) -> Tuple[Optional[bool], str]:
-        raise _NotTried(f"not probed, {why}")
-    return handler
 
 
 # sentrypeer with SENTRYPEER_PEER_TO_PEER shares the sources it sees with its peers, so the

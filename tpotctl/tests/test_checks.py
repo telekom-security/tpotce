@@ -1402,6 +1402,47 @@ GROUPS = {"tpotinit": "core", "cowrie": "honeypots", "dionaea": "honeypots", "ci
           "elasticsearch": "elk", "nginx": "tools"}
 
 
+class ProbeTableTest(unittest.TestCase):
+    """Ports the probes leave alone, and the sources honeypots do not log."""
+
+    def test_dionaea_leaves_ftp_data_and_the_mirror_alone(self):
+        table = probes.PROBES["dionaea"]
+        for target, why in ((20, probes.FTP_DATA_REASON), (42, probes.MIRROR_REASON)):
+            with self.subTest(port=target):
+                with self.assertRaises(probes._NotTried) as caught:
+                    table.handler_for(Port(target, target))(None)
+                self.assertEqual(str(caught.exception), f"not probed, {why}")
+        self.assertEqual(probes.FTP_DATA_REASON, "FTP data port, nothing listens on it")
+        self.assertEqual(probes.MIRROR_REASON, "dionaea mirrors a connection on this port back to its source")
+        # skipped ports do not make the honeypot closed
+        outcomes = [probes._Outcome(Port(20, 20), probes.SKIPPED, None, "not probed, x"),
+                    probes._Outcome(Port(21, 21), probes.OPEN, True, "220")]
+        self.assertEqual(probes._combine(outcomes, False, []).state, probes.OPEN)
+
+    def test_the_mirror_is_the_only_service_that_connects_back(self):
+        """T-Pot enables no nfq ihandler (nfqmirrord); the mirror service of dionaea has no ports of
+        its own in its config (mirror.py listens on 42)."""
+        etc = os.path.join(REPO, "docker", "dionaea", "dist", "etc")
+        self.assertNotIn("nfq.yaml", os.listdir(os.path.join(etc, "ihandlers")))
+        with open(os.path.join(etc, "services", "mirror.yaml"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read().split(), ["-", "name:", "mirror"])
+
+    def test_sources_the_honeypot_does_not_log(self):
+        for name in ("elasticpot", "ipphoney", "rdphoneypot"):
+            with self.subTest(name=name):
+                table = probes.PROBES[name]
+                self.assertEqual(table.ignores, ("127.0.0.1", "192.168.0.0/16"))
+                self.assertEqual(table.ignored("192.168.5.15"), "192.168.0.0/16")
+                self.assertEqual(table.ignored("127.0.0.1"), "127.0.0.1")
+                self.assertEqual((table.ignored("10.0.0.5"), table.ignored("2001:db8::1"), table.ignored("x")),
+                                 ("", "", ""))
+                # the fallback of honeypot.py holds: T-Pot's honeypot.cfg sets no blacklist of its own
+                with open(os.path.join(REPO, "docker", name, "dist", "honeypot.cfg"), encoding="utf-8") as handle:
+                    lines = [line.strip() for line in handle if "blacklist" in line.split("=")[0]]
+                self.assertTrue(all(line.startswith("#") for line in lines), lines)
+        self.assertEqual(probes.PROBES["cowrie"].ignores, ())
+
+
 class InventoryTest(unittest.TestCase):
 
     CONFIG = {"services": {
@@ -2351,6 +2392,8 @@ def es_match(query, source):
         return value is not None and window.get("gte", "") <= value <= window.get("lte", "9999")
     if "query_string" in query:
         return query["query_string"]["query"].strip('"') in json.dumps(source)
+    if "exists" in query:
+        return es_field(source, query["exists"]["field"]) is not None
     raise AssertionError(f"query the fake does not know: {query}")
 
 
@@ -2606,6 +2649,39 @@ class StagesTest(unittest.TestCase):
         self.assertEqual(stages.match_line("dicompot", self.result(src_ports=[]), ["", "Connection from x"],
                                            token, OWN), "Connection from x")
 
+    def test_a_line_without_the_token_by_address_and_port(self):
+        """The token went out, but the honeypot logs only the connect (adbhoney) or the payload
+        encoded (medpot): an own address with a source port of the probe counts, where the ports
+        survive; the token stays the first choice."""
+        adbhoney = ('{"eventid": "adbhoney.session.connect", "src_ip": "192.0.2.5", "src_port": 56206, '
+                    '"dest_ip": "172.18.0.2", "dest_port": "5555", "timestamp": "2026-10-17T10:43:48.194987Z"}')
+        medpot = ('{"level":"info","message":"Connection found","timestamp":"2026-10-17T10:43:48Z",'
+                  '"src_port":"53180","src_ip":"192.0.2.5","data":"TVNIfF5+XCZ8VFBPVENIRUNL"}')
+        cases = (("adbhoney", adbhoney, 56206), ("medpot", medpot, 53180))
+        for name, line, port in cases:
+            with self.subTest(name=name):
+                result = self.result(token_sent=True, src_ports=[port])
+                self.assertEqual(stages.match_line(name, result, ["", line], TOKEN, OWN), line)
+                self.assertEqual(stages.match_line(name, result, [line], TOKEN, OWN, ports_survive=False), "")
+                self.assertEqual(stages.match_line(name, self.result(token_sent=True, src_ports=[port + 1]),
+                                                   [line], TOKEN, OWN), "")
+                with_token = [line, f'{{"user": "{TOKEN}", "src_ip": "192.0.2.5"}}']
+                self.assertEqual(stages.match_line(name, result, with_token, TOKEN, OWN), with_token[1])
+
+    def test_conpot_ipmi_by_its_address(self):
+        """conpot's IPMI logs the source port of an address's first contact: a line with an own
+        address counts, and its port is the one the honeypot logs for the probe."""
+        line = ('{"schema_version": 1, "protocol": "ipmi", "src_ip": "192.0.2.5", "src_port": 41000, '
+                '"event_type": "NEW_CONNECTION"}')
+        other = '{"protocol": "ipmi", "src_ip": "198.51.100.1", "src_port": 40100}'
+        result = self.result(src_ports=[40100])
+        self.assertEqual(stages.match_line("conpot_ipmi", result, [other, line], TOKEN, OWN), line)
+        self.assertEqual(stages.match_line("conpot_iccp", result, [other, line], TOKEN, OWN), "")
+        self.assertEqual(stages.line_port(line), 41000)
+        self.assertEqual(stages.line_port('{"src_port": "53180"}'), 53180)
+        for text in ('{"src_port": true}', '{"src_port": 0}', "no json", '["src_port"]', '{"src_port": "x"}'):
+            self.assertIsNone(stages.line_port(text), text)
+
     def test_geoip(self):
         self.assertEqual(stages.geo_stage(None, 90).state, stages.FAILED)
         failed = {"_source": {"tags": ["_geoip_lookup_failure"], "geoip": {}}}
@@ -2696,7 +2772,8 @@ class StagesTest(unittest.TestCase):
         # what the probes sent from this host and none of (a) to (c) names: counted, not deleted
         left = stages.leftover_query(BASE, BASE + datetime.timedelta(minutes=5), self.own(), HOST)
         self.assertEqual(es.count(left), 1)
-        self.assertEqual(stages.leftover_kql(self.own(), HOST), 'src_ip:"192.0.2.5" and type:("ConPot" or "Cowrie")')
+        self.assertEqual(stages.leftover_kql(self.own(), HOST),
+                         '(src_ip:"192.0.2.5" or not src_ip:*) and type:("ConPot" or "Cowrie")')
 
     def test_the_kibana_link(self):
         query = stages.run_kql(TOKEN, [HOST, "8.8.8.8"])
@@ -3100,6 +3177,82 @@ class RunTest(unittest.TestCase):
         self.assertIn(run_checks.SECOND_PASS, world.sleeps)
         self.assertTrue(any("2 + 1" in text for _kind, text in world.said))
 
+    def test_a_honeypot_that_does_not_log_the_probe_address(self):
+        """elasticpot ignores 192.168.0.0/16: the probe runs (port, answer), log and Elasticsearch
+        are n/a with the reason, the geo event covers the rest."""
+        ignored = probes.ProbeResult("open", True, "9200/tcp: answered", token_sent=True, src_ports=[40100],
+                                     ignored="192.168.0.0/16")
+        world = self.world(("elasticpot",), host="192.168.5.15", results={"elasticpot": ignored}, probe_logs=False,
+                           probe_docs=False)
+        report = world.run()
+        self.assertEqual(report.exit_code, 0, report.rows[0].stages)
+        row = report.rows[0]
+        why = "elasticpot does not log sources in 192.168.0.0/16 (its configuration)"
+        self.assertEqual([row.state(name) for name in stages.STAGES],
+                         [stages.OK, stages.OK, stages.NOT_APPLICABLE, stages.NOT_APPLICABLE, stages.OK, stages.OK,
+                          stages.OK])
+        self.assertEqual((row.stages["log"].detail, row.stages["elasticsearch"].detail), (why, why))
+
+    def test_events_without_a_source_are_counted_never_deleted(self):
+        """dicompot's "Connection Finished" has no src_ip: counted in cleanup.left, named as such,
+        left in Elasticsearch."""
+        knock = probes.ProbeResult("open", True, "11112/tcp: port open", answer_checked=False, src_ports=[40100])
+        world = self.world(("dicompot",), results={"dicompot": knock}, geo=False)
+        world.es.add({"type": "Dicompot", "session": "Finished", "@timestamp": stages.iso(BASE)})
+        report = world.run()
+        self.assertEqual((report.cleanup["left"], report.cleanup["left_no_source"]), (1, 1))
+        self.assertTrue(any(doc["_source"].get("session") == "Finished" for doc in world.es.docs))
+        self.assertTrue(any(text.startswith("1 probe events could not be told apart from real ones and stay "
+                                            "(1 of them without a source address); Kibana: ")
+                            for _kind, text in world.said))
+        import urllib.parse
+        self.assertIn("not src_ip:*", urllib.parse.unquote(report.cleanup["left_kibana"]))
+        self.assertEqual(run_checks.read_result(world.result_file)["cleanup"]["left_no_source"], 1)
+
+    def test_conpot_ipmi_takes_the_port_it_logs(self):
+        """The IPMI line of the probe names the port of an earlier contact: the log stage finds it
+        by the address, Elasticsearch and the cleanup by that port."""
+        result = probes.ProbeResult("open", True, "623/udp: IPMI answer", src_ports=[40100])
+        world = self.world(("conpot_ipmi",), results={"conpot_ipmi": result}, probe_logs=False, probe_docs=False)
+        line = json.dumps({"src_ip": HOST, "src_port": 41000, "event_type": "NEW_CONNECTION"})
+
+        def logged(w):
+            rel = fixtures.log_file("conpot_ipmi")
+            if line.encode() not in w.files.logs[rel] and "probes" in w.order:
+                w.files.logs[rel] += (line + "\n").encode()
+                w.es.add({"type": "ConPot", "src_ip": HOST, "src_port": 41000, "@timestamp": stages.iso(w.now())})
+        world.sleep_hook = logged
+        report = world.run()
+        row = report.rows[0]
+        self.assertEqual((row.state("log"), row.state("elasticsearch")), (stages.OK, stages.OK), row.stages)
+        self.assertIn(41000, world.check.results["conpot_ipmi"].src_ports)
+        self.assertNotIn(HOST, [d["_source"]["src_ip"] for d in world.es.docs if d["_source"].get("type") == "ConPot"])
+
+    def test_the_map_gets_the_time_map_data_needs(self):
+        """A geo event in Elasticsearch that does not come on Redis fails MAP_WAIT seconds later, not
+        after twice the timeout, and says why."""
+        world = self.world(("cowrie", "dionaea"))
+        listener_lines = FakeListener.lines
+
+        def lines(listener, which):
+            return [line for line in listener_lines(listener, which) if '"src_port": 51234' not in line]
+        with mock.patch.object(FakeListener, "lines", lines):
+            report = world.run()
+        rows = {row.name: row for row in report.rows}
+        self.assertEqual(rows["dionaea"].state("attack_map"), stages.OK)
+        self.assertEqual(rows["cowrie"].state("attack_map"), stages.FAILED)
+        self.assertTrue(rows["cowrie"].stages["attack_map"].detail.startswith(stages.MAP_SKIPPED),
+                        rows["cowrie"].stages["attack_map"].detail)
+        self.assertIn("Elasticsearch had it", rows["cowrie"].stages["attack_map"].detail)
+        # the stages polled about MAP_WAIT past the geo event, far less than twice the timeout
+        self.assertLess(sum(world.sleeps), 2 * run_checks.TIMEOUT)
+
+    def test_nothing_on_redis_says_so(self):
+        world = self.world(("cowrie",), map_missing=("redis", "ws"))
+        report = world.run()
+        self.assertEqual(report.rows[0].stages["attack_map"].detail,
+                         stages.MAP_SILENT.format(channel=stages.REDIS_CHANNEL))
+
     def test_probe_events_through_docker_proxy_stay_and_are_counted(self):
         knock = probes.ProbeResult("open", True, "2404/tcp: answered", src_ports=[40100])
         world = self.world(("conpot_IEC104",), host="127.0.0.1", results={"conpot_IEC104": knock}, geo=False)
@@ -3296,7 +3449,7 @@ class ResultViewTest(unittest.TestCase):
         self.assertEqual(cowrie["geo"]["location"], {"lat": "1.5", "country": "United States",
                                                      "ip_rep": "known attacker, mass scanner"})
         self.assertEqual(view["cleanup"], {"state": "done", "deleted": 3, "passes": [2, 1], "left": 0,
-                                           "left_kibana": "", "detail": ""})
+                                           "left_no_source": 0, "left_kibana": "", "detail": ""})
         self.assertEqual(view["options"], {"geo": True, "keep": False})
 
     def test_a_stage_the_honeypot_does_not_name_is_not_reached(self):

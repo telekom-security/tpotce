@@ -3,8 +3,10 @@
     1 port           the probe reached the published ports (probes.ProbeResult.state)
     2 answer         the honeypot answered as it should ("–" where only the port was checked)
     3 log            the probe's line in the honeypot's log: by the token where the probe sent it,
-                     by an own address and a source port of the probe where the protocol carries no
-                     text, by the time window for dicompot (its DICOM client leaves no source port)
+                     else by an own address and a source port of the probe (where the source ports
+                     survive: a honeypot that logs only the connect or encodes the payload), by the
+                     time window for dicompot (its DICOM client leaves no source port), by an own
+                     address for conpot_ipmi (it logs the source port of an address's first contact)
     4 elasticsearch  the probe's event in logstash-* (127.0.0.1:64298)
     5 geoip          the injected geo event (a fixture with a fixed test IP): geoip.latitude, no
                      _geoip_lookup_failure
@@ -17,6 +19,7 @@ check stopped). A SENSOR runs stages 1 to 3 only, the others say "check on the H
 Everything here is pure: the runner (tpotctl.checks.run) hands in what it saw.
 """
 
+import json
 import re
 import urllib.parse
 from dataclasses import asdict, dataclass, field
@@ -46,6 +49,17 @@ TEST_IPS = ("8.8.8.8", "208.67.222.222", "8.8.4.4", "4.2.2.2")
 MARKER_PORT = 51234
 # honeypots whose log is matched by the time window: their probe leaves no source port
 TIME_WINDOW = ("dicompot",)
+# honeypots whose log is matched by an own address alone: conpot's IPMI keeps one attack session
+# per source address (ipmi_server.py attack_sessions) until it closes, so a later probe from this
+# host is logged with the source port of the first one; the port of the line found then counts as
+# one of the probe's (the cleanup takes it)
+ADDRESS_ONLY = ("conpot_ipmi",)
+# map_data (t-pot-attack-map DataServer_v2.py) polls every 0.5 s and takes the events up to 10 s
+# old; Elasticsearch shows an event 5 s after it is indexed (refresh_interval): the seconds an event
+# has, from the moment the check finds it in Elasticsearch, to come on Redis and the WebSocket
+MAP_WAIT = 30.0
+MAP_SKIPPED = "not shown by the Attack Map (map_data skips events indexed after newer ones)"
+MAP_SILENT = "nothing came on Redis ({channel}) during the check: does map_data run? (docker logs map_data)"
 # the types the Attack Map leaves out (events.NOT_ATTACKS)
 NOT_ON_THE_MAP = ("Suricata", "P0f", "DdospotTarget")
 REDIS_CHANNEL = "attack-map-production"
@@ -176,24 +190,50 @@ def _has_address(line: str, addresses: Iterable[str]) -> bool:
 
 
 def match_line(name: str, result: ProbeResult, lines: Iterable[str], token: str,
-               addresses: Iterable[str], skip: Iterable[str] = ()) -> str:
-    """The first new log line of the probe: with the token where the probe sent it; for dicompot
-    any new line (the time window); else a line with an own address and a source port of the
-    probe. Lines in `skip` (the injected geo event) never count."""
+               addresses: Iterable[str], skip: Iterable[str] = (), ports_survive: bool = True) -> str:
+    """The first new log line of the probe: with the token where the probe sent it, else (where the
+    source ports reach the honeypot, `ports_survive`) a line with an own address and a source port
+    of the probe: a honeypot may log only the connect (adbhoney) or the payload encoded (medpot).
+    For dicompot any new line (the time window), for conpot_ipmi a line with an own address. Lines
+    in `skip` (the injected geo events) never count."""
     skip = set(skip)
     addresses = list(addresses)
-    for line in lines:
-        if not line.strip() or line in skip:
-            continue
-        if result.token_sent:
+    lines = [line for line in lines if line.strip() and line not in skip]
+    if result.token_sent:
+        for line in lines:
             if token in line:
                 return line
-            continue
-        if name in TIME_WINDOW:
-            return line
+        if not ports_survive:
+            return ""
+    elif name in TIME_WINDOW:
+        return lines[0] if lines else ""
+    for line in lines:
         if _has_address(line, addresses) and any(_has_number(line, port) for port in result.src_ports):
             return line
+    if name in ADDRESS_ONLY:
+        for line in lines:
+            if _has_address(line, addresses):
+                return line
     return ""
+
+
+def line_port(line: str) -> Optional[int]:
+    """The source port a JSON log line names (src_port), None for none."""
+    try:
+        value = json.loads(line).get("src_port")
+    except (ValueError, AttributeError):
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+        port = int(value)
+        return port if 0 < port <= 65535 else None
+    return None
+
+
+def ignored_text(name: str, entry: str) -> str:
+    """Why a probe leaves no log line: the honeypot does not log sources in `entry`."""
+    return f"{name} does not log sources in {entry} (its configuration)"
 
 
 # -- stages 4 and 5: Elasticsearch --------------------------------------------------------------
@@ -210,7 +250,7 @@ def token_clause(token: str) -> Dict[str, Any]:
     return {"query_string": {"query": f'"{token}"', "lenient": True}}
 
 
-SOURCE_FIELDS = ["type", "src_ip", "src_port", "dest_port", "tags", "t-pot_hostname", "ip_rep",
+SOURCE_FIELDS = ["@timestamp", "type", "src_ip", "src_port", "dest_port", "tags", "t-pot_hostname", "ip_rep",
                  "geoip.latitude", "geoip.longitude", "geoip.country_name", "geoip_ext.latitude"]
 
 
@@ -384,8 +424,20 @@ def leftover_query(start: datetime, end: datetime, own: OwnEvents, host: str) ->
                                           {"term": {"src_ip.keyword": host}}]}}}
 
 
+def sourceless_query(start: datetime, end: datetime, own: OwnEvents) -> Optional[Dict[str, Any]]:
+    """The events of the probed types in the window without a source address (dicompot's
+    "Connection Finished"): they may be the probes' or real ones, so they are counted, never
+    deleted."""
+    if not _probed(own):
+        return None
+    return {"query": {"bool": {"filter": [{"range": {"@timestamp": cleanup_window(start, end)}},
+                                          {"terms": {"type.keyword": _probed(own)}}],
+                               "must_not": [{"exists": {"field": "src_ip"}}]}}}
+
+
 def leftover_kql(own: OwnEvents, host: str) -> str:
-    return f'src_ip:"{host}" and type:(' + " or ".join(f'"{name}"' for name in _probed(own)) + ")"
+    return (f'(src_ip:"{host}" or not src_ip:*) and type:('
+            + " or ".join(f'"{name}"' for name in _probed(own)) + ")")
 
 
 def run_kql(token: str, sources: Iterable[str]) -> str:

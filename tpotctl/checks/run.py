@@ -36,7 +36,8 @@ last.json (version 1), for the Checks page:
      "exit_code", "result": "ok"|"failed"|"hold failed"|"cancelled"|"error", "error",
      "ewsposter": {"state": "held"|"not_here"|"not_running"|"failed"|"none", "detail"},
      "cleanup": {"state": "done"|"kept"|"skipped"|"failed"|"none", "deleted" (the sum),
-                 "passes": [first, second], "left" (probe events that stay), "left_kibana", "detail"},
+                 "passes": [first, second], "left" (probe events that stay), "left_no_source" (of them
+                 the events of a probed type without a source address), "left_kibana", "detail"},
      "kibana": the Discover link of the run's window and token / sources,
      "stages": the names in order, "titles": name -> column title,
      "honeypots": [{"name", "group", "container", "running", "external", "logstash_type", "ports",
@@ -514,6 +515,14 @@ def probe_address(host_address: Optional[Callable[[], str]] = None, interfaces: 
     raise CheckError("no address of this host found to probe (no route to the internet, no global IPv4 address)")
 
 
+def left_text(left: int, sourceless: int = 0) -> str:
+    """The probe events a cleanup leaves, in words."""
+    text = f"{left} probe events could not be told apart from real ones and stay"
+    if sourceless:
+        text += f" ({sourceless} of them without a source address)"
+    return text
+
+
 def new_run_id() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + secrets.token_hex(3)
 
@@ -664,6 +673,7 @@ def result_view(data: Any) -> Dict[str, Any]:
           "cleanup.passes")
     view["cleanup"] = {"state": _text(cleanup, "state", "cleanup."), "deleted": _number(cleanup, "deleted", "cleanup."),
                        "passes": list(passes), "left": _number(cleanup, "left", "cleanup."),
+                       "left_no_source": _number(cleanup, "left_no_source", "cleanup."),
                        "left_kibana": _text(cleanup, "left_kibana", "cleanup."),
                        "detail": _text(cleanup, "detail", "cleanup.")}
     rows = data.get("honeypots", [])
@@ -1193,7 +1203,13 @@ class Check:
                 continue                    # _leave_alone said why
             row = self.rows[honeypot.name]
             result = self.results.get(honeypot.name)
-            if row.state("port") == OK and result is not None:
+            if row.state("port") == OK and result is not None and result.ignored:
+                # the probe ran, but the honeypot does not log its source: the geo event covers the rest
+                why = stages.ignored_text(honeypot.name, result.ignored)
+                row.set("log", NOT_APPLICABLE, why)
+                if not self.sensor:
+                    row.set("elasticsearch", NOT_APPLICABLE, why)
+            elif row.state("port") == OK and result is not None:
                 pending_log.append(honeypot)
                 if not self.sensor:
                     pending_es.append(honeypot)
@@ -1221,6 +1237,10 @@ class Check:
                 row.set("attack_map", NOT_APPLICABLE, "no sample event for it")
         errors: Dict[str, str] = {}
         skip = [row.geo.line for row in self.rows.values() if row.geo is not None and row.geo.line]
+        survive = self.ports_survive()
+        # per honeypot on the way to the map: until when (clock), and how late Elasticsearch had it
+        map_due: Dict[str, float] = {}
+        map_lag: Dict[str, Optional[float]] = {}
         while pending_log or pending_es or pending_geo or pending_map:
             hold.check()
             now = self.clock()
@@ -1241,8 +1261,12 @@ class Check:
             for honeypot in list(pending_log):
                 row, result = self.rows[honeypot.name], self.results[honeypot.name]
                 lines = self.watch.new_lines(LOGS[honeypot.name][1]) if honeypot.name in LOGS else []
-                line = stages.match_line(honeypot.name, result, lines, self.token, self.addresses, skip)
+                line = stages.match_line(honeypot.name, result, lines, self.token, self.addresses, skip, survive)
                 if line:
+                    port = stages.line_port(line) if honeypot.name in stages.ADDRESS_ONLY else None
+                    if port is not None and port not in result.src_ports:
+                        # the source port the honeypot logs for this host: the probe's (Elasticsearch, cleanup)
+                        result.src_ports.append(port)
                     row.log_line = line
                     row.set("log", OK, line[:200])
                     pending_log.remove(honeypot)
@@ -1296,6 +1320,8 @@ class Check:
                         row.set("attack_map", FAILED, self.map.error)
                     else:
                         pending_map.append(honeypot)
+                        map_due[honeypot.name] = min(map_end, now + stages.MAP_WAIT)
+                        map_lag[honeypot.name] = self._lag(hit)
             for honeypot in list(pending_map):
                 row = self.rows[honeypot.name]
                 redis = stages.seen(self.map.lines("redis"), row.geo.src_ip, row.geo.src_port)
@@ -1303,12 +1329,35 @@ class Check:
                 if redis and ws:
                     row.set("attack_map", OK, "on Redis and on the WebSocket")
                     pending_map.remove(honeypot)
-                elif now >= map_end:
-                    row.set("attack_map", FAILED, "on Redis, not on the WebSocket" if redis else
-                            f"not on Redis ({stages.REDIS_CHANNEL}) within {2 * self.options.timeout:g} s")
+                elif now >= map_due.get(honeypot.name, map_end):
+                    row.set("attack_map", FAILED, self._map_miss(redis, map_lag.get(honeypot.name)))
                     pending_map.remove(honeypot)
             if pending_log or pending_es or pending_geo or pending_map:
                 self.sleep(self.poll)
+
+    def _lag(self, hit: Optional[dict]) -> Optional[float]:
+        """How many seconds after its @timestamp the check found an event in Elasticsearch."""
+        stamp = ((hit or {}).get("_source") or {}).get("@timestamp")
+        if not isinstance(stamp, str):
+            return None
+        try:
+            moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        return max(0.0, (self.now() - moment).total_seconds())
+
+    def _map_miss(self, redis: bool, lag: Optional[float]) -> str:
+        """Why a geo event in Elasticsearch did not reach the map in the time map_data needs."""
+        if redis:
+            return "on Redis, not on the WebSocket"
+        if not any('"src_ip"' in line for line in self.map.lines("redis")):
+            return stages.MAP_SILENT.format(channel=stages.REDIS_CHANNEL)
+        text = stages.MAP_SKIPPED
+        if lag is not None:
+            text += f"; Elasticsearch had it {lag:.0f} s after its time"
+        return text
 
     # -- the cleanup --
 
@@ -1394,16 +1443,21 @@ class Check:
                 passes.append(self._delete(own, end))
             left_query = stages.leftover_query(self.started, end, own, self.host)
             left = self.elastic.count(left_query) if left_query is not None else 0
+            # events of a probed type without a source (dicompot): counted, never deleted
+            sourceless_query = stages.sourceless_query(self.started, end, own)
+            sourceless = self.elastic.count(sourceless_query) if sourceless_query is not None else 0
         except ElasticError as error:
             self.mark("fail", "cleanup")
             self.log("error", f"The test events could not be removed: {error}")
             report.cleanup = {"state": "failed", "deleted": sum(passes), "passes": passes, "left": 0,
                               "detail": str(error)}
             return
-        report.cleanup = {"state": "done", "deleted": sum(passes), "passes": passes, "left": left, "detail": ""}
+        left += sourceless
+        report.cleanup = {"state": "done", "deleted": sum(passes), "passes": passes, "left": left,
+                          "left_no_source": sourceless, "detail": ""}
         self.log("ok", f"{sum(passes)} test events removed from Elasticsearch "
                        f"({' + '.join(str(n) for n in passes)}, the second pass {SECOND_PASS:g} s later).")
         if left:
             link = stages.kibana_link(self.host, port, stages.leftover_kql(own, self.host), self.started, end)
             report.cleanup["left_kibana"] = link
-            self.log("warn", f"{left} probe events could not be told apart from real ones and stay; Kibana: {link}")
+            self.log("warn", f"{left_text(left, sourceless)}; Kibana: {link}")

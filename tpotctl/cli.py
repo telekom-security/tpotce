@@ -1469,7 +1469,8 @@ def check_summary(report, ascii_only: bool) -> None:
         say.ok(f"Removed {cleanup.get('deleted', 0)} test events from Elasticsearch"
                + (f" ({' + '.join(str(n) for n in passes)} in two passes)." if len(passes) > 1 else "."))
         if cleanup.get("left"):
-            say.warn(f"{cleanup['left']} probe events could not be told apart from real ones and stay; "
+            from tpotctl.checks import run as trun
+            say.warn(f"{trun.left_text(cleanup['left'], cleanup.get('left_no_source', 0))}; "
                      f"Kibana: {cleanup.get('left_kibana', '')}")
     elif cleanup.get("state") == "failed":
         error(f"The test events are still in Elasticsearch: {cleanup.get('detail')}")
