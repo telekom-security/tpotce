@@ -17,9 +17,13 @@ if [ "$myBLACKHOLE_STATUS" -gt "500" ];
     myBLACKHOLE_STATUS="| [1;34mBLACKHOLE: [ [1;30mDISABLED[1;34m ][0m"
 fi
 
+# The running T-Pot is the image tag TPOT_VERSION of .env (env_file of tpotinit, required by
+# env.schema.yml); only the characters of a tag go into the issue file (agetty reads escapes)
+myVERSION="${TPOT_VERSION//[^A-Za-z0-9._+-]/}"
+
 # Build issue
 echo "[H[2J" > /tmp/etc/issue
-echo "T-Pot 23.12" >> /tmp/etc/issue
+echo "T-Pot${myVERSION:+ ${myVERSION}}" >> /tmp/etc/issue
 echo >> /tmp/etc/issue
 echo ",---- [ [1;34m\n[0m ] [ [0;34m\d[0m ] [ [1;30m\t[0m ]" >> /tmp/etc/issue
 echo "|" >> /tmp/etc/issue

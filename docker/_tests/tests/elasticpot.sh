@@ -13,6 +13,7 @@ IMAGE=""
 HTTP_PORT=""
 LOG_DIR=""
 MAPPED_HTTP_PORT=""
+PRIVATE_SUBNET=""
 
 usage() {
   cat <<EOF
@@ -121,7 +122,20 @@ services:
 networks:
   default:
     name: "${TEST_PROJECT_NAME}_net"
+    ipam:
+      config:
+        - subnet: "${PRIVATE_SUBNET}"
 EOF
+}
+
+# A request from a client on the harness network: its source lies in 192.168.0.0/16, which the
+# fallback blacklist of ElasticPot leaves out and T-Pot's honeypot.cfg logs.
+run_private_network_probe() {
+  local token="$1"
+
+  docker run --rm --network "${TEST_PROJECT_NAME}_net" --read-only --user 2000:2000 \
+    --entrypoint /usr/bin/wget "${IMAGE}" \
+    -q -T 5 -O /dev/null "http://${TEST_CONTAINER_NAME}:9200/_cluster/health?${token}"
 }
 
 run_elasticsearch_probes() {
@@ -337,6 +351,7 @@ main() {
     test_ensure_port_free "${TEST_BIND_IP}" "${HTTP_PORT}" || test_die "${TEST_BIND_IP}:${HTTP_PORT} is already in use. Try --http-port <free-port>."
   fi
 
+  PRIVATE_SUBNET="$(test_private_subnet)" || test_die "No free 192.168.N.0/24 subnet for the harness network"
   prepare_elasticpot_harness
   test_enable_cleanup
 
@@ -358,6 +373,12 @@ main() {
   test_info "Waiting for ElasticPot JSON log events"
   wait_for_json_log_events "${token}" || test_die "Expected ElasticPot recon and attack events were not found in elasticpot.json"
   test_ok "ElasticPot recon and attack events were written to elasticpot.json"
+
+  test_info "Probing from ${PRIVATE_SUBNET} on the harness network"
+  run_private_network_probe "${token}-private" || test_die "ElasticPot probe from ${PRIVATE_SUBNET} failed"
+  test_wait_for_json_source "${LOG_DIR}" "elasticpot.json*" "${PRIVATE_SUBNET}" "${token}-private" \
+    || test_die "ElasticPot did not log the request from ${PRIVATE_SUBNET} (blacklist of honeypot.cfg)"
+  test_ok "ElasticPot logged the request from ${PRIVATE_SUBNET}"
 
   assert_no_runtime_errors
   test_ok "No ElasticPot runtime errors found in logs"

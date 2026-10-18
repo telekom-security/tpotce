@@ -200,6 +200,81 @@ test_wait_for_file_text() {
   return 1
 }
 
+# A free 192.168.N.0/24 for the network of a harness: no Docker network and no route of the
+# host overlaps it (sources in 192.168.0.0/16 for honeypots with a source blacklist).
+test_private_subnet() {
+  local used=""
+  local ids=""
+
+  ids="$(docker network ls -q 2>/dev/null || true)"
+  if [[ -n "${ids}" ]]; then
+    # shellcheck disable=SC2086
+    used="$(docker network inspect ${ids} --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' 2>/dev/null || true)"
+  fi
+  if command -v ip >/dev/null 2>&1; then
+    used="${used} $(ip -4 route show 2>/dev/null || true)"
+  fi
+
+  python3 - "$$" "${used}" <<'PY'
+import ipaddress
+import re
+import sys
+
+taken = []
+for word in re.findall(r"\b\d+\.\d+\.\d+\.\d+(?:/\d+)?\b", sys.argv[2]):
+    try:
+        taken.append(ipaddress.ip_network(word, strict=False))
+    except ValueError:
+        pass
+start = int(sys.argv[1]) % 50
+for step in range(50):
+    candidate = ipaddress.ip_network("192.168.{}.0/24".format(200 + (start + step) % 50))
+    if not any(candidate.overlaps(network) for network in taken):
+        print(candidate)
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+# Waits for a JSON line in DIR/GLOB whose src_ip lies in SUBNET (and that holds TOKEN, if given).
+test_wait_for_json_source() {
+  local directory="$1"
+  local pattern="$2"
+  local subnet="$3"
+  local token="${4:-}"
+
+  python3 - "${directory}" "${pattern}" "${subnet}" "${token}" "${TEST_TIMEOUT}" <<'PY'
+import ipaddress
+import json
+import sys
+import time
+from pathlib import Path
+
+directory, pattern, subnet, token = Path(sys.argv[1]), sys.argv[2], ipaddress.ip_network(sys.argv[3]), sys.argv[4]
+deadline = time.monotonic() + int(sys.argv[5])
+while time.monotonic() < deadline:
+    for log_file in sorted(directory.glob(pattern)):
+        try:
+            lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line_number, line in enumerate(lines, 1):
+            if token and token not in line:
+                continue
+            try:
+                event = json.loads(line)
+                source = ipaddress.ip_address(str(event.get("src_ip", "")))
+            except (AttributeError, ValueError):
+                continue
+            if source in subnet:
+                print("Event of {} found in {}:{}".format(source, log_file, line_number))
+                sys.exit(0)
+    time.sleep(1)
+print("No event with a source in {} found in {}/{}".format(subnet, directory, pattern), file=sys.stderr)
+sys.exit(1)
+PY
+}
+
 test_show_diagnostics() {
   printf '\n[diagnostics] Container state\n' >&2
   if [[ -n "${TEST_CONTAINER_NAME}" ]]; then

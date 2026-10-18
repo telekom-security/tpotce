@@ -104,6 +104,22 @@ class ScriptsTest(unittest.TestCase):
             subprocess.run([sys.executable, "-c", code, new], input=b"x\n", check=True)
             self.assertEqual(oct(os.stat(new).st_mode & 0o777), oct(0o660 & ~self.umask()))
 
+    def test_updateip_names_the_running_version(self):
+        """The login banner takes TPOT_VERSION of the environment (the image tag of .env), no number
+        of its own; only the characters of a tag go in, without one it says T-Pot alone."""
+        text = UPDATEIP.read_text()
+        self.assertIsNone(re.search(r"T-Pot \d", text))
+        version = re.search(r'^myVERSION=.*$', text, re.M).group(0)
+        title = re.search(r'^echo "T-Pot.*" >> /tmp/etc/issue$', text, re.M).group(0)
+        script = version + "\n" + title.replace(" >> /tmp/etc/issue", "")
+        for value, shown in (("24.04.2", "T-Pot 24.04.2"), ("", "T-Pot"), ("1.2\\n$(x)`y`", "T-Pot 1.2nxy")):
+            with self.subTest(value=value):
+                environ = {key: item for key, item in os.environ.items() if key != "TPOT_VERSION"}
+                if value:
+                    environ["TPOT_VERSION"] = value
+                done = subprocess.run(["bash", "-c", script], env=environ, capture_output=True, text=True)
+                self.assertEqual((done.returncode, done.stdout), (0, shown + "\n"), done.stderr)
+
     @staticmethod
     def umask():
         mask = os.umask(0)
