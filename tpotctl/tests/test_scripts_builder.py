@@ -1101,7 +1101,8 @@ class SmokeTest(BuilderHarness):
         super().setUp()
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
-        for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "redis"):
+        for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
+                     "logstash_fixtures", "nginx", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
 
@@ -1113,10 +1114,14 @@ class SmokeTest(BuilderHarness):
                            'printf "I %s\\n" "${mySMOKE_IMAGES[@]}"; printf "W %s\\n" "${mySMOKE_NOTES[@]}"',
                            TPOT_BUILDER_TESTS_DIR=self.tests)
         lines = result.stdout.splitlines()
-        self.assertEqual([line[2:] for line in lines if line.startswith("N ")], ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "redis"])
+        self.assertEqual([line[2:] for line in lines if line.startswith("N ")],
+                         ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
+                          "logstash_fixtures", "nginx", "redis"])
         self.assertEqual([line[2:] for line in lines if line.startswith("A ")],
-                         ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 3 + ["--image hub/redis:1.0"])
-        self.assertEqual([line[2:] for line in lines if line.startswith("I ")], ["cowrie", "tpotinit", "redis"])
+                         ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 4
+                         + ["--image hub/logstash:1.0", "--image hub/nginx:1.0", "--image hub/redis:1.0"])
+        self.assertEqual([line[2:] for line in lines if line.startswith("I ")],
+                         ["cowrie", "tpotinit", "logstash", "nginx", "redis"])
         notes = [line[2:] for line in lines if line.startswith("W ")]
         self.assertEqual(len(notes), 1, notes)
         self.assertIn("No smoke test for adbhoney", notes[0])
@@ -1126,7 +1131,8 @@ class SmokeTest(BuilderHarness):
                            'printf "N %s\\n" "${mySMOKE_NAMES[@]}"; printf "I %s\\n" "${mySMOKE_IMAGES[@]}"\n'
                            'printf "W %s\\n" "${mySMOKE_NOTES[@]}"', TPOT_BUILDER_TESTS_DIR=self.tests)
         lines = result.stdout.splitlines()
-        self.assertEqual([line[2:] for line in lines if line.startswith("N ")], ["tpotinit_env", "tpotinit_kibana"])
+        self.assertEqual([line[2:] for line in lines if line.startswith("N ")],
+                         ["tpotinit_env", "tpotinit_kibana", "tpotinit_modes"])
         self.assertEqual([line[2:] for line in lines if line.startswith("I ")], ["tpotinit"])
         self.assertEqual([line[2:] for line in lines if line.startswith("W ")],
                          [f"No smoke test for tpotinit ({self.tests}/tpotinit_ilm.sh)"])
@@ -1151,6 +1157,24 @@ class SmokeTest(BuilderHarness):
         for name in names:
             self.assertTrue(os.path.exists(os.path.join(REPO, "docker", "_tests", "tests", name + ".sh")), name)
 
+    # smoke tests of docker/_tests that belong to no image of the build, with the reason
+    IMAGELESS = {}
+
+    def test_every_test_of_the_repo_is_in_the_plan(self):
+        """Each docker/_tests/tests/*.sh runs after the build of its image (-T), or is named in IMAGELESS:
+        a new test is not left out of the builder's smoke tests by accident."""
+        with open(COMPOSE, encoding="utf-8") as handle:
+            services = re.findall(r"^  ([a-z0-9][a-z0-9_.-]*):\s*$", handle.read().split("\nservices:", 1)[1], re.M)
+        result = self.bash("myHUB=h myGHCR=g myVER=1\nfuSMOKE_PLAN " + " ".join(services) +
+                           '\nprintf "%s\\n" "${mySMOKE_NAMES[@]}"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        planned = set(result.stdout.split())
+        folder = os.path.join(REPO, "docker", "_tests", "tests")
+        present = {name[:-3] for name in os.listdir(folder) if name.endswith(".sh")}
+        self.assertEqual(sorted(present - planned - set(self.IMAGELESS)), [])
+        self.assertEqual(sorted(set(self.IMAGELESS) - present), [])
+        self.assertEqual(sorted(set(self.IMAGELESS) & planned), [])
+
     def test_smoke_tests_after_build(self):
         rc, out = self.builder("-i", "cowrie,tpotinit", "-T", "--docker-repo", "hub", STUB_TEST_FAIL="tpotinit_env",
                                TPOT_BUILDER_TESTS_DIR=self.tests)
@@ -1164,7 +1188,7 @@ class SmokeTest(BuilderHarness):
         self.assertTrue(load[0] < tests[0], calls)
         self.assertEqual([calls[i] for i in tests], [f"test cowrie --image hub/cowrie:{VERSION}"]
                          + [f"test {name} --image hub/tpotinit:{VERSION}"
-                            for name in ("tpotinit_env", "tpotinit_ilm", "tpotinit_kibana")])
+                            for name in ("tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes")])
         override = self.override("override-load.yml")
         self.assertIn(f"  cowrie:\n    image: hub/cowrie:{VERSION}\n    build:\n      platforms: !override\n"
                       "        - linux/amd64\n      tags: !reset []\n", override)
@@ -1181,7 +1205,7 @@ class SmokeTest(BuilderHarness):
         self.assertEqual(len(load), 1, self.calls())
         self.assertIn("build cowrie tpotinit --builder mybuilder", load[0])
         self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")],
-                         ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana"])
+                         ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes"])
 
     def test_ctrl_c_under_a_spinner_cancels_the_run(self):
         """gum takes Ctrl+C as a key and fuUI_SPIN gives back 130: the run ends as cancelled (130),
@@ -1225,7 +1249,7 @@ class SmokeTest(BuilderHarness):
         self.assertIn("### [ERROR] - docker compose 2.20.3 is too old: the smoke test build (-T) needs 2.24.4.", out)
         self.assertFalse(any(" build " in line for line in self.calls()), self.calls())
         # no test for the image, or this host's platform without a push (no load build): no override
-        for args in (["-i", "nginx", "-T"], ["-i", "cowrie"]):
+        for args in (["-i", "glutton", "-T"], ["-i", "cowrie"]):
             with self.subTest(args=args):
                 rc, out = self.builder(*args, STUB_COMPOSE_VERSION="2.20.3", TPOT_BUILDER_TESTS_DIR=self.tests)
                 self.assertEqual(rc, 0, out)
@@ -1305,7 +1329,8 @@ class SmokeTest(BuilderHarness):
         rc, out = self.builder("-i", "cowrie,tpotinit", "-T", "-a", "host", STUB_PLATFORMS="linux/amd64",
                                STUB_FAIL="cowrie", TPOT_BUILDER_TESTS_DIR=self.tests)
         self.assertEqual(rc, 1, out)
-        self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")], ["tpotinit_env", "tpotinit_ilm", "tpotinit_kibana"])
+        self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")],
+                         ["tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes"])
 
 
 class SetupTest(BuilderHarness):
