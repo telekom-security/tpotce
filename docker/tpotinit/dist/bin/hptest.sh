@@ -5,9 +5,10 @@
 # events removed from Elasticsearch afterwards); it asks first, -y confirms.
 # Otherwise, for another host, with --nmap or --tools-only, the probes of old: a
 # few service specific requests on host (default: the address of this host),
-# then nmap over every published port. They are real attacks as far as T-Pot can
-# tell and show up in Kibana. ewsposter of this host sends nothing while they run
-# (ews_hold.sh), and one check runs at a time.
+# then nmap over the published ports the checks probe (the probe table leaves
+# some out, `tpot check honeypots --dry-run` names them). They are real attacks
+# as far as T-Pot can tell and show up in Kibana. ewsposter of this host sends
+# nothing while they run (ews_hold.sh), and one check runs at a time.
 
 # an exported CDPATH turns a cd into a search that prints the folder it found
 unset CDPATH
@@ -269,8 +270,10 @@ Checks the honeypots of ${myDOCKERCOMPOSEYML}. Where the T-Pot Manager
 runs, this is tpot check honeypots: every honeypot of this host from its port
 to the Attack Map, the test events removed from Elasticsearch afterwards.
 For another host, with --nmap or --tools-only, or without the T-Pot Manager:
-service requests, then nmap over every published port of host (default: the
-address of this host); those probes are real attacks as far as T-Pot can tell.
+service requests, then nmap over the published ports the checks probe on host
+(default: the address of this host; the probe table leaves some out,
+tpot check honeypots --dry-run names them); those probes are real attacks as
+far as T-Pot can tell.
 ewsposter of this host sends nothing during a check, one check runs at a time.
 
   -B <file>      Read the sudo password from a file
@@ -320,7 +323,7 @@ if [ -z "${myNMAP}" ] && [ -z "${myTOOLS_ONLY}" ] && { [ -z "${myHOST}" ] || fuO
     exec "${myTPOT}" "${myARGS[@]}"
 fi
 
-fuUI_BANNER "Honeypot probe" "Probes the honeypots of this T-Pot: service requests, then nmap over every port."
+fuUI_BANNER "Honeypot probe" "Probes the honeypots of this T-Pot: service requests, then nmap over the ports the checks probe."
 
 fuMARK phase tools Checking the tools
 fuCHECKDEPS
@@ -407,7 +410,7 @@ while read -r myIKEPORT myNATT;
 wait
 fuUI_OK "Service requests sent."
 
-fuMARK phase scan Scanning every published port
+fuMARK phase scan Scanning the published ports
 if fuHAS nmap;
   then
     fuUI_INFO "Scanning the UDP / TCP ports of ${myDOCKERCOMPOSEYML} (up to ${myTIMEOUT}s) ..."
