@@ -292,7 +292,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 80, 443, 8080, 8443                                                                                                                   | tcp      | incoming  | Honeypot: Galah  (LLM required)                                                                     |
 | 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Go-pot                                                                                    |
 | 80, 443                                                                                                                               | tcp      | incoming  | Honeypot: H0neytr4p                                                                                 |
-| 21, 22, 23, 25, 80, 110, 143, 389, 443, 465, 636, 990, 993, 995, 1080, 5432, 5900, 8883                                               | tcp      | incoming  | Honeypot: Heralding                                                                                 |
+| 110, 143, 389, 636, 990, 993, 995, 1080, 5432, 5900, 8883                                                                             | tcp      | incoming  | Honeypot: Heralding ¹                                                                               |
 | 3000                                                                                                                                  | tcp      | incoming  | Honeypot: Honeyaml                                                                                  |
 | 21, 22, 23, 25, 80, 110, 143, 389, 443, 445, 631, 1080, 1433, 1521, 3306, 3389, 5060, 5432, 5900, 6379, 6667, 8080, 9100, 9200, 11211 | tcp      | incoming  | Honeypot: qHoneypots                                                                                |
 | 53, 123, 161, 5060                                                                                                                    | udp      | incoming  | Honeypot: qHoneypots                                                                                |
@@ -306,6 +306,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 5060                                                                                                                                  | tcp/udp  | incoming  | Honeypot: SentryPeer                                                                                |
 | 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Wordpot                                                                                   |
 
+¹ The Tarpit edition has no Mailoney, there Heralding also takes 21, 23, 25, 443, 445, 465, 587, 1433, 1883, 3306, 3389 and 6379 (tcp) and 5060 (tcp / udp). The Mac / Windows edition adds 445 (tcp).
 
 Ports and availability of SaaS services may vary based on your geographical location.
 
