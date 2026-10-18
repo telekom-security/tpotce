@@ -1,6 +1,7 @@
 """tpot check and tpot attackers: the host helpers of T-Pot in the look of tpot."""
 
 import base64
+import configparser
 import contextlib
 import csv
 import datetime
@@ -1828,19 +1829,26 @@ class ProbeTableTest(unittest.TestCase):
             self.assertEqual(handle.read().split(), ["-", "name:", "mirror"])
 
     def test_sources_the_honeypot_does_not_log(self):
+        """No probe names sources its honeypot leaves out; the mechanism holds addresses and networks."""
+        self.assertEqual({name: table.ignores for name, table in probes.PROBES.items()
+                          if isinstance(table, probes.PortProbe) and table.ignores}, {})
+        table = probes.PortProbe({}, ignores=("127.0.0.1", "192.168.0.0/16"))
+        self.assertEqual(table.ignored("192.168.5.15"), "192.168.0.0/16")
+        self.assertEqual(table.ignored("127.0.0.1"), "127.0.0.1")
+        self.assertEqual((table.ignored("10.0.0.5"), table.ignored("2001:db8::1"), table.ignored("x")),
+                         ("", "", ""))
+        self.assertEqual(probes.PortProbe({}).ignored("192.168.5.15"), "")
+
+    def test_the_blacklist_leaves_out_only_loopback(self):
+        """elasticpot, ipphoney and rdphoneypot fall back to 127.0.0.1,192.168.0.0/16 without a
+        `blacklist` in [honeypot]; T-Pot's honeypot.cfg sets it to 127.0.0.1 alone."""
         for name in ("elasticpot", "ipphoney", "rdphoneypot"):
             with self.subTest(name=name):
-                table = probes.PROBES[name]
-                self.assertEqual(table.ignores, ("127.0.0.1", "192.168.0.0/16"))
-                self.assertEqual(table.ignored("192.168.5.15"), "192.168.0.0/16")
-                self.assertEqual(table.ignored("127.0.0.1"), "127.0.0.1")
-                self.assertEqual((table.ignored("10.0.0.5"), table.ignored("2001:db8::1"), table.ignored("x")),
-                                 ("", "", ""))
-                # the fallback of honeypot.py holds: T-Pot's honeypot.cfg sets no blacklist of its own
-                with open(os.path.join(REPO, "docker", name, "dist", "honeypot.cfg"), encoding="utf-8") as handle:
-                    lines = [line.strip() for line in handle if "blacklist" in line.split("=")[0]]
-                self.assertTrue(all(line.startswith("#") for line in lines), lines)
-        self.assertEqual(probes.PROBES["cowrie"].ignores, ())
+                config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
+                config.read(os.path.join(REPO, "docker", name, "dist", "honeypot.cfg"), encoding="utf-8")
+                self.assertEqual(config.get("honeypot", "blacklist").split(","), ["127.0.0.1"])
+                self.assertEqual([section for section in config.sections() if config.has_option(section, "blacklist")],
+                                 ["honeypot"])
 
 
 class InventoryTest(unittest.TestCase):
@@ -3853,8 +3861,9 @@ class RunTest(unittest.TestCase):
         self.assertTrue(any("2 + 1" in text for _kind, text in world.said))
 
     def test_a_honeypot_that_does_not_log_the_probe_address(self):
-        """elasticpot ignores 192.168.0.0/16: the probe runs (port, answer), log and Elasticsearch
-        are n/a with the reason, the geo event covers the rest."""
+        """A honeypot that does not log the source of the probe (here as if elasticpot left out
+        192.168.0.0/16): the probe runs (port, answer), log and Elasticsearch are n/a with the reason,
+        the geo event covers the rest."""
         ignored = probes.ProbeResult("open", True, "9200/tcp: answered", token_sent=True, src_ports=[40100],
                                      ignored="192.168.0.0/16")
         world = self.world(("elasticpot",), host="192.168.5.15", results={"elasticpot": ignored}, probe_logs=False,

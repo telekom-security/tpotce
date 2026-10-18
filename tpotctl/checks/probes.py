@@ -18,6 +18,8 @@ TFTP port 69 (it answers only the first request after a start); its HTTP port 81
 being open only (it answers no GET). A
 honeypot that does not log some sources by its configuration names them (`PortProbe.ignores`):
 the probe of an address among them still runs, `ProbeResult.ignored` says which entry holds it.
+No honeypot names any today: elasticpot, ipphoney and rdphoneypot leave out only 127.0.0.1
+(`blacklist` of their honeypot.cfg), never the address of a probe.
 """
 
 import base64
@@ -862,10 +864,6 @@ FTP_DATA_REASON = "FTP data port, nothing listens on it"
 MIRROR_REASON = "dionaea mirrors a connection on this port back to its source"
 TFTP_REASON = "dionaea's TFTP answers only the first request after its start, later ones are refused"
 HTTP81_REASON = "dionaea's HTTP service (port 81) closes a GET without an answer"
-# elasticpot, ipphoney and rdphoneypot log no event of a source in `blacklist` of honeypot.cfg; its
-# fallback in honeypot.py (CONFIG.get('honeypot', 'blacklist', fallback=...)) holds while the
-# dist/honeypot.cfg of T-Pot leaves the line commented out
-BLACKLIST_FALLBACK = ("127.0.0.1", "192.168.0.0/16")
 
 PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
     "adbhoney": PortProbe({(5555, TCP): adb}),
@@ -944,7 +942,7 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         (3306, TCP): _mysql_greeting,
         (27017, TCP): connect_only,
     }),
-    "elasticpot": PortProbe({(9200, TCP): http("GET", "/_cluster/health?{token}")}, ignores=BLACKLIST_FALLBACK),
+    "elasticpot": PortProbe({(9200, TCP): http("GET", "/_cluster/health?{token}")}),
     "endlessh": PortProbe({(2222, TCP): tarpit}),
     # knocked at only, on every port: an answer would call the LLM
     "galah": PortProbe({(80, TCP): knock, (8080, TCP): knock, (443, TCP): knock, (8443, TCP): knock},
@@ -1010,7 +1008,7 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         (9200, TCP): _qhp_elastic,
         (11211, TCP): connect_only,
     }),
-    "ipphoney": PortProbe({(631, TCP): http("GET", "/tpot-check/{token}")}, ignores=BLACKLIST_FALLBACK),
+    "ipphoney": PortProbe({(631, TCP): http("GET", "/tpot-check/{token}")}),
     "log4pot": PortProbe({(8080, TCP): http("GET", "/tpot-check/{token}?probe={token}")}),
     "mailoney": PortProbe({
         (25, TCP): smtp(mail=True),
@@ -1022,7 +1020,7 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         (9100, TCP): _pjl,
         (8000, TCP): http("POST", "/login", _LOGIN_FORM, f"username={{token}}&password={PASSWORD}"),
     }),
-    "rdphoneypot": PortProbe({(3389, TCP): _rdp}, ignores=BLACKLIST_FALLBACK),
+    "rdphoneypot": PortProbe({(3389, TCP): _rdp}),
     "redishoneypot": PortProbe({(6379, TCP): _redis}),
     "sentrypeer": PortProbe({(5060, TCP): _sip_options(udp=False), (5060, UDP): _sip_options(udp=True)}),
     "wordpot": PortProbe({

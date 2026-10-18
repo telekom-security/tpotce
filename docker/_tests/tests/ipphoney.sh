@@ -11,9 +11,9 @@ TEST_NAME="ipphoney"
 DEFAULT_IMAGE="dtagdevsec/ipphoney:24.04.2"
 IMAGE=""
 LOG_DIR=""
-CONFIG_FILE=""
 JSON_LOG_FILE=""
 PROBE_CONTAINER_NAME=""
+PRIVATE_SUBNET=""
 
 usage() {
   cat <<EOF
@@ -83,7 +83,6 @@ prepare_ipphoney_harness() {
   test_prepare_harness "${TEST_NAME}"
 
   LOG_DIR="${TEST_TMP_ROOT}/log"
-  CONFIG_FILE="${TEST_TMP_ROOT}/honeypot.cfg"
   JSON_LOG_FILE="${LOG_DIR}/ipphoney.json"
   PROBE_CONTAINER_NAME="${TEST_PROJECT_NAME}-probe"
   TEST_ARTIFACT_LOG_DIR="${LOG_DIR}"
@@ -91,17 +90,8 @@ prepare_ipphoney_harness() {
   mkdir -p "${LOG_DIR}"
   chmod 0777 "${LOG_DIR}"
 
-  cat > "${CONFIG_FILE}" <<EOF
-[honeypot]
-sensor_name = ipphoney
-blacklist = 127.0.0.1
-
-[output_jsonlog]
-enabled = true
-logfile = log/ipphoney.json
-epoch_timestamp = false
-EOF
-
+  # the image's own honeypot.cfg; the probe helper sits on a 192.168.N.0/24 network, which the
+  # fallback blacklist of IPPHoney leaves out and T-Pot's honeypot.cfg logs
   cat > "${TEST_HARNESS_COMPOSE}" <<EOF
 services:
   ipphoney:
@@ -110,7 +100,6 @@ services:
     restart: "no"
     volumes:
       - "${LOG_DIR}:/opt/ipphoney/log"
-      - "${CONFIG_FILE}:/opt/ipphoney/etc/honeypot.cfg:ro"
   probe:
     image: "${IMAGE}"
     container_name: "${PROBE_CONTAINER_NAME}"
@@ -120,6 +109,9 @@ services:
 networks:
   default:
     name: "${TEST_PROJECT_NAME}_net"
+    ipam:
+      config:
+        - subnet: "${PRIVATE_SUBNET}"
 EOF
 }
 
@@ -191,7 +183,8 @@ SH
 wait_for_json_log_event() {
   local token="$1"
 
-  python3 - "${JSON_LOG_FILE}" "${token}" "${TEST_TIMEOUT}" <<'PY'
+  python3 - "${JSON_LOG_FILE}" "${token}" "${TEST_TIMEOUT}" "${PRIVATE_SUBNET}" <<'PY'
+import ipaddress
 import json
 import sys
 import time
@@ -200,6 +193,7 @@ from pathlib import Path
 json_log = Path(sys.argv[1])
 token = sys.argv[2]
 timeout = int(sys.argv[3])
+subnet = ipaddress.ip_network(sys.argv[4])
 deadline = time.monotonic() + timeout
 last_error = None
 
@@ -242,6 +236,7 @@ while time.monotonic() < deadline:
                 and has_token(event.get("url"))
                 and has_token(event.get("user_agent"))
                 and event.get("src_ip")
+                and ipaddress.ip_address(event["src_ip"]) in subnet
                 and event.get("src_port")
                 and event.get("dst_ip")
             ):
@@ -283,6 +278,7 @@ main() {
   test_info "Using image: ${IMAGE}"
   test_require_image "${IMAGE}" "docker compose -f docker/${TEST_NAME}/docker-compose.yml build ${TEST_NAME}"
 
+  PRIVATE_SUBNET="$(test_private_subnet)" || test_die "No free 192.168.N.0/24 subnet for the harness network"
   prepare_ipphoney_harness
   test_enable_cleanup
 
@@ -301,7 +297,7 @@ main() {
 
   test_info "Waiting for IPPHoney JSON log event"
   wait_for_json_log_event "${token}" || test_die "Expected IPPHoney event was not found in ipphoney.json"
-  test_ok "IPPHoney connection event was written to ipphoney.json"
+  test_ok "IPPHoney logged the request from ${PRIVATE_SUBNET} to ipphoney.json"
 
   assert_no_runtime_errors
   test_ok "No IPPHoney runtime errors found in logs"

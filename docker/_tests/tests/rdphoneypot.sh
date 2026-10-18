@@ -14,6 +14,8 @@ RDP_PORT=""
 LOG_DIR=""
 CERT_DIR=""
 MAPPED_RDP_PORT=""
+PRIVATE_SUBNET=""
+PRIVATE_CLIENT=""
 
 usage() {
   cat <<EOF
@@ -124,7 +126,23 @@ services:
 networks:
   default:
     name: "${TEST_PROJECT_NAME}_net"
+    ipam:
+      config:
+        - subnet: "${PRIVATE_SUBNET}"
 EOF
+}
+
+# A connection request from a client on the harness network: its source lies in 192.168.0.0/16,
+# which the fallback blacklist of RDPHoneypot leaves out and T-Pot's honeypot.cfg logs. The client
+# has an address of its own (.250): the host's connection through the published port may come
+# from the gateway of the same network.
+run_private_network_probe() {
+  local request="${TEST_TMP_ROOT}/rdp-request.bin"
+
+  # TPKT + X.224 Connection Request + RDP Negotiation Request (SSL | HYBRID)
+  printf '\x03\x00\x00\x13\x0e\xe0\x00\x00\x00\x00\x00\x01\x00\x08\x00\x03\x00\x00\x00' > "${request}"
+  docker run --rm -i --network "${TEST_PROJECT_NAME}_net" --ip "${PRIVATE_CLIENT}" --read-only --user 2000:2000 \
+    --entrypoint /usr/bin/nc "${IMAGE}" -w 3 "${TEST_CONTAINER_NAME}" 3389 < "${request}" >/dev/null || true
 }
 
 run_rdp_negotiation_probe() {
@@ -332,6 +350,8 @@ main() {
     test_ensure_port_free "${TEST_BIND_IP}" "${RDP_PORT}" || test_die "${TEST_BIND_IP}:${RDP_PORT} is already in use. Try --rdp-port <free-port>."
   fi
 
+  PRIVATE_SUBNET="$(test_private_subnet)" || test_die "No free 192.168.N.0/24 subnet for the harness network"
+  PRIVATE_CLIENT="${PRIVATE_SUBNET%.0/24}.250"
   prepare_rdphoneypot_harness
   test_enable_cleanup
 
@@ -351,6 +371,12 @@ main() {
   test_info "Waiting for RDPHoneypot JSON log event"
   wait_for_json_log_event || test_die "Expected RDPHoneypot connection event was not found in rdphoneypot.json"
   test_ok "RDPHoneypot connection event was written to rdphoneypot.json"
+
+  test_info "Connecting from ${PRIVATE_CLIENT} on the harness network"
+  run_private_network_probe
+  test_wait_for_json_source "${LOG_DIR}" "rdphoneypot.json*" "${PRIVATE_CLIENT}/32" \
+    || test_die "RDPHoneypot did not log the connection from ${PRIVATE_CLIENT} (blacklist of honeypot.cfg)"
+  test_ok "RDPHoneypot logged the connection from ${PRIVATE_CLIENT}"
 
   test_info "Checking persistent RDPHoneypot certificate"
   cert_hash_before="$(wait_for_certificate_hash)" || test_die "RDPHoneypot certificate was not created in the persistent cert volume"
