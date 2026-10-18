@@ -32,6 +32,19 @@ def example_values():
     return EnvFile(ENV_EXAMPLE).values()
 
 
+class ShippedEnvTest(unittest.TestCase):
+
+    def test_the_shipped_env_is_env_example(self):
+        """install.sh takes the .env of the checkout as the config of a new
+        install, so it is the same file as env.example: a key added to one only would be missing
+        on every new T-Pot."""
+        with open(ENV_EXAMPLE, "rb") as handle:
+            example = handle.read()
+        with open(os.path.join(REPO_DIR, ".env"), "rb") as handle:
+            shipped = handle.read()
+        self.assertEqual(shipped, example, ".env differs from env.example: cp env.example .env")
+
+
 @unittest.skipUnless(yaml, "PyYAML is not installed")
 class SchemaTest(unittest.TestCase):
 
