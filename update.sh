@@ -4162,7 +4162,7 @@ function fuRESTORE_CUSTOM () {
 	    fuUI_WARN "The customizer of this checkout cannot rebuild your docker-compose.yml."
 	else
 	    fuUI_HINT "Now rebuilding your custom docker-compose.yml from this release."
-	    if python3 "${myCUSTOMIZER}" --rebuild "${myTMPDIR}/docker-compose.yml" -o "$HOME/tpotce/docker-compose.yml" </dev/null;
+	    if "$(fuCUSTOMIZER_PYTHON)" "${myCUSTOMIZER}" --rebuild "${myTMPDIR}/docker-compose.yml" -o "$HOME/tpotce/docker-compose.yml" </dev/null;
 	      then
 	        # the rebuild writes the file anew from its header: lines of your own above it are not in it
 	        # (blank lines there are none of your own)

@@ -3672,7 +3672,8 @@ class UpdateRepairTest(Harness):
                 self.write(os.path.join(self.tpotce, "compose", "customizer.py"),
                            "import sys  # --rebuild\nsrc, dst = sys.argv[2], sys.argv[4]\n"
                            "text = open(src).read()\nopen(dst, 'w').write(text[text.index('# T-Pot:'):])\n")
-                script = (self.functions("fuEDITION_LINE", "fuCOMPOSE_FROM_ARCHIVE", "fuRESTORE_CUSTOM")
+                script = (self.functions("fuEDITION_LINE", "fuCOMPOSE_FROM_ARCHIVE", "fuCUSTOMIZER_PYTHON",
+                                         "fuRESTORE_CUSTOM")
                           + f'fuTMPDIR () {{ myTMPDIR=$(mktemp -d); }}\nmyARCHIVE="{archive}" '
                           'myCOMPOSE_CUSTOMIZED=""\nfuRESTORE_CUSTOM\n')
                 result = self.bash(script)
