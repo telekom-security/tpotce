@@ -216,40 +216,88 @@ if __name__ == "__main__":
     unittest.main()
 
 
+
 class PersistenceTest(unittest.TestCase):
-    """TPOT_PERSISTENCE=off deletes the logs, downloads and uploads of a honeypot at the start, its
-    identity stays (the SSH host keys and the persona state of Cowrie, the identity of Ciscoasa and
-    Endlessh). The functions of clean.sh run on a temporary tree in place of /data."""
+    """TPOT_PERSISTENCE=off deletes what the honeypots collected (logs, downloads, payloads, captures and
+    the archives of fuLOGROTATE) at every start, the identity and state of a service stays: host keys,
+    TLS certificates, the values of an installation, persona state, the rules cache. Every fuSERVICE of
+    clean.sh runs on a temporary tree in place of /data, first with on (it makes its folders, a file goes
+    into each), then with off."""
 
-    TREES = {
-        "fuCISCOASA": ("ciscoasa", ["identity/identity.json", "log/ciscoasa.json", "payloads/upload.bin"],
-                       ["identity/identity.json"]),
-        "fuCOWRIE": ("cowrie", ["keys/persona-state.json", "keys/ubuntu-noble/ssh_host_ed25519_key",
-                                "log/cowrie.json", "log/tty/session.log", "downloads/sample", "misc/note"],
-                     ["keys/persona-state.json", "keys/ubuntu-noble/ssh_host_ed25519_key"]),
-        "fuENDLESSH": ("endlessh", ["identity/banner", "log/endlessh.log"], ["identity/banner"]),
+    # per folder of /data: the folders that stay with off (all others are emptied)
+    KEPT = {
+        "beelzebub": {"key"}, "ciscoasa": {"identity"}, "conpot": {"identity"}, "cowrie": {"keys"},
+        "dicompot": {"images"}, "elk": {"data", "listbot"}, "endlessh": {"identity"}, "galah": {"cert"},
+        "miniprint": {"data"}, "nginx": {"cert", "conf"}, "rdphoneypot": {"cert"}, "suricata": {"rules"},
     }
+    # names of folders that hold an identity or state: one of them that a function makes has to stay
+    STATE_NAMES = {"identity", "key", "keys", "cert", "certs", "data", "rules", "images", "conf", "listbot",
+                   "state", "seed"}
+    NOT_SERVICES = {"fuEMPTY", "fuREMOVE_ALL_BUT", "fuLOGROTATECONF", "fuLOGROTATE", "fuTPOTINIT"}
 
-    def run_function(self, name, root, persistence):
-        body = re.search(rf"^{name} \(\) \{{.*?^\}}", CLEAN.read_text(), re.M | re.S).group()
-        script = ("fuDATA_MODES () { :; }\nchown () { :; }\n" + body.replace("/data/", f"{root}/")
+    def functions(self):
+        text = CLEAN.read_text()
+        found = {name: body for name, body in re.findall(r"^(fu[A-Z0-9]+) \(\) \{(.*?)^\}", text, re.M | re.S)}
+        helper = re.search(r"^fuREMOVE_ALL_BUT \(\) \{.*?^\}", text, re.M | re.S).group()
+        return helper, {name: body for name, body in found.items()
+                        if name not in self.NOT_SERVICES and "myPERSISTENCE" in body}
+
+    def run_function(self, helper, name, body, root, persistence):
+        here = re.sub(r"(?<![\w/])/data(?=/|\s|$)", root, f"{name} () {{{body}}}")
+        script = ("fuDATA_MODES () { :; }\nchown () { :; }\n" + helper + "\n" + here
                   + f"\nmyPERSISTENCE={persistence}\n{name}\n")
         result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def files(self, folder):
-        return sorted(str(path.relative_to(folder)) for path in folder.rglob("*") if path.is_file())
+    def test_off_keeps_identity_and_state_on_keeps_all(self):
+        helper, functions = self.functions()
+        self.assertGreater(len(functions), 30)
+        for name, body in sorted(functions.items()):
+            service = re.search(r"mkdir -vp /data/([\w.-]+)", body).group(1)
+            with self.subTest(function=name), tempfile.TemporaryDirectory() as root:
+                folder = Path(root) / service
+                self.run_function(helper, name, body, root, "on")
+                made = sorted(path for path in folder.rglob("*") if path.is_dir())
+                tops = {path.relative_to(folder).parts[0] for path in made}
+                self.assertEqual(sorted(tops & self.STATE_NAMES - self.KEPT.get(service, set())), [],
+                                 "a folder of identity or state that KEPT does not name")
+                for path in [folder] + made:
+                    (path / "sample").write_text("inert")
+                (folder / "archive.tgz").write_text("inert")
+                every = sorted(str(p.relative_to(folder)) for p in folder.rglob("*") if p.is_file())
+                self.run_function(helper, name, body, root, "on")
+                self.assertEqual(sorted(str(p.relative_to(folder)) for p in folder.rglob("*") if p.is_file()), every)
+                self.run_function(helper, name, body, root, "off")
+                # what the function makes itself (empty files of nginx and dionaea) does not count
+                left = {p.relative_to(folder).parts[0] for p in folder.rglob("*")
+                        if p.is_file() and p.name in ("sample", "archive.tgz")}
+                kept = self.KEPT.get(service, set())
+                if "fuREMOVE_ALL_BUT" in body or f"/data/{service}/*;" in body:
+                    self.assertEqual(sorted(left), sorted(kept))
+                else:
+                    # a function that names what goes: its folders are emptied, the rest stays
+                    self.assertEqual(sorted(left & tops), sorted(kept))
+                for top in tops:
+                    self.assertTrue((folder / top).is_dir(), top)
 
-    def test_off_keeps_the_identity_on_keeps_all(self):
-        for name, (service, made, kept) in self.TREES.items():
-            for persistence, expected in (("off", sorted(kept)), ("on", sorted(made))):
-                with self.subTest(function=name, persistence=persistence), tempfile.TemporaryDirectory() as root:
-                    folder = Path(root) / service
-                    for item in made:
-                        (folder / item).parent.mkdir(parents=True, exist_ok=True)
-                        (folder / item).write_text("inert")
-                    self.run_function(name, root, persistence)
-                    self.assertEqual(self.files(folder), expected)
-                    # the folders of the compose file are there again
-                    for sub in {item.split("/")[0] for item in made}:
-                        self.assertTrue((folder / sub).is_dir(), sub)
+    def test_cowrie_keeps_the_persona_state(self):
+        helper, functions = self.functions()
+        with tempfile.TemporaryDirectory() as root:
+            keys = Path(root) / "cowrie" / "keys"
+            (keys / "ubuntu-noble").mkdir(parents=True)
+            for item in ("persona-state.json", "ubuntu-noble/ssh_host_ed25519_key"):
+                (keys / item).write_text("inert")
+            self.run_function(helper, "fuCOWRIE", functions["fuCOWRIE"], root, "off")
+            self.assertEqual(sorted(str(p.relative_to(keys)) for p in keys.rglob("*") if p.is_file()),
+                             ["persona-state.json", "ubuntu-noble/ssh_host_ed25519_key"])
+
+    def test_a_link_is_removed_not_followed(self):
+        helper, functions = self.functions()
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
+            (Path(outside) / "file").write_text("inert")
+            folder = Path(root) / "conpot"
+            folder.mkdir()
+            (folder / "log").symlink_to(outside)
+            self.run_function(helper, "fuCONPOT", functions["fuCONPOT"], root, "off")
+            self.assertTrue((Path(outside) / "file").exists())
+            self.assertFalse((folder / "log").is_symlink())

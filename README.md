@@ -1244,7 +1244,22 @@ All persistent log files from the honeypots, tools and T-Pot related services ar
 <br><br>
 
 ## Log Persistence
-All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will be persisted for the number of cycles set for `TPOT_PERSISTENCE_CYCLES=<1-999>` in the T-Pot configuration file `~/tpotce/.env`. It defaults to 30. With `TPOT_PERSISTENCE=off` the honeypot logs are deleted on every start instead; the identities of Cowrie (`data/cowrie/keys`, see [Cowrie Personas](#cowrie-personas)), Ciscoasa (`data/ciscoasa/identity`) and Endlessh (`data/endlessh/identity`) stay.
+All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will be persisted for the number of cycles set for `TPOT_PERSISTENCE_CYCLES=<1-999>` in the T-Pot configuration file `~/tpotce/.env`. It defaults to 30. With `TPOT_PERSISTENCE=off` what the honeypots collect (logs, downloads, payloads, captures and their archives) is deleted on every start instead. The identity and state of the services stay:
+
+| Folder in `~/tpotce/data` | What stays |
+| :--- | :--- |
+| `beelzebub/key` | the SSH host key of Beelzebub |
+| `ciscoasa/identity` | the identity of Ciscoasa |
+| `conpot/identity` | the values of this installation for each Conpot template |
+| `cowrie/keys` | the SSH host keys of each persona and the state of `COWRIE_PERSONA_ROTATION`, see [Cowrie Personas](#cowrie-personas) |
+| `dicompot/images` | the DICOM images you put there for Dicompot |
+| `elk/data`, `elk/listbot` | the Elasticsearch data (its retention is `TPOT_ES_RETENTION`) and the translation maps Logstash caches |
+| `endlessh/identity` | the identity of Endlessh |
+| `galah/cert` | the TLS certificate of Galah (its cache of answers goes) |
+| `miniprint/data` | the printer identity of this installation |
+| `nginx/cert`, `nginx/conf` | the certificate of the web UI and the passwords of its users and sensors |
+| `rdphoneypot/cert` | the TLS certificate of RDPHoneypot |
+| `suricata/rules` | the rules cache of Suricata (all there is with `SURICATA_RULES_UPDATE=off`) |
 <br>
 Elasticsearch keeps its events for the number of days set for `TPOT_ES_RETENTION=<1-3650|off>` in `~/tpotce/.env`, it defaults to 30. This offers a good balance between storage and speed. T-Pot sets the Index Lifecycle Policy `tpot` accordingly on every start of a HIVE, `off` keeps the events forever (mind the disk). An empty value leaves an existing policy alone.
 <br>

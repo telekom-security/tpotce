@@ -63,7 +63,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Honeypots** without releases were updated to their latest pushed code, pinned to a commit.
 * Docker images now use **Alpine 3.24**, **Go 1.26** or **Scratch** wherever possible; **Log4Pot** moved from Ubuntu to Alpine.
 * **Installer** supports unattended installations and has been tested with **Alma 10**, **Debian 13**, **Fedora 44**, **OpenSuse Tumbleweed**, **Rocky 10**, **RHEL 10** and **Ubuntu 26.04** (sudo-rs).
-* **Persistence** cycles for logrotate are configurable through `TPOT_PERSISTENCE_CYCLES` in `.env`.
+* **Persistence** cycles for logrotate are configurable through `TPOT_PERSISTENCE_CYCLES` in `.env`. With `TPOT_PERSISTENCE=off` only what the honeypots collect is deleted on every start, the identity and state of the services (host keys, TLS certificates, the values of an installation, persona state, the Suricata rules cache) stay, see the README section *Log Persistence*.
 * **Data Folder** modes are set by tpotinit on every start: folders 770, files 660 (the `conf` and `cert` folders of nginx 774 / 664). Files get no execute bit, links are neither followed nor changed.
 * **Beelzebub** and **Honeypots** log their status as text (i.e. `Stateless`, `failed`), it is now indexed as `status_text`. So far Elasticsearch could not index it in the numeric `status` field, some values ended up as `0` and with 24.04.1 part of these events were not indexed at all.
 * **ElasticPot** events are indexed again: its timestamps with an offset and `Z` (`+00:00Z`) are turned into a date Elasticsearch takes, as for IPPHoney and RDPHoneypot ([#1928](https://github.com/telekom-security/tpotce/issues/1928)).

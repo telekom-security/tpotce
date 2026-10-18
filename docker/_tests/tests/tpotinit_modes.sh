@@ -18,7 +18,7 @@ Usage: $0 [options]
 
 Check the modes tpotinit gives the data folder: folders 770, files 660 (no execute bit),
 nginx conf and cert 774 / 664, and links are neither followed nor changed. With
-TPOT_PERSISTENCE=off clean.sh keeps the identities of Cowrie, Ciscoasa and Endlessh.
+TPOT_PERSISTENCE=off clean.sh keeps the identity and state of each service.
 
 The image only provides the tools (busybox chmod, logrotate, tar): dist/bin/data_modes.sh,
 dist/bin/clean.sh and update_permissions of dist/entrypoint.sh of this checkout run inside
@@ -140,21 +140,27 @@ check "data: owner tpot" "tpot:tpot" "$(stat -c %U:%G /data/elk/data/indices/x/s
 outside_unchanged data /data/cowrie/log
 check "data: the links of elk stay" "yes yes" "$( [ -L /data/elk/to-file ] && echo yes) $( [ -L /data/elk/to-folder ] && echo yes)"
 
-# 3. clean.sh with TPOT_PERSISTENCE=off: logs, downloads and uploads go, the identities stay
+# 3. clean.sh with TPOT_PERSISTENCE=off: logs, downloads, payloads and their archives go, the identity
+#    and state of each service stays
 rm -rf /data
-mkdir -p /data/cowrie/keys/ubuntu-noble /data/cowrie/log/tty /data/cowrie/downloads \
-         /data/ciscoasa/identity /data/ciscoasa/log /data/ciscoasa/payloads /data/endlessh/identity /data/endlessh/log
-for file in cowrie/keys/persona-state.json cowrie/keys/ubuntu-noble/ssh_host_ed25519_key cowrie/log/cowrie.json \
-            cowrie/log/tty/session cowrie/downloads/sample ciscoasa/identity/identity.json ciscoasa/log/ciscoasa.json \
-            ciscoasa/payloads/sample endlessh/identity/banner endlessh/log/endlessh.log; do
+kept="beelzebub/key/ssh_host_key ciscoasa/identity/identity.json conpot/identity/identity.json
+cowrie/keys/persona-state.json cowrie/keys/ubuntu-noble/ssh_host_ed25519_key endlessh/identity/banner
+galah/cert/cert.pem miniprint/data/state.json rdphoneypot/cert/server.pem suricata/rules/suricata.rules"
+gone="beelzebub/log/beelzebub.json ciscoasa/log/ciscoasa.json ciscoasa/payloads/sample conpot/log/conpot.json
+cowrie/log/cowrie.json cowrie/log/tty/session cowrie/downloads/sample cowrie/downloads.tgz
+endlessh/log/endlessh.log galah/log/galah.json galah/cache/cache.db miniprint/log/miniprint.json
+miniprint/uploads/job.ps miniprint/uploads.tgz rdphoneypot/log/rdphoneypot.log suricata/log/eve.json"
+for file in ${kept} ${gone}; do
+  mkdir -p "$(dirname "/data/${file}")"
   echo inert > "/data/${file}"
 done
 bash /opt/tpot/bin/clean.sh off 30 > /tmp/clean-off.log 2>&1 || { echo "FAIL clean.sh off"; sed 's/^/     /' /tmp/clean-off.log; failed=1; }
-check "persistence off: the identities stay" \
-      "/data/ciscoasa/identity/identity.json /data/cowrie/keys/persona-state.json /data/cowrie/keys/ubuntu-noble/ssh_host_ed25519_key /data/endlessh/identity/banner " \
-      "$(find /data/ciscoasa /data/cowrie /data/endlessh -type f | sort | tr '\n' ' ')"
+check "persistence off: identity and state stay" "" \
+      "$(for file in ${kept}; do [ -f "/data/${file}" ] || printf '%s ' "${file}"; done)"
+check "persistence off: logs, downloads and payloads go" "" \
+      "$(for file in ${gone}; do [ -e "/data/${file}" ] && printf '%s ' "${file}"; done)"
 check "persistence off: the folders are there again" "yes" \
-      "$( [ -d /data/cowrie/log/tty ] && [ -d /data/cowrie/downloads ] && [ -d /data/ciscoasa/payloads ] && echo yes)"
+      "$( [ -d /data/cowrie/log/tty ] && [ -d /data/cowrie/downloads ] && [ -d /data/ciscoasa/payloads ] && [ -d /data/miniprint/uploads ] && [ -d /data/galah/cache ] && echo yes)"
 exit "${failed}"
 EOF
   chmod 0755 "${TEST_TMP_ROOT}/run.sh"

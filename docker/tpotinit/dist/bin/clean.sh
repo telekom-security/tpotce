@@ -17,6 +17,22 @@ myPERSISTENCE_CYCLES=$2
 myPERSISTENCE_CYCLES="${myPERSISTENCE_CYCLES:=30}"
 export myPERSISTENCE_CYCLES
 
+# Let's create a function that empties a service folder but for its identity / state:
+# fuREMOVE_ALL_BUT <folder> <name> ...: every entry of the folder goes (logs, downloads,
+# payloads, the archives of fuLOGROTATE) except the named ones; a link is removed, not followed
+fuREMOVE_ALL_BUT () {
+  local myFOLDER="$1" myITEM myKEEP myNAME
+  shift
+  for myITEM in "${myFOLDER}"/*; do
+    [ -e "${myITEM}" ] || [ -L "${myITEM}" ] || continue
+    myKEEP=""
+    for myNAME in "$@"; do
+      if [ "${myITEM##*/}" = "${myNAME}" ]; then myKEEP="1"; fi
+    done
+    [ -n "${myKEEP}" ] || rm -rf "${myITEM}"
+  done
+}
+
 # Let's create a function to check if folder is empty
 fuEMPTY () {
   local myFOLDER=$1
@@ -138,7 +154,8 @@ fuADBHONEY () {
 
 # Let's create a function to clean up and prepare beelzebub data
 fuBEELZEBUB () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/beelzebub/*; fi
+  # key/ (the SSH host key) stays, the logs go
+  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/beelzebub key; fi
   mkdir -vp /data/beelzebub/{key,log}
   fuDATA_MODES /data/beelzebub
   chown tpot:tpot /data/beelzebub/ -R
@@ -146,8 +163,8 @@ fuBEELZEBUB () {
 
 # Let's create a function to clean up and prepare ciscoasa data
 fuCISCOASA () {
-  # the identity stays, logs and uploads go
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ciscoasa/log /data/ciscoasa/payloads; fi
+  # identity/ stays, logs and uploads go
+  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/ciscoasa identity; fi
   mkdir -vp /data/ciscoasa/{identity,log,payloads}
   fuDATA_MODES /data/ciscoasa
   chown tpot:tpot /data/ciscoasa -R
@@ -163,7 +180,8 @@ fuCITRIXHONEYPOT () {
 
 # Let's create a function to clean up and prepare conpot data
 fuCONPOT () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot/*; fi
+  # identity/ (the values of this installation) stays, the logs go
+  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/conpot identity; fi
   mkdir -vp /data/conpot/{identity,log}
   fuDATA_MODES /data/conpot
   chown tpot:tpot /data/conpot -R
@@ -173,7 +191,7 @@ fuCONPOT () {
 fuCOWRIE () {
   # keys/ (the SSH host keys of each persona, persona-state.json of COWRIE_PERSONA_ROTATION)
   # stays, logs, tty records and downloads go
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/cowrie/downloads /data/cowrie/log /data/cowrie/misc; fi
+  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/cowrie keys; fi
   mkdir -vp /data/cowrie/{downloads,keys,misc,log,log/tty}
   fuDATA_MODES /data/cowrie
   chown tpot:tpot /data/cowrie -R
@@ -236,7 +254,8 @@ fuENDLESSH () {
 
 # Let's create a function to clean up and prepare galah data
 fuGALAH () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/galah/*; fi
+  # cert/ (the TLS certificate) stays, the logs and the cache of answers to requests go
+  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/galah cert; fi
   mkdir -vp /data/galah/{cache,cert,log}
   fuDATA_MODES /data/galah
   chown tpot:tpot /data/galah/ -R
@@ -348,7 +367,8 @@ fuMEDPOT () {
 
 # Let's create a function to clean up and prepare miniprint data
 fuMINIPRINT () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/miniprint/*; fi
+  # data/ (the printer identity of this installation) stays, logs and print jobs go
+  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/miniprint data; fi
   mkdir -vp /data/miniprint/{data,log,uploads}
   fuDATA_MODES /data/miniprint
   chown tpot:tpot /data/miniprint/ -R
@@ -365,7 +385,8 @@ fuNGINX () {
 
 # Let's create a function to clean up and prepare rdphoneypot data
 fuRDPHONEYPOT () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/rdphoneypot/*; fi
+  # cert/ (the TLS certificate) stays, the logs go
+  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/rdphoneypot cert; fi
   mkdir -vp /data/rdphoneypot/{cert,log}
   fuDATA_MODES /data/rdphoneypot
   chown tpot:tpot /data/rdphoneypot -R
@@ -389,7 +410,8 @@ fuSENTRYPEER () {
 
 # Let's create a function to clean up and prepare suricata data
 fuSURICATA () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/suricata/*; fi
+  # rules/ (the rules cache, all there is with SURICATA_RULES_UPDATE=off) stays, the logs go
+  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/suricata rules; fi
   mkdir -vp /data/suricata/{log,rules}
   fuDATA_MODES /data/suricata
   chown tpot:tpot -R /data/suricata
