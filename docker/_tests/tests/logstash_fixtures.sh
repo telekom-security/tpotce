@@ -249,7 +249,7 @@ COLUMN = re.compile(r"column\d+")
 # tpot-template.json: strict_date_optional_time): an offset Z, +HH:MM, +HHMM or +HH, not two of them
 ES_DATE = re.compile(r"^\d{4}(-\d{2}(-\d{2}(T\d{2}(:\d{2}(:\d{2}([.,]\d{1,9})?)?)?(Z|[+-]\d{2}(:?\d{2})?)?)?)?)?$")
 # failures known and waiting for a decision: honeypot -> (the start of its problem, why)
-KNOWN = {"elasticpot": ("timestamp ", "ElasticPot timestamp, decision pending")}
+KNOWN = {}
 failed = known = 0
 for name, want in sorted(manifest.items()):
     found = by_name.get(name, [])
