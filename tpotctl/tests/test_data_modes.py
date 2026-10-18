@@ -214,3 +214,42 @@ class HelperTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PersistenceTest(unittest.TestCase):
+    """TPOT_PERSISTENCE=off deletes the logs, downloads and uploads of a honeypot at the start, its
+    identity stays (the SSH host keys and the persona state of Cowrie, the identity of Ciscoasa and
+    Endlessh). The functions of clean.sh run on a temporary tree in place of /data."""
+
+    TREES = {
+        "fuCISCOASA": ("ciscoasa", ["identity/identity.json", "log/ciscoasa.json", "payloads/upload.bin"],
+                       ["identity/identity.json"]),
+        "fuCOWRIE": ("cowrie", ["keys/persona-state.json", "keys/ubuntu-noble/ssh_host_ed25519_key",
+                                "log/cowrie.json", "log/tty/session.log", "downloads/sample", "misc/note"],
+                     ["keys/persona-state.json", "keys/ubuntu-noble/ssh_host_ed25519_key"]),
+        "fuENDLESSH": ("endlessh", ["identity/banner", "log/endlessh.log"], ["identity/banner"]),
+    }
+
+    def run_function(self, name, root, persistence):
+        body = re.search(rf"^{name} \(\) \{{.*?^\}}", CLEAN.read_text(), re.M | re.S).group()
+        script = ("fuDATA_MODES () { :; }\nchown () { :; }\n" + body.replace("/data/", f"{root}/")
+                  + f"\nmyPERSISTENCE={persistence}\n{name}\n")
+        result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def files(self, folder):
+        return sorted(str(path.relative_to(folder)) for path in folder.rglob("*") if path.is_file())
+
+    def test_off_keeps_the_identity_on_keeps_all(self):
+        for name, (service, made, kept) in self.TREES.items():
+            for persistence, expected in (("off", sorted(kept)), ("on", sorted(made))):
+                with self.subTest(function=name, persistence=persistence), tempfile.TemporaryDirectory() as root:
+                    folder = Path(root) / service
+                    for item in made:
+                        (folder / item).parent.mkdir(parents=True, exist_ok=True)
+                        (folder / item).write_text("inert")
+                    self.run_function(name, root, persistence)
+                    self.assertEqual(self.files(folder), expected)
+                    # the folders of the compose file are there again
+                    for sub in {item.split("/")[0] for item in made}:
+                        self.assertTrue((folder / sub).is_dir(), sub)

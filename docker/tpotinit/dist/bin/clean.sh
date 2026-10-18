@@ -146,7 +146,8 @@ fuBEELZEBUB () {
 
 # Let's create a function to clean up and prepare ciscoasa data
 fuCISCOASA () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ciscoasa/*; fi
+  # the identity stays, logs and uploads go
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ciscoasa/log /data/ciscoasa/payloads; fi
   mkdir -vp /data/ciscoasa/{identity,log,payloads}
   fuDATA_MODES /data/ciscoasa
   chown tpot:tpot /data/ciscoasa -R
@@ -170,7 +171,9 @@ fuCONPOT () {
 
 # Let's create a function to clean up and prepare cowrie data
 fuCOWRIE () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/cowrie/*; fi
+  # keys/ (the SSH host keys of each persona, persona-state.json of COWRIE_PERSONA_ROTATION)
+  # stays, logs, tty records and downloads go
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/cowrie/downloads /data/cowrie/log /data/cowrie/misc; fi
   mkdir -vp /data/cowrie/{downloads,keys,misc,log,log/tty}
   fuDATA_MODES /data/cowrie
   chown tpot:tpot /data/cowrie -R
