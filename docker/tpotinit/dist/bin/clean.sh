@@ -254,8 +254,8 @@ fuENDLESSH () {
 
 # Let's create a function to clean up and prepare galah data
 fuGALAH () {
-  # cert/ (the TLS certificate) stays, the logs and the cache of answers to requests go
-  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/galah cert; fi
+  # cert/ (the TLS certificate) and cache/ (the answers of the LLM, they save LLM calls) stay, the logs go
+  if [ "$myPERSISTENCE" != "on" ]; then fuREMOVE_ALL_BUT /data/galah cache cert; fi
   mkdir -vp /data/galah/{cache,cert,log}
   fuDATA_MODES /data/galah
   chown tpot:tpot /data/galah/ -R

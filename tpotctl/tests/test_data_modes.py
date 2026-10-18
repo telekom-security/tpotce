@@ -227,7 +227,7 @@ class PersistenceTest(unittest.TestCase):
     # per folder of /data: the folders that stay with off (all others are emptied)
     KEPT = {
         "beelzebub": {"key"}, "ciscoasa": {"identity"}, "conpot": {"identity"}, "cowrie": {"keys"},
-        "dicompot": {"images"}, "elk": {"data", "listbot"}, "endlessh": {"identity"}, "galah": {"cert"},
+        "dicompot": {"images"}, "elk": {"data", "listbot"}, "endlessh": {"identity"}, "galah": {"cache", "cert"},
         "miniprint": {"data"}, "nginx": {"cert", "conf"}, "rdphoneypot": {"cert"}, "suricata": {"rules"},
     }
     # names of folders that hold an identity or state: one of them that a function makes has to stay

@@ -1259,7 +1259,7 @@ All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will b
 | `dicompot/images` | the DICOM images you put there for Dicompot |
 | `elk/data`, `elk/listbot` | the Elasticsearch data (its retention is `TPOT_ES_RETENTION`) and the translation maps Logstash caches |
 | `endlessh/identity` | the identity of Endlessh |
-| `galah/cert` | the TLS certificate of Galah (its cache of answers goes) |
+| `galah/cache`, `galah/cert` | the answers of the LLM Galah caches (they save LLM calls) and its TLS certificate |
 | `miniprint/data` | the printer identity of this installation |
 | `nginx/cert`, `nginx/conf` | the certificate of the web UI and the passwords of its users and sensors |
 | `rdphoneypot/cert` | the TLS certificate of RDPHoneypot |

@@ -145,10 +145,10 @@ check "data: the links of elk stay" "yes yes" "$( [ -L /data/elk/to-file ] && ec
 rm -rf /data
 kept="beelzebub/key/ssh_host_key ciscoasa/identity/identity.json conpot/identity/identity.json
 cowrie/keys/persona-state.json cowrie/keys/ubuntu-noble/ssh_host_ed25519_key endlessh/identity/banner
-galah/cert/cert.pem miniprint/data/state.json rdphoneypot/cert/server.pem suricata/rules/suricata.rules"
+galah/cert/cert.pem galah/cache/cache.db miniprint/data/state.json rdphoneypot/cert/server.pem suricata/rules/suricata.rules"
 gone="beelzebub/log/beelzebub.json ciscoasa/log/ciscoasa.json ciscoasa/payloads/sample conpot/log/conpot.json
 cowrie/log/cowrie.json cowrie/log/tty/session cowrie/downloads/sample cowrie/downloads.tgz
-endlessh/log/endlessh.log galah/log/galah.json galah/cache/cache.db miniprint/log/miniprint.json
+endlessh/log/endlessh.log galah/log/galah.json miniprint/log/miniprint.json
 miniprint/uploads/job.ps miniprint/uploads.tgz rdphoneypot/log/rdphoneypot.log suricata/log/eve.json"
 for file in ${kept} ${gone}; do
   mkdir -p "$(dirname "/data/${file}")"
@@ -160,7 +160,7 @@ check "persistence off: identity and state stay" "" \
 check "persistence off: logs, downloads and payloads go" "" \
       "$(for file in ${gone}; do [ -e "/data/${file}" ] && printf '%s ' "${file}"; done)"
 check "persistence off: the folders are there again" "yes" \
-      "$( [ -d /data/cowrie/log/tty ] && [ -d /data/cowrie/downloads ] && [ -d /data/ciscoasa/payloads ] && [ -d /data/miniprint/uploads ] && [ -d /data/galah/cache ] && echo yes)"
+      "$( [ -d /data/cowrie/log/tty ] && [ -d /data/cowrie/downloads ] && [ -d /data/ciscoasa/payloads ] && [ -d /data/miniprint/uploads ] && [ -d /data/galah/log ] && echo yes)"
 exit "${failed}"
 EOF
   chmod 0755 "${TEST_TMP_ROOT}/run.sh"
