@@ -42,6 +42,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
     - [DNS](#dns)
     - [Personas](#personas)
     - [Before you enable it](#before-you-enable-it)
+  - [Cowrie Personas](#cowrie-personas)
 - [System Placement](#system-placement)
 - [Installation](#installation)
   - [Choose your distro](#choose-your-distro)
@@ -394,6 +395,14 @@ On every start Ddospot takes one coherent host profile and answers as that host 
 Services like these on a public address get noticed: projects that scan the internet record them and may put the address of your T-Pot on their lists, and hosting providers sometimes ask their customers about them. If you are not sure, ask your provider first. If your provider asks: the [answer budget](#answer-budget) limits what Ddospot sends to any address and network, the *Ddospot - Victims* dashboard shows the addresses whose forged requests reached it, and with `DDOSPOT_DNS_RECURSION=off` DNS refuses queries of class IN.
 - [Blackhole](#blackhole) (`TPOT_BLACKHOLE=ENABLED`) null routes known mass scanners, so fewer of them see Ddospot and the other honeypots.
 - To run the Tarpit edition without Ddospot, leave it out with the [customizer](#customize-t-pot-honeypots-and-services) (*Edition & services* in the `tpot` menu, or `tpot customize --base tarpit --remove ddospot`).
+<br><br>
+
+## Cowrie Personas
+Cowrie answers on SSH and Telnet as one of 16 systems, its persona: the servers `ubuntu-noble`, `ubuntu-jammy`, `debian-trixie`, `debian-bookworm`, `rhel-9`, `centos-7`, `raspios` and `gpu-ubuntu`, the devices `dlink-dir859`, `tplink-wr841n`, `zyxel-nas326`, `openwrt`, `qnap-qts`, `synology-dsm`, `ubiquiti-edgerouter-x` and `ipcam`. Each start also draws the identity of that system: host name, release, hardware and uptime. Two settings in `~/tpotce/.env` choose them:
+- `COWRIE_PERSONA`: Empty (default) picks one of all personas at random, otherwise the personas to pick from, separated by spaces (i.e. `COWRIE_PERSONA=ubuntu-noble debian-bookworm`).
+- `COWRIE_PERSONA_ROTATION`: The days Cowrie keeps its persona (0 to 365). With `0` (default) every start draws a new persona and identity. With i.e. `7` a start within seven days of the draw keeps persona, host name, release, hardware and boot time, so the uptime goes on, as long as `COWRIE_PERSONA` still names the persona. `docker logs cowrie` says why a start drew a new one.
+
+The SSH host keys of each persona and the state of the rotation (`persona-state.json`) are kept in `~/tpotce/data/cowrie/keys`. They stay with `TPOT_PERSISTENCE=off` as well, which only deletes the logs, tty records and downloads of Cowrie on every start (see [Log Persistence](#log-persistence)).
 <br><br>
 
 # System Placement
@@ -1234,7 +1243,7 @@ All persistent log files from the honeypots, tools and T-Pot related services ar
 <br><br>
 
 ## Log Persistence
-All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will be persisted for the number of cycles set for `TPOT_PERSISTENCE_CYCLES=<1-999>` in the T-Pot configuration file `~/tpotce/.env`. It defaults to 30.
+All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will be persisted for the number of cycles set for `TPOT_PERSISTENCE_CYCLES=<1-999>` in the T-Pot configuration file `~/tpotce/.env`. It defaults to 30. With `TPOT_PERSISTENCE=off` the honeypot logs are deleted on every start instead; the identities of Cowrie (`data/cowrie/keys`, see [Cowrie Personas](#cowrie-personas)), Ciscoasa (`data/ciscoasa/identity`) and Endlessh (`data/endlessh/identity`) stay.
 <br>
 Elasticsearch keeps its events for the number of days set for `TPOT_ES_RETENTION=<1-3650|off>` in `~/tpotce/.env`, it defaults to 30. This offers a good balance between storage and speed. T-Pot sets the Index Lifecycle Policy `tpot` accordingly on every start of a HIVE, `off` keeps the events forever (mind the disk). An empty value leaves an existing policy alone.
 <br>
