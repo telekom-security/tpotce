@@ -2642,12 +2642,18 @@ class FixturesTest(unittest.TestCase):
 
     def test_elasticpot_writes_its_own_timestamp(self):
         """ElasticPot writes `+00:00Z` (an offset and Z): the fixture keeps that format, so the
-        smoke test of the fixtures shows what Elasticsearch does with it (its known failure)."""
+        smoke test of the fixtures shows that Logstash makes a date of it Elasticsearch takes."""
         line = json.loads(render_fixture("elasticpot"))
         self.assertEqual(line["timestamp"], "2026-10-17T08:15:42.123456+00:00Z")
         with open(FIXTURE_SMOKE, encoding="utf-8") as handle:
             smoke = handle.read()
-        self.assertIn('KNOWN = {"elasticpot": ("timestamp ", "ElasticPot timestamp, decision pending")}', smoke)
+        self.assertIn("KNOWN = {}", smoke)
+        with open(os.path.join(REPO, "docker", "elk", "logstash", "dist", "logstash.conf"),
+                  encoding="utf-8") as handle:
+            conf = handle.read()
+        block = conf[conf.index('  if [type] == "ElasticPot" {'):]
+        block = block[:block.index("\n# ")]
+        self.assertLess(block.index('"timestamp", "\\+00:00Z$", "+00:00"'), block.index("date {"))
 
     def test_the_ports_the_attack_map_needs(self):
         """cowrie (every event of a session carries the ports) and adbhoney (its connect event) log
