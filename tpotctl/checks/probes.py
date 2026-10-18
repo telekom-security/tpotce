@@ -64,7 +64,7 @@ def token_for(run_id: str) -> str:
 #   open         the connection was taken (UDP: an answer came)
 #   closed       a connect was refused, or timed out on the port's own, full clock
 #   not_reached  not tried, or cut short: the time of the honeypot or of the run ran out
-#   skipped      left alone on purpose (P2P mode, not running, no port, ...): the detail says why
+#   skipped      left alone on purpose (not running, no port, ...): the detail says why
 OPEN, CLOSED, NOT_REACHED, SKIPPED = "open", "closed", "not_reached", "skipped"
 STATES = (OPEN, CLOSED, NOT_REACHED, SKIPPED)
 
@@ -517,7 +517,6 @@ LLM_REASON = "an answer would call the LLM"
 # open the TCP connection and close it, nothing sent: no request reaches the LLM (nor Galah's
 # lookup of the source address); the ports of galah and beelzebub are all TCP
 knock = port_only(LLM_REASON)
-P2P_REASON = "P2P mode would share the probe's source with its peers"
 
 
 def _dicom_echo(ctx: _Ctx) -> Tuple[Optional[bool], str]:
@@ -1029,25 +1028,6 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
 }
 
 
-# sentrypeer with SENTRYPEER_PEER_TO_PEER shares the sources it sees with its peers, so the
-# probe only knocks at the TCP port and leaves the UDP one alone
-SENTRYPEER_P2P = PortProbe({(5060, TCP): port_only(P2P_REASON), (5060, UDP): not_tried(P2P_REASON)},
-                           default=not_tried(P2P_REASON))
-
-
-# probes of a honeypot whose settings in the compose file ask for another one: name -> (the
-# environment key, the probe); hptest.sh takes the same (hptest_table)
-VARIANTS: Dict[str, Tuple[str, PortProbe]] = {"sentrypeer": ("SENTRYPEER_PEER_TO_PEER", SENTRYPEER_P2P)}
-
-
-def _variant(honeypot: Honeypot) -> Optional[Callable[[str, List[Port], str], ProbeResult]]:
-    """Another probe for a honeypot whose settings in the compose file ask for it."""
-    found = VARIANTS.get(honeypot.name)
-    if found is not None and found[0] in honeypot.environment:
-        return found[1]
-    return None
-
-
 def uncovered(names: Iterable[str]) -> List[str]:
     """The honeypots of `names` with neither a probe nor a place in EXTERNAL."""
     return sorted(name for name in names if name not in PROBES and name not in EXTERNAL)
@@ -1063,8 +1043,6 @@ def probe(honeypot: Honeypot, host: str, token: str,
     if not honeypot.ports:
         return ProbeResult(SKIPPED, False, "no published port", answer_checked=False)
     function = probes.get(honeypot.name)
-    if function is not None:
-        function = _variant(honeypot) or function
     if function is None:
         return ProbeResult(SKIPPED, False, "no probe for this honeypot", answer_checked=False)
     try:
@@ -1142,8 +1120,7 @@ HPTEST_END = "# <<< probe table <<<"
 
 def hptest_table() -> Dict[str, object]:
     """What hptest.sh --nmap takes from the probe table: per honeypot the ports (inside the
-    container) it leaves out, or "*" for all of them, and the environment key that makes a variant
-    leave all of them out; the late writers and their seconds."""
+    container) it leaves out, or "*" for all of them; the late writers and their seconds."""
     def left_out(name: str, table: PortProbe) -> object:
         if name in NMAP_LEAVE_OUT or getattr(getattr(table, "default", None), "leave_out", None):
             return "*"
@@ -1155,9 +1132,7 @@ def hptest_table() -> Dict[str, object]:
         found = left_out(name, table)
         if found:
             skipped[name] = found
-    # a variant: with its environment key in the service, its own list instead
-    variants = {name: {"env": key, "skipped": left_out(name, table)} for name, (key, table) in sorted(VARIANTS.items())}
-    return {"skipped": skipped, "variants": variants,
+    return {"skipped": skipped,
             "late": {name: int(seconds) for name, seconds in sorted(LATE_WRITE.items())}}
 
 
@@ -1168,7 +1143,6 @@ def hptest_block() -> str:
     lines = [HPTEST_BEGIN,
              "# generated from tpotctl/checks/probes.py by python3 -m tpotctl.checks.probes --hptest",
              "skipped = " + json.dumps(data["skipped"], sort_keys=True),
-             "variants = " + json.dumps(data["variants"], sort_keys=True),
              "late = " + json.dumps(data["late"], sort_keys=True),
              HPTEST_END]
     text = "\n".join(lines)

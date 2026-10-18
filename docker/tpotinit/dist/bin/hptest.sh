@@ -100,15 +100,14 @@ function fuCOMMAND_OF {   # package -> the command it brings
 # docker compose config --format json on stdin -> "T:22,...", "U:69,..." and the seconds the
 # scanned honeypots may still write lines after the last probe; $1 the services left out. What
 # the probe table of tpot check leaves alone is left out here too: the ports it never sends to or
-# only knocks at (by the port inside the container), whole honeypots (the LLM honeypots, ddospot),
-# sentrypeer in P2P mode; the block is generated from tpotctl/checks/probes.py
+# only knocks at (by the port inside the container), whole honeypots (the LLM honeypots, ddospot);
+# the block is generated from tpotctl/checks/probes.py
 function fuPORTS {
 	python3 -c '
 import json, sys
 # >>> probe table >>>
 # generated from tpotctl/checks/probes.py by python3 -m tpotctl.checks.probes --hptest
 skipped = {"beelzebub": "*", "conpot_IEC104": [["20000", "tcp"]], "conpot_beckhoff_cx": [["48898", "tcp"]], "conpot_kamstrup_382": [["1025", "tcp"]], "conpot_plc_modbus": [["502", "tcp"]], "ddospot": "*", "dionaea": [["20", "tcp"], ["42", "tcp"], ["69", "udp"], ["81", "tcp"]], "galah": "*"}
-variants = {"sentrypeer": {"env": "SENTRYPEER_PEER_TO_PEER", "skipped": "*"}}
 late = {"ciscoasa": 60, "ddospot": 60}
 # <<< probe table <<<
 config = json.load(sys.stdin)
@@ -116,10 +115,7 @@ left_out = set(sys.argv[1].split())
 tcp, udp = set(), set()
 wait = 0
 for name, service in (config.get("services") or {}).items():
-    environment = service.get("environment") or {}
     leave = skipped.get(name) or []
-    if name in variants and variants[name]["env"] in environment:
-        leave = variants[name]["skipped"]
     if name in left_out or leave == "*":
         continue
     scanned = False

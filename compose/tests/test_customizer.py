@@ -179,7 +179,7 @@ class CoreTest(unittest.TestCase):
         text = core.render(self.catalog, self.resolve("STANDARD", add=["ddospot"], remove=["honeytrap"]))
         self.assertIn("# Ddospot service", text)
         self.assertIn("# SentryPeer service", text)
-        self.assertIn('#     - "4222:4222/udp"', text)               # commented option inside the block
+        self.assertIn('#     - "127.0.0.1:8082:8082"', text)         # commented option inside the block
         self.assertIn("#     - ${TPOT_DATA_PATH}/dicompot/images", text)  # trailing comment of a block
         self.assertNotIn("x-tpot", text)
         self.assertNotIn("#### DEV", text)
