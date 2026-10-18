@@ -111,6 +111,26 @@ class GlyphsTest(unittest.TestCase):
                     if mode == "ascii":
                         self.assertTrue(plain.isascii(), plain)
 
+    def test_the_stages_of_a_check_have_a_glyph_each(self):
+        """The Checks page: one glyph per state of tpotctl.checks.stages, one cell, distinct in every set,
+        ASCII in ascii, coloured by a token of the theme."""
+        if not textual:
+            self.skipTest("Textual is not installed")
+        from rich.cells import cell_len
+        from tpotctl import app as tapp, theme
+        from tpotctl.checks import stages
+        self.assertEqual(set(tapp.CHECK_STATES), set(stages.STATES))
+        for mode in glyphs.MODES:
+            glyphs.set_mode(mode)
+            with self.subTest(mode=mode):
+                cells = [tapp.check_cell(state) for state in stages.STATES]
+                self.assertEqual(len({cell.plain for cell in cells}), len(cells))
+                for state, cell in zip(stages.STATES, cells):
+                    self.assertEqual(cell_len(cell.plain), 1)
+                    self.assertIn(theme.color(tapp.CHECK_STATES[state][1]), str(cell.style))
+                    if mode == "ascii":
+                        self.assertTrue(cell.plain.isascii())
+
     def test_switching(self):
         glyphs.set_mode("ascii")
         self.assertEqual(glyphs.g("on"), "*")

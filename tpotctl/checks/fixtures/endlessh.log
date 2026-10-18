@@ -1,0 +1,1 @@
+{ts:%Y-%m-%dT%H:%M:%S.%3fZ} ACCEPT host={src_ip} port={src_port} fd=7 n=1/4096

@@ -74,14 +74,71 @@ create_web_users() {
     done
 }
 
+# The hold of ewsposter (hold, hold.ack) and the lock of the checks (check.lock) in <data>/ews
+# end with every start, so a check that was cut off never keeps ewsposter quiet. The folder is
+# reached by its descriptor, and a name in it is removed, never followed; a folder of that name stays.
+clear_ews_hold() {
+    python3 - "${1:-/data}" <<'PY'
+import fcntl
+import os
+import stat
+import sys
+
+data = sys.argv[1]
+try:
+    data_fd = os.open(data, os.O_RDONLY | os.O_DIRECTORY)
+except OSError:
+    sys.exit(0)
+try:
+    ews_fd = os.open("ews", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=data_fd)
+except FileNotFoundError:
+    sys.exit(0)
+except OSError as error:
+    if os.path.islink(os.path.join(data, "ews")):
+        print(f"# Warning: {data}/ews is a link, the hold of ewsposter is not cleared there.")
+    else:
+        print(f"# Warning: {data}/ews could not be opened ({error.strerror}), the hold of ewsposter is not cleared.")
+    sys.exit(0)
+for name in ("hold", "hold.ack", "check.lock", "quarantine", "catchup"):
+    try:
+        info = os.stat(name, dir_fd=ews_fd, follow_symlinks=False)
+        if stat.S_ISDIR(info.st_mode):
+            print(f"# Warning: {data}/ews/{name} is a folder, it stays.")
+            continue
+        if name == "check.lock" and stat.S_ISREG(info.st_mode):
+            # a check that runs holds its flock: its lock stays (it stops by itself once the
+            # marker is gone)
+            handle = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=ews_fd)
+            try:
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    print(f"# {data}/ews/{name} is held by a running check, it stays.")
+                    continue
+                os.unlink(name, dir_fd=ews_fd)
+            finally:
+                os.close(handle)
+            print(f"# Removed {data}/ews/{name}.")
+            continue
+        os.unlink(name, dir_fd=ews_fd)
+        print(f"# Removed {data}/ews/{name}.")
+    except FileNotFoundError:
+        continue
+    except OSError as error:
+        print(f"# Warning: {data}/ews/{name} could not be removed ({error.strerror}).")
+PY
+}
+
+# Folders 770, files 660 (no execute bit), nginx conf and cert 774 / 664; links are not followed
+. /opt/tpot/bin/data_modes.sh
+
 update_permissions() {
 	echo
 	echo "# Updating permissions ..."
 	echo
 	chown -R tpot:tpot /data
-	chmod -R 770 /data
-	chmod 774 -R /data/nginx/conf
-	chmod 774 -R /data/nginx/cert
+	fuDATA_MODES /data
+	fuDATA_WEB_MODES /data/nginx/conf /data/nginx/cert
 }
 
 # Update permissions
@@ -198,6 +255,9 @@ if [ -f "/data/uuid" ];
     echo
     uuidgen > /data/uuid
 fi
+
+# A hold of ewsposter or a lock of the checks from before this start ends here
+clear_ews_hold /data
 
 # Check if TPOT_BLACKHOLE is enabled
 if [ "${TPOT_OSTYPE}" == "linux" ];

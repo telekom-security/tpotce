@@ -1,0 +1,1 @@
+{"connection": {"protocol": "ftpd", "transport": "tcp", "type": "accept"}, "dst_ip": "::ffff:172.20.0.6", "dst_port": {dst_port}, "src_hostname": "", "src_ip": "::ffff:{src_ip}", "src_port": {src_port}, "timestamp": "{ts:%Y-%m-%dT%H:%M:%S.%f}", "ftp": {"commands": {"command": ["USER"], "arguments": ["{token}"]}}}

@@ -1,0 +1,1 @@
+{"level":"info","USERAGENT":"{token}","REMOTE_ADDR":"{src_ip}","URL":"/wp-login.php?{token}","time":"{ts:%Y-%m-%dT%H:%M:%SZ}","message":"NEW"}

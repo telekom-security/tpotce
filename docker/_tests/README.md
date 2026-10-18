@@ -28,6 +28,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh honeyaml
 ./docker/_tests/run.sh honeypots
 ./docker/_tests/run.sh log4pot
+./docker/_tests/run.sh logstash_fixtures
 ./docker/_tests/run.sh mailoney
 ./docker/_tests/run.sh medpot
 ./docker/_tests/run.sh miniprint
@@ -92,6 +93,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/honeypots.sh --image dtagdevsec/honeypots:24.04.2
 ./docker/_tests/tests/log4pot.sh
 ./docker/_tests/tests/log4pot.sh --image log4pot:alpine-check --http-port 18080
+./docker/_tests/tests/logstash_fixtures.sh
+./docker/_tests/tests/logstash_fixtures.sh --image docker.elastic.co/logstash/logstash:9.5.4
 ./docker/_tests/tests/mailoney.sh
 ./docker/_tests/tests/mailoney.sh --image mailoney:test --smtp-port 10025 --smtps-port 10465 --submission-port 10587
 ./docker/_tests/tests/medpot.sh
@@ -122,6 +125,17 @@ mounts a temporary config without `services/sip.yaml`, and skips the SIP ports
 host-side FTP control port; every other tested Dionaea port remains dynamically
 assigned.
 
+The Logstash fixture test renders the sample event of every honeypot
+(`tpotctl/checks/fixtures`, the line a `tpot check` writes into the honeypot's
+log) and feeds each through `docker/elk/logstash/dist/logstash.conf` of the
+checkout, with its inputs and filters as they are and a file as output, in a
+container without network. Every event must keep the type of its input, carry
+no tag ending in `failure` (grok, json, csv, date, GeoIP) and no `columnNN`
+field, have `src_ip`, the token or marker port of the check, the time of the
+line as `@timestamp` and a GeoIP location. It takes the T-Pot Logstash image
+when it is built here, otherwise the official image of its `LS_VER`; an image
+without the Listbot dictionaries gets small stand-ins for them.
+
 The Conpot test starts all nine deployed templates in one Docker network on
 dynamic loopback ports (`--<key>-port` pins one, see `--help`). The probes
 compare each answer with the rendered template and the stored identity and
@@ -131,12 +145,17 @@ and oversized frames and expects no container to stay busy afterwards, and
 validates the JSON events against the Conpot 1.0 event schema. The OPC UA probe
 runs the `asyncua` client of the image inside the container's network namespace.
 
-The EWSPoster test runs `ews.py` twice in verbose mode with EWS submission
-disabled, first against empty Honeytrap, Endlessh, Heralding and IPPHoney logs,
-then with one line added to the Honeytrap and IPPHoney logs. Both runs must
-finish without a traceback and the second run must report the events from
-line 1. The container needs outbound network access, EWSPoster looks up the
-external IP via `api.ipify.org` on every start.
+The EWSPoster test runs the image with its real entrypoint (the loop of
+`ews.py` passes) and sends EWS submissions to a local sink container that keeps
+every POST. The first pass over empty Honeytrap, Endlessh, Heralding, IPPHoney
+and Cowrie logs sends nothing; then line 1 of the Honeytrap and IPPHoney logs
+and three Cowrie sessions (labelled SSH or Telnet) must arrive. A line written
+right before the hold marker `data/ews/hold` is still sent by the normal pass
+the hold starts with; then EWSPoster writes `data/ews/hold.ack`, its indexes
+move on and nothing is sent, also after a restart of the container in the hold;
+after the hold only the new line arrives, never those of the hold. A marker older than 30 minutes is ignored, and `docker stop` ends the
+container at once. The container needs outbound network access, EWSPoster looks
+up the external IP via `api.ipify.org` on every pass.
 
 The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.

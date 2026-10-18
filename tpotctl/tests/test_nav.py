@@ -88,8 +88,8 @@ if textual:
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
 class PagesTest(unittest.IsolatedAsyncioTestCase):
 
-    async def check_page(self, key, host=True):
-        app = tapp.TpotApp(backend=FakeBackend(host=host), runner=Recorder(), engine=FakeEngine)
+    async def check_page(self, key, host=True, backend=None):
+        app = tapp.TpotApp(backend=backend or FakeBackend(host=host), runner=Recorder(), engine=FakeEngine)
         async with app.run_test(size=(150, 50)) as pilot:
             await pilot.pause(0.3)
             app.goto(key)
@@ -114,6 +114,15 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             if "host" in needs or key == "edition":
                 with self.subTest(page=key):
                     await self.check_page(key, host=False)
+
+    async def test_the_checks_page_with_a_result_and_on_a_sensor(self):
+        from tpotctl.tests.test_app import sample_check
+        for kind in ("HIVE", "SENSOR"):
+            backend = FakeBackend(kind=kind)
+            backend.check_result_value = sample_check()
+            backend.pending_value = 1          # the button of the pending cleanups is reached too
+            with self.subTest(kind=kind):
+                await self.check_page("checks", backend=backend)
 
     async def test_left_at_the_start_of_a_line_goes_to_the_menu(self):
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
@@ -178,7 +187,7 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             field.cursor_position = len(field.value)
             await pilot.press("right")
             await pilot.pause(0.1)
-            self.assertEqual(app.focused.id, "check-honeypots")
+            self.assertEqual(app.focused.id, "check-nmap")
 
     async def test_enter_on_the_edition_list_goes_on_to_its_buttons(self):
         """Choose, then act: down in a list moves the highlight, so enter takes the choice and goes on."""
@@ -243,7 +252,7 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.1)
             await pilot.press("enter")
             await pilot.pause(0.2)
-            self.assertEqual(app.focused.id, "check-honeypots")
+            self.assertEqual(app.focused.id, "check-nmap")
             self.assertEqual(len(app.screen_stack), 1)
         self.assertEqual(FakeEngine.seen, [])
 
@@ -394,6 +403,7 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
         from tpotctl import sensors
         from tpotctl.screens import customizer, dialogs, pickers, restore, task, uninstall
         from tpotctl.screens.customizer import State, core
+        from tpotctl.tests.test_app import sample_check as check
         times = [("UTC", Text("UTC"), False), ("Europe/Berlin", Text("Europe/Berlin"), False)]
 
         def state():
@@ -422,6 +432,8 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
             "customizer": lambda: customizer.CustomizerScreen(core.Catalog(), core.Selection("MINI"),
                                                               core.DEFAULT_MAX_NETWORKS),
             "ports": lambda: customizer.PortsDialog(state(), "cowrie"),
+            # the detail of a honeypot of the last check (Checks page): a long text, it scrolls
+            "check-detail": lambda: tapp.CheckDetailDialog(check(), check()["honeypots"][0]),
         }
 
     async def check_screen(self, label, make):
@@ -603,6 +615,17 @@ class SyncRowsTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((table.scroll_y, table.cursor_row), (scroll, 40))
             await pilot.pause(0.2)
             self.assertEqual(table.scroll_y, scroll)
+
+    async def test_a_cell_whose_colour_changes_is_repainted(self):
+        """Rich Text equals a Text of another style: the colour of the whole cell counts as a change."""
+        from rich.text import Text
+        app = self.table_app()
+        async with app.run_test(size=(60, 20)) as pilot:
+            table = app.query_one("#t")
+            table.sync_rows([("a", (Text("a", style="red"), "x"))])
+            await pilot.pause(0.1)
+            table.sync_rows([("a", (Text("a", style="blue"), "x"))])
+            self.assertEqual(str(table.get_row("a")[0].style), "blue")
 
     async def test_new_rows_keep_the_cursor_on_its_row_and_the_scroll_position(self):
         names = [f"honeypot{n:02d}" for n in range(43)]

@@ -1,9 +1,13 @@
 #!/bin/bash
-# hptest.sh [-B <file>] [--tools-only] [host]: probes the honeypots of
-# ~/tpotce/docker-compose.yml on host (default: the address of this host), a few
-# service specific requests first, then nmap over every published port. The
-# probes are real attacks as far as T-Pot can tell, they show up in Kibana.
-# `tpot check honeypots` runs it, also from the Checks page of the menu.
+# hptest.sh [-B <file>] [-y] [--nmap] [--tools-only] [host]: checks the honeypots
+# of ~/tpotce/docker-compose.yml. Where the T-Pot Manager runs, this is
+# `tpot check honeypots` (every honeypot from its port to the Attack Map, the test
+# events removed from Elasticsearch afterwards); it asks first, -y confirms.
+# Otherwise, for another host, with --nmap or --tools-only, the probes of old: a
+# few service specific requests on host (default: the address of this host),
+# then nmap over every published port. They are real attacks as far as T-Pot can
+# tell and show up in Kibana. ewsposter of this host sends nothing while they run
+# (ews_hold.sh), and one check runs at a time.
 
 # an exported CDPATH turns a cd into a search that prints the folder it found
 unset CDPATH
@@ -26,11 +30,21 @@ if ! source "${myHERE}/../../../../installer/lib/ui.sh" 2>/dev/null && \
 # <<< plain fallback
 fi
 fuUI_INIT
+# the hold of ewsposter and the lock of the checks
+# shellcheck source=docker/tpotinit/dist/bin/ews_hold.sh
+if ! source "${myHERE}/ews_hold.sh";
+  then
+    fuUI_ERROR "${myHERE}/ews_hold.sh is missing, the probes do not run without the hold of ewsposter."
+    exit 1
+fi
 
 myHOST=""
 myTOOLS_ONLY=""
+myNMAP=""
+myYES=""
 myBECOME_FILE=""
-myDOCKERCOMPOSEYML="$HOME/tpotce/docker-compose.yml"
+myTPOTCE="${TPOTCE_DIR:-$HOME/tpotce}"
+myDOCKERCOMPOSEYML="${myTPOTCE}/docker-compose.yml"
 myTIMEOUT=180
 myMEDPOTPACKET="
 MSH|^~\&|ADT1|MCM|LABADT|MCM|198808181126|SECURITY|ADT^A01|MSG00001-|P|2.6
@@ -50,6 +64,8 @@ IN2|ID1551001|SSN12345678
 ROL|45^RECORDER^ROLE MASTER LIST|AD|RO|KATE^ELLEN|199505011201"
 # containers whose state the probes change, restarted afterwards (if they run here)
 myRESTART="adbhoney conpot_guardian_ast conpot_kamstrup_382 dionaea"
+# the ports of the honeypots that get no probe ("T:2575,U:623"): their ewsposter module is not held
+myLEFTOUT=""
 
 function fuTOOLS_FOR {   # $1 = os-release file -> "<package manager> <packages>"
 	local myID="" myLIKE=""
@@ -80,13 +96,35 @@ function fuCOMMAND_OF {   # package -> the command it brings
 	esac
 }
 
-function fuPORTS {   # docker compose config --format json on stdin -> "T:22,..." and "U:69,..."
+# docker compose config --format json on stdin -> "T:22,...", "U:69,..." and the seconds the
+# scanned honeypots may still write lines after the last probe; $1 the services left out. What
+# the probe table of tpot check leaves alone is left out here too: the ports it never sends to or
+# only knocks at (by the port inside the container), whole honeypots (the LLM honeypots, ddospot),
+# sentrypeer in P2P mode; the block is generated from tpotctl/checks/probes.py
+function fuPORTS {
 	python3 -c '
 import json, sys
+# >>> probe table >>>
+# generated from tpotctl/checks/probes.py by python3 -m tpotctl.checks.probes --hptest
+skipped = {"beelzebub": "*", "conpot_IEC104": [["20000", "tcp"]], "conpot_beckhoff_cx": [["48898", "tcp"]], "conpot_kamstrup_382": [["1025", "tcp"]], "conpot_plc_modbus": [["502", "tcp"]], "ddospot": "*", "dionaea": [["20", "tcp"], ["42", "tcp"], ["69", "udp"], ["81", "tcp"]], "galah": "*"}
+variants = {"sentrypeer": {"env": "SENTRYPEER_PEER_TO_PEER", "skipped": "*"}}
+late = {"ciscoasa": 60, "ddospot": 60}
+# <<< probe table <<<
 config = json.load(sys.stdin)
+left_out = set(sys.argv[1].split())
 tcp, udp = set(), set()
-for service in (config.get("services") or {}).values():
+wait = 0
+for name, service in (config.get("services") or {}).items():
+    environment = service.get("environment") or {}
+    leave = skipped.get(name) or []
+    if name in variants and variants[name]["env"] in environment:
+        leave = variants[name]["skipped"]
+    if name in left_out or leave == "*":
+        continue
+    scanned = False
     for port in service.get("ports") or []:
+        if [str(port.get("target") or ""), port.get("protocol") or "tcp"] in leave:
+            continue
         if port.get("host_ip") in ("127.0.0.1", "::1"):
             continue
         published = str(port.get("published") or port.get("target") or "")
@@ -94,9 +132,28 @@ for service in (config.get("services") or {}).values():
         if not published.isdigit() or 64290 <= int(published) <= 64309:
             continue
         (udp if port.get("protocol") == "udp" else tcp).add(int(published))
+        scanned = True
+    if scanned:
+        wait = max(wait, late.get(name, 0))
 print(",".join(f"T:{p}" for p in sorted(tcp)))
 print(",".join(f"U:{p}" for p in sorted(udp)))
-'
+print(wait)
+' "${1:-}"
+}
+
+function fuNOT_HELD {   # docker compose config --format json on stdin -> the services whose ewsposter module is not held
+	local myNAME=""
+	for myNAME in $(python3 -c 'import json, sys; print(" ".join(sorted((json.load(sys.stdin).get("services") or {}))))');
+	  do
+	    fuEWS_HOLDS "${myNAME}" || printf '%s ' "${myNAME}"
+	  done
+}
+
+function fuPROBE_TO {   # protocol (T or U) port -> 0 unless the port belongs to a service left out
+	case ",${myLEFTOUT}," in
+	  *",$1:$2,"*) return 1 ;;
+	esac
+	return 0
 }
 
 function fuIKEPORTS {   # compose JSON -> Ciscoasa published port and NAT-T marker flag
@@ -136,6 +193,44 @@ function fuHAS {   # command
 	command -v "$1" >/dev/null 2>&1
 }
 
+function fuOWN_ADDRESS {   # host -> 0 when it is an address of this host (or a name of it)
+	local myADDR=""
+	case "$1" in
+	  localhost|127.*|::1|"$(hostname 2>/dev/null)") return 0 ;;
+	esac
+	for myADDR in $(ip -o addr show 2>/dev/null | awk '{print $4}');
+	  do
+	    [ "${myADDR%/*}" = "$1" ] && return 0
+	  done
+	return 1
+}
+
+# the scans in the background: their own pids (timeout, or sudo for the UDP scan), so a signal
+# reaches the scanner itself and a wait really waits for it
+myPIDS=()
+mySUDO_PIDS=()
+
+function fuSTOP_PROBES {   # the probes still running (Ctrl+C, TERM) end before the hold does
+	local myPID="" myJOBS="" myWAIT=0
+	myJOBS=$(jobs -p)
+	# shellcheck disable=SC2086
+	kill ${myJOBS} "${myPIDS[@]}" 2>/dev/null
+	# the UDP scan runs as root: when sudo did not end by the TERM above, root ends it (sudo passes
+	# it on to timeout, timeout to nmap), with the credentials of the sudo -v before the scan
+	for myPID in "${mySUDO_PIDS[@]}";
+	  do
+	    myWAIT=0
+	    while kill -0 "${myPID}" 2>/dev/null && [ "${myWAIT}" -lt 10 ];
+	      do
+	        sleep 0.1
+	        myWAIT=$(( myWAIT + 1 ))
+	      done
+	    kill -0 "${myPID}" 2>/dev/null && sudo -n kill -TERM "${myPID}" 2>/dev/null
+	  done
+	# every probe and scan, however long it takes to end (the scans at most myTIMEOUT)
+	wait
+}
+
 function fuCHECKDEPS {
 	local myTOOLS="" myMANAGER="" myPACKAGE="" myMISSING=()
 	myTOOLS=$(fuTOOLS_FOR /etc/os-release)
@@ -168,16 +263,23 @@ function fuCHECKDEPS {
 
 function fuUSAGE {
 	cat <<EOF
-Usage: $0 [-B <file>] [--tools-only] [host]
+Usage: $0 [-B <file>] [-y] [--nmap] [--tools-only] [host]
 
-Probes the honeypots of ${myDOCKERCOMPOSEYML} on host, default: the address of
-this host. The probes are real attacks as far as T-Pot can tell.
+Checks the honeypots of ${myDOCKERCOMPOSEYML}. Where the T-Pot Manager
+runs, this is tpot check honeypots: every honeypot of this host from its port
+to the Attack Map, the test events removed from Elasticsearch afterwards.
+For another host, with --nmap or --tools-only, or without the T-Pot Manager:
+service requests, then nmap over every published port of host (default: the
+address of this host); those probes are real attacks as far as T-Pot can tell.
+ewsposter of this host sends nothing during a check, one check runs at a time.
 
-  -B <file>      Read the sudo password from a file (installing the tools)
+  -B <file>      Read the sudo password from a file
+  -y             Start the check without asking (tpot check honeypots asks)
+  --nmap         The service requests and the nmap scan, not tpot check
   --tools-only   Only install nmap, ncat and the DICOM tools, then end
   -h             Show this help message
 EOF
-	exit 1
+	exit "${1:-1}"
 }
 
 # sourced by the tests for its functions
@@ -186,9 +288,12 @@ EOF
 while [ $# -gt 0 ];
   do
     case "$1" in
-      -B) myBECOME_FILE="$2"; shift 2 ;;
+      -B) [ $# -ge 2 ] || { fuUI_ERROR "-B needs a file."; fuUSAGE; }
+          myBECOME_FILE="$2"; shift 2 ;;
       --tools-only) myTOOLS_ONLY="1"; shift ;;
-      -h|--help) fuUSAGE ;;
+      --nmap) myNMAP="1"; shift ;;
+      -y|--yes) myYES="1"; shift ;;
+      -h|--help) fuUSAGE 0 ;;
       -*) fuUI_ERROR "Unknown option $1."; fuUSAGE ;;
       *) myHOST="$1"; shift ;;
     esac
@@ -199,6 +304,20 @@ if [ -n "${myBECOME_FILE}" ];
     [ -r "${myBECOME_FILE}" ] || { fuUI_ERROR "Cannot read the sudo password from ${myBECOME_FILE}."; exit 1; }
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
     sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
+fi
+
+# the check of this host is tpot check honeypots of the T-Pot Manager where it runs (as genuser.sh
+# hands over to tpot users add); another host, --nmap and --tools-only stay here
+myTPOT="${myTPOTCE}/tpot"
+function fuTPOT_READY {
+	[ -x "${myTPOT}" ] && "${myTPOT}" setup >/dev/null 2>&1
+}
+if [ -z "${myNMAP}" ] && [ -z "${myTOOLS_ONLY}" ] && { [ -z "${myHOST}" ] || fuOWN_ADDRESS "${myHOST}"; } && fuTPOT_READY;
+  then
+    myARGS=(check honeypots)
+    [ -n "${myBECOME_FILE}" ] && myARGS+=(--become-file "${myBECOME_FILE}")
+    [ -n "${myYES}" ] && myARGS+=(--yes)
+    exec "${myTPOT}" "${myARGS[@]}"
 fi
 
 fuUI_BANNER "Honeypot probe" "Probes the honeypots of this T-Pot: service requests, then nmap over every port."
@@ -224,6 +343,36 @@ fi
 myTCPPORTS=$(echo "${myPORTS}" | sed -n 1p)
 myUDPPORTS=$(echo "${myPORTS}" | sed -n 2p)
 
+# ewsposter of this host sends nothing from here on, until the last probe is logged
+fuMARK phase hold Holding ewsposter
+fuEWS_HOLD_TRAPS fuSTOP_PROBES
+fuEWS_HOLD_BEGIN "$(fuEWS_DATA_PATH "${myTPOTCE}")" "${myDOCKERCOMPOSEYML}" || { fuMARK fail hold; exit 3; }
+if ! fuOWN_ADDRESS "${myHOST}";
+  then
+    fuUI_WARN "${myHOST} is no address of this host: if it is another T-Pot, its ewsposter is not held and reports the probes."
+  elif [ -n "${myEWS_HOLD_FAILED}" ];
+    then
+      # the honeypots whose ewsposter module is not held get no probe: their ports are left out
+      myCONFIG=$(docker compose -f "${myDOCKERCOMPOSEYML}" config --format json 2>/dev/null)
+      myNOTHELD=$(echo "${myCONFIG}" | fuNOT_HELD)
+      if [ -n "${myNOTHELD}" ];
+        then
+          myALLPORTS="${myTCPPORTS},${myUDPPORTS}"
+          myPORTS=$(echo "${myCONFIG}" | fuPORTS "${myNOTHELD}")
+          myTCPPORTS=$(echo "${myPORTS}" | sed -n 1p)
+          myUDPPORTS=$(echo "${myPORTS}" | sed -n 2p)
+          myLEFTOUT=$(python3 -c 'import sys; keep = set(sys.argv[2].split(",")); print(",".join(p for p in sys.argv[1].split(",") if p and p not in keep))' "${myALLPORTS}" "${myTCPPORTS},${myUDPPORTS}")
+          fuUI_WARN "No probe for ${myNOTHELD% }: ewsposter cannot hold its module (its idle pass fails; docker logs ewsposter)."
+      fi
+fi
+# a honeypot that writes its lines late (ddospot, ciscoasa: a minute after the probe): the hold
+# (of the ports really scanned) lasts that long after the last scan, plus a margin
+myLATE=$(echo "${myPORTS}" | sed -n 3p)
+case "${myLATE}" in
+  ''|*[!0-9]*|0) ;;
+  *) [ $(( myLATE + 10 )) -gt "${myEWS_HOLD_SETTLE}" ] && myEWS_HOLD_SETTLE=$(( myLATE + 10 )) ;;
+esac
+
 fuMARK phase probe Probing some services on "${myHOST}"
 fuUI_INFO "Probing some services on ${myHOST} ..."
 myNC=""
@@ -231,13 +380,16 @@ fuHAS nc && myNC="nc"
 fuHAS ncat && myNC="ncat"
 if [ -n "${myNC}" ];
   then
-    echo "$myMEDPOTPACKET" | timeout 5 "${myNC}" "$myHOST" 2575 >/dev/null 2>&1 &
-    echo "I20100" | timeout 3 "${myNC}" "$myHOST" 10001 >/dev/null 2>&1 &
-    timeout 3 "${myNC}" "$myHOST" 3299 </dev/null >/dev/null 2>&1 &
+    fuPROBE_TO T 2575 && { echo "$myMEDPOTPACKET" | timeout 5 "${myNC}" "$myHOST" 2575 >/dev/null 2>&1 & }
+    fuPROBE_TO T 10001 && { echo "I20100" | timeout 3 "${myNC}" "$myHOST" 10001 >/dev/null 2>&1 & }
+    fuPROBE_TO T 3299 && { timeout 3 "${myNC}" "$myHOST" 3299 </dev/null >/dev/null 2>&1 & }
 fi
-curl -s -m 5 -XGET "http://$myHOST:9200/logstash-*/_search" >/dev/null 2>&1 &
-curl -s -m 5 -XPOST -H "Content-Type: application/json" -d '{"name":"test","email":"test@test.com"}' "http://$myHOST:9200/test" >/dev/null 2>&1 &
-if fuHAS findscu;
+if fuPROBE_TO T 9200;
+  then
+    curl -s -m 5 -XGET "http://$myHOST:9200/logstash-*/_search" >/dev/null 2>&1 &
+    curl -s -m 5 -XPOST -H "Content-Type: application/json" -d '{"name":"test","email":"test@test.com"}' "http://$myHOST:9200/test" >/dev/null 2>&1 &
+fi
+if fuHAS findscu && fuPROBE_TO T 11112;
   then
     timeout 10 findscu -P -k PatientName="*" "$myHOST" 11112 >/dev/null 2>&1 &
     timeout 10 getscu -P -k PatientName="*" "$myHOST" 11112 >/dev/null 2>&1 &
@@ -246,6 +398,7 @@ myIKEPORTS=$(docker compose -f "${myDOCKERCOMPOSEYML}" config --format json 2>/d
 while read -r myIKEPORT myNATT;
   do
     [ -n "${myIKEPORT}" ] || continue
+    fuPROBE_TO U "${myIKEPORT}" || continue
     if fuIKEPROBE "$myHOST" "$myIKEPORT" "$myNATT";
       then fuUI_OK "Ciscoasa IKE answered on ${myIKEPORT}/udp."
       else fuUI_WARN "Ciscoasa IKE did not answer on ${myIKEPORT}/udp."
@@ -258,10 +411,38 @@ fuMARK phase scan Scanning every published port
 if fuHAS nmap;
   then
     fuUI_INFO "Scanning the UDP / TCP ports of ${myDOCKERCOMPOSEYML} (up to ${myTIMEOUT}s) ..."
-    [ -n "${myTCPPORTS}" ] && timeout --foreground "${myTIMEOUT}" nmap -sV -sC -v -p "${myTCPPORTS}" "$myHOST" &
-    # a UDP scan needs root; sudo first, so the -B function refreshes it
-    [ -n "${myUDPPORTS}" ] && sudo timeout --foreground "${myTIMEOUT}" nmap -sU -sV -sC -v -p "${myUDPPORTS}" "$myHOST" &
-    wait
+    if [ -n "${myTCPPORTS}" ];
+      then
+        timeout --foreground "${myTIMEOUT}" nmap -sV -sC -v -p "${myTCPPORTS}" "$myHOST" &
+        myPIDS+=("$!")
+    fi
+    # a UDP scan needs root: sudo itself in the background, so the job is sudo and no subshell
+    # around it; with -B it reads the password from the file, otherwise sudo -v first (in the
+    # foreground) and sudo -n for the scan
+    if [ -n "${myUDPPORTS}" ];
+      then
+        if [ -n "${myBECOME_FILE}" ];
+          then
+            command sudo -S -p "" timeout --foreground "${myTIMEOUT}" nmap -sU -sV -sC -v -p "${myUDPPORTS}" "$myHOST" < "${myBECOME_FILE}" &
+            myPIDS+=("$!")
+            mySUDO_PIDS+=("$!")
+        elif ! sudo -v;
+          then
+            fuUI_WARN "No sudo, no UDP scan."
+        elif ! sudo -n true 2>/dev/null;
+          then
+            # sudo -v recorded nothing (i.e. timestamp_timeout=0): the scan below could not start
+            fuUI_WARN "UDP scan skipped: sudo needs a password again."
+            fuMARK warn scan UDP scan skipped: sudo needs a password again
+          else
+            command sudo -n timeout --foreground "${myTIMEOUT}" nmap -sU -sV -sC -v -p "${myUDPPORTS}" "$myHOST" &
+            myPIDS+=("$!")
+            mySUDO_PIDS+=("$!")
+        fi
+    fi
+    [ "${#myPIDS[@]}" -eq 0 ] || wait "${myPIDS[@]}"
+    myPIDS=()
+    mySUDO_PIDS=()
     fuUI_OK "Scan done."
   else
     fuUI_WARN "nmap is not there (openSUSE has none in its repositories), no scan."
@@ -273,6 +454,8 @@ for myCONTAINER in ${myRESTART};
     grep -qE "^  ${myCONTAINER}:" "${myDOCKERCOMPOSEYML}" 2>/dev/null || continue
     docker restart "${myCONTAINER}" >/dev/null 2>&1 && fuUI_OK "${myCONTAINER} restarted."
   done
+fuMARK phase release Lifting the hold of ewsposter
+fuEWS_HOLD_END
 # nmap can leave the terminal in a strange state, not a log
 [ -t 1 ] && [ "${TPOT_MARKS}" != "1" ] && reset
 fuMARK phase "done" Done

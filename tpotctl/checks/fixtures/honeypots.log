@@ -1,0 +1,1 @@
+{"action": "connection", "data": {"Host": "192.0.2.1", "User-Agent": "{token}", "method": "GET", "uri": "/{token}"}, "dest_ip": "0.0.0.0", "dest_port": "{dst_port}", "protocol": "http", "src_ip": "{src_ip}", "src_port": "{src_port}", "timestamp": "{ts:%Y-%m-%dT%H:%M:%S.%f}"}

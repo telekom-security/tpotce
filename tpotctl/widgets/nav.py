@@ -176,6 +176,15 @@ class NavInput(Input):
         super().action_cursor_right(select)
 
 
+def same_cell(old, new) -> bool:
+    """Whether a cell shows the same: a Rich Text equals another of the same text and spans even when its
+    own style (a colour for the whole cell) differs, so that is compared too."""
+    from rich.text import Text
+    if isinstance(old, Text) and isinstance(new, Text):
+        return old == new and str(old.style) == str(new.style) and old.justify == new.justify
+    return old == new
+
+
 class NavDataTable(DataTable):
     """up / down move the cursor, at the first or last row on to the line before or after; with a row
     cursor left / right go along the line (left to the menu). enter_goes_on: a table whose buttons act
@@ -202,7 +211,7 @@ class NavDataTable(DataTable):
             columns = [column.key for column in self.ordered_columns]
             for key, cells in rows:
                 for column, value in zip(columns, cells):
-                    if self.get_cell(key, column) != value:
+                    if not same_cell(self.get_cell(key, column), value):
                         self.update_cell(key, column, value)
             return
         cursor = self.cursor_row

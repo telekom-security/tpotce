@@ -1,0 +1,1 @@
+{"timestamp":"{ts:%Y-%m-%dT%H:%M:%S.%fZ}","level":"WARN","src_ip":"{src_ip}","path":"/{token}","method":"GET","status_code":404,"host":"192.0.2.1","dest_port":"{dst_port}","user_agent_browser":"{token}","user_agent":"{token}","target":"honeyaml::access-log"}

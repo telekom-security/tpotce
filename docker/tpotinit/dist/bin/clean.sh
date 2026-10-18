@@ -8,6 +8,9 @@ myWHITE="[0;0m"
 # Set pigz
 myPIGZ=$(which pigz)
 
+# Folders 770, files 660 (no execute bit), nginx conf and cert 774 / 664; links are not followed
+. "$(dirname "${BASH_SOURCE[0]}")/data_modes.sh"
+
 # Set persistence
 myPERSISTENCE=$1
 myPERSISTENCE_CYCLES=$2
@@ -61,10 +64,9 @@ fuLOGROTATE () {
 fuLOGROTATECONF
 
 # Ensure correct permissions and ownerships for logrotate to run without issues
-find /data -path /data/ciscoasa -prune -o ! -type l -exec chmod 770 {} +
+fuDATA_MODES /data
 chown tpot:tpot /data -R
-chmod 774 /data/nginx/conf -R
-chmod 774 /data/nginx/cert -R
+fuDATA_WEB_MODES /data/nginx/conf /data/nginx/cert
 
 # Run logrotate with force (-f) first, so the status file can be written and race conditions (with tar) be avoided
 logrotate -f -s $mySTATUS $myCONF
@@ -82,9 +84,26 @@ if [ "$(fuEMPTY $myMAILONEYM)" != "0" ]; then tar -I $myPIGZ -cvf $myMAILONEYTGZ
 if [ "$(fuEMPTY $myMINIPRINTU)" != "0" ]; then tar -I $myPIGZ -cvf $myMINIPRINTTGZ $myMINIPRINTU; fi
 if [ "$(fuEMPTY $myWORDPOTP)" != "0" ]; then tar -I $myPIGZ -cvf $myWORDPOTTGZ $myWORDPOTP; fi
 
-# Ensure correct permissions and ownership for previously created archives
-chmod 770 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ
-chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ
+# Ensure correct permissions and ownership for previously created archives: only those that are
+# there (an archive exists once its folder had files), opened with O_NOFOLLOW and changed through
+# that descriptor (fchmod, fchown), so a link put in place of one is never followed
+# >>> archive modes >>>
+myARCHIVE_MODES='import grp, os, pwd, stat, sys
+user, _, group = sys.argv[1].partition(":")
+uid, gid = pwd.getpwnam(user).pw_uid, grp.getgrnam(group or user).gr_gid
+for path in sys.argv[2:]:
+    try:
+        handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        continue
+    try:
+        if stat.S_ISREG(os.fstat(handle).st_mode):
+            os.fchmod(handle, 0o660)
+            os.fchown(handle, uid, gid)
+    finally:
+        os.close(handle)'
+# <<< archive modes <<<
+python3 -c "${myARCHIVE_MODES}" tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ
 
 # Need to remove subfolders since too many files cause rm to exit with errors
 rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU $myWORDPOTP
@@ -103,9 +122,7 @@ fuTPOTINIT () {
   mkdir -vp /data/ews/conf \
             /data/tpot/etc/{compose,logrotate} \
             /tmp/etc/
-  chmod 770 /data/ews/ -R
-  chmod 770 /data/tpot/ -R
-  chmod 770 /tmp/etc/ -R
+  fuDATA_MODES /data/ews /data/tpot /tmp/etc
   chown tpot:tpot /data/ews/ -R
   chown tpot:tpot /data/tpot/ -R
   chown tpot:tpot /tmp/etc/ -R
@@ -115,7 +132,7 @@ fuTPOTINIT () {
 fuADBHONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/adbhoney/*; fi
   mkdir -vp /data/adbhoney/{downloads,log}
-  chmod 770 /data/adbhoney/ -R
+  fuDATA_MODES /data/adbhoney
   chown tpot:tpot /data/adbhoney/ -R
 }
 
@@ -123,7 +140,7 @@ fuADBHONEY () {
 fuBEELZEBUB () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/beelzebub/*; fi
   mkdir -vp /data/beelzebub/{key,log}
-  chmod 770 /data/beelzebub/ -R
+  fuDATA_MODES /data/beelzebub
   chown tpot:tpot /data/beelzebub/ -R
 }
 
@@ -131,8 +148,7 @@ fuBEELZEBUB () {
 fuCISCOASA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ciscoasa/*; fi
   mkdir -vp /data/ciscoasa/{identity,log,payloads}
-  find /data/ciscoasa -type f -exec chmod a-x {} +
-  chmod -R u=rwX,g=rwX,o= /data/ciscoasa
+  fuDATA_MODES /data/ciscoasa
   chown tpot:tpot /data/ciscoasa -R
 }
 
@@ -140,7 +156,7 @@ fuCISCOASA () {
 fuCITRIXHONEYPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/citrixhoneypot/*; fi
   mkdir -vp /data/citrixhoneypot/log/
-  chmod 770 /data/citrixhoneypot/ -R
+  fuDATA_MODES /data/citrixhoneypot
   chown tpot:tpot /data/citrixhoneypot/ -R
 }
 
@@ -148,7 +164,7 @@ fuCITRIXHONEYPOT () {
 fuCONPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot/*; fi
   mkdir -vp /data/conpot/{identity,log}
-  chmod 770 /data/conpot -R
+  fuDATA_MODES /data/conpot
   chown tpot:tpot /data/conpot -R
 }
 
@@ -156,7 +172,7 @@ fuCONPOT () {
 fuCOWRIE () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/cowrie/*; fi
   mkdir -vp /data/cowrie/{downloads,keys,misc,log,log/tty}
-  chmod 770 /data/cowrie -R
+  fuDATA_MODES /data/cowrie
   chown tpot:tpot /data/cowrie -R
 }
 
@@ -164,7 +180,7 @@ fuCOWRIE () {
 fuDDOSPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ddospot/log; fi
   mkdir -vp /data/ddospot/log
-  chmod 770 /data/ddospot -R
+  fuDATA_MODES /data/ddospot
   chown tpot:tpot /data/ddospot -R
 }
 
@@ -172,7 +188,7 @@ fuDDOSPOT () {
 fuDICOMPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dicompot/log; fi
   mkdir -vp /data/dicompot/{images,log}
-  chmod 770 /data/dicompot -R
+  fuDATA_MODES /data/dicompot
   chown tpot:tpot /data/dicompot -R
 }
 
@@ -185,7 +201,7 @@ fuDIONAEA () {
   touch /data/dionaea/sipaccounts.sqlite-journal
   touch /data/dionaea/log/dionaea.json
   touch /data/dionaea/log/dionaea.sqlite
-  chmod 770 /data/dionaea -R
+  fuDATA_MODES /data/dionaea
   chown tpot:tpot /data/dionaea -R
 }
 
@@ -193,7 +209,7 @@ fuDIONAEA () {
 fuELASTICPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/elasticpot/*; fi
   mkdir -vp /data/elasticpot/log
-  chmod 770 /data/elasticpot -R
+  fuDATA_MODES /data/elasticpot
   chown tpot:tpot /data/elasticpot -R
 }
 
@@ -203,7 +219,7 @@ fuELK () {
   # ELK daemon log files will be removed
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/elk/log/*; fi
   mkdir -vp /data/elk/{data,log,listbot}
-  chmod 770 /data/elk -R
+  fuDATA_MODES /data/elk
   chown tpot:tpot /data/elk -R
 }
 
@@ -211,7 +227,7 @@ fuELK () {
 fuENDLESSH () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/endlessh/log; fi
   mkdir -vp /data/endlessh/{identity,log}
-  chmod 770 /data/endlessh -R
+  fuDATA_MODES /data/endlessh
   chown tpot:tpot /data/endlessh -R
 }
 
@@ -219,7 +235,7 @@ fuENDLESSH () {
 fuGALAH () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/galah/*; fi
   mkdir -vp /data/galah/{cache,cert,log}
-  chmod 770 /data/galah/ -R
+  fuDATA_MODES /data/galah
   chown tpot:tpot /data/galah/ -R
 }
 
@@ -227,7 +243,7 @@ fuGALAH () {
 fuGLUTTON () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
   mkdir -vp /data/glutton/{log,payloads}
-  chmod 770 /data/glutton -R
+  fuDATA_MODES /data/glutton
   chown tpot:tpot /data/glutton -R
 }
 
@@ -235,7 +251,7 @@ fuGLUTTON () {
 fuGOPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/go-pot/*; fi
   mkdir -vp /data/go-pot/log
-  chmod 770 /data/go-pot -R
+  fuDATA_MODES /data/go-pot
   chown tpot:tpot /data/go-pot -R
 }
 
@@ -243,7 +259,7 @@ fuGOPOT () {
 fuH0NEYTR4P () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/h0neytr4p/*; fi
   mkdir -vp /data/h0neytr4p/{log,payloads}
-  chmod 770 /data/h0neytr4p/ -R
+  fuDATA_MODES /data/h0neytr4p
   chown tpot:tpot /data/h0neytr4p/ -R
 }
 
@@ -251,7 +267,7 @@ fuH0NEYTR4P () {
 fuHELLPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/hellpot/log; fi
   mkdir -vp /data/hellpot/log
-  chmod 770 /data/hellpot -R
+  fuDATA_MODES /data/hellpot
   chown tpot:tpot /data/hellpot -R
 }
 
@@ -259,7 +275,7 @@ fuHELLPOT () {
 fuHERALDING () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/heralding/*; fi
   mkdir -vp /data/heralding/log
-  chmod 770 /data/heralding -R
+  fuDATA_MODES /data/heralding
   chown tpot:tpot /data/heralding -R
 }
 
@@ -267,7 +283,7 @@ fuHERALDING () {
 fuHONEYAML () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeyaml/*; fi
   mkdir -vp /data/honeyaml/log
-  chmod 770 -R /data/honeyaml
+  fuDATA_MODES /data/honeyaml
   chown tpot:tpot -R /data/honeyaml
 }
 
@@ -275,7 +291,7 @@ fuHONEYAML () {
 fuHONEYPOTS () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeypots/*; fi
   mkdir -vp /data/honeypots/log
-  chmod 770 /data/honeypots -R
+  fuDATA_MODES /data/honeypots
   chown tpot:tpot /data/honeypots -R
 }
 
@@ -283,7 +299,7 @@ fuHONEYPOTS () {
 fuHONEYSAP () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeysap/*; fi
   mkdir -vp /data/honeysap/log
-  chmod 770 /data/honeysap -R
+  fuDATA_MODES /data/honeysap
   chown tpot:tpot /data/honeysap -R
 }
 
@@ -291,7 +307,7 @@ fuHONEYSAP () {
 fuHONEYTRAP () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeytrap/*; fi
   mkdir -vp /data/honeytrap/{log,attacks,downloads}
-  chmod 770 /data/honeytrap/ -R
+  fuDATA_MODES /data/honeytrap
   chown tpot:tpot /data/honeytrap/ -R
 }
 
@@ -299,7 +315,7 @@ fuHONEYTRAP () {
 fuIPPHONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ipphoney/*; fi
   mkdir -vp /data/ipphoney/log
-  chmod 770 /data/ipphoney -R
+  fuDATA_MODES /data/ipphoney
   chown tpot:tpot /data/ipphoney -R
 }
 
@@ -307,7 +323,7 @@ fuIPPHONEY () {
 fuLOG4POT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/log4pot/*; fi
   mkdir -vp /data/log4pot/{log,payloads}
-  chmod 770 /data/log4pot -R
+  fuDATA_MODES /data/log4pot
   chown tpot:tpot /data/log4pot -R
 }
 
@@ -315,7 +331,7 @@ fuLOG4POT () {
 fuMAILONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/mailoney/*; fi
   mkdir -vp /data/mailoney/log/
-  chmod 770 /data/mailoney/ -R
+  fuDATA_MODES /data/mailoney
   chown tpot:tpot /data/mailoney/ -R
 }
 
@@ -323,7 +339,7 @@ fuMAILONEY () {
 fuMEDPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/medpot/*; fi
   mkdir -vp /data/medpot/log/
-  chmod 770 /data/medpot/ -R
+  fuDATA_MODES /data/medpot
   chown tpot:tpot /data/medpot/ -R
 }
 
@@ -331,7 +347,7 @@ fuMEDPOT () {
 fuMINIPRINT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/miniprint/*; fi
   mkdir -vp /data/miniprint/{data,log,uploads}
-  chmod 770 /data/miniprint/ -R
+  fuDATA_MODES /data/miniprint
   chown tpot:tpot /data/miniprint/ -R
 }
 
@@ -340,8 +356,7 @@ fuNGINX () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/nginx/log/*; fi
   mkdir -vp /data/nginx/{cert,conf,log}
   touch /data/nginx/log/error.log
-  chmod 774 /data/nginx/conf -R
-  chmod 774 /data/nginx/cert -R
+  fuDATA_WEB_MODES /data/nginx/conf /data/nginx/cert
   chown tpot:tpot /data/nginx -R
 }
 
@@ -349,7 +364,7 @@ fuNGINX () {
 fuRDPHONEYPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/rdphoneypot/*; fi
   mkdir -vp /data/rdphoneypot/{cert,log}
-  chmod 770 /data/rdphoneypot -R
+  fuDATA_MODES /data/rdphoneypot
   chown tpot:tpot /data/rdphoneypot -R
 }
 
@@ -357,7 +372,7 @@ fuRDPHONEYPOT () {
 fuREDISHONEYPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/redishoneypot/log; fi
   mkdir -vp /data/redishoneypot/log
-  chmod 770 /data/redishoneypot -R
+  fuDATA_MODES /data/redishoneypot
   chown tpot:tpot /data/redishoneypot -R
 }
 
@@ -365,7 +380,7 @@ fuREDISHONEYPOT () {
 fuSENTRYPEER () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/sentrypeer/log; fi
   mkdir -vp /data/sentrypeer/log
-  chmod 770 /data/sentrypeer -R
+  fuDATA_MODES /data/sentrypeer
   chown tpot:tpot /data/sentrypeer -R
 }
 
@@ -373,7 +388,7 @@ fuSENTRYPEER () {
 fuSURICATA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/suricata/*; fi
   mkdir -vp /data/suricata/{log,rules}
-  chmod 770 -R /data/suricata
+  fuDATA_MODES /data/suricata
   chown tpot:tpot -R /data/suricata
 }
 
@@ -381,7 +396,7 @@ fuSURICATA () {
 fuP0F () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/p0f/*; fi
   mkdir -vp /data/p0f/log
-  chmod 770 -R /data/p0f
+  fuDATA_MODES /data/p0f
   chown tpot:tpot -R /data/p0f
 }
 
@@ -389,7 +404,7 @@ fuP0F () {
 fuWORDPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/wordpot/*; fi
   mkdir -vp /data/wordpot/log/payloads
-  chmod 770 /data/wordpot -R
+  fuDATA_MODES /data/wordpot
   chown tpot:tpot /data/wordpot -R
 }
 

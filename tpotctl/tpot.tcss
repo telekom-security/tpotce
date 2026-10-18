@@ -903,11 +903,37 @@ Button.-error:disabled {
     border: none;
 }
 
-/* checks (ChecksPane) */
+/* checks (ChecksPane): the page scrolls, so the table of the last check takes its rows only */
 
 #check-host {
     width: 40;
     margin-right: 2;
+}
+
+#check-hold {
+    margin-top: 1;
+}
+
+.check-switches .switch-state {
+    margin-right: 2;
+}
+
+#check-summary {
+    margin-top: 1;
+}
+
+#check-results {
+    height: auto;
+    max-height: 24;
+    margin-top: 1;
+}
+
+#check-legend {
+    margin-top: 0;
+}
+
+#check-extra {
+    margin-top: 1;
 }
 
 /* elastic (ElasticPane): the retention field as the host field of the checks */

@@ -69,6 +69,30 @@ if textual:
         def host_address(self):
             return "192.0.2.5"
 
+        # the Checks page: last.json (None: no check yet; an exception: it cannot be read) and hold.state
+        check_result_value = None
+        ews = ("normal", 4.0)
+
+        def check_result(self):
+            if isinstance(self.check_result_value, BaseException):
+                raise self.check_result_value
+            return self.check_result_value
+
+        def ews_state(self):
+            return self.ews
+
+        # earlier checks whose cleanup did not run through
+        pending_value = 0
+        quarantine_value = []
+
+        def ews_quarantine(self):
+            return list(self.quarantine_value)
+
+        refused_value = []
+
+        def pending_checks(self):
+            return self.pending_value, list(self.refused_value)
+
         def backup_infos(self):
             return [ops.BackupInfo("/b/new_tpot_backup.tar", "new_tpot_backup.tar", 2 ** 20, "regular",
                                    ["version: 24.04.2"], ["git", "config"]),
@@ -147,6 +171,30 @@ if textual:
             done = [(i.type, i.id) for i in chosen.to_import("overwrite" if overwrite else "update")
                     if (i.type, i.id) not in {(t, n) for t, n, _title, _why in refused}]
             return chosen, ko.Result(imported=done, errors=list(refused)), "/b/kibana_objects_20261016120000.ndjson"
+
+        # the old objects: two of earlier releases, the title of one with markup in it; _kibana_old a list
+        # of its own, _kibana_prune_failed the type:id Kibana refuses to remove
+        def kibana_old(self):
+            from tpotctl import kibana_objects as ko
+            return getattr(self, "_kibana_old", [
+                ko.Item("dashboard:o1", "dashboard", "o1", "Old board", "old"),
+                ko.Item("visualization:o2", "visualization", "o2", "[b]Old[/b] vis", "old")])
+
+        def kibana_prune_preview(self):
+            self.calls.append("kibana-prune-preview")
+            self.kibana_raise("prune-preview")
+            return self.kibana_old()
+
+        def kibana_prune(self, confirmed):
+            from tpotctl import kibana_objects as ko
+            self.calls.append(("kibana-prune", set(confirmed)))
+            self.kibana_raise("prune")
+            refused = getattr(self, "_kibana_prune_failed", set())
+            planned = [i for i in self.kibana_old() if i.key in confirmed]
+            return ko.Prune(planned, removed=[i for i in planned if i.key not in refused],
+                            failed=[(i, "Kibana at http://127.0.0.1:64296 answered 400") for i in planned
+                                    if i.key in refused],
+                            export_path="/b/kibana_objects_20261016120003.ndjson")
 
         def kibana_export(self):
             self.calls.append("kibana-export")
@@ -536,39 +584,6 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             text = str(app.query_one("#top-attackers").render())
         self.assertIn("203.0.113.7", text)
         self.assertIn("Netherlands", text)
-
-    async def test_checks_probe_the_honeypots(self):
-        FakeEngine.seen.clear()
-        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.2)
-            app.goto("checks")
-            await pilot.pause(0.2)
-            self.assertEqual(app.query_one("#check-host").value, "192.0.2.5")
-            await pilot.click("#check-honeypots")
-            await pilot.pause(0.3)
-            await pilot.click("#task-run")
-            await pilot.pause(0.4)
-        self.assertEqual(FakeEngine.seen, [[cli.HPTEST, "192.0.2.5"]])
-
-    async def test_checks_pipeline_asks_first(self):
-        FakeEngine.seen.clear()
-        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.2)
-            app.goto("checks")
-            await pilot.pause(0.2)
-            await pilot.click("#check-pipeline")
-            await pilot.pause(0.3)
-            self.assertIsInstance(app.screen, ConfirmDialog)
-            await pilot.click("#no")
-            await pilot.pause(0.2)
-            self.assertEqual(FakeEngine.seen, [])
-            await pilot.click("#check-pipeline")
-            await pilot.pause(0.3)
-            await pilot.click("#yes")
-            await pilot.pause(0.5)
-        self.assertEqual(FakeEngine.seen, [[cli.PIPELINE]])
 
     async def test_quit_waits_for_a_running_task(self):
         import threading
@@ -1938,6 +1953,391 @@ def flat(widget) -> str:
     return " ".join(str(widget.render()).split())
 
 
+def sample_check(**over):
+    """A last.json as tpot check honeypots writes it (run.Report), read back as the page reads it."""
+    import json
+    from datetime import datetime, timezone
+    from tpotctl.checks import run as trun, stages as tstages
+    cowrie = tstages.Row("cowrie", "honeypots", "cowrie", True, False, "Cowrie", ["22/tcp", "23/tcp"])
+    for name in tstages.STAGES:
+        cowrie.set(name, tstages.OK, f"{name} of cowrie")
+    cowrie.log_line = '{"eventid": "cowrie.session.connect", "src_ip": "192.0.2.5"}'
+    cowrie.es_id, cowrie.es_index = "abc123", "logstash-2026.10.17"
+    cowrie.geo = tstages.GeoEvent("8.8.8.8", 51234, "cowrie/log/cowrie.json", '{"src_ip": "8.8.8.8"}', "geo1",
+                                  "logstash-2026.10.17", {"lat": 37.75, "lon": -97.8, "country": "United States",
+                                                          "ip_rep": "known attacker"})
+    dionaea = tstages.Row("dionaea", "honeypots", "dionaea", True, False, "Dionaea", ["21/tcp"])
+    dionaea.set("port", tstages.OK, "21/tcp open")
+    dionaea.set("answer", tstages.FAILED, "no [bold]banner[/bold] in 10 s")
+    dionaea.set("log", tstages.NOT_APPLICABLE, "the knock left no trace")
+    glutton = tstages.Row("glutton", "honeypots", "glutton", False, True, "Glutton", [])
+    glutton.set("port", tstages.NOT_APPLICABLE, "not running")
+    report = trun.Report(run_id="20261017080000a1b2c3", token="tpot-check-20261017080000a1b2c3",
+                         started=datetime(2026, 10, 17, 8, 0, tzinfo=timezone.utc),
+                         ended=datetime(2026, 10, 17, 8, 4, tzinfo=timezone.utc), host="192.0.2.5",
+                         options={"only": [], "geo": True, "keep": False, "timeout": 90.0},
+                         rows=[cowrie, dionaea, glutton], exit_code=1, result="failed",
+                         ewsposter={"state": "held", "detail": ""},
+                         cleanup={"state": "done", "deleted": 12, "passes": [10, 2], "left": 3,
+                                  "left_kibana": "https://192.0.2.5:64297/kibana/app/discover#/?left",
+                                  "detail": ""},
+                         kibana="https://192.0.2.5:64297/kibana/app/discover#/?_g=(run)")
+    data = report.as_json()
+    data.update(over)
+    return trun.result_view(json.loads(json.dumps(data)))
+
+
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
+class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
+    """The Checks page: the switches, the question, tpot check in the task screen, the table of last.json."""
+
+    SIZE = (150, 50)
+
+    def setUp(self):
+        FakeEngine.seen.clear()
+        self.addCleanup(tapp.glyphs.set_mode, "unicode")
+
+    async def open(self, pilot, app):
+        await pilot.pause(0.2)
+        app.goto("checks")
+        await pilot.pause(0.3)
+        return app.query_one("#checks")
+
+    async def until(self, pilot, test):
+        for _ in range(40):
+            if test():
+                return
+            await pilot.pause(0.05)
+
+    async def test_no_check_yet(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertEqual(flat(app.query_one("#check-summary")), tapp.NO_CHECK_YET)
+            self.assertFalse(app.query_one("#check-results").display)
+            info = flat(app.query_one("#checks-info"))
+        for words in ("ewsposter sends nothing", "test event", "removes the check's own events", "tpot check"):
+            self.assertIn(words, info)
+        self.assertNotIn("RDPy", info)
+
+    async def test_a_result_that_cannot_be_read_is_one_line(self):
+        from tpotctl.checks import run as trun
+        for problem in (trun.ResultError("/x/last.json: no JSON"), RuntimeError("anything else")):
+            backend = FakeBackend()
+            backend.check_result_value = problem
+            app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+            async with app.run_test(size=self.SIZE) as pilot:
+                await self.open(pilot, app)
+                with self.subTest(problem=problem):
+                    self.assertEqual(flat(app.query_one("#check-summary")), f"{tapp.CHECK_UNREADABLE} {problem}")
+                    self.assertFalse(app.query_one("#check-results").display)
+
+    async def test_an_error_before_the_hold_shows_its_text(self):
+        backend = FakeBackend()
+        backend.check_result_value = sample_check(result="error", exit_code=1, honeypots=[],
+                                                  error="no address of this host found to probe")
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertIn("no address of this host found to probe", flat(app.query_one("#check-summary")))
+            self.assertFalse(app.query_one("#check-results").display)
+
+    async def test_the_table_has_a_row_per_honeypot_and_a_column_per_stage(self):
+        from tpotctl import theme
+        from tpotctl.checks import stages as tstages
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            self.assertTrue(table.display)
+            self.assertEqual([str(c.label) for c in table.ordered_columns],
+                             ["Honeypot"] + [tstages.SHORT_TITLES[name] for name in tstages.STAGES])
+            self.assertEqual(table.fixed_columns, 1)
+            legend = flat(app.query_one("#check-legend"))
+            for name in tstages.STAGES:
+                if tstages.SHORT_TITLES[name] != tstages.TITLES[name]:
+                    self.assertIn(f"{tstages.SHORT_TITLES[name]}: {tstages.TITLES[name]}.", legend)
+            self.assertEqual([row.key.value for row in table.ordered_rows], ["cowrie", "dionaea", "glutton"])
+            cells = table.get_row("dionaea")
+            self.assertEqual([cell.plain for cell in cells[1:4]], ["✓", "✗", "–"])
+            self.assertEqual(cells[4].plain, "·")
+            self.assertIn(theme.color("error"), str(cells[2].style))
+            self.assertEqual(str(cells[1].style), theme.color("ok"))
+            summary = flat(app.query_one("#check-summary"))
+        self.assertIn("1 honeypot(s) with a failed stage: dionaea", summary)
+        self.assertIn("Removed 12 test events from Elasticsearch (10 + 2 in two passes).", summary)
+        self.assertIn("3 probe events could not be told apart from real ones and stay; Kibana: "
+                      "https://192.0.2.5:64297/kibana/app/discover#/?left", summary)
+
+    async def test_the_glyphs_follow_the_icon_set(self):
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            # set_icons saves the choice: the other tests take unicode, also when this one fails
+            self.addCleanup(tapp.prefs.save, tapp.prefs.Prefs("unicode"))
+            app.set_icons("ascii")
+            await pilot.pause(0.3)
+            cells = app.query_one("#check-results").get_row("dionaea")
+        self.assertEqual([cell.plain for cell in cells[1:5]], ["+", "x", "-", "."])
+
+    async def test_a_reload_keeps_the_cursor_and_changes_only_the_cells(self):
+        from tpotctl.checks import stages as tstages
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            pane = await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            table.move_cursor(row=2)
+            later = sample_check()
+            later["honeypots"][2]["stages"]["port"]["state"] = tstages.OK
+            backend.check_result_value = later
+            cleared = []
+            table.clear = lambda *args, **kwargs: cleared.append(args)
+            pane.load()
+            await pilot.pause(0.2)
+            self.assertEqual(cleared, [])
+            self.assertEqual(table.cursor_row, 2)
+            self.assertEqual(table.get_row("glutton")[1].plain, "✓")
+
+    async def test_the_table_fits_at_80_columns(self):
+        """80 x 24 next to the menu: every stage column in view, the name stays when it scrolls sideways."""
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            table.focus()
+            await pilot.pause(0.3)
+            self.assertEqual(table.max_scroll_x, 0, (table.virtual_size, table.size))
+            self.assertEqual(table.fixed_columns, 1)
+
+    async def test_a_change_of_running_repaints_the_name(self):
+        from tpotctl import theme
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            pane = await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            self.assertIn(theme.color("ash"), str(table.get_row("glutton")[0].spans))
+            later = sample_check()
+            later["honeypots"][2]["running"] = True
+            backend.check_result_value = later
+            pane.load()
+            await pilot.pause(0.2)
+            self.assertIn(theme.color("glass"), str(table.get_row("glutton")[0].spans))
+            self.assertNotIn(theme.color("ash"), str(table.get_row("glutton")[0].spans))
+
+    async def test_enter_on_a_row_shows_its_details(self):
+        backend = FakeBackend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            table = app.query_one("#check-results")
+            table.focus()
+            table.move_cursor(row=0)
+            await pilot.press("enter")
+            await self.until(pilot, lambda: isinstance(app.screen, tapp.CheckDetailDialog))
+            self.assertIsInstance(app.screen, tapp.CheckDetailDialog)
+            body = app.screen.query_one("#check-detail-body").render().plain
+            self.assertEqual(app.screen.query_one("#check-detail").border_title, "cowrie")
+            for words in ("22/tcp, 23/tcp", "elasticsearch of cowrie", "Attack Map", "cowrie.session.connect",
+                          "logstash-2026.10.17 / abc123", "8.8.8.8:51234", "cowrie/log/cowrie.json",
+                          "country United States", "ip_rep known attacker",
+                          "https://192.0.2.5:64297/kibana/app/discover#/?_g=(run)",
+                          "Removed 12 test events", "3 probe events", "discover#/?left"):
+                self.assertIn(words, body)
+            await pilot.press("escape")
+            await pilot.pause(0.2)
+            self.assertNotIsInstance(app.screen, tapp.CheckDetailDialog)
+            table.focus()
+            table.move_cursor(row=1)
+            await pilot.press("enter")
+            await self.until(pilot, lambda: isinstance(app.screen, tapp.CheckDetailDialog))
+            body = app.screen.query_one("#check-detail-body").render().plain
+        self.assertIn("no [bold]banner[/bold] in 10 s", body)     # data, no markup
+        self.assertIn("not reached", body)
+
+    async def test_the_check_asks_first_and_runs_tpot_check_with_the_switches(self):
+        from tpotctl.checks import run as trun
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        loads = []
+        async with app.run_test(size=self.SIZE) as pilot:
+            pane = await self.open(pilot, app)
+            original = pane.load
+            pane.load = lambda: (loads.append(1), original())
+            self.assertTrue(app.query_one("#check-geo").value)
+            self.assertTrue(app.query_one("#check-cleanup").value)
+            await pilot.click("#check-honeypots")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertEqual(app.focused.id, "no")
+            self.assertEqual(app.screen.body.plain, trun.question(trun.Options()))
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertEqual(FakeEngine.seen, [])
+            app.query_one("#check-geo").value = False
+            app.query_one("#check-cleanup").value = False
+            await pilot.click("#check-honeypots")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertEqual(app.screen.body.plain, trun.question(trun.Options(keep=True, geo=False)))
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+            self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "check", "honeypots", "-y", "--no-geo", "--keep"]])
+            self.assertEqual(loads, [])
+            await pilot.click("#task-back")
+            await pilot.pause(0.3)
+        self.assertEqual(loads, [1])                # last.json anew after the task screen
+
+    async def test_the_modules_ewsposter_keeps_back(self):
+        backend = FakeBackend()
+        backend.quarantine_value = ["conpot", "redishoneypot"]
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertIn("ewsposter sends, except conpot, redishoneypot (they catch up first).",
+                          flat(app.query_one("#check-hold")))
+        self.assertEqual(tapp.quarantine_text(["redishoneypot"]),
+                         "ewsposter sends, except redishoneypot (it catches up first).")
+
+    async def test_earlier_checks_that_left_test_events(self):
+        """Pending cleanups: a line and Remove them now, which asks (#no first) and runs tpot check
+        cleanup -y in the task screen; none: neither."""
+        from tpotctl import cli
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertFalse(app.query_one("#check-pending").display)
+            self.assertFalse(app.query_one("#check-pending-actions").display)
+        backend.pending_value = 2
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertTrue(app.query_one("#check-pending").display)
+            self.assertIn("An earlier check could not remove its test events (2 runs).",
+                          flat(app.query_one("#check-pending")))
+            await pilot.click("#check-pending-run")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertEqual(app.focused.id, "no")
+            self.assertEqual(app.screen.body.plain, cli.CLEANUP_QUESTION.format(runs="2 runs"))
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertEqual(FakeEngine.seen, [])
+            await pilot.click("#check-pending-run")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+            self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "check", "cleanup", "-y"]])
+        # a check runs (it holds the lock, its own file is pending): no line, no button
+        backend.pending_value = -1
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertFalse(app.query_one("#check-pending").display)
+            self.assertFalse(app.query_one("#check-pending-actions").display)
+        # a file tpot check cleanup refuses: named with why, no button
+        backend.pending_value, backend.refused_value = 0, ["/x/pending/abc.json: probed: a type this T-Pot does not run"]
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertTrue(app.query_one("#check-pending").display)
+            self.assertFalse(app.query_one("#check-pending-actions").display)
+            self.assertIn("A pending cleanup is refused, nothing of it is deleted: /x/pending/abc.json",
+                          flat(app.query_one("#check-pending")))
+        # a SENSOR keeps no events: no line
+        sensor = FakeBackend(kind="SENSOR")
+        sensor.pending_value = 2
+        app = tapp.TpotApp(backend=sensor, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertFalse(app.query_one("#check-pending").display)
+
+    async def test_the_task_takes_a_sudo_password_file(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        tasks = []
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            app.run_task = lambda task, then=None: tasks.append((task, then))
+            for button in ("#check-honeypots", "#check-pipeline"):
+                await pilot.click(button)
+                await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+                await pilot.click("#yes")
+                await pilot.pause(0.2)
+            await pilot.click("#check-dry")
+            await pilot.pause(0.2)
+        self.assertEqual([task.command for task, _then in tasks],
+                         [[tapp.LAUNCHER, "check", "honeypots", "-y"], [tapp.LAUNCHER, "check", "pipeline", "-y"],
+                          [tapp.LAUNCHER, "check", "honeypots", "--dry-run"]])
+        self.assertEqual([task.become for task, _then in tasks], ["--become-file", "--become-file", ""])
+        self.assertTrue(all(task.autostart and then is not None for task, then in tasks))
+
+    async def test_the_pipeline_asks_and_keeps_with_cleanup_off(self):
+        from tpotctl.checks import run as trun
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            app.query_one("#check-cleanup").value = False
+            await pilot.click("#check-pipeline")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertEqual(app.screen.body.plain, trun.question(trun.Options(keep=True, geo_only=True)))
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "check", "pipeline", "-y", "--keep"]])
+
+    async def test_probe_with_nmap_runs_hptest(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertEqual(app.query_one("#check-host").value, "192.0.2.5")
+            await pilot.click("#check-nmap")
+            await pilot.pause(0.3)
+            await pilot.click("#task-run")
+            await pilot.pause(0.4)
+        self.assertEqual(FakeEngine.seen, [[cli.HPTEST, "--nmap", "192.0.2.5"]])
+
+    async def test_a_sensor_checks_three_stages(self):
+        from tpotctl.checks import run as trun
+        app = tapp.TpotApp(backend=FakeBackend(kind="SENSOR"), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.open(pilot, app)
+            self.assertNotIsInstance(app.query_one("#checks"), tapp.LockedPane)
+            self.assertTrue(app.query_one("#check-pipeline").disabled)
+            self.assertTrue(app.query_one("#check-geo").disabled)
+            self.assertTrue(app.query_one("#check-cleanup").disabled)
+            self.assertIn("HIVE", str(app.query_one("#check-cleanup").tooltip))
+            self.assertIn("SENSOR", flat(app.query_one("#checks-info")))
+            app.query_one("#check-cleanup").value = False       # as it may be from before: no --keep there
+            await pilot.click("#check-honeypots")
+            await self.until(pilot, lambda: isinstance(app.screen, ConfirmDialog))
+            self.assertEqual(app.screen.body.plain, trun.question(trun.Options(), sensor=True))
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "check", "honeypots", "-y"]])
+
+    async def test_the_state_of_ewsposter(self):
+        from tpotctl import theme
+        for state, words, colour in (("normal", "sends as usual", "mist"), ("held", "is held", "warn"),
+                                     ("stuck", "is stuck after a hold", "warn"), ("unknown", "does not say", "ash")):
+            backend = FakeBackend()
+            backend.ews = (state, 10.0 if state != "unknown" else None)
+            app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+            async with app.run_test(size=self.SIZE) as pilot:
+                await self.open(pilot, app)
+                rendered = app.query_one("#check-hold").render()
+                with self.subTest(state=state):
+                    self.assertIn(words, rendered.plain)
+                    self.assertIn(theme.color(colour), str(rendered.spans))
+
+
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
 class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
     """The Kibana objects on the Elastic page: the state, the mode, Export, Update, Overwrite all, Restore."""
@@ -2082,6 +2482,93 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
                           self.notes(app))
             self.assertGreater(backend.calls.count("kibana-exports"), before)       # the table read anew
 
+    async def test_prune_lists_the_old_objects_and_asks(self):
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            self.assertEqual(str(app.query_one("#kibana-prune").label), "Remove old T-Pot objects")
+            await self.press(pilot, app, "#kibana-prune")
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIs(app.focused, app.screen.query_one("#no"))
+            self.assertEqual(app.screen.title_text, "Remove 2 old T-Pot objects from Kibana?")
+            self.assertEqual(str(app.screen.query_one("#yes").label), "Remove")
+            body = self.body(app)
+            self.assertIn(cli.KIBANA_PRUNE_TEXT, body)
+            self.assertIn("Old board (dashboard:o1)", body)
+            self.assertIn("[b]Old[/b] vis (visualization:o2)", body)          # plain text, no markup
+            self.assertTrue(app.screen.query("NavScroll"))                    # a long list scrolls
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            self.assertEqual(self.kibana_calls(backend, "kibana-prune"),
+                             [("kibana-prune", {"dashboard:o1", "visualization:o2"})])
+            self.assertIsInstance(app.screen, ConfirmDialog)                    # the result
+            self.assertEqual(app.screen.title_text, "Old T-Pot objects")
+            result = self.body(app)
+            self.assertIn("2 old objects removed (export: /b/kibana_objects_20261016120003.ndjson).", result)
+            self.assertIn('removed: dashboard:o1 "Old board"', result)
+            self.assertFalse(app.screen.query("#yes"))
+        self.assertEqual(self.kibana_calls(backend, "kibana-update"), [])        # it imports nothing
+        self.assertEqual(self.kibana_calls(backend, "kibana-mode"), [])
+
+    async def test_prune_back_removes_nothing(self):
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            await self.press(pilot, app, "#kibana-prune")
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            await pilot.press("enter")                              # #no has the focus
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+            self.assertFalse(app.query_one("#kibana-prune").disabled)
+        self.assertEqual(self.kibana_calls(backend, "kibana-prune"), [])
+
+    async def test_prune_with_nothing_old_or_a_refusal(self):
+        backend = FakeBackend()
+        backend._kibana_old = []
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            await self.press(pilot, app, "#kibana-prune")
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+            self.assertIn(("Kibana holds no old T-Pot objects, nothing to remove.", "information"), self.notes(app))
+        self.assertEqual(self.kibana_calls(backend, "kibana-prune"), [])
+        backend = FakeBackend()
+        backend._kibana_prune_failed = {"dashboard:o1"}
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=self.SIZE) as pilot:
+            await self.page(pilot, app)
+            await self.press(pilot, app, "#kibana-prune")
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            result = self.body(app)
+            self.assertIn("1 old object removed, 1 failed", result)
+            self.assertIn('not removed: dashboard:o1 "Old board" (Kibana at http://127.0.0.1:64296 answered 400)',
+                          result)
+
+    async def test_prune_errors_are_notes(self):
+        from tpotctl import kibana_objects as ko
+        for name, error, expected in (
+                ("prune-preview", ko.KibanaError("Kibana at http://127.0.0.1:64296 answered 503"),
+                 ("Kibana at http://127.0.0.1:64296 answered 503.", "error")),
+                ("prune", ko.KibanaError(ko.BUSY), (ko.BUSY[:1].upper() + ko.BUSY[1:] + ".", "warning")),
+                ("prune", ko.KibanaError("the export cannot be written into /b: full"),
+                 ("The export cannot be written into /b: full.", "error"))):
+            with self.subTest(name=name, error=str(error)):
+                backend = FakeBackend()
+                backend._kibana_errors = {name: error}
+                app = tapp.TpotApp(backend=backend, runner=Recorder())
+                async with app.run_test(size=self.SIZE) as pilot:
+                    await self.page(pilot, app)
+                    await self.press(pilot, app, "#kibana-prune")
+                    if name == "prune":
+                        await pilot.click("#yes")
+                        await pilot.pause(0.4)
+                    self.assertNotIsInstance(app.screen, ConfirmDialog)
+                    self.assertIn(expected, self.notes(app))
+                    self.assertFalse(app.query_one("#kibana-prune").disabled)
+
     async def test_restore_uses_the_chosen_export(self):
         backend = FakeBackend()
         app = tapp.TpotApp(backend=backend, runner=Recorder())
@@ -2152,7 +2639,7 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=self.SIZE) as pilot:
             await self.page(pilot, app)
             for name in ("#kibana-mode", "#kibana-mode-save", "#kibana-export", "#kibana-update",
-                         "#kibana-overwrite", "#kibana-restore"):
+                         "#kibana-overwrite", "#kibana-prune", "#kibana-restore"):
                 self.assertTrue(app.query_one(name).disabled, name)
             self.assertIn("no Kibana in this edition", flat(app.query_one("#kibana-status")))
             self.assertEqual(app.query_one("#kibana-exports").row_count, 0)
@@ -2178,7 +2665,7 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
                 await self.page(pilot, app)
                 await self.press(pilot, app, "#kibana-update", 0.3)
                 controls = ("#kibana-mode", "#kibana-mode-save", "#kibana-export", "#kibana-update",
-                            "#kibana-overwrite", "#kibana-restore")
+                            "#kibana-overwrite", "#kibana-prune", "#kibana-restore")
                 for name in controls:
                     self.assertTrue(app.query_one(name).disabled, name)
                 self.assertFalse(app.query_one("#elastic-set").disabled)       # the retention is a part of its own
@@ -2214,8 +2701,13 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
                 release.wait(5)
                 return plan
 
+            def kibana_prune_preview(self):
+                old = super().kibana_prune_preview()
+                release.wait(5)
+                return old
+
         for button, label in (("#kibana-update", "Update"), ("#kibana-overwrite", "Overwrite all"),
-                              ("#kibana-restore", "Restore")):
+                              ("#kibana-prune", "Remove old T-Pot objects"), ("#kibana-restore", "Restore")):
             with self.subTest(button=button):
                 release.clear()
                 backend = Slow()
@@ -2234,7 +2726,7 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
                 finally:
                     release.set()
                 self.assertEqual([c for c in backend.calls if isinstance(c, tuple) and c[0] in
-                                  ("kibana-update", "kibana-restore")], [])
+                                  ("kibana-update", "kibana-restore", "kibana-prune")], [])
 
     async def test_mode_select_saves_through_settings(self):
         from tpotctl.tests.test_cli_kibana import FakeSettings
@@ -2413,7 +2905,7 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
             app.query_one("#kibana-mode").value = "add"             # Save can take the focus
             await pilot.pause(0.2)
             for name in ("#kibana-mode", "#kibana-mode-save", "#kibana-export", "#kibana-update",
-                         "#kibana-overwrite", "#kibana-exports", "#kibana-restore"):
+                         "#kibana-overwrite", "#kibana-prune", "#kibana-exports", "#kibana-restore"):
                 with self.subTest(widget=name):
                     widget = app.query_one(name)
                     widget.focus()

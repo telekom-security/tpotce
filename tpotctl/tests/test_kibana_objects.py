@@ -337,10 +337,36 @@ class FakeKibana:
     def imports(self):
         return [r for r in self.requests if "/_import" in r.full_url]
 
+    def deletes(self):
+        return [r for r in self.requests if r.get_method() == "DELETE"]
+
+    # DELETE /api/saved_objects/<type>/<id>: `refuse_delete` answers 400 (an object shared into other spaces),
+    # `down_after` deletes the connection goes away
+    refuse_delete = frozenset()
+    down_after = None
+
+    def delete(self, request, path):
+        import urllib.parse
+        if self.down_after is not None and len(self.deletes()) > self.down_after:
+            raise urllib.error.URLError("connection refused")
+        kind, ident = (urllib.parse.unquote(part) for part in path.split("?", 1)[0].split("/")[3:5])
+        name = f"{kind}:{ident}"
+        if name in self.refuse_delete:
+            body = json.dumps({"statusCode": 400, "error": "Bad Request", "message": "Unable to delete saved "
+                               "object that exists in multiple namespaces"}).encode()
+            raise urllib.error.HTTPError(request.full_url, 400, "err", {}, io.BytesIO(body))
+        if self.store.pop(name, None) is None:
+            body = json.dumps({"statusCode": 404, "error": "Not Found",
+                               "message": f"Saved object [{kind}/{ident}] not found"}).encode()
+            raise urllib.error.HTTPError(request.full_url, 404, "err", {}, io.BytesIO(body))
+        return io.BytesIO(b"{}")
+
     def __call__(self, request, timeout=None):
         self.requests.append(request)
         if self.down:
             raise urllib.error.URLError("connection refused")
+        if request.get_method() == "DELETE":
+            return self.delete(request, request.full_url.split("64296", 1)[1])
         if ":64298" in request.full_url:
             if self.es is None:
                 raise urllib.error.URLError("connection refused")
@@ -2256,6 +2282,230 @@ JOB = os.path.join(TPOTINIT, "dist", "bin", "kibana_objects.sh")
 def read(*parts):
     with open(os.path.join(REPO_DIR, *parts), encoding="utf-8") as handle:
         return handle.read()
+
+
+def vis(ident, title=None, refs=(), body=1):
+    return {"type": "visualization", "id": ident, "attributes": {"title": title or f"Vis {ident}",
+                                                                 "visState": json.dumps({"v": body})},
+            "references": [{"type": t, "id": i, "name": f"ref_{n}"} for n, (t, i) in enumerate(refs)]}
+
+
+class PrunePlanTest(unittest.TestCase):
+    """prune_plan lists the unchanged objects of earlier releases that this one no longer ships, and nothing
+    else."""
+
+    A = dash("a")                       # shipped
+    OLD = dash("old", "Old board")      # shipped by an earlier release only
+
+    def plan_of(self, installed, old=(), records=None, shipped=None):
+        manifest = {}
+        for obj in [self.A, self.OLD, *old]:
+            manifest.setdefault(ko.key(obj), set()).add(ko.digest(obj))
+        return ko.prune_plan([as_in_kibana(o) for o in installed], shipped or [CONFIG, self.A], manifest,
+                             records or {})
+
+    def test_an_unchanged_old_object_is_listed(self):
+        items = self.plan_of([CONFIG, self.A, self.OLD])
+        self.assertEqual(keys(items), ["dashboard:old"])
+        self.assertEqual((items[0].type, items[0].id, items[0].title, items[0].action),
+                         ("dashboard", "old", "Old board", "old"))
+        # any version an earlier release shipped counts, the order: type, title, id
+        older = dash("old", "Old board", body=0)
+        items = self.plan_of([vis("v2", "b"), vis("v1", "B"), older], old=[older, vis("v1", "B"), vis("v2", "b")])
+        self.assertEqual(keys(items), ["dashboard:old", "visualization:v1", "visualization:v2"])
+
+    def test_a_changed_old_object_is_never_listed(self):
+        self.assertEqual(self.plan_of([dash("old", "Old board, mine")]), [])
+        self.assertEqual(self.plan_of([dash("old", "Old board", body=7)]), [])
+
+    def test_a_record_within_its_window_widens_nothing(self):
+        changed = as_in_kibana(dash("old", "Old board, mine"), NOW + 1)
+        manifest = {ko.key(self.OLD): {ko.digest(self.OLD)}}
+        self.assertEqual(ko.prune_plan([changed], [self.A], manifest, {"dashboard:old": iso(NOW)}), [])
+
+    def test_objects_of_your_own_are_never_listed(self):
+        self.assertEqual(self.plan_of([dash("mine"), vis("mine")]), [])
+
+    def test_a_shipped_object_is_never_listed(self):
+        older_a = dash("a", body=0)
+        self.assertEqual(self.plan_of([older_a, self.A], old=[older_a]), [])
+
+    def test_the_advanced_settings_are_never_listed(self):
+        global_config = {"type": "config-global", "id": "9.5.4", "attributes": {}, "references": []}
+        self.assertEqual(self.plan_of([CONFIG, global_config], old=[CONFIG, global_config], shipped=[self.A]), [])
+
+    def test_an_old_object_the_advanced_settings_name_is_never_listed(self):
+        old_view = {"type": "index-pattern", "id": "old-view", "references": [],
+                    "attributes": {"title": "old-*", "name": "Old view"}}
+        settings = dict(CONFIG, attributes={"defaultIndex": "old-view",
+                                            "defaultRoute": "/app/dashboards#/view/old?_g=()"})
+        self.assertEqual(keys(self.plan_of([old_view, self.OLD], old=[old_view])),
+                         ["dashboard:old", "index-pattern:old-view"])
+        self.assertEqual(self.plan_of([settings, old_view, self.OLD], old=[old_view]), [])
+        for kind in ("config", "config-global"):
+            with self.subTest(kind=kind):
+                only_index = {"type": kind, "id": "9.5.4", "references": [],
+                              "attributes": {"defaultIndex": "old-view"}}
+                self.assertEqual(keys(self.plan_of([only_index, old_view], old=[old_view])), [])
+        # a route that names no dashboard, and an index of another id, hold nothing back
+        other = dict(CONFIG, attributes={"defaultIndex": "logstash-*", "defaultRoute": "/app/discover"})
+        self.assertEqual(keys(self.plan_of([other, old_view, self.OLD], old=[old_view])),
+                         ["dashboard:old", "index-pattern:old-view"])
+
+    def test_an_old_object_that_something_staying_refers_to_is_never_listed(self):
+        old_vis, older_vis = vis("ov", "Old vis"), vis("ow", "Older vis")
+        old_board = dash("old", "Old board")
+        old_board["references"] = [{"type": "visualization", "id": "ov", "name": "panel_0"}]
+        old_vis["references"] = [{"type": "visualization", "id": "ow", "name": "ref_0"}]
+        old = [old_vis, older_vis, old_board]
+        # nothing staying refers to them: all three go
+        self.assertEqual(keys(self.plan_of([old_board, old_vis, older_vis], old=old)),
+                         ["dashboard:old", "visualization:ov", "visualization:ow"])
+        # a dashboard of yours uses the old visualization: it stays, and so does the one it refers to
+        mine = dash("mine", "My board")
+        mine["references"] = [{"type": "visualization", "id": "ov", "name": "panel_0"}]
+        self.assertEqual(keys(self.plan_of([mine, old_board, old_vis, older_vis], old=old)), ["dashboard:old"])
+        # an object of this release that refers to an old one keeps it too
+        shipped_a = dash("a")
+        shipped_a["references"] = [{"type": "visualization", "id": "ow", "name": "panel_0"}]
+        self.assertEqual(keys(ko.prune_plan([as_in_kibana(o) for o in (shipped_a, older_vis)], [shipped_a],
+                                             {"visualization:ow": {ko.digest(older_vis)}}, {})), [])
+        # an old object that a changed old object refers to stays: the changed one stays in Kibana
+        changed = dict(old_vis, attributes={"title": "Mine now", "visState": "{}"})
+        self.assertEqual(keys(self.plan_of([changed, older_vis], old=old)), [])
+
+
+class PruneTest(unittest.TestCase):
+    """run_prune: under the lock, the export first, one DELETE per confirmed old object, the records."""
+
+    A = dash("a")
+    X, Y, Z = dash("x", "Old X"), dash("y", "Old Y"), dash("z w/1", "Old Z")
+
+    def setUp(self):
+        self.site = Site(self, [self.A], old=[self.X, self.Y, self.Z])
+        self.kibana = FakeKibana([as_in_kibana(o) for o in (CONFIG, self.A, self.X, self.Y, self.Z,
+                                                             dash("mine"))])
+        self.all = {"dashboard:x", "dashboard:y", "dashboard:z w/1"}
+
+    def prune(self, confirmed=None, **kw):
+        return ko.run_prune(self.site.data, self.site.objects, self.site.exports,
+                            self.all if confirmed is None else confirmed, opener=self.kibana, now=NOW, **kw)
+
+    def test_the_export_comes_first_then_one_delete_per_object(self):
+        self.site.record(NOW - DAY, "dashboard:a", "dashboard:x", "dashboard:y")
+        done = self.prune()
+        self.assertEqual(keys(done.removed), ["dashboard:x", "dashboard:y", "dashboard:z w/1"])
+        self.assertEqual((done.failed, done.problem), ([], ""))
+        methods = [(r.get_method(), r.full_url.split("64296", 1)[1]) for r in self.kibana.requests]
+        self.assertEqual(methods, [("POST", "/api/saved_objects/_export"),
+                                   ("DELETE", "/api/saved_objects/dashboard/x"),
+                                   ("DELETE", "/api/saved_objects/dashboard/y"),
+                                   ("DELETE", "/api/saved_objects/dashboard/z%20w%2F1")])
+        for request in self.kibana.deletes():
+            self.assertEqual(request.get_header("Kbn-xsrf"), "true")
+            self.assertIsNone(request.data)                     # no body, no force
+        self.assertEqual(sorted(self.kibana.store), ["config:9.5.4", "dashboard:a", "dashboard:mine"])
+        self.assertEqual(self.site.files(), [os.path.basename(done.export_path)])
+        with open(done.export_path, encoding="utf-8") as handle:
+            exported = {ko.key(o) for o in ko.parse_ndjson(handle.read(), done.export_path)}
+        self.assertLessEqual(self.all, exported)                # the export can bring them back
+        self.assertEqual(sorted(self.site.records()), ["dashboard:a"])     # their records went
+        self.assertEqual(ko.prune_summary(done)[0], f"# Kibana objects: 3 old objects removed (export: "
+                                                    f"{done.export_path})")
+        self.assertIn('# Kibana objects: removed: dashboard:z w/1 "Old Z"', ko.prune_summary(done))
+
+    def test_a_failed_export_removes_nothing(self):
+        self.kibana.export_status = 503
+        with self.assertRaisesRegex(ko.KibanaError, "answered 503"):
+            self.prune()
+        self.kibana.export_status = 200
+        with open(self.site.exports, "w", encoding="utf-8") as handle:     # a file where the folder would go
+            handle.write("in the way\n")
+        with self.assertRaisesRegex(ko.KibanaError, "the export cannot be written"):
+            self.prune()
+        self.assertEqual(self.kibana.deletes(), [])
+        self.assertLessEqual(self.all, set(self.kibana.store))
+
+    def test_only_what_the_question_named_and_the_plan_still_lists(self):
+        self.kibana.store["dashboard:y"]["attributes"]["title"] = "Mine now"      # changed after the question
+        done = self.prune({"dashboard:x", "dashboard:y"})
+        self.assertEqual(keys(done.removed), ["dashboard:x"])
+        self.assertIn("dashboard:y", self.kibana.store)
+        self.assertIn("dashboard:z w/1", self.kibana.store)                     # not named by the question
+        self.kibana.requests.clear()
+        done = self.prune(set())
+        self.assertEqual((done.planned, done.export_path), ([], ""))
+        self.assertEqual([r.get_method() for r in self.kibana.requests], ["POST"])   # no export file, no delete
+        self.assertEqual(len(self.site.files()), 1)
+        self.assertIn("nothing removed", ko.prune_summary(done)[0])
+
+    def test_a_refused_delete_keeps_its_record_and_a_404_counts_as_removed(self):
+        self.site.record(NOW - DAY, "dashboard:x", "dashboard:y")
+        self.kibana.refuse_delete = {"dashboard:x"}
+        original = self.kibana.delete
+
+        def gone_meanwhile(request, path):
+            if path.endswith("/y"):
+                self.kibana.store.pop("dashboard:y")
+            return original(request, path)
+        self.kibana.delete = gone_meanwhile
+        done = self.prune()
+        self.assertEqual(keys(done.removed), ["dashboard:y", "dashboard:z w/1"])
+        self.assertEqual([(i.key, why[:45]) for i, why in done.failed],
+                         [("dashboard:x", "Kibana at http://127.0.0.1:64296 answered 400")])
+        self.assertEqual(sorted(self.site.records()), ["dashboard:x"])
+        lines = ko.prune_summary(done)
+        self.assertTrue(lines[0].startswith("# Kibana objects: 2 old objects removed, 1 failed (export: "))
+        self.assertTrue(any(line.startswith('# Kibana objects: not removed: dashboard:x "Old X" (Kibana at ')
+                            for line in lines))
+
+    def test_without_an_answer_the_rest_is_not_tried(self):
+        self.kibana.down_after = 1
+        done = self.prune()
+        self.assertEqual(keys(done.removed), ["dashboard:x"])
+        self.assertEqual(keys(i for i, _why in done.failed), ["dashboard:y", "dashboard:z w/1"])
+        self.assertEqual(len(self.kibana.deletes()), 2)
+        self.assertIn("is not reachable", done.failed[0][1])
+
+    def test_a_record_that_cannot_be_written_is_named(self):
+        self.site.record(NOW - DAY, "dashboard:x")
+        with unittest.mock.patch.object(ko.Records, "save", side_effect=ko.KibanaError("cannot write it")):
+            done = self.prune()
+        self.assertEqual(len(done.removed), 3)
+        self.assertEqual(done.problem, "cannot write it")
+        self.assertEqual(ko.prune_summary(done)[-1], "# Kibana objects: warning: cannot write it")
+
+    def test_one_run_at_a_time(self):
+        os.makedirs(ko.state_dir(self.site.data))
+        proc = subprocess.Popen([sys.executable, "-c", LockTest.HOLD, ko.lock_path(self.site.data), "3"],
+                                stdout=subprocess.PIPE, text=True)
+        self.addCleanup(proc.wait)
+        self.assertEqual(proc.stdout.readline().strip(), "held")
+        proc.stdout.close()
+        with unittest.mock.patch.object(ko, "LOCK_WAIT", 0.3):
+            with self.assertRaisesRegex(ko.KibanaError, f"^{re.escape(ko.BUSY)}$"):
+                self.prune()
+        self.assertEqual((self.kibana.requests, self.site.files()), ([], []))
+
+    def test_tpotinit_never_prunes(self):
+        """Only the T-Pot Manager removes old objects: no command of the module does, and apply with every
+        mode leaves them in Kibana."""
+        import inspect
+        for function in (ko.main, ko._cli_apply, ko._cli_first, ko._cli_restore, ko.run_apply,
+                         ko.run_first_import, ko.run_restore):
+            with self.subTest(function=function.__name__):
+                self.assertNotIn("prune", inspect.getsource(function))
+                self.assertNotIn("_delete", inspect.getsource(function))
+        for mode in ko.MODES:
+            with self.subTest(mode=mode):
+                rc, _out, _err = self.site.cli("apply", "--mode", mode, "--data", self.site.data, "--objects",
+                                               self.site.objects, "--exports", ko.auto_exports_dir(self.site.data),
+                                               opener=self.kibana)
+                self.assertEqual(rc, 0)
+        self.assertEqual(self.kibana.deletes(), [])
+        self.assertLessEqual(self.all, set(self.kibana.store))
+        with open(os.path.join(TPOTINIT, "dist", "bin", "kibana_objects.sh"), encoding="utf-8") as handle:
+            self.assertNotIn("prune", handle.read())
 
 
 class CopyTest(unittest.TestCase):

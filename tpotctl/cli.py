@@ -79,13 +79,19 @@ def build_parser() -> argparse.ArgumentParser:
     kibana_export.add_argument("file", nargs="?", metavar="FILE",
                                help="write the export to FILE instead, a new file (mode 0600)")
     kibana_import = elastic_actions.add_parser("import", help="import T-Pot's Kibana objects as a mode of "
-                                                              "TPOT_KIBANA_OBJECTS does, an export first")
-    kibana_import.add_argument("--mode", choices=KIBANA_IMPORT_MODES, default="update",
+                                                              "TPOT_KIBANA_OBJECTS does, an export first; "
+                                                              "--prune removes old ones instead")
+    kibana_import.add_argument("--mode", choices=KIBANA_IMPORT_MODES, default=None,
                                help="add: only the missing ones; update (default): the missing and the unchanged "
                                     "ones, yours stay; overwrite: all of them, yours too (asks first)")
-    kibana_import.add_argument("--dry-run", action="store_true", help="only show what the mode would import")
+    kibana_import.add_argument("--prune", action="store_true",
+                               help="import nothing, remove the objects of earlier releases that this one no longer "
+                                    "ships and nobody changed (asks first, an export first); not with --mode")
+    kibana_import.add_argument("--dry-run", action="store_true",
+                               help="only show what the mode would import (with --prune: what it would remove)")
     kibana_import.add_argument("-y", "--yes", action="store_true",
-                               help="do not ask before overwrite replaces objects of yours (the export keeps them)")
+                               help="do not ask before overwrite replaces objects of yours or --prune removes old "
+                                    "objects (the export keeps them)")
     kibana_restore = elastic_actions.add_parser("restore", help="import every object of an export, the advanced "
                                                                 "settings too, after a new export")
     kibana_restore.add_argument("file", metavar="FILE", help="the export, i.e. one in ~/tpot_backups")
@@ -154,20 +160,59 @@ def build_parser() -> argparse.ArgumentParser:
                        ("test", "send a short prompt to the model of a honeypot, from this host")):
         action = llm_actions.add_parser(name, help=text)
         action.add_argument("service", nargs="?", choices=["beelzebub", "galah"], default="galah")
-    check = sub.add_parser("check", help="checks of a running T-Pot: probe the honeypots, test the Attack Map "
-                                         "pipeline")
+    check = sub.add_parser("check", help="checks of a running T-Pot: every honeypot from its port to the Attack "
+                                         "Map")
     check_actions = check.add_subparsers(dest="check_command", metavar="CHECK")
-    probe = check_actions.add_parser("honeypots", help="probe the honeypots: service requests, then nmap over every "
-                                                       "published port (runs hptest.sh)")
-    probe.add_argument("--host", default="", help="the host to probe, default: the address of this host")
-    probe.add_argument("--become-file", metavar="FILE", default="", help="the sudo password in a file")
-    pipe = check_actions.add_parser("pipeline", help="inject test events and follow them to the Attack Map "
-                                                     "(runs attackmap_pipeline_test.sh); they stay in Kibana")
-    pipe.add_argument("--types", help="comma list of cowrie, dionaea, honeytrap, rdphoneypot")
-    pipe.add_argument("--ips", help="test source IPs, one per type")
-    pipe.add_argument("--dry-run", action="store_true", help="show the events only, inject nothing")
-    pipe.add_argument("--become-file", metavar="FILE", default="", help="the sudo password in a file")
-    pipe.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    probe = check_actions.add_parser(
+        "honeypots", help="probe every honeypot of this T-Pot and follow it from the port through its answer, "
+                          "its log line, Elasticsearch and GeoIP to the Attack Map; ewsposter sends nothing "
+                          "meanwhile, the test events are removed from Elasticsearch afterwards",
+        description="Probes every honeypot of this T-Pot on the address of this host and follows it: port, "
+                    "answer, log line, Elasticsearch, GeoIP / ip_rep of a test event with a fixed test IP, "
+                    "Attack Map (Redis, WebSocket), ewsposter held. A SENSOR checks the first three. Exit "
+                    "codes: 0 all ok, 1 a stage failed, 2 it cannot ask (no terminal, no --yes), 3 ewsposter "
+                    "did not confirm its hold (nothing probed), 130 cancelled (Ctrl+C, SIGTERM, SIGHUP). The "
+                    "result is in ~/.local/share/tpotce/checks/last.json, its output in last.log next to it. "
+                    "The cleanup removes only events that are the check's own beyond doubt (its token, a "
+                    "test IP with its marker port, or with its type in the window for the honeypots that log "
+                    "no source port, the probe source with a source port of the probe); one that "
+                    "does not run through stays pending (tpot check cleanup), and every check runs the pending "
+                    "ones first. A honeypot whose ewsposter module cannot be held gets no probe and no test "
+                    "event.")
+    pipe = check_actions.add_parser(
+        "pipeline", help="only the test events with a fixed test IP: from the honeypot logs through Logstash, "
+                         "Elasticsearch and Redis to the WebSocket of the Attack Map (check honeypots without "
+                         "probes); removed from Elasticsearch afterwards",
+        description="Writes one test event with a fixed test IP into the log of every honeypot and follows it "
+                    "through Logstash, Elasticsearch (GeoIP, ip_rep) and Redis to the WebSocket of the Attack "
+                    "Map. The same as check honeypots without the probes, with its exit codes. A SENSOR refuses "
+                    "it (exit 2): Elasticsearch and the Attack Map are on its HIVE.")
+    tidy = check_actions.add_parser(
+        "cleanup", help="remove the test events earlier checks could not remove (their cleanup failed or was cut "
+                        "off: Elasticsearch down, a reboot); every check does it first as well",
+        description="Removes from Elasticsearch the test events of earlier checks whose cleanup did not run "
+                    "through (~/.local/share/tpotce/checks/pending): only the check's own events, by the rules of "
+                    "its cleanup, in the window of that check. Asks first (-y confirms; without a terminal it "
+                    "needs -y, exit 2). While a check runs it does nothing (its events are its own) and ends "
+                    "with exit 0. Exit codes: 0 done, nothing to do or a check is running, 1 Elasticsearch failed "
+                    "(the runs stay pending), a file is refused or the lock cannot be taken, 2 it cannot ask, 130 "
+                    "cancelled.")
+    tidy.add_argument("--dry-run", action="store_true", help="show the pending runs and their queries, remove nothing")
+    tidy.add_argument("-y", "--yes", action="store_true", help="remove without asking")
+    for action in (probe, pipe):
+        action.add_argument("--only", "--types", dest="only", metavar="A,B",
+                            help="these honeypots only (service names, comma list)")
+        if action is probe:
+            action.add_argument("--no-geo", action="store_true",
+                                help="no test events with a test IP: no GeoIP and no Attack Map stage")
+        action.add_argument("--keep", action="store_true", help="leave the test events in Elasticsearch")
+        action.add_argument("--timeout", type=float, default=90.0, metavar="SECONDS",
+                            help="seconds for Elasticsearch, and again for the Attack Map (default 90)")
+        action.add_argument("--dry-run", action="store_true",
+                            help="show what the check would do: no hold, no probe, no test event")
+        action.add_argument("-B", "--become-file", metavar="FILE", default="",
+                            help="the sudo password in a file, for a log only root may read or append to")
+        action.add_argument("-y", "--yes", action="store_true", help="start without asking")
     attackers = sub.add_parser("attackers", help="the source IPs with the most attacks, with country and "
                                                  "reputation (was mytopips.sh)")
     attackers.add_argument("--hours", type=int, default=24, help="of the last HOURS hours (default 24)")
@@ -575,9 +620,48 @@ def _kibana_export(args, console) -> int:
     return 0
 
 
+KIBANA_PRUNE_TEXT = ("These objects of earlier T-Pot releases are in Kibana: this release no longer ships them, "
+                     "nobody changed them and nothing that stays refers to them. An export comes first, a restore "
+                     "of it brings them back.")
+
+
+def kibana_prune_question(count: int) -> str:
+    return f"Remove {_objects(count, 'old T-Pot objects')} from Kibana?"
+
+
+def kibana_prune_lines(old) -> List[str]:
+    """The text of the question of --prune and of Remove old T-Pot objects: why these, then every one of them
+    (title, type:id), none left out."""
+    return [KIBANA_PRUNE_TEXT] + [f"  {item.title} ({item.key})" for item in old]
+
+
+def _kibana_prune(args, values, console) -> int:
+    """tpot elastic import --prune: the old objects (kibana_objects.prune_plan), the question (default no),
+    then kibana_objects.run_prune with the objects it named; it imports nothing."""
+    from tpotctl import kibana_objects as ko
+    data, objects = ops.kibana_dirs(env=values)
+    old = ko.prune_preview(data, objects)
+    if not old:
+        say.ok("Kibana holds no old T-Pot objects, nothing to remove.", console.file)
+        return 0
+    for line in kibana_prune_lines(old):
+        console.print(line, markup=False)
+    if args.dry_run:
+        say.info("Nothing was changed (--dry-run).", console.file)
+        return 0
+    if not confirm(kibana_prune_question(len(old)), args.yes):
+        say.info("Nothing was changed.", console.file)
+        return 1
+    done = ko.run_prune(data, objects, ops.kibana_export_dir(), {item.key for item in old})
+    _kibana_result(ko.prune_summary(done), not done.failed and not done.problem, console)
+    return 1 if done.failed or done.problem else 0
+
+
 def _kibana_import(args, values, console) -> int:
     from tpotctl import kibana_objects as ko
-    mode = args.mode
+    if args.prune:
+        return _kibana_prune(args, values, console)
+    mode = args.mode or "update"
     data, objects = ops.kibana_dirs(env=values)
     confirmed = None
     if args.dry_run or mode == "overwrite":
@@ -637,6 +721,10 @@ def run_elastic(args) -> int:
     if getattr(args, "adopt", False) and getattr(args, "value", None):
         error("--adopt takes the value of the ILM policy tpot, it takes no VALUE: "
               "tpot elastic retention --adopt, or tpot elastic retention VALUE")
+        return 2
+    if getattr(args, "prune", False) and getattr(args, "mode", None):
+        error("--prune removes old objects and imports nothing, it takes no --mode: "
+              "tpot elastic import --prune, or tpot elastic import --mode MODE")
         return 2
     ops.require_linux_host("tpot elastic")
     current = tsettings.load()
@@ -1290,40 +1378,222 @@ HPTEST = os.path.join(CHECKS, "hptest.sh")
 PIPELINE = os.path.join(CHECKS, "attackmap_pipeline_test.sh")
 
 
-def check_command(args) -> List[str]:
-    """The script of a check with its options, the menu runs the same."""
-    if args.check_command == "honeypots":
-        command = [HPTEST]
-        if args.become_file:
-            command += ["-B", args.become_file]
-        return command + ([args.host] if args.host else [])
-    command = [PIPELINE]
-    for option in ("types", "ips"):
-        if getattr(args, option):
-            command += [f"--{option}", getattr(args, option)]
+def check_options(args):
+    """The options of tpot check honeypots / pipeline for tpotctl.checks.run."""
+    from tpotctl.checks import run as trun
+    only = [name.strip() for name in (args.only or "").split(",") if name.strip()]
+    if args.timeout <= 0:
+        fail("--timeout takes seconds above 0", 2)
+    if args.become_file and not os.access(args.become_file, os.R_OK):
+        fail(f"cannot read the sudo password from {args.become_file}")
+    return trun.Options(only=only, geo=not getattr(args, "no_geo", False),
+                        geo_only=args.check_command == "pipeline", keep=args.keep,
+                        become_file=os.path.abspath(args.become_file) if args.become_file else "",
+                        timeout=args.timeout, dry_run=args.dry_run)
+
+
+NOTE_MIN_WIDTH = 18     # the note column of the check table: room for words, never 4-character pieces
+
+
+def check_table(report, ascii_only: bool = False):
+    """The stages per honeypot of a check, one row each, the glyphs coloured by their state."""
+    from rich import box
+    from rich.table import Table
+    from rich.text import Text
+    from tpotctl.checks import stages as tstages
+    colours = {tstages.OK: "green", tstages.FAILED: "red", tstages.NOT_APPLICABLE: "bright_black",
+               tstages.NOT_REACHED: "bright_black"}
+    shown = tstages.SENSOR_STAGES if report.tpot_type == "SENSOR" else tstages.STAGES
+    # 80 columns: the columns are one space apart (the separator of the box, no padding), the note
+    # keeps room for whole words and wraps by them
+    table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False, padding=(0, 0),
+                  caption=" ".join(f"{tstages.SHORT_TITLES[name]}: {tstages.TITLES[name]}." for name in shown
+                                   if tstages.SHORT_TITLES[name] != tstages.TITLES[name]),
+                  caption_justify="left")
+    table.add_column("Honeypot", no_wrap=True, overflow="ellipsis")
+    for name in shown:
+        table.add_column(tstages.SHORT_TITLES[name], justify="center", no_wrap=True)
+    table.add_column("Note", overflow="fold", ratio=1, min_width=NOTE_MIN_WIDTH)
+    for row in report.rows:
+        cells = [Text(row.name)]
+        for name in shown:
+            state = row.state(name)
+            cells.append(Text(tstages.glyph(state, ascii_only), style=colours[state]))
+        failed = [f"{tstages.TITLES[name]}: {row.stages[name].detail}" for name in shown
+                  if row.state(name) == tstages.FAILED and row.stages[name].detail]
+        note = failed[0] if failed else (row.stages["port"].detail if row.external else "")
+        # a note that is cut says so
+        cells.append(Text(note if len(note) <= 160 else note[:159] + "…", style="red" if failed else "bright_black"))
+        table.add_row(*cells)
+    return table
+
+
+PIPELINE_ON_A_SENSOR = "The pipeline test runs on the HIVE (Elasticsearch and the Attack Map are there)."
+CLEANUP_QUESTION = ("Earlier checks could not remove their test events ({runs}). Remove them from Elasticsearch "
+                    "now? Only the check's own events go: its token, a test IP with its marker port (or with its "
+                    "type alone for the honeypots that log no source port), the probe source with a source port "
+                    "of the probe, in the window of that check.")
+
+
+def runs_text(count: int) -> str:
+    return f"{count} run{'s' if count != 1 else ''}"
+
+
+def run_check_cleanup(args) -> int:
+    """tpot check cleanup: the cleanups of earlier checks that did not run through."""
+    ops.require_linux_host("check cleanup")
+    from tpotctl import system
+    from tpotctl.checks import CheckError, run as trun
+    from tpotctl.checks.ewshold import EwsHold, LockBusy
+    from tpotctl.checks.inventory import inventory
+    env = ops.env_values()
+    # the lock of the checks first: the pending file of a check that runs is its own
+    lock = EwsHold(system.data_path(env, REPO_DIR), [], log=lambda kind, text: None, settle=0)
+    try:
+        lock.__enter__()
+    except LockBusy:
+        say.info("A check is running: its test events are its own, nothing to do now.")
+        return 0
+    except CheckError as err:
+        error(f"The lock of the checks cannot be taken: {err}")
+        return 1
+    try:
+        return pending_cleanups(args, trun.read_pending(types=sorted({h.logstash_type for h in inventory(REPO_DIR, env)
+                                                                      if h.logstash_type})))
+    except CheckError as err:
+        error(str(err))
+        return 1
+    finally:
+        lock.__exit__(None, None, None)
+
+
+def pending_cleanups(args, pending) -> int:
+    """tpot check cleanup under the lock of the checks: (found, refused) of run.read_pending."""
+    import json as tjson
+    from tpotctl.checks import run as trun, stages as tstages
+    found, broken = pending
+    for problem in broken:
+        say.warn(f"A pending cleanup is refused and stays, nothing of it is deleted: {problem} (remove the file "
+                 f"once you have looked at it)")
+    if not found:
+        if broken:
+            error(f"No pending cleanup can run: {len(broken)} file(s) refused.")
+            return 1
+        say.ok("No earlier check left test events behind.")
+        return 0
     if args.dry_run:
-        command.append("--dry-run")
-    if args.become_file:
-        command += ["--become-file", args.become_file]
-    return command
+        for pending in found:
+            body = tstages.cleanup_query(pending.started, pending.end, pending.own, pending.with_token)
+            print(f"{pending.run_id}: {tstages.iso(pending.started)} to {tstages.iso(pending.end)}: "
+                  f"POST logstash-*/_delete_by_query {tjson.dumps(body)}")
+        say.info("Nothing was removed (--dry-run).")
+        return 0
+    text = CLEANUP_QUESTION.format(runs=runs_text(len(found)))
+    if not args.yes and not sys.stdin.isatty():
+        error(f"{text} Add --yes to remove them without a terminal.")
+        return 2
+    if not args.yes:
+        say.info(text)
+        if not confirm("Remove them now?", False):
+            say.info("Nothing was removed.")
+            return 1
+    elastic = trun.Elastic()
+    rc = 1 if broken else 0
+    for pending in found:
+        try:
+            deleted, left, sourceless = trun.run_pending(pending, elastic, say.warn)
+        except trun.ElasticError as err:
+            error(f"Check {pending.run_id}: the test events stay for now: {err}")
+            rc = 1
+            continue
+        say.ok(f"Check {pending.run_id}: {deleted} test events removed"
+               + (f"; {trun.left_text(left, sourceless)}." if left else "."))
+    return rc
 
 
 def run_check(args) -> int:
     if args.check_command is None:
         build_parser().parse_args(["check", "-h"])
         return 2
+    if args.check_command == "cleanup":
+        return run_check_cleanup(args)
     ops.require_linux_host(f"check {args.check_command}")
-    if args.check_command == "pipeline" and not args.dry_run:
+    from tpotctl import prefs
+    from tpotctl.checks import CheckError, run as trun
+    options = check_options(args)
+    try:
+        check = trun.Check(options)
+        if options.geo_only and check.sensor:
+            error(PIPELINE_ON_A_SENSOR)
+            return trun.EXIT_CANNOT_ASK
+        if options.dry_run:
+            for line in check.plan():
+                print(line)
+            return 0
+        text = trun.question(options, check.sensor)
         if not args.yes and not sys.stdin.isatty():
-            error("add --yes to inject the test events without a terminal")
-            return 2
-        if not confirm("Inject test events into the honeypot logs? They become ordinary events in Kibana and "
-                       "stay there.", args.yes):
-            return 1
-    command = check_command(args)
-    os.chdir(os.path.expanduser("~"))
-    os.execv(command[0], command)
-    return 0    # not reached
+            error(f"{text} Add --yes to start the check without a terminal.")
+            return trun.EXIT_CANNOT_ASK
+        if not args.yes:
+            say.info(text)
+            if not confirm("Start the check?", False):
+                say.info("Nothing was checked.")
+                return 1
+        report = check.run()
+    except trun.UsageError as err:
+        error(str(err))
+        return 2
+    except CheckError as err:
+        error(str(err))
+        return 1
+    try:
+        check_summary(report, prefs.load().icons == "ascii")
+        sys.stdout.flush()
+    except (OSError, ValueError, SystemExit):
+        # stdout closed (Rich ends with SystemExit(1) on a broken pipe): the result is in last.json
+        # and last.log, the exit code stays the one of the run
+        quiet_stdout()
+    return report.exit_code
+
+
+def quiet_stdout() -> None:
+    """A closed stdout must not change the exit code: CPython's last flush of it would fail (120),
+    so what is left goes to /dev/null."""
+    try:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def check_summary(report, ascii_only: bool) -> None:
+    if report.result == "error":
+        error(report.error)
+        return
+    _console().print(check_table(report, ascii_only))
+    if report.result == "hold failed":
+        error(f"Nothing was probed: {report.error}")
+    elif report.result == "cancelled":
+        say.warn("The check was cancelled; the hold of ewsposter is lifted.")
+    cleanup = report.cleanup
+    if cleanup.get("state") == "done":
+        passes = cleanup.get("passes") or []
+        say.ok(f"Removed {cleanup.get('deleted', 0)} test events from Elasticsearch"
+               + (f" ({' + '.join(str(n) for n in passes)} in two passes)." if len(passes) > 1 else "."))
+        if cleanup.get("left"):
+            from tpotctl.checks import run as trun
+            say.warn(f"{trun.left_text(cleanup['left'], cleanup.get('left_no_source', 0))}; "
+                     f"Kibana: {cleanup.get('left_kibana', '')}")
+    elif cleanup.get("state") == "failed":
+        error(f"The test events are still in Elasticsearch: {cleanup.get('detail')}")
+    if report.kibana:
+        say.hint(f"Kibana: {report.kibana}")
+    if report.written:
+        say.hint(f"Result: {report.written}")
+    if report.exit_code == 0:
+        say.ok("Every stage of every honeypot is ok.")
+    elif report.exit_code == 1:
+        say.error(f"{len(report.failed)} honeypot(s) with a failed stage: "
+                  f"{', '.join(row.name for row in report.failed) or 'the cleanup'}.")
 
 
 def run_attackers(args) -> int:

@@ -1,0 +1,1 @@
+{"dest_port":"{dst_port}","header_user-agent":"{token}","hostname":"192.0.2.1","protocol":"http","request_method":"GET","request_proto":"HTTP/1.1","request_uri":"/{token}","src_ip":"{src_ip}","timestamp":"{ts:%Y-%m-%dT%H:%M:%SZ}","trapped":"false","user-agent":"{token}","user-agent_browser":"Other","user-agent_os":"Other"}

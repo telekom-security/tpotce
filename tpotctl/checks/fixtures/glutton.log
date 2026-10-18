@@ -1,0 +1,1 @@
+{"time":"{ts:%Y-%m-%dT%H:%M:%S.%3fZ}","level":"INFO","msg":"HTTP GET request handled: /{token}","sensorID":"7e1d3c5a-9b2f-4d6e-8a0c-1f3e5d7b9a2c","handler":"http","dest_port":"{dst_port}","src_ip":"{src_ip}","src_port":"{src_port}","path":"/{token}","method":"GET","query":""}

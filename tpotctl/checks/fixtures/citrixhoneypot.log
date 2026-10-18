@@ -1,0 +1,1 @@
+{"asctime": "{ts:%Y-%m-%d %H:%M:%S,%3f}", "levelname": "INFO", "message": "({src_ip}:{src_port}): GET Header: /vpn/{token}.html"}

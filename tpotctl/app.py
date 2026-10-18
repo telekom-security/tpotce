@@ -20,11 +20,11 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import (Button, Checkbox, ContentSwitcher, DataTable, Footer, Input, Label, ListItem, ListView,
-                             OptionList, Static, TabbedContent, TabPane)
+                             OptionList, Static, Switch, TabbedContent, TabPane)
 from textual.widgets.option_list import Option
 
 from tpotctl.widgets import nav
-from tpotctl.widgets.nav import NavDataTable, NavInput, NavOptionList
+from tpotctl.widgets.nav import DialogTitle, NavDataTable, NavInput, NavModal, NavOptionList, NavScroll
 from tpotctl import glyphs, logo, ops, prefs, theme
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.commands import TpotCommands
@@ -167,6 +167,18 @@ class Backend:
         return ko.run_apply("overwrite" if overwrite else "update", data, objects, ops.kibana_export_dir(),
                             confirmed=confirmed)
 
+    def kibana_prune_preview(self):
+        """The old T-Pot objects in Kibana now (kibana_objects.prune_plan), before the question of Remove old
+        T-Pot objects."""
+        from tpotctl import kibana_objects as ko
+        return ko.prune_preview(*ops.kibana_dirs())
+
+    def kibana_prune(self, confirmed):
+        """kibana_objects.Prune of a removal of the old objects the question named (`confirmed`, type:id)."""
+        from tpotctl import kibana_objects as ko
+        data, objects = ops.kibana_dirs()
+        return ko.run_prune(data, objects, ops.kibana_export_dir(), confirmed)
+
     def kibana_export(self):
         """Every object into ~/tpot_backups: (path, count)."""
         from tpotctl import cli
@@ -192,6 +204,36 @@ class Backend:
 
     def check_data_loss(self, args: List[str]):
         return ops.check_data_loss(args)
+
+    def check_result(self):
+        """The last check (tpotctl.checks.run.read_result): None before the first, ResultError when it
+        cannot be read."""
+        from tpotctl.checks import run as trun
+        return trun.read_result()
+
+    def ews_state(self):
+        """(state, age) of the hold of ewsposter, ewshold.ews_state of the data folder."""
+        from tpotctl import system
+        from tpotctl.checks import ewshold
+        return ewshold.ews_state(system.data_path(ops.env_values(), REPO_DIR))
+
+    def ews_quarantine(self):
+        """The modules ewsposter keeps from sending until they caught up (ewshold.ews_quarantine)."""
+        from tpotctl import system
+        from tpotctl.checks import ewshold
+        return ewshold.ews_quarantine(system.data_path(ops.env_values(), REPO_DIR))
+
+    def pending_checks(self):
+        """(how many earlier checks could not remove their test events, the pending files that are
+        refused with why), read as `tpot check cleanup` reads them (the types of the inventory);
+        (-1, []) while a check runs (it holds the lock of the checks, its own file is pending)."""
+        from tpotctl import system
+        from tpotctl.checks import ewshold, run as trun
+        env = ops.env_values()
+        if ewshold.check_running(system.data_path(env, REPO_DIR)):
+            return -1, []
+        found, broken = trun.read_pending(types=trun.cleanup_types(REPO_DIR, env))
+        return len(found), broken
 
 
 class Runner:
@@ -1503,70 +1545,472 @@ class SensorsPane(Vertical):
 
 
 
-class ChecksPane(Vertical):
-    """Checks of a running T-Pot: probe the honeypots, test the Attack Map pipeline."""
+# the stages of a check on the Checks page: glyph and colour per state (tpotctl.checks.stages.STATES)
+CHECK_STATES = {"ok": ("stage_ok", "ok"), "failed": ("stage_failed", "error"), "n/a": ("stage_na", "ash"),
+                "not_reached": ("stage_not_reached", "mist")}
+CHECK_STATE_WORDS = {"ok": "ok", "failed": "failed", "n/a": "does not apply", "not_reached": "not reached"}
+NO_CHECK_YET = "No check has run yet."
+CHECK_UNREADABLE = "The last result cannot be read."
+
+
+def check_short_title(result: Dict, name: str) -> str:
+    """The column title of a stage: short (stages.SHORT_TITLES, as tpot check prints it) so that the table fits
+    next to the menu at 80 columns; a stage of another release by its title of last.json."""
+    from tpotctl.checks import stages as tstages
+    return tstages.SHORT_TITLES.get(name) or result["titles"][name]
+
+
+def check_legend(result: Dict) -> Text:
+    """What the short column titles stand for, the full titles of last.json (plain text)."""
+    parts = [f"{short}: {result['titles'][name]}." for name in result["stages"]
+             for short in [check_short_title(result, name)] if short != result["titles"][name]]
+    return Text(" ".join(parts), style=theme.color("ash"))
+
+
+def check_cell(state: str) -> Text:
+    glyph, colour = CHECK_STATES[state]
+    return Text(glyphs.g(glyph), style=f"bold {theme.color(colour)}" if state == "failed" else theme.color(colour),
+                justify="center")
+
+
+def check_when(stamp: str) -> str:
+    """A time of last.json (UTC, ISO) in the time of this host, to the minute; as it is if it is none."""
+    from datetime import datetime
+    try:
+        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return stamp
+    if moment.tzinfo is None:
+        return stamp
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+def quarantine_text(modules) -> str:
+    """The ewsposter line of the Checks page while modules catch up after a hold."""
+    return (f"ewsposter sends, except {', '.join(modules)} "
+            f"({'they catch' if len(modules) > 1 else 'it catches'} up first).")
+
+
+def pending_text(count: int) -> str:
+    """The line of the Checks page while earlier checks left test events behind."""
+    return f"An earlier check could not remove its test events ({count} run{'s' if count != 1 else ''})."
+
+
+def check_cleanup_text(cleanup: Dict) -> Text:
+    """What the cleanup of a check did, as tpot check says it (cli.check_summary); values from last.json
+    stay plain text."""
+    text = Text()
+    state = cleanup.get("state")
+    if state == "done":
+        passes = cleanup.get("passes") or []
+        text.append(f"{glyphs.g('ok')} Removed {cleanup.get('deleted', 0)} test events from Elasticsearch"
+                    + (f" ({' + '.join(str(n) for n in passes)} in two passes)." if len(passes) > 1 else "."),
+                    style=theme.color("mist"))
+        if cleanup.get("left"):
+            from tpotctl.checks import run as trun
+            text.append(f"\n{glyphs.g('warn')} {trun.left_text(cleanup['left'], cleanup.get('left_no_source', 0))}; "
+                        f"Kibana: ", style=theme.color("warn"))
+            text.append(cleanup.get("left_kibana") or "-", style=theme.color("glass"))
+    elif state == "kept":
+        text.append("The test events stay in Elasticsearch (no cleanup).", style=theme.color("mist"))
+    elif state == "skipped":
+        text.append("Nothing to clean up here: the events went to the HIVE.", style=theme.color("mist"))
+    elif state == "failed":
+        text.append(f"{glyphs.g('fail')} The test events are still in Elasticsearch: ", style=theme.color("error"))
+        text.append(cleanup.get("detail") or "-", style=theme.color("glass"))
+    return text
+
+
+def check_summary(result: Dict, sensor: bool) -> Text:
+    """The lines above the table: which check ran when, how it ended, the cleanup."""
+    text = Text()
+    what = "pipeline test" if result.get("mode") == "pipeline" else "check of the honeypots"
+    text.append(f"Last {what}: {check_when(result.get('started', ''))}", style=f"bold {theme.color('glass')}")
+    if result.get("host"):
+        text.append(" on ", style=theme.color("mist"))
+        text.append(result["host"], style=theme.color("glass"))
+    text.append("\n")
+    outcome = result.get("result")
+    failed = [row["name"] for row in result["honeypots"]
+              if any(stage["state"] == "failed" for stage in row["stages"].values())]
+    if outcome == "ok":
+        text.append(f"{glyphs.g('ok')} Every stage of every honeypot is ok.", style=f"bold {theme.color('ok')}")
+    elif outcome == "failed":
+        text.append(f"{glyphs.g('fail')} {len(failed)} honeypot(s) with a failed stage: ",
+                    style=f"bold {theme.color('error')}")
+        text.append(", ".join(failed) or "the cleanup", style=theme.color("glass"))
+    elif outcome == "hold failed":
+        text.append(f"{glyphs.g('fail')} Nothing was probed, ewsposter did not confirm its hold: ",
+                    style=f"bold {theme.color('error')}")
+        text.append(result.get("error") or "-", style=theme.color("glass"))
+    elif outcome == "cancelled":
+        text.append(f"{glyphs.g('warn')} The check was cancelled; the hold of ewsposter is lifted.",
+                    style=theme.color("warn"))
+    else:
+        text.append(f"{glyphs.g('fail')} The check ended with an error: ", style=f"bold {theme.color('error')}")
+        text.append(result.get("error") or "-", style=theme.color("glass"))
+    if result["ewsposter"].get("state") == "failed":
+        text.append(f"\n{glyphs.g('fail')} The hold of ewsposter: ", style=theme.color("error"))
+        text.append(result["ewsposter"].get("detail") or "-", style=theme.color("glass"))
+    cleanup = check_cleanup_text(result["cleanup"])
+    if cleanup.plain:
+        text.append("\n")
+        text.append_text(cleanup)
+    if sensor or result.get("tpot_type") == "SENSOR":
+        text.append("\nA SENSOR checks the port, the answer and the log line; the other stages: check on the HIVE.",
+                    style=theme.color("ash"))
+    if result["honeypots"]:
+        text.append("\nenter on a honeypot shows what each stage found and the Kibana link.",
+                    style=theme.color("ash"))
+    return text
+
+
+def check_detail(result: Dict, row: Dict) -> Text:
+    """The detail of one honeypot of a check: every stage with what it found, the ports, its log line and
+    event, the geo event, the Kibana link and the cleanup of the run. Everything from last.json is plain
+    text (Text.append, no markup)."""
+    text = Text()
+
+    def head(title: str) -> None:
+        text.append(f"\n{title}\n", style=f"bold {theme.color('magenta')}")
+
+    def pair(label: str, value: str, width: int = 16) -> None:
+        text.append(f"  {label:<{width}}", style=theme.color("ash"))
+        text.append(f"{value or '-'}\n", style=theme.color("glass"))
+
+    pair("Container", f"{row['container'] or row['name']}, " + ("running" if row["running"] else "not running"))
+    pair("Ports", ", ".join(row["ports"]))
+    pair("Logstash type", row["logstash_type"])
+    if row["external"]:
+        pair("Probed", "by its own tool, not by this check")
+    head("Stages")
+    titles = result["titles"]
+    width = max(len(titles[name]) for name in result["stages"]) + 2
+    for name in result["stages"]:
+        stage = row["stages"][name]
+        glyph, colour = CHECK_STATES[stage["state"]]
+        text.append(f"  {glyphs.g(glyph)} ", style=theme.color(colour))
+        text.append(f"{titles[name]:<{width}}", style=theme.color("glass"))
+        text.append(f"{stage['detail'] or CHECK_STATE_WORDS[stage['state']]}\n", style=theme.color("mist"))
+    head("Log line and event")
+    pair("Log line", row["log_line"])
+    pair("Elasticsearch", " / ".join(part for part in (row["es_index"], row["es_id"]) if part))
+    geo = row["geo"]
+    if geo is not None:
+        head("Geo event")
+        pair("Source", f"{geo['src_ip']}:{geo['src_port']}")
+        pair("Written to", geo["file"])
+        pair("Line", geo["line"] or "nothing was written")
+        pair("Elasticsearch", " / ".join(part for part in (geo["es_index"], geo["es_id"]) if part))
+        location = geo["location"]
+        pair("Location", ", ".join(f"{key} {value}" for key, value in location.items()))
+    head("Kibana")
+    text.append(f"  {result['kibana'] or '-'}\n", style=theme.color("glass"))
+    cleanup = check_cleanup_text(result["cleanup"])
+    if cleanup.plain:
+        head("Cleanup of this check")
+        for line in cleanup.split("\n"):
+            text.append("  ")
+            text.append_text(line)
+            text.append("\n")
+    return _trim(text)
+
+
+def _trim(text: Text) -> Text:
+    """Without the newline before the first heading and after the last line."""
+    plain = text.plain
+    start = len(plain) - len(plain.lstrip("\n"))
+    end = len(plain.rstrip("\n"))
+    return text[start:end]
+
+
+class CheckDetailDialog(NavModal):
+    """One honeypot of the last check: its stages and what they found; esc or Back closes it."""
+
+    BINDINGS = [Binding("escape", "close", "Back")]
+
+    def __init__(self, result: Dict, row: Dict):
+        super().__init__()
+        self.result, self.row = result, row
 
     def compose(self) -> ComposeResult:
-        yield Static("", id="checks-info", classes="info")
-        with Horizontal(classes="actions"):
-            yield NavInput(placeholder="host to probe", id="check-host", compact=True)
-            yield Button("Probe the honeypots", id="check-honeypots", variant="primary")
-        with Horizontal(classes="actions"):
-            yield Button("Test the Attack Map pipeline", id="check-pipeline")
-            yield Button("Dry run", id="check-pipeline-dry")
+        from rich.markup import escape
+        with Vertical(classes="dialog", id="check-detail") as dialog:
+            yield DialogTitle(escape(self.row["name"]))
+            with NavScroll():
+                yield Static(check_detail(self.result, self.row), id="check-detail-body")
+            with Horizontal(classes="actions"):
+                yield Button("Back", id="no")
+        dialog.border_subtitle = "esc back"
 
     def on_mount(self) -> None:
-        self.show()
+        self.query_one("#no", Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        self.dismiss(None)
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
+class ChecksPane(Vertical):
+    """Checks of a running T-Pot: tpot check honeypots / pipeline in the task screen, the stages of the last
+    check from last.json; the service requests and the nmap scan of hptest.sh as an extra."""
+
+    result = None           # the last check as run.result_view gives it, None without one
+    problem = ""            # why last.json cannot be read ("" when it can or there is none)
+    pending = 0             # earlier checks whose test events are still in Elasticsearch
+    refused: List[str] = []     # pending files tpot check cleanup refuses (path: why)
+    sensor = False
+    row_keys: Dict[str, Dict] = {}
+    columns_for = ()        # the stages the columns of the table were made for
+
+    def compose(self) -> ComposeResult:
+        # the table of the last check and the extra below it do not fit into 24 rows: the page scrolls
+        with NavScroll(id="checks-scroll"):
+            yield Static("", id="checks-info", classes="info")
+            yield Static("", id="check-hold")
+            # shown while earlier checks left test events behind (their cleanup did not run through)
+            yield Static("", id="check-pending")
+            with Horizontal(classes="actions", id="check-pending-actions"):
+                yield Button("Remove them now", id="check-pending-run")
+            with Horizontal(classes="actions check-switches"):
+                yield Switch(True, id="check-geo")
+                yield Label("Geo probe", classes="switch-state")
+                yield Switch(True, id="check-cleanup")
+                yield Label("Clean up afterwards", classes="switch-state")
+            # rows of their own: the three do not fit next to the menu at 80 columns
+            with Horizontal(classes="actions"):
+                yield Button("Check the honeypots", id="check-honeypots", variant="primary")
+                yield Button("Dry run", id="check-dry")
+            with Horizontal(classes="actions"):
+                yield Button("Test the Attack Map pipeline", id="check-pipeline")
+            yield Static("", id="check-summary")
+            # the name stays when the table scrolls sideways (80 columns)
+            yield NavDataTable(id="check-results", cursor_type="row", zebra_stripes=True, fixed_columns=1)
+            yield Static("", id="check-legend")
+            yield Static("", id="check-extra", classes="info")
+            with Horizontal(classes="actions"):
+                yield NavInput(placeholder="host to probe", id="check-host", compact=True)
+                yield Button("Probe with nmap", id="check-nmap")
+
+    def on_mount(self) -> None:
+        self.row_keys = {}
         self.query_one("#check-host", Input).value = self.app.backend.host_address()
+        self.load()
+        # the state of ewsposter changes with a check started elsewhere (tpot check, hptest.sh)
+        self.set_interval(30, self.show_hold)
+
+    def load(self) -> None:
+        """REPAINT, on_mount, page_shown and the end of a task: last.json and the state of ewsposter anew."""
+        self.sensor = self.app.backend.tpot_type().upper() == "SENSOR"
+        try:
+            self.result, self.problem = self.app.backend.check_result(), ""
+        except Exception as err:            # noqa: BLE001 - a broken file is a line on the page, never a traceback
+            self.result, self.problem = None, str(err) or type(err).__name__
+        try:
+            self.pending, self.refused = (0, []) if self.sensor else self.app.backend.pending_checks()
+        except Exception:                   # noqa: BLE001 - the line only informs
+            self.pending, self.refused = 0, []
+        self.show()
 
     def show(self) -> None:
+        info = Text()
+        info.append("Check the honeypots", style=f"bold {theme.color('glass')}")
+        info.append("  probes every honeypot of this T-Pot on the address of this host and follows it from the "
+                    "port through its answer, its log line, Elasticsearch and GeoIP to the Attack Map (tpot check "
+                    "honeypots). ewsposter sends nothing during the check, so real attacks of those minutes are "
+                    "not reported either. The geo probe writes one test event with a fixed test IP into the log "
+                    "of every honeypot; cleaning up removes the check's own events from Elasticsearch afterwards, "
+                    "the lines in the logs stay.\n\n", style=theme.color("mist"))
+        info.append("Test the Attack Map pipeline", style=f"bold {theme.color('glass')}")
+        info.append("  the test events only, without the probes (tpot check pipeline).", style=theme.color("mist"))
+        if self.sensor:
+            info.append("\n\nThis is a SENSOR: the check covers the port, the answer and the log line, the rest is "
+                        "checked on its HIVE.", style=theme.color("ash"))
+        self.query_one("#checks-info", Static).update(info)
+        # a SENSOR writes no test events with a test IP and keeps no events: its HIVE has them
+        geo, cleanup = self.query_one("#check-geo", Switch), self.query_one("#check-cleanup", Switch)
+        geo.disabled = cleanup.disabled = self.sensor
+        geo.tooltip = "A SENSOR writes no test events with a test IP: check the HIVE." if self.sensor else None
+        cleanup.tooltip = "A SENSOR keeps no events, they are in Elasticsearch of its HIVE." if self.sensor else None
+        self.query_one("#check-pipeline", Button).disabled = self.sensor
+        extra = Text()
+        extra.append("Probe with nmap", style=f"bold {theme.color('glass')}")
+        extra.append("  the service requests and the nmap scan of hptest.sh, of this T-Pot or another one; "
+                     "ewsposter of this host sends nothing meanwhile, the probes stay in Kibana.",
+                     style=theme.color("mist"))
+        self.query_one("#check-extra", Static).update(extra)
+        self.show_hold()
+        self.show_pending()
+        self.show_result()
+
+    def show_pending(self) -> None:
+        """The line and the button for the test events earlier checks could not remove."""
+        line = self.query_one("#check-pending", Static)
+        actions = self.query_one("#check-pending-actions", Horizontal)
+        # a check that runs holds its own pending file: no line, no button meanwhile
+        actions.display = self.pending > 0
+        line.display = self.pending > 0 or bool(self.refused)
         text = Text()
-        text.append("Probe the honeypots", style=f"bold {theme.color('glass')}")
-        text.append("  sends a few service requests and scans every published port with nmap (hptest.sh). Probe "
-                    "this host or another T-Pot; the probes show up in Kibana as attacks.\n\n",
-                    style=theme.color("mist"))
-        text.append("Test the Attack Map pipeline", style=f"bold {theme.color('glass')}")
-        text.append("  appends test events to the logs of Cowrie, Dionaea, Honeytrap and RDPy and follows them "
-                    "through Logstash, Elasticsearch and Redis to the WebSocket of the Attack Map "
-                    "(attackmap_pipeline_test.sh). The events stay in Kibana; the dry run only shows them.",
-                    style=theme.color("mist"))
-        self.query_one("#checks-info", Static).update(text)
+        if self.pending > 0:
+            text.append(f"{glyphs.g('warn')} {pending_text(self.pending)}", style=theme.color("warn"))
+        for problem in self.refused:
+            # a file that is no pending cleanup of this T-Pot: named, never offered for removal
+            text.append(("\n" if text.plain else "") + f"{glyphs.g('warn')} A pending cleanup is refused, nothing of "
+                        f"it is deleted: ", style=theme.color("warn"))
+            text.append(" ".join(problem.split()), style=theme.color("ash"))
+            text.append(" (remove the file once you have looked at it).", style=theme.color("warn"))
+        if line.display:
+            line.update(text)
+
+    def show_hold(self) -> None:
+        """What ewsposter says of its hold (<data>/ews/hold.state): stuck is a warning."""
+        try:
+            state, age = self.app.backend.ews_state()
+        except Exception:                   # noqa: BLE001 - the line only informs
+            state, age = "unknown", None
+        try:
+            quarantined = self.app.backend.ews_quarantine() if state == "normal" else []
+        except Exception:                   # noqa: BLE001 - the line only informs
+            quarantined = []
+        if state == "normal" and quarantined:
+            text = Text(f"{glyphs.g('warn')} {quarantine_text(quarantined)}", style=theme.color("warn"))
+        elif state == "normal":
+            text = Text(f"{glyphs.g('ok')} ewsposter sends as usual.", style=theme.color("mist"))
+        elif state == "held":
+            text = Text(f"{glyphs.g('warn')} ewsposter is held: a check runs, nothing is sent meanwhile.",
+                        style=theme.color("warn"))
+        elif state == "stuck":
+            text = Text(f"{glyphs.g('warn')} ewsposter is stuck after a hold: it sends nothing until one of its "
+                        f"idle rounds ends cleanly (docker logs ewsposter says why).",
+                        style=f"bold {theme.color('warn')}")
+        else:
+            text = Text("ewsposter does not say how it is: it does not run here, or its state is older than two "
+                        "minutes.", style=theme.color("ash"))
+        self.query_one("#check-hold", Static).update(text)
+
+    def show_result(self) -> None:
+        table = self.query_one("#check-results", NavDataTable)
+        summary = self.query_one("#check-summary", Static)
+        result = self.result
+        if result is None or not result["honeypots"]:
+            if self.problem:
+                text = Text(CHECK_UNREADABLE, style=theme.color("warn"))
+                # why, in one line of plain text (a path, "no JSON", another version)
+                text.append("\n" + " ".join(self.problem.split()), style=theme.color("ash"))
+                summary.update(text)
+            elif result is None:
+                summary.update(Text(NO_CHECK_YET, style=theme.color("mist")))
+            else:
+                summary.update(check_summary(result, self.sensor))
+            self.row_keys = {}
+            table.clear()
+            table.display = False
+            self.query_one("#check-legend", Static).display = False
+            return
+        summary.update(check_summary(result, self.sensor))
+        stages = tuple(result["stages"])
+        if stages != self.columns_for:
+            table.clear(columns=True)
+            table.add_column(Text("Honeypot"), key="name")
+            for name in stages:
+                table.add_column(Text(check_short_title(result, name)), key=name)
+            self.columns_for = stages
+        legend = self.query_one("#check-legend", Static)
+        legend.update(check_legend(result))
+        legend.display = True
+        rows, self.row_keys = [], {}
+        for row in result["honeypots"]:
+            key, number = row["name"], 1
+            while key in self.row_keys:
+                number += 1
+                key = f"{row['name']} ({number})"
+            self.row_keys[key] = row
+            # the colour as a span: a change of running repaints the cell (sync_rows compares the spans too)
+            name = Text(row["name"])
+            name.stylize(theme.color("glass" if row["running"] else "ash"))
+            rows.append((key, [name] + [check_cell(row["stages"][stage]["state"]) for stage in stages]))
+        table.display = True
+        table.sync_rows(rows)
 
     def enter(self) -> None:
-        self.query_one("#check-host", Input).focus()
+        self.query_one("#check-honeypots", Button).focus()
 
     def on_input_submitted(self, event) -> None:
         """enter in the host field: on to the probe, a second enter starts it."""
         if event.input.id == "check-host":
             event.stop()
-            self.query_one("#check-honeypots", Button).focus()
+            self.query_one("#check-nmap", Button).focus()
+
+    def on_data_table_row_selected(self, event) -> None:
+        if event.data_table.id != "check-results" or self.result is None:
+            return
+        event.stop()
+        row = self.row_keys.get(str(event.row_key.value))
+        if row is not None:
+            self.app.push_screen(CheckDetailDialog(self.result, row))
+
+    def check_command(self, what: str, dry_run: bool = False) -> List[str]:
+        """tpot check honeypots / pipeline with the switches: -y (the page asked), --no-geo, --keep."""
+        geo = self.query_one("#check-geo", Switch).value
+        cleanup = self.query_one("#check-cleanup", Switch).value
+        command = [LAUNCHER, "check", what, "--dry-run" if dry_run else "-y"]
+        if what == "honeypots" and not geo and not self.sensor:
+            command.append("--no-geo")
+        if not cleanup and not self.sensor:
+            command.append("--keep")
+        return command
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         from tpotctl import cli
+        from tpotctl.checks import run as trun
         from tpotctl.screens.task import Task
-        if event.button.id == "check-honeypots":
+        button = event.button.id
+        if button == "check-nmap":
             host = self.query_one("#check-host", Input).value.strip()
-            self.app.run_task(Task(f"Probe the honeypots{' on ' + host if host else ''}",
-                                   [cli.HPTEST] + ([host] if host else []), cwd=os.path.expanduser("~"),
-                                   become="-B", done="The probes are through, Kibana shows them."))
-        elif event.button.id == "check-pipeline-dry":
-            self.app.run_task(Task("Attack Map pipeline, dry run", [cli.PIPELINE, "--dry-run"],
-                                   cwd=os.path.expanduser("~"), autostart=True))
-        elif event.button.id == "check-pipeline":
+            # the service requests and the nmap scan of hptest.sh, under the hold of ewsposter
+            self.app.run_task(Task(f"Probe with nmap{' on ' + host if host else ''}",
+                                   [cli.HPTEST, "--nmap"] + ([host] if host else []), cwd=os.path.expanduser("~"),
+                                   become="-B", done="The probes are through, Kibana shows them."),
+                              lambda _code: self.load())
+        elif button == "check-pending-run":
+            def remove(yes: bool) -> None:
+                if yes:
+                    self.app.run_task(Task("Remove the test events of earlier checks", [LAUNCHER, "check", "cleanup", "-y"],
+                                           cwd=REPO_DIR, autostart=True,
+                                           done="The test events of the earlier checks are removed."),
+                                      lambda _code: self.load())
+            question = cli.CLEANUP_QUESTION.format(runs=cli.runs_text(self.pending))
+            self.app.push_screen(ConfirmDialog("Remove the test events of earlier checks?",
+                                               Text(question, style=theme.color("glass")), yes="Remove them",
+                                               no="Back"), remove)
+        elif button == "check-dry":
+            self.app.run_task(Task("Check the honeypots, dry run", self.check_command("honeypots", dry_run=True),
+                                   cwd=REPO_DIR, autostart=True), lambda _code: self.load())
+        elif button in ("check-honeypots", "check-pipeline"):
+            what = "honeypots" if button == "check-honeypots" else "pipeline"
+            options = trun.Options(keep=not self.query_one("#check-cleanup", Switch).value,
+                                   geo=self.query_one("#check-geo", Switch).value, geo_only=what == "pipeline")
+            title = "Check the honeypots" if what == "honeypots" else "Test the Attack Map pipeline"
+            command = self.check_command(what)
+            done = ("Every stage of every honeypot is ok." if what == "honeypots"
+                    else "Every test event reached the Attack Map.")
+
             def confirmed(yes: bool) -> None:
                 if yes:
-                    self.app.run_task(Task("Test the Attack Map pipeline", [cli.PIPELINE],
-                                           cwd=os.path.expanduser("~"), become="--become-file", autostart=True,
-                                           done="Every test event reached the Attack Map."))
-            self.app.push_screen(ConfirmDialog(
-                "Inject test events into the honeypot logs?",
-                Text("They become ordinary events in Kibana and the Attack Map and stay there.",
-                     style=theme.color("glass")), yes="Inject and test", no="Back"), confirmed)
+                    self.app.run_task(Task(title, command, cwd=REPO_DIR, become="--become-file", autostart=True,
+                                           done=done), lambda _code: self.load())
+            self.app.push_screen(ConfirmDialog(f"{title}?", Text(trun.question(options, self.sensor),
+                                                                  style=theme.color("glass")),
+                                               yes="Start the check", no="Back"), confirmed)
 
 
 class ElasticPane(Vertical):
     """How long Elasticsearch keeps the events (TPOT_ES_RETENTION and the ILM policy tpot), and T-Pot's
-    Kibana objects: the mode TPOT_KIBANA_OBJECTS, Export, Update, Overwrite all and Restore."""
+    Kibana objects: the mode TPOT_KIBANA_OBJECTS, Export, Update, Overwrite all, Remove old T-Pot objects
+    and Restore."""
 
     status = None           # the elastic.Status the page shows, None before the first read or after an error
     busy = False            # a Set, Apply or Take over is under way: its buttons are disabled
@@ -1575,8 +2019,8 @@ class ElasticPane(Vertical):
     shows = 0               # the number of the latest show() begun, so that an older answer stays out
     shown = 0               # the number of the show() whose answer the page shows
     # the Kibana objects, the same in their own part: the cli.KibanaState shown, a job (Export, Update,
-    # Overwrite all, Restore, Save) under way, a read under way and one wanted after it, the reads begun
-    # and the one shown; the mode of .env as read last (empty is keep)
+    # Overwrite all, Remove old T-Pot objects, Restore, Save) under way, a read under way and one wanted
+    # after it, the reads begun and the one shown; the mode of .env as read last (empty is keep)
     kibana = None
     kibana_busy = False
     kibana_reading = False
@@ -1610,6 +2054,9 @@ class ElasticPane(Vertical):
                 yield Button("Export", id="kibana-export", disabled=True)
                 yield Button("Update", id="kibana-update", variant="primary", disabled=True)
                 yield Button("Overwrite all", id="kibana-overwrite", disabled=True)
+            # a row of its own: next to the three it does not fit at 80 columns
+            with Horizontal(classes="actions"):
+                yield Button(KIBANA_PRUNE_LABEL, id="kibana-prune", disabled=True)
             yield NavDataTable(id="kibana-exports", cursor_type="row", zebra_stripes=True, enter_goes_on=True)
             with Horizontal(classes="actions"):
                 yield Button("Restore", id="kibana-restore", disabled=True)
@@ -1810,7 +2257,7 @@ class ElasticPane(Vertical):
         none while a job runs; Save only for a mode other than the one of .env, Restore with an export."""
         state = self.kibana
         ready = state is not None and state.kibana and not self.kibana_busy
-        for name in ("#kibana-mode", "#kibana-export", "#kibana-update", "#kibana-overwrite"):
+        for name in ("#kibana-mode", "#kibana-export", "#kibana-update", "#kibana-overwrite", "#kibana-prune"):
             self.query_one(name).disabled = not ready
         self.query_one("#kibana-mode-save", Button).disabled = not (
             ready and self.kibana_mode is not None and self.chosen_mode() != self.kibana_mode)
@@ -1846,6 +2293,8 @@ class ElasticPane(Vertical):
             self.start_kibana(self.export_kibana())
         elif button in ("kibana-update", "kibana-overwrite"):
             self.start_kibana(self.ask_import(button == "kibana-overwrite"))
+        elif button == "kibana-prune":
+            self.start_kibana(self.ask_prune())
         elif button == "kibana-restore" and self.selected_export():
             self.start_kibana(self.ask_restore(self.selected_export()))
 
@@ -1957,6 +2406,39 @@ class ElasticPane(Vertical):
         self.kibana_result("Kibana objects", lines, not result.errors)
         await self.show_kibana()
 
+    async def ask_prune(self) -> None:
+        """Remove old T-Pot objects: the old objects of Kibana as it is now (kibana_objects.prune_plan), then
+        the question of tpot elastic import --prune, every one of them named; #no has the focus."""
+        import asyncio
+        from tpotctl import cli, kibana_objects as ko
+        try:
+            old = await asyncio.to_thread(self.app.backend.kibana_prune_preview)
+        except (ko.KibanaError, OSError) as err:
+            self.kibana_failed(err)
+            return
+        if not old:
+            self.app.notify("Kibana holds no old T-Pot objects, nothing to remove.", title="Kibana objects")
+            return
+        if another_screen(self.app, KIBANA_PRUNE_LABEL, "The list of the old Kibana objects is ready"):
+            return
+        text = Text("\n".join(cli.kibana_prune_lines(old)), style=theme.color("mist"))
+        confirmed = {item.key for item in old}
+        self.app.push_screen(ConfirmDialog(cli.kibana_prune_question(len(old)), text, yes="Remove", no="Back"),
+                             lambda yes: self.start_kibana(self.run_prune(confirmed)) if yes else None)
+
+    async def run_prune(self, confirmed) -> None:
+        import asyncio
+        from tpotctl import cli, kibana_objects as ko
+        try:
+            done = await asyncio.to_thread(self.app.backend.kibana_prune, confirmed)
+        except (ko.KibanaError, OSError) as err:
+            self.kibana_failed(err, "Not removed")
+            await self.show_kibana()
+            return
+        self.kibana_result("Old T-Pot objects", cli.kibana_result_lines(ko.prune_summary(done)),
+                           not done.failed and not done.problem)
+        await self.show_kibana()
+
     async def ask_restore(self, path: str) -> None:
         """Restore: the chosen export is read as the restore reads it, then the question of tpot elastic
         restore."""
@@ -1991,7 +2473,7 @@ class ElasticPane(Vertical):
         """What a run did, in a dialog; with another screen open a note instead: its first line and the
         objects Kibana refused (at most RESULT_REFUSED_SHOWN)."""
         if len(self.app.screen_stack) > 1:
-            refused = [line for line in lines[1:] if line.startswith("not imported:")]
+            refused = [line for line in lines[1:] if line.startswith(("not imported:", "not removed:"))]
             note = [lines[0]] + refused[:RESULT_REFUSED_SHOWN]
             if len(refused) > RESULT_REFUSED_SHOWN:
                 note.append(f"… and {len(refused) - RESULT_REFUSED_SHOWN} more")
@@ -2172,6 +2654,9 @@ def another_screen(app, button: str, done: str = "The check of the ILM policy is
     return True
 
 
+KIBANA_PRUNE_LABEL = "Remove old T-Pot objects"
+
+
 def kibana_modes():
     """(value, label, help) of the modes of TPOT_KIBANA_OBJECTS: the choices of env.schema.yml, whose help
     (the pros and cons) the Settings page shows as well."""
@@ -2186,8 +2671,9 @@ def kibana_info() -> Text:
     text = Text()
     text.append("Kibana objects", style=f"bold {theme.color('glass')}")
     text.append("  T-Pot's dashboards, visualizations and searches. Update brings in the ones of this release and "
-                "keeps the ones you changed, Overwrite all replaces those too, Restore brings an export back; each "
-                "asks first and runs once. An export always comes first (Manager: ~/tpot_backups, T-Pot: "
+                "keeps the ones you changed, Overwrite all replaces those too, Remove old T-Pot objects removes the "
+                "unchanged ones of earlier releases that this one no longer ships, Restore brings an export back; "
+                "each asks first and runs once. An export always comes first (Manager: ~/tpot_backups, T-Pot: "
                 "data/kibana_objects/exports). The mode is what T-Pot does on every start.",
                 style=theme.color("mist"))
     return text
@@ -2775,11 +3261,15 @@ class TpotApp(App):
 
     def page_shown(self, key: str) -> None:
         """A page comes into view: the pages that show .env read what changed meanwhile; the Elastic
-        page reads its status anew (unless a read is under way: one at a time, ElasticPane.load)."""
+        page reads its status anew (unless a read is under way: one at a time, ElasticPane.load), the
+        Checks page the last check and the state of ewsposter."""
         if key in CONFIG_PAGES:
             self.config_maybe_changed()
         if key == "elastic":
             for pane in self.query(ElasticPane):
+                pane.load()
+        if key == "checks":                     # a check run elsewhere (tpot check) meanwhile
+            for pane in self.query(ChecksPane):
                 pane.load()
 
     def setting_keys(self):

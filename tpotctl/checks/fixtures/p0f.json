@@ -1,0 +1,1 @@
+{"timestamp": "{ts:%Y/%m/%d %H:%M:%S}", "mod": "syn", "client_ip": "{src_ip}", "server_ip": "172.20.0.16", "client_port": {src_port}, "server_port": {dst_port}, "subject": "cli", "os": "Linux 2.2.x-3.x", "dist": 0, "params": "generic", "raw_sig": "4:64+0:0:1460:mss*20,10:mss,sok,ts,nop,ws:df,id+:0"}
