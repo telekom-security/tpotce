@@ -357,6 +357,52 @@ fuENV_SET () {
   printf '%s\n' "${myENV_LINES[@]}" > "${myENV_FILE}"
 }
 
+fuKEEP_LOST () {
+  # fuKEEP_LOST <file> <entries>: the lines of the file whose name the entries (base64 of name:hash)
+  # do not hold go into <file>.lost first, as tpotinit does (a line that is there already is not added
+  # again, tpot sensors import takes them back); rc 1 with myKEEP_REASON when a line cannot be kept
+  local myLOST="$1.lost" myENTRY myLINE myOUT myNAMES=$'\n'
+  local -a myDROP=()
+  myKEPT=0 myKEEP_REASON=""
+  [ -s "$1" ] || return 0
+  if [ ! -r "$1" ];
+    then
+      myKEEP_REASON="$1 cannot be read"
+      return 1
+  fi
+  for myENTRY in $2; do
+    myLINE="$(echo -n "${myENTRY}" | base64 -d | tr -d '\n')"
+    myNAMES+="${myLINE%%:*}"$'\n'
+  done
+  while IFS= read -r myLINE || [[ -n "${myLINE}" ]]; do
+    myLINE="${myLINE%$'\r'}"
+    [[ -n "${myLINE//[[:space:]]/}" ]] || continue
+    [[ "${myNAMES}" == *$'\n'"${myLINE%%:*}"$'\n'* ]] && continue
+    myDROP+=("${myLINE}")
+  done < "$1"
+  [ "${#myDROP[@]}" -gt 0 ] || return 0
+  if [ -L "${myLOST}" ];
+    then myKEEP_REASON="it is a link"
+  elif [ -e "${myLOST}" ] && [ ! -f "${myLOST}" ];
+    then myKEEP_REASON="it is not a regular file"
+  elif [ ! -e "${myLOST}" ];
+    then
+      if myOUT="$( { : > "${myLOST}"; } 2>&1 )";
+        then chmod 660 "${myLOST}"
+        else myKEEP_REASON="${myOUT##*: }"; myKEEP_REASON="${myKEEP_REASON:-the write failed}"
+      fi
+  fi
+  for myLINE in "${myDROP[@]}"; do
+    [ -z "${myKEEP_REASON}" ] || break
+    grep -Fxq -- "${myLINE}" "${myLOST}" && continue
+    if myOUT="$( { printf '%s\n' "${myLINE}" >> "${myLOST}"; } 2>&1 )";
+      then myKEPT=$((myKEPT + 1))
+      else myKEEP_REASON="${myOUT##*: }"; myKEEP_REASON="${myKEEP_REASON:-the write failed}"
+    fi
+  done
+  [ -z "${myKEEP_REASON}" ]
+}
+
 # Check if the script is running in a HIVE installation
 if ! grep -qE '^TPOT_TYPE=["'\'']?HIVE(["'\''[:space:]#]|$)' "${myENV_FILE}";
   then
@@ -467,6 +513,20 @@ if [ "${myENV_LS_WEB_USER}" == "" ];
     myENV_LS_WEB_USER="${myLS_WEB_USER_ENC_B64}"
   else
     myENV_LS_WEB_USER="${myENV_LS_WEB_USER} ${myLS_WEB_USER_ENC_B64}"
+fi
+
+# lswebpasswd is rewritten from LS_WEB_USER after the deployment: what it holds besides goes into
+# lswebpasswd.lost now, before anything is deployed; if that is not possible, nothing is done
+if ! fuKEEP_LOST "${myLSWEBPASSWD}" "${myENV_LS_WEB_USER}";
+  then
+    fuUI_SUMMARY "The SENSOR is not deployed" \
+      "fail:The lines of ${myLSWEBPASSWD} that LS_WEB_USER does not name cannot be kept in ${myLSWEBPASSWD}.lost (${myKEEP_REASON}), this HIVE is unchanged" \
+      "next:Fix ${myLSWEBPASSWD}.lost, or use tpot sensors add"
+    exit 1
+fi
+if [ "${myKEPT}" -gt 0 ];
+  then
+    fuUI_WARN "${myKEPT} line(s) of lswebpasswd that LS_WEB_USER does not name are kept in lswebpasswd.lost, take them back with: tpot sensors import"
 fi
 
 # deploy.yml reads both from the environment, they go to the playbook only; every value one argument
