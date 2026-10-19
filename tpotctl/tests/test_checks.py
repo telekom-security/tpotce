@@ -1589,7 +1589,7 @@ class HptestUnderTheHoldTest(HoldFolder):
 
     def test_the_ports_the_probe_table_leaves_alone_are_not_scanned(self):
         """hptest.sh leaves out what tpot check never sends to or only knocks at (dionaea 20, 42,
-        69/udp, 81; the LLM honeypots; ddospot; sentrypeer in P2P mode), from the block generated
+        69/udp, 81; the LLM honeypots; ddospot), from the block generated
         from the probe table; a late writer (ciscoasa) keeps the hold its time + 10 s."""
         def ports(*pairs):
             return [{"target": t, "published": str(t), "protocol": proto} for t, proto in pairs]
@@ -1597,8 +1597,6 @@ class HptestUnderTheHoldTest(HoldFolder):
             "dionaea": {"ports": ports((20, "tcp"), (21, "tcp"), (42, "tcp"), (69, "udp"), (81, "tcp"), (445, "tcp"))},
             "galah": {"ports": ports((8080, "tcp"))},
             "ddospot": {"ports": ports((53, "udp"), (123, "udp"))},
-            "sentrypeer": {"ports": ports((5060, "tcp"), (5060, "udp")),
-                           "environment": {"SENTRYPEER_PEER_TO_PEER": "1"}},
             "ciscoasa": {"ports": ports((8443, "tcp"))}}}
         with open(os.path.join(self.bin, "config.json"), "w", encoding="utf-8") as out:
             json.dump(config, out)
@@ -1616,10 +1614,6 @@ class HptestUnderTheHoldTest(HoldFolder):
         # ciscoasa writes late: the hold lasts 70 s after the scans
         self.assertIn("Waiting 70 s for the last log lines", result.stdout)
         self.assertTrue(probes.write_hptest(check=True), "the probe table block of hptest.sh is not current")
-        # every variant of the probe table is in the block, with its own list
-        table = probes.hptest_table()
-        self.assertEqual(sorted(table["variants"]), sorted(probes.VARIANTS))
-        self.assertEqual(table["variants"]["sentrypeer"], {"env": "SENTRYPEER_PEER_TO_PEER", "skipped": "*"})
 
     def test_term_during_the_scan(self):
         env = self.env()
@@ -1945,15 +1939,6 @@ class InventoryTest(unittest.TestCase):
         # ./data of the .env is the data folder of the checkout, not of compose/
         source = config["services"]["cowrie"]["volumes"][0]["source"]
         self.assertEqual(os.path.realpath(source), os.path.join(os.path.realpath(checkout), "data", "cowrie", "log"))
-
-    def test_the_environment_of_a_service(self):
-        self.assertEqual(inventory._environment({"environment": {"A": "1", "B": None}}), {"A": "1", "B": ""})
-        self.assertEqual(inventory._environment({"environment": ["A=1", "B=x=y", "C"]}),
-                         {"A": "1", "B": "x=y", "C": ""})
-        config = {"services": {"sentrypeer": {"container_name": "sentrypeer", "ports": [port(5060)],
-                                              "environment": {"SENTRYPEER_PEER_TO_PEER": "1"}}}}
-        found = inventory.inventory(REPO, {}, config=config, found=[], groups={"sentrypeer": "honeypots"})
-        self.assertEqual(found[0].environment, {"SENTRYPEER_PEER_TO_PEER": "1"})
 
     def test_errors_are_check_errors(self):
         def failing(argv, **kwargs):
@@ -2423,36 +2408,11 @@ class ProbesTest(unittest.TestCase):
             result = probes.PROBES["dicompot"]("127.0.0.1", [Port(number, 11112)], TOKEN)
         self.assertIn("echoscu timed out", result.detail)
 
-    def test_sentrypeer_in_p2p_mode_is_only_knocked_at(self):
+    def test_sentrypeer_gets_the_sip_options(self):
+        # the SIP OPTIONS go out as the smoke test sends them
         server = FakeTcp([None, b"SIP/2.0 200 OK\r\n\r\n"])
         self.addCleanup(server.close)
-        udp = FakeUdp(answer=b"SIP/2.0 200 OK\r\n\r\n")
-        honeypot = inventory.Honeypot("sentrypeer", "honeypots", "sentrypeer",
-                                      [Port(server.port, 5060), Port(udp.port, 5060, "udp")], running=True,
-                                      environment={"SENTRYPEER_PEER_TO_PEER": "1"})
-        result = probes.probe(honeypot, "127.0.0.1", TOKEN)
-        server.thread.join(5)
-        udp.sock.close()
-        udp.thread.join(5)
-        self.assertEqual(server.received, b"")
-        self.assertEqual(udp.received, b"")
-        self.assertFalse(result.token_sent)
-        self.assertTrue(result.port_open)
-        self.assertEqual(result.state, "open")
-        self.assertEqual(result.port_states, [(Port(server.port, 5060), "open"), (Port(udp.port, 5060, "udp"), "skipped")])
-        # only the UDP port published: left alone, never closed
-        only_udp = inventory.Honeypot("sentrypeer", "honeypots", "sentrypeer", [Port(udp.port, 5060, "udp")],
-                                      running=True, environment={"SENTRYPEER_PEER_TO_PEER": "0"})
-        result_udp = probes.probe(only_udp, "127.0.0.1", TOKEN)
-        self.assertEqual(result_udp.state, "skipped")
-        self.assertFalse(result_udp.port_open)
-        reason = "P2P mode would share the probe's source with its peers"
-        self.assertEqual(result.detail, f"{server.port}/tcp: port open, {reason}; "
-                                        f"{udp.port}/udp: not probed, {reason}")
-        # without P2P the SIP OPTIONS go out as the smoke test sends them
-        server = FakeTcp([None, b"SIP/2.0 200 OK\r\n\r\n"])
-        self.addCleanup(server.close)
-        honeypot.ports, honeypot.environment = [Port(server.port, 5060)], {}
+        honeypot = inventory.Honeypot("sentrypeer", "honeypots", "sentrypeer", [Port(server.port, 5060)], running=True)
         self.assertTrue(probes.probe(honeypot, "127.0.0.1", TOKEN).answered)
         server.thread.join(5)
         self.assertTrue(server.received.startswith(b"OPTIONS sip:1000@127.0.0.1 SIP/2.0\r\n"))

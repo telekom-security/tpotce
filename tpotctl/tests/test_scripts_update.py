@@ -2608,6 +2608,27 @@ class ComposeAdoptTest(Scripts):
                       out)
         self.assertNotIn("customizer --adopt", self.calls())              # no run, no venv built on the way
 
+    def test_the_rebuild_of_a_custom_file_runs_with_the_python_of_the_venv(self):
+        """fuRESTORE_CUSTOM takes the Python of fuCUSTOMIZER_PYTHON, as --adopt does: the python3 of the
+        system may have no PyYAML."""
+        custom = "# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\nservices: {}\n"
+        self.write(os.path.join(self.tpotce, "compose", "customizer.py"),
+                   "import sys  # --rebuild\nsrc, dst = sys.argv[2], sys.argv[4]\n"
+                   "open(dst, 'w').write(open(src).read().replace('{}', '{rebuilt: {}}'))\n")
+        self.write(self.python, f'#!/bin/sh\necho "venv $*" >> "$HOME/calls"\n'
+                                f'exec {shlex.quote(sys.executable)} "$@"\n')
+        os.chmod(self.python, 0o755)
+        self.stub("python3", '#!/bin/sh\necho "system $*" >> "$HOME/calls"\n'
+                             'echo "ModuleNotFoundError: No module named yaml" >&2\nexit 1\n')
+        archive = self.archive(custom)
+        result = self.source_update(f'myARCHIVE="{archive}" myCOMPOSE_CUSTOMIZED=""\nfuRESTORE_CUSTOM\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertEqual(self.compose(), custom.replace("{}", "{rebuilt: {}}"), out)
+        self.assertIn("customizer.py --rebuild", self.calls())
+        self.assertNotIn("system ", self.calls())
+        self.assertNotIn("The rebuild failed", out)
+
     # --- a cancel after an updater without a handover ---------------------------------------------------
 
     def test_a_cancel_after_an_updater_without_a_handover_says_so_and_starts_tpot(self):

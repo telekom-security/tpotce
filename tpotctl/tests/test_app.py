@@ -1939,6 +1939,41 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("only `tpot customize` and `tpot setup` are available", readme)
         self.assertIn("### What depends on the host and the edition", section)
 
+    def test_readme_matrix_options_match_the_parser(self):
+        """Every option a row of the matrix names exists for its command; the rows of COMPLETE name all
+        options of their command (the others sum them up, i.e. `[list|add|remove]`)."""
+        import argparse
+        import re
+        complete = ("status", "ps", "images", "start", "stop", "restart", "install", "uninstall", "setup",
+                    "attackers")
+
+        def options(parser):
+            found = set()
+            for action in parser._actions:
+                if isinstance(action, argparse._SubParsersAction):
+                    for child in action.choices.values():
+                        found |= options(child)
+                else:
+                    found |= {o for o in action.option_strings if o.startswith("--") and o != "--help"}
+            return found
+        with open(os.path.join(cli.REPO_DIR, "README.md"), encoding="utf-8") as handle:
+            readme = handle.read()
+        start = readme.index("## The T-Pot Manager (tpot)")
+        section = readme[start:readme.index("\n## ", start + 10)]
+        cells = {}
+        for row in section.splitlines():
+            if row.startswith("| `tpot"):
+                cell = row.split(" | ")[0]
+                for name in re.findall(r"`tpot ([a-z][\w-]*)", cell):
+                    cells[name] = cells.get(name, "") + cell
+        sub = next(a for a in cli.build_parser()._actions if isinstance(a, argparse._SubParsersAction))
+        for name, parser in sub.choices.items():
+            listed = set(re.findall(r"--[a-z][a-z-]*", cells.get(name, "")))
+            with self.subTest(command=name):
+                self.assertEqual(sorted(listed - options(parser)), [])
+                if name in complete:
+                    self.assertEqual(sorted(options(parser) - listed), [])
+
     def test_every_menu_pane_has_a_command(self):
         commands = {"status": "status", "edition": "edition", "settings": "env", "llm": "llm", "users": "users",
                     "sensors": "sensors", "images": "images", "checks": "check", "elastic": "elastic",

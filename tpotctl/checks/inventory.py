@@ -98,7 +98,6 @@ class Honeypot:
     external: bool = False  # in EXTERNAL or a passive group: no probe reaches it from this host
     logstash_type: str = ""
     log_path: str = ""      # the log file (a glob for honeypots / ddospot) in the data folder
-    environment: Dict[str, str] = field(default_factory=dict)   # of the compose file (probe variants)
 
 
 def _int(value: Any) -> Optional[int]:
@@ -197,15 +196,6 @@ def honeypot_names(groups: Dict[str, str]) -> List[str]:
     return sorted(name for name, group in groups.items() if group in HONEYPOT_GROUPS + PASSIVE_GROUPS)
 
 
-def _environment(service: dict) -> Dict[str, str]:
-    """The environment of a service: a mapping (docker compose config) or a list of KEY=value."""
-    raw = service.get("environment") or {}
-    if isinstance(raw, dict):
-        return {str(key): "" if value is None else str(value) for key, value in raw.items()}
-    pairs = (str(item).partition("=") for item in raw if isinstance(item, (str, int)))
-    return {key: value for key, _, value in pairs if key}
-
-
 def _running_names(found: Iterable[Any]) -> set:
     return {c.name for c in found if getattr(c, "state", "") == "running"}
 
@@ -249,6 +239,5 @@ def inventory(repo_dir: str, env: Optional[Dict[str, str]] = None, *,
             external=name in EXTERNAL or group in PASSIVE_GROUPS,
             logstash_type=logstash_type,
             log_path=os.path.join(data, log_rel) if log_rel else "",
-            environment=_environment(service),
         ))
     return honeypots

@@ -5,9 +5,10 @@
 # events removed from Elasticsearch afterwards); it asks first, -y confirms.
 # Otherwise, for another host, with --nmap or --tools-only, the probes of old: a
 # few service specific requests on host (default: the address of this host),
-# then nmap over every published port. They are real attacks as far as T-Pot can
-# tell and show up in Kibana. ewsposter of this host sends nothing while they run
-# (ews_hold.sh), and one check runs at a time.
+# then nmap over the published ports the checks probe (the probe table leaves
+# some out, `tpot check honeypots --dry-run` names them). They are real attacks
+# as far as T-Pot can tell and show up in Kibana. ewsposter of this host sends
+# nothing while they run (ews_hold.sh), and one check runs at a time.
 
 # an exported CDPATH turns a cd into a search that prints the folder it found
 unset CDPATH
@@ -99,15 +100,14 @@ function fuCOMMAND_OF {   # package -> the command it brings
 # docker compose config --format json on stdin -> "T:22,...", "U:69,..." and the seconds the
 # scanned honeypots may still write lines after the last probe; $1 the services left out. What
 # the probe table of tpot check leaves alone is left out here too: the ports it never sends to or
-# only knocks at (by the port inside the container), whole honeypots (the LLM honeypots, ddospot),
-# sentrypeer in P2P mode; the block is generated from tpotctl/checks/probes.py
+# only knocks at (by the port inside the container), whole honeypots (the LLM honeypots, ddospot);
+# the block is generated from tpotctl/checks/probes.py
 function fuPORTS {
 	python3 -c '
 import json, sys
 # >>> probe table >>>
 # generated from tpotctl/checks/probes.py by python3 -m tpotctl.checks.probes --hptest
 skipped = {"beelzebub": "*", "conpot_IEC104": [["20000", "tcp"]], "conpot_beckhoff_cx": [["48898", "tcp"]], "conpot_kamstrup_382": [["1025", "tcp"]], "conpot_plc_modbus": [["502", "tcp"]], "ddospot": "*", "dionaea": [["20", "tcp"], ["42", "tcp"], ["69", "udp"], ["81", "tcp"]], "galah": "*"}
-variants = {"sentrypeer": {"env": "SENTRYPEER_PEER_TO_PEER", "skipped": "*"}}
 late = {"ciscoasa": 60, "ddospot": 60}
 # <<< probe table <<<
 config = json.load(sys.stdin)
@@ -115,10 +115,7 @@ left_out = set(sys.argv[1].split())
 tcp, udp = set(), set()
 wait = 0
 for name, service in (config.get("services") or {}).items():
-    environment = service.get("environment") or {}
     leave = skipped.get(name) or []
-    if name in variants and variants[name]["env"] in environment:
-        leave = variants[name]["skipped"]
     if name in left_out or leave == "*":
         continue
     scanned = False
@@ -269,8 +266,10 @@ Checks the honeypots of ${myDOCKERCOMPOSEYML}. Where the T-Pot Manager
 runs, this is tpot check honeypots: every honeypot of this host from its port
 to the Attack Map, the test events removed from Elasticsearch afterwards.
 For another host, with --nmap or --tools-only, or without the T-Pot Manager:
-service requests, then nmap over every published port of host (default: the
-address of this host); those probes are real attacks as far as T-Pot can tell.
+service requests, then nmap over the published ports the checks probe on host
+(default: the address of this host; the probe table leaves some out,
+tpot check honeypots --dry-run names them); those probes are real attacks as
+far as T-Pot can tell.
 ewsposter of this host sends nothing during a check, one check runs at a time.
 
   -B <file>      Read the sudo password from a file
@@ -320,7 +319,7 @@ if [ -z "${myNMAP}" ] && [ -z "${myTOOLS_ONLY}" ] && { [ -z "${myHOST}" ] || fuO
     exec "${myTPOT}" "${myARGS[@]}"
 fi
 
-fuUI_BANNER "Honeypot probe" "Probes the honeypots of this T-Pot: service requests, then nmap over every port."
+fuUI_BANNER "Honeypot probe" "Probes the honeypots of this T-Pot: service requests, then nmap over the ports the checks probe."
 
 fuMARK phase tools Checking the tools
 fuCHECKDEPS
@@ -407,7 +406,7 @@ while read -r myIKEPORT myNATT;
 wait
 fuUI_OK "Service requests sent."
 
-fuMARK phase scan Scanning every published port
+fuMARK phase scan Scanning the published ports
 if fuHAS nmap;
   then
     fuUI_INFO "Scanning the UDP / TCP ports of ${myDOCKERCOMPOSEYML} (up to ${myTIMEOUT}s) ..."

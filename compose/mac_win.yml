@@ -386,12 +386,9 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
-#    environment:
-#     - SENTRYPEER_PEER_TO_PEER=1
     networks:
      - honeypot_local
     ports:
-#     - "4222:4222/udp"
      - "5060:5060/tcp"
      - "5060:5060/udp"
 #     - "127.0.0.1:8082:8082"

@@ -1447,15 +1447,17 @@ fuSMOKE_PLAN () {
   # fuSMOKE_PLAN <image> ...: the smoke tests of docker/_tests for built images into
   # mySMOKE_NAMES / mySMOKE_ARGS (one string each), the images they need into
   # mySMOKE_IMAGES (once each) and what has none into mySMOKE_NOTES. A test has the name
-  # of its image, tpotinit has tpotinit_env, tpotinit_ilm and tpotinit_kibana; the
-  # Elastic Stack, the Attack Map, nginx and glutton have none
+  # of its image, tpotinit has tpotinit_env, tpotinit_ilm, tpotinit_kibana and
+  # tpotinit_modes, logstash has logstash_fixtures; Elasticsearch, Kibana, the Attack
+  # Map and glutton have none
   local myI myT myHAS
   local -a myTESTS
   mySMOKE_NAMES=() mySMOKE_ARGS=() mySMOKE_IMAGES=() mySMOKE_NOTES=()
   for myI in "$@"; do
     case "${myI}" in
-      elasticsearch|kibana|logstash|map|nginx|glutton) continue ;;
-      tpotinit) myTESTS=(tpotinit_env tpotinit_ilm tpotinit_kibana) ;;
+      elasticsearch|kibana|map|glutton) continue ;;
+      logstash) myTESTS=(logstash_fixtures) ;;
+      tpotinit) myTESTS=(tpotinit_env tpotinit_ilm tpotinit_kibana tpotinit_modes) ;;
       *) myTESTS=("${myI}") ;;
     esac
     myHAS=""
