@@ -401,8 +401,8 @@ class CliTest(unittest.TestCase):
         self.assertIn("lswebpasswd.lost holds 2 sensor(s) LS_WEB_USER does not name", text)
         code, text = self.run_cli("sensors", "import")
         self.assertEqual(code, 2, text)                    # no terminal, no --yes
-        self.assertIn(f"To drop one on purpose instead, remove its line from {lswebpasswd}.lost",
-                      text.replace("\n", " "))
+        self.assertIn(f"To drop one on purpose instead, remove its line from {lswebpasswd}.lost (or the whole file).",
+                      text)
         code, text = self.run_cli("sensors", "import", "-y")
         self.assertEqual(code, 0, text)
         self.assertIn("sensor-old-otter, sensor-old-lynx are in LS_WEB_USER now", text)

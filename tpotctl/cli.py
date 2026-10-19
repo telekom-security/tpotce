@@ -1056,8 +1056,9 @@ def run_import(source, kind: str, key: str, then: str, yes: bool, console, path:
     for entry in found:
         console.print(Text(f"  {entry.name}  (from {entry.source})"))
     if any(entry.source.endswith(".lost") for entry in found):
+        # one line, so that the path can be copied as it is
         console.print(Text(f"To drop one on purpose instead, remove its line from {path}.lost (or the whole file).",
-                           style="dim"))
+                           style="dim"), soft_wrap=True)
     count = f"{len(found)} {kind}{'s' if len(found) != 1 else ''}"
     if not confirm(f"Take {'this' if len(found) == 1 else 'these'} {count} over into {key}? {then}", yes):
         return 1
