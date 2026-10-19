@@ -59,7 +59,8 @@ write_passwd_file() {
     local myFILE="$1" myLOST="$1.lost" myENTRY myLINE myNAMES=$'\n' myNEW="" myREASON="" myOUT
     # kept / left: users import can take back (their hash is one myENV_HTPASSWD of env_validate.sh
     # takes), only: lines in another format, which stay in .lost and cannot come back
-    local myKEPT=0 myKEPT_ONLY=0 myLEFT=0 myLEFT_ONLY=0 myLEFT_NAMES=$'\n'
+    local myKEPT=0 myKEPT_ONLY=0 myLEFT=0 myLEFT_ONLY=0 myLEFT_NAMES=$'\n' myLEFT_SEEN=$'\n'
+    : "${myENV_HTPASSWD:?the hash formats of env_validate.sh are not there}"
     local -a myDROP=()
     for myENTRY in $2;
       do
@@ -150,6 +151,9 @@ write_passwd_file() {
                 myLEFT_NAMES+="${myLINE%%:*}"$'\n'
                 myLEFT=$((myLEFT + 1))
               else
+                # a line counts once, as import names it
+                [[ "${myLEFT_SEEN}" == *$'\n'"${myLINE}"$'\n'* ]] && continue
+                myLEFT_SEEN+="${myLINE}"$'\n'
                 myLEFT_ONLY=$((myLEFT_ONLY + 1))
             fi
         done < "${myLOST}"

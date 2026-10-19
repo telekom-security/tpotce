@@ -115,6 +115,10 @@ class WebUsersInitTest(unittest.TestCase):
         out = self.run_init(web=entry(ALICE))
         self.assertIn("# lswebpasswd.lost holds 1 sensor user(s) LS_WEB_USER does not name", out)
         self.assertIn("# lswebpasswd.lost keeps 1 line(s) with a hash in a format T-Pot does not take", out)
+        # the same line twice counts once, as import names it
+        Path(f"{self.lsweb}.lost").write_text(f"{legacy}\r\n{legacy}\n")
+        out = self.run_init(web=entry(ALICE))
+        self.assertIn("keeps 1 line(s)", out)
         # only such lines: no word of an import
         Path(f"{self.lsweb}.lost").write_text(f"{legacy}\n")
         out = self.run_init(web=entry(ALICE))
@@ -133,6 +137,17 @@ class WebUsersInitTest(unittest.TestCase):
         bash = re.compile(pattern.replace("[:space:]", r"\s"))
         for prefix, _ in users.SCHEMES:
             self.assertTrue(bash.match(f"x:{prefix}rest"), prefix)
+        # and no prefix the Manager does not have: the alternatives of the hash group, [aby] spelled out
+        group = re.search(r":\((.*)\)$", pattern).group(1)
+        prefixes = set()
+        for alternative in group.split("|"):
+            alternative = alternative.replace("\\", "")
+            choice = re.search(r"\[(\w+)\]", alternative)
+            if choice:
+                prefixes |= {alternative.replace(choice.group(), c) for c in choice.group(1)}
+            else:
+                prefixes.add(alternative)
+        self.assertEqual(prefixes, {prefix for prefix, _ in users.SCHEMES})
         for other in ("$1$", "{PLAIN}", "{SSHA}", "ab01FAKEdes"):
             self.assertIsNone(bash.match(f"x:{other}rest"), other)
 
