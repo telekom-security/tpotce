@@ -67,6 +67,7 @@ class Settings:
             found.append(envschema.Problem(
                 "error", key, f"is {values.get(key, 'linux')}, this host runs {ops.OSTYPE_TEXT[value]}: "
                               f"tpotinit does not start, set it to {value}"))
+        found += self.passwd_problems(values, found)
         if offered:
             defaults = {key: rule.default for key, rule in self.schema.items()}
             for rule in self.schema.values():
@@ -74,6 +75,31 @@ class Settings:
                     found += [envschema.Problem("warning", p.key, p.text)
                               for p in envschema.check(rule, values, defaults)]
         return found
+
+    def passwd_problems(self, values: Dict[str, str], found: List[envschema.Problem]) -> List[envschema.Problem]:
+        """On a HIVE: users of nginxpasswd / lswebpasswd (or their .lost) the .env does not name, the T-Pot
+        Manager takes them over (tpot users import, tpot sensors import). An empty WEB_USER stays the error
+        it is, its text names the import; everything else is a warning."""
+        from tpotctl import users
+        if values.get("TPOT_TYPE", "HIVE") != "HIVE":
+            return []
+        data = os.path.join(os.path.dirname(os.path.abspath(self.path)), values.get("TPOT_DATA_PATH") or "./data")
+        out = []
+        for key, name, kind, command in (("WEB_USER", "nginxpasswd", "web user", "tpot users import"),
+                                         ("LS_WEB_USER", "lswebpasswd", "sensor", "tpot sensors import")):
+            path = os.path.normpath(os.path.join(data, "nginx", "conf", name))
+            takeable = users.file_only(path, {u.name for u in users.parse(values.get(key) or "")})
+            if not takeable:
+                continue
+            sources = " and ".join(dict.fromkeys(e.source for e in takeable))
+            text = (f"{sources} {'hold' if ' and ' in sources else 'holds'} {len(takeable)} {kind}(s) it does not "
+                    f"name, take them over with: {command}.")
+            empty = [p for p in found if p.key == key and p.level == "error" and not (values.get(key) or "").strip()]
+            if empty:
+                empty[0].text = f"{empty[0].text.rstrip('.')}; {text}"
+            else:
+                out.append(envschema.Problem("warning", key, text))
+        return out
 
     def fixes(self, values: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """{key: value} for fixed keys that do not match this host (TPOT_OSTYPE): tpotinit would

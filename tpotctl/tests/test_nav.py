@@ -102,6 +102,7 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             if graph:
                 start = app.focused if app.focused in graph else next(iter(graph))
                 check(self, graph, start, key)
+            return sorted(w.id for w in graph if w.id)
 
     async def test_every_page(self):
         for key, *_rest in tapp.PANES:
@@ -123,6 +124,32 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             backend.pending_value = 1          # the button of the pending cleanups is reached too
             with self.subTest(kind=kind):
                 await self.check_page("checks", backend=backend)
+
+    async def test_the_take_over_buttons_are_reached(self):
+        """The users of nginxpasswd and the sensors of lswebpasswd.lost the .env does not name: the row of
+        their Take over button is reached as well."""
+        import os
+        from tpotctl import sensors, users
+        from tpotctl.tests import test_sensors, test_users
+        repo, passwd = test_users.checkout(self, web_user="")
+        with open(passwd, "w") as handle:
+            handle.write(f"{test_users.ALICE}\n")
+        sensor_repo = test_sensors.checkout(self, ls_web_user="")
+        with open(os.path.join(sensor_repo, "data", "nginx", "conf", "lswebpasswd.lost"), "w") as handle:
+            handle.write(f"{test_sensors.OTTER}\n")
+
+        class Backend(FakeBackend):
+            def users(self):
+                return users.load(repo)
+
+            def sensors(self):
+                return sensors.Registry(sensor_repo)
+
+            def sensor_status(self, days=7):
+                return sensors.Status()
+        for key, button in (("users", "user-import"), ("sensors", "sensor-import")):
+            with self.subTest(page=key):
+                self.assertIn(button, await self.check_page(key, backend=Backend()))
 
     async def test_left_at_the_start_of_a_line_goes_to_the_menu(self):
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)

@@ -107,6 +107,9 @@ def build_parser() -> argparse.ArgumentParser:
     remove = user_actions.add_parser("remove", help="remove a web user, not the last working one")
     remove.add_argument("name")
     remove.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    importing = user_actions.add_parser("import", help="take the web users of nginxpasswd and nginxpasswd.lost "
+                                                       "that WEB_USER does not name over into WEB_USER")
+    importing.add_argument("-y", "--yes", action="store_true", help="do not ask")
     sensors = sub.add_parser("sensors", help="sensors of this HIVE (default: list)")
     sensor_actions = sensors.add_subparsers(dest="sensors_command", metavar="ACTION")
     listing = sensor_actions.add_parser("list", help="sensors, their access and when they were last seen")
@@ -136,6 +139,9 @@ def build_parser() -> argparse.ArgumentParser:
     cert.add_argument("--no-restart", action="store_true", help="do not restart T-Pot after --renew")
     cert.add_argument("--no-become-pass", action="store_true", help="sudo on the sensors needs no password")
     cert.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    importing = sensor_actions.add_parser("import", help="give the sensors of lswebpasswd and lswebpasswd.lost "
+                                                         "that LS_WEB_USER does not name their access back")
+    importing.add_argument("-y", "--yes", action="store_true", help="do not ask")
     edition = sub.add_parser("edition", help="the editions of T-Pot and switching between them (default: list)")
     edition_actions = edition.add_subparsers(dest="edition_command", metavar="ACTION")
     edition_actions.add_parser("list", help="the editions, the one in use marked")
@@ -966,11 +972,17 @@ def run_users(args) -> int:
     store = tusers.load()
     console = _console()
     command = args.users_command or "list"
+    if command == "import":
+        return run_import(store.file_only(), store.take_over, "web user", "WEB_USER",
+                          "They can log in to the web UI then.", args.yes, console)
     if command == "list":
         entries = store.users()
+        found = store.file_only()
         if not sys.stdout.isatty():
             for user in entries:
                 print(f"{user.name}\t{user.scheme or '-'}\t{user.problem or 'ok'}")
+            if found:
+                say.hint(import_hint(found, "web user", "WEB_USER", "tpot users import"), stream=sys.stderr)
             return 0 if all(u.ok for u in entries) and entries else 1
         from rich import box
         from rich.table import Table
@@ -982,8 +994,17 @@ def run_users(args) -> int:
                 f"! {user.problem}, T-Pot will not start - tpot users "
                 f"{'passwd' if tusers.NAME_RE.match(user.name) else 'remove'} '{user.name}'", style="bold red")
             table.add_row(user.name, user.scheme or "-", state)
-        console.print(table if entries else Text("No web users, add one with: tpot users add", style="red"))
+        if entries:
+            console.print(table)
+        elif not found:
+            console.print(Text("No web users, add one with: tpot users add", style="red"))
+        else:
+            console.print(Text("No web users in WEB_USER.", style="red"))
+        if found:
+            console.print(Text(import_hint(found, "web user", "WEB_USER", "tpot users import"), style=MAGENTA))
         return 0 if entries and all(u.ok for u in entries) else 1
+    # before anything is asked: the change could not be written
+    store.check_writable()
     if command == "remove":
         if not args.yes:
             if not sys.stdin.isatty():
@@ -1010,6 +1031,31 @@ def run_users(args) -> int:
     return 0
 
 
+def import_hint(found, kind: str, key: str, command: str) -> str:
+    """The line for users of a passwd file (or its .lost) that the .env does not name."""
+    sources = " and ".join(dict.fromkeys(e.source for e in found))
+    return (f"{sources} {'holds' if ' and ' not in sources else 'hold'} {len(found)} {kind}(s) {key} does not "
+            f"name ({', '.join(e.name for e in found)}), take them over with: {command}")
+
+
+def run_import(found, take_over, kind: str, key: str, then: str, yes: bool, console) -> int:
+    """tpot users import / tpot sensors import: the entries of the passwd file and its .lost that the .env does
+    not name go into it, after a question (--yes: none; it only grants, nothing is removed)."""
+    if not found:
+        say.info(f"Nothing to take over, {key} names every {kind} of the passwd file and its .lost.", console.file)
+        return 0
+    from rich.text import Text
+    for entry in found:
+        console.print(Text(f"  {entry.name}  (from {entry.source})"))
+    count = f"{len(found)} {kind}{'s' if len(found) != 1 else ''}"
+    if not confirm(f"Take {'this' if len(found) == 1 else 'these'} {count} over into {key}? {then}", yes):
+        return 1
+    note = take_over([entry.name for entry in found])
+    say.ok(f"{', '.join(entry.name for entry in found)} {'is' if len(found) == 1 else 'are'} in {key} now, "
+           f"{note}.", console.file)
+    return 0
+
+
 def confirm(question: str, yes: bool) -> bool:
     if yes:
         return True
@@ -1018,16 +1064,20 @@ def confirm(question: str, yes: bool) -> bool:
     return ask(f"{question} [y/N] ").lower() == "y"
 
 
-def sensors_table(registry, status, days: int):
+def sensors_table(registry, status, days: int, found=()):
+    """found: the sensors of lswebpasswd / lswebpasswd.lost that can be taken over (Registry.file_only)."""
     from rich import box
     from rich.table import Table
     from rich.text import Text
     table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
     for column in ("Sensor", "Host", "Hostname", "Last seen", "State"):
         table.add_column(column, overflow="fold")
+    takeable = {entry.name: entry for entry in found}
     for sensor in registry.sensors():
         seen = status.sensors.get(sensor.name)
-        if not sensor.access:
+        if not sensor.access and sensor.name in takeable:
+            state = Text("to take over", style="yellow")
+        elif not sensor.access:
             state = Text("no access (LS_WEB_USER)", style="red")
         elif seen:
             state = Text("sending", style="green")
@@ -1035,9 +1085,12 @@ def sensors_table(registry, status, days: int):
             state = Text("unknown", style="yellow")
         else:
             state = Text(f"nothing in {days} days", style="yellow")
-        source = "" if sensor.source == "deployed" else " (migrated)"
+        source = "" if sensor.source == "deployed" else f" ({sensor.source})"
         table.add_row(sensor.name + source, sensor.host or "-", (seen.hostname if seen else sensor.hostname) or "-",
                       seen.last[:19].replace("T", " ") if seen else "-", state)
+    for name, entry in takeable.items():
+        if name not in registry.records:
+            table.add_row(f"{name} ({entry.source})", "-", "-", "-", Text("to take over", style="yellow"))
     return table
 
 
@@ -1050,13 +1103,19 @@ def run_sensors(args) -> int:
     if registry.migrated:
         console.print(Text(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. Add where they are "
                            f"with: tpot sensors set NAME --host ... --ssh-user ...", style=MAGENTA))
+    if command == "import":
+        return run_import(registry.file_only(), registry.take_over, "sensor", "LS_WEB_USER",
+                          "They can send to this HIVE then.", args.yes, console)
     if command == "list":
         status = tsensors.fetch_status(args.days)
         tsensors.link_hostnames(registry, status)
-        if not registry.sensors():
+        found = registry.file_only()
+        if not registry.sensors() and not found:
             console.print("No sensors yet, deploy one with: tpot sensors add")
         else:
-            console.print(sensors_table(registry, status, args.days))
+            console.print(sensors_table(registry, status, args.days, found))
+        if found:
+            console.print(Text(import_hint(found, "sensor", "LS_WEB_USER", "tpot sensors import"), style=MAGENTA))
         if status.problem:
             console.print(Text(status.problem, style="yellow"))
         for hostname, seen in sorted(status.unlinked.items()):
@@ -1066,6 +1125,7 @@ def run_sensors(args) -> int:
         return 0
     if command == "remove":
         registry.get(args.name)
+        registry.check_writable()           # before the question: the access could not be written
         if not confirm(f"Revoke the access of {args.name}? It cannot send to this HIVE any more.", args.yes):
             return 1
         note = registry.revoke(args.name)
@@ -1151,6 +1211,8 @@ class tempfile_inventory:
 def run_sensor_add(args, registry, console) -> int:
     from rich.text import Text
     from tpotctl import sensors as tsensors
+    # before anything is asked: the access of the new sensor could not be written
+    registry.check_writable()
     interactive = sys.stdin.isatty()
     host = tsensors.check_address(args.host or ask_for("IP or name of the sensor: ", "--host"))
     user = tsensors.check_user(args.ssh_user or ask_for("User T-Pot was installed with on the sensor: ",
@@ -1309,7 +1371,8 @@ def run_edition(args) -> int:
                 password = read_password(args)
         if not confirm(f"Switch to the {plan.target.title} edition? T-Pot stops meanwhile.", args.yes):
             return 1
-        add_user = (lambda: tusers.load().add(args.web_user, password)) if plan.needs_web_user else None
+        # a SENSOR does not serve nginxpasswd: what it holds is kept in nginxpasswd.lost, as tpotinit does
+        add_user = (lambda: tusers.load().add(args.web_user, password, keep=True)) if plan.needs_web_user else None
         editions.switch(plan, become_file=args.become_file, add_user=add_user)
     except (editions.EditionError, tusers.UsersError, OSError) as err:
         error(str(err))
