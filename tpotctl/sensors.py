@@ -238,6 +238,9 @@ class Registry:
         """The sensors of lswebpasswd and lswebpasswd.lost that LS_WEB_USER does not name."""
         return users.file_only(self.lswebpasswd, {u.name for u in self.entries()})
 
+    def read_problems(self) -> List[str]:
+        return users.read_problems(self.lswebpasswd)
+
     def check_writable(self) -> None:
         """SensorsError while lswebpasswd holds sensors LS_WEB_USER does not name: a change of the
         access would drop them."""
@@ -268,6 +271,8 @@ class Registry:
         why = users.refusal(self.lswebpasswd, known, "sensor", "tpot sensors import")
         if why:
             raise SensorsError(why)
+        # the lines the rewrite drops and nobody takes over (T-Pot does not accept them) go into .lost first
+        users.keep_or_refuse(self.lswebpasswd, users.foreign_lines(self.lswebpasswd, known), SensorsError)
         try:
             self.env.set("LS_WEB_USER", " ".join(entries))
             self.env.save()

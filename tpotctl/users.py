@@ -20,7 +20,9 @@ not name: writing it would drop them.
 
 import base64
 import binascii
+import errno
 import os
+import tempfile
 import re
 import shutil
 import subprocess
@@ -89,12 +91,29 @@ class FileEntry:
     source: str         # the file it comes from: nginxpasswd, nginxpasswd.lost, ...
 
 
-def _lines(path: str) -> List[str]:
+def _lines(path: str, strict: bool = False) -> List[str]:
+    """The lines of a passwd file, [] if it is not there; strict: OSError for one that cannot be read."""
     try:
         with open(path, encoding="utf-8", errors="replace") as handle:
             return [line.rstrip("\r\n") for line in handle]
-    except OSError:
+    except FileNotFoundError:
         return []
+    except OSError:
+        if strict:
+            raise
+        return []
+
+
+def read_problems(path: str) -> List[str]:
+    """Why the passwd file at path or its .lost cannot be read (not there is fine), one text each."""
+    problems = []
+    for name in (path, path + ".lost"):
+        try:
+            _lines(name, strict=True)
+        except OSError as err:
+            hint = ", log in again for the group tpot" if getattr(err, "errno", None) == errno.EACCES else ""
+            problems.append(f"cannot read {name}: {err.strerror or err}{hint}")
+    return problems
 
 
 def _usable(line: str) -> Optional[WebUser]:
@@ -135,32 +154,64 @@ def foreign_lines(path: str, known: Iterable[str]) -> List[str]:
 
 def keep_lines(path: str, lines: List[str]) -> int:
     """Append the lines to path.lost as tpotinit does (one that is there already is not added again);
-    how many went in."""
+    how many went in. OSError if it cannot: .lost is a link or no regular file, or the write fails."""
     lost = path + ".lost"
+    if not lines:
+        return 0
     if os.path.islink(lost):
-        raise OSError(f"{lost} is a link")
-    there = set(_lines(lost))
+        raise OSError(errno.ELOOP, "it is a link", lost)
+    if os.path.exists(lost) and not os.path.isfile(lost):
+        raise OSError(errno.EISDIR, "it is not a regular file", lost)
+    there = set(_lines(lost, strict=True))
     new = [line for line in dict.fromkeys(lines) if line not in there]
     if new:
         created = not os.path.exists(lost)
         with open(lost, "a", encoding="utf-8") as handle:
-            for line in new:
-                handle.write(line + "\n")
+            handle.write("".join(line + "\n" for line in new))
         if created:
             os.chmod(lost, 0o660)
     return len(new)
 
 
 def drop_lost(path: str, names: Iterable[str]) -> None:
-    """Remove the lines of these users from path.lost, in place; nothing if it is not there."""
+    """Remove the lines of these users from path.lost; nothing if it is not there. .lost is not bind
+    mounted, so it is replaced as a whole: a new file in the same folder (mode 660, the group of the
+    folder), renamed over it."""
     lost = path + ".lost"
     names = set(names)
     if not os.path.isfile(lost) or os.path.islink(lost):
         return
-    rest = [line for line in _lines(lost) if line.partition(":")[0] not in names]
-    with open(lost, "w", encoding="utf-8") as handle:
-        for line in rest:
-            handle.write(line + "\n")
+    lines = _lines(lost, strict=True)
+    rest = [line for line in lines if line.partition(":")[0] not in names]
+    if rest == lines:
+        return
+    folder = os.path.dirname(lost) or "."
+    handle, temp = tempfile.mkstemp(prefix=".nginx-lost-", dir=folder)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            out.write("".join(line + "\n" for line in rest))
+        os.chmod(temp, 0o660)
+        try:
+            os.chown(temp, -1, os.stat(folder).st_gid)
+        except OSError:
+            pass
+        os.replace(temp, lost)
+    except BaseException:
+        try:
+            os.unlink(temp)
+        except OSError:
+            pass
+        raise
+
+
+def keep_or_refuse(path: str, lines: List[str], error: Callable[[str], Exception]) -> int:
+    """keep_lines, and error(text) when it cannot: then nothing is written, the file stays as it is."""
+    try:
+        return keep_lines(path, lines)
+    except OSError as err:
+        name = os.path.basename(path)
+        raise error(f"{len(lines)} line(s) of {name} cannot be kept in {path}.lost ({err.strerror or err}), "
+                    f"{name} stays as it is")
 
 
 def refusal(path: str, known: Iterable[str], kind: str, command: str) -> str:
@@ -240,6 +291,9 @@ class Store:
         """The users of nginxpasswd and nginxpasswd.lost that WEB_USER does not name."""
         return file_only(self.passwd_path, {u.name for u in self.users()})
 
+    def read_problems(self) -> List[str]:
+        return read_problems(self.passwd_path)
+
     def check_writable(self) -> None:
         """UsersError while nginxpasswd holds users WEB_USER does not name: a change would drop them."""
         why = refusal(self.passwd_path, {u.name for u in self.users()}, "web", "tpot users import")
@@ -294,23 +348,21 @@ class Store:
         if not any(u.ok for u in parse(value)):
             raise UsersError("no working web user would be left")
         names = {u.name for u in self.users()} | {u.name for u in parse(value)}
-        kept = 0
-        if keep:
-            try:
-                kept = keep_lines(self.passwd_path, foreign_lines(self.passwd_path, {u.name for u in parse(value)}))
-            except OSError as err:
-                raise UsersError(f"{os.path.basename(self.passwd_path)}.lost cannot be written: "
-                                 f"{err.strerror or err}")
-        else:
+        if not keep:
             why = refusal(self.passwd_path, names, "web", "tpot users import")
             if why:
                 raise UsersError(why)
+        # what the rewrite drops and nobody takes over goes into .lost first, as tpotinit does: with
+        # keep every line of a name the new value lacks, else the lines T-Pot does not accept (the
+        # others were refused above)
+        dropped = foreign_lines(self.passwd_path, {u.name for u in parse(value)} if keep else names)
+        kept = keep_or_refuse(self.passwd_path, dropped, UsersError)
         try:
             self.env.set("WEB_USER", value)
             self.env.save()
         except EnvError as err:
             raise UsersError(str(err))
-        also = f", {kept} line(s) of nginxpasswd are kept in nginxpasswd.lost (tpot users import)" if kept else ""
+        also = f", {kept} line(s) of nginxpasswd are kept in nginxpasswd.lost" if kept else ""
         try:
             # in place: the file is bind mounted on its own, see the module docstring
             with open(self.passwd_path, "w", encoding="utf-8") as handle:

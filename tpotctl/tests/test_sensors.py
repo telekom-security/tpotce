@@ -330,6 +330,26 @@ class FileOnlyTest(unittest.TestCase):
         self.registry().grant("sensor-new-fox", "pw")
         self.assertEqual([u.name for u in self.registry().entries()], ["sensor-new-fox"])
 
+    def test_a_line_t_pot_does_not_take_goes_into_the_lost_file(self):
+        with open(self.lswebpasswd, "w") as handle:
+            handle.write("legacy:$1$salt$legacyhash\n")
+        registry = self.registry()
+        self.assertEqual([e.name for e in registry.file_only()], ["sensor-old-otter", "sensor-old-lynx"])
+        registry.grant("sensor-new-fox", "pw")
+        self.assertEqual(self.read(self.lswebpasswd + ".lost"), f"{OTTER}\n{LYNX}\nlegacy:$1$salt$legacyhash\n")
+        self.assertEqual(self.read(self.lswebpasswd), fake_hash("sensor-new-fox", "pw") + "\n")
+
+    def test_no_change_when_the_lost_file_cannot_take_them(self):
+        os.remove(self.lswebpasswd + ".lost")
+        os.mkdir(self.lswebpasswd + ".lost")
+        with open(self.lswebpasswd, "w") as handle:
+            handle.write("legacy:$1$salt$legacyhash\n")
+        with self.assertRaises(sensors.SensorsError) as caught:
+            self.registry().grant("sensor-new-fox", "pw")
+        self.assertIn("cannot be kept in", str(caught.exception))
+        self.assertEqual(self.read(self.lswebpasswd), "legacy:$1$salt$legacyhash\n")
+        self.assertEqual(self.registry().entries(), [])
+
     def test_env_check_warns(self):
         from tpotctl import settings
         problems = [p for p in settings.load(self.repo).problems() if p.key == "LS_WEB_USER"]
@@ -381,6 +401,8 @@ class CliTest(unittest.TestCase):
         self.assertIn("lswebpasswd.lost holds 2 sensor(s) LS_WEB_USER does not name", text)
         code, text = self.run_cli("sensors", "import")
         self.assertEqual(code, 2, text)                    # no terminal, no --yes
+        self.assertIn(f"To drop one on purpose instead, remove its line from {lswebpasswd}.lost",
+                      text.replace("\n", " "))
         code, text = self.run_cli("sensors", "import", "-y")
         self.assertEqual(code, 0, text)
         self.assertIn("sensor-old-otter, sensor-old-lynx are in LS_WEB_USER now", text)

@@ -332,6 +332,65 @@ class FileOnlyTest(unittest.TestCase):
         found = {e.name: e for e in self.store().file_only()}
         self.assertEqual((found["alice"].source, found["alice"].line), ("nginxpasswd", ALICE))
 
+    def legacy_checkout(self):
+        """WEB_USER: tsec; nginxpasswd: tsec and a line nginx takes but T-Pot does not ($1$)."""
+        repo, passwd = checkout(self)
+        with open(passwd, "w") as handle:
+            handle.write(users.parse(APR1)[0].line + "\nlegacy:$1$salt$legacyhash\n")
+        return repo, passwd
+
+    def test_a_line_t_pot_does_not_take_goes_into_the_lost_file(self):
+        repo, passwd = self.legacy_checkout()
+        store = users.load(repo, hasher=fake_hash)
+        self.assertEqual(store.file_only(), [])                  # not offered, it does not block either
+        self.assertIn("1 line(s) of nginxpasswd are kept in nginxpasswd.lost", store.add("carol", "pw"))
+        self.assertEqual(self.read(passwd + ".lost"), "legacy:$1$salt$legacyhash\n")
+        self.assertEqual(oct(os.stat(passwd + ".lost").st_mode & 0o777), "0o660")
+        self.assertNotIn("legacy", self.read(passwd))
+        # removing a user of WEB_USER keeps nothing
+        users.load(repo, hasher=fake_hash).remove("carol")
+        self.assertEqual(self.read(passwd + ".lost"), "legacy:$1$salt$legacyhash\n")
+
+    def test_no_change_when_the_lost_file_cannot_take_them(self):
+        repo, passwd = self.legacy_checkout()
+        os.mkdir(passwd + ".lost")
+        before = self.read(passwd)
+        with self.assertRaises(users.UsersError) as caught:
+            users.load(repo, hasher=fake_hash).add("carol", "pw")
+        self.assertEqual(str(caught.exception), f"1 line(s) of nginxpasswd cannot be kept in {passwd}.lost (it is not "
+                                                f"a regular file), nginxpasswd stays as it is")
+        self.assertEqual(self.read(passwd), before)
+        self.assertEqual([u.name for u in users.load(repo).users()], ["tsec"])
+
+    def test_take_over_replaces_the_lost_file(self):
+        with open(self.lost, "w") as handle:
+            handle.write(f"erin:$apr1$x$y\n{ALICE}\n")
+        os.chmod(self.lost, 0o644)
+        inode = os.stat(self.lost).st_ino
+        users.drop_lost(self.passwd, ["alice"])
+        self.assertEqual(self.read(self.lost), "erin:$apr1$x$y\n")
+        self.assertEqual(oct(os.stat(self.lost).st_mode & 0o777), "0o660")
+        self.assertNotEqual(os.stat(self.lost).st_ino, inode)
+        self.assertEqual([n for n in os.listdir(os.path.dirname(self.lost)) if n.startswith(".")], [])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads every file")
+    @unittest.skipUnless(textual, "Rich is not installed, run with the venv of tpot")
+    def test_import_names_a_file_it_cannot_read(self):
+        from tpotctl import cli
+        with open(self.lost, "w") as handle:
+            handle.write("erin:$apr1$x$y\n")
+        os.chmod(self.lost, 0)
+        self.addCleanup(os.chmod, self.lost, 0o600)
+        original = users.load
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(users, "load", lambda: original(self.repo, hasher=fake_hash)), \
+                mock.patch.object(cli.os, "geteuid", return_value=1000, create=True), \
+                redirect_stdout(out), redirect_stderr(err):
+            self.assertEqual(cli.main(["users", "import", "-y"]), 1)
+        text = out.getvalue() + err.getvalue()
+        self.assertIn(f"cannot read {self.lost}: Permission denied, log in again for the group tpot", text)
+        self.assertNotIn("Nothing to take over", text)
+
     def test_keep_puts_them_into_the_lost_file(self):
         """The edition switch of a SENSOR to a HIVE: its nginxpasswd is not served, its users are kept."""
         with open(self.lost, "w") as handle:
@@ -368,6 +427,7 @@ class FileOnlyTest(unittest.TestCase):
                           "with: tpot users import", text)
             self.assertIn("take them over first: tpot users import", text)
             self.assertIn("alice  (from nginxpasswd)", text)
+            self.assertNotIn("To drop one on purpose", text)          # nothing of .lost
             self.assertIn("Nothing to take over", text)
         self.assertEqual(self.read(self.passwd), f"{ALICE}\n{BOB}\n")
         self.assertEqual([u.name for u in users.load(self.repo).users()], ["alice", "bob"])

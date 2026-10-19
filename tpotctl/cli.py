@@ -973,8 +973,8 @@ def run_users(args) -> int:
     console = _console()
     command = args.users_command or "list"
     if command == "import":
-        return run_import(store.file_only(), store.take_over, "web user", "WEB_USER",
-                          "They can log in to the web UI then.", args.yes, console)
+        return run_import(store, "web user", "WEB_USER", "They can log in to the web UI then.", args.yes, console,
+                          store.passwd_path)
     if command == "list":
         entries = store.users()
         found = store.file_only()
@@ -1038,19 +1038,30 @@ def import_hint(found, kind: str, key: str, command: str) -> str:
             f"name ({', '.join(e.name for e in found)}), take them over with: {command}")
 
 
-def run_import(found, take_over, kind: str, key: str, then: str, yes: bool, console) -> int:
-    """tpot users import / tpot sensors import: the entries of the passwd file and its .lost that the .env does
-    not name go into it, after a question (--yes: none; it only grants, nothing is removed)."""
+def run_import(source, kind: str, key: str, then: str, yes: bool, console, path: str) -> int:
+    """tpot users import / tpot sensors import: the entries of the passwd file at path and its .lost that the .env
+    does not name go into it, after a question (--yes: none; it only grants, nothing is removed). source is the
+    users.Store or sensors.Registry; a file that cannot be read is named (exit 1), it is not "nothing"."""
+    problems = source.read_problems()
+    if problems:
+        for problem in problems:
+            error(problem)
+        return 1
+    found = source.file_only()
     if not found:
-        say.info(f"Nothing to take over, {key} names every {kind} of the passwd file and its .lost.", console.file)
+        say.info(f"Nothing to take over, {key} names every {kind} of {os.path.basename(path)} and its .lost.",
+                 console.file)
         return 0
     from rich.text import Text
     for entry in found:
         console.print(Text(f"  {entry.name}  (from {entry.source})"))
+    if any(entry.source.endswith(".lost") for entry in found):
+        console.print(Text(f"To drop one on purpose instead, remove its line from {path}.lost (or the whole file).",
+                           style="dim"))
     count = f"{len(found)} {kind}{'s' if len(found) != 1 else ''}"
     if not confirm(f"Take {'this' if len(found) == 1 else 'these'} {count} over into {key}? {then}", yes):
         return 1
-    note = take_over([entry.name for entry in found])
+    note = source.take_over([entry.name for entry in found])
     say.ok(f"{', '.join(entry.name for entry in found)} {'is' if len(found) == 1 else 'are'} in {key} now, "
            f"{note}.", console.file)
     return 0
@@ -1104,8 +1115,8 @@ def run_sensors(args) -> int:
         console.print(Text(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. Add where they are "
                            f"with: tpot sensors set NAME --host ... --ssh-user ...", style=MAGENTA))
     if command == "import":
-        return run_import(registry.file_only(), registry.take_over, "sensor", "LS_WEB_USER",
-                          "They can send to this HIVE then.", args.yes, console)
+        return run_import(registry, "sensor", "LS_WEB_USER", "They can send to this HIVE then.", args.yes, console,
+                          registry.lswebpasswd)
     if command == "list":
         status = tsensors.fetch_status(args.days)
         tsensors.link_hostnames(registry, status)
