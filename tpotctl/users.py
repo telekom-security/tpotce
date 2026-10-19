@@ -146,6 +146,20 @@ def file_only(path: str, known: Iterable[str], lost: bool = True) -> List[FileEn
     return list(live.values()) + list(kept.values())
 
 
+def kept_only(path: str, known: Iterable[str]) -> List[FileEntry]:
+    """The lines of the passwd file at path and of path.lost whose user is not in known and whose hash is
+    in a format T-Pot does not take: file_only() cannot offer them, they only stay in .lost. Each line once."""
+    known = set(known)
+    found: Dict[str, FileEntry] = {}
+    for name in (path, path + ".lost"):
+        for line in _lines(name):
+            user_name, sep, _ = line.partition(":")
+            if not line.strip() or user_name in known or line in found or _usable(line):
+                continue
+            found[line] = FileEntry(user_name if sep else "?", encode(line), line, os.path.basename(name))
+    return list(found.values())
+
+
 def foreign_lines(path: str, known: Iterable[str]) -> List[str]:
     """Every line of the passwd file at path whose user is not in known, as tpotinit keeps them."""
     known = set(known)
@@ -290,6 +304,10 @@ class Store:
     def file_only(self) -> List[FileEntry]:
         """The users of nginxpasswd and nginxpasswd.lost that WEB_USER does not name."""
         return file_only(self.passwd_path, {u.name for u in self.users()})
+
+    def kept_only(self) -> List[FileEntry]:
+        """The lines of nginxpasswd and nginxpasswd.lost in a hash format T-Pot does not take."""
+        return kept_only(self.passwd_path, {u.name for u in self.users()})
 
     def read_problems(self) -> List[str]:
         return read_problems(self.passwd_path)

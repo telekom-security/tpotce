@@ -1041,18 +1041,26 @@ def import_hint(found, kind: str, key: str, command: str) -> str:
 def run_import(source, kind: str, key: str, then: str, yes: bool, console, path: str) -> int:
     """tpot users import / tpot sensors import: the entries of the passwd file at path and its .lost that the .env
     does not name go into it, after a question (--yes: none; it only grants, nothing is removed). source is the
-    users.Store or sensors.Registry; a file that cannot be read is named (exit 1), it is not "nothing"."""
+    users.Store or sensors.Registry; a file that cannot be read is named (exit 1), it is not "nothing"; lines with
+    a hash in a format T-Pot does not take (kept_only) are named, they cannot come back."""
     problems = source.read_problems()
     if problems:
         for problem in problems:
             error(problem)
         return 1
     found = source.file_only()
-    if not found:
-        say.info(f"Nothing to take over, {key} names every {kind} of {os.path.basename(path)} and its .lost.",
-                 console.file)
-        return 0
     from rich.text import Text
+    kept = source.kept_only()
+    if kept:
+        names = ", ".join(dict.fromkeys(entry.name for entry in kept))
+        # one line, so that the path can be copied as it is
+        console.print(Text(f"{len(kept)} line(s) {key} does not name have a hash in a format T-Pot does not take "
+                           f"({names}): they cannot be taken over and only stay in {path}.lost, remove them there "
+                           f"to drop the note of each start.", style="dim"), soft_wrap=True)
+    if not found:
+        say.info(f"Nothing to take over, {key} names every {kind} of {os.path.basename(path)} and its .lost"
+                 f"{' that T-Pot can take' if kept else ''}.", console.file)
+        return 0
     for entry in found:
         console.print(Text(f"  {entry.name}  (from {entry.source})"))
     if any(entry.source.endswith(".lost") for entry in found):

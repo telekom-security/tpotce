@@ -23,9 +23,9 @@ was; a HIVE without WEB_USER is told what nginxpasswd still holds. The
 .lost files get the modes of nginx conf (664) and stay with TPOT_PERSISTENCE=off.
 
 The image only provides the tools (busybox base64, grep, chmod): create_web_users and the
-functions around it of dist/entrypoint.sh, dist/bin/data_modes.sh and dist/bin/clean.sh of
-this checkout run inside it on a data folder of the container, so an older image tests the
-current rules.
+functions around it of dist/entrypoint.sh, the hash formats of dist/bin/env_validate.sh,
+dist/bin/data_modes.sh and dist/bin/clean.sh of this checkout run inside it on a data folder
+of the container, so an older image tests the current rules.
 
 Options:
   --image IMAGE      Image to test. Defaults to docker/tpotinit/docker-compose.yml.
@@ -72,6 +72,9 @@ mode() { stat -c %a "$1"; }
 b64() { printf '%s' "$1" | base64 -w0; }
 content() { tr '\n' '|' < "$1"; }
 
+# the hash formats T-Pot takes, as tpotinit has them from env_validate.sh
+eval "$(grep '^myENV_HTPASSWD=' /opt/tpot/bin/env_validate.sh)"
+check "env_validate: the hash formats are there" "yes" "$([ -n "${myENV_HTPASSWD:-}" ] && echo yes || echo no)"
 eval "$(sed -n '/^write_passwd_file() {$/,/^}$/p; /^create_web_users() {$/,/^}$/p; /^web_users_hint() {$/,/^}$/p; /^\. \/opt\/tpot\/bin\/data_modes.sh$/p; /^update_permissions() {$/,/^}$/p' /work/entrypoint.sh)"
 check "entrypoint: the functions are there" "function function function function" \
       "$(type -t write_passwd_file) $(type -t create_web_users) $(type -t web_users_hint) $(type -t update_permissions)"
@@ -152,6 +155,19 @@ check "lost folder: named" "1" "$(grep -c '^# Error: the lines of /data/nginx/co
 check "lost folder: nothing said to be kept" "0" "$(grep -c 'kept in lswebpasswd.lost' <<<"${out}")"
 rmdir "${CONF}/lswebpasswd.lost"
 
+# 7b. a line with a hash in a format T-Pot does not take is kept, but not named for the import
+LEGACY='legacy:$1$legacysalt$legacyhashlegacyhash'
+fresh
+printf '%s\n%s\n' "${OTTER}" "${LEGACY}" > "${CONF}/lswebpasswd"
+TPOT_TYPE=HIVE WEB_USER="$(b64 "${ALICE}")" LS_WEB_USER=""
+out="$(create_web_users /data)"
+check "other format: both kept" "${OTTER}|${LEGACY}|" "$(content "${CONF}/lswebpasswd.lost")"
+check "other format: one to take back" "1" "$(grep -c '^# Warning: 1 sensor user(s) of lswebpasswd are not in LS_WEB_USER and lose access' <<<"${out}")"
+check "other format: one only kept" "1" "$(grep -c '^# Warning: 1 line(s) of lswebpasswd that LS_WEB_USER does not name lose access, their hash is in a format T-Pot does not take' <<<"${out}")"
+out="$(create_web_users /data)"
+check "other format, next start: one to take back" "1" "$(grep -c '^# lswebpasswd.lost holds 1 sensor user(s) LS_WEB_USER does not name' <<<"${out}")"
+check "other format, next start: one only kept" "1" "$(grep -c '^# lswebpasswd.lost keeps 1 line(s) with a hash in a format T-Pot does not take' <<<"${out}")"
+
 # 8. the modes of the .lost files after update_permissions, and TPOT_PERSISTENCE=off keeps them
 fresh
 mkdir -p /data/cowrie/log /data/nginx/cert
@@ -188,6 +204,7 @@ main() {
   output="$(docker run --rm --entrypoint bash \
     -v "${TPOTINIT_DIR}/dist/bin/data_modes.sh:/opt/tpot/bin/data_modes.sh:ro" \
     -v "${TPOTINIT_DIR}/dist/bin/clean.sh:/opt/tpot/bin/clean.sh:ro" \
+    -v "${TPOTINIT_DIR}/dist/bin/env_validate.sh:/opt/tpot/bin/env_validate.sh:ro" \
     -v "${TPOTINIT_DIR}/dist/entrypoint.sh:/work/entrypoint.sh:ro" \
     -v "${TEST_TMP_ROOT}/run.sh:/work/run.sh:ro" \
     "${IMAGE}" /work/run.sh 2>&1)" || status=$?

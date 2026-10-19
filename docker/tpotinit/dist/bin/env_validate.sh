@@ -66,13 +66,17 @@ fuCOMPOSE_HAS() {
     grep -qE "^  (${myPATTERN}):" "${COMPOSE}" 2>/dev/null
 }
 
+# A htpasswd line T-Pot takes: name:hash with a hash of bcrypt, apr1, SHA-256 / SHA-512 crypt or SHA-1
+# (the SCHEMES of tpotctl/users.py); the entrypoint counts the lines of a .lost file with it too
+myENV_HTPASSWD='^([^:[:space:]]+):(\$apr1\$|\$2[aby]\$|\$5\$|\$6\$|\{SHA\})'
+
 # Every entry has to be base64 of "name:secret", $1 = variable, $2 = htpasswd (the
 # secret is a htpasswd hash, as genuser.sh creates it) | basic (a plain password,
 # as for the basic auth of a SENSOR). Only the names are shown.
 fuCREDENTIALS() {
     local myVAR="$1" myMODE="$2" myENTRY myLINE
     local myBASE64='^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$'
-    local myHTPASSWD='^([^:[:space:]]+):(\$apr1\$|\$2[aby]\$|\$5\$|\$6\$|\{SHA\})'
+    local myHTPASSWD="${myENV_HTPASSWD}"
     local myBASIC='^([^:[:space:]]+):.+'
     for myENTRY in $(fuVAL "${myVAR}");
       do

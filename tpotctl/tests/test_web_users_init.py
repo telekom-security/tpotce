@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ENTRYPOINT = ROOT / "docker" / "tpotinit" / "dist" / "entrypoint.sh"
+ENV_VALIDATE = ROOT / "docker" / "tpotinit" / "dist" / "bin" / "env_validate.sh"
 FUNCTIONS = ("write_passwd_file", "create_web_users", "web_users_hint")
 
 ALICE = "alice:$2y$05$aliceshashaliceshashaliceshashaliceshashaliceshash"
@@ -28,7 +29,8 @@ def entry(line):
 
 def functions():
     text = ENTRYPOINT.read_text()
-    found = []
+    # the hash formats T-Pot takes, as the entrypoint has them from env_validate.sh
+    found = [re.search(r"^myENV_HTPASSWD=.*$", ENV_VALIDATE.read_text(), re.M).group()]
     for name in FUNCTIONS:
         match = re.search(rf"^{name}\(\) \{{.*?^\}}", text, re.M | re.S)
         assert match, name
@@ -101,6 +103,53 @@ class WebUsersInitTest(unittest.TestCase):
         self.nginx.write_text("alice:$apr1$older$hash\n")
         self.run_init(web=entry(ALICE))
         self.assertEqual(self.lost(self.nginx), f"{BOB}\n")
+
+    def test_a_hash_in_another_format_is_only_kept(self):
+        legacy = "legacy:$1$legacysalt$legacyhashlegacyhash"
+        self.lsweb.write_text(f"{OTTER}\n{legacy}\n")
+        out = self.run_init(web=entry(ALICE))
+        self.assertEqual(self.lost(self.lsweb), f"{OTTER}\n{legacy}\n")
+        self.assertIn("# Warning: 1 sensor user(s) of lswebpasswd are not in LS_WEB_USER and lose access", out)
+        self.assertIn("# Warning: 1 line(s) of lswebpasswd that LS_WEB_USER does not name lose access, their hash "
+                      "is in a format T-Pot does not take, so they are only kept in lswebpasswd.lost", out)
+        out = self.run_init(web=entry(ALICE))
+        self.assertIn("# lswebpasswd.lost holds 1 sensor user(s) LS_WEB_USER does not name", out)
+        self.assertIn("# lswebpasswd.lost keeps 1 line(s) with a hash in a format T-Pot does not take", out)
+        # the same line twice counts once, as import names it
+        Path(f"{self.lsweb}.lost").write_text(f"{legacy}\r\n{legacy}\n")
+        out = self.run_init(web=entry(ALICE))
+        self.assertIn("keeps 1 line(s)", out)
+        # only such lines: no word of an import
+        Path(f"{self.lsweb}.lost").write_text(f"{legacy}\n")
+        out = self.run_init(web=entry(ALICE))
+        self.assertNotIn("tpot sensors import", out)
+        self.assertIn("keeps 1 line(s)", out)
+
+    def test_a_name_counts_once(self):
+        Path(f"{self.nginx}.lost").write_text(f"{BOB}\nbob:$apr1$newer$hash\n")
+        out = self.run_init(web=entry(ALICE))
+        self.assertIn("nginxpasswd.lost holds 1 web user(s)", out)
+
+    def test_the_formats_are_those_of_the_manager(self):
+        """env_validate.sh (tpotinit) and users.SCHEMES (the T-Pot Manager) take the same hash formats."""
+        from tpotctl import users
+        pattern = re.search(r"^myENV_HTPASSWD='(.*)'$", ENV_VALIDATE.read_text(), re.M).group(1)
+        bash = re.compile(pattern.replace("[:space:]", r"\s"))
+        for prefix, _ in users.SCHEMES:
+            self.assertTrue(bash.match(f"x:{prefix}rest"), prefix)
+        # and no prefix the Manager does not have: the alternatives of the hash group, [aby] spelled out
+        group = re.search(r":\((.*)\)$", pattern).group(1)
+        prefixes = set()
+        for alternative in group.split("|"):
+            alternative = alternative.replace("\\", "")
+            choice = re.search(r"\[(\w+)\]", alternative)
+            if choice:
+                prefixes |= {alternative.replace(choice.group(), c) for c in choice.group(1)}
+            else:
+                prefixes.add(alternative)
+        self.assertEqual(prefixes, {prefix for prefix, _ in users.SCHEMES})
+        for other in ("$1$", "{PLAIN}", "{SSHA}", "ab01FAKEdes"):
+            self.assertIsNone(bash.match(f"x:{other}rest"), other)
 
     def test_the_same_content_keeps_nothing(self):
         self.nginx.write_text(f"{ALICE}\n")
