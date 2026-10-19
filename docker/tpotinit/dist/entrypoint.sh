@@ -56,7 +56,10 @@ source /opt/tpot/bin/env_validate.sh
 # $1 = file, $2 = the entries (base64 of name:hash), $3 = web / sensor, $4 = the key, $5 = the command
 # that takes them back, $6 = keep (yes / no)
 write_passwd_file() {
-    local myFILE="$1" myLOST="$1.lost" myENTRY myLINE myNAMES=$'\n' myNEW="" myKEPT=0 myLEFT=0 myREASON="" myOUT
+    local myFILE="$1" myLOST="$1.lost" myENTRY myLINE myNAMES=$'\n' myNEW="" myREASON="" myOUT
+    # kept / left: users import can take back (their hash is one myENV_HTPASSWD of env_validate.sh
+    # takes), only: lines in another format, which stay in .lost and cannot come back
+    local myKEPT=0 myKEPT_ONLY=0 myLEFT=0 myLEFT_ONLY=0 myLEFT_NAMES=$'\n'
     local -a myDROP=()
     for myENTRY in $2;
       do
@@ -104,7 +107,12 @@ write_passwd_file() {
             grep -Fxq -- "${myLINE}" "${myLOST}" && continue
             if myOUT="$( { printf '%s\n' "${myLINE}" >> "${myLOST}"; } 2>&1 )";
               then
-                myKEPT=$((myKEPT + 1))
+                if [[ "${myLINE}" =~ ${myENV_HTPASSWD} ]];
+                  then
+                    myKEPT=$((myKEPT + 1))
+                  else
+                    myKEPT_ONLY=$((myKEPT_ONLY + 1))
+                fi
               else
                 myREASON="${myOUT##*: }"
                 myREASON="${myREASON:-the write failed}"
@@ -120,21 +128,38 @@ write_passwd_file() {
     fi
     # truncated and written, the inode stays
     printf '%s' "${myNEW}" > "${myFILE}"
-    if [[ "${myKEPT}" -gt 0 ]];
+    if [[ $((myKEPT + myKEPT_ONLY)) -gt 0 ]];
       then
         echo
-        echo "# Warning: ${myKEPT} $3 user(s) of ${myFILE##*/} are not in $4 and lose access, they are kept in ${myLOST##*/}. Take them back with: $5"
+        [[ "${myKEPT}" -gt 0 ]] \
+          && echo "# Warning: ${myKEPT} $3 user(s) of ${myFILE##*/} are not in $4 and lose access, they are kept in ${myLOST##*/}. Take them back with: $5"
+        [[ "${myKEPT_ONLY}" -gt 0 ]] \
+          && echo "# Warning: ${myKEPT_ONLY} line(s) of ${myFILE##*/} that $4 does not name lose access, their hash is in a format T-Pot does not take, so they are only kept in ${myLOST##*/} and cannot be taken back (remove them there to drop this note)."
         echo
     elif [[ "$6" == "yes" && -f "${myLOST}" && -s "${myLOST}" && ! -L "${myLOST}" ]];
       then
         while IFS= read -r myLINE || [[ -n "${myLINE}" ]];
           do
+            myLINE="${myLINE%$'\r'}"
             [[ -n "${myLINE//[[:space:]]/}" ]] || continue
-            [[ "${myNAMES}" == *$'\n'"${myLINE%%:*}"$'\n'* ]] || myLEFT=$((myLEFT + 1))
+            [[ "${myNAMES}" == *$'\n'"${myLINE%%:*}"$'\n'* ]] && continue
+            if [[ "${myLINE}" =~ ${myENV_HTPASSWD} ]];
+              then
+                # a name counts once, import takes its last line
+                [[ "${myLEFT_NAMES}" == *$'\n'"${myLINE%%:*}"$'\n'* ]] && continue
+                myLEFT_NAMES+="${myLINE%%:*}"$'\n'
+                myLEFT=$((myLEFT + 1))
+              else
+                myLEFT_ONLY=$((myLEFT_ONLY + 1))
+            fi
         done < "${myLOST}"
         if [[ "${myLEFT}" -gt 0 ]];
           then
             echo "# ${myLOST##*/} holds ${myLEFT} $3 user(s) $4 does not name, take them back with: $5 (to drop them, remove their lines or the whole file ${myLOST##*/})"
+        fi
+        if [[ "${myLEFT_ONLY}" -gt 0 ]];
+          then
+            echo "# ${myLOST##*/} keeps ${myLEFT_ONLY} line(s) with a hash in a format T-Pot does not take, they cannot be taken back (remove them there to drop this note)"
         fi
     fi
     return 0

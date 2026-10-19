@@ -238,6 +238,10 @@ class Registry:
         """The sensors of lswebpasswd and lswebpasswd.lost that LS_WEB_USER does not name."""
         return users.file_only(self.lswebpasswd, {u.name for u in self.entries()})
 
+    def kept_only(self) -> List[users.FileEntry]:
+        """The lines of lswebpasswd and lswebpasswd.lost in a hash format T-Pot does not take."""
+        return users.kept_only(self.lswebpasswd, {u.name for u in self.entries()})
+
     def read_problems(self) -> List[str]:
         return users.read_problems(self.lswebpasswd)
 

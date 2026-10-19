@@ -391,6 +391,15 @@ class FileOnlyTest(unittest.TestCase):
         self.assertIn(f"cannot read {self.lost}: Permission denied, log in again for the group tpot", text)
         self.assertNotIn("Nothing to take over", text)
 
+    def test_kept_only_names_lines_import_cannot_take(self):
+        legacy = "legacy:$1$legacysalt$legacyhash"
+        with open(self.lost, "w") as handle:
+            handle.write(f"erin:$apr1$x$y\n{legacy}\n{legacy}\n{ALICE}\n")
+        store = self.store()
+        self.assertEqual([e.name for e in store.file_only()], ["alice", "bob", "erin"])
+        self.assertEqual([(e.name, e.line, e.source) for e in store.kept_only()],
+                         [("legacy", legacy, "nginxpasswd.lost")])
+
     def test_keep_puts_them_into_the_lost_file(self):
         """The edition switch of a SENSOR to a HIVE: its nginxpasswd is not served, its users are kept."""
         with open(self.lost, "w") as handle:

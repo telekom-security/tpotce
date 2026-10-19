@@ -413,6 +413,27 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, text)
         self.assertIn("Nothing to take over", text)
 
+    def test_import_names_lines_in_another_format(self):
+        env = EnvFile(os.path.join(self.repo, ".env"))
+        env.set("LS_WEB_USER", "")
+        env.save()
+        lswebpasswd = os.path.join(self.repo, "data", "nginx", "conf", "lswebpasswd")
+        legacy = "sensor-old-heron:$1$heronsalt$heronhash"
+        with open(lswebpasswd + ".lost", "w") as handle:
+            handle.write(f"{OTTER}\n{legacy}\n")
+        code, text = self.run_cli("sensors", "import", "-y")
+        self.assertEqual(code, 0, text)
+        self.assertIn("sensor-old-otter is in LS_WEB_USER now", text)
+        self.assertIn("1 line(s) LS_WEB_USER does not name have a hash in a format T-Pot does not take "
+                      f"(sensor-old-heron): they cannot be taken over and only stay in {lswebpasswd}.lost", text)
+        with open(lswebpasswd + ".lost") as handle:
+            self.assertEqual(handle.read(), f"{legacy}\n")
+        code, text = self.run_cli("sensors", "import", "-y")
+        self.assertEqual(code, 0, text)
+        self.assertIn("Nothing to take over, LS_WEB_USER names every sensor of lswebpasswd and its .lost that "
+                      "T-Pot can take.", text)
+        self.assertIn("(sensor-old-heron)", text)
+
     def test_add_refuses_before_it_asks(self):
         lswebpasswd = os.path.join(self.repo, "data", "nginx", "conf", "lswebpasswd")
         with open(lswebpasswd, "w") as handle:
