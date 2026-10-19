@@ -228,7 +228,6 @@ myANSIBLE_TPOT_PLAYBOOK="installer/install/deploy.yml"
 myADJECTIVE=$(shuf -n1 installer/install/a.txt)
 myNOUN=$(shuf -n1 installer/install/n.txt)
 myENV_FILE="$HOME/tpotce/.env"
-myLSWEBPASSWD="$HOME/tpotce/data/nginx/conf/lswebpasswd"
 
 fuTRIM () {
   # fuTRIM <text>: the text without the spaces around it
@@ -453,6 +452,14 @@ echo
 mapfile -t myENV_LINES < "${myENV_FILE}"
 fuENV_FIND "LS_WEB_USER"
 myENV_LS_WEB_USER="${myENV_VALUE//[\"\']/}"
+# lswebpasswd is in the data folder of the .env (TPOT_DATA_PATH, relative to ~/tpotce), as for tpotinit
+fuENV_FIND "TPOT_DATA_PATH"
+myDATA_PATH="${myENV_VALUE:-./data}"
+if [[ "${myDATA_PATH}" != /* ]];
+  then
+    myDATA_PATH="$HOME/tpotce/${myDATA_PATH#./}"
+fi
+myLSWEBPASSWD="${myDATA_PATH%/}/nginx/conf/lswebpasswd"
 
 # Add the new SENSOR user
 if [ "${myENV_LS_WEB_USER}" == "" ];

@@ -97,7 +97,14 @@ if [ "${WEB_USER}" == "" ];
   else
     WEB_USER="${WEB_USER} ${myWEB_USER_ENC_B64}"
 fi
-sed -i "s|^WEB_USER=.*|WEB_USER=${WEB_USER}|" ${myTPOT_CONF_FILE}
+if grep -q "^WEB_USER=" "${myTPOT_CONF_FILE}";
+  then
+    sed -i "s|^WEB_USER=.*|WEB_USER=${WEB_USER}|" "${myTPOT_CONF_FILE}"
+  else
+    # a .env without the key: the line goes at the end (on a line of its own)
+    [ -z "$(tail -c 1 "${myTPOT_CONF_FILE}")" ] || echo >> "${myTPOT_CONF_FILE}"
+    echo "WEB_USER=${WEB_USER}" >> "${myTPOT_CONF_FILE}"
+fi
 
 # Done
 echo

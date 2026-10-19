@@ -459,6 +459,19 @@ class InstallShTest(Scripts):
                     self.assertIn(child, ran)
                 self.assertEqual(self.saw_pw(), [])
 
+    def test_a_missing_web_user_line_is_added(self):
+        """A .env without the WEB_USER line gets one at the end (a sed of the line would change nothing)."""
+        import base64
+        entry = base64.b64encode(b"admin:$2y$05$hash").decode()
+        env = os.path.join(self.tpotce, ".env")
+        for text in ("TPOT_TYPE=HIVE\n", "TPOT_TYPE=HIVE"):
+            with self.subTest(text=text):
+                write(env, text)
+                result = self.install("-s", "-t", "h", "-u", "admin", "-p", "Secret-pw-4711")
+                self.assertEqual(result.returncode, 0, result.stdout[-1500:])
+                with open(env, encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), f"TPOT_TYPE=HIVE\nWEB_USER={entry}\n")
+
     def test_a_port_conflict_ends_with_a_summary(self):
         write(os.path.join(self.bin, "ss"), "#!/bin/sh\necho 'LISTEN 0 100 0.0.0.0:25 0.0.0.0:*'\n", 0o755)
         result = self.install("-s", "-t", "s")

@@ -420,6 +420,25 @@ class DeployEnvTest(Harness):
         self.assertEqual(stat.S_IMODE(os.stat(self.env_file).st_mode), 0o640)
 
 
+class DeployDataPathTest(Harness):
+    """lswebpasswd is in the data folder of the .env: TPOT_DATA_PATH, relative to ~/tpotce or absolute."""
+
+    def test_the_data_path_of_the_env(self):
+        outside = os.path.join(self.home, "srv", "x")
+        for value, folder in ((outside, outside), (f'"{outside}/"', outside),
+                              ("./elsewhere", os.path.join(self.tpotce, "elsewhere")),
+                              ("", os.path.join(self.tpotce, "data"))):
+            with self.subTest(value=value):
+                os.makedirs(os.path.join(folder, "nginx", "conf"), exist_ok=True)
+                write(self.env_file, "TPOT_TYPE=HIVE\n" + (f"TPOT_DATA_PATH={value}\n" if value else ""))
+                self.assert_deployed(self.deploy())
+                with open(os.path.join(folder, "nginx", "conf", "lswebpasswd"), encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), f"{SENSOR}:{HASH}\n")
+                if folder != os.path.join(self.tpotce, "data"):
+                    self.assertFalse(os.path.exists(os.path.join(self.tpotce, "data", "nginx", "conf",
+                                                                 "lswebpasswd")))
+
+
 class DeployLookTest(Harness):
     """Cosmetics: the indentation of the file, plain quotes, 'an SSH key', the canonical y/n question."""
 

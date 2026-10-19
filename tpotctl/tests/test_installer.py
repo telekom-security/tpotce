@@ -59,7 +59,11 @@ class FreshInstallEnvTest(unittest.TestCase):
         writes = [line.strip() for line in text.splitlines()
                   if "myTPOT_CONF_FILE" in line and not line.strip().startswith(("#", "myTPOT_CONF_FILE=",
                                                                                   "fuUI_INFO"))]
-        self.assertEqual(writes, ['sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" ${myTPOT_CONF_FILE}'])
+        # the WEB_USER line in place, or (a .env without it) at the end on a line of its own
+        self.assertEqual(writes, ['if grep -q "^WEB_USER=" "${myTPOT_CONF_FILE}";',
+                                  'sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" "${myTPOT_CONF_FILE}"',
+                                  '[ -z "$(tail -c 1 "${myTPOT_CONF_FILE}")" ] || echo >> "${myTPOT_CONF_FILE}"',
+                                  'echo "WEB_USER=${myWEB_USER_ENC_B64}" >> "${myTPOT_CONF_FILE}"'])
         self.assertNotIn("env.example", text)
         with open(os.path.join(REPO_DIR, "installer", "install", "tpot.yml"), encoding="utf-8") as handle:
             playbook = handle.read()
