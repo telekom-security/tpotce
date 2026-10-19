@@ -1101,7 +1101,7 @@ class SmokeTest(BuilderHarness):
         super().setUp()
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
-        for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
+        for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes", "tpotinit_users",
                      "logstash_fixtures", "nginx", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
@@ -1116,9 +1116,10 @@ class SmokeTest(BuilderHarness):
         lines = result.stdout.splitlines()
         self.assertEqual([line[2:] for line in lines if line.startswith("N ")],
                          ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
+                          "tpotinit_users",
                           "logstash_fixtures", "nginx", "redis"])
         self.assertEqual([line[2:] for line in lines if line.startswith("A ")],
-                         ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 4
+                         ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 5
                          + ["--image hub/logstash:1.0", "--image hub/nginx:1.0", "--image hub/redis:1.0"])
         self.assertEqual([line[2:] for line in lines if line.startswith("I ")],
                          ["cowrie", "tpotinit", "logstash", "nginx", "redis"])
@@ -1132,7 +1133,7 @@ class SmokeTest(BuilderHarness):
                            'printf "W %s\\n" "${mySMOKE_NOTES[@]}"', TPOT_BUILDER_TESTS_DIR=self.tests)
         lines = result.stdout.splitlines()
         self.assertEqual([line[2:] for line in lines if line.startswith("N ")],
-                         ["tpotinit_env", "tpotinit_kibana", "tpotinit_modes"])
+                         ["tpotinit_env", "tpotinit_kibana", "tpotinit_modes", "tpotinit_users"])
         self.assertEqual([line[2:] for line in lines if line.startswith("I ")], ["tpotinit"])
         self.assertEqual([line[2:] for line in lines if line.startswith("W ")],
                          [f"No smoke test for tpotinit ({self.tests}/tpotinit_ilm.sh)"])
@@ -1188,7 +1189,8 @@ class SmokeTest(BuilderHarness):
         self.assertTrue(load[0] < tests[0], calls)
         self.assertEqual([calls[i] for i in tests], [f"test cowrie --image hub/cowrie:{VERSION}"]
                          + [f"test {name} --image hub/tpotinit:{VERSION}"
-                            for name in ("tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes")])
+                            for name in ("tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
+                                         "tpotinit_users")])
         override = self.override("override-load.yml")
         self.assertIn(f"  cowrie:\n    image: hub/cowrie:{VERSION}\n    build:\n      platforms: !override\n"
                       "        - linux/amd64\n      tags: !reset []\n", override)
@@ -1205,7 +1207,8 @@ class SmokeTest(BuilderHarness):
         self.assertEqual(len(load), 1, self.calls())
         self.assertIn("build cowrie tpotinit --builder mybuilder", load[0])
         self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")],
-                         ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes"])
+                         ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
+                          "tpotinit_users"])
 
     def test_ctrl_c_under_a_spinner_cancels_the_run(self):
         """gum takes Ctrl+C as a key and fuUI_SPIN gives back 130: the run ends as cancelled (130),
@@ -1330,7 +1333,7 @@ class SmokeTest(BuilderHarness):
                                STUB_FAIL="cowrie", TPOT_BUILDER_TESTS_DIR=self.tests)
         self.assertEqual(rc, 1, out)
         self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")],
-                         ["tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes"])
+                         ["tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes", "tpotinit_users"])
 
 
 class SetupTest(BuilderHarness):
