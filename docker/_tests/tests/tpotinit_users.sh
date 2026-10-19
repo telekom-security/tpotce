@@ -18,7 +18,8 @@ Usage: $0 [options]
 
 Check the passwd files tpotinit writes from WEB_USER / LS_WEB_USER: a line whose user the
 .env no longer names is kept in <file>.lost (never twice) and the file is written in place;
-a SENSOR keeps nothing; a HIVE without WEB_USER is told what nginxpasswd still holds. The
+a SENSOR keeps nothing; a .lost that cannot take the lines stops the start with the file as it
+was; a HIVE without WEB_USER is told what nginxpasswd still holds. The
 .lost files get the modes of nginx conf (664) and stay with TPOT_PERSISTENCE=off.
 
 The image only provides the tools (busybox base64, grep, chmod): create_web_users and the
@@ -135,10 +136,23 @@ check "sensor: files empty, nothing kept, nothing said" "|| no no 0" \
 # 6. the hint before the abort of a HIVE without WEB_USER, the file stays
 fresh
 printf '%s\n%s\n' "${ALICE}" "${BOB}" > "${CONF}/nginxpasswd"
-check "hint: named" "# ${CONF}/nginxpasswd still holds 2 web user(s), take them over with: tpot users import" "$(web_users_hint /data)"
+check "hint: named" "# ${CONF}/nginxpasswd still holds 2 line(s), the file stays as it is; the users among them T-Pot accepts are taken over with: tpot users import" "$(web_users_hint /data)"
 check "hint: the file stays" "${ALICE}|${BOB}|" "$(content "${CONF}/nginxpasswd")"
 
-# 7. the modes of the .lost files after update_permissions, and TPOT_PERSISTENCE=off keeps them
+# 7. a .lost that cannot take the lines (here a folder): the file stays as it is, the start stops
+fresh
+mkdir "${CONF}/lswebpasswd.lost"
+printf '%s\n' "${OTTER}" > "${CONF}/lswebpasswd"
+TPOT_TYPE=HIVE WEB_USER="$(b64 "${ALICE}")" LS_WEB_USER=""
+out="$(create_web_users /data)"
+rc=$?
+check "lost folder: create_web_users fails" "1" "${rc}"
+check "lost folder: lswebpasswd stays" "${OTTER}|" "$(content "${CONF}/lswebpasswd")"
+check "lost folder: named" "1" "$(grep -c '^# Error: the lines of /data/nginx/conf/lswebpasswd that LS_WEB_USER does not name cannot be kept in /data/nginx/conf/lswebpasswd.lost (it is not a regular file), lswebpasswd stays as it is\.$' <<<"${out}")"
+check "lost folder: nothing said to be kept" "0" "$(grep -c 'kept in lswebpasswd.lost' <<<"${out}")"
+rmdir "${CONF}/lswebpasswd.lost"
+
+# 8. the modes of the .lost files after update_permissions, and TPOT_PERSISTENCE=off keeps them
 fresh
 mkdir -p /data/cowrie/log /data/nginx/cert
 echo inert > /data/uuid

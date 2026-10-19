@@ -54,12 +54,12 @@ class WebUsersInitTest(unittest.TestCase):
                         f"sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))'\n")
         stub.chmod(0o755)
 
-    def run_init(self, web="", lsweb="", kind="HIVE", command=None):
+    def run_init(self, web="", lsweb="", kind="HIVE", command=None, code=0):
         script = functions() + "\n" + (command or f'create_web_users "{self.data}"') + "\n"
         environ = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", WEB_USER=web, LS_WEB_USER=lsweb,
                        TPOT_TYPE=kind)
         done = subprocess.run(["bash", "-c", script], env=environ, capture_output=True, text=True)
-        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.returncode, code, done.stdout + done.stderr)
         return done.stdout
 
     def lost(self, path):
@@ -88,7 +88,7 @@ class WebUsersInitTest(unittest.TestCase):
         self.assertEqual(self.lost(self.lsweb), f"{OTTER}\n{LYNX}\n")
         self.assertNotIn("Warning", out)
         self.assertIn("# lswebpasswd.lost holds 2 sensor user(s) LS_WEB_USER does not name, take them back with: "
-                      "tpot sensors import", out)
+                      "tpot sensors import (to drop them, remove their lines or the whole file lswebpasswd.lost)", out)
 
     def test_only_the_missing_name_is_kept(self):
         self.nginx.write_text(f"{ALICE}\n{BOB}\n")
@@ -124,21 +124,63 @@ class WebUsersInitTest(unittest.TestCase):
         self.assertIsNone(self.lost(self.lsweb))
         self.assertNotIn("Warning", out)
 
-    def test_a_link_in_place_of_the_lost_file_is_not_written(self):
+    def test_a_link_in_place_of_the_lost_file_stops_the_start(self):
         target = self.data / "target"
         target.write_text("keep\n")
         Path(f"{self.nginx}.lost").symlink_to(target)
         self.nginx.write_text(f"{BOB}\n")
-        out = self.run_init(web=entry(ALICE))
+        out = self.run_init(web=entry(ALICE), code=1)
         self.assertEqual(target.read_text(), "keep\n")
-        self.assertIn("is a link, nothing is kept in it", out)
+        self.assertEqual(self.nginx.read_text(), f"{BOB}\n")
+        self.assertIn(f"# Error: the lines of {self.nginx} that WEB_USER does not name cannot be kept in "
+                      f"{self.nginx}.lost (it is a link), nginxpasswd stays as it is.", out)
+        self.assertNotIn("kept in nginxpasswd.lost", out)
+
+    def test_a_folder_in_place_of_the_lost_file_stops_the_start(self):
+        Path(f"{self.lsweb}.lost").mkdir()
+        self.lsweb.write_text(f"{OTTER}\n")
+        out = self.run_init(web=entry(ALICE), code=1)
+        self.assertEqual(self.lsweb.read_text(), f"{OTTER}\n")
+        self.assertIn("(it is not a regular file), lswebpasswd stays as it is.", out)
+        self.assertNotIn("Warning", out)
+        # nothing to keep: the folder does not matter
+        self.run_init(web=entry(ALICE), lsweb=entry(OTTER))
+        self.assertEqual(self.lsweb.read_text(), f"{OTTER}\n")
+
+    @unittest.skipIf(os.geteuid() == 0, "root writes into a read-only folder")
+    def test_a_lost_file_that_cannot_be_written_stops_the_start(self):
+        conf = self.data / "nginx" / "conf"
+        self.nginx.write_text(f"{ALICE}\n{BOB}\n")
+        lost = Path(f"{self.nginx}.lost")
+        for make in ("missing", "read-only"):
+            with self.subTest(lost=make):
+                if make == "read-only":
+                    conf.chmod(0o700)
+                    lost.write_text("")
+                    lost.chmod(0o400)
+                else:
+                    conf.chmod(0o500)               # .lost cannot be created
+                try:
+                    out = self.run_init(web=entry(ALICE), code=1)
+                finally:
+                    conf.chmod(0o700)
+                self.assertEqual(self.nginx.read_text(), f"{ALICE}\n{BOB}\n")
+                self.assertIn("(Permission denied), nginxpasswd stays as it is.", out)
+                self.assertNotIn("kept in nginxpasswd.lost", out)
+
+    def test_the_entrypoint_stops_when_the_files_cannot_be_written(self):
+        text = ENTRYPOINT.read_text()
+        self.assertEqual(text.count("    if ! create_web_users;\n      then\n        echo \"# Aborting\"\n"
+                                    "        exit 1\n    fi\n"), 2)
+        self.assertNotRegex(text, r"\n    create_web_users\n")
 
     def test_the_hint_before_the_abort(self):
-        self.nginx.write_text(f"{ALICE}\n{BOB}\n")
+        self.nginx.write_text(f"{ALICE}\nlegacy:$1$salt$hash\n\n")
         out = self.run_init(command=f'web_users_hint "{self.data}"')
-        self.assertEqual(out, f"# {self.nginx} still holds 2 web user(s), take them over with: tpot users import\n")
-        self.assertEqual(self.nginx.read_text(), f"{ALICE}\n{BOB}\n")
-        self.nginx.write_text("")
+        self.assertEqual(out, f"# {self.nginx} still holds 2 line(s), the file stays as it is; the users among them "
+                              f"T-Pot accepts are taken over with: tpot users import\n")
+        self.assertEqual(self.nginx.read_text(), f"{ALICE}\nlegacy:$1$salt$hash\n\n")
+        self.nginx.write_text("\n")
         self.assertEqual(self.run_init(command=f'web_users_hint "{self.data}"'), "")
 
     def test_the_entrypoint_gives_the_hint_on_a_hive_without_web_user(self):

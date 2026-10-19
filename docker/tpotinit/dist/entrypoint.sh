@@ -51,10 +51,13 @@ source /opt/tpot/bin/env_validate.sh
 # nginx, a new file (rename) would not reach it. The .env names who has access; a line of the old
 # file whose user it no longer names is kept in <file>.lost first (a line that is there already is not
 # added again), the T-Pot Manager takes it back from there (tpot users import / tpot sensors import).
+# If a line cannot be kept (.lost is a link or no regular file, a write fails), the file stays as it
+# is and the function ends with 1: the start stops, nothing is dropped and nothing gets access.
 # $1 = file, $2 = the entries (base64 of name:hash), $3 = web / sensor, $4 = the key, $5 = the command
 # that takes them back, $6 = keep (yes / no)
 write_passwd_file() {
-    local myFILE="$1" myLOST="$1.lost" myENTRY myLINE myNAMES=$'\n' myNEW="" myKEPT=0 myLEFT=0
+    local myFILE="$1" myLOST="$1.lost" myENTRY myLINE myNAMES=$'\n' myNEW="" myKEPT=0 myLEFT=0 myREASON="" myOUT
+    local -a myDROP=()
     for myENTRY in $2;
       do
         if [[ -n "${myENTRY}" ]];
@@ -65,28 +68,55 @@ write_passwd_file() {
             myNAMES+="${myLINE%%:*}"$'\n'
         fi
     done
-    if [[ "$6" == "yes" && -L "${myLOST}" ]];
+    if [[ "$6" == "yes" && -s "${myFILE}" ]];
       then
-        echo "# Warning: ${myLOST} is a link, nothing is kept in it."
-    elif [[ "$6" == "yes" && -s "${myFILE}" ]];
-      then
+        # the lines the new content drops
         while IFS= read -r myLINE || [[ -n "${myLINE}" ]];
           do
             myLINE="${myLINE%$'\r'}"
             [[ -n "${myLINE//[[:space:]]/}" ]] || continue
             [[ "${myNAMES}" == *$'\n'"${myLINE%%:*}"$'\n'* ]] && continue
-            if [[ -f "${myLOST}" ]] && grep -Fxq -- "${myLINE}" "${myLOST}";
-              then
-                continue
-            fi
-            if [[ ! -e "${myLOST}" ]];
-              then
-                : > "${myLOST}"
-                chmod 660 "${myLOST}"
-            fi
-            printf '%s\n' "${myLINE}" >> "${myLOST}"
-            myKEPT=$((myKEPT + 1))
+            myDROP+=("${myLINE}")
         done < "${myFILE}"
+    fi
+    if [[ "${#myDROP[@]}" -gt 0 ]];
+      then
+        if [[ -L "${myLOST}" ]];
+          then
+            myREASON="it is a link"
+        elif [[ -e "${myLOST}" && ! -f "${myLOST}" ]];
+          then
+            myREASON="it is not a regular file"
+        elif [[ ! -e "${myLOST}" ]];
+          then
+            if myOUT="$( { : > "${myLOST}"; } 2>&1 )";
+              then
+                chmod 660 "${myLOST}"
+              else
+                myREASON="${myOUT##*: }"
+                myREASON="${myREASON:-the write failed}"
+            fi
+        fi
+        for myLINE in "${myDROP[@]}";
+          do
+            [[ -z "${myREASON}" ]] || break
+            # a line that is there already (or came twice) is not added again
+            grep -Fxq -- "${myLINE}" "${myLOST}" && continue
+            if myOUT="$( { printf '%s\n' "${myLINE}" >> "${myLOST}"; } 2>&1 )";
+              then
+                myKEPT=$((myKEPT + 1))
+              else
+                myREASON="${myOUT##*: }"
+                myREASON="${myREASON:-the write failed}"
+            fi
+        done
+        if [[ -n "${myREASON}" ]];
+          then
+            echo
+            echo "# Error: the lines of ${myFILE} that $4 does not name cannot be kept in ${myLOST} (${myREASON}), ${myFILE##*/} stays as it is."
+            echo
+            return 1
+        fi
     fi
     # truncated and written, the inode stays
     printf '%s' "${myNEW}" > "${myFILE}"
@@ -95,7 +125,7 @@ write_passwd_file() {
         echo
         echo "# Warning: ${myKEPT} $3 user(s) of ${myFILE##*/} are not in $4 and lose access, they are kept in ${myLOST##*/}. Take them back with: $5"
         echo
-    elif [[ "$6" == "yes" && -s "${myLOST}" && ! -L "${myLOST}" ]];
+    elif [[ "$6" == "yes" && -f "${myLOST}" && -s "${myLOST}" && ! -L "${myLOST}" ]];
       then
         while IFS= read -r myLINE || [[ -n "${myLINE}" ]];
           do
@@ -104,9 +134,10 @@ write_passwd_file() {
         done < "${myLOST}"
         if [[ "${myLEFT}" -gt 0 ]];
           then
-            echo "# ${myLOST##*/} holds ${myLEFT} $3 user(s) $4 does not name, take them back with: $5"
+            echo "# ${myLOST##*/} holds ${myLEFT} $3 user(s) $4 does not name, take them back with: $5 (to drop them, remove their lines or the whole file ${myLOST##*/})"
         fi
     fi
+    return 0
 }
 
 # $1 = the data folder (/data)
@@ -120,19 +151,19 @@ create_web_users() {
       then
         myKEEP="no"
     fi
-    write_passwd_file "${myDATA}/nginx/conf/nginxpasswd" "${WEB_USER}" web WEB_USER "tpot users import" "${myKEEP}"
-    write_passwd_file "${myDATA}/nginx/conf/lswebpasswd" "${LS_WEB_USER}" sensor LS_WEB_USER "tpot sensors import" "${myKEEP}"
+    write_passwd_file "${myDATA}/nginx/conf/nginxpasswd" "${WEB_USER}" web WEB_USER "tpot users import" "${myKEEP}" \
+      && write_passwd_file "${myDATA}/nginx/conf/lswebpasswd" "${LS_WEB_USER}" sensor LS_WEB_USER "tpot sensors import" "${myKEEP}"
 }
 
-# Before the abort of a HIVE without WEB_USER: the web users nginxpasswd still holds (the file stays as
-# it is). $1 = the data folder (/data)
+# Before the abort of a HIVE without WEB_USER: the lines nginxpasswd still holds (the file stays as it
+# is). $1 = the data folder (/data)
 web_users_hint() {
     local myFILE="${1:-/data}/nginx/conf/nginxpasswd" myCOUNT
     [ -f "${myFILE}" ] || return 0
-    myCOUNT="$(grep -c ':' "${myFILE}")"
+    myCOUNT="$(grep -c '[^[:space:]]' "${myFILE}")"
     if [ "${myCOUNT:-0}" -gt 0 ];
       then
-        echo "# ${myFILE} still holds ${myCOUNT} web user(s), take them over with: tpot users import"
+        echo "# ${myFILE} still holds ${myCOUNT} line(s), the file stays as it is; the users among them T-Pot accepts are taken over with: tpot users import"
     fi
 }
 
@@ -279,7 +310,11 @@ if [ -f "/data/uuid" ];
   then
     figlet "Initializing ..."
     figlet "T-Pot: ${TPOT_VERSION}"
-    create_web_users
+    if ! create_web_users;
+      then
+        echo "# Aborting"
+        exit 1
+    fi
     echo
     echo "# Data folder is present, just cleaning up, please be patient ..."
     echo
@@ -315,7 +350,11 @@ if [ -f "/data/uuid" ];
           -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' \
           -addext "subjectAltName = IP:${myINTIP}"
     echo
-    create_web_users
+    if ! create_web_users;
+      then
+        echo "# Aborting"
+        exit 1
+    fi
     echo
     echo "# Final touches and permissions ..."
     echo
