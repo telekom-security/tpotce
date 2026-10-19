@@ -39,7 +39,7 @@ echo "|" >> /tmp/etc/issue
 echo "\`----" >> /tmp/etc/issue
 echo >> /tmp/etc/issue
 # the text on stdin into the file $1, in place (ews.ip is bind mounted: no rename) through an
-# O_NOFOLLOW descriptor: a link planted in its place is refused, never followed; truncated, written,
+# O_NOFOLLOW descriptor: a link in its place is refused, never followed; truncated, written,
 # synced; a new file gets 0660
 # >>> write in place >>>
 myWRITE_IN_PLACE='import os, stat, sys

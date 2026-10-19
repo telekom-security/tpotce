@@ -78,7 +78,7 @@ class ScriptsTest(unittest.TestCase):
 
     def test_updateip_writes_in_place_and_follows_no_link(self):
         """ews.ip and elk_environment are written in place (ews.ip is bind mounted) through an
-        O_NOFOLLOW descriptor: the inode stays, a planted link is refused and its target unchanged."""
+        O_NOFOLLOW descriptor: the inode stays, a link there is refused and its target unchanged."""
         text = UPDATEIP.read_text()
         code = re.search(r"^myWRITE_IN_PLACE='(.*?)'$", text, re.M | re.S).group(1)
         self.assertNotIn("\ntee /data/", text)
