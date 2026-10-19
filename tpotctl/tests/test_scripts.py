@@ -1438,6 +1438,50 @@ class FallbackTest(Harness):
         self.assertNotRegex(read("deploy.sh"), r"htpasswd [^|]*-b")
 
 
+class GenuserImageTest(Harness):
+    """genuser.sh of the tpotinit image (the fallback of ~/tpotce/genuser.sh): the new user goes into
+    WEB_USER, also into a .env without that line. Its fixed paths point into the temporary HOME."""
+
+    def run_genuser(self, env_text):
+        env = os.path.join(self.home, ".env")
+        with open(env, "w", encoding="utf-8") as out:
+            out.write(env_text)
+        cracklib = os.path.join(self.bin, "cracklib-check")
+        for name, text in (("htpasswd", "#!/bin/sh\necho \"$4:\\$2y\\$05\\$hash\"\n"),
+                           ("cracklib-check", "#!/bin/sh\nread -r pw\necho \"$pw: OK\"\n")):
+            path = os.path.join(self.bin, name)
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(text)
+            os.chmod(path, 0o755)
+        script = os.path.join(self.home, "genuser.sh")
+        with open(script, "w", encoding="utf-8") as out:
+            out.write(read("docker/tpotinit/dist/bin/genuser.sh").replace("/data/.env", env)
+                      .replace("/usr/sbin/cracklib-check", cracklib))
+        environment = dict(os.environ, HOME=self.home, PATH=f"{self.bin}:{os.environ['PATH']}")
+        result = subprocess.run(["bash", script], input="alice\ny\nA long passphrase\nA long passphrase\n",
+                                capture_output=True, universal_newlines=True, env=environment, cwd=self.home,
+                                timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with open(env, encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_a_missing_web_user_line_is_added(self):
+        import base64
+        entry = base64.b64encode(b"alice:$2y$05$hash").decode()
+        for text in ("TPOT_TYPE=HIVE\n", "TPOT_TYPE=HIVE"):
+            with self.subTest(text=text):
+                self.assertEqual(self.run_genuser(text), f"TPOT_TYPE=HIVE\nWEB_USER={entry}\n")
+
+    def test_the_line_is_changed_in_place(self):
+        """The sed of the image is GNU / busybox; a BSD sed (macOS) does not take -i without a suffix."""
+        if subprocess.run(["sed", "--version"], capture_output=True).returncode != 0:
+            self.skipTest("the sed of this host is no GNU sed")
+        import base64
+        entry = base64.b64encode(b"alice:$2y$05$hash").decode()
+        self.assertEqual(self.run_genuser("WEB_USER=old\nTPOT_TYPE=HIVE\n"),
+                         f"WEB_USER=old {entry}\nTPOT_TYPE=HIVE\n")
+
+
 class MytopipsTest(Harness):
 
     def test_is_tpot_attackers(self):

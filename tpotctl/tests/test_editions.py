@@ -457,8 +457,9 @@ class EditionCliTest(unittest.TestCase):
             def users(self):
                 return []
 
-            def add(self, name, password):
-                Store.added.append((name, password))
+            def add(self, name, password, keep=False):
+                # keep: what nginxpasswd of the SENSOR holds goes into nginxpasswd.lost, no refusal
+                Store.added.append((name, password, keep))
                 return "used right away"
 
         folder = tempfile.mkdtemp(prefix="tpot-edition-cli-")
@@ -478,7 +479,7 @@ class EditionCliTest(unittest.TestCase):
             code = cli.main(["edition", "set", "standard", "-y", "--web-user", "anna", "--password-file", secret])
         self.assertEqual(code, 0)
         switch.assert_called_once()
-        self.assertEqual(Store.added, [("anna", "s3cret-Password")])
+        self.assertEqual(Store.added, [("anna", "s3cret-Password", True)])
 
     @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
     def test_list(self):

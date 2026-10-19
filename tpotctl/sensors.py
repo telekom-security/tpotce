@@ -12,6 +12,11 @@ sensors of 24.04.1 come along. nginx hands the sensor user to Logstash, which pu
 it into t-pot_sensor of every event (lsweb.conf, http_input.conf), that is how the
 status ties events to sensors.
 
+A sensor of lswebpasswd that LS_WEB_USER does not name is kept by tpotinit in
+lswebpasswd.lost when it writes the file anew; take_over() (tpot sensors import) gives it
+its access back. A change of the access refuses while the live file holds sensors
+LS_WEB_USER does not name, as users.Store does for nginxpasswd.
+
 The deployment itself stays installer/install/deploy.yml, run over SSH.
 """
 
@@ -55,7 +60,7 @@ class Sensor:
     added: str = ""
     version: str = ""
     hostname: str = ""         # t-pot_hostname of its events
-    source: str = "migrated"   # deployed | migrated
+    source: str = "migrated"   # deployed | migrated | imported (from lswebpasswd / lswebpasswd.lost)
     access: bool = True        # has an entry in LS_WEB_USER
 
 
@@ -229,7 +234,45 @@ class Registry:
 
     # -- access ----------------------------------------------------------------
 
+    def file_only(self) -> List[users.FileEntry]:
+        """The sensors of lswebpasswd and lswebpasswd.lost that LS_WEB_USER does not name."""
+        return users.file_only(self.lswebpasswd, {u.name for u in self.entries()})
+
+    def read_problems(self) -> List[str]:
+        return users.read_problems(self.lswebpasswd)
+
+    def check_writable(self) -> None:
+        """SensorsError while lswebpasswd holds sensors LS_WEB_USER does not name: a change of the
+        access would drop them."""
+        why = users.refusal(self.lswebpasswd, {u.name for u in self.entries()}, "sensor", "tpot sensors import")
+        if why:
+            raise SensorsError(why)
+
+    def take_over(self, names) -> str:
+        """Give these sensors of file_only() their access in LS_WEB_USER (and lswebpasswd) back, their
+        lines leave lswebpasswd.lost; one the registry does not know is noted as imported."""
+        names = list(dict.fromkeys(names))
+        offered = {e.name: e for e in self.file_only()}
+        missing = [n for n in names if n not in offered]
+        if missing or not names:
+            raise SensorsError(f"{', '.join(missing) or 'nothing'} cannot be taken over, see tpot sensors import")
+        note = self._write_access([u.entry for u in self.entries()] + [offered[n].entry for n in names])
+        for name in names:
+            self.records.setdefault(name, Sensor(name=name, source="imported")).access = True
+        self.save()
+        try:
+            users.drop_lost(self.lswebpasswd, names)
+        except OSError as err:
+            note += f" (lswebpasswd.lost keeps them: {err.strerror or err})"
+        return note
+
     def _write_access(self, entries: List[str]) -> str:
+        known = {u.name for u in self.entries()} | {u.name for u in users.parse(" ".join(entries))}
+        why = users.refusal(self.lswebpasswd, known, "sensor", "tpot sensors import")
+        if why:
+            raise SensorsError(why)
+        # the lines the rewrite drops and nobody takes over (T-Pot does not accept them) go into .lost first
+        users.keep_or_refuse(self.lswebpasswd, users.foreign_lines(self.lswebpasswd, known), SensorsError)
         try:
             self.env.set("LS_WEB_USER", " ".join(entries))
             self.env.save()

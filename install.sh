@@ -2159,7 +2159,14 @@ if [ "${myTPOT_TYPE}" == "HIVE" ];
     # nothing after this needs the password
     unset myWEB_PW myWEB_PW2
     myWEB_USER_ENC_B64=$(echo -n "${myWEB_USER_ENC}" | base64 -w0)
-    sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" ${myTPOT_CONF_FILE}
+    if grep -q "^WEB_USER=" "${myTPOT_CONF_FILE}";
+      then
+        sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" "${myTPOT_CONF_FILE}"
+      else
+        # a .env without the key: the line goes at the end (on a line of its own)
+        [ -z "$(tail -c 1 "${myTPOT_CONF_FILE}")" ] || echo >> "${myTPOT_CONF_FILE}"
+        echo "WEB_USER=${myWEB_USER_ENC_B64}" >> "${myTPOT_CONF_FILE}"
+    fi
     echo
 fi
 

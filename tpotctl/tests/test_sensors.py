@@ -263,6 +263,100 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(self.registry().get("sensor-old-otter").hostname, "edge1")
 
 
+OTTER = "sensor-old-otter:$apr1$abc$def"
+LYNX = "sensor-old-lynx:$apr1$ghi$jkl"
+
+
+class FileOnlyTest(unittest.TestCase):
+    """Sensors of lswebpasswd and lswebpasswd.lost that LS_WEB_USER does not name."""
+
+    def setUp(self):
+        # sensors.json knows both sensors, LS_WEB_USER is empty: tpotinit kept their lines in .lost
+        self.repo = checkout(self)
+        sensors.Registry(self.repo, hasher=fake_hash)
+        env = EnvFile(os.path.join(self.repo, ".env"))
+        env.set("LS_WEB_USER", "")
+        env.save()
+        self.lswebpasswd = os.path.join(self.repo, "data", "nginx", "conf", "lswebpasswd")
+        with open(self.lswebpasswd + ".lost", "w") as handle:
+            handle.write(f"{OTTER}\n{LYNX}\n")
+
+    def registry(self):
+        return sensors.Registry(self.repo, hasher=fake_hash)
+
+    def read(self, path):
+        with open(path) as handle:
+            return handle.read()
+
+    def test_offered_and_taken_over(self):
+        registry = self.registry()
+        self.assertEqual([(e.name, e.source) for e in registry.file_only()],
+                         [("sensor-old-otter", "lswebpasswd.lost"), ("sensor-old-lynx", "lswebpasswd.lost")])
+        self.assertFalse(any(s.access for s in registry.sensors()))
+        inode = os.stat(self.lswebpasswd).st_ino
+        self.assertIn("right away", registry.take_over(["sensor-old-otter", "sensor-old-lynx"]))
+        again = self.registry()
+        self.assertEqual([u.name for u in again.entries()], ["sensor-old-otter", "sensor-old-lynx"])
+        self.assertTrue(all(s.access for s in again.sensors()))
+        self.assertEqual(self.read(self.lswebpasswd), f"{OTTER}\n{LYNX}\n")
+        self.assertEqual(os.stat(self.lswebpasswd).st_ino, inode)
+        self.assertEqual(self.read(self.lswebpasswd + ".lost"), "")
+        self.assertEqual(again.file_only(), [])
+
+    def test_a_sensor_the_registry_does_not_know_is_imported(self):
+        with open(self.lswebpasswd, "w") as handle:
+            handle.write("sensor-new-fox:$apr1$x$y\n")
+        registry = self.registry()
+        registry.take_over(["sensor-new-fox"])
+        self.assertEqual(self.registry().get("sensor-new-fox").source, "imported")
+        self.assertTrue(self.registry().get("sensor-new-fox").access)
+
+    def test_grant_and_revoke_refuse_while_the_live_file_holds_them(self):
+        with open(self.lswebpasswd, "w") as handle:
+            handle.write(f"{OTTER}\n")
+        registry = self.registry()
+        message = ("lswebpasswd holds 1 sensor user(s) the .env does not name (sensor-old-otter); take them over "
+                   "first: tpot sensors import")
+        for change in (lambda: registry.grant("sensor-new-fox", "pw"), lambda: registry.revoke("sensor-old-lynx"),
+                       registry.check_writable):
+            with self.assertRaises(sensors.SensorsError) as caught:
+                change()
+            self.assertEqual(str(caught.exception), message)
+        self.assertEqual(self.read(self.lswebpasswd), f"{OTTER}\n")
+        self.assertEqual(self.registry().entries(), [])
+        # .lost alone never blocks
+        os.remove(self.lswebpasswd)
+        open(self.lswebpasswd, "w").close()
+        self.registry().grant("sensor-new-fox", "pw")
+        self.assertEqual([u.name for u in self.registry().entries()], ["sensor-new-fox"])
+
+    def test_a_line_t_pot_does_not_take_goes_into_the_lost_file(self):
+        with open(self.lswebpasswd, "w") as handle:
+            handle.write("legacy:$1$salt$legacyhash\n")
+        registry = self.registry()
+        self.assertEqual([e.name for e in registry.file_only()], ["sensor-old-otter", "sensor-old-lynx"])
+        registry.grant("sensor-new-fox", "pw")
+        self.assertEqual(self.read(self.lswebpasswd + ".lost"), f"{OTTER}\n{LYNX}\nlegacy:$1$salt$legacyhash\n")
+        self.assertEqual(self.read(self.lswebpasswd), fake_hash("sensor-new-fox", "pw") + "\n")
+
+    def test_no_change_when_the_lost_file_cannot_take_them(self):
+        os.remove(self.lswebpasswd + ".lost")
+        os.mkdir(self.lswebpasswd + ".lost")
+        with open(self.lswebpasswd, "w") as handle:
+            handle.write("legacy:$1$salt$legacyhash\n")
+        with self.assertRaises(sensors.SensorsError) as caught:
+            self.registry().grant("sensor-new-fox", "pw")
+        self.assertIn("cannot be kept in", str(caught.exception))
+        self.assertEqual(self.read(self.lswebpasswd), "legacy:$1$salt$legacyhash\n")
+        self.assertEqual(self.registry().entries(), [])
+
+    def test_env_check_warns(self):
+        from tpotctl import settings
+        problems = [p for p in settings.load(self.repo).problems() if p.key == "LS_WEB_USER"]
+        self.assertIn(("warning", "lswebpasswd.lost holds 2 sensor(s) it does not name, take them over with: "
+                                  "tpot sensors import."), [(p.level, p.text) for p in problems])
+
+
 @unittest.skipUnless(textual, "Rich is not installed, run with the venv of tpot")
 class CliTest(unittest.TestCase):
 
@@ -292,6 +386,42 @@ class CliTest(unittest.TestCase):
             except KeyboardInterrupt:       # unittest would stop on it
                 code = "KeyboardInterrupt"
         return code, out.getvalue() + err.getvalue()
+
+    def test_import(self):
+        env = EnvFile(os.path.join(self.repo, ".env"))
+        self.run_cli("sensors", "list")                    # the registry knows both now
+        env.set("LS_WEB_USER", "")
+        env.save()
+        lswebpasswd = os.path.join(self.repo, "data", "nginx", "conf", "lswebpasswd")
+        with open(lswebpasswd + ".lost", "w") as handle:
+            handle.write(f"{OTTER}\n{LYNX}\n")
+        code, text = self.run_cli("sensors", "list")
+        self.assertEqual(code, 0)
+        self.assertEqual(text.count("to take over"), 2, text)
+        self.assertIn("lswebpasswd.lost holds 2 sensor(s) LS_WEB_USER does not name", text)
+        code, text = self.run_cli("sensors", "import")
+        self.assertEqual(code, 2, text)                    # no terminal, no --yes
+        self.assertIn(f"To drop one on purpose instead, remove its line from {lswebpasswd}.lost (or the whole file).",
+                      text)
+        code, text = self.run_cli("sensors", "import", "-y")
+        self.assertEqual(code, 0, text)
+        self.assertIn("sensor-old-otter, sensor-old-lynx are in LS_WEB_USER now", text)
+        with open(lswebpasswd) as handle:
+            self.assertEqual(handle.read(), f"{OTTER}\n{LYNX}\n")
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+        code, text = self.run_cli("sensors", "import", "-y")
+        self.assertEqual(code, 0, text)
+        self.assertIn("Nothing to take over", text)
+
+    def test_add_refuses_before_it_asks(self):
+        lswebpasswd = os.path.join(self.repo, "data", "nginx", "conf", "lswebpasswd")
+        with open(lswebpasswd, "w") as handle:
+            handle.write("sensor-new-fox:$apr1$x$y\n")
+        with mock.patch.object(sensors, "check_ssh", side_effect=AssertionError("ssh")):
+            code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
+                                      "--hive-address", "192.168.1.2")
+        self.assertEqual(code, 1, text)
+        self.assertIn("take them over first: tpot sensors import", text)
 
     def test_list_set_remove(self):
         code, text = self.run_cli("sensors", "list")
@@ -673,6 +803,57 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.click("#yes")
                 await pilot.pause(0.5)
         self.assertEqual([u.name for u in sensors.Registry(repo).entries()], ["sensor-old-otter"])
+
+    async def test_take_over_from_lswebpasswd(self):
+        from tpotctl import app as tapp, ops
+        from tpotctl.screens.dialogs import ConfirmDialog
+        repo = checkout(self, ls_web_user="")
+        lswebpasswd = os.path.join(repo, "data", "nginx", "conf", "lswebpasswd")
+        with open(lswebpasswd + ".lost", "w") as handle:
+            handle.write(f"{OTTER}\n{LYNX}\n")
+
+        class Backend(tapp.Backend):
+            def linux_host(self):
+                return True
+
+            def tpot_type(self):
+                return "HIVE"
+
+            def status(self):
+                return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", repo)
+
+            def containers(self):
+                return []
+
+            def images(self):
+                return []
+
+            def backups(self):
+                return []
+
+            def sensors(self):
+                return sensors.Registry(repo, hasher=fake_hash)
+
+            def sensor_status(self, days=7):
+                return sensors.Status()
+
+        app = tapp.TpotApp(backend=Backend(), runner=lambda command, cwd=None: 0)
+        async with app.run_test(size=(150, 45)) as pilot:
+            await pilot.pause(0.3)
+            app.query_one("ContentSwitcher").current = "sensors"
+            await pilot.pause(0.5)
+            self.assertEqual(app.query_one("#sensors-table").row_count, 2)
+            button = app.query_one("#sensor-import")
+            self.assertTrue(app.query_one("#sensors-import-actions").display)
+            self.assertEqual(str(button.label), "Take over 2 sensors")
+            await pilot.click("#sensor-import")
+            await pilot.pause(0.2)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+            self.assertFalse(app.query_one("#sensors-import-actions").display)
+        self.assertEqual([u.name for u in sensors.Registry(repo).entries()], ["sensor-old-otter", "sensor-old-lynx"])
+        self.assertEqual(sensors.Registry(repo).get("sensor-old-lynx").source, "imported")
 
     async def test_the_dialog_proposes_only_a_hive_address_it_found(self):
         from textual.app import App

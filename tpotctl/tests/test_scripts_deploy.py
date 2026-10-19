@@ -420,6 +420,60 @@ class DeployEnvTest(Harness):
         self.assertEqual(stat.S_IMODE(os.stat(self.env_file).st_mode), 0o640)
 
 
+class DeployDataPathTest(Harness):
+    """lswebpasswd is in the data folder of the .env: TPOT_DATA_PATH, relative to ~/tpotce or absolute."""
+
+    def test_the_data_path_of_the_env(self):
+        outside = os.path.join(self.home, "srv", "x")
+        for value, folder in ((outside, outside), (f'"{outside}/"', outside),
+                              ("./elsewhere", os.path.join(self.tpotce, "elsewhere")),
+                              ("", os.path.join(self.tpotce, "data"))):
+            with self.subTest(value=value):
+                os.makedirs(os.path.join(folder, "nginx", "conf"), exist_ok=True)
+                write(self.env_file, "TPOT_TYPE=HIVE\n" + (f"TPOT_DATA_PATH={value}\n" if value else ""))
+                self.assert_deployed(self.deploy())
+                with open(os.path.join(folder, "nginx", "conf", "lswebpasswd"), encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), f"{SENSOR}:{HASH}\n")
+                if folder != os.path.join(self.tpotce, "data"):
+                    self.assertFalse(os.path.exists(os.path.join(self.tpotce, "data", "nginx", "conf",
+                                                                 "lswebpasswd")))
+
+
+class DeployKeepTest(Harness):
+    """The fallback rewrites lswebpasswd from LS_WEB_USER: its other lines go into lswebpasswd.lost first,
+    as tpotinit does; if they cannot, nothing is deployed and nothing changes."""
+
+    OTHER = "sensor-hand-made:$apr1$x$handmadehash"
+
+    def path(self, name="lswebpasswd"):
+        return os.path.join(self.tpotce, "data", "nginx", "conf", name)
+
+    def test_the_other_lines_are_kept(self):
+        old = base64.b64encode(b"sensor-old-one:$apr1$x$y").decode()
+        write(self.env_file, f"TPOT_TYPE=HIVE\nLS_WEB_USER={old}\n")
+        write(self.path(), f"sensor-old-one:$apr1$x$y\n{self.OTHER}\nlegacy:$1$salt$hash\n")
+        write(self.path("lswebpasswd.lost"), "legacy:$1$salt$hash\n")
+        result = self.deploy()
+        self.assert_deployed(result)
+        self.assertIn("1 line(s) of lswebpasswd that LS_WEB_USER does not name are kept in lswebpasswd.lost",
+                      result.stdout)
+        with open(self.path("lswebpasswd.lost"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), f"legacy:$1$salt$hash\n{self.OTHER}\n")
+        self.assertEqual(self.lswebpasswd(), f"sensor-old-one:$apr1$x$y\n{SENSOR}:{HASH}\n")
+
+    def test_nothing_is_deployed_when_they_cannot_be_kept(self):
+        for _ in self.both():
+            write(self.env_file, "TPOT_TYPE=HIVE\n")
+            write(self.path(), f"{self.OTHER}\n")
+            os.makedirs(self.path("lswebpasswd.lost"), exist_ok=True)
+            result = self.deploy()
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("(it is not a regular file), this HIVE is unchanged", result.stdout)
+            self.assertNotIn("ansible-playbook", self.calls())
+            self.assertEqual(self.lswebpasswd(), f"{self.OTHER}\n")
+            self.assertEqual(self.env_text(), "TPOT_TYPE=HIVE\n")
+
+
 class DeployLookTest(Harness):
     """Cosmetics: the indentation of the file, plain quotes, 'an SSH key', the canonical y/n question."""
 

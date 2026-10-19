@@ -145,7 +145,8 @@ check "data: the links of elk stay" "yes yes" "$( [ -L /data/elk/to-file ] && ec
 rm -rf /data
 kept="beelzebub/key/ssh_host_key ciscoasa/identity/identity.json conpot/identity/identity.json
 cowrie/keys/persona-state.json cowrie/keys/ubuntu-noble/ssh_host_ed25519_key endlessh/identity/banner
-galah/cert/cert.pem galah/cache/cache.db miniprint/data/state.json rdphoneypot/cert/server.pem suricata/rules/suricata.rules"
+galah/cert/cert.pem galah/cache/cache.db miniprint/data/state.json rdphoneypot/cert/server.pem suricata/rules/suricata.rules
+nginx/conf/nginxpasswd.lost nginx/conf/lswebpasswd.lost"
 gone="beelzebub/log/beelzebub.json ciscoasa/log/ciscoasa.json ciscoasa/payloads/sample conpot/log/conpot.json
 cowrie/log/cowrie.json cowrie/log/tty/session cowrie/downloads/sample cowrie/downloads.tgz
 endlessh/log/endlessh.log galah/log/galah.json miniprint/log/miniprint.json

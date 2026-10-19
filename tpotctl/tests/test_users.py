@@ -242,6 +242,212 @@ class StoreTest(unittest.TestCase):
             self.assertIn(hint, text)
 
 
+ALICE = "alice:$2y$05$aliceshashaliceshashaliceshashaliceshashaliceshash"
+BOB = "bob:$apr1$bobsalt$bobshashbobshash"
+
+
+@unittest.skipUnless(yaml, "PyYAML is not installed")
+class FileOnlyTest(unittest.TestCase):
+    """Users of nginxpasswd and nginxpasswd.lost that WEB_USER does not name: offered, taken over, and no
+    change of the web users drops them."""
+
+    def setUp(self):
+        self.repo, self.passwd = checkout(self, web_user="")
+        self.lost = self.passwd + ".lost"
+        with open(self.passwd, "w") as handle:
+            handle.write(f"{ALICE}\n{BOB}\n")
+
+    def store(self):
+        return users.load(self.repo, hasher=fake_hash)
+
+    def read(self, path):
+        with open(path) as handle:
+            return handle.read()
+
+    def test_an_empty_web_user_offers_the_users_of_the_file(self):
+        found = self.store().file_only()
+        self.assertEqual([(e.name, e.source, e.line) for e in found],
+                         [("alice", "nginxpasswd", ALICE), ("bob", "nginxpasswd", BOB)])
+        self.assertEqual(found[0].entry, users.encode(ALICE))
+
+    def test_every_change_refuses_while_the_file_holds_them(self):
+        inode = os.stat(self.passwd).st_ino
+        for change in (lambda s: s.add("carol", "pw"),):
+            with self.assertRaises(users.UsersError) as caught:
+                change(self.store())
+            self.assertEqual(str(caught.exception), "nginxpasswd holds 2 web user(s) the .env does not name "
+                                                    "(alice, bob); take them over first: tpot users import")
+        # with users of its own in WEB_USER: passwd and remove refuse as well
+        repo, passwd = checkout(self, f"{APR1} {users.encode(fake_hash('dave', 'pw'))}")
+        with open(passwd, "w") as handle:
+            handle.write(f"{ALICE}\n")
+        store = users.load(repo, hasher=fake_hash)
+        for change in (lambda: store.passwd("tsec", "pw2"), lambda: store.remove("dave"),
+                       lambda: store.add("carol", "pw")):
+            with self.assertRaises(users.UsersError) as caught:
+                change()
+            self.assertIn("tpot users import", str(caught.exception))
+        self.assertEqual(self.read(passwd), f"{ALICE}\n")
+        self.assertEqual(self.read(self.passwd), f"{ALICE}\n{BOB}\n")
+        self.assertEqual(os.stat(self.passwd).st_ino, inode)
+        self.assertEqual(self.store().users(), [])
+
+    def test_take_over_writes_web_user_and_the_file(self):
+        inode = os.stat(self.passwd).st_ino
+        self.assertIn("right away", self.store().take_over(["alice", "bob"]))
+        self.assertEqual([u.line for u in self.store().users()], [ALICE, BOB])
+        self.assertEqual(self.read(self.passwd), f"{ALICE}\n{BOB}\n")
+        self.assertEqual(os.stat(self.passwd).st_ino, inode)
+        self.assertEqual(self.store().file_only(), [])
+        # a change works again
+        self.store().add("carol", "pw")
+        with self.assertRaises(users.UsersError):
+            self.store().take_over(["nobody"])
+
+    def test_a_line_t_pot_does_not_take_is_not_offered(self):
+        with open(self.passwd, "w") as handle:
+            handle.write(f"{ALICE}\nold:abJnggxhB/yWI\nno colon here\n\n")
+        self.assertEqual([e.name for e in self.store().file_only()], ["alice"])
+
+    def test_the_lost_file_is_offered_but_does_not_block(self):
+        repo, passwd = checkout(self)                   # WEB_USER: tsec
+        with open(passwd, "w") as handle:
+            handle.write(users.parse(APR1)[0].line + "\n")
+        with open(passwd + ".lost", "w") as handle:
+            handle.write(f"bob:$apr1$older$hash\n{BOB}\n{ALICE}\n")
+        store = users.load(repo, hasher=fake_hash)
+        found = store.file_only()
+        # the last line of a name counts in .lost
+        self.assertEqual([(e.name, e.source, e.line) for e in found],
+                         [("bob", "nginxpasswd.lost", BOB), ("alice", "nginxpasswd.lost", ALICE)])
+        store.add("carol", "pw")                         # not blocked
+        users.load(repo, hasher=fake_hash).take_over(["bob"])
+        self.assertEqual(self.read(passwd + ".lost"), f"{ALICE}\n")
+        self.assertEqual([u.name for u in users.load(repo).users()], ["tsec", "carol", "bob"])
+        self.assertIn(f"{BOB}\n", self.read(passwd))
+
+    def test_the_live_file_wins_over_the_lost_one(self):
+        with open(self.lost, "w") as handle:
+            handle.write("alice:$apr1$older$hash\n")
+        found = {e.name: e for e in self.store().file_only()}
+        self.assertEqual((found["alice"].source, found["alice"].line), ("nginxpasswd", ALICE))
+
+    def legacy_checkout(self):
+        """WEB_USER: tsec; nginxpasswd: tsec and a line nginx takes but T-Pot does not ($1$)."""
+        repo, passwd = checkout(self)
+        with open(passwd, "w") as handle:
+            handle.write(users.parse(APR1)[0].line + "\nlegacy:$1$salt$legacyhash\n")
+        return repo, passwd
+
+    def test_a_line_t_pot_does_not_take_goes_into_the_lost_file(self):
+        repo, passwd = self.legacy_checkout()
+        store = users.load(repo, hasher=fake_hash)
+        self.assertEqual(store.file_only(), [])                  # not offered, it does not block either
+        self.assertIn("1 line(s) of nginxpasswd are kept in nginxpasswd.lost", store.add("carol", "pw"))
+        self.assertEqual(self.read(passwd + ".lost"), "legacy:$1$salt$legacyhash\n")
+        self.assertEqual(oct(os.stat(passwd + ".lost").st_mode & 0o777), "0o660")
+        self.assertNotIn("legacy", self.read(passwd))
+        # removing a user of WEB_USER keeps nothing
+        users.load(repo, hasher=fake_hash).remove("carol")
+        self.assertEqual(self.read(passwd + ".lost"), "legacy:$1$salt$legacyhash\n")
+
+    def test_no_change_when_the_lost_file_cannot_take_them(self):
+        repo, passwd = self.legacy_checkout()
+        os.mkdir(passwd + ".lost")
+        before = self.read(passwd)
+        with self.assertRaises(users.UsersError) as caught:
+            users.load(repo, hasher=fake_hash).add("carol", "pw")
+        self.assertEqual(str(caught.exception), f"1 line(s) of nginxpasswd cannot be kept in {passwd}.lost (it is not "
+                                                f"a regular file), nginxpasswd stays as it is")
+        self.assertEqual(self.read(passwd), before)
+        self.assertEqual([u.name for u in users.load(repo).users()], ["tsec"])
+
+    def test_take_over_replaces_the_lost_file(self):
+        with open(self.lost, "w") as handle:
+            handle.write(f"erin:$apr1$x$y\n{ALICE}\n")
+        os.chmod(self.lost, 0o644)
+        inode = os.stat(self.lost).st_ino
+        users.drop_lost(self.passwd, ["alice"])
+        self.assertEqual(self.read(self.lost), "erin:$apr1$x$y\n")
+        self.assertEqual(oct(os.stat(self.lost).st_mode & 0o777), "0o660")
+        self.assertNotEqual(os.stat(self.lost).st_ino, inode)
+        self.assertEqual([n for n in os.listdir(os.path.dirname(self.lost)) if n.startswith(".")], [])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads every file")
+    @unittest.skipUnless(textual, "Rich is not installed, run with the venv of tpot")
+    def test_import_names_a_file_it_cannot_read(self):
+        from tpotctl import cli
+        with open(self.lost, "w") as handle:
+            handle.write("erin:$apr1$x$y\n")
+        os.chmod(self.lost, 0)
+        self.addCleanup(os.chmod, self.lost, 0o600)
+        original = users.load
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(users, "load", lambda: original(self.repo, hasher=fake_hash)), \
+                mock.patch.object(cli.os, "geteuid", return_value=1000, create=True), \
+                redirect_stdout(out), redirect_stderr(err):
+            self.assertEqual(cli.main(["users", "import", "-y"]), 1)
+        text = out.getvalue() + err.getvalue()
+        self.assertIn(f"cannot read {self.lost}: Permission denied, log in again for the group tpot", text)
+        self.assertNotIn("Nothing to take over", text)
+
+    def test_keep_puts_them_into_the_lost_file(self):
+        """The edition switch of a SENSOR to a HIVE: its nginxpasswd is not served, its users are kept."""
+        with open(self.lost, "w") as handle:
+            handle.write(f"{BOB}\n")
+        note = self.store().add("carol", "pw", keep=True)
+        self.assertIn("1 line(s) of nginxpasswd are kept in nginxpasswd.lost", note)
+        self.assertEqual(self.read(self.lost), f"{BOB}\n{ALICE}\n")
+        self.assertEqual(self.read(self.passwd), fake_hash("carol", "pw") + "\n")
+        self.assertEqual([e.name for e in self.store().file_only()], ["bob", "alice"])
+
+    @unittest.skipUnless(textual, "Rich is not installed, run with the venv of tpot")
+    def test_cli_import(self):
+        from tpotctl import cli
+        original = users.load
+
+        class Stdin(io.StringIO):
+            def isatty(self):
+                return False
+        with mock.patch.object(users, "load", lambda: original(self.repo, hasher=fake_hash)), \
+                mock.patch.object(cli.os, "geteuid", return_value=1000, create=True):
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err), mock.patch("sys.stdin", Stdin()):
+                try:
+                    code = cli.main(["users", "import"])
+                except SystemExit as stop:
+                    code = stop.code
+                self.assertEqual(code, 2)                               # cannot ask
+                self.assertEqual(cli.main(["users", "list"]), 1)
+                self.assertEqual(cli.main(["users", "add", "carol", "--password-stdin"]), 1)
+                self.assertEqual(cli.main(["users", "import", "-y"]), 0)
+                self.assertEqual(cli.main(["users", "import", "--yes"]), 0)  # nothing left
+            text = out.getvalue() + err.getvalue()
+            self.assertIn("nginxpasswd holds 2 web user(s) WEB_USER does not name (alice, bob), take them over "
+                          "with: tpot users import", text)
+            self.assertIn("take them over first: tpot users import", text)
+            self.assertIn("alice  (from nginxpasswd)", text)
+            self.assertNotIn("To drop one on purpose", text)          # nothing of .lost
+            self.assertIn("Nothing to take over", text)
+        self.assertEqual(self.read(self.passwd), f"{ALICE}\n{BOB}\n")
+        self.assertEqual([u.name for u in users.load(self.repo).users()], ["alice", "bob"])
+
+    def test_env_check_names_the_import(self):
+        from tpotctl import settings
+        problems = [p for p in settings.load(self.repo).problems() if p.key == "WEB_USER"]
+        self.assertEqual([p.level for p in problems], ["error"])
+        self.assertEqual(problems[0].text, "is not set or empty; nginxpasswd holds 2 web user(s) it does not name, "
+                                           "take them over with: tpot users import.")
+        self.store().take_over(["alice", "bob"])
+        self.assertEqual([p for p in settings.load(self.repo).problems() if p.key == "WEB_USER"], [])
+        with open(self.lost, "w") as handle:
+            handle.write("erin:$apr1$x$y\n")
+        problems = [p for p in settings.load(self.repo).problems() if p.key == "WEB_USER"]
+        self.assertEqual([(p.level, p.text) for p in problems],
+                         [("warning", "nginxpasswd.lost holds 1 web user(s) it does not name, take them over "
+                                      "with: tpot users import.")])
+
+
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
 class UsersPaneTest(unittest.IsolatedAsyncioTestCase):
 
@@ -297,6 +503,57 @@ class UsersPaneTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause(0.3)
                 self.assertEqual(app.query_one("#users-table").row_count, 1)
         self.assertEqual([u.name for u in users.load(repo).users()], ["tsec"])
+
+    async def test_take_over_the_users_of_nginxpasswd(self):
+        from tpotctl import app as tapp, ops
+        from tpotctl.screens.dialogs import ConfirmDialog, UserDialog
+        repo, passwd = checkout(self, web_user="")
+        with open(passwd, "w") as handle:
+            handle.write(f"{ALICE}\n{BOB}\n")
+
+        class Backend(tapp.Backend):
+            def linux_host(self):
+                return True
+
+            def tpot_type(self):
+                return "HIVE"
+
+            def status(self):
+                return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", repo)
+
+            def containers(self):
+                return []
+
+            def images(self):
+                return []
+
+            def backups(self):
+                return []
+
+            def users(self):
+                return users.load(repo, hasher=fake_hash)
+
+        app = tapp.TpotApp(backend=Backend(), runner=lambda command, cwd=None: 0)
+        async with app.run_test(size=(140, 45)) as pilot:
+            await pilot.pause(0.3)
+            app.query_one("ContentSwitcher").current = "users"
+            await pilot.pause(0.3)
+            self.assertEqual(app.query_one("#users-table").row_count, 0)
+            self.assertTrue(app.query_one("#users-import-actions").display)
+            self.assertEqual(str(app.query_one("#user-import").label), "Take over 2 users")
+            self.assertIn("nginxpasswd holds 2 web user(s) WEB_USER does not name (alice, bob)",
+                          str(app.query_one("#users-info").render()))
+            await pilot.click("#user-add")             # refused before the dialog
+            await pilot.pause(0.2)
+            self.assertNotIsInstance(app.screen, UserDialog)
+            await pilot.click("#user-import")
+            await pilot.pause(0.2)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            await pilot.click("#yes")
+            await pilot.pause(0.3)
+            self.assertEqual(app.query_one("#users-table").row_count, 2)
+            self.assertFalse(app.query_one("#users-import-actions").display)
+        self.assertEqual([u.name for u in users.load(repo).users()], ["alice", "bob"])
 
     async def test_users_page_is_locked_on_a_sensor(self):
         from tpotctl import app as tapp

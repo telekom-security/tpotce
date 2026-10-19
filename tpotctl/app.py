@@ -1301,6 +1301,29 @@ def offer_row_actions(pane, name: str, kind: str, actions) -> None:
     pane.app.push_screen(ChoiceDialog(f"{kind} {name}", [f"{text} {name}" for text, _button in actions]), chosen)
 
 
+def take_over_label(count: int, kind: str) -> str:
+    """The button of the users (sensors) a passwd file or its .lost holds and the .env does not name."""
+    return f"Take over {count} {kind}{'s' if count != 1 else ''}"
+
+
+def take_over_body(found, key: str, then: str) -> Text:
+    """What the question of that button lists: name and file of each."""
+    body = Text()
+    for entry in found:
+        body.append(f"{entry.name}", style=f"bold {theme.color('glass')}")
+        body.append(f"  from {entry.source}\n", style=theme.color("mist"))
+    body.append(f"They go into {key}. {then}", style=theme.color("mist"))
+    return body
+
+
+def take_over_hint(found, kind: str, key: str) -> str:
+    sources = " and ".join(dict.fromkeys(e.source for e in found))
+    live = any(not e.source.endswith(".lost") for e in found)
+    return (f"{sources} {'hold' if ' and ' in sources else 'holds'} {len(found)} {kind}(s) {key} does not name "
+            f"({', '.join(e.name for e in found)}). Take them over"
+            + (", until then nothing here can be changed." if live else " to give them their access back."))
+
+
 class UsersPane(Vertical):
     """Users of the web UI (WEB_USER), changes count at once."""
 
@@ -1311,6 +1334,9 @@ class UsersPane(Vertical):
             yield Button("Add", id="user-add", variant="primary")
             yield Button("Change password", id="user-passwd")
             yield Button("Remove", id="user-remove")
+        # users of nginxpasswd / nginxpasswd.lost that WEB_USER does not name (tpot users import)
+        with Horizontal(classes="actions", id="users-import-actions"):
+            yield Button("Take over", id="user-import")
 
     def on_mount(self) -> None:
         self.query_one(DataTable).add_columns("User", "Hash", "State")
@@ -1328,15 +1354,22 @@ class UsersPane(Vertical):
         try:
             self.store = self.app.backend.users()
             entries = self.store.users()
+            self.found = self.store.file_only()
         except UsersError as err:
-            self.store, entries = None, []
+            self.store, entries, self.found = None, [], []
             info.append(str(err), style=theme.color("error"))
         for user in entries:
             state = Text(f"{glyphs.g('ok')} ok", style=theme.color("ok")) if user.ok else \
                 Text(f"{glyphs.g('fail')} {user.problem}", style=f"bold {theme.color('error')}")
             table.add_row(user.name, user.scheme or "-", state, key=user.name)
+        actions = self.query_one("#users-import-actions", Horizontal)
+        actions.display = bool(self.found)
+        self.query_one("#user-import", Button).label = take_over_label(len(self.found), "user")
+        if self.found:
+            info.append(f"{glyphs.g('warn')} {take_over_hint(self.found, 'web user', 'WEB_USER')}\n",
+                        style=f"bold {theme.color('warn')}")
         if self.store is not None:
-            if not entries:
+            if not entries and not self.found:
                 info.append("No web users yet. Add one, without a user nobody can open the T-Pot web UI.\n",
                             style=f"bold {theme.color('warn')}")
             info.append("New and changed passwords are bcrypt, nginx uses them right away.",
@@ -1357,6 +1390,12 @@ class UsersPane(Vertical):
         if self.store is None:
             return
         name = self.selected()
+        if event.button.id in ("user-add", "user-passwd", "user-remove"):
+            try:
+                self.store.check_writable()         # before a dialog asks for anything
+            except tusers.UsersError as err:
+                self.app.notify(str(err), title="Not changed", severity="error", timeout=10)
+                return
         if event.button.id == "user-add":
             self.app.push_screen(UserDialog("Add a web user", check_name=tusers.check_name,
                                             weakness=tusers.weakness),
@@ -1371,6 +1410,14 @@ class UsersPane(Vertical):
             self.app.push_screen(ConfirmDialog(f"Remove the web user {name}?", yes="Remove"),
                                  lambda yes: self.run_change(lambda: self.store.remove(name),
                                                              f"{name} is removed") if yes else None)
+        elif event.button.id == "user-import" and self.found:
+            names = [entry.name for entry in self.found]
+            self.app.push_screen(ConfirmDialog(f"{take_over_label(len(names), 'web user')}?",
+                                               take_over_body(self.found, "WEB_USER",
+                                                              "They can log in to the web UI then."),
+                                               yes="Take over"),
+                                 lambda yes: self.run_change(lambda: self.store.take_over(names),
+                                                             f"{', '.join(names)} taken over") if yes else None)
 
     def save(self, action: str, result) -> None:
         from tpotctl import users as tusers
@@ -1419,10 +1466,15 @@ class SensorsPane(Vertical):
             yield Button("Renew certificate", id="sensor-cert-renew")
             yield Button("Send certificate", id="sensor-cert-send")
             yield Button("Refresh", id="sensor-refresh")
+        # sensors of lswebpasswd / lswebpasswd.lost that LS_WEB_USER does not name (tpot sensors import)
+        with Horizontal(classes="actions", id="sensors-import-actions"):
+            yield Button("Take over", id="sensor-import")
 
     def on_mount(self) -> None:
         self.query_one(DataTable).add_columns("Sensor", "Host", "Hostname", "Last seen", "State")
         self.registry = None
+        self.found = []
+        self.query_one("#sensors-import-actions", Horizontal).display = False
         self.load()
 
     def stale(self) -> bool:
@@ -1441,33 +1493,48 @@ class SensorsPane(Vertical):
             registry = self.app.backend.sensors()
             status = self.app.backend.sensor_status()
             tsensors.link_hostnames(registry, status)
+            found = registry.file_only()
             problem = ""
         except tsensors.SensorsError as err:
-            registry, status, problem = None, None, str(err)
-        self.app.call_from_thread(self.show, registry, status, problem)
+            registry, status, found, problem = None, None, [], str(err)
+        self.app.call_from_thread(self.show, registry, status, problem, found)
 
-    def show(self, registry, status, problem: str) -> None:
+    def show(self, registry, status, problem: str, found=()) -> None:
         self.registry = registry
+        self.found = list(found)
         table = self.query_one(DataTable)
         table.clear()
         info = Text()
+        self.query_one("#sensors-import-actions", Horizontal).display = bool(self.found)
+        self.query_one("#sensor-import", Button).label = take_over_label(len(self.found), "sensor")
         if registry is None:
             info.append(problem, style=theme.color("error"))
             self.query_one("#sensors-info", Static).update(info)
             return
+        takeable = {entry.name: entry for entry in self.found}
         for sensor in registry.sensors():
             seen = status.sensors.get(sensor.name)
-            if not sensor.access:
+            if not sensor.access and sensor.name in takeable:
+                state = Text(f"{glyphs.g('warn')} no access, in {takeable[sensor.name].source}",
+                             style=theme.color("warn"))
+            elif not sensor.access:
                 state = Text(f"{glyphs.g('fail')} no access", style=theme.color("error"))
             elif seen:
                 state = Text(f"{glyphs.g('running')} sending", style=theme.color("ok"))
             else:
                 state = Text(f"{glyphs.g('stopped')} " + ("unknown" if status.problem else "nothing in 7 days"),
                              style=theme.color("warn"))
-            table.add_row(sensor.name + ("" if sensor.source == "deployed" else " (migrated)"), sensor.host or "-",
-                          (seen.hostname if seen else sensor.hostname) or "-",
+            table.add_row(sensor.name + ("" if sensor.source == "deployed" else f" ({sensor.source})"),
+                          sensor.host or "-", (seen.hostname if seen else sensor.hostname) or "-",
                           seen.last[:19].replace("T", " ") if seen else "-", state, key=sensor.name)
-        if not registry.sensors():
+        for name, entry in takeable.items():
+            if name not in registry.records:
+                table.add_row(name, "-", "-", "-", Text(f"{glyphs.g('warn')} no access, in {entry.source}",
+                                                        style=theme.color("warn")), key=name)
+        if self.found:
+            info.append(f"{glyphs.g('warn')} {take_over_hint(self.found, 'sensor', 'LS_WEB_USER')}",
+                        style=f"bold {theme.color('warn')}")
+        if not registry.sensors() and not self.found:
             info.append("No sensors yet. Deploy a sensor to send its events to this HIVE.",
                         style=theme.color("mist"))
         if registry.migrated:
@@ -1496,6 +1563,11 @@ class SensorsPane(Vertical):
             self.app.push_screen(SensorDialog(tsensors.check_address, tsensors.check_user,
                                               tsensors.default_hive_address, tsensors.check_hive_address),
                                  self.deploy)
+        elif button in ("sensor-edit", "sensor-remove") and self.registry is not None \
+                and self.selected() and self.selected() not in self.registry.records:
+            # a sensor of lswebpasswd(.lost) only: nothing to edit or revoke before it is taken over
+            self.app.notify(f"{self.selected()} has no access yet: {take_over_label(len(self.found), 'sensor')}.",
+                            title="Sensors", timeout=5)
         elif button == "sensor-edit" and self.selected() and self.registry is not None:
             from tpotctl.screens.dialogs import SensorEditDialog
             name, registry = self.selected(), self.registry
@@ -1507,6 +1579,13 @@ class SensorsPane(Vertical):
             self.app.push_screen(ConfirmDialog(f"Revoke the access of {name}? It cannot send to this HIVE any more, "
                                                f"nothing is done on the sensor itself.", yes="Revoke"),
                                  lambda yes: self.revoke(name) if yes else None)
+        elif button == "sensor-import" and self.found and self.registry is not None:
+            names, registry = [entry.name for entry in self.found], self.registry
+            self.app.push_screen(ConfirmDialog(f"{take_over_label(len(names), 'sensor')}?",
+                                               take_over_body(self.found, "LS_WEB_USER",
+                                                              "They can send to this HIVE then."),
+                                               yes="Take over"),
+                                 lambda yes: self.take_over(registry, names) if yes else None)
         elif button == "sensor-cert-renew":
             self.app.runner([LAUNCHER, "sensors", "cert", "--renew"], cwd=REPO_DIR)
             self.load()
@@ -1529,6 +1608,17 @@ class SensorsPane(Vertical):
         if result["nopass"]:
             command.append("--no-become-pass")
         self.app.runner(command, cwd=REPO_DIR)
+        self.load()
+        self.app.config_maybe_changed()         # LS_WEB_USER
+
+    def take_over(self, registry, names) -> None:
+        from tpotctl.sensors import SensorsError
+        try:
+            note = registry.take_over(names)
+        except SensorsError as err:
+            self.app.notify(str(err), title="Not taken over", severity="error", timeout=10)
+            return
+        self.app.notify(f"{', '.join(names)} can send again, {note}.", title="Sensors")
         self.load()
         self.app.config_maybe_changed()         # LS_WEB_USER
 
@@ -3315,6 +3405,8 @@ class TpotApp(App):
                         fix += " (Docker Desktop runs the MAC_WIN edition)"
                     else:
                         fix += " and switch to the MAC_WIN edition on Edition & services"
+            elif key == "WEB_USER" and "tpot users import" in problem.text:
+                fix, page = "Take them over on the Web users page (tpot users import)", "users"
             elif key == "WEB_USER":
                 fix, page = "Add one on the Web users page (tpot users add)", "users"
             elif key in MANAGED_BY:
