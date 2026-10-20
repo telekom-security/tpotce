@@ -13,9 +13,9 @@ a port the time of its honeypot did not reach is "not reached", never closed (`P
 a budget for all probes. A refused or timed-out connection is a result (`port_open=False`), never
 an exception. The LLM honeypots (galah, beelzebub) are only knocked at: an answer would call the
 LLM. Some ports are left alone (skipped, the reason in the detail): dionaea's FTP data port 20
-(nothing listens), its mirror port 42 (the mirror service connects back to the source) and its
-TFTP port 69 (it answers only the first request after a start); its HTTP port 81 is checked for
-being open only (it answers no GET). A
+(nothing listens) and its mirror port 42 (the mirror service connects back to the source). Its TFTP
+port 69 gets a read request: the answer comes from a port of the session, so that probe takes an
+answer from any port (`from_any`). A
 honeypot that does not log some sources by its configuration names them (`PortProbe.ignores`):
 the probe of an address among them still runs, `ProbeResult.ignored` says which entry holds it.
 No honeypot names any today: elasticpot, ipphoney and rdphoneypot leave out only 127.0.0.1
@@ -185,19 +185,28 @@ class _Ctx:
         return self.recv_until(sock, lambda d: b"\n" in d)
 
     # -- UDP ----------------------------------------------------------------
-    def udp(self, payload: bytes, token: bool = False, answer: bool = True, wait: float = 3.0) -> bytes:
+    def udp(self, payload: bytes, token: bool = False, answer: bool = True, wait: float = 3.0,
+            from_any: bool = False) -> bytes:
         """One datagram, and the answer (b"" without one). Refused (ICMP) is ConnectionRefusedError;
-        without `answer` a datagram that is not refused within `wait` counts as taken."""
+        without `answer` a datagram that is not refused within `wait` counts as taken. A service that
+        answers from a port of its own (TFTP, RFC 1350) needs `from_any`: the socket is not connected,
+        so the answer of that port is taken (a connected socket drops it)."""
         family, kind, proto, _, address = socket.getaddrinfo(self.host, self.port.published,
                                                              type=socket.SOCK_DGRAM)[0]
         with socket.socket(family, kind, proto) as sock:
             sock.settimeout(self.clock.timeout(wait))
-            sock.connect(address)
+            if not from_any:
+                sock.connect(address)
+            else:
+                sock.bind(("", 0) if family == socket.AF_INET else ("::", 0))
             try:
                 self.src_ports.append(sock.getsockname()[1])
             except OSError:
                 pass
-            sock.send(payload)
+            if from_any:
+                sock.sendto(payload, address)
+            else:
+                sock.send(payload)
             if token:
                 self.token_sent = True
             try:
@@ -492,9 +501,10 @@ def tcp_exchange(payload: bytes, expect: Callable[[bytes], bool], what: str,
     return handler
 
 
-def udp_exchange(payload: bytes, expect: Callable[[bytes], bool], what: str, token: bool = False) -> Handler:
+def udp_exchange(payload: bytes, expect: Callable[[bytes], bool], what: str, token: bool = False,
+                 from_any: bool = False) -> Handler:
     def handler(ctx: _Ctx) -> Tuple[Optional[bool], str]:
-        data = ctx.udp(payload.replace(b"{token}", ctx.token.encode("ascii")), token=token)
+        data = ctx.udp(payload.replace(b"{token}", ctx.token.encode("ascii")), token=token, from_any=from_any)
         if not data:
             return False, f"no {what} answer"
         if not expect(data):
@@ -834,12 +844,6 @@ def _qhp_elastic(ctx: _Ctx) -> Tuple[Optional[bool], str]:
                 '{"size":1}', tls=True)(ctx)
 
 
-def _tftp(ctx: _Ctx) -> Tuple[Optional[bool], str]:
-    """A TFTP read request for <token>.txt (dionaea.sh); Dionaea is not expected to answer it."""
-    ctx.udp(b"\x00\x01" + f"{ctx.token}.txt".encode("ascii") + b"\x00octet\x00", token=True, answer=False, wait=1.0)
-    return None, "TFTP request taken (port only)"
-
-
 def not_tried(why: str) -> Handler:
     """A port left alone: nothing is sent, not even a connection (UDP has no knock)."""
     def handler(ctx: _Ctx) -> Tuple[Optional[bool], str]:
@@ -861,8 +865,6 @@ LATE_MARGIN = 10.0
 NMAP_LEAVE_OUT = {"ddospot": "nmap's DNS scripts make it recurse to Quad9 (DDOSPOT_DNS_RECURSION)"}
 FTP_DATA_REASON = "FTP data port, nothing listens on it"
 MIRROR_REASON = "dionaea mirrors a connection on this port back to its source"
-TFTP_REASON = "dionaea's TFTP answers only the first request after its start, later ones are refused"
-HTTP81_REASON = "dionaea's HTTP service (port 81) closes a GET without an answer"
 
 PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
     "adbhoney": PortProbe({(5555, TCP): adb}),
@@ -928,11 +930,11 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         # the mirror service connects back to the source of a connection (dionaea's mirror.py,
         # mirrord on 42): a probe would start a loop of connections, hundreds of events
         (42, TCP): not_tried(MIRROR_REASON),
-        # the TFTP listener answered only the first request after a start of dionaea, every later
-        # one was refused (E2E runs 3 and 3b): the probe could take it down for real attackers
-        (69, UDP): not_tried(TFTP_REASON),
-        # the http service of dionaea (services/http.yaml: ports 81) closes a GET without an answer
-        (81, TCP): port_only(HTTP81_REASON),
+        # a read request for a file that does not exist: the ERROR (or DATA) comes from a port of
+        # the session, not from 69 (RFC 1350), so the socket takes an answer from any port
+        (69, UDP): udp_exchange(b"\x00\x01{token}.txt\x00octet\x00", lambda d: d[:2] in (b"\x00\x03", b"\x00\x05"),
+                               "TFTP", token=True, from_any=True),
+        (81, TCP): http("GET", "/tpot-check/{token}?probe={token}"),
         (135, TCP): connect_only,
         (445, TCP): connect_only,
         (1433, TCP): connect_only,

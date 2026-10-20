@@ -1588,8 +1588,8 @@ class HptestUnderTheHoldTest(HoldFolder):
         self.assertNotIn("Ciscoasa IKE", result.stdout)
 
     def test_the_ports_the_probe_table_leaves_alone_are_not_scanned(self):
-        """hptest.sh leaves out what tpot check never sends to or only knocks at (dionaea 20, 42,
-        69/udp, 81; the LLM honeypots; ddospot), from the block generated
+        """hptest.sh leaves out what tpot check never sends to or only knocks at (dionaea 20, 42; the LLM
+        honeypots; ddospot), from the block generated
         from the probe table; a late writer (ciscoasa) keeps the hold its time + 10 s."""
         def ports(*pairs):
             return [{"target": t, "published": str(t), "protocol": proto} for t, proto in pairs]
@@ -1609,8 +1609,10 @@ class HptestUnderTheHoldTest(HoldFolder):
         with open(self.log, encoding="utf-8") as handle:
             log = handle.read().splitlines()
         scans = [line for line in log if " nmap " in f" {line} "]
-        self.assertTrue(any("-p T:21,T:445,T:8443 " in line for line in scans), scans)
-        self.assertFalse(any("U:" in line for line in scans), scans)
+        self.assertTrue(any("-p T:21,T:81,T:445,T:8443 " in line for line in scans), scans)
+        # dionaea's TFTP is probed: its UDP port is scanned, ddospot's (left out as a whole) are not
+        self.assertEqual([line for line in scans if "U:" in line], [line for line in scans if "-p U:69 " in line])
+        self.assertTrue(any("-p U:69 " in line for line in scans), scans)
         # ciscoasa writes late: the hold lasts 70 s after the scans
         self.assertIn("Waiting 70 s for the last log lines", result.stdout)
         self.assertTrue(probes.write_hptest(check=True), "the probe table block of hptest.sh is not current")
@@ -1794,19 +1796,15 @@ class ProbeTableTest(unittest.TestCase):
 
     def test_dionaea_leaves_ftp_data_and_the_mirror_alone(self):
         table = probes.PROBES["dionaea"]
-        for target, protocol, why in ((20, "tcp", probes.FTP_DATA_REASON), (42, "tcp", probes.MIRROR_REASON),
-                                      (69, "udp", probes.TFTP_REASON)):
+        for target, protocol, why in ((20, "tcp", probes.FTP_DATA_REASON), (42, "tcp", probes.MIRROR_REASON)):
             with self.subTest(port=target):
                 with self.assertRaises(probes._NotTried) as caught:
                     table.handler_for(Port(target, target, protocol))(None)
                 self.assertEqual(str(caught.exception), f"not probed, {why}")
-        # 81: only whether it is open
-        server = listening()
-        self.addCleanup(server.close)
-        answered, note = table.handler_for(Port(81, 81))(
-            probes._Ctx("127.0.0.1", Port(server.getsockname()[1], 81), TOKEN, probes._Clock(5)))
-        self.assertIsNone(answered)
-        self.assertEqual(note, f"port open, {probes.HTTP81_REASON}")
+        # TFTP and the HTTP service on 81 are probed with an answer: nothing is left out for them
+        for target, protocol in ((69, "udp"), (81, "tcp")):
+            self.assertIsNone(getattr(table.handler_for(Port(target, target, protocol)), "leave_out", None))
+        self.assertEqual(probes.hptest_table()["skipped"]["dionaea"], [["20", "tcp"], ["42", "tcp"]])
         self.assertEqual(probes.FTP_DATA_REASON, "FTP data port, nothing listens on it")
         self.assertEqual(probes.MIRROR_REASON, "dionaea mirrors a connection on this port back to its source")
         # skipped ports do not make the honeypot closed
@@ -2062,8 +2060,10 @@ class FakeBinary(FakeTcp):
 
 
 class FakeUdp:
-    def __init__(self, answer=b""):
+    def __init__(self, answer=b"", new_port=False):
         self.received = b""
+        self.new_port = new_port    # the answer comes from a port of its own (TFTP, RFC 1350)
+        self.answered_from = None
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("127.0.0.1", 0))
         self.sock.settimeout(3)
@@ -2079,7 +2079,14 @@ class FakeUdp:
             return
         self.received = data
         if self.answer:
-            self.sock.sendto(self.answer(data) if callable(self.answer) else self.answer, peer)
+            reply = self.answer(data) if callable(self.answer) else self.answer
+            if self.new_port:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as other:
+                    other.bind(("127.0.0.1", 0))
+                    self.answered_from = other.getsockname()[1]
+                    other.sendto(reply, peer)
+            else:
+                self.sock.sendto(reply, peer)
 
     def close(self):
         self.thread.join(5)
@@ -2237,6 +2244,41 @@ class ProbesTest(unittest.TestCase):
         self.assertEqual(server.received, TOKEN.encode() + b"\n")
         self.assertTrue(result.token_sent)
         self.assertEqual(len(result.src_ports), 1)
+
+    def test_dionaea_tftp_answers_from_a_port_of_the_session(self):
+        # a read request for <token>.txt: the ERROR "File not found" comes from another port than 69
+        error = b"\x00\x05\x00\x01File not found\x00"
+        server = FakeUdp(answer=error, new_port=True)
+        result = self.run_probe("dionaea", server, 69, "udp")
+        self.assertTrue(result.port_open and result.answered and result.answer_checked, result)
+        self.assertEqual(server.received, b"\x00\x01" + TOKEN.encode() + b".txt\x00octet\x00")
+        self.assertNotEqual(server.answered_from, server.port)
+        self.assertTrue(result.token_sent)
+        self.assertEqual(len(result.src_ports), 1)
+        self.assertEqual(result.detail, f"{server.port}/udp: TFTP answer")
+        # DATA, or an answer from port 69 itself (the limit of sessions), is an answer too
+        for reply, new_port in ((b"\x00\x03\x00\x01x", True), (b"\x00\x05\x00\x00Too many sessions\x00", False)):
+            self.assertTrue(self.run_probe("dionaea", FakeUdp(answer=reply, new_port=new_port), 69, "udp").answered)
+
+    def test_dionaea_tftp_no_answer_or_another_protocol(self):
+        with mock.patch.object(probes, "PORT_TIME", 1.0):
+            result = self.run_probe("dionaea", FakeUdp(), 69, "udp")
+        self.assertFalse(result.answered)
+        self.assertIn("no TFTP answer", result.detail)
+        result = self.run_probe("dionaea", FakeUdp(answer=b"HTTP/1.1 200 OK\r\n", new_port=True), 69, "udp")
+        self.assertTrue(result.port_open)
+        self.assertFalse(result.answered)
+        self.assertIn("no TFTP answer (", result.detail)
+
+    def test_dionaea_http_81(self):
+        server = FakeTcp([None, b"HTTP/1.1 404 Not Found\r\nServer: nginx\r\n\r\n"])
+        result = self.run_probe("dionaea", server, 81)
+        self.assertTrue(result.answered and result.answer_checked, result)
+        self.assertIn(f"GET /tpot-check/{TOKEN}?probe={TOKEN} HTTP/1.1".encode(), server.received)
+        self.assertEqual(result.detail, f"{server.port}/tcp: HTTP/1.1 404 Not Found")
+        result = self.run_probe("dionaea", FakeTcp([None, b""]), 81)
+        self.assertTrue(result.port_open)
+        self.assertFalse(result.answered)
 
     def test_udp_without_an_answer(self):
         server = FakeUdp()
