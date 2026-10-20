@@ -200,6 +200,37 @@ cases:
     set: {TPOT_CAPTURE_INTERFACE: "eth0;x"}
     errors: [TPOT_CAPTURE_INTERFACE]
     warnings: [LS_WEB_USER]
+  - name: dionaea limits at the bounds
+    services: [dionaea]
+    set: {DIONAEA_BISTREAMS_MAX_MB: "1", DIONAEA_BISTREAMS_MAX_FILES: "100000000", DIONAEA_BINARIES_MAX_MB: "1048576"}
+    warnings: [LS_WEB_USER]
+  - name: dionaea limits of 0 are not unlimited
+    services: [dionaea]
+    set: {DIONAEA_BISTREAMS_MAX_MB: "0", DIONAEA_BISTREAMS_MAX_FILES: "0", DIONAEA_BINARIES_MAX_MB: "0"}
+    errors: [DIONAEA_BISTREAMS_MAX_MB, DIONAEA_BISTREAMS_MAX_FILES, DIONAEA_BINARIES_MAX_MB]
+    warnings: [LS_WEB_USER]
+  - name: dionaea limits too large or not a number
+    services: [dionaea]
+    set: {DIONAEA_BISTREAMS_MAX_MB: "1048577", DIONAEA_BISTREAMS_MAX_FILES: "100000001", DIONAEA_BINARIES_MAX_MB: "2g"}
+    errors: [DIONAEA_BISTREAMS_MAX_MB, DIONAEA_BISTREAMS_MAX_FILES, DIONAEA_BINARIES_MAX_MB]
+    warnings: [LS_WEB_USER]
+  - name: an int beyond 2^64 is out of range, it does not wrap
+    services: [dionaea]
+    set: {DIONAEA_BISTREAMS_MAX_MB: "18446744073709551621"}
+    errors: [DIONAEA_BISTREAMS_MAX_MB]
+    warnings: [LS_WEB_USER]
+  - name: an int with leading zeros is its value
+    services: [dionaea]
+    set: {DIONAEA_BISTREAMS_MAX_MB: "0000000000000000000000000002048"}
+    warnings: [LS_WEB_USER]
+  - name: dionaea limits empty take the default of the compose file
+    services: [dionaea]
+    set: {DIONAEA_BISTREAMS_MAX_MB: "", DIONAEA_BISTREAMS_MAX_FILES: "", DIONAEA_BINARIES_MAX_MB: ""}
+    warnings: [LS_WEB_USER]
+  - name: dionaea limits without dionaea
+    services: [cowrie]
+    set: {DIONAEA_BISTREAMS_MAX_MB: abc, DIONAEA_BISTREAMS_MAX_FILES: abc, DIONAEA_BINARIES_MAX_MB: abc}
+    warnings: [LS_WEB_USER]
   - name: redishoneypot persona
     services: [redishoneypot]
     set: {REDISHONEYPOT_PROFILE: valkey8}

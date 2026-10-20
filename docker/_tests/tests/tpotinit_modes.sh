@@ -17,8 +17,8 @@ usage() {
 Usage: $0 [options]
 
 Check the modes tpotinit gives the data folder: folders 770, files 660 (no execute bit),
-nginx conf and cert 774 / 664, and links are neither followed nor changed. With
-TPOT_PERSISTENCE=off clean.sh keeps the identity and state of each service.
+nginx conf and cert 774 / 664, the samples of Dionaea 440, and links are neither followed
+nor changed. With TPOT_PERSISTENCE=off clean.sh keeps the identity and state of each service.
 
 The image only provides the tools (busybox chmod, logrotate, tar): dist/bin/data_modes.sh,
 dist/bin/clean.sh and update_permissions of dist/entrypoint.sh of this checkout run inside
@@ -118,7 +118,8 @@ check "helper: a link given as path is named" "# Warning: /t/top is a link, its 
 # 2. clean.sh on a data folder from an earlier release (everything 770), then update_permissions
 outside
 rm -rf /data
-mkdir -p /data/cowrie/log /data/elk/data/indices/x /data/nginx/conf /data/nginx/cert /data/ciscoasa/payloads
+mkdir -p /data/cowrie/log /data/elk/data/indices/x /data/nginx/conf /data/nginx/cert /data/ciscoasa/payloads /data/dionaea/binaries
+echo inert > /data/dionaea/binaries/sample
 tree /data/cowrie/log
 echo inert > /data/elk/data/indices/x/segment
 echo inert > /data/nginx/conf/nginxpasswd
@@ -129,6 +130,9 @@ chmod -R 770 /data
 ln -s /outside/file /data/elk/to-file
 ln -s /outside/folder /data/elk/to-folder
 bash /opt/tpot/bin/clean.sh on 30 > /tmp/clean.log 2>&1 || { echo "FAIL clean.sh on"; sed 's/^/     /' /tmp/clean.log; failed=1; }
+check "dionaea: the archived sample is 440" "-r--r-----" "$(tar -tvzf /data/dionaea/binaries.tgz 2>/dev/null | awk '$NF ~ /binaries\/sample$/ {print $1}')"
+echo inert > /data/dionaea/binaries/new
+chmod 0770 /data/dionaea/binaries/new
 eval "$(sed -n '/^\. \/opt\/tpot\/bin\/data_modes.sh$/p; /^update_permissions() {$/,/^}$/p' /work/entrypoint.sh)"
 check "entrypoint: update_permissions is there" "function" "$(type -t update_permissions)"
 update_permissions > /tmp/update.log 2>&1 || { echo "FAIL update_permissions"; sed 's/^/     /' /tmp/update.log; failed=1; }
@@ -136,6 +140,7 @@ check "data: no file with an execute bit" "" "$(find /data -type f -perm /111 | 
 check "data: every folder 770 (nginx conf and cert 774)" "" "$(find /data -type d ! -perm 770 | grep -Ev '^/data/nginx/(conf|cert)$' | sort | tr '\n' ' ')"
 check "data: nginx conf and cert" "774 774 664 664" "$(mode /data/nginx/conf) $(mode /data/nginx/cert) $(mode /data/nginx/conf/nginxpasswd) $(mode /data/nginx/cert/nginx.crt)"
 check "data: files rw for owner and group" "660 660 660 660" "$(mode /data/cowrie/log/run) $(mode /data/elk/data/indices/x/segment) $(mode /data/ciscoasa/payloads/sample) $(mode /data/uuid)"
+check "dionaea: a new sample is 440 after update_permissions" 440 "$(mode /data/dionaea/binaries/new)"
 check "data: owner tpot" "tpot:tpot" "$(stat -c %U:%G /data/elk/data/indices/x/segment)"
 outside_unchanged data /data/cowrie/log
 check "data: the links of elk stay" "yes yes" "$( [ -L /data/elk/to-file ] && echo yes) $( [ -L /data/elk/to-folder ] && echo yes)"

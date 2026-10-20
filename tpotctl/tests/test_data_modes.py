@@ -244,7 +244,7 @@ class PersistenceTest(unittest.TestCase):
 
     def run_function(self, helper, name, body, root, persistence):
         here = re.sub(r"(?<![\w/])/data(?=/|\s|$)", root, f"{name} () {{{body}}}")
-        script = ("fuDATA_MODES () { :; }\nchown () { :; }\n" + helper + "\n" + here
+        script = ("fuDATA_MODES () { :; }\nfuDATA_SAMPLE_MODES () { :; }\nchown () { :; }\n" + helper + "\n" + here
                   + f"\nmyPERSISTENCE={persistence}\n{name}\n")
         result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -301,3 +301,42 @@ class PersistenceTest(unittest.TestCase):
             self.run_function(helper, "fuCONPOT", functions["fuCONPOT"], root, "off")
             self.assertTrue((Path(outside) / "file").exists())
             self.assertFalse((folder / "log").is_symlink())
+
+
+class SampleModesTest(unittest.TestCase):
+    """The samples of Dionaea in binaries/ are 440 after every start of tpotinit and before clean.sh
+    archives them; the folders keep the modes of the data folder, links are neither followed nor changed."""
+
+    def test_the_scripts_set_the_sample_modes(self):
+        function = re.search(r"^update_permissions\(\) \{.*?^\}", ENTRYPOINT.read_text(), re.M | re.S).group()
+        self.assertLess(function.index("fuDATA_MODES /data\n"),
+                        function.index("fuDATA_SAMPLE_MODES /data/dionaea/binaries"))
+        text = CLEAN.read_text()
+        self.assertLess(text.index("fuDATA_SAMPLE_MODES /data/dionaea/binaries"), text.index("tar -I"))
+        dionaea = re.search(r"^fuDIONAEA \(\) \{.*?^\}", text, re.M | re.S).group()
+        self.assertLess(dionaea.index("fuDATA_MODES /data/dionaea"),
+                        dionaea.index("fuDATA_SAMPLE_MODES /data/dionaea/binaries"))
+
+    def test_samples_440_folders_and_links_stay(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            binaries = base / "binaries"
+            (binaries / "sub").mkdir(parents=True)
+            outside = base / "outside"
+            outside.write_text("inert")
+            outside.chmod(0o660)
+            for name in ("sample", "sub/sample"):
+                (binaries / name).write_text("inert")
+                (binaries / name).chmod(0o770)
+            (binaries / "sub").chmod(0o770)
+            (binaries / "to-file").symlink_to(outside)
+            linked = base / "linked"
+            linked.symlink_to(binaries)
+            result = subprocess.run(["bash", "-c", f'. "{HELPER}"\nfuDATA_SAMPLE_MODES "{binaries}/" "{base}/missing"'
+                                     f'\nfuDATA_SAMPLE_MODES "{linked}"'], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stderr), (0, ""))
+            self.assertEqual(result.stdout, f"# Warning: {linked} is a link, its modes stay as they are.\n")
+            self.assertEqual((mode(binaries / "sample"), mode(binaries / "sub" / "sample")), (0o440, 0o440))
+            self.assertEqual(mode(binaries / "sub"), 0o770)
+            self.assertEqual(mode(outside), 0o660)
+            self.assertTrue((binaries / "to-file").is_symlink())

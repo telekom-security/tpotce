@@ -3,6 +3,7 @@
 #
 # Folders get rwx and files rw for the owner and the group (770 / 660), the others nothing.
 # The folders of nginx (conf, cert) keep the read bit for the others (774 / 664), as before.
+# The samples of Dionaea (binaries/) are read only (440), as Dionaea stores them.
 # No container runs a program from the data folder, so no file there keeps an execute bit.
 #
 # "ug+X" after "u=rw,g=rw" gives x to folders only: busybox and GNU chmod take X from the mode
@@ -38,4 +39,21 @@ fuDATA_MODES () {
 # fuDATA_WEB_MODES <path>...: folders 774, files 664 (nginx conf and cert)
 fuDATA_WEB_MODES () {
   fuDATA_CHMOD "${myDATA_WEB_MODE}" "$@"
+}
+
+# fuDATA_SAMPLE_MODES <path>...: files 440, the folders keep their modes (the samples of Dionaea).
+# A path that is not there is left out. find enters no linked folder and -type f leaves the links out.
+fuDATA_SAMPLE_MODES () {
+  local myPATH
+  for myPATH in "$@"; do
+    while [ "${myPATH}" != "/" ] && [ "${myPATH%/}" != "${myPATH}" ]; do
+      myPATH="${myPATH%/}"
+    done
+    if [ -L "${myPATH}" ];
+      then
+        echo "# Warning: ${myPATH} is a link, its modes stay as they are."
+        continue
+    fi
+    if [ -d "${myPATH}" ]; then find "${myPATH}" -type f -exec chmod 440 {} +; fi
+  done
 }

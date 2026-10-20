@@ -1,5 +1,5 @@
 # ftp client section
-- name: ftp
+- name: ftpdownload
   config:
     # host for active ftp via NAT
     # * 0.0.0.0 - the initiating connection ip is used for active ftp

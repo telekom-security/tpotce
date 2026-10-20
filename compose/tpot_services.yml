@@ -444,12 +444,14 @@ services:
   dionaea:
     x-tpot: {group: honeypots, description: "Malware capture: SMB, FTP, MSSQL, MySQL, MQTT and more"}
     container_name: dionaea
-    stdin_open: true
-    tty: true
     restart: always
     depends_on:
       tpotinit:
         condition: service_healthy
+    environment:
+     - DIONAEA_STREAMDUMPER_MAX_SIZE=${DIONAEA_BISTREAMS_MAX_MB:-2048}
+     - DIONAEA_STREAMDUMPER_MAX_FILES=${DIONAEA_BISTREAMS_MAX_FILES:-200000}
+     - DIONAEA_STORE_MAX_SIZE=${DIONAEA_BINARIES_MAX_MB:-1024}
     networks:
      - honeypot_local
     ports:
@@ -469,11 +471,17 @@ services:
     image: ${TPOT_REPO}/dionaea:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 256
+    cpus: 1
+    tmpfs:
+     - /tmp:uid=2000,gid=2000,size=16m
     volumes:
-     - ${TPOT_DATA_PATH}/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
-     - ${TPOT_DATA_PATH}/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp
-     - ${TPOT_DATA_PATH}/dionaea/roots/www:/opt/dionaea/var/dionaea/roots/www
-     - ${TPOT_DATA_PATH}/dionaea/roots/upnp:/opt/dionaea/var/dionaea/roots/upnp
+     - ${TPOT_DATA_PATH}/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp:ro
+     - ${TPOT_DATA_PATH}/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp:ro
+     - ${TPOT_DATA_PATH}/dionaea/roots/www:/opt/dionaea/var/dionaea/roots/www:ro
+     - ${TPOT_DATA_PATH}/dionaea/roots/upnp:/opt/dionaea/var/dionaea/roots/upnp:ro
      - ${TPOT_DATA_PATH}/dionaea:/opt/dionaea/var/dionaea
      - ${TPOT_DATA_PATH}/dionaea/binaries:/opt/dionaea/var/dionaea/binaries
      - ${TPOT_DATA_PATH}/dionaea/log:/opt/dionaea/var/log

@@ -851,6 +851,7 @@ Settings for the NSM services (Suricata, P0f, Glutton):
 - `SURICATA_RULES_UPDATE`: The Suricata rules are cached in `~/tpotce/data/suricata/rules` and updated once in 24 hours, without internet access the latest cached rules are used. Set it to `off` for isolated deployments to never download rules.
 
 Settings for the honeypots:
+- `DIONAEA_BISTREAMS_MAX_MB` (default `2048`, 1 to 1048576), `DIONAEA_BISTREAMS_MAX_FILES` (default `200000`, 1 to 100000000) and `DIONAEA_BINARIES_MAX_MB` (default `1024`, 1 to 1048576): The most Dionaea keeps in its bistreams folder (recorded sessions, in MiB and in files) and in its binaries folder (captured samples, in MiB). At a limit nothing new is stored, so the two folders stay within these sizes. An empty value takes the default. tpotinit checks the values when Dionaea is in the compose file: an invalid value (also `0`) is an error and T-Pot does not start. Dionaea itself would only warn about an invalid value and keep the value of its `dionaea.cfg` / `ihandlers/store.yaml`; with the default log of `dionaea.cfg` turned on, `dionaea.log` names each limit in effect and its source at the start. Unlimited is not possible through `.env`. Whoever wants no limit sets the variables of the fork in the `environment:` of the `dionaea` service of a `docker-compose.yml` of their own to `0` (no limit) instead of the `.env` values: `DIONAEA_STREAMDUMPER_MAX_SIZE`, `DIONAEA_STREAMDUMPER_MAX_FILES` and `DIONAEA_STORE_MAX_SIZE`.
 - `REDISHONEYPOT_PROFILE`: The Redis or Valkey server RedisHoneyPot answers as, its replies, `INFO`, `CONFIG GET *` and command table are recorded from that server. `redis74` (default, Redis 7.4.5 in Docker, file writes over `CONFIG SET dir` / `SAVE` proceed), `legacy6` (Redis 6.2.18), `current8` (Redis 8.8.0, refuses protected configs and `MODULE LOAD` like the real one), `redis50` (Redis 5.0.7) or `valkey8` (Valkey 8.1.3).
 
 ## Customize T-Pot Honeypots and Services
@@ -1383,6 +1384,8 @@ The Elastic Stack is hungry for RAM, specifically `logstash` and `elasticsearch`
 While T-Pot keeps trying to restart the services / containers run `docker logs -f <container_name>` (either `logstash` or `elasticsearch`) and check if there are any warnings or failures involving RAM.
 
 Elasticsearch runs with a 2 GB heap (`ES_JAVA_OPTS`) inside a `mem_limit` of 4 GB. On hosts with many CPU cores (about 28 or more) raise both, otherwise free text searches in Kibana over a daily index that holds close to its limit of 3000 fields may fail with `field expansion matches too many fields`. Elasticsearch derives that limit from the heap size and the number of search threads.
+
+Dionaea is limited to 1 GB of memory (no swap), 256 processes and 1 CPU (`mem_limit`, `memswap_limit`, `pids_limit`, `cpus`): a container that reaches its memory limit is restarted, and the host keeps its memory and CPU for the rest.
 
 Kibana runs with a 1 GB Node.js heap inside a `mem_limit` of 2 GB. The heap is set by `KIBANA_HEAP_MB` in `~/tpotce/docker/elk/kibana/Dockerfile` (or `--build-arg KIBANA_HEAP_MB=<MB>`) and has to stay well below the `mem_limit` of the `kibana` service in `docker-compose.yml`. If you use a `docker-compose.yml` of your own, raise its Kibana `mem_limit` to `2g`.
 

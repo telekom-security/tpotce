@@ -251,7 +251,8 @@ for name in ("hold", "hold.ack", "check.lock", "quarantine", "catchup"):
 PY
 }
 
-# Folders 770, files 660 (no execute bit), nginx conf and cert 774 / 664; links are not followed
+# Folders 770, files 660 (no execute bit), nginx conf and cert 774 / 664, Dionaea samples 440;
+# links are not followed
 . /opt/tpot/bin/data_modes.sh
 
 update_permissions() {
@@ -261,6 +262,7 @@ update_permissions() {
 	chown -R tpot:tpot /data
 	fuDATA_MODES /data
 	fuDATA_WEB_MODES /data/nginx/conf /data/nginx/cert
+	fuDATA_SAMPLE_MODES /data/dionaea/binaries
 }
 
 # Update permissions

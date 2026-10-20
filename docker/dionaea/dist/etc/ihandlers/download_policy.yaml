@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: none
+# SPDX-License-Identifier: CC0-1.0
+
+- name: download_policy
+  config:
+    # Public destinations only. Explicit private CIDRs are for isolated labs.
+    # Loopback, link-local, local addresses and gateways are always denied.
+    allowed_networks: []

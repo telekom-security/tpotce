@@ -124,7 +124,16 @@ The Dionaea test maps the tested service ports to temporary loopback ports,
 mounts a temporary config without `services/sip.yaml`, and skips the SIP ports
 `5060/tcp`, `5060/udp`, and `5061/tcp`. The `--ftp-port` option pins only the
 host-side FTP control port; every other tested Dionaea port remains dynamically
-assigned.
+assigned. The roots of the FTP, TFTP, HTTP and UPnP services are mounted
+read-only as in T-Pot. The test checks the sample store with a Python probe
+inside the container (FTP passive data and TFTP answers do not pass the
+published ports): it uploads a sample over FTP (`STOR`) and over an HTTP
+multipart `POST` (port 81), expects both in `binaries/` with mode `0440`, and
+then tries to get each file back from a second connection over FTP `RETR`
+(`550`), HTTP `GET` (`404`) and TFTP `RRQ` (`ERROR`). A TFTP `WRQ` must be
+rejected, the four roots must stay empty, and the logs must have no `Traceback`
+or `LoaderError`. The image needs Dionaea 0.12.3 with the sample store (`store`
+option `max_size`, samples `0440`).
 
 The Logstash fixture test renders the sample event of every honeypot
 (`tpotctl/checks/fixtures`, the line a `tpot check` writes into the honeypot's
@@ -215,3 +224,46 @@ data in memory only (`/etc/redis.conf`).
 - Fail with a clear image build hint when the target image is missing.
 
 Ciscoasa v2 uses dynamic host ports by default and probes HTTPS, AnyConnect, ASDM, JSON credentials, inert uploads and IKE on both UDP listeners. Its identity is checked again after restart.
+
+### Dionaea 0.12.3
+
+The Dionaea smoke test uses only the Python standard library. It checks TFTP
+responses, passive and active FTP uploads, sample store with mode 0440, and
+SMB2 2.02/2.10 with NTLMv1/v2: rejected logins must appear in JSON and SQLite
+with username, domain, workstation, dialect and variant, and empty passwords.
+Runtime logs must contain no traceback or loader error, and `dionaea-errors.log`
+must have no `-critical:` line and no warning message more than 5 times (a summary
+warning once per started minute of the run plus one); the test checks that the
+shipped `dionaea.cfg` has `critical` in `errors.levels`. The test turns the default log on in its copy of `dionaea.cfg`; after dionaea stopped, `dionaea.log`
+must have the three lines of the storage limits as whole messages, once with
+`DIONAEA_STREAMDUMPER_MAX_SIZE`, `DIONAEA_STREAMDUMPER_MAX_FILES` and
+`DIONAEA_STORE_MAX_SIZE` set (`streamdumper: max_size 48 MiB (from
+DIONAEA_STREAMDUMPER_MAX_SIZE)`, ...) and once, in a second start without them,
+with the values T-Pot ships (`streamdumper: max_size 2048 MiB (from dionaea.cfg)`,
+`streamdumper: max_files 200000 (from dionaea.cfg)`, `store: max_size 1024 MiB
+(from store.yaml)`). An image that does not write these lines fails the test.
+
+To test a change of the fork before it is tagged, build from a local checkout of
+the pinned commit (`DIONAEA_COMMIT` of `docker/dionaea/Dockerfile`):
+
+```sh
+docker build --build-context dionaea-src=<path to a checkout of the fork> \
+  -t dtagdevsec/dionaea:24.04.2 docker/dionaea
+./docker/_tests/run.sh dionaea
+```
+
+The default source stage checks tag `0.12.3` against `DIONAEA_COMMIT`.
+
+The ewsposter compatibility helper uses the installed reader and sample checker,
+with a stub for message output. Run it against functional-suite artifacts;
+the database and sample mounts are read-only and networking is disabled:
+
+```sh
+docker run --rm --network none --read-only --tmpfs /tmp \
+  -e PYTHONPATH=/opt/ewsposter \
+  -v "$PWD/docker/_tests/lib/dionaea_ewsposter.py:/compatibility.py:ro" \
+  -v "$DIONAEA_ARTIFACTS:/fixture:ro" \
+  --entrypoint python3 dtagdevsec/ewsposter:24.04.2 /compatibility.py \
+  --sqlite /fixture/var-log/dionaea.sqlite \
+  --binaries /fixture/var-dionaea/binaries
+```

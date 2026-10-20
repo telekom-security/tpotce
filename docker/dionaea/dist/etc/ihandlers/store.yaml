@@ -1,1 +1,5 @@
 - name: store
+  config:
+    # Total size of the samples in binaries/ in MiB (0: no limit). A new sample
+    # that would exceed it is not stored, its md5 is still logged.
+    max_size: 1024

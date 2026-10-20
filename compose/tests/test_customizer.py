@@ -189,6 +189,20 @@ class CoreTest(unittest.TestCase):
         for line in text.split("\n"):
             self.assertFalse(line.startswith("   ") and line.strip().endswith(":") and line.startswith("  honeytrap"))
 
+    def test_render_keeps_dionaea_resource_limits(self):
+        limits = {"mem_limit": "1g", "memswap_limit": "1g", "pids_limit": 256, "cpus": 1}
+        cases = (("TARPIT", ["dionaea"], ["heralding"], {}),    # added from the catalogue
+                 ("STANDARD", [], [], {}),                      # taken over from the edition
+                 ("STANDARD", [], [], {("dionaea", 445, "tcp"): 4445}))
+        for base, add, remove, ports in cases:
+            with self.subTest(base=base, add=add, ports=ports):
+                result = self.resolve(base, add=add, remove=remove, ports=ports)
+                self.assertEqual(errors(result), [])
+                service = yaml.safe_load(core.render(self.catalog, result))["services"]["dionaea"]
+                for key, value in limits.items():
+                    self.assertEqual(service.get(key), value, key)
+                self.assertIn("/tmp:uid=2000,gid=2000,size=16m", service.get("tmpfs") or [])
+
     def test_split_entries(self):
         lines = ["#### Banner", "# Alpha", "  alpha:", "    image: a", "#    x: 1", "    y: 2", "", "# trailing",
                  "", "## Beta", "  beta:", "    image: b", "#### /End", ""]

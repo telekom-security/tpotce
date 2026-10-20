@@ -7,9 +7,11 @@ services:
   dionaea:
     build: .
     container_name: dionaea
-    stdin_open: true
-    tty: true
     restart: always
+    environment:
+     - DIONAEA_STREAMDUMPER_MAX_SIZE=${DIONAEA_BISTREAMS_MAX_MB:-2048}
+     - DIONAEA_STREAMDUMPER_MAX_FILES=${DIONAEA_BISTREAMS_MAX_FILES:-200000}
+     - DIONAEA_STORE_MAX_SIZE=${DIONAEA_BINARIES_MAX_MB:-1024}
     networks:
      - dionaea_local
     ports:
@@ -31,11 +33,17 @@ services:
      - "27017:27017"
     image: "dtagdevsec/dionaea:24.04.2"
     read_only: true
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 256
+    cpus: 1
+    tmpfs:
+     - /tmp:uid=2000,gid=2000,size=16m
     volumes:
-     - $HOME/tpotce/data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
-     - $HOME/tpotce/data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp
-     - $HOME/tpotce/data/dionaea/roots/www:/opt/dionaea/var/dionaea/roots/www
-     - $HOME/tpotce/data/dionaea/roots/upnp:/opt/dionaea/var/dionaea/roots/upnp
+     - $HOME/tpotce/data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp:ro
+     - $HOME/tpotce/data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp:ro
+     - $HOME/tpotce/data/dionaea/roots/www:/opt/dionaea/var/dionaea/roots/www:ro
+     - $HOME/tpotce/data/dionaea/roots/upnp:/opt/dionaea/var/dionaea/roots/upnp:ro
      - $HOME/tpotce/data/dionaea:/opt/dionaea/var/dionaea
      - $HOME/tpotce/data/dionaea/binaries:/opt/dionaea/var/dionaea/binaries
      - $HOME/tpotce/data/dionaea/log:/opt/dionaea/var/log

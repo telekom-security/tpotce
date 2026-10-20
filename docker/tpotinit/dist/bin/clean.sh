@@ -8,7 +8,8 @@ myWHITE="[0;0m"
 # Set pigz
 myPIGZ=$(which pigz)
 
-# Folders 770, files 660 (no execute bit), nginx conf and cert 774 / 664; links are not followed
+# Folders 770, files 660 (no execute bit), nginx conf and cert 774 / 664, Dionaea samples 440;
+# links are not followed
 . "$(dirname "${BASH_SOURCE[0]}")/data_modes.sh"
 
 # Set persistence
@@ -83,6 +84,8 @@ fuLOGROTATECONF
 fuDATA_MODES /data
 chown tpot:tpot /data -R
 fuDATA_WEB_MODES /data/nginx/conf /data/nginx/cert
+# The samples of Dionaea stay read only (440) in the archive
+fuDATA_SAMPLE_MODES /data/dionaea/binaries
 
 # Run logrotate with force (-f) first, so the status file can be written and race conditions (with tar) be avoided
 logrotate -f -s $mySTATUS $myCONF
@@ -218,11 +221,11 @@ fuDIONAEA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dionaea/*; fi
   mkdir -vp /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp}
   touch /data/dionaea/dionaea-errors.log
-  touch /data/dionaea/sipaccounts.sqlite
-  touch /data/dionaea/sipaccounts.sqlite-journal
   touch /data/dionaea/log/dionaea.json
   touch /data/dionaea/log/dionaea.sqlite
   fuDATA_MODES /data/dionaea
+  # the samples in binaries/ 440, as Dionaea stores them
+  fuDATA_SAMPLE_MODES /data/dionaea/binaries
   chown tpot:tpot /data/dionaea -R
 }
 

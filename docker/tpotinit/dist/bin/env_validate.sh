@@ -142,7 +142,7 @@ fuENV_RULE() {
     local myVALUES="$7" myOPTIONAL="$8" myMIN="$9" myMAX="${10}" myPATTERN="${11}" myMESSAGE="${12}"
     local myDEFAULT="${13}" myINVALID="${14}" myRW_KEY="${15}" myRW_VALUES="${16}" myRW_MESSAGE="${17}"
     local myWARN_EMPTY="${18}" myWW_KEY="${19}" myWW_VALUES="${20}" myWW_MESSAGE="${21}" myLEGACY="${22}"
-    local myVALUE myWHEN myIFACE myENTRY myLISTED
+    local myVALUE myWHEN myIFACE myENTRY myLISTED myDIGITS
     myVALUE="$(fuVAL "${myKEY}")"
     [ -n "${mySCOPE}" ] && [ "${mySCOPE}" != "${TPOT_TYPE}" ] && return 0
     # shellcheck disable=SC2086
@@ -213,7 +213,11 @@ fuENV_RULE() {
         done
         ;;
       int)
-        if [[ ! "${myVALUE}" =~ ^[0-9]+$ ]] || (( 10#${myVALUE} < myMIN )) || (( 10#${myVALUE} > myMAX ));
+        # without its leading zeros a value of more than 18 digits is out of range: the
+        # arithmetic of bash wraps at 2^64 (envschema.py compares the whole number)
+        myDIGITS="${myVALUE#"${myVALUE%%[!0]*}"}"
+        if [[ ! "${myVALUE}" =~ ^[0-9]+$ ]] || (( ${#myDIGITS} > 18 )) || \
+           (( 10#${myVALUE} < myMIN )) || (( 10#${myVALUE} > myMAX ));
           then
             if [ "${myINVALID}" == "default" ];
               then
