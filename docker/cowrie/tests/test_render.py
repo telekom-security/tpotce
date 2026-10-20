@@ -6,7 +6,7 @@ import re
 import unittest
 
 from tests.helpers import base_tree, tmpdir
-from tpot_personas import catalog, servers, system, tree, validate
+from tpot_personas import catalog, firmware, servers, system, tree, validate
 from tpot_personas.common import kernel_series
 from tpot_personas.identity import DAY, draw, fits, kernel_time, restore, specialize, to_state, updated_at
 from tpot_personas.render import render
@@ -44,18 +44,27 @@ class ProgramTest(unittest.TestCase):
             ident, out, _ = render_one(self, persona, 1)
             fs = tree.load_pickle(out / "fs.pickle")
             content = persona.builder(persona, ident)
+            builtins = set(firmware.builtins(persona) or ())
             for rel in set(content.txtcmds) | set(content.programs):
-                node = tree.find_node(fs, rel)
+                if rel.startswith("bin/") and rel[4:] in builtins:
+                    # the text of a builtin of the firmware's shell (ulimit of the Archer C7): no program
+                    self.assertIsNone(tree.resolve(fs, rel), (persona.id, rel))
+                    continue
+                # an applet of a firmware's BusyBox is a link to its program
+                node = tree.resolve(fs, rel)
                 self.assertEqual(tree.node_get(node, tree.A_TYPE), tree.T_FILE, (persona.id, rel))
                 self.assertTrue(tree.node_get(node, tree.A_MODE) & 0o111, (persona.id, rel))
                 self.assertGreater(tree.node_get(node, tree.A_SIZE), 10_000, (persona.id, rel))
                 self.assertNotIsInstance(tree.node_get(node, tree.A_CONTENTS), bytes, (persona.id, rel))
-            # usr/bin/top of Cowrie's pickle keeps its size
-            self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/top"), tree.A_SIZE), 134736, persona.id)
+            # usr/bin/top of Cowrie's pickle keeps its size (the Archer C7 has the applet of its image)
+            if persona.family != "tplink":
+                self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/top"), tree.A_SIZE), 134736,
+                                 persona.id)
 
     def test_bin_stays_a_link_to_usr_bin(self):
         # a /bin of its own held only the txtcmds: `ls /bin` showed five files, `df` ran Debian's binary
-        for pid in ("ubuntu-noble", "tplink-wr841n"):
+        #   (the Archer C7 has the folders of its image: tests.test_busybox)
+        for pid in ("ubuntu-noble", "openwrt"):
             _, out, _ = render_one(self, catalog.by_id(pid), 1)
             fs = tree.load_pickle(out / "fs.pickle")
             for name in ("bin", "sbin", "lib"):
@@ -77,10 +86,10 @@ class ProgramTest(unittest.TestCase):
 
 class TextToolsTest(unittest.TestCase):
     """wc, sort and seq: coreutils on servers and DSM, the applets of the firmware's BusyBox on the
-    other devices (TL-WR841N: none of them; the shared list: wc only)."""
+    other devices (the Archer C7 and OpenWrt: all three; the shared list: wc only)."""
 
     def test_the_programs_and_the_answers_agree(self):
-        expected = {"tplink-wr841n": set(), "openwrt": {"wc", "sort", "seq"},
+        expected = {"tplink-archer-c7": {"wc", "sort", "seq"}, "openwrt": {"wc", "sort", "seq"},
                     "ubiquiti-edgerouter-x": {"wc", "sort", "seq"}, "dlink-dir859": {"wc"},
                     "synology-dsm": {"wc", "sort", "seq"}, "debian-bookworm": {"wc", "sort", "seq"}}
         for persona in catalog.PERSONAS:
@@ -94,7 +103,7 @@ class TextToolsTest(unittest.TestCase):
                     self.assertEqual(name not in skipped(out), present, name)
                     self.assertEqual(f"/usr/bin/{name}" not in skipped(out), present, name)
                     self.assertEqual(tree.find_node(fs, f"usr/bin/{name}") is not None, present, name)
-                if persona.id == "openwrt":
+                if persona.id in ("openwrt", "tplink-archer-c7"):
                     node = tree.find_node(fs, "usr/bin/wc")
                     self.assertEqual((node[tree.A_TYPE], node[tree.A_TARGET]), (tree.T_LINK, "../../bin/busybox"))
                 if persona.id == "ubiquiti-edgerouter-x":
@@ -107,9 +116,9 @@ class TextToolsTest(unittest.TestCase):
                  "rhel-9": {"text_version": "8.32", "text_collate": "en", "text_fold": "bytes"},
                  "centos-7": {"text_version": "8.22", "text_collate": "en-2.17", "text_fold": "bytes"},
                  "raspios": {"text_version": "9.1", "text_collate": "en"},
-                 "synology-dsm": {"text_style": "gnu", "text_version": "8.31", "text_collate": "posix"},
+                 "synology-dsm": {"text_style": "gnu", "text_version": "8.30", "text_collate": "posix"},
                  "openwrt": {"text_style": "busybox", "text_libc": "musl"},
-                 "tplink-wr841n": {"text_style": "busybox", "text_libc": "uclibc", "text_version": "1.19.2"},
+                 "tplink-archer-c7": {"text_style": "busybox", "text_libc": "uclibc", "text_version": "1.19.4"},
                  "ubiquiti-edgerouter-x": {"text_style": "busybox", "text_libc": "glibc", "text_version": "1.27.2"}}
         for persona_id, keys in cases.items():
             persona = catalog.by_id(persona_id)
@@ -125,16 +134,16 @@ class TextToolsTest(unittest.TestCase):
 
 class NetToolsTest(unittest.TestCase):
     """ip, ss, ifconfig and netstat: iproute2 on every server, net-tools where it is installed, the
-    programs of the firmware on the devices (BusyBox applets, iproute2 of the TL-WR841N and EdgeOS)."""
+    programs of the firmware on the devices (BusyBox applets, iproute2 of the Archer C7 and EdgeOS)."""
 
     def test_the_programs_and_the_answers_agree(self):
         expected = {"debian-bookworm": {"ip", "ss"}, "ubuntu-noble": {"ip", "ss", "ifconfig", "netstat"},
                     "rhel-9": {"ip", "ss"}, "centos-7": {"ip", "ss", "ifconfig", "netstat"},
-                    "openwrt": {"ip", "ifconfig", "netstat"}, "tplink-wr841n": {"ip", "ifconfig", "netstat"},
+                    "openwrt": {"ip", "ifconfig", "netstat"}, "tplink-archer-c7": {"ip", "ifconfig"},
                     "ubiquiti-edgerouter-x": {"ip", "ss", "ifconfig", "netstat"}, "dlink-dir859": {"ifconfig", "netstat"}}
         paths = {"rhel-9": {"ip": "usr/sbin/ip"}, "debian-bookworm": {"ip": "usr/bin/ip", "ss": "usr/bin/ss"},
                  "ubuntu-noble": {"ip": "usr/bin/ip", "ifconfig": "usr/sbin/ifconfig", "netstat": "usr/bin/netstat"},
-                 "openwrt": {"ip": "sbin/ip"}, "tplink-wr841n": {"ip": "usr/bin/ip"}}
+                 "openwrt": {"ip": "sbin/ip"}, "tplink-archer-c7": {"ip": "usr/sbin/ip", "ifconfig": "sbin/ifconfig"}}
         for persona_id, names in expected.items():
             persona = catalog.by_id(persona_id)
             ident, out, _ = render_one(self, persona, 1)
@@ -153,7 +162,7 @@ class NetToolsTest(unittest.TestCase):
                 if persona_id in ("debian-bookworm", "ubuntu-noble"):
                     # root's PATH finds /usr/sbin/ip, the link of Debian's iproute2 (ubuntu:24.04, debian:12)
                     self.assertEqual(tree.find_node(fs, "usr/sbin/ip")[tree.A_TARGET], "/bin/ip")
-                if persona_id == "tplink-wr841n":
+                if persona_id == "tplink-archer-c7":
                     self.assertEqual({i["qdisc"] for i in data["interfaces"]}, {"noqueue", "pfifo_fast"})
                 if persona_id == "centos-7":
                     # yum knows the package of ip and ss as installed
@@ -163,7 +172,7 @@ class NetToolsTest(unittest.TestCase):
 class BusyboxTest(unittest.TestCase):
     def test_devices_with_busybox_run_cowries_busybox_with_their_help(self):
         with_busybox = [p for p in catalog.PERSONAS if any(r.extra.get("busybox") for r in p.releases)]
-        self.assertEqual({p.id for p in with_busybox}, {"dlink-dir859", "tplink-wr841n", "zyxel-nas326", "openwrt",
+        self.assertEqual({p.id for p in with_busybox}, {"dlink-dir859", "tplink-archer-c7", "zyxel-nas326", "openwrt",
                                                        "ubiquiti-edgerouter-x", "ipcam", "qnap-qts"})
         for persona in with_busybox:
             for seed in range(3):
@@ -214,7 +223,7 @@ class SystemTest(unittest.TestCase):
     """Cowrie's Debian 12 x86_64 container tree becomes the persona's system (F4, F6)."""
 
     def test_no_debian_package_system_without_dpkg(self):
-        for pid in ("rhel-9", "centos-7", "openwrt", "qnap-qts", "tplink-wr841n"):
+        for pid in ("rhel-9", "centos-7", "openwrt", "qnap-qts", "tplink-archer-c7"):
             _, out, _ = render_one(self, catalog.by_id(pid), 1)
             fs = fs_of(out)
             for rel in ("etc/debian_version", "etc/apt", "etc/dpkg", "var/lib/dpkg", "usr/bin/dpkg",
@@ -270,8 +279,13 @@ class SystemTest(unittest.TestCase):
                 addresses = [line.split()[5] for line in text.splitlines()]
                 self.assertTrue(all(len(a) == width + 2 and int(a, 16) for a in addresses), persona.id)
                 self.assertEqual(addresses, sorted(addresses, reverse=True), persona.id)
-                old = kernel_series(ident.release.kernel_version) < (4, 0)
-                self.assertEqual(any(size % 4096 for size in sizes), old, persona.id)
+                # sizes are whole pages only with STRICT_MODULE_RWX (debug_align of kernel/module.c):
+                #   not on MIPS (arch/mips/Kconfig of 4.14 and 5.10 has no ARCH_HAS_STRICT_MODULE_RWX),
+                #   not on the 2.6 / 3.x vendor kernels
+                aligned = (persona.hardware_platform != "mips"
+                           and kernel_series(ident.release.kernel_version) >= (4, 0))
+                self.assertEqual(all(size % 4096 == 0 for size in sizes), aligned, persona.id)
+                self.assertEqual(any(size % 4096 == 0 for size in sizes), aligned, persona.id)
                 continue
             if persona.family == "centos":
                 self.assertTrue(any(size % 4096 for size in sizes))
@@ -340,7 +354,8 @@ class SystemTest(unittest.TestCase):
         self.assertIsNotNone(tree.find_node(fs_of(out), "usr/bin/perl"))
         self.assertEqual((cfg.get("shell", "perl_version"), cfg.get("shell", "perl_archname"),
                           cfg.get("shell", "perl_copyright")), ("5.24.1", "mipsel-linux-gnu-thread-multi", "2017"))
-        self.assertFalse(cfg.has_option("shell", "sudo_version"))
+        # sudo 1.8.19p1-2.1+deb9u3 of the EdgeOS image
+        self.assertEqual(cfg.get("shell", "sudo_version"), "1.8.19p1")
 
     def test_no_debian_tools_without_dpkg(self):
         for persona in catalog.PERSONAS:
@@ -350,6 +365,10 @@ class SystemTest(unittest.TestCase):
             for rel in ("etc/adduser.conf", "etc/rcS.d", "usr/bin/which.debianutils"):
                 self.assertEqual(tree.find_node(fs, rel) is not None, debian, (persona.id, rel))
             which = tree.find_node(fs, "usr/bin/which")
+            if persona.family == "tplink":
+                # the which applet of the Archer C7's BusyBox
+                self.assertEqual(which[tree.A_TARGET], "../../bin/busybox")
+                continue
             self.assertEqual(tree.node_get(which, tree.A_TYPE), tree.T_LINK if debian else tree.T_FILE, persona.id)
 
     def test_links_have_the_targets_of_a_real_system(self):
@@ -360,7 +379,10 @@ class SystemTest(unittest.TestCase):
         self.assertEqual(targets["/bin"], "usr/bin")
         self.assertEqual(targets["/usr/bin/which"], "which.debianutils")
         self.assertEqual(targets["/etc/systemd/system/sshd.service"], "/lib/systemd/system/ssh.service")
-        self.assertEqual(targets["/proc/self"], "969")
+        # /proc/self: the login shell of the ps list (Cowrie's tree has the container's Python, 969)
+        shell = [p["PID"] for p in json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
+                 if p["TTY"].startswith("pts/")][-1]
+        self.assertEqual(targets["/proc/self"], str(shell))
         self.assertEqual(targets["/usr/lib64/ld-linux-x86-64.so.2"], "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2")
         self.assertTrue(all(targets.values()), [p for p, t in targets.items() if not t])
         sizes = [path for path, node in tree.iter_nodes(fs) if tree.node_get(node, tree.A_TYPE) == tree.T_LINK
@@ -399,7 +421,7 @@ class SystemTest(unittest.TestCase):
         self.assertIsNone(tree.find_node(fs_of(out), "usr/sbin/installkernel"))
 
     def test_login_shell_streams_are_its_terminal(self):
-        for pid in ("ubuntu-noble", "tplink-wr841n"):
+        for pid in ("ubuntu-noble", "tplink-archer-c7"):
             persona = catalog.by_id(pid)
             _, out, _ = render_one(self, persona, 1)
             fs = fs_of(out)
@@ -428,16 +450,23 @@ class ServerCommandTest(unittest.TestCase):
             debian = server and "dpkg" in persona.package_managers
             rhel = persona.family == "rhel"
             # apt-get of EdgeOS is the patched apt-get too (apt 1.4 without sources)
-            answered = {"sudo": server, "service": server, "apt": debian,
-                        "apt-get": debian or persona.family == "ubiquiti",
-                        "yum": persona.family in ("centos", "rhel"), "dnf": rhel, "dnf-3": rhel, "rpm": rhel}
+            # sudo of EdgeOS 2.0 (Debian 9)
+            answered = {"sudo": server or persona.family == "ubiquiti", "service": server, "apt": debian,
+                        "apt-get": debian or persona.family == "ubiquiti", "dpkg": debian, "dpkg-query": debian,
+                        "apt-cache": debian,
+                        "yum": persona.family in ("centos", "rhel"), "dnf": rhel, "dnf-3": rhel,
+                        "rpm": persona.family in ("centos", "rhel")}
             for name, python in answered.items():
                 self.assertEqual(name not in skip, python, (persona.id, name))
                 path = "usr/sbin/service" if name == "service" else f"usr/bin/{name}"
+                if name == "sudo" and persona.family == "ubiquiti":
+                    self.assertIsNotNone(tree.find_node(fs, path), (persona.id, name))
+                    continue
                 if python:
                     self.assertNotIn(path, txtcmds, (persona.id, name))
                     self.assertIsNotNone(tree.find_node(fs, path), (persona.id, name))
-            if debian:
+            if persona.family == "ubiquiti":
+                # dpkg of EdgeOS stays its version line
                 self.assertIn("usr/bin/dpkg", txtcmds, persona.id)
             if rhel:
                 # dnf 4: dnf and yum are links to the script dnf-3
@@ -452,7 +481,9 @@ class ServerCommandTest(unittest.TestCase):
             else:
                 self.assertIsNone(cfg_of(out).get("shell", "dnf_packages", fallback=None), persona.id)
             if persona.family == "centos":
-                self.assertIn("usr/bin/rpm", txtcmds)
+                # rpm of CentOS 7 is the patched rpm on yum 3's package state
+                self.assertNotIn("usr/bin/rpm", txtcmds)
+                self.assertEqual(cfg_of(out).get("shell", "rpm_owners"), f"{out}/{system.RPM_OWNERS}")
 
     def test_openssl_of_rhel_9_4_is_its_last_public_errata(self):
         """The 9.4 level (EUS, 2025-02-20) has the last openssl of 9.4 that the rebuilds published:
@@ -540,19 +571,26 @@ class ServerRuntimeTest(unittest.TestCase):
             cfg, fs = cfg_of(out), fs_of(out)
             server = persona.kind == "server"
             debian = server and "dpkg" in persona.package_managers
-            for name, key, present in ((system.SYSTEMD_UNITS, "systemctl_units", server),
-                                       (system.SUDO_LIST, "sudo_list", server),
+            # EdgeOS 2.0 and DSM 7 have systemd, EdgeOS sudo too
+            systemd = server or persona.family in system.SYSTEMD_DEVICES
+            for name, key, present in ((system.SYSTEMD_UNITS, "systemctl_units", systemd),
+                                       (system.SUDO_LIST, "sudo_list", server or persona.family == "ubiquiti"),
                                        (system.APT_PACKAGES, "apt_packages", debian)):
                 self.assertEqual((out / name).is_file(), present, (persona.id, name))
                 self.assertEqual(cfg.get("shell", key, fallback=None), f"{out}/{name}" if present else None,
                                  (persona.id, key))
-            self.assertEqual("systemctl" not in skipped(out), server, persona.id)
-            self.assertEqual(tree.find_node(fs, "usr/bin/systemctl") is not None, server, persona.id)
+            self.assertEqual("systemctl" not in skipped(out), systemd, persona.id)
+            # EdgeOS has Debian 9's /bin/systemctl (no /usr merge of its own; usr/bin of the tree is the same dir)
+            self.assertEqual(tree.find_node(fs, "bin/systemctl" if persona.family == "ubiquiti" else
+                                            "usr/bin/systemctl") is not None, systemd, persona.id)
             if not server:
                 continue
             units = json.loads((out / system.SYSTEMD_UNITS).read_text())
             pids = {p["PID"]: p["COMMAND"] for p in json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]}
             for unit in units["units"]:
+                if not unit["name"].endswith(".service"):
+                    # sockets and slices have no process of their own
+                    continue
                 if unit["sub"] == "running":
                     self.assertEqual(pids[unit["pid"]], unit["command"], (persona.id, unit["name"]))
                 elif unit["sub"] == "exited":
@@ -587,7 +625,8 @@ class PackageNamesTest(unittest.TestCase):
         samples = {"debian-bookworm": ("htop", "raspi-config"), "debian-trixie": ("htop", "ubuntu-server"),
                    "ubuntu-noble": ("ubuntu-server", "raspi-config"), "ubuntu-jammy": ("ubuntu-server", "raspi-config"),
                    "gpu-ubuntu": ("htop", "yum"), "raspios": ("raspi-config", "ubuntu-server"),
-                   "centos-7": ("bash", "htop"), "openwrt": ("htop packages", "apt base")}
+                   "centos-7": ("bash", "htop"), "openwrt": ("htop packages", "apt base"),
+                   "rhel-9": ("tree baseos", "apt baseos")}
         for persona in catalog.PERSONAS:
             ident, out, _ = render_one(self, persona, 2)
             path = out / system.PACKAGE_NAMES
@@ -612,7 +651,8 @@ class PackageNamesTest(unittest.TestCase):
             if persona.family == "centos":
                 self.assertFalse(set(ident.release.packages) - set(lines))
                 installed = dict(e.split(" ", 1) for e in cfg_of(out).get("shell", "yum_installed").split(","))
-                self.assertEqual(installed, {**system.CENTOS_BASE, **ident.release.packages})
+                self.assertEqual(installed, system.centos_installed(ident))
+                self.assertLessEqual({**system.CENTOS_BASE, **ident.release.packages}.items(), installed.items())
                 self.assertIn("iproute", lines)
 
     def test_names_of_the_kernel_virtual_names_and_providers(self):
@@ -685,8 +725,12 @@ class PackageNamesTest(unittest.TestCase):
 
     def test_name_lists_stay_small(self):
         files = sorted(system.NAMES_DIR.glob("*.txt.gz"))
-        self.assertEqual([f.name for f in files], ["apt-virtual.txt.gz", "apt.txt.gz", "opkg.txt.gz", "yum.txt.gz"])
-        self.assertLess(sum(f.stat().st_size for f in files), 300_000)
+        self.assertEqual([f.name for f in files], ["apt-meta.txt.gz", "apt-virtual.txt.gz", "apt.txt.gz", "deb-base.txt.gz",
+                                                   "deb-files.txt.gz", "dnf-meta.txt.gz", "dnf.txt.gz", "opkg-meta.txt.gz",
+                                                   "opkg.txt.gz", "rpm-man.txt.gz", "yum-meta.txt.gz", "yum.txt.gz"])
+        # the names (about 620 kB, Debian main whole), the versions, sizes and descriptions of the releases' packages
+        # and the manual pages of the rpm packages' programs (about 50 kB)
+        self.assertLess(sum(f.stat().st_size for f in files), 1_900_000)
         for row in system._name_rows("apt.txt.gz"):
             self.assertTrue(len(row) == 2 and set(row[1]) <= set("btrjn"), row)
         for row in system._name_rows("opkg.txt.gz"):
@@ -762,7 +806,8 @@ class SystemdTreeTest(unittest.TestCase):
     def test_noble_listens_on_ssh_socket(self):
         _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
         units = {u["name"]: u for u in json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]}
-        self.assertEqual((units["ssh.socket"]["sub"], units["ssh.socket"]["state"]), ("listening", "enabled"))
+        # ref ubuntu-24-04-status-ssh-socket-after-connect: running once it has taken a connection
+        self.assertEqual((units["ssh.socket"]["sub"], units["ssh.socket"]["state"]), ("running", "enabled"))
         self.assertEqual(units["ssh.socket"]["triggers"], "ssh.service")
         self.assertEqual(units["ssh.service"]["triggered_by"], "ssh.socket")
         self.assertIn("irqbalance.service", units)
@@ -809,9 +854,11 @@ class ToolPackageTest(unittest.TestCase):
                     self.assertEqual(on_path, tool in installed, (persona.id, tool, name))
                     if name in system.COWRIE_TOOL_NAMES:
                         self.assertEqual(answered, tool in installed, (persona.id, tool, name))
+        # (and the telnet server of Debian / Ubuntu: inetutils-telnetd behind openbsd-inetd and tcpd)
+        telnet = {"inetutils-telnetd", "openbsd-inetd", "tcpd", "update-inetd"}
         expected = {"ubuntu-noble": {"net-tools", "netcat-openbsd", "iptables", "ethtool", "bind9-dnsutils",
-                                     "iputils-ping", "iproute2"},
-                    "debian-bookworm": {"netcat-openbsd", "iputils-ping", "iproute2"},
+                                     "iputils-ping", "iproute2"} | telnet,
+                    "debian-bookworm": {"netcat-openbsd", "iputils-ping", "iproute2"} | telnet,
                     "rhel-9": {"ethtool", "iputils-ping", "iproute2"}}
         for pid, tools in expected.items():
             persona = catalog.by_id(pid)
@@ -837,6 +884,8 @@ class FamilyFilesTest(unittest.TestCase):
                 node = tree.find_node(fs, "usr/sbin/installkernel")
                 self.assertTrue(tree.node_get(node, tree.A_CONTENTS).startswith(b"#!"), pid)
                 self.assertEqual(tree.node_get(node, tree.A_SIZE), len(tree.node_get(node, tree.A_CONTENTS)), pid)
+                # grubby 8.28-26.el7 of centos:7 and 8.40-64.el9 of the AlmaLinux 9.4 vault (refs t9.json)
+                self.assertEqual(tree.node_get(node, tree.A_SIZE), 323 if pid == "rhel-9" else 2754, pid)
         _, out, _ = render_one(self, catalog.by_id("debian-bookworm"), 1)
         self.assertIsNotNone(tree.find_node(fs_of(out), "etc/rmt"))
         self.assertEqual(tree.node_get(tree.find_node(fs_of(out), "etc/localtime"), tree.A_TARGET),
@@ -868,12 +917,17 @@ class UnitDetailTest(unittest.TestCase):
             _, out, _ = render_one(self, persona, 1)
             fs = fs_of(out)
             for unit in self.units(out):
-                if unit["sub"] != "running" or unit["path"].startswith("/etc/"):
+                if unit["sub"] != "running" or unit["path"].startswith("/etc/") or not unit["name"].endswith(".service"):
                     continue
                 text = tree.node_get(tree.find_node(fs, unit["path"]), tree.A_CONTENTS).decode()
                 lines = [line for line in text.splitlines() if line.startswith("ExecStart=")]
                 first = unit["command"].split()[0]
                 if "Type=forking" in text or first.endswith(":") or first.rsplit("/", 1)[-1].startswith("python"):
+                    continue
+                value = lines[0].split("=", 1)[1]
+                if value.startswith("@"):
+                    # ExecStart=@program argv0 ...: ps shows argv0 (Ubuntu's @dbus-daemon)
+                    self.assertEqual(value.split()[1], first, (persona.id, unit["name"]))
                     continue
                 self.assertEqual(system.exec_program(lines[0]), first, (persona.id, unit["name"]))
             if persona.family == "centos":
@@ -882,7 +936,9 @@ class UnitDetailTest(unittest.TestCase):
         _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
         dbus = tree.node_get(tree.find_node(fs_of(out), "usr/lib/systemd/system/dbus.service"), tree.A_CONTENTS)
         ps = json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
-        self.assertIn(f"ExecStart={next(p['COMMAND'] for p in ps if 'dbus-daemon' in p['COMMAND'])}\n".encode(), dbus)
+        # ref ubuntu-24-04-ps-ef: "@dbus-daemon ..." from ExecStart=@/usr/bin/dbus-daemon @dbus-daemon ...
+        self.assertIn(f"ExecStart=@/usr/bin/dbus-daemon {next(p['COMMAND'] for p in ps if 'dbus-daemon' in p['COMMAND'])}"
+                      "\n".encode(), dbus)
 
     def test_script_programs_are_text(self):
         for pid, paths in (("ubuntu-noble", ("usr/share/apport/apport", "lib/apparmor/apparmor.systemd",
@@ -1010,7 +1066,7 @@ class RenderTest(unittest.TestCase):
         wanted = {"ubuntu-noble": ("procps", "4.0.4"), "ubuntu-jammy": ("procps", "3.3.17"),
                   "debian-bookworm": ("procps", "4.0.2"), "rhel-9": ("procps", "3.3.17"),
                   "centos-7": ("procps", "3.3.10"), "ubiquiti-edgerouter-x": ("procps", "3.3.12"),
-                  "openwrt": ("busybox", None), "tplink-wr841n": ("busybox", None)}
+                  "openwrt": ("busybox", None), "tplink-archer-c7": ("busybox", None)}
         for pid, (style, version) in wanted.items():
             with self.subTest(pid):
                 persona = catalog.by_id(pid)
@@ -1021,9 +1077,10 @@ class RenderTest(unittest.TestCase):
                 self.assertEqual(cfg.get("shell", "procps_version", fallback=None), version)
                 processes = json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
                 threads = cfg.getint("shell", "kernel_threads")
-                # the tasks of the old static top: the ps list, the session and the kernel threads
-                self.assertEqual(len(processes) + 2 + threads,
-                                 persona.builder(persona, ident).tasks)
+                # the kernel threads ps lists ([shell] kernel_thread_list) are those top counts
+                listed = json.loads((out / "kernel_threads.json").read_text())
+                self.assertEqual(len(listed), threads)
+                self.assertEqual(cfg.get("shell", "kernel_thread_list"), str(out / "kernel_threads.json"))
                 self.assertTrue(0.0 <= cfg.getfloat("shell", "load_base") <= 0.12)
 
     def test_same_identity_same_output(self):
@@ -1117,42 +1174,54 @@ class KeptHistoryTest(unittest.TestCase):
     """COWRIE_PERSONA_ROTATION: a kept identity shows the history it showed when it
     was drawn; only what runs now (the clock, uptime, the ps START of today) moves."""
 
-    # what follows the clock of the start: the runtime config, the identity, the units
-    # with their CPU time, the date nvidia-smi prints; /proc and /dev/pts are compared apart
-    CLOCK_FILES = {"cowrie.cfg", "identity.json", "systemd-units.json", "txtcmds/usr/bin/nvidia-smi"}
+    def files(self, out, keys):
+        return {rel: self.comparable(rel, p.read_bytes(), out, keys)
+                for rel, p in ((str(p.relative_to(out)), p) for p in sorted(out.rglob("*")))
+                if p.is_file() and p.name not in ("fs.pickle", "cmdoutput.json", "kernel_threads.json")}
 
-    def files(self, out):
-        return {str(p.relative_to(out)): p.read_bytes() for p in sorted(out.rglob("*"))
-                if p.is_file() and p.name not in ("fs.pickle", "cmdoutput.json")}
+    def comparable(self, rel, data, out, keys):
+        """The file without what follows the clock of the start: the folders of the render and
+        the uptime in cowrie.cfg, now and the uptime in identity.json, the CPU time of the units,
+        the date nvidia-smi prints in its first line."""
+        if rel == "cowrie.cfg":
+            data = data.replace(str(keys).encode(), b"<keys>").replace(str(out).encode(), b"<out>")
+            return re.sub(rb"(?m)^boot_offset = [0-9]+$", b"boot_offset = <uptime>", data)
+        if rel == "identity.json":
+            return {k: v for k, v in json.loads(data).items() if k not in ("now", "boot_offset")}
+        if rel == "systemd-units.json":
+            units = json.loads(data)
+            return dict(units, units=[{k: v for k, v in u.items() if k != "cpu_ms"} for u in units["units"]])
+        if rel == "txtcmds/usr/bin/nvidia-smi":
+            return data.split(b"\n", 1)[1]
+        return data
 
-    def nodes(self, out):
+    def nodes(self, out, now):
         fs = tree.load_pickle(out / "fs.pickle")
-        # a folder without its children: those are compared on their own
-        return {path: [v for i, v in enumerate(node) if not (i == tree.A_CONTENTS and node[tree.A_TYPE] == tree.T_DIR)]
-                for path, node in tree.iter_nodes(fs)
-                if not path.startswith(("/proc/", "/dev/pts/")) and path not in ("/proc", "/dev/pts")}
+        # a folder without its children: those are compared on their own; the process of the
+        # session in /proc and its terminal in /dev/pts are made at the start ("now")
+        return {path: [("now" if i == tree.A_CTIME and v == now and path.startswith(("/proc/", "/dev/pts")) else v)
+                       for i, v in enumerate(node) if not (i == tree.A_CONTENTS and node[tree.A_TYPE] == tree.T_DIR)]
+                for path, node in tree.iter_nodes(fs)}
 
     def processes(self, out, ident):
         rows = json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
+        rows += json.loads((out / "kernel_threads.json").read_text())
         return [{k: v for k, v in row.items() if k != "START"} for row in rows]
 
     def test_kept_identity_renders_the_same_history(self):
         for persona, seed in ((p, s) for p in catalog.PERSONAS for s in (3, 33)):
             first = draw(persona, seed, NOW)
-            _, out, _ = render_ident(self, persona, first)
-            files, nodes = self.files(out), self.nodes(out)
+            _, out, keys = render_ident(self, persona, first)
+            files, nodes = self.files(out, keys), self.nodes(out, first.now)
             procs = self.processes(out, first)
             for days in (1, 7, 30, 365):
                 with self.subTest(persona=persona.id, seed=seed, days=days):
                     kept = restore(persona, to_state(persona, first), NOW + days * DAY + 3600)
-                    _, again, _ = render_ident(self, persona, kept)
-                    later = self.files(again)
+                    _, again, again_keys = render_ident(self, persona, kept)
+                    later = self.files(again, again_keys)
                     self.assertEqual(sorted(later), sorted(files))
-                    changed = sorted(rel for rel in files if later[rel] != files[rel]
-                                     and rel.split("/", 1)[-1] not in self.CLOCK_FILES
-                                     and rel not in self.CLOCK_FILES and not rel.startswith("honeyfs/proc/"))
-                    self.assertEqual(changed, [])
-                    again_nodes = self.nodes(again)
+                    self.assertEqual([rel for rel in files if later[rel] != files[rel]], [])
+                    again_nodes = self.nodes(again, kept.now)
                     self.assertEqual(sorted(again_nodes), sorted(nodes))
                     self.assertEqual([path for path in nodes if again_nodes[path] != nodes[path]], [])
                     self.assertEqual(self.processes(again, kept), procs)
@@ -1400,6 +1469,126 @@ class DeviceContentTest(unittest.TestCase):
         self.assertNotIn("isa\t", cpuinfo)  # 2.6.31 has no isa line
         self.assertTrue(r.kernel_version.startswith("2.6.31-"))
 
+    def test_zyxel_has_the_busybox_and_kernel_of_its_images(self):
+        # the initramfs (BusyBox) and the kernel of the V5.21(AAZF.14)C0 and (AAZF.18)C0 images
+        releases = {r.label: r for r in catalog.by_id("zyxel-nas326").releases}
+        self.assertEqual(releases["5.21(AAZF.14)C0"].extra["busybox"], "BusyBox v1.19.4 (2023-05-26 10:02:27 CST)")
+        self.assertEqual(releases["5.21(AAZF.14)C0"].kernel_build, "#1 Fri May 26 10:10:07 CST 2023")
+        self.assertEqual(releases["5.21(AAZF.18)C0"].extra["busybox"], "BusyBox v1.19.4 (2024-06-06 16:40:04 CST)")
+        self.assertEqual(releases["5.21(AAZF.18)C0"].kernel_build, "#1 Thu Jun 6 16:47:41 CST 2024")
+
+    def test_lsmod_lists_the_modules_of_the_persona(self):
+        # kmod's lsmod ("%-19s %8lu  %d" and the users) on the servers and EdgeOS, BusyBox's (1.19.4 under
+        #   qemu-mips-static: "Module" padded to 24, "%-19s %8s %2s %s", the users without the last comma,
+        #   the taint flags) on the BusyBox devices
+        for pid, head, style in (("ubuntu-noble", "Module                  Size  Used by\n", "kmod"),
+                                 ("ubiquiti-edgerouter-x", "Module                  Size  Used by\n", "kmod"),
+                                 ("tplink-archer-c7", "Module                  Size  Used by    Tainted: P  \n",
+                                  "busybox")):
+            with self.subTest(persona=pid):
+                persona = catalog.by_id(pid)
+                ident = draw(persona, 1)
+                content = persona.builder(persona, ident)
+                text = content.txtcmds["sbin/lsmod"]
+                self.assertTrue(text.startswith(head), text[:80])
+                modules = content.files["proc/modules"].splitlines()
+                self.assertEqual(len(text.splitlines()), len(modules) + 1)
+                name, size, count, users = modules[-1].split()[:4]
+                users = "" if users == "-" else users.rstrip(",")
+                line = (f"{name:<19} {size:>8}  {count}" + (f" {users}" if users else "") if style == "kmod"
+                        else f"{name:<19} {size:>8} {count:>2} {users}")
+                self.assertEqual(text.splitlines()[-1], line)
+        # OpenWrt: lsmod of ubox's kmodloader (21.02 / 22.03: "%-20s%8d%3d " and the users joined by commas,
+        #   no header, in the order of its tree of names, "_" as "-"; recorded in openwrt/rootfs:armvirt-64-21.02.7)
+        persona = catalog.by_id("openwrt")
+        content = persona.builder(persona, draw(persona, 1))
+        rows = [line.split() for line in content.files["proc/modules"].splitlines()]
+        rows.sort(key=lambda row: row[0].replace("_", "-"))
+        self.assertEqual(content.txtcmds["sbin/lsmod"], "".join(
+            f"{name:<20}{int(size):8d}{int(count):3d} {'' if users == '-' else users.rstrip(',')}\n"
+            for name, size, count, users, *_ in rows))
+        self.assertIn("mac80211              501616  2 mt7603e,mt76\n", content.txtcmds["sbin/lsmod"])
+        _, out, _ = render_one(self, persona, 1)
+        fs = tree.load_pickle(out / "fs.pickle")
+        self.assertEqual(tree.node_get(tree.resolve(fs, "sbin/kmodloader"), tree.A_TYPE), tree.T_FILE)
+        for name in ("lsmod", "insmod", "rmmod", "modinfo", "modprobe"):
+            node = tree.find_node(fs, f"usr/sbin/{name}")
+            self.assertEqual((node[tree.A_TYPE], node[tree.A_TARGET]), (tree.T_LINK, "/sbin/kmodloader"), name)
+        persona = catalog.by_id("tplink-archer-c7")
+        text = persona.builder(persona, draw(persona, 1)).txtcmds["sbin/lsmod"]
+        self.assertIn("\nnf_conntrack_pptp       3408  1 nf_nat_pptp\n", text)
+        self.assertIn("\nqca_ssdk              584112  0 \n", text)
+
+    def test_the_shell_of_the_busybox_devices_is_busybox(self):
+        # /bin/sh -> busybox: the DIR-859 1.05B03 image (no ash, bash or dash) and the OpenWrt images (ash too,
+        #   no bash); the other BusyBox devices sh -> busybox and no dash (unverified, their images not read)
+        expected = {"dlink-dir859": ({"sh": "busybox"}, ("ash", "bash", "dash")),
+                    "openwrt": ({"sh": "busybox", "ash": "busybox"}, ("bash", "dash")),
+                    "zyxel-nas326": ({"sh": "busybox", "ash": "busybox"}, ("bash", "dash")),
+                    "qnap-qts": ({"sh": "busybox"}, ("dash",)),
+                    "ipcam": ({"sh": "busybox"}, ("dash",)),
+                    "ubiquiti-edgerouter-x": ({"sh": "dash"}, ())}
+        for pid, (links, absent) in expected.items():
+            with self.subTest(persona=pid):
+                _, out, _ = render_one(self, catalog.by_id(pid), 1)
+                fs = tree.load_pickle(out / "fs.pickle")
+                for name, target in links.items():
+                    node = tree.find_node(fs, f"usr/bin/{name}")
+                    self.assertEqual((node[tree.A_TYPE], node[tree.A_TARGET]), (tree.T_LINK, target), name)
+                for name in absent:
+                    self.assertIsNone(tree.find_node(fs, f"usr/bin/{name}"), name)
+
+    def test_a_shell_the_firmware_has_not_is_not_found(self):
+        # Cowrie's bash answers bash and /bin/bash before it looks at the tree: where the image has no
+        #   such shell, every spelling is skipped (the DIR-859: "-sh: bash: not found"); sh stays
+        for pid in ("dlink-dir859", "openwrt", "zyxel-nas326"):
+            with self.subTest(persona=pid):
+                _, out, _ = render_one(self, catalog.by_id(pid), 1)
+                fs = tree.load_pickle(out / "fs.pickle")
+                skip = skipped(out)
+                for name in ("bash", "rbash", "dash"):
+                    self.assertIsNone(tree.resolve(fs, f"bin/{name}"), name)
+                    for spelling in (name, f"/bin/{name}", f"/usr/bin/{name}"):
+                        self.assertIn(spelling, skip)
+                for spelling in ("sh", "/bin/sh", "/usr/bin/sh"):
+                    self.assertNotIn(spelling, skip)
+        # where the persona keeps bash, Cowrie's bash answers
+        _, out, _ = render_one(self, catalog.by_id("qnap-qts"), 1)
+        self.assertNotIn("bash", skipped(out))
+
+    def test_tplink_is_an_archer_c7_v5(self):
+        persona = catalog.by_id("tplink-archer-c7")
+        for seed in range(3):
+            ident, out, _ = render_one(self, persona, seed)
+            r = ident.release
+            self.assertEqual(ident.hostname, "ArcherC7v5")  # getfirm HOSTNAME_NO_BLANK of the image
+            self.assertTrue(r.os_version.startswith(("1.2.0 Build 20211210 rel.", "1.2.1 Build 20220715 rel.",
+                                                     "1.3.1 Build 20260821 rel.")), r.os_version)
+            # the files of the image, with the placeholders its build left in openwrt_release
+            self.assertIn('DISTRIB_DESCRIPTION="%D %N %V"\n', (out / "honeyfs/etc/openwrt_release").read_text())
+            self.assertIn("For those about to rock... (%C, %R)", (out / "honeyfs/etc/banner").read_text())
+            self.assertTrue((out / "honeyfs/etc/passwd").read_text().startswith("root:x:0:0:root:/root:/bin/ash\n"))
+            # Linux 3.3.8: machine, ASEs of the 74Kc and kscratch, no isa / Options / package lines (from 3.15 / 4.x)
+            cpuinfo = (out / "honeyfs/proc/cpuinfo").read_text()
+            self.assertIn("system type\t\t: Qualcomm Atheros QCA956X ver 1 rev 0\nmachine\t\t\t: TP-Link Archer C7 v5\n",
+                          cpuinfo)
+            self.assertIn("ASEs implemented\t: mips16 dsp dsp2\nshadow register sets\t: 1\nkscratch registers\t: 0\n"
+                          "core\t\t\t: 0\n", cpuinfo)
+            for word in ("isa\t", "Options implemented", "package\t"):
+                self.assertNotIn(word, cpuinfo)
+            self.assertIn("/dev/root /rom squashfs ro,relatime 0 0\n", (out / "honeyfs/proc/mounts").read_text())
+            # the folders at the root of the image and /home (Cowrie's home of a login /etc/passwd has not)
+            fs = tree.load_pickle(out / "fs.pickle")
+            self.assertEqual({child[tree.A_NAME] for child in tree.node_children(fs)},
+                             {"bin", "dev", "etc", "home", "lib", "mnt", "overlay", "proc", "rom", "root", "sbin", "sys",
+                              "tmp", "usr", "var", "www"})
+            for rel in ("var/run", "var/lock"):
+                self.assertEqual(tree.find_node(fs, rel)[tree.A_TYPE], tree.T_DIR, rel)
+            commands = [e["COMMAND"] for e in json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]]
+            for command in ("/usr/sbin/dropbear -P /var/run/dropbear.1.pid -p 22", "/usr/bin/tmpServer", "-ash"):
+                self.assertIn(command, commands)
+            self.assertTrue(any(c.startswith("/usr/sbin/uhttpd -f -h /www -r ArcherC7v5 ") for c in commands))
+
     def test_openwrt_is_a_mt7621_router(self):
         persona = catalog.by_id("openwrt")
         for seed in range(6):
@@ -1462,7 +1651,7 @@ class DeviceContentTest(unittest.TestCase):
 
     def test_each_device_says_what_it_is(self):
         expected = {
-            "tplink-wr841n": ("busybox-help.txt", "BusyBox v1.19.2 "),
+            "tplink-archer-c7": ("busybox-help.txt", "BusyBox v1.19.4 "),
             "zyxel-nas326": ("honeyfs/firmware/mnt/info/fwversion", "V5.21(AAZF."),
             "qnap-qts": ("honeyfs/etc/config/uLinux.conf", "Model = TS-"),
             "synology-dsm": ("honeyfs/etc.defaults/VERSION", 'productversion="7.'),

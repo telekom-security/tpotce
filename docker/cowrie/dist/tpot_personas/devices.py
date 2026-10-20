@@ -10,7 +10,9 @@ from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, assign_processes, 
                      embedded_group, embedded_passwd, embedded_shadow, fs_row, kernel_line, kernel_series, lscpu,
                      mount_text, nproc, proc_mounts_text, ps_entry, rng_for, shadow_ctime, shadow_days, with_inodes)
 from .model import Content
-from .system import busybox_applets, proc_modules
+from . import firmware
+from .firmware import programs as firmware_programs
+from .system import busybox_applets, cpu_commands, init_scripts, lsmod_text, proc_modules
 
 
 # --- shared parts of the device builders -------------------------------------------
@@ -79,29 +81,57 @@ def used_kb(ident, purpose, size, low, high):
 
 
 # BusyBox 1.14-1.20 print the copyright of their year, 1.21 and later one text
-# (unverified: the exact wording per release)
+# (1.19.4: the Archer C7 v5 images; 1.14: the year of its appletlib.c, unverified)
 _BB_YEARS = {(1, 14): "2008", (1, 19): "2011"}
+_BB_INTRO = ("\tBusyBox is a multi-call binary that combines many common Unix\n"
+             "\tutilities into a single executable.  Most people will create a\n"
+             "\tlink to busybox for each function they wish to use and BusyBox\n"
+             "\twill act like whatever it was invoked as.\n\n")
+
+
+def busybox_applet_lines(applets, width=80):
+    """The applet list of `busybox` as appletlib.c wraps it (output_width - 1 columns, a tab counts 6)."""
+    out, col = "", 0
+    for name in applets:
+        length = len(name) + 2
+        if col >= width - 1 - length:
+            out += ",\n"
+            col = 0
+        if col == 0:
+            out, col = out + "\t", 6
+        else:
+            out += ", "
+        out += name
+        col += length
+    return out
 
 
 def busybox_help(banner, applets):
-    """What `busybox` without arguments prints, for "BusyBox v1.19.2 (2025-03-28 14:13:40 CST)" and the
-    applets of system.busybox_applets."""
+    """What `busybox` without arguments prints, for "BusyBox v1.19.4 (2022-07-14 23:31:52 EDT)" and the
+    applets of system.busybox_applets, without a terminal (80 columns). The forms of 1.19.4 (the Archer C7
+    v5 images) and of 1.27.2 / 1.31.1 / 1.36.1 (busybox images): before 1.21 the copyright of the year, one
+    usage line less and a blank line at the end; --show SCRIPT from 1.31 (the default configuration;
+    unverified for the vendors' builds and for the versions between)."""
     major, minor = (int(x) for x in re.match(r"BusyBox v(\d+)\.(\d+)", banner).groups())
     if (major, minor) < (1, 21):
         year = _BB_YEARS.get((major, minor), "2012")
         notice = (f"Copyright (C) 1998-{year} Erik Andersen, Rob Landley, Denys Vlasenko\n"
                   "and others. Licensed under GPLv2.\nSee source distribution for full notice.\n")
+        usage = ("Usage: busybox [function] [arguments]...\n"
+                 "   or: busybox --list[-full]\n"
+                 "   or: function [arguments]...\n")
+        end = "\n\n"
     else:
         notice = ("BusyBox is copyrighted by many authors between 1998-2015.\n"
                   "Licensed under GPLv2. See source distribution for detailed\ncopyright notices.\n")
-    applets = "\n".join("\t" + line.strip() for line in re.findall(r".{1,64}(?:, |$)", ", ".join(applets)))
-    return (f"{banner} multi-call binary.\n{notice}\n"
-            "Usage: busybox [function] [arguments]...\n"
-            "   or: busybox --list\n"
-            "   or: function [arguments]...\n\n"
-            "\tBusyBox is a multi-call binary that combines many common Unix\n"
-            "\tutilities into a single executable.\n\n"
-            f"Currently defined functions:\n{applets}\n")
+        usage = ("Usage: busybox [function [arguments]...]\n"
+                 "   or: busybox --list[-full]\n"
+                 + ("   or: busybox --show SCRIPT\n" if (major, minor) >= (1, 31) else "")
+                 + "   or: busybox --install [-s] [DIR]\n"
+                 "   or: function [arguments]...\n")
+        end = "\n"
+    return (f"{banner} multi-call binary.\n{notice}\n{usage}\n{_BB_INTRO}"
+            f"Currently defined functions:\n{busybox_applet_lines(applets)}{end}")
 
 
 # lspci of the bare metal NAS boards, per CPU (unverified: the exact device lists)
@@ -149,12 +179,24 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
         "bin/dmesg": device_dmesg(persona, ident, cmdline, boot),
         "bin/mount": mount,
         "bin/ulimit": ULIMIT,
-        "usr/bin/lscpu": lscpu(persona, hw, with_bogomips=persona.hardware_platform != "x86_64"),
-        "usr/bin/nproc": nproc(hw),
+        "sbin/lsmod": lsmod_text(persona, all_files["proc/modules"]),
     }
+    # lscpu and nproc only where the firmware has them (system.cpu_commands)
+    has_lscpu, has_nproc = cpu_commands(persona, ident)
+    if has_lscpu:
+        commands["usr/bin/lscpu"] = lscpu(persona, hw, with_bogomips=persona.hardware_platform != "x86_64")
+    if has_nproc:
+        commands["usr/bin/nproc"] = nproc(hw)
     if hw.cpu_model in NAS_LSPCI:
         commands["usr/bin/lspci"] = NAS_LSPCI[hw.cpu_model]
     commands.update(txtcmds or {})
+    own = firmware_programs(persona, ident)
+    if own is not None:
+        # a firmware with its own programs: no txtcmd of a program it has not (bin/ulimit and bin/help are
+        # the texts of ash's builtins, which the patched getCommand answers without a program)
+        builtins = set(firmware.builtins(persona) or ())
+        commands = {rel: text for rel, text in commands.items()
+                    if rel in own or (rel.startswith("bin/") and rel[4:] in builtins)}
     # /etc/shadow was last written on its newest lastchange day
     banner = r.extra.get("busybox")
     return Content(files=all_files, txtcmds=commands, processes=processes,
@@ -162,7 +204,7 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
                    programs=("bin/busybox",) if banner else (),
                    busybox_help=busybox_help(banner, busybox_applets(persona, ident)) if banner else "",
                    # the kernel threads and helpers of a small system (top counts them, ps lists them not)
-                   tasks=len(processes) + (60 if coreutils else 40), top_style="procps" if coreutils else "busybox",
+                   top_style="procps" if coreutils else "busybox",
                    filesystems=filesystems)
 
 
@@ -207,31 +249,122 @@ def build_dlink(persona, ident):
     return device_content(persona, ident, files, entries, cmdline, boot, processes)
 
 
+# /etc/banner and /etc/openwrt_release of the image: the OpenWrt Attitude Adjustment banner and the
+# placeholders the build of TP-Link left in them
+TPLINK_BANNER = (
+    '     MM           NM                    MMMMMMM          M       M\n'
+    '   $MMMMM        MMMMM                MMMMMMMMMMM      MMM     MMM\n'
+    '  MMMMMMMM     MM MMMMM.              MMMMM:MMMMMM:   MMMM   MMMMM\n'
+    "MMMM= MMMMMM  MMM   MMMM       MMMMM   MMMM  MMMMMM   MMMM  MMMMM'\n"
+    'MMMM=  MMMMM MMMM    MM       MMMMM    MMMM    MMMM   MMMMNMMMMM\n'
+    'MMMM=   MMMM  MMMMM          MMMMM     MMMM    MMMM   MMMMMMMM\n'
+    'MMMM=   MMMM   MMMMMM       MMMMM      MMMM    MMMM   MMMMMMMMM\n'
+    'MMMM=   MMMM     MMMMM,    NMMMMMMMM   MMMM    MMMM   MMMMMMMMMMM\n'
+    'MMMM=   MMMM      MMMMMM   MMMMMMMM    MMMM    MMMM   MMMM  MMMMMM\n'
+    'MMMM=   MMMM   MM    MMMM    MMMM      MMMM    MMMM   MMMM    MMMM\n'
+    'MMMM$ ,MMMMM  MMMMM  MMMM    MMM       MMMM   MMMMM   MMMM    MMMM\n'
+    '  MMMMMMM:      MMMMMMM     M         MMMMMMMMMMMM  MMMMMMM MMMMMMM\n'
+    '    MMMMMM       MMMMN     M           MMMMMMMMM      MMMM    MMMM\n'
+    '     MMMM          M                    MMMMMMM        M       M\n'
+    '       M\n'
+    ' ---------------------------------------------------------------\n'
+    '   For those about to rock... (%C, %R)\n'
+    ' ---------------------------------------------------------------\n'
+)
+TPLINK_RELEASE = """DISTRIB_ID="%D"
+DISTRIB_RELEASE="%C"
+DISTRIB_REVISION="%R"
+DISTRIB_CODENAME="%n"
+DISTRIB_TARGET="%S"
+DISTRIB_DESCRIPTION="%D %N %V"
+"""
+TPLINK_PASSWD = """root:x:0:0:root:/root:/bin/ash
+daemon:*:1:1:daemon:/var:/bin/false
+ftp:*:55:55:ftp:/home/ftp:/bin/false
+network:*:101:101:network:/var:/bin/false
+nobody:*:65534:65534:nobody:/var:/bin/false
+admin:x:1000:0:admin:/var:/bin/false
+guest::2000:65534:guest:/var:/bin/false
+"""
+TPLINK_GROUP = """root:x:0:admin
+daemon:x:1:
+adm:x:4:
+mail:x:8:
+audio:x:29:
+www-data:x:33:
+ftp:x:55:
+users:x:100:
+network:x:101:
+nogroup:x:65534:
+"""
+
+
+def ash_help(builtins):
+    """What help of BusyBox ash prints (helpcmd of shell/ash.c 1.19: a name after a tab or a blank, a
+    new line once the column passes 60); recorded for the ash of the Archer C7 v5."""
+    out, col = "Built-in commands:\n------------------\n", 0
+    for name in builtins:
+        piece = ("\t" if col == 0 else " ") + name
+        out += piece
+        col += len(piece)
+        if col > 60:
+            out += "\n"
+            col = 0
+    return out + ("\n" if col else "") + "\n"
+
+
 def build_tplink(persona, ident):
-    """TP-Link TL-WR841N v14 (MT7628, the 2.6.36 SDK of MediaTek): squashfs root on
-    mtdblock5 of the built-in command line, cos / httpd / dropbear in ps.
-    Unverified: the process list."""
-    hw = ident.hardware
-    cmdline = "console=ttyS1,57600n8 root=/dev/mtdblock5"
+    """TP-Link Archer C7 v5 (QCA9563; QSDK, an OpenWrt of 2012 with Linux 3.3.8 and TP-Link's programs):
+    the accounts and the release files of the image (its openwrt_release keeps the placeholders of the
+    build), the squashfs of the image on /rom under an overlay of the jffs2 rest of the flash, BusyBox
+    init and the daemons of /etc/rc.d with the arguments their init scripts give them (dropbear -P / -p 22
+    of /etc/config/dropbear, uhttpd with https_support, logd -C 128, crond -l 5). /etc/profile cats
+    /etc/banner, and the host name is getfirm HOSTNAME_NO_BLANK (ArcherC7v5). Unverified: the MTD
+    numbers and the overlay size, the start of the command line (the image has board=750Gr3 and
+    rootfstype=squashfs,jffs2)."""
+    r, hw = ident.release, ident.hardware
+    x = r.extra
+    _, root_day, _ = shadow_days(ident)
+    shadow = (f"root:$1$root$A3qH7I7U2vW0nLJ9rKaNl/:{root_day}:0:99999:7:::\n"
+              + "".join(f"{name}:*:0:0:99999:7:::\n" for name in ("daemon", "ftp", "network", "nobody"))
+              + "admin:x:0:0:99999:7:::\nguest::0:0:99999:7:::\n")
+    files = {"etc/banner": TPLINK_BANNER, "etc/openwrt_release": TPLINK_RELEASE, "etc/openwrt_version": "%V\n"}
+    rootfs = x["rootfs_kb"]
+    overlay = 640
+    tmp = hw.mem_kb // 2
     entries = [
         fs_entry("rootfs", "/", "rootfs", "rw"),
-        fs_entry("/dev/root", "/", "squashfs", "ro,relatime", hw.disk_kb, hw.disk_kb),
-        fs_entry("proc", "/proc", "proc", "rw,relatime"),
-        fs_entry("ramfs", "/var", "ramfs", "rw,relatime"),
-        fs_entry("sysfs", "/sys", "sysfs", "rw,relatime"),
+        fs_entry("/dev/root", "/rom", "squashfs", "ro,relatime", rootfs, rootfs),
+        fs_entry("proc", "/proc", "proc", "rw,noatime"),
+        fs_entry("sysfs", "/sys", "sysfs", "rw,noatime"),
+        fs_entry("tmpfs", "/tmp", "tmpfs", "rw,nosuid,nodev,noatime", tmp, used_kb(ident, "tmp", tmp, 0.004, 0.012)),
+        fs_entry("tmpfs", "/dev", "tmpfs", "rw,noatime,size=512k,mode=755", 512, 0),
+        fs_entry("devpts", "/dev/pts", "devpts", "rw,noatime,mode=600"),
+        fs_entry("/dev/mtdblock3", "/overlay", "jffs2", "rw,noatime", overlay, 392),
+        fs_entry("overlayfs:/overlay", "/", "overlayfs", "rw,noatime,lowerdir=/,upperdir=/overlay", overlay, 392),
     ]
-    boot = [f"VFS: Mounted root (squashfs filesystem) readonly on device 31:{_mtd_root(cmdline)}.",
-            "Freeing unused kernel memory: 132k freed"]
+    cmdline = "console=ttyS0,115200 board=750Gr3 rootfstype=squashfs,jffs2 noinitrd"
+    boot = ["VFS: Mounted root (squashfs filesystem) readonly on device 31:2.",
+            "Freeing unused kernel memory: 236k freed"]
     processes = [
-        ps_entry("root", 0, "init", vsz=1220, rss=396),
-        ps_entry("root", 0, "/usr/bin/cos", vsz=2896, rss=1112),
-        ps_entry("root", 0, "/usr/bin/httpd", vsz=2184, rss=812),
-        ps_entry("root", 0, "/usr/bin/dnsProxy", vsz=1240, rss=392),
-        ps_entry("root", 0, "dropbear -p 22 -r /var/tmp/dropbear/dropbear_rsa_host_key -A /var/tmp/dropbear/dropbearpwd",
-                 vsz=1032, rss=372),
-        ps_entry(persona.user, 0, "-sh", vsz=1224, rss=404, tty="pts/0"),
+        ps_entry("root", 0, "init", vsz=1500, rss=520),
+        ps_entry("root", 0, "/sbin/ubusd", vsz=1028, rss=332),
+        ps_entry("root", 0, "/sbin/netifd", vsz=1736, rss=780),
+        ps_entry("root", 0, "/usr/sbin/logd -C 128", vsz=1288, rss=424),
+        ps_entry("root", 0, "/usr/sbin/crond -c /etc/crontabs -l 5", vsz=1500, rss=420),
+        ps_entry("root", 0, "/usr/sbin/dnsmasq -C /var/etc/dnsmasq.conf", vsz=1308, rss=508),
+        ps_entry("root", 0, "/usr/sbin/dropbear -P /var/run/dropbear.1.pid -p 22", vsz=1152, rss=420),
+        ps_entry("root", 0, "/usr/sbin/uhttpd -f -h /www -r ArcherC7v5 -x /cgi-bin -t 120 -T 30 -A 1 -n 16 -R "
+                            "-p 0.0.0.0:80 -C /etc/uhttpd.crt -K /etc/uhttpd.key "
+                            "-N ALL:+AES256:!DES:!3DES:!aNULL:!MD5:!SSLv2:!SSLv3:!TLSv1:!RC4 -s 0.0.0.0:443",
+                 vsz=2208, rss=1112),
+        ps_entry("root", 0, "/usr/bin/tmpServer", vsz=2884, rss=1088),
+        ps_entry("root", 0, "/usr/bin/tdpServer", vsz=1484, rss=560),
+        ps_entry("root", 0, "-ash", vsz=1508, rss=528, tty="pts/0"),
     ]
-    return device_content(persona, ident, {}, entries, cmdline, boot, processes)
+    return device_content(persona, ident, files, entries, cmdline, boot, processes,
+                          accounts=(TPLINK_PASSWD, TPLINK_GROUP, shadow),
+                          txtcmds={"bin/help": ash_help(firmware.TPLINK_ASH_BUILTINS)})
 
 
 def build_zyxel(persona, ident):
@@ -370,6 +503,10 @@ DISTRIB_TAINTS=''
         ps_entry("root", 0, "/sbin/ubusd", vsz=1212, rss=760),
         ps_entry("logd", 0, "/sbin/logd -S 64", vsz=1240, rss=788),
         ps_entry("root", 0, "/sbin/netifd", vsz=1880, rss=1276),
+        # the DHCP client netifd runs for the WAN (proto dhcp of /lib/netifd/proto/dhcp.sh; unverified: the
+        #   options of the release); it has no UDP socket, only a packet socket
+        ps_entry("root", 0, "udhcpc -p /var/run/udhcpc-wan.pid -s /lib/netifd/dhcp.script -f -t 0 -i wan "
+                            "-x hostname:OpenWrt -C -O 121", vsz=1236, rss=748, parent="/sbin/netifd"),
         ps_entry("root", 0, "/usr/sbin/odhcpd", vsz=1448, rss=840),
         ps_entry("root", 0, "/usr/sbin/dropbear -F -P /var/run/dropbear.1.pid -p 22 -K 300 -T 3", vsz=1104, rss=644),
         ps_entry("root", 0, "/usr/sbin/uhttpd -f -h /www -r OpenWrt -x /cgi-bin -u /ubus -t 60 -T 30 -k 20 -A 1 "
@@ -423,17 +560,30 @@ def build_qnap(persona, ident):
     cmdline = "console=ttyS0,115200n8 pcie_aspm=off pci=noaer"
     boot = ["Unpacking initramfs...", "Freeing initrd memory: 70768K", "Freeing unused kernel image memory: 2140K",
             "Run /init as init process"]
+    # admin is the root account of QTS: uid 0, ps names it (getpwuid(0) is the first line); QTS has no
+    #   root line, it is kept after the accounts of QTS so that a login as root, which the honeypot takes,
+    #   is uid 0 as well
     processes = [
-        ps_entry("root", 0, "init", vsz=3364, rss=1088),
-        ps_entry("root", 0, "/sbin/daemon_mgr", vsz=8172, rss=2316),
-        ps_entry("root", 0, "/sbin/qLogEngined", vsz=19248, rss=5560),
-        ps_entry("root", 0, "/usr/sbin/sshd -f /etc/config/ssh/sshd_config -p 22", vsz=13880, rss=4012),
-        ps_entry("root", 0, "/usr/local/sbin/_thttpd_ -p 58080 -nor -nos -u admin -d /home/httpd", vsz=7716, rss=2096),
-        ps_entry("root", 0, "/usr/local/apache/bin/apache_proxy -k start -f /etc/apache-sys-proxy.conf",
+        ps_entry("admin", 0, "init", vsz=3364, rss=1088),
+        ps_entry("admin", 0, "/sbin/daemon_mgr", vsz=8172, rss=2316),
+        ps_entry("admin", 0, "/sbin/qLogEngined", vsz=19248, rss=5560),
+        ps_entry("admin", 0, "/usr/sbin/sshd -f /etc/config/ssh/sshd_config -p 22", vsz=13880, rss=4012),
+        ps_entry("admin", 0, "/usr/local/sbin/_thttpd_ -p 58080 -nor -nos -u admin -d /home/httpd", vsz=7716, rss=2096),
+        ps_entry("admin", 0, "/usr/local/apache/bin/apache_proxy -k start -f /etc/apache-sys-proxy.conf",
                  vsz=48224, rss=9132),
         ps_entry("admin", 0, "-sh", vsz=2472, rss=1324, tty="pts/0"),
     ]
-    return device_content(persona, ident, files, entries, cmdline, boot, processes,
+    _, root_day, _ = shadow_days(ident)
+    passwd = ("admin:x:0:0:administrator:/home/admin:/bin/sh\n"
+              "guest:x:65534:65534:guest:/tmp:/bin/sh\n"
+              "httpdusr:x:99:0:Apache httpd user:/tmp:/bin/sh\n"
+              "sshd:x:22:22:sshd:/var/empty:/bin/false\n"
+              "root:x:0:0:root:/root:/bin/sh\n")
+    group = ("administrators:x:0:admin\neveryone:x:100:admin\nguest:x:65534:guest\nsshd:x:22:\n")
+    shadow = (f"admin:$1$admin$Qd4NFXmPRH2LcGv5jAO.k1:{root_day}:0:99999:7:::\n"
+              f"guest:!:{root_day}:0:99999:7:::\nhttpdusr:!:{root_day}:0:99999:7:::\nsshd:*:{root_day}:0:99999:7:::\n"
+              f"root:!:{root_day}:0:99999:7:::\n")
+    return device_content(persona, ident, files, entries, cmdline, boot, processes, accounts=(passwd, group, shadow),
                           txtcmds={"sbin/qpkg_cli": QPKG_CLI_HELP})
 
 
@@ -567,14 +717,20 @@ BUG_REPORT_URL="https://bugs.debian.org/"
             "VFS: Mounted root (ubifs filesystem) on device 0:13."]
     processes = [
         ps_entry("root", 0, "/sbin/init", vsz=2900, rss=1724, stat="Ss"),
-        ps_entry("root", 0, "/usr/sbin/rsyslogd", vsz=29352, rss=2904, stat="Ssl"),
+        # the command lines of the image's units (rsyslog.service, ssh.service; telnet.service with the port
+        #   of "service telnet", gui_telnet.service of the web UI's console)
+        ps_entry("root", 0, "/usr/sbin/rsyslogd -n -iNONE", vsz=29352, rss=2904, stat="Ssl"),
         ps_entry("root", 0, "/usr/sbin/ubnt-daemon", vsz=6820, rss=2300),
-        ps_entry("root", 0, "/usr/sbin/sshd", vsz=7728, rss=3440, stat="Ss"),
+        ps_entry("root", 0, "/usr/sbin/sshd -D", vsz=7728, rss=3440, stat="Ss"),
+        ps_entry("root", 0, "/usr/sbin/telnetd -p 23", vsz=2856, rss=1288, stat="Ss"),
+        ps_entry("root", 0, "/usr/sbin/telnetd -p 55523 -b 127.0.0.101", vsz=2856, rss=1312, stat="Ss"),
         ps_entry("root", 0, "/usr/sbin/lighttpd -f /etc/lighttpd/lighttpd.conf", vsz=5992, rss=3588, stat="Ss"),
         ps_entry("nobody", 0, "/usr/sbin/dnsmasq -x /var/run/dnsmasq/dnsmasq.pid", vsz=4372, rss=1688),
         ps_entry(persona.user, 0, "-vbash", vsz=4964, rss=3164, tty="pts/0", stat="Ss"),
     ]
     arch = x["deb_arch"]
+    # the init scripts of the EdgeOS image (systemd starts the services, the rc directories hold no links)
+    files.update(init_scripts(persona))
     content = device_content(persona, ident, files, entries, cmdline, boot, processes, coreutils=True, txtcmds={
         "usr/bin/dpkg": f"Debian 'dpkg' package management program version {r.packages['dpkg']} ({arch}).\n",
     })
@@ -629,3 +785,133 @@ def build_ipcam(persona, ident):
         ps_entry(persona.user, 0, "-sh", vsz=1920, rss=480, tty="pts/0"),
     ]
     return device_content(persona, ident, files, entries, cmdline, boot, processes)
+
+
+# --- systemd of the devices that have it ----------------------------------------------------------
+# EdgeOS 2.0: Debian 9 with systemd 232-25+deb9u12 and sudo 1.8.19p1-2.1+deb9u3 (dpkg status of the
+#   ER-e50 v2.0.9-hotfix.2 image; its unit files in unit_files.json.gz); DSM 7.2: systemd 219 with the
+#   features of the configure options of its SynoBuildConf/build (the systemd of Synology's GPL sources of
+#   7.2-72806; SysV compatibility on by default); unverified: the units, named after the processes of its ps list
+DEVICE_SYSTEMD = {"ubiquiti": (232, "", "+PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP "
+                                         "+GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD +IDN",
+                               "/lib/systemd/system"),
+                  "synology": (219, "", "+PAM -AUDIT -SELINUX -IMA -APPARMOR -SMACK +SYSVINIT -UTMP -LIBCRYPTSETUP "
+                                        "-GCRYPT -GNUTLS -ACL +XZ -LZ4 -SECCOMP +BLKID -ELFUTILS +KMOD -IDN",
+                               "/usr/lib/systemd/system")}
+# (unit, description, the text of its process in ps or None, unit file state)
+DEVICE_UNITS = {
+    "ubiquiti": (("dnsmasq.service", "dnsmasq - A lightweight DHCP and caching DNS server", "/usr/sbin/dnsmasq",
+                  "enabled"),
+                 ("gui_telnet.service", "GUI Telnet Daemon", "telnetd -p 55523", "static"),
+                 ("lighttpd.service", "Lighttpd Daemon", None, "static"),
+                 ("rsyslog.service", "System Logging Service", "/usr/sbin/rsyslogd", "enabled"),
+                 ("ssh.service", "OpenBSD Secure Shell server", "/usr/sbin/sshd", "enabled"),
+                 ("telnet.service", "Telnet Daemon", "telnetd -p 23", "static"),
+                 ("ubnt-init.service", "UBNT daemon", "/usr/sbin/ubnt-daemon", "enabled"),
+                 ("vyatta-router.service", "UBNT Routing Daemons", None, "enabled")),
+    "synology": (("nginx.service", "nginx", "nginx: master", "enabled"),
+                 ("sshd.service", "OpenSSH Daemon", "/usr/bin/sshd", "enabled"),
+                 ("synoscgi.service", "Synology CGI", "synoscgi", "enabled"),
+                 ("synostoraged.service", "Synology storage daemon", "synostoraged", "enabled"),
+                 ("systemd-journald.service", "Journal Service", "systemd-journald", "static")),
+}
+
+
+def device_units(persona, ident, processes):
+    """What the patched systemctl shows of a device with systemd ([shell] systemctl_units)."""
+    from . import servers
+    version, full, features, directory = DEVICE_SYSTEMD[persona.family]
+    texts = servers.unit_texts(persona, ident)
+    rng = rng_for(ident, "systemd")
+    pids = {p["PID"] for p in processes}
+    units = []
+    for name, description, match, state in DEVICE_UNITS[persona.family]:
+        unit = {"name": name, "description": description, "state": state, "preset": "enabled",
+                "path": f"{directory}/{name}"}
+        process = next((p for p in processes if match and match in p["COMMAND"]), None)
+        if match and process is None:
+            raise ValueError(f"{persona.id}: no process of {name} in ps")
+        if process is None:
+            pid = rng.randint(150, 700)
+            while pid in pids:
+                pid += 1
+            sub = "exited" if state == "enabled" else "dead"
+            unit.update({"sub": sub, "start": round(rng.uniform(4.0, 12.0), 3), "pid": pid, "kind": "oneshot",
+                         "cpu_ms": rng.randint(40, 2400)})
+        else:
+            memory = int(process["RSS"] * 1024 * rng.uniform(1.1, 1.5))
+            unit.update({"sub": "running", "start": round(rng.uniform(6.0, 30.0), 3), "pid": process["PID"],
+                         "comm": servers.process_name(process["COMMAND"]), "command": process["COMMAND"],
+                         "tasks": rng.randint(2, 6) if "l" in process["STAT"] else 1, "memory": memory,
+                         "peak": int(memory * 1.2), "kind": "simple", "cpu_ms": rng.randint(30, 900)})
+        servers._unit_details(unit, texts.get(name), persona.family)
+        if not unit.get("exec") and process is not None:
+            # a unit of no unit file read: the command of its process (nginx: its master's program)
+            unit["exec"] = "/usr/bin/nginx -g 'daemon off;'" if name == "nginx.service" else process["COMMAND"]
+        if unit["sub"] == "dead":
+            unit.pop("pid", None)
+        units.append(unit)
+    units.sort(key=lambda u: u["name"].lower())
+    return {"version": version, "full": full, "features": features, "unit_dir": directory,
+            "tasks_max": int(ident.hardware.mem_kb / 128 * 0.15), "init": processes[0]["COMMAND"], "units": units,
+            "preset": "enabled"}
+
+
+# --- the daemons of a device in its tree ---------------------------------------------------------------------------
+# the program of the telnet session of a device whose ps list has no telnetd ([shell] telnet_daemon): BusyBox telnetd
+#   where BusyBox installs it; on a BusyBox without the applet (the Archer C7 and OpenWrt images have no telnet
+#   daemon) a telnetd of its own, a deviation on purpose: T-Pot serves Telnet on every persona, as it serves SSH on
+#   the DIR-859 1.05B03 (catalog)
+SESSION_TELNETD = "/usr/sbin/telnetd"
+BUSYBOX = "/bin/busybox"
+
+
+def ps_program(command):
+    """The program of a process of ps: its first word, of a title ("nginx: master process /usr/bin/nginx") the
+    first path after it; None for a login shell and a kernel thread."""
+    words = str(command or "").split()
+    if not words or words[0].startswith(("-", "[")):
+        return None
+    if words[0].endswith(":"):
+        return next((word for word in words[1:] if word.startswith("/")), None)
+    return words[0]
+
+
+def daemon_programs(persona, ident, processes):
+    """{path: link target or None} of the programs a device's ps list runs and the telnetd of its sessions: an applet
+    of its BusyBox is a link to /bin/busybox where BusyBox installs it (firmware.BUSYBOX_DIRS; init, which the
+    kernel starts, in /sbin), another program a file of its own where the list names it (a bare name: /usr/sbin).
+    What the tree has stays as it is (render.apply_to_tree)."""
+    if persona.kind != "device":
+        return {}
+    banner = ident.release.extra.get("busybox")
+    applets = set(busybox_applets(persona, ident)) if banner else set()
+    where = {}
+    for folder, names in firmware.BUSYBOX_DIRS.items():
+        for name in "".join(names).split():
+            where.setdefault(name, folder)
+    found = {}
+
+    def add(path):
+        name = path.rsplit("/", 1)[-1]
+        if banner and name in applets and name in where and path in (name, f"/{where[name]}/{name}"):
+            found[f"/{where[name]}/{name}"] = BUSYBOX
+        elif banner and path == "init":
+            found["/sbin/init"] = BUSYBOX
+        else:
+            found[path if path.startswith("/") else f"/usr/sbin/{path}"] = None
+
+    for process in processes:
+        program = ps_program(process.get("COMMAND"))
+        if program is not None:
+            add(program)
+    if not any(ps_program(p.get("COMMAND")) and ps_program(p.get("COMMAND")).rsplit("/", 1)[-1] in
+               ("telnetd", "utelnetd") for p in processes):
+        add(SESSION_TELNETD)
+    return found
+
+
+def telnet_daemon(persona, ident):
+    """[shell] telnet_daemon: the program of the telnet session of a device whose ps list has no telnetd (tpot_session;
+    a listed telnetd serves its sessions itself), "" for a server (its telnet_server)."""
+    return SESSION_TELNETD if persona.kind == "device" else ""

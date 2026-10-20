@@ -73,7 +73,7 @@ class StartTest(unittest.TestCase):
 
     def test_cfg_names_the_key_files_of_the_profile_in_the_persona_dir(self):
         for pid, kinds in (("openwrt", ("ed25519", "rsa")), ("ubuntu-noble", ("rsa", "ecdsa", "ed25519")),
-                           ("tplink-wr841n", ("rsa",))):
+                           ("tplink-archer-c7", ("rsa",))):
             with self.subTest(pid):
                 self.prepare(pid)
                 cfg = configparser.ConfigParser(interpolation=None)
@@ -317,7 +317,7 @@ class RotationTest(unittest.TestCase):
         self.assertTrue(self.lines[1].startswith("Could not save the Cowrie persona state persona-state.json ("))
         self.assertTrue((self.runtime / "runtime" / "cowrie.cfg").is_file())
 
-    def test_a_state_that_is_no_regular_file_is_not_followed(self):
+    def test_a_state_that_is_a_link_or_a_fifo_is_not_used(self):
         target = tmpdir(self) / "elsewhere.json"
         self.prepare("ipcam", "7", NOW)
         target.write_text(self.state_path.read_text())

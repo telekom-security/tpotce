@@ -419,6 +419,21 @@ def standard_backend(repo):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class LegacyPickerTest(unittest.TestCase):
+    """An earlier persona ID in .env (the legacy of COWRIE_PERSONA) is ticked as its new ID; the list offers only
+    the new one."""
+
+    def test_the_earlier_id_is_ticked_as_the_new_one(self):
+        from tpotctl import envschema
+        from tpotctl.screens.pickers import many_picker
+        picker = many_picker(envschema.load_schema()["COWRIE_PERSONA"], "tplink-wr841n ipcam")
+        self.assertEqual(picker.chosen, {"tplink-archer-c7", "ipcam"})
+        self.assertEqual(picker.dropped, [])
+        self.assertNotIn(("value", "tplink-wr841n"), picker.lines)
+        self.assertIn(("value", "tplink-archer-c7"), picker.lines)
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
 class ManyPickerTest(unittest.IsolatedAsyncioTestCase):
     """COWRIE_PERSONA on the Settings page: Choose opens the list to tick, Servers and Devices."""
 
@@ -500,7 +515,7 @@ class ManyPickerTest(unittest.IsolatedAsyncioTestCase):
             listing.highlighted = picker.lines.index(("group", "Devices"))
             await pilot.press("enter")
             await pilot.pause(0.05)
-            self.assertEqual(picker.value(), "dlink-dir859 tplink-wr841n zyxel-nas326 openwrt qnap-qts synology-dsm "
+            self.assertEqual(picker.value(), "dlink-dir859 tplink-archer-c7 zyxel-nas326 openwrt qnap-qts synology-dsm "
                                              "ubiquiti-edgerouter-x ipcam")
             self.assertIn("8 of 8", str(listing.get_option_at_index(listing.highlighted).prompt))
             await pilot.press("space")                          # all of the group ticked: none of it

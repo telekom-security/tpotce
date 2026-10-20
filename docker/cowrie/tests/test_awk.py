@@ -282,7 +282,7 @@ class FakeLog:
         self.errors.append((args, kwargs))
 
 
-def awk(style, args, data=None, version=None, log=None, broken=False):
+def awk(style, args, data=None, version=None, log=None, broken=False, libc=None):
     """(stdout, stderr, status) of the patched awk of a style; broken makes the interpreter fail."""
     global _MATCHER
     root = patched_root()
@@ -290,7 +290,8 @@ def awk(style, args, data=None, version=None, log=None, broken=False):
         fs = module_all((root / "src/cowrie/commands/fs.py").read_text(),
                         {"HoneyPotCommand": Base, "fs": object(), "CowrieConfig": FakeConfig({})})
         _MATCHER = fs["TpotGrepMatcher"]
-    config = FakeConfig({("shell", "awk_style"): style, ("shell", "awk_version"): version or VERSIONS[style]})
+    config = FakeConfig({("shell", "awk_style"): style, ("shell", "awk_version"): version or VERSIONS[style],
+                         **({("shell", "text_libc"): libc} if libc else {})})
     namespace = module_all((root / "src/cowrie/commands/awk.py").read_text(),
                            {"HoneyPotCommand": Base, "FileNotFound": FileNotFoundError, "TpotGrepMatcher": _MATCHER,
                             "CowrieConfig": config, "log": log or FakeLog()})
@@ -360,6 +361,27 @@ class AwkTest(unittest.TestCase):
         self.assertEqual((out, code), ("", 1))
         self.assertTrue(err.startswith("awk: warning: option -W is ignored\nBusyBox v1.36.1"))
         self.assertIn("-e AWK_PROGRAM", err)
+
+    def test_busybox_1_19_ends_its_usage_with_a_blank_line(self):
+        # awk -x of the BusyBox v1.19.4 of the Archer C7 v5 (220715 image, qemu-mips-static)
+        expected = (
+            'awk: invalid option -- x\n'
+            'BusyBox v1.19.4 (2022-07-14 23:31:52 EDT) multi-call binary.\n'
+            '\n'
+            'Usage: awk [OPTIONS] [AWK_PROGRAM] [FILE]...\n'
+            '\n'
+            '\t-v VAR=VAL\tSet variable\n'
+            '\t-F SEP\t\tUse SEP as field separator\n'
+            '\t-f FILE\t\tRead program from FILE\n'
+            '\n'
+        )
+        self.assertEqual(awk("busybox", ["-x"], version="BusyBox v1.19.4 (2022-07-14 23:31:52 EDT)", libc="uclibc"),
+                         ("", expected, 1))
+        # the getopt of the other C libraries (glibc as busybox:1.36.1, musl of OpenWrt)
+        self.assertTrue(awk("busybox", ["-x"])[1].startswith("awk: invalid option -- 'x'\nBusyBox v1.36.1"))
+        self.assertTrue(awk("busybox", ["-x"], libc="musl")[1].startswith("awk: unrecognized option: x\n"))
+        self.assertTrue(awk("busybox", ["-f"], libc="uclibc")[1].startswith(
+            "awk: option requires an argument -- f\n"))
 
     def test_old_gawk_and_mawk(self):
         """gawk 4.0.2 of centos:7 and mawk 1.3.3 of debian:9."""

@@ -1,0 +1,26 @@
+{
+ "source": "BusyBox v1.19.4 of the Archer C7(US)_V5.0_220715 squashfs under qemu-mips-static: the usage of uname --help, head -x, grep and which without arguments (stderr, status 1) and the options getopt32 takes (uname -o / -i answer, head -n without a value is an error)",
+ "applets": {
+  "uname": {
+   "usage": "[-amnrspv]\n\nPrint system information\n\n\t-a\tPrint all\n\t-m\tThe machine (hardware) type\n\t-n\tHostname\n\t-r\tOS release\n\t-s\tOS name (default)\n\t-p\tProcessor type\n\t-v\tOS version\n\n",
+   "flags": "amnrspvio",
+   "values": "",
+   "noargs": false
+  },
+  "head": {
+   "usage": "[OPTIONS] [FILE]...\n\nPrint first 10 lines of each FILE (or stdin) to stdout.\nWith more than one FILE, precede each with a filename header.\n\n\t-n N[kbm]\tPrint first N lines\n\t-c N[kbm]\tPrint first N bytes\n\t-q\t\tNever print headers\n\t-v\t\tAlways print headers\n\nN may be suffixed by k (x1024), b (x512), or m (x1024^2).\n\n",
+   "flags": "qv",
+   "values": "nc",
+   "numbers": true,
+   "noargs": false
+  },
+  "grep": {
+   "usage": "[-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n\n",
+   "noargs": true
+  },
+  "which": {
+   "usage": "[COMMAND]...\n\nLocate a COMMAND\n\n",
+   "noargs": true
+  }
+ }
+}

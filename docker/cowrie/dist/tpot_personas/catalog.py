@@ -115,7 +115,7 @@ def _firmware(label, released, superseded, banner, ssh_version, kernel, uts, bui
 
 
 def _device(pid, family, os_id, user, shell, arch, ssh_profile, managers, releases, hardware, hostnames, builder,
-            summary, uid=1000, remove_paths=(), max_install_days=900):
+            summary, uid=1000, remove_paths=(), max_install_days=900, prompt_style="debian"):
     # uname -o / -a: BusyBox prints "GNU/Linux" (coreutils/uname.c 1.14.1 and 1.19.2 hard-code it, 1.35.0
     #   takes CONFIG_UNAME_OSNAME, default "GNU/Linux"), as coreutils does on the Debian-based EdgeOS
     operating_system = "GNU/Linux"
@@ -126,7 +126,7 @@ def _device(pid, family, os_id, user, shell, arch, ssh_profile, managers, releas
         ssh_profile=ssh_profile, package_managers=managers,
         releases=releases, hardware=hardware, hostnames=hostnames,
         builder=builder, summary=summary, remove_paths=remove_paths,
-        max_install_days=max_install_days,
+        max_install_days=max_install_days, prompt_style=prompt_style,
     )
 
 
@@ -218,7 +218,8 @@ def _rhel(updated, minor, kernel, uts, builder, compiler, openssh, openssh_befor
 
 
 def _centos(updated, kernel, uts, openssh, openssh_before, packages):
-    extra = {"centos_release": "7.9.2009", "kernel_builder": "mockbuild@kbuilder.bsys.centos.org",
+    # ssh_vendor: the KEX and server-sig-algs of CentOS's OpenSSH 7.4 (ssh_profiles.kex_algorithms)
+    extra = {"centos_release": "7.9.2009", "kernel_builder": "mockbuild@kbuilder.bsys.centos.org", "ssh_vendor": "centos",
              "kernel_compiler": "gcc version 4.8.5 20150623 (Red Hat 4.8.5-44) (GCC) ",
              "first_install": "2020-11-12", "updated": updated}
     if openssh_before:
@@ -572,8 +573,11 @@ _DLINK_KERNEL = ("2.6.31-svn58067", "#1 Fri Jun 24 11:05:39 CST 2016", "vic@loca
 DLINK = (
     # source: https://legacyfiles.us.dlink.com/DIR-859/REVA/FIRMWARE/ (DIR-859_REVA_FIRMWARE_1.05B03.zip:
     #   release note "June, 2016", kernel and BusyBox from the image; /etc/config of its squashfs)
-    # unverified: the day of the release (the note names the month); the dropbear of the persona (the
-    #   image has telnetd only), taken from the TP-Link firmware of the same SDK era
+    # unverified: the day of the release (the note names the month)
+    # deviation on purpose: the 1.05B03 image ships telnetd only (no dropbear, no sshd), but
+    #   T-Pot serves SSH on every persona, so the persona answers with a dropbear of the same SDK era
+    #   (2012.55, as the TP-Link firmware of that time); D-Link's GPL archive (tsd.dlink.com.tw) gives its
+    #   sources only after a registration, so no DIR-859 release is known to ship one
     _firmware("1.05B03", "2016-06-30", "2019-12-26", "SSH-2.0-dropbear_2012.55", "Dropbear sshd 2012.55",
               *_DLINK_KERNEL, "1.05", "1.05", busybox="BusyBox v1.14.1 (2016-06-28 10:53:08 CST)", buildrev="b03",
               image_sign="wrgac37_dlink.2013gui_dir859"),
@@ -586,31 +590,34 @@ DLINK = (
               image_sign="wrgac37_dlink.2013gui_dir859"),
 )
 
-# TL-WR841N v14: MT7628NN (MIPS 24KEc, named 24Kc by 2.6 kernels), 4 MB flash, 32 MB; system type,
-#   MemTotal and BogoMIPS unverified
-TPLINK_HARDWARE = (Hardware(cpus=1, cpu_model="MIPS 24Kc V5.5", mem_kb=29436, disk_kb=2752, board="MT7628"),)
-_TPLINK_GCC = "gcc version 4.6.3 (Buildroot 2012.11.1) "
+# Archer C7 v5: QCA9563 (one MIPS 74Kc at 775 MHz), 128 MB, 16 MB SPI flash (QSDK, OpenWrt of 2012 with
+#   Linux 3.3.8 and TP-Link's programs); unverified: MemTotal, BogoMIPS, the system type and machine lines
+TPLINK_HARDWARE = (Hardware(cpus=1, cpu_model="MIPS 74Kc V5.0", mem_kb=125284, disk_kb=16384,
+                            board="Qualcomm Atheros QCA956X ver 1 rev 0", machine="TP-Link Archer C7 v5"),)
+# the compiler, builder and uname -v of each kernel: the Linux version line of its LZMA image
+_TPLINK_GCC = "gcc version 4.6.3 20120201 (prerelease) (Linaro GCC 4.6-2012.02) "
 
 
-def _tplink(build, rel, released, superseded, uts, builder, busybox):
-    # the firmware version as the web UI shows it (unverified: "v0348.0")
-    return _firmware(build, released, superseded, "SSH-2.0-dropbear_2012.55", "Dropbear sshd 2012.55", "2.6.36",
-                     uts, builder, _TPLINK_GCC, f"0.9.1 4.19 v0348.0 Build {build} Rel.{rel}n", "0.9.1",
-                     busybox=busybox)
+def _tplink(build, version, rel, released, superseded, uts, builder, busybox, rootfs_kb):
+    # the firmware version as the web UI shows it ("1.2.1 Build 20220715 rel.19099"); dropbear 2019.78 of
+    #   OpenWrt (no version in its banner, `dropbear -V`: "Dropbear v2019.78")
+    return _firmware(build, released, superseded, "SSH-2.0-dropbear", "Dropbear v2019.78", "3.3.8", uts,
+                     builder, _TPLINK_GCC, f"{version} Build 20{build} rel.{rel}", version,
+                     busybox=busybox, rootfs_kb=rootfs_kb)
 
 
-# kernel, BusyBox and dropbear_2012.55 from the squashfs of each image (US firmware); released / superseded:
-#   the dates of the download page (the next US image)
+# BusyBox, dropbear 2019.78, iproute2 3.3.0 and the kernel 3.3.8 (module vermagic) from the squashfs of each
+#   US image; released / superseded: the dates of the download page; the root squashfs in KiB as df shows it
 TPLINK = (
-    # source: https://www.tp-link.com/us/support/download/tl-wr841n/v14/ (TL-WR841N(US)_V14_220816, 2022-11-23)
-    _tplink("220816", "43928", "2022-11-23", "2023-11-24", "#1 Tue Aug 16 12:04:29 CST 2022", "jenkins@sohoici",
-            "BusyBox v1.19.2 (2022-08-16 12:08:08 CST)"),
-    # source: https://www.tp-link.com/us/support/download/tl-wr841n/v14/ (TL-WR841N(US)_V14_231119, 2023-11-24)
-    _tplink("231119", "69901", "2023-11-24", "2025-01-21", "#1 Sun Nov 19 19:19:44 PST 2023", "zhang@ubuntu",
-            "BusyBox v1.19.2 (2023-11-19 19:21:54 PST)"),
-    # source: https://www.tp-link.com/us/support/download/tl-wr841n/v14/ (TL-WR841N(US)_V14_250328, 2025-04-18)
-    _tplink("250328", "51324", "2025-04-18", "2026-01-14", "#1 Fri Mar 28 14:12:15 CST 2025",
-            "jenkins@sohoicilinux4", "BusyBox v1.19.2 (2025-03-28 14:13:40 CST)"),
+    # source: https://www.tp-link.com/us/support/download/archer-c7/v5/ (Archer C7(US)_V5_211210, 2022-01-29)
+    _tplink("211210", "1.2.0", "51212", "2022-01-29", "2022-11-08", "#5 Thu Nov 25 12:02:36 CST 2021",
+            "feng@ubuntu", "BusyBox v1.19.4 (2021-12-08 20:26:37 CST)", 14208),
+    # source: https://www.tp-link.com/us/support/download/archer-c7/v5/ (Archer C7(US)_V5.0_220715, 2022-11-08)
+    _tplink("220715", "1.2.1", "19099", "2022-11-08", "2026-08-27", "#1 Fri Jul 15 00:03:58 EDT 2022",
+            "tplink@tplink-virtual-machine", "BusyBox v1.19.4 (2022-07-14 23:31:52 EDT)", 14208),
+    # source: https://www.tp-link.com/us/support/download/archer-c7/v5/ (Archer C7_V5_260821, 2026-08-27)
+    _tplink("260821", "1.3.1", "41256", "2026-08-27", None, "#1 Wed Aug 12 20:14:15 CST 2026",
+            "wyx182@wyx182-virtual-machine", "BusyBox v1.19.4 (2026-08-12 19:47:05 CST)", 13824),
 )
 
 # NAS326: Marvell Armada 380 (one Cortex-A9 at 1.3 GHz), 512 MB, one or two disks in the volume;
@@ -626,17 +633,17 @@ _ZYXEL_GCC = "gcc version 4.8.5 20150209 (prerelease) (crosstool-NG 1.21.0) "
 _ZYXEL_SSH = ("SSH-2.0-OpenSSH_6.7p1", "OpenSSH_6.7p1, OpenSSL 1.0.2h  3 May 2016")
 ZYXEL = (
     # source: https://www.zyxel.com/global/en/support/download?model=nas326 (521AAZF14C0.pdf, "June 1, 2023";
-    #   kernel from the image)
-    # unverified: superseded by AAZF.16 (2024-01-10, no AAZF.15 release note); BusyBox (not in the image strings)
+    #   kernel and the BusyBox of its initramfs from the image)
+    # unverified: superseded by AAZF.16 (2024-01-10, no AAZF.15 release note)
     _firmware("5.21(AAZF.14)C0", "2023-06-01", "2024-01-10", *_ZYXEL_SSH, "3.10.39",
               "#1 Fri May 26 10:10:07 CST 2023", "root@twsvnnt01652-01", _ZYXEL_GCC, "V5.21(AAZF.14)C0", "5.21",
-              busybox="BusyBox v1.19.4 (2023-05-26 10:21:37 CST)"),
+              busybox="BusyBox v1.19.4 (2023-05-26 10:02:27 CST)"),
     # source: https://www.zyxel.com/global/en/support/download?model=nas326 (521AAZF18C0.pdf, "June 17, 2024",
-    #   the last firmware listed)
-    # unverified: the kernel build time (the image is packed), OpenSSH as in AAZF.14, BusyBox
+    #   the last firmware listed; kernel and the BusyBox of its initramfs from the image)
+    # unverified: OpenSSL as in AAZF.14 (sshd of the system image: OpenSSH_6.7p1)
     _firmware("5.21(AAZF.18)C0", "2024-06-17", None, *_ZYXEL_SSH, "3.10.39",
-              "#1 Tue Jun 11 16:42:51 CST 2024", "root@twsvnnt01652-01", _ZYXEL_GCC, "V5.21(AAZF.18)C0", "5.21",
-              busybox="BusyBox v1.19.4 (2024-06-11 16:53:20 CST)"),
+              "#1 Thu Jun 6 16:47:41 CST 2024", "root@twsvnnt01652-01", _ZYXEL_GCC, "V5.21(AAZF.18)C0", "5.21",
+              busybox="BusyBox v1.19.4 (2024-06-06 16:40:04 CST)"),
 )
 
 # MT7621A routers with NOR flash (MIPS 1004Kc, 2 cores x 2 VPEs, 880 MHz, 128 MB); hardware.disk_kb is the
@@ -684,10 +691,12 @@ QNAP_HARDWARE = (
 
 
 def _qts(version, number, build, released, superseded, uts, openssh, openssl):
+    # kernel 5.10.60 and BusyBox 1.24.1: QNAP's GPL sources of QTS 5.2.3 build 20250218 (SourceForge qosgpl,
+    #   QTS_Kernel_5.2.3.20250218.0 linux-5.10/Makefile, QTS_OSS_5.2.3.20250218.0 busybox-1.24.1)
     # unverified: uname -v (built the night of the build date), builder and compiler of the QNAP kernel
     #   (gcc 8.4.0, binutils assumed), the OpenSSH / OpenSSL of each build; a 5.10 kernel names the
-    #   compiler as `cc --version` and the linker (the format of Linux 5.8 and later); the BusyBox of
-    #   QTS (1.24.1, built the night of the build like the kernel)
+    #   compiler as `cc --version` and the linker (the format of Linux 5.8 and later); the build time of
+    #   BusyBox (taken as the night of the build like the kernel)
     clock = re.search(r"\d\d:\d\d:\d\d", uts).group()
     return _firmware(f"{version}.{number}", released, superseded, f"SSH-2.0-OpenSSH_{openssh.split('p')[0]}",
                      f"OpenSSH_{openssh}, {openssl}", "5.10.60-qnap", uts, "root@U16BuildServer141",
@@ -720,8 +729,10 @@ SYNOLOGY_HARDWARE = (
 
 
 def _dsm(version, build, smallfix, released, superseded, uts, builddate, openssl):
-    # unverified: uname -v, builder and compiler of the kernel, builddate, the OpenSSL of ssh -V
-    #   (DSM 7.2 moved to OpenSSL 3; OpenSSH 8.2p1 of DSM 7)
+    # kernel 4.4.302, OpenSSH 8.2p1 and the gcc 12.2.0 of the toolchain (geminilake-gcc1220_glibc236) from
+    #   Synology's GPL sources and toolchain of 7.2-72806; 7.2.1-69057 has no GPL sources of its own, those of
+    #   7.2-64570 before it name the same versions; unverified: uname -v, the builder of the kernel,
+    #   builddate, the OpenSSL of ssh -V (DSM 7.2 moved to OpenSSL 3)
     return _firmware(f"{version}-{build} Update {smallfix}", released, superseded, "SSH-2.0-OpenSSH_8.2",
                      f"OpenSSH_8.2p1, {openssl}", "4.4.302+", uts, "root@build13", "gcc version 12.2.0 (GCC) ",
                      version, version.rsplit(".", 1)[0] if version.count(".") == 2 else version, build=build,
@@ -840,18 +851,19 @@ PERSONAS = (
     _device("dlink-dir859", "dlink", "dlink", "admin", "/bin/sh", MIPS_BE, "dropbear", (), DLINK, DLINK_HARDWARE,
             ("dlinkrouter", "DIR-859"), build_dlink, "D-Link DIR-859 router, discontinued, old firmware",
             remove_paths=VENDOR_ONLY, max_install_days=3650),
-    _device("tplink-wr841n", "tplink", "tplink", "admin", "/bin/sh", MIPS, "dropbear", (), TPLINK, TPLINK_HARDWARE,
-            ("TL-WR841N",), build_tplink, "TP-Link TL-WR841N v14 router, firmware not updated",
-            remove_paths=VENDOR_ONLY, max_install_days=1500),
+    _device("tplink-archer-c7", "tplink", "tplink", "root", "/bin/ash", MIPS_BE, "dropbear-tplink", (), TPLINK,
+            TPLINK_HARDWARE, ("ArcherC7v5",), build_tplink, "TP-Link Archer C7 v5 router, firmware not updated",
+            uid=0, remove_paths=("home/root",) + VENDOR_ONLY, max_install_days=1500),
     _device("zyxel-nas326", "zyxel", "zyxel", "admin", "/bin/sh", ("linux-arm-lsb", "armv7l"), "openssh", (),
             ZYXEL, ZYXEL_HARDWARE, ("NAS326",), build_zyxel, "Zyxel NAS326, end of support",
             remove_paths=VENDOR_ONLY, max_install_days=2190),
     _device("openwrt", "openwrt", "openwrt", "root", "/bin/ash", MIPS, "dropbear-openwrt", ("opkg",), OPENWRT,
             OPENWRT_HARDWARE, ("OpenWrt",), build_openwrt, "OpenWrt router on an end-of-life release", uid=0,
             remove_paths=("home/root",) + VENDOR_ONLY),
+    # QTS: admin is the root account (uid 0), the prompt of its /etc/profile is [\w] \$
     _device("qnap-qts", "qnap", "qnap", "admin", "/bin/sh", X86, "openssh", ("qpkg_cli",), QNAP, QNAP_HARDWARE,
-            ("NAS{HEX6}",), build_qnap, "QNAP NAS on QTS 5.2, updates not installed",
-            remove_paths=VENDOR_ONLY),
+            ("NAS{HEX6}",), build_qnap, "QNAP NAS on QTS 5.2, updates not installed", uid=0,
+            remove_paths=VENDOR_ONLY, prompt_style="qnap"),
     _device("synology-dsm", "synology", "synology", "admin", "/bin/sh", X86, "openssh", ("synopkg",), SYNOLOGY,
             SYNOLOGY_HARDWARE, ("DiskStation", "denverton:DS1618", "geminilake:DS920"), build_synology,
             "Synology DiskStation on DSM 7.2, updates not installed", uid=1024,

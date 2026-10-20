@@ -125,6 +125,22 @@ def real_path(root, relative_path):
     return None if real is None else "/".join(real + [parts[-1]])
 
 
+def resolve(root, relative_path, depth=8):
+    """The node of a path with every link of it followed (of its directories and the last one),
+    None for a path that names nothing."""
+    import posixpath
+    path = "/" + relative_path.lstrip("/")
+    for _ in range(depth):
+        real = real_path(root, path)
+        node = find_node(root, real) if real is not None else None
+        if node is None or node_get(node, A_TYPE) != T_LINK:
+            return node
+        target = node_get(node, A_TARGET) or ""
+        path = target if target.startswith("/") else posixpath.join(posixpath.dirname("/" + real), target)
+        path = posixpath.normpath(path)
+    return None
+
+
 def ensure_dir(root, relative_path, uid=0, gid=0, mode=0o755, ctime=0):
     """The directory of the path, created where missing; a link to a directory is
     followed (also as the last part), any other link becomes a directory."""

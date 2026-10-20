@@ -9,8 +9,16 @@ provide.
 | --- | --- | --- |
 | `apt.txt.gz` | `b` Debian 12 (bookworm), `t` Debian 13 (trixie), `r` Raspberry Pi OS bookworm (arm64), `j` Ubuntu 22.04 (jammy), `n` Ubuntu 24.04 (noble) | `<name> <release letters>` |
 | `apt-virtual.txt.gz` | the same letters | `<virtual name> <release letters> <provider,...>` |
-| `yum.txt.gz` | CentOS 7.9.2009 (os, updates, extras) | `<name>`, or `<provided name> <package>` |
+| `yum.txt.gz` | CentOS 7.9.2009 (os, updates, extras) | `<name>`, or `<provided name or program> <package>` |
 | `opkg.txt.gz` | `a` OpenWrt 21.02.7, `b` OpenWrt 22.03.7 (mipsel_24kc, ramips/mt7621) | `<name> <release letters> <feed>` |
+| `apt-meta.txt.gz` | the letters of `apt.txt.gz` | 13 columns: `<name>\t<release letters>\t<version>\t<component>\t<pocket>\t<installed size>\t<size>\t<all or ->\t<section>\t<maintainer>\t<priority>\t<essential yes or ->\t<short description>` |
+| `deb-base.txt.gz` | the letters of `apt.txt.gz` | `<name> <release letters>`: the base system (Priority required / important and the packages of the official image) |
+| `deb-files.txt.gz` | `b`, `t`, `j`, `n` (Raspberry Pi OS takes `b`) | `<path> <release letters> <package>`: the programs in /bin, /sbin, /usr/bin, /usr/sbin of the image's packages |
+| `opkg-meta.txt.gz` | the letters of `opkg.txt.gz` | `<name>\t<release letters>\t<version>\t<description>` (the description on the first row of a name) |
+| `dnf.txt.gz` | RHEL 9 (the BaseOS and AppStream repositories of AlmaLinux 9.4) | `<name> <baseos or appstream>`, or `<provided name or program> > <package>` |
+| `yum-meta.txt.gz` | CentOS 7.9.2009 | 12 columns: `<name>\t<arch>\t<epoch:version-release>\t<repo>\t<size>\t<installed size>\t<summary>\t<url>\t<license>\t<group>\t<description, \n escaped; only for the popcon top 3,000, EXTRA and the modelled packages>\t<source rpm>` |
+| `dnf-meta.txt.gz` | RHEL 9 (AlmaLinux 9.4 vault) | the columns of `yum-meta.txt.gz`; a build outside the module streams before the builds of a stream (as dnf installs nginx 1.20.1, not nginx:1.24), a name only a stream has with the stream's build |
+| `rpm-man.txt.gz` | `c` CentOS 7.9.2009, `r` RHEL 9 (AlmaLinux 9.4 vault) | `<manual page> <release letters> <package>`: the manual pages in sections 1 and 8 named as one of the package's own programs, from the filelists |
 
 A release covers the components and pockets that the persona's own sources name:
 
@@ -20,13 +28,30 @@ A release covers the components and pockets that the persona's own sources name:
 - jammy: main, restricted, universe; main and restricted of -updates; main, restricted, universe of -security.
 - noble: main, restricted, universe, multiverse of noble, -updates, -backports, -security.
 
-Ubuntu main and restricted and the Raspberry Pi archive are taken whole. The other indexes keep
+Debian main, Ubuntu main and restricted and the Raspberry Pi archive are taken whole. The other indexes keep
 the names in the top 20,000 of Debian popcon (`by_inst`) and the names of `EXTRA` in the builder.
 Names of a kernel ABI are left out. At start the persona adds the names of its own kernel and the
 packages it models (`system.APT_INSTALLED`, `APT_AVAILABLE`, the release's packages). A real name
 that ranks lower is not found. Virtual names of libraries and language modules are left out, and
 yum takes the provider with the shortest name (unverified: yum's own choice also weighs arch and
 repository). yum and opkg keep their whole indexes, but yum has no sonames.
+
+The recorded inputs `deb-files-<letter>.txt` (`dpkg -L` of every package of the image, the paths in
+/bin, /sbin, /usr/bin and /usr/sbin) and `deb-base-<letter>.txt` (`dpkg-query -W`) come from the official
+images (linux/arm64, 2026-10-15): `b` debian:12 `debian@sha256:2c037a04925515fdd6ea85ea14a682d0e79931f5e9f5d07b6dbfc6ba12f9e858`,
+`t` debian:13 `debian@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5`, `j` ubuntu:22.04
+`ubuntu@sha256:5ec03bb3441e8b0bf3b4f9cd4629a1ae763010dc3035bb8da3ae6cf026486401`, `n` ubuntu:24.04
+`ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55`. Debian 12 and Ubuntu 22.04
+record /bin/ls, Debian 13 and Ubuntu 24.04 /usr/bin/ls (as `dpkg -S` finds them there).
+
+`apt-meta.txt.gz` keeps, per release, the candidate of the names in the top 2,000 of popcon, of `EXTRA`
+and of the packages the personas model: the highest version of the release and its -updates and
+-security pockets (-backports only for a name without another candidate; of equal versions the first
+pocket of the sources), its component, sizes and short description. A name without a row installs
+with a version that fits the release (`apt_fallback`). `opkg-meta.txt.gz` keeps every package of the
+feeds with its version and description. `dnf.txt.gz` takes the names of AlmaLinux 9.4 for those of
+RHEL 9: the AlmaLinux brand packages are named as those of Red Hat (`REBRAND` in the builder), and
+the programs in /usr/bin and /usr/sbin are names dnf installs by (`/usr/bin/mail` gives s-nail).
 
 ## Sources (downloaded 2026-10-13)
 
@@ -43,11 +68,19 @@ The download folder of the builder holds these files under these names:
 | `c7-<repo>-primary.xml.gz` | https://vault.centos.org/7.9.2009/<repo>/x86_64/repodata/ (the `primary.xml.gz` that `repomd.xml` names; repos os, updates, extras) |
 | `ow-<version>-core.gz` | https://downloads.openwrt.org/releases/<version>/targets/ramips/mt7621/packages/Packages.gz |
 | `ow-<version>-<feed>.gz` | https://downloads.openwrt.org/releases/<version>/packages/mipsel_24kc/<feed>/Packages.gz (base, luci, packages, routing, telephony) |
+| `el94-<repo>-primary.xml.gz` | https://vault.almalinux.org/9.4/<repo>/x86_64/os/repodata/ (the `primary.xml.gz` that `repomd.xml` names; repos BaseOS, AppStream; downloaded 2026-10-14) |
+| `c7-<repo>-filelists.xml.gz` | https://vault.centos.org/7.9.2009/<repo>/x86_64/repodata/ (the `filelists.xml.gz` that `repomd.xml` names; repos os, updates, extras; downloaded 2026-10-15) |
+| `el94-<repo>-filelists.xml.gz` | https://vault.almalinux.org/9.4/<repo>/x86_64/os/repodata/ (the `filelists.xml.gz` that `repomd.xml` names; repos BaseOS, AppStream; downloaded 2026-10-15) |
 
 The sha256 of each input:
 
 | File | sha256 |
 | --- | --- |
+| `c7-extras-filelists.xml.gz` | `e72094fa3c5f686a92550dc92ad509926d501ca399fe5b7dd79fc493db9766ae` |
+| `c7-os-filelists.xml.gz` | `5319616dde574d636861a6e632939f617466a371e59b555cf816cf1f52f3e873` |
+| `c7-updates-filelists.xml.gz` | `a54fd4a52a33703bdab6b05fc38fba5eb4ecfe0afd02abb31794bead337c548e` |
+| `el94-AppStream-filelists.xml.gz` | `32a4efbf03582df7195f8c5e4e036a13e04dc6487c6f87c6ab597c0615060092` |
+| `el94-BaseOS-filelists.xml.gz` | `b1ba073ba4fe48ee0af324713f6578a499e5f24eec00679849a637bbf710c323` |
 | `c7-extras-primary.xml.gz` | `6f4160fb1c4f94da6bf6d4295b3ae98fb4abcf01645072917b6b84acf87af159` |
 | `c7-os-primary.xml.gz` | `2b479c0f3efa73f75b7fb76c82687744275fff78e4a138b5b3efba95f91e099e` |
 | `c7-updates-primary.xml.gz` | `04fc3905eafcdc8422d475812ed81841986f18e3150b571c6920ba94b9c1898e` |
@@ -70,6 +103,8 @@ The sha256 of each input:
 | `deb-trixie-main-amd64.xz` | `7778d3e3f303b7ddb8ce0fe7c8d57473a076c6bf2e8f241f75421d2396352498` |
 | `deb-trixie-security-main-amd64.xz` | `cf9ed1763e683ee0d51b976b6632e3b4c7f6c7abc965a1965ea85df07fd25b86` |
 | `deb-trixie-updates-main-amd64.xz` | `10012cb384dc2613586d7b3d391d92a5637c9faa36017239739f2a6109a0d45f` |
+| `el94-AppStream-primary.xml.gz` | `1fc5e4d02ee250bb81c612a5e748da2f5f78f77c1bd9ebe4717ecf3b9026e1e4` |
+| `el94-BaseOS-primary.xml.gz` | `9c977a15fac064f2892b571691366d9ad29f0675d9c603db6f1d319ca3db6ce6` |
 | `ow-21.02.7-base.gz` | `93ec547a86ba2c9662090dfcada30fa593abd2d8ba4f268ae5f892654e364aa3` |
 | `ow-21.02.7-core.gz` | `be894c4f14d2cea2842b5515ce32119c8f02d838377c76c6b719157e01d2c2c6` |
 | `ow-21.02.7-luci.gz` | `300e998b681278925b882e66ef5fef0b45ca28342a9d03da61da56e00c4da8d9` |
@@ -110,4 +145,5 @@ The sha256 of each input:
 | `ub-noble-updates-universe-amd64.xz` | `7648697581e4da732a404961c3d8477e36bf31d18d4cfbde68b080345eab9057` |
 
 Rebuild the lists with `python3 -I docker/cowrie/tools/build_package_names.py DOWNLOADS`. The
-builder only reads the names and the Provides; it runs nothing from the indexes.
+builder only reads the names, the Provides, the listed programs and the fields of apt-meta /
+opkg-meta; it runs nothing from the indexes.

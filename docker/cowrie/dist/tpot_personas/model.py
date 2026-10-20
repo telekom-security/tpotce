@@ -6,7 +6,8 @@ from typing import Callable
 # how the shell prompt looks ([shell] prompt_style, read by the patched showPrompt of Cowrie):
 #   debian  user@host:~/dir$   Cowrie's own prompt, bash PS1 of Debian / Ubuntu, kept for the devices
 #   redhat  [user@host dir]$   bash PS1 of RHEL / CentOS (/etc/bashrc): short host name, basename of the cwd
-PROMPT_STYLES = ("debian", "redhat")
+#   qnap    [\w] \$                 QTS (/etc/profile): the cwd with ~ for home, "[~] #" for admin
+PROMPT_STYLES = ("debian", "redhat", "qnap")
 
 
 @dataclass(frozen=True)
@@ -43,7 +44,6 @@ class Content:
     ctimes: dict = field(default_factory=dict)  # rel path -> ctime, for files whose date shows (logs, shadow)
     programs: tuple = ()     # paths of the commands Cowrie's Python runs that the system has (bin/busybox)
     busybox_help: str = ""   # what `busybox` prints (patched busybox.py, [shell] busybox_help), "" without BusyBox
-    tasks: int = 0           # the tasks top counts: the ps list and the kernel threads it does not list
     top_style: str = "procps"  # the patched top: procps, or busybox
     filesystems: list = field(default_factory=list)  # the mounted file systems (common.fs_row): mount, df
 

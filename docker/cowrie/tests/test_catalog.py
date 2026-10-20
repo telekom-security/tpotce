@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from tests.helpers import DIST  # noqa: F401
-from tpot_personas import PersonaError, catalog, identity
+from tpot_personas import PersonaError, catalog, identity, select
 from tpot_personas.identity import DAY, draw, first_install, fits, kernel_time
 from tpot_personas.ssh_profiles import PROFILES
 
@@ -13,12 +13,12 @@ ROOT = Path(__file__).resolve().parents[3]
 
 SERVERS = ["ubuntu-noble", "ubuntu-jammy", "debian-trixie", "debian-bookworm",
            "rhel-9", "centos-7", "raspios", "gpu-ubuntu"]
-DEVICES = ["dlink-dir859", "tplink-wr841n", "zyxel-nas326", "openwrt", "qnap-qts",
+DEVICES = ["dlink-dir859", "tplink-archer-c7", "zyxel-nas326", "openwrt", "qnap-qts",
            "synology-dsm", "ubiquiti-edgerouter-x", "ipcam"]
-DEVICE_PACKAGES = {"dlink-dir859": set(), "tplink-wr841n": set(), "zyxel-nas326": set(),
+DEVICE_PACKAGES = {"dlink-dir859": set(), "tplink-archer-c7": set(), "zyxel-nas326": set(),
                    "openwrt": {"opkg"}, "qnap-qts": {"qpkg_cli"}, "synology-dsm": {"synopkg"},
                    "ubiquiti-edgerouter-x": {"apt-get", "dpkg"}, "ipcam": set()}
-DEVICE_USERS = {"dlink-dir859": ("admin", "/bin/sh"), "tplink-wr841n": ("admin", "/bin/sh"),
+DEVICE_USERS = {"dlink-dir859": ("admin", "/bin/sh"), "tplink-archer-c7": ("root", "/bin/ash"),
                 "zyxel-nas326": ("admin", "/bin/sh"), "openwrt": ("root", "/bin/ash"),
                 "qnap-qts": ("admin", "/bin/sh"), "synology-dsm": ("admin", "/bin/sh"),
                 "ubiquiti-edgerouter-x": ("ubnt", "/bin/vbash"), "ipcam": ("admin", "/bin/sh")}
@@ -141,14 +141,17 @@ class ServerCatalogTest(unittest.TestCase):
                     self.assertNotRegex(r.kernel_build, r" [A-Z][a-z]{2} 0\d ", (pid, r.label))
 
     def test_every_kernel_date_pads_the_day_with_a_space(self):
-        # UTS_VERSION is date(1) output: "Wed Jan  8", never "Wed Jan 8" or "Wed Jan 08"
+        # UTS_VERSION is date(1) output: "Wed Jan  8", never "Wed Jan 8" or "Wed Jan 08"; the kernel of the
+        #   NAS326 V5.21(AAZF.18)C0 image has "Thu Jun 6" (read from the image)
+        unpadded = {("zyxel-nas326", "5.21(AAZF.18)C0")}
         stamp = re.compile(r"\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) "
                            r"(?P<day>[ \d]\d|\d) \d{2}:\d{2}:\d{2} ")
         for persona in catalog.PERSONAS:
             for r in persona.releases:
                 match = stamp.search(r.kernel_build)
                 if match:
-                    self.assertEqual(len(match.group("day")), 2, (persona.id, r.label, r.kernel_build))
+                    self.assertEqual(len(match.group("day")), 1 if (persona.id, r.label) in unpadded else 2,
+                                     (persona.id, r.label, r.kernel_build))
                     self.assertNotEqual(match.group("day")[0], "0", (persona.id, r.label))
                     stamp_time = kernel_time(r)
                     if stamp_time is not None:
@@ -234,8 +237,9 @@ class DeviceCatalogTest(unittest.TestCase):
     def test_arch_is_the_byte_order_of_the_soc(self):
         # [shell] arch is the ELF header of `cat /bin/busybox`: ath79 (QCA956x) is big endian
         arches = {p.id: p.arch for p in catalog.PERSONAS}
-        self.assertEqual(arches["dlink-dir859"], "linux-mips-msb")
-        for pid in ("tplink-wr841n", "openwrt", "ubiquiti-edgerouter-x"):
+        for pid in ("dlink-dir859", "tplink-archer-c7"):
+            self.assertEqual(arches[pid], "linux-mips-msb", pid)
+        for pid in ("openwrt", "ubiquiti-edgerouter-x"):
             self.assertEqual(arches[pid], "linux-mips-lsb", pid)
         for pid in ("zyxel-nas326", "ipcam"):
             self.assertEqual(arches[pid], "linux-arm-lsb", pid)
@@ -299,10 +303,11 @@ class DeviceCatalogTest(unittest.TestCase):
         from tpot_personas.model import PROMPT_STYLES
         for p in catalog.PERSONAS:
             self.assertIn(p.prompt_style, PROMPT_STYLES, p.id)
-            self.assertEqual(p.prompt_style, "redhat" if p.family in ("rhel", "centos") else "debian", p.id)
+            expected = {"rhel": "redhat", "centos": "redhat", "qnap": "qnap"}.get(p.family, "debian")
+        self.assertEqual(p.prompt_style, expected, p.id)
 
     def test_uname_names_gnu_linux(self):
-        # BusyBox uname -o / -a prints "GNU/Linux" (uname.c of 1.14.1, 1.19.2; CONFIG_UNAME_OSNAME since)
+        # BusyBox uname -o / -a prints "GNU/Linux" (uname.c of 1.14.1, 1.19.4; CONFIG_UNAME_OSNAME since)
         for p in catalog.PERSONAS:
             self.assertEqual(p.operating_system, "GNU/Linux", p.id)
 
@@ -314,6 +319,10 @@ class DeviceCatalogTest(unittest.TestCase):
                 if "dropbear" not in r.ssh_version.lower():
                     continue
                 year = int(re.search(r"(\d{4})\.\d+", r.ssh_version).group(1))
+                if pid == "tplink-archer-c7":
+                    # dropbear 2019.78 of TP-Link: the algorithms of its build (ssh_profiles)
+                    self.assertEqual(p.ssh_profile, "dropbear-tplink", r.label)
+                    continue
                 self.assertEqual(p.ssh_profile, "dropbear-openwrt" if year >= 2019 else "dropbear", (pid, r.label))
 
 
@@ -353,4 +362,8 @@ class SchemaTest(unittest.TestCase):
         self.assertIsNotNone(block, "COWRIE_PERSONA missing in env.schema.yml")
         values = re.search(r"^    values: \[(.*)\]$", block.group(1), re.M).group(1)
         self.assertEqual([v.strip() for v in values.split(",")], catalog.ids())
+        # the earlier IDs: the legacy of the schema is select.ALIASES
+        legacy = re.search(r"^    legacy: \{(.*)\}$", block.group(1), re.M).group(1)
+        self.assertEqual(dict(tuple(part.strip() for part in item.split(":")) for item in legacy.split(",")),
+                         select.ALIASES)
         self.assertIn("COWRIE_PERSONA=", (ROOT / "env.example").read_text())

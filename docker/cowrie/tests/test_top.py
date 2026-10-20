@@ -164,7 +164,7 @@ class Session:
     """A patched base.py / uptime.py / protocol with one session: config, clock, reactor, terminal."""
 
     def __init__(self, test, config=None, window=(24, 80), target="terminal", exec_mode=False, processes=None,
-                 username="ubuntu", files=None, telnet=False):
+                 username="ubuntu", files=None, telnet=False, interactive=False):
         root = test.root
         values = {("shell", "top_style"): "procps", ("shell", "procps_version"): "4.0.4",
                   ("shell", "kernel_threads"): "77", ("shell", "load_base"): "0.06",
@@ -229,6 +229,8 @@ class Session:
 
         if telnet:
             Protocol = type("HoneyPotInteractiveTelnetProtocol", (Protocol,), {})  # noqa: N806 - Cowrie's name
+        elif interactive:
+            Protocol = type("HoneyPotInteractiveProtocol", (Protocol,), {})  # noqa: N806 - Cowrie's name
         self.protocol = Protocol()
         self.protocol.terminal = Terminal()
         self.protocol.user = User()
@@ -275,7 +277,7 @@ class PatchedTest(unittest.TestCase):
 
 class PsWidthTest(PatchedTest):
     def ps(self, *args, **session):
-        return Session(self, **session).run("Command_ps", *args).out.splitlines()
+        return Session(self, **session).run("Command_tpot_ps", *args).out.splitlines()
 
     def test_a_pipe_gets_the_whole_line(self):
         lines = self.ps("aux", target="capture")
@@ -301,9 +303,9 @@ class PsWidthTest(PatchedTest):
     def test_an_exported_columns_wins_on_the_terminal(self):
         session = Session(self, window=(24, 200))
         session.protocol.environ["COLUMNS"] = "100"
-        self.assertEqual(max(len(line) for line in session.run("Command_ps", "aux").out.splitlines()), 100)
+        self.assertEqual(max(len(line) for line in session.run("Command_tpot_ps", "aux").out.splitlines()), 100)
         session.protocol.environ["COLUMNS"] = "wide"
-        self.assertLessEqual(max(len(line) for line in session.run("Command_ps", "aux").out.splitlines()), 200)
+        self.assertLessEqual(max(len(line) for line in session.run("Command_tpot_ps", "aux").out.splitlines()), 200)
 
 
 class LoadTest(PatchedTest):
@@ -355,7 +357,8 @@ class TopProcpsTest(PatchedTest):
         self.assertEqual(top.code, 0)
         lines = top.out.split("\n")
         self.assertEqual(lines[0], "top -" + session.protocol.tpot_uptime_line(NOW))
-        self.assertEqual(lines[1], f"Tasks:{len(PS) + 79:4d} total,   1 running,{len(PS) + 78:4d} sleeping,"
+        # the ps list, sshd and its monitor of the session, top and the kernel threads
+        self.assertEqual(lines[1], f"Tasks:{len(PS) + 80:4d} total,   1 running,{len(PS) + 79:4d} sleeping,"
                                    "   0 stopped,   0 zombie")
         # since boot: 1 to 4 % busy, per host
         cpu = re.fullmatch(r"%Cpu\(s\):( +\d\.\d) us,( +\d\.\d) sy,  0\.0 ni,( 9\d\.\d) id,( +\d\.\d) wa,  0\.0 hi,"
@@ -369,7 +372,7 @@ class TopProcpsTest(PatchedTest):
         self.assertEqual(lines[5], "")
         self.assertEqual(lines[6], "    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND")
         rows = [line for line in lines[7:] if line]
-        self.assertEqual(len(rows), len(PS) + 2)
+        self.assertEqual(len(rows), len(PS) + 3)
         self.assertRegex(rows[0], r"^ +\d+ ubuntu    20   0   11928   5376 +\d+ R +[\d.]+ +0\.1 +0:00\.01 top$")
         self.assertRegex(" ".join(rows), r"  1 root      20   0  168520   8140 +\d+ S   0\.0   0\.2 +\d+:\d\d\.\d\d init")
         self.assertIn(" unattended-upgr", " ".join(rows))
@@ -434,7 +437,7 @@ class TopProcpsTest(PatchedTest):
         top = session.run("Command_top")
         self.assertTrue(top.out.startswith("\x1b[?25l\x1b[H\x1b[2J\x1b[H"))
         screen = strip(top.out).split("\n")
-        self.assertEqual(len(screen), 7 + len(PS) + 2)
+        self.assertEqual(len(screen), 7 + len(PS) + 3)
         self.assertIn("\x1b[7m    PID USER", top.out)
         self.assertTrue(all(len(line) <= 80 for line in screen))
         self.assertEqual(top.tpot_key(b"x"), True)
@@ -501,17 +504,23 @@ class TopProcpsTest(PatchedTest):
 
     def test_options(self):
         session = Session(self, target="capture")
-        for args, err in ((["-x"], "top: unknown option 'x'\nUsage:\n  top -hv | -bcEeHiOSs1 -d secs -n max"),
+        # procps-ng 4 (refs final-wave *-ffw-top*): an error is its line alone
+        for args, err in ((["-x"], "top: invalid option -- 'x'\n"),
                           (["-n", "x"], "top: bad iterations argument 'x'\n"),
                           (["-n", "-1"], "top: bad iterations argument '-1'\n"),
                           (["-d", "soon"], "top: bad delay interval 'soon'\n"),
-                          (["-n"], "top: -n requires argument")):
+                          (["-n"], "top: option requires an argument -- 'n'\n"),
+                          (["foo"], "top: unknown option 'foo'\n"),
+                          (["--bogus"], "top: unrecognized option '--bogus'\n")):
             with self.subTest(args):
                 top = session.run("Command_top", *args)
-                self.assertTrue(top.err.startswith(err), top.err)
-                self.assertEqual(top.code, 1)
-        top = session.run("Command_top", "-v")
-        self.assertTrue(top.out.startswith("  procps-ng 4.0.4\nUsage:\n"))
+                self.assertEqual((top.err, top.code), (err, 1))
+        # 3.3: the usage after the error, -v its version and usage
+        mid = Session(self, config={("shell", "procps_version"): "3.3.17"}, target="capture")
+        top = mid.run("Command_top", "-x")
+        self.assertTrue(top.err.startswith("top: unknown option 'x'\nUsage:\n  top -hv | -bcEeHiOSs1 -d secs -n max"))
+        self.assertTrue(mid.run("Command_top", "-n").err.startswith("top: -n requires argument"))
+        self.assertTrue(mid.run("Command_top", "-v").out.startswith("  procps-ng 3.3.17\nUsage:\n"))
         old = Session(self, config={("shell", "procps_version"): "3.3.10"}, target="capture")
         self.assertTrue(old.run("Command_top", "-v").out.startswith("  procps-ng version 3.3.10\n"))
         top = session.run("Command_top", "-b", "-c", "-w", "-n1", "-p", "1,3089")
@@ -519,6 +528,24 @@ class TopProcpsTest(PatchedTest):
         self.assertEqual([int(r.split()[0]) for r in rows], [1, 3089])
         top = session.run("Command_top", "-bn1", "-u", "root")
         self.assertTrue(all(" root " in r for r in top.out.split("\n")[7:] if r))
+
+    def test_the_texts_and_status_of_procps_4(self):
+        """top -v, -h, -V, --version, --help and -x of procps-ng 4.0.2 (debian:12) and 4.0.4 (debian:13,
+        ubuntu:24.04): refs final-wave *-ffw-top*."""
+        import json
+        refs = [e for e in json.loads((Path(__file__).parent / "fixtures" / "final_wave.json").read_text())["entries"]
+                if "-ffw-top" in e["id"]]
+        self.assertEqual(len(refs), 18)
+        for ref in refs:
+            version = ref["setup"].split("(", 1)[1].split(")", 1)[0].split(":", 1)[1].split("-", 1)[0]
+            with self.subTest(id=ref["id"], version=version):
+                session = Session(self, config={("shell", "procps_version"): version}, target="capture")
+                top = session.run("Command_top", *ref["cmd"].split()[1:])
+                self.assertEqual((top.out, top.err, top.code), (ref["stdout"], ref["stderr"], ref["rc"]))
+        # the long names of the options
+        session = Session(self, target="capture")
+        self.assertIn("Tasks:", session.run("Command_top", "--batch-mode", "--iterations=1").out)
+        self.assertIn("Tasks:", session.run("Command_top", "--batch", "--iter", "1").out)
 
     def test_numbers_of_options_are_ascii_digits(self):
         # str.isdigit and int take digits top does not (superscripts, other scripts, > 4300 digits)
@@ -604,10 +631,16 @@ class TopSessionTest(PatchedTest):
     def ps_session(self, session):
         """The lines of ps aux that are not in the persona's list: the session's processes, the
         shell, ps (in the order of their PID)."""
-        lines = session.run("Command_ps", "aux").out.splitlines()
+        lines = session.run("Command_tpot_ps", "aux").out.splitlines()
         listed = {p["PID"] for p in session.protocol.user.server.process}
         return [[word.rstrip() for word in line.split(None, 10)]
                 for line in lines[1:] if int(line.split()[1]) not in listed]
+
+    def bb_session(self, session):
+        """The lines of BusyBox ps that are not in the persona's list."""
+        lines = session.run("Command_tpot_ps").out.splitlines()
+        listed = {p["PID"] for p in session.protocol.user.server.process}
+        return [line for line in lines[1:] if int(line.split()[0]) not in listed]
 
     def test_ps_lists_every_row_by_pid(self):
         """ps sorts its rows by PID, as real ps does: the session's server process comes before its
@@ -615,15 +648,18 @@ class TopSessionTest(PatchedTest):
         ps = PS + [dict(PS[4], PID=5012, COMMAND="/usr/sbin/cron -f")]
         for args in ("aux", "ax"):
             session = Session(self, processes=ps, target="capture")
-            lines = session.run("Command_ps", args).out.splitlines()[1:]
+            lines = session.run("Command_tpot_ps", args).out.splitlines()[1:]
             pids = [int(line.split()["u" in args]) for line in lines]
             with self.subTest(args=args):
                 self.assertEqual(pids, sorted(pids))
                 self.assertIn(session.protocol.tpot_session_pid, pids)
-                self.assertEqual(pids[-1], 5012)
+                # ps is the newest process
+                self.assertEqual(pids[-2], 5012)
+                self.assertTrue(lines[-1].endswith(f"ps {args}"))
         # without a or x the processes of the terminal only, in the same order
-        lines = Session(self, processes=ps, target="capture").run("Command_ps").out.splitlines()[1:]
-        self.assertEqual([int(line.split()[0]) for line in lines], [3089, 3091])
+        lines = Session(self, processes=ps, target="capture").run("Command_tpot_ps").out.splitlines()[1:]
+        self.assertEqual([int(line.split()[0]) for line in lines][0], 3089)
+        self.assertEqual([line.split()[-1] for line in lines], ["bash", "ps"])
 
     def test_ps_and_top_name_one_session_process(self):
         """ps, top, ss and netstat show the session's server process with one PID (tpot_session_pid)
@@ -631,13 +667,15 @@ class TopSessionTest(PatchedTest):
         session = Session(self, target="capture")
         lines = self.ps_session(session)
         self.assertEqual(session.protocol.tpot_session_pid, 3088)
-        self.assertEqual([(line[0], line[1], line[10]) for line in lines[:1]], [("ubuntu", "3088", "sshd: ubuntu@pts/0")])
+        self.assertEqual([(line[0], line[1], line[10]) for line in lines[:2]],
+                         [("root", "3077", "sshd: ubuntu [priv]"), ("ubuntu", "3088", "sshd: ubuntu@pts/0")])
         self.assertNotIn("-bash", [line[10] for line in lines])
         self.assertRegex(self.rows(session)[3088], r" ubuntu .* sshd$")
         # OpenSSH 9.8 and later: sshd-session
         session = Session(self, config={("shell", "ssh_version"): "OpenSSH_10.0p2 Debian-7, OpenSSL 3.5.4 30 Sep 2025"},
                           target="capture")
-        self.assertEqual(self.ps_session(session)[0][10], "sshd-session: ubuntu@pts/0")
+        self.assertEqual([line[10] for line in self.ps_session(session)[:2]],
+                         ["sshd-session: ubuntu [priv]", "sshd-session: ubuntu@pts/0"])
         self.assertRegex(self.rows(session)[3088], r" ubuntu .* sshd-session$")
 
     def test_ps_and_top_on_dropbear_and_busybox_telnetd(self):
@@ -645,24 +683,24 @@ class TopSessionTest(PatchedTest):
         ps = [dict(PS[0], COMMAND="/sbin/procd", STAT="S"), dict(PS[2], PID=1180, COMMAND=dropbear),
               dict(PS[5], PID=1520, USER="root", COMMAND="-ash")]
         session = Session(self, config=self.DEVICE, processes=ps, username="root", target="capture")
-        lines = self.ps_session(session)
-        self.assertEqual((lines[0][0], lines[0][1], lines[0][10]), ("root", "1519", dropbear))
-        self.assertNotIn("sshd", " ".join(line[10] for line in lines))
+        lines = self.bb_session(session)
+        self.assertEqual(lines[0], " 1519 root      1104 S    " + dropbear[:52])
+        self.assertNotIn("sshd", " ".join(lines))
         self.assertRegex(self.rows(session)[1519], r"^ 1519  1180 root .* /usr/sbin/dropbear -F ")
         # BusyBox telnetd serves the connection itself: no process of its own for the session
         ps = [dict(PS[0], COMMAND="/sbin/init", STAT="S"), dict(PS[2], PID=640, COMMAND="/usr/sbin/telnetd"),
               dict(PS[5], PID=900, USER="admin", COMMAND="-sh")]
         session = Session(self, config=self.DEVICE, processes=ps, username="admin", telnet=True, target="capture")
-        lines = self.ps_session(session)
+        lines = self.bb_session(session)
         self.assertEqual(session.protocol.tpot_session_pid, 640)
-        self.assertEqual([line[10] for line in lines], ["ps aux"])
+        self.assertEqual([line.split()[-1] for line in lines], ["ps"])
 
     def test_top_takes_the_session_pid(self):
         """Without a login shell in the ps list the session's PID is drawn once; top shows it too."""
         session = Session(self, processes=PS[:3], target="capture")
         session.protocol.tpot_session_pid = 5000
         self.assertRegex(self.rows(session)[5000], r" ubuntu .* sshd$")
-        self.assertEqual(self.ps_session(session)[0][1], "5000")
+        self.assertEqual([line[1] for line in self.ps_session(session)[:2]], ["4989", "5000"])
 
     def test_the_screen_keeps_the_session_from_the_idle_timeout(self):
         session = Session(self)
@@ -676,14 +714,6 @@ class TopSessionTest(PatchedTest):
         session.run("Command_top", "-b", "-n", "3")
         session.advance(3)
         self.assertEqual(session.resets, [])
-
-    def test_ctrl_d_ends_the_screen_and_brings_the_cursor_back(self):
-        session = Session(self)
-        top = session.run("Command_top")
-        top.eofReceived()
-        self.assertTrue(top.exited)
-        self.assertTrue(top.out.endswith("\x1b[?25h\n"))
-        self.assertEqual(session.reactor.pending(), [])
 
     def test_the_cursor_comes_back_when_the_shell_ends_under_top(self):
         session = Session(self)

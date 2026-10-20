@@ -207,6 +207,22 @@ class AuthTest(unittest.TestCase):
                 self.assertEqual(self.state(our_dir), self.state(up_dir))
                 self.assertIn("warn", {level for level, _ in ours["_log"].lines})
 
+    def test_an_entry_of_another_form_leaves_out_only_that_entry(self):
+        # the other pairs of the list stay refused; the entry that is no [login, password] is
+        # left out with one warning (it is no pair to refuse, AuthRandom decides as for any pair)
+        login, password = REFUSED_LOGINS[0]
+        for bad in (["admin"], ["admin", 1], "admin", 1, None, ["a", "b", "c"], [["admin", "x"]]):
+            with self.subTest(bad=bad):
+                state_dir = tmpdir(self)
+                value = json.dumps([bad, [login, password], ["guest", "guest"]])
+                module = self.auth_module(self.patched, state_dir, value)
+                for attempt in range(25):
+                    self.assertFalse(self.check(module, login, password, f"203.0.113.{attempt}"))
+                    self.assertFalse(self.check(module, "guest", "guest", f"198.51.100.{attempt}"))
+                self.assertIsNone(self.state(state_dir))
+                self.assertEqual([text for level, text in module["_log"].lines if level == "warn"],
+                                 ["[honeypot] auth_refused_pairs: 1 entry is not [login, password], left out"])
+
     def test_the_value_is_parsed_once_and_a_bad_one_warned_once(self):
         """The list is read and parsed on the first attempt only (functools.cache, as the shell's
         history size); a value of another form gives one warning, not one per attempt."""

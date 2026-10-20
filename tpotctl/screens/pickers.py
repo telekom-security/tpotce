@@ -298,7 +298,9 @@ class ManyPicker(NavModal):
 
 
 def many_picker(rule, current: str) -> ManyPicker:
-    """The ManyPicker of a choice_many setting."""
+    """The ManyPicker of a choice_many setting; an earlier name of a value (legacy) is ticked as that value."""
+    legacy = getattr(rule, "legacy", None) or {}
+    current = " ".join(dict.fromkeys(legacy.get(entry, entry) for entry in current.split()))
     return ManyPicker(rule.title, rule.values, rule.groups, current,
                       note="Enter or space ticks a line, a heading its whole group. Nothing ticked is all of them.")
 

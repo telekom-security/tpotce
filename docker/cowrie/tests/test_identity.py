@@ -6,11 +6,13 @@ import random
 import re
 import unittest
 
+import shutil
 import subprocess
 import sys
+from unittest import mock
 
-from tests.helpers import DIST
-from tpot_personas import catalog, servers
+from tests.helpers import DIST, tmpdir
+from tpot_personas import catalog, identity, servers
 from tpot_personas.identity import (DAY, draw, first_install, host_patterns, hostname_regex, is_fresh, is_medium,
                                     kernel_time, is_firmware, log_window, ready_at, restore, stale_at, superseded_at,
                                     persona_digest, to_json, to_state, updated_at)
@@ -286,7 +288,7 @@ class FirmwareTest(unittest.TestCase):
     def test_vendor_host_names(self):
         expected = {
             "dlink-dir859": r"dlinkrouter|DIR-859",
-            "tplink-wr841n": r"TL-WR841N",
+            "tplink-archer-c7": r"ArcherC7v5",
             "zyxel-nas326": r"NAS326",
             "openwrt": r"OpenWrt",
             "qnap-qts": r"NAS[0-9A-F]{6}",
@@ -319,6 +321,44 @@ class DigestTest(unittest.TestCase):
                        {"remove_paths": p.remove_paths + ("etc/extra",)}, {"max_install_days": 901}):
             with self.subTest(next(iter(change))):
                 self.assertNotEqual(persona_digest(dataclasses.replace(p, **change)), persona_digest(p))
+
+    def test_digest_follows_the_code_of_the_package(self):
+        # the history is made by the code (and the data files) of the package as much as by the catalog
+        package = DIST / "tpot_personas"
+        root = tmpdir(self) / "tpot_personas"
+        shutil.copytree(package, root, ignore=shutil.ignore_patterns("__pycache__"))
+        first = identity.code_digest(root)
+        self.assertEqual(identity.code_digest(package), first)
+        # the bytecode caches of Python are no part of it
+        (root / "__pycache__").mkdir(exist_ok=True)
+        (root / "__pycache__" / "servers.cpython-312.pyc").write_bytes(b"cache")
+        self.assertEqual(identity.code_digest(root), first)
+        # nor are the notes of a folder
+        (root / "package_names" / "README.md").write_text("notes\n")
+        self.assertEqual(identity.code_digest(root), first)
+        for rel in ("servers.py", "package_names/apt-meta.txt.gz"):
+            with self.subTest(rel):
+                path = root / rel
+                kept = path.read_bytes()
+                path.write_bytes(kept + b"\n")
+                self.assertNotEqual(identity.code_digest(root), first)
+                path.write_bytes(kept)
+        # a file that cannot be read: the digest counts it by its name, the start goes on
+        import pathlib
+        original = pathlib.Path.read_bytes
+
+        def read_bytes(path):
+            if path.name == "servers.py":
+                raise PermissionError(13, "Permission denied")
+            return original(path)
+
+        with mock.patch.object(pathlib.Path, "read_bytes", read_bytes):
+            other = identity.code_digest(root)
+        self.assertNotEqual(other, first)
+        p = catalog.by_id("ubuntu-noble")
+        with mock.patch.object(identity, "package_digest", return_value="0" * 64):
+            other = persona_digest(p)
+        self.assertNotEqual(other, persona_digest(p))
 
     def test_a_state_of_changed_catalog_data_is_refused(self):
         p = catalog.by_id("ubuntu-noble")

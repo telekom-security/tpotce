@@ -12,19 +12,21 @@ import re
 import time
 from pathlib import Path
 
-from . import PersonaError, network, servers, system, tree
+from . import PersonaError, devices, firmware, kthreads, network, servers, system, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import (DAY, drawn_at, host_patterns, hostname_regex, is_fresh, kernel_time, max_uptime, stale_at,
                        updated_at)
 from .model import PROMPT_STYLES
-from .render import BUSYBOX_HELP, DF_TABLE, DIR_MODES, PACKAGE_MANAGER_PATHS, refused_logins_value, runtime_json
-from .ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS,
-                           host_key_algorithms, key_type, server_version)
+from .render import (BUSYBOX_HELP, DF_TABLE, DIR_MODES, PACKAGE_MANAGER_PATHS, PROGRAM_DIRS, refused_logins_value,
+                     runtime_json)
+from .ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_KEX,
+                           TWISTED_MACS, host_key_algorithms, kex_algorithms, key_type, server_sig_algs,
+                           server_version)
 
 # a rendered device tree is about 1 MB (a server's more); far below it the render broke
 MIN_PICKLE_SIZE = 800_000
 PATH_DIRS = ("usr/local/sbin", "usr/local/bin", "usr/sbin", "usr/bin", "sbin", "bin")
-PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "yum", "dnf", "rpm", "opkg")
+PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "dpkg", "yum", "dnf", "rpm", "opkg")
 # a package manager of Cowrie's Python that is a program at one path only (opkg of OpenWrt)
 PYTHON_PACKAGE_MANAGER_AT = {"opkg": "bin/opkg"}
 FORBIDDEN_MARKERS = ("phil", "2.6.26-2-686", "2.6.26-19lenny", "com/ubuntu/upstart", "dannf@debian.org",
@@ -104,13 +106,16 @@ def _check_ssh(persona, ident, cfg, out):
             out.append(f"{word} list {','.join(entries)} differs from profile {profile.name}")
 
     _check_host_key_algorithms(profile, ident.release, cfg, out)
+    _check_kex(profile, ident.release, cfg, out)
     banner = ident.release.ssh_banner
     ssh_version = cfg.get("shell", "ssh_version", fallback="")
     product = banner[len("SSH-2.0-"):].split(" ", 1)[0] if banner.startswith("SSH-2.0-") else ""
     if product.lower() == "dropbear":
-        # OpenWrt builds dropbear without the version in its banner
+        # OpenWrt and TP-Link build dropbear without the version in its banner: the version of the release
         if "dropbear" not in ssh_version.lower():
             out.append(f"ssh_version {ssh_version!r} does not name dropbear of the banner")
+        elif ssh_version != ident.release.ssh_version:
+            out.append(f"ssh_version {ssh_version!r} is not {ident.release.ssh_version!r} of the release")
     elif product.lower().startswith("dropbear_"):
         version = product.split("_", 1)[1]
         if "dropbear" not in ssh_version.lower() or not re.search(rf"(^|\s){re.escape(version)}(\s|,|$)", ssh_version):
@@ -121,6 +126,21 @@ def _check_ssh(persona, ident, cfg, out):
             out.append(f"ssh_version {ssh_version!r} does not name {product} of the banner")
     else:
         out.append(f"ssh_version: banner {banner!r} names no known product")
+
+
+def _check_kex(profile, release, cfg, out):
+    """[ssh] kex_algorithms: Twisted's, with a curve25519 exchange (the clients of today offer no
+    DH with SHA-1), those of the server of the banner in its order; [ssh] server_sig_algs as that
+    server names them (ssh_profiles.kex_algorithms / server_sig_algs)."""
+    names = tuple(e.strip() for e in cfg.get("ssh", "kex_algorithms", fallback="").split(",") if e.strip())
+    out += [f"key exchange not supported: {name}" for name in names if name not in TWISTED_KEX]
+    if not {"curve25519-sha256", "curve25519-sha256@libssh.org"} & set(names):
+        out.append("key exchanges offer no curve25519: modern clients cannot connect")
+    if names != kex_algorithms(profile, release):
+        out.append(f"key exchanges {','.join(names)} differ from {profile.name} of {release.ssh_banner}")
+    sigs = cfg.get("ssh", "server_sig_algs", fallback=None)
+    if sigs is None or sigs.strip() != server_sig_algs(profile, release):
+        out.append(f"server-sig-algs {sigs} differ from {profile.name} of {release.ssh_banner}")
 
 
 def _check_host_key_algorithms(profile, release, cfg, out):
@@ -160,7 +180,7 @@ def _check_host_key_algorithms(profile, release, cfg, out):
         out.append(f"host key algorithms {','.join(names)} differ from {profile.name} of {release.ssh_banner}")
 
 
-def _check_top(persona, cfg, txtcmds, out):
+def _check_top(persona, cfg, txtcmds, out, out_dir=None, runtime_dir=None):
     """The patched top answers (it reads /proc/meminfo, the ps list and these keys): no static
     top, a style the persona's system has, procps-ng's version, a plausible count of kernel
     threads and base load."""
@@ -178,8 +198,18 @@ def _check_top(persona, cfg, txtcmds, out):
     except ValueError:
         out.append("top: kernel_threads or load_base is no number")
         return
-    if not 20 <= threads <= 600:
+    if not 10 <= threads <= 1500:
         out.append(f"top: {threads} kernel threads")
+    if out_dir is None:
+        return
+    if cfg.get("shell", "kernel_thread_list", fallback="") != f"{runtime_dir}/{kthreads.KERNEL_THREADS}":
+        out.append(f"top: cfg kernel_thread_list is not {runtime_dir}/{kthreads.KERNEL_THREADS}")
+    try:
+        count = len(json.loads((Path(out_dir) / kthreads.KERNEL_THREADS).read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError):
+        count = None
+    if count != threads:
+        out.append(f"top: {threads} kernel threads, ps lists {count}")
     if not 0.0 <= base <= 1.0:
         out.append(f"top: load_base {base} of an idle system")
 
@@ -199,14 +229,19 @@ def _check_hardware(persona, ident, honeyfs, txtcmds, out):
             out.append(f"cpuinfo: no Model {hw.board!r}")
     elif hw.cpu_model not in cpuinfo:
         out.append(f"cpuinfo: no {hw.cpu_model!r}")
-    if _text(txtcmds / "usr/bin/nproc").strip() != str(hw.cpus):
+    has_lscpu, has_nproc = system.cpu_commands(persona, ident)
+    if has_nproc and _text(txtcmds / "usr/bin/nproc").strip() != str(hw.cpus):
         out.append(f"nproc is not {hw.cpus}")
+    if not has_nproc and (txtcmds / "usr/bin/nproc").exists():
+        out.append("nproc: a txtcmd on a system without nproc")
     lscpu = _text(txtcmds / "usr/bin/lscpu")
     match = re.search(r"^CPU\(s\):\s+(\d+)", lscpu, re.M)
-    if not match or int(match.group(1)) != hw.cpus:
+    if has_lscpu and (not match or int(match.group(1)) != hw.cpus):
         out.append(f"lscpu CPU(s) is not {hw.cpus}")
-    if hw.cpu_model not in lscpu:
+    if has_lscpu and hw.cpu_model not in lscpu:
         out.append(f"lscpu: no {hw.cpu_model!r}")
+    if not has_lscpu and (txtcmds / "usr/bin/lscpu").exists():
+        out.append("lscpu: a txtcmd on a system without lscpu")
 
     meminfo = _text(honeyfs / "proc/meminfo")
     lacking = [key for key in MEMINFO_KEYS if not re.search(rf"^{key}:\s+\d+ kB$", meminfo, re.M)]
@@ -252,6 +287,184 @@ def _check_processes(persona, ident, path, out):
         out.append(f"PID of {processes[0]['COMMAND']!r} is {pids[0]}, not 1")
     if len(set(pids)) != len(pids):
         out.append("PID used twice in ps")
+
+
+def _check_accounts(persona, out_dir, out):
+    """Every user of the ps list has its line in /etc/passwd (ps prints its uid, -u finds it)."""
+    try:
+        processes = json.loads(_text(Path(out_dir) / "cmdoutput.json"))["command"]["ps"]
+    except (ValueError, KeyError, TypeError):
+        return
+    names = {line.split(":", 1)[0] for line in _text(Path(out_dir) / "honeyfs/etc/passwd").splitlines() if line}
+    for entry in processes:
+        name = entry.get("USERNAME") or entry.get("USER")
+        if name not in names:
+            out.append(f"accounts: {name} of {entry.get('COMMAND')!r} has no line in /etc/passwd")
+
+
+def _check_program_owners(persona, ident, out_dir, fs, out):
+    """Every program of the ps list of a server with a package manager is in the tree, and an installed package
+    owns it as dpkg -S / rpm -qf name it (one below /usr/local, /opt or /home is nobody's); every program of a
+    device's ps list and the telnetd of its sessions are in its tree (_check_device_programs)."""
+    if persona.kind == "device":
+        _check_device_programs(persona, ident, out_dir, fs, out)
+        return
+    if persona.kind != "server" or not (system.has_dpkg(persona) or system.is_el(persona)):
+        return
+    try:
+        processes = json.loads(_text(Path(out_dir) / "cmdoutput.json"))["command"]["ps"]
+    except (ValueError, KeyError, TypeError):
+        return
+    for entry in processes:
+        command = str(entry.get("COMMAND") or "")
+        for path in system.ps_programs(persona, ident, command):
+            if path.startswith(system.UNPACKAGED):
+                continue
+            if fs is not None and tree.find_node(fs, path.lstrip("/")) is None and tree.resolve(fs, path.lstrip("/")) \
+                    is None:
+                out.append(f"owners: {path} of {command!r} is not in the tree")
+            if system.program_owner(persona, ident, path) is None:
+                out.append(f"owners: no package owns {path} of {command!r}")
+
+
+def _check_device_programs(persona, ident, out_dir, fs, out):
+    """The programs of a device's ps list (a bare name as its PATH finds it) and the telnetd of its telnet sessions
+    ([shell] telnet_daemon) are in its tree."""
+    if fs is None:
+        return
+    try:
+        processes = json.loads(_text(Path(out_dir) / "cmdoutput.json"))["command"]["ps"]
+    except (ValueError, KeyError, TypeError):
+        return
+
+    def present(path):
+        return tree.resolve(fs, path.lstrip("/")) is not None
+
+    folders = ("/sbin/", "/bin/", "/usr/sbin/", "/usr/bin/")
+    for entry in processes:
+        command = str(entry.get("COMMAND") or "")
+        program = devices.ps_program(command)
+        if program is None:
+            continue
+        spellings = [program] if program.startswith("/") else [folder + program for folder in folders]
+        if not any(present(path) for path in spellings):
+            out.append(f"programs: {program} of {command!r} is not in the tree")
+    cfg = configparser.ConfigParser(interpolation=None)
+    cfg.read(Path(out_dir) / "cowrie.cfg", encoding="utf-8")
+    daemon = cfg.get("shell", "telnet_daemon", fallback="")
+    if daemon != devices.telnet_daemon(persona, ident):
+        out.append(f"cfg telnet_daemon: {daemon!r} is not the telnetd of {persona.id}")
+    elif daemon and not present(daemon):
+        out.append(f"cfg telnet_daemon: {daemon} is not in the tree")
+
+
+# the values the patched commands take for the [shell] keys of round 4 (absent: the upstream behaviour)
+TELNET_SERVERS = frozenset({"inetutils", "inetutils-2.6", "netkit"})
+HISTORY_CONTROLS = frozenset({"ignorespace", "ignoredups", "ignoreboth", "erasedups"})
+HISTORY_EXPORTS = frozenset({"HISTSIZE", "HISTFILESIZE", "HISTCONTROL", "HISTTIMEFORMAT"})
+
+
+def _check_shell_keys(persona, ident, cfg, out_dir, runtime_dir, fs, out):
+    """The [shell] keys of the telnet session, BusyBox's wget, dd, ls and usage texts, the program folders of
+    which, the history of the login shell, command-not-found and the login's PATH and SHELL: allowed values,
+    their files, and what the persona has."""
+    out_dir, runtime_dir = Path(out_dir), Path(runtime_dir)
+
+    def value(key):
+        return cfg.get("shell", key, fallback=None)
+
+    def bad(key, why):
+        out.append(f"cfg {key}: {value(key)!r} {why}")
+
+    def program(rel):
+        node = tree.find_node(fs, rel.lstrip("/")) if fs is not None else None
+        return node is not None and (tree.node_get(node, tree.A_TYPE) != tree.T_LINK or tree.resolve(fs, rel.lstrip("/")))
+
+    style = value("telnet_server")
+    expected = network.telnet_server(persona, ident) or None
+    if style is not None and style not in TELNET_SERVERS:
+        bad("telnet_server", f"is none of {', '.join(sorted(TELNET_SERVERS))}")
+    elif style != expected:
+        bad("telnet_server", f"is not the telnet server of {persona.id} ({expected!r})")
+    elif style and not all(program(rel) for rel in (("usr/sbin/in.telnetd",) if style == "netkit"
+                                                     else ("usr/sbin/telnetd", "usr/sbin/inetd"))):
+        bad("telnet_server", "names a telnet daemon the tree has not")
+    applets = system.busybox_applets(persona, ident) or ()
+    if value("wget_style") not in (None, "busybox"):
+        bad("wget_style", "is not busybox")
+    elif value("wget_style") == "busybox" and ("wget" not in applets or not value("busybox_help")):
+        bad("wget_style", "without the wget applet of a BusyBox")
+    elif value("wget_style") is None and value("busybox_help") and "wget" in applets and persona.family != "ubiquiti":
+        bad("wget_style", "is missing, the persona's wget is BusyBox's")
+    for key in ("wget_timeout", "dd_status_line"):
+        if value(key) not in (None, "no"):
+            bad(key, "is not no")
+    if value("wget_timeout") == "no" and value("wget_style") != "busybox":
+        bad("wget_timeout", "without BusyBox's wget")
+    ash = persona.family in system.ASH_FAMILIES
+    if value("ls_style") not in (None, "busybox") or (value("ls_style") == "busybox") != ash:
+        bad("ls_style", "does not fit the shell of the persona" if ash or value("ls_style") else "is not busybox")
+    if value("ls_total") not in (None, "yes") or (value("ls_total") == "yes") != bool(system.busybox_desktop(persona)):
+        bad("ls_total", "does not fit the BusyBox of the persona (CONFIG_DESKTOP)")
+    usage = value("busybox_usage")
+    want = firmware.usage_table(persona)
+    if (usage is None) != (want is None) or (usage is not None and Path(usage) != Path(want)):
+        bad("busybox_usage", f"is not the usage table of the persona ({want})")
+    elif usage is not None:
+        try:
+            table = json.loads(Path(usage).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            table = None
+        if not isinstance(table, dict) or not table:
+            bad("busybox_usage", "is no table of usage texts")
+    dirs = value("which_dirs")
+    if dirs is not None:
+        if dirs != f"{runtime_dir}/{PROGRAM_DIRS}" or not (out_dir / PROGRAM_DIRS).is_file():
+            bad("which_dirs", f"is not {runtime_dir}/{PROGRAM_DIRS}")
+        else:
+            table = firmware.program_dirs(persona, applets) or {}
+            rows = dict(line.partition(" ")[::2] for line in _text(out_dir / PROGRAM_DIRS).splitlines() if line)
+            if rows != {name: ",".join(folders) for name, folders in table.items()}:
+                bad("which_dirs", "is not the table of the persona's program folders")
+            elif any(folder not in firmware.PROGRAM_FOLDERS for folders in rows.values() for folder in folders.split(",")):
+                bad("which_dirs", f"names a folder other than {', '.join(firmware.PROGRAM_FOLDERS)}")
+    for key, (root, user) in (("history_control", system.history_controls(persona)),):
+        for name, want in ((key + "_root", root), (key, user)):
+            given = value(name)
+            if given is None:
+                continue
+            if any(part and part not in HISTORY_CONTROLS for part in given.split(":")):
+                bad(name, f"is none of {', '.join(sorted(HISTORY_CONTROLS))}")
+            elif given != want:
+                bad(name, f"is not the HISTCONTROL of the persona ({want!r})")
+    exports = value("history_export")
+    if exports is not None:
+        names = [name for name in exports.split(",") if name]
+        if set(names) - HISTORY_EXPORTS or tuple(names) != tuple(system.history_exports(persona)):
+            bad("history_export", f"is not what the login exports ({','.join(system.history_exports(persona))!r})")
+    found = value("command_not_found")
+    lines = system.command_not_found_lines(persona, ident)
+    if (found is None) != (lines is None):
+        bad("command_not_found", "does not fit the persona" if found else "is missing")
+    elif found is not None and (found != f"{runtime_dir}/{system.COMMAND_NOT_FOUND}"
+                                or not (out_dir / system.COMMAND_NOT_FOUND).is_file()):
+        bad("command_not_found", f"is not {runtime_dir}/{system.COMMAND_NOT_FOUND}")
+    sudo = value("command_not_found_sudo")
+    if sudo is not None:
+        group = _text(out_dir / "honeyfs/etc/group")
+        users = {line.split(":", 1)[0] for line in _text(out_dir / "honeyfs/etc/passwd").splitlines() if line}
+        if found is None or [name for name in sudo.split(",") if name] != system.sudo_users(group) \
+                or set(name for name in sudo.split(",") if name) - users:
+            bad("command_not_found_sudo", "is not the members of sudo and admin")
+    login = firmware.login_env(persona)
+    for key in ("login_path", "login_shell"):
+        if value(key) != login.get(key):
+            bad(key, f"is not the login of the persona ({login.get(key)!r})")
+    if value("login_path") is not None and not all(fs is not None and tree.find_dir(fs, folder.strip("/")) is not None
+                                                   for folder in value("login_path").split(":") if folder):
+        bad("login_path", "names a folder the tree has not")
+    if value("login_shell") is not None and not program(value("login_shell")):
+        bad("login_shell", "is no program of the tree")
 
 
 def _check_clock(persona, ident, out):
@@ -339,7 +552,8 @@ def _restarts_sshd(text):
 
 def _check_logs(ident, honeyfs, fs, out):
     events = _log_events(ident, honeyfs)
-    first, last = _utc_date(ident.installed_at), _utc_date(ident.now)
+    # the history ends where the identity was drawn, the clock of the builders (now for a fresh one)
+    first, last = _utc_date(ident.installed_at), _utc_date(drawn_at(ident))
     updated, stale = updated_at(ident.release), stale_at(ident.release)
     newest = {}
     for rel, stamp, text in events:
@@ -413,6 +627,8 @@ def _check_device_boot(honeyfs, txtcmds, out):
     or rootfs on /."""
     if _text(honeyfs / "etc/fstab"):
         return
+    if not (txtcmds / "bin/dmesg").exists():
+        return  # a firmware without dmesg (the problems check names one that should have it)
     dmesg = _text(txtcmds / "bin/dmesg")
     match = re.search(r"(?:Kernel command line|Command line): (.*)$", dmesg, re.M)
     if not match:
@@ -491,7 +707,7 @@ def _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out):
 
 
 def _check_dates(ident, honeyfs, out):
-    first, last = _utc_date(ident.installed_at), _utc_date(ident.now)
+    first, last = _utc_date(ident.installed_at), _utc_date(drawn_at(ident))
     for path in sorted((honeyfs / "var/log").rglob("*")):
         if not path.is_file():
             continue
@@ -505,11 +721,11 @@ def _check_dates(ident, honeyfs, out):
                 out.append(f"date {day} in {path.relative_to(honeyfs)} is not between {first} and {last}")
     for line in _text(honeyfs / "etc/shadow").splitlines():
         fields = line.split(":")
-        if len(fields) > 2 and fields[2].isdigit() and int(fields[2]) > ident.now // DAY:
-            out.append(f"date: shadow lastchange of {fields[0]} is in the future")
+        if len(fields) > 2 and fields[2].isdigit() and int(fields[2]) > drawn_at(ident) // DAY:
+            out.append(f"date: shadow lastchange of {fields[0]} is after the draw")
 
 
-def _tree_texts(fs):
+def tree_texts(fs):
     """(path, bytes) of what the shell shows of fs.pickle: the path of every node, the
     contents of files and the targets of links. The raw pickle is no text: its
     ctimes are 4-byte integers (0x6c696870 is b"phil", August 2027)."""
@@ -526,9 +742,11 @@ def _tree_texts(fs):
 def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out):
     markers = FORBIDDEN_MARKERS + (UBUNTU_MARKERS if persona.os_id != "ubuntu" else ())
     markers = tuple(m.lower().encode() for m in markers)
-    paths = [out_dir / "cmdoutput.json", out_dir / "cowrie.cfg", out_dir / BUSYBOX_HELP,
+    paths = [out_dir / "cmdoutput.json", out_dir / kthreads.KERNEL_THREADS, out_dir / "cowrie.cfg", out_dir / BUSYBOX_HELP,
              out_dir / system.SERVICE_STATUS, out_dir / system.SYSTEMD_UNITS, out_dir / system.SUDO_LIST,
-             out_dir / system.APT_PACKAGES, out_dir / system.PACKAGE_NAMES, out_dir / system.OPKG_HELP_FILE]
+             out_dir / system.APT_PACKAGES, out_dir / system.PACKAGE_NAMES, out_dir / system.OPKG_HELP_FILE,
+             out_dir / system.YUM_META, out_dir / system.RPM_OWNERS, out_dir / system.OPKG_META, out_dir / system.DNF_META,
+             out_dir / system.RPM_MANUALS]
     for root in (out_dir / "honeyfs", out_dir / "txtcmds"):
         for path in sorted(root.rglob("*")):
             if any(m in path.name.lower().encode() for m in markers):
@@ -551,7 +769,7 @@ def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out):
     if fs is None:
         return
     hits = {}
-    for path, data in _tree_texts(fs):
+    for path, data in tree_texts(fs):
         for marker in found_in(data):
             hits.setdefault(marker, path)
     for marker, path in sorted(hits.items()):
@@ -661,9 +879,10 @@ def _is_program(node):
             and (tree.node_get(node, tree.A_MODE) or 0) & 0o111 != 0)
 
 
-def _check_programs(fs, txtcmds, out):
+def _check_programs(fs, txtcmds, out, builtins=frozenset()):
     """Every program in a bin / sbin directory has a size, every txtcmd is a program
-    without contents (Cowrie's cat / dd serve the ELF header of [shell] arch)."""
+    without contents (Cowrie's cat / dd serve the ELF header of [shell] arch); the txtcmd
+    bin/<name> of a builtin of the firmware's shell ([shell] builtins) needs no program."""
     empty = [path for path, node in tree.iter_nodes(fs)
              if path.rsplit("/", 2)[-2] in ("bin", "sbin") and _is_program(node)
              and not tree.node_get(node, tree.A_SIZE)]
@@ -673,7 +892,10 @@ def _check_programs(fs, txtcmds, out):
         if not path.is_file():
             continue
         rel = str(path.relative_to(txtcmds))
-        node = tree.find_node(fs, rel)
+        if rel.startswith("bin/") and rel[4:] in builtins and tree.resolve(fs, rel) is None:
+            continue
+        # a txtcmd of a link (an applet of BusyBox) is the program it names
+        node = tree.resolve(fs, rel)
         if not _is_program(node):
             out.append(f"program: txtcmd {rel} is no executable of fs.pickle")
         elif isinstance(tree.node_get(node, tree.A_CONTENTS), (bytes, str)):
@@ -796,7 +1018,12 @@ def _check_init_links(persona, fs, out):
                 continue
             link = f"etc/rc{level}.d/{tree.node_get(node, tree.A_NAME)}"
             sign, name = match.groups()
-            target = tree.target_path(fs, link) if tree.node_get(node, tree.A_TYPE) == tree.T_LINK else None
+            is_link = tree.node_get(node, tree.A_TYPE) == tree.T_LINK
+            target = tree.target_path(fs, link) if is_link else None
+            if is_link and (target is None or tree.find_node(fs, target) is None):
+                # a link that names nothing: _check_links reports it
+                found.add((level, sign, name))
+                continue
             if target is None or target != tree.real_path(fs, f"etc/init.d/{name}"):
                 out.append(f"init: /{link} names {'/' + target if target else 'nothing'}, not /etc/init.d/{name}")
             elif (level, sign, name) not in expected:
@@ -890,6 +1117,8 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
     them, with their versions."""
     honeyfs, txtcmds = out_dir / "honeyfs", out_dir / "txtcmds"
     own = {"/" + rel for rel, _ in system.links(persona)}
+    # the programs of a firmware image are its own (the adduser applet of the Archer C7's BusyBox)
+    own |= {"/" + rel for rel in firmware.programs(persona, ident) or {}}
     found = [hit for rel in system.CONTAINER_PATHS + system.foreign_paths(persona) for hit in _matches(fs, rel)
              if "/" + hit not in own]
     if found:
@@ -971,6 +1200,8 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
                                f"{'Cowrie answers it' if _answered(cfg, name) else 'nothing answers it'}")
         units = {u["name"]: u for u in expected.get(system.SYSTEMD_UNITS, {}).get("units", [])}
         for name, unit in sorted(units.items()):
+            if not unit.get("path"):
+                continue  # system.slice: no unit file
             node = tree.find_node(fs, unit["path"])
             if node is None:
                 out.append(f"systemctl: {unit['path']} of {name} is not in fs.pickle")
@@ -1035,9 +1266,13 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     version = _text(honeyfs / "proc/version")
     if r.kernel_version not in version or r.kernel_build not in version:
         out.append(f"kernel: proc/version does not name {r.kernel_version} {r.kernel_build}")
-    banner = re.search(r"\bLinux version (\S+)", _text(txtcmds / "bin/dmesg"))
-    if not banner or banner.group(1) != r.kernel_version:
-        out.append(f"kernel: dmesg does not name {r.kernel_version}")
+    own = firmware.programs(persona)
+    if (txtcmds / "bin/dmesg").exists():
+        banner = re.search(r"\bLinux version (\S+)", _text(txtcmds / "bin/dmesg"))
+        if not banner or banner.group(1) != r.kernel_version:
+            out.append(f"kernel: dmesg does not name {r.kernel_version}")
+    elif own is None or "bin/dmesg" in own:
+        out.append("kernel: no dmesg")
     built = kernel_time(r)
     if built is not None and built > ident.booted_at:
         out.append(f"kernel: built {time.strftime('%Y-%m-%d', time.gmtime(built))}, after the boot")
@@ -1052,7 +1287,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         out.append(f"hostname: etc/hosts does not name {ident.hostname}")
 
     _check_hardware(persona, ident, honeyfs, txtcmds, out)
-    _check_top(persona, cfg, txtcmds, out)
+    _check_top(persona, cfg, txtcmds, out, out_dir, runtime_dir)
     _check_boot(honeyfs, txtcmds, out)
     if persona.kind == "device":
         _check_device_boot(honeyfs, txtcmds, out)
@@ -1069,6 +1304,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         out.append(f"os-release VERSION_ID is not {r.os_version_id}")
 
     _check_processes(persona, ident, out_dir / "cmdoutput.json", out)
+    _check_accounts(persona, out_dir, out)
     _check_dates(ident, honeyfs, out)
     _check_logs(ident, honeyfs, fs, out)
     _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out)
@@ -1076,8 +1312,11 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     if fs is not None:
         _check_tree(persona, ident, fs, out)
         _check_package_managers(persona, cfg, fs, honeyfs, txtcmds, out)
-        _check_programs(fs, txtcmds, out)
+        _check_programs(fs, txtcmds, out, frozenset(
+            name.strip() for name in cfg.get("shell", "builtins", fallback="").split(",") if name.strip()))
         _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out)
+        _check_shell_keys(persona, ident, cfg, out_dir, runtime_dir, fs, out)
+        _check_program_owners(persona, ident, out_dir, fs, out)
         _check_links(fs, out)
         _check_init_links(persona, fs, out)
     return out

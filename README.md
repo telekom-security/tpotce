@@ -403,7 +403,7 @@ Services like these on a public address get noticed: projects that scan the inte
 <br><br>
 
 ## Cowrie Personas
-Cowrie answers on SSH and Telnet as one of 16 systems, its persona: the servers `ubuntu-noble`, `ubuntu-jammy`, `debian-trixie`, `debian-bookworm`, `rhel-9`, `centos-7`, `raspios` and `gpu-ubuntu`, the devices `dlink-dir859`, `tplink-wr841n`, `zyxel-nas326`, `openwrt`, `qnap-qts`, `synology-dsm`, `ubiquiti-edgerouter-x` and `ipcam`. Each start also draws the identity of that system: host name, release, hardware and uptime. Two settings in `~/tpotce/.env` choose them:
+Cowrie answers on SSH and Telnet as one of 16 systems, its persona: the servers `ubuntu-noble`, `ubuntu-jammy`, `debian-trixie`, `debian-bookworm`, `rhel-9`, `centos-7`, `raspios` and `gpu-ubuntu`, the devices `dlink-dir859`, `tplink-archer-c7`, `zyxel-nas326`, `openwrt`, `qnap-qts`, `synology-dsm`, `ubiquiti-edgerouter-x` and `ipcam`. Each start also draws the identity of that system: host name, release, hardware and uptime. Two settings in `~/tpotce/.env` choose them:
 - `COWRIE_PERSONA`: Empty (default) picks one of all personas at random, otherwise the personas to pick from, separated by spaces (i.e. `COWRIE_PERSONA=ubuntu-noble debian-bookworm`).
 - `COWRIE_PERSONA_ROTATION`: The days Cowrie keeps its persona (0 to 365). With `0` (default) every start draws a new persona and identity. With i.e. `7` a start within seven days of the draw keeps persona, host name, release, hardware and boot time, so the uptime goes on, as long as `COWRIE_PERSONA` still names the persona. `docker logs cowrie` says why a start drew a new one.
 

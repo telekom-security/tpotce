@@ -9,10 +9,10 @@ import re
 import shutil
 from pathlib import Path
 
-from . import network, servers, system, tree
-from .common import home_dir, rng_for, top_keys
+from . import devices, firmware, kthreads, network, package_units, servers, system, tree
+from .common import home_dir, is_login_shell, rng_for, top_keys
 from .identity import DAY, to_json
-from .ssh_profiles import PROFILES, host_key_algorithms
+from .ssh_profiles import PROFILES, host_key_algorithms, kex_algorithms, server_sig_algs
 
 COWRIE_ROOT = Path("/home/cowrie/cowrie")
 
@@ -128,6 +128,15 @@ COMMON_SKIP_PYTHON_COMMANDS = (
     "/usr/sbin/service",
     "/bin/opkg",
     "opkg",
+    "/usr/bin/dpkg",
+    "/bin/dpkg",
+    "dpkg",
+    "/usr/bin/dpkg-query",
+    "/bin/dpkg-query",
+    "dpkg-query",
+    "/usr/bin/apt-cache",
+    "/bin/apt-cache",
+    "apt-cache",
     "apt",
     "apt-get",
     "dnf",
@@ -152,11 +161,15 @@ EMBEDDED_SKIP_PYTHON_COMMANDS = (
 BUSYBOX_PYTHON_COMMANDS = ("/bin/busybox", "busybox")
 KEY_FILES = {"ssh-rsa": "rsa", "ecdsa-sha2-nistp256": "ecdsa", "ssh-ed25519": "ed25519"}
 BUSYBOX_HELP = "busybox-help.txt"
+# the folder of each program of a device with folders of its own ([shell] which_dirs)
+PROGRAM_DIRS = "program-dirs.txt"
 # the file systems of the patched df ([shell] df_table, every persona)
 DF_TABLE = "df.json"
 # what ls -l shows for a program Cowrie runs (the pickle keeps the size of one it has):
 # BusyBox of a firmware, any other program
-PROGRAM_SIZES = {"busybox": (380_000, 1_100_000), "git": (2_500_000, 4_500_000), "python2.7": (7_000, 7_400)}
+#   (kmodloader of ubox: 16393 bytes in the aarch64 images of OpenWrt 21.02 / 22.03; unverified for MIPS)
+PROGRAM_SIZES = {"busybox": (380_000, 1_100_000), "git": (2_500_000, 4_500_000), "python2.7": (7_000, 7_400),
+                 "kmodloader": (15_000, 22_000)}
 PROGRAM_SIZE = (18_000, 420_000)
 
 
@@ -166,7 +179,10 @@ def skip_python_commands(persona, ident, content):
     for name in system.python_answers(persona):
         commands -= {name, f"/bin/{name}", f"/{system.command_path(name)}"}
     if persona.kind == "device":
-        commands |= set(EMBEDDED_SKIP_PYTHON_COMMANDS) - ({"perl"} if system.has_perl(persona) else set())
+        commands |= set(EMBEDDED_SKIP_PYTHON_COMMANDS) - ({"perl"} if system.has_perl(persona) else set()) \
+            - set(system.python_answers(persona))
+    if not system.has_systemd(persona):
+        commands |= {"journalctl", "/bin/journalctl", "/usr/bin/journalctl"}
     # the tools of packages the server has not installed
     commands |= set(system.skipped_tools(persona, ident))
     # wc, sort and seq where the firmware's BusyBox has no such applet
@@ -180,6 +196,17 @@ def skip_python_commands(persona, ident, content):
                      for spelling in (name, f"/bin/{name}", f"/sbin/{name}", f"/usr/bin/{name}", f"/usr/sbin/{name}")}
     if not content.busybox_help:
         commands |= set(BUSYBOX_PYTHON_COMMANDS)
+    own = firmware.programs(persona, ident)
+    if own is not None:
+        # the scp of dropbear in the image: Cowrie's scp answers (scp -t of an upload); help is a builtin
+        #   of its ash, so Cowrie's help (the builtins of bash) gives way to the txtcmd of the builtin
+        if "usr/bin/scp" in own:
+            commands -= {"scp"}
+        if "help" in (firmware.builtins(persona) or ()):
+            commands |= {"help"}
+    # the shells the firmware has not (Cowrie's bash answers bash and /bin/bash before the tree)
+    for name in firmware.shell_links(persona)[1]:
+        commands |= {name, f"/bin/{name}", f"/usr/bin/{name}"}
     if persona.family == "openwrt":
         commands -= {"/bin/opkg", "opkg"}
     if persona.family == "ubiquiti":
@@ -318,7 +345,15 @@ def _without_text(node):
 def _unit_files(t, persona, ident, processes):
     """A unit file for every unit systemctl shows (Cowrie's tree has those of its container), the link
     of the target that wants an enabled one."""
-    for unit in servers.systemd_units(persona, ident, processes)["units"]:
+    units = servers.systemd_units(persona, ident, processes) if persona.kind == "server" else \
+        devices.device_units(persona, ident, processes)
+    directory = units["unit_dir"].lstrip("/")
+    directory = "usr/" + directory if directory.startswith("lib/") else directory
+    for name, target in servers.unit_links(persona, ident).items():
+        # the links the packages ship between their unit files (openbsd-inetd.service -> inetd.service)
+        if any(u["name"] == target for u in units["units"]):
+            tree.ensure_link(t, f"{directory}/{name}", target, ctime=ident.installed_at)
+    for unit in units["units"]:
         path = unit["path"]
         if not path.startswith(("/usr/lib/systemd/", "/lib/systemd/")):
             continue
@@ -338,8 +373,46 @@ def _unit_files(t, persona, ident, processes):
             elif program and node is None:
                 tree.ensure_executable(t, rel_program, program_size(ident, rel_program), ctime=ident.installed_at)
         if unit["state"] == "enabled":
-            tree.ensure_link(t, f"etc/systemd/system/{servers.wants_target(unit['name'])}.wants/{unit['name']}", path,
-                             ctime=ident.installed_at)
+            for wants in unit.get("wants") or [f"{servers.wants_target(unit['name'])}.wants"]:
+                tree.ensure_link(t, f"etc/systemd/system/{wants}/{unit['name']}", path, ctime=ident.installed_at)
+            for alias in unit.get("alias", ()):
+                if not unit["name"].startswith("ssh"):
+                    tree.ensure_link(t, f"etc/systemd/system/{alias}", path, ctime=ident.installed_at)
+
+
+def _shell_proc(t, processes):
+    """/proc/<PID> of the login shell, the PID ps shows and $$ expands to: Cowrie's tree has the
+    process of the container's Python there (/proc/self, /proc/thread-self, /proc/net, /proc/mounts)."""
+    shells = [p["PID"] for p in processes if is_login_shell(p) and isinstance(p.get("PID"), int)]
+    own = tree.node_get(tree.find_node(t, "proc/self"), tree.A_TARGET) if tree.find_node(t, "proc/self") else None
+    if not shells or not own:
+        return
+    old = own.rstrip("/").rsplit("/", 1)[-1]
+    new = str(shells[-1])
+    node = tree.find_dir(t, f"proc/{old}")
+    if node is None or old == new or tree.find_node(t, f"proc/{new}") is not None:
+        return
+    node[tree.A_NAME] = new
+    task = tree.find_dir(t, f"proc/{new}/task/{old}")
+    if task is not None:
+        task[tree.A_NAME] = new
+    def retarget(link, target):
+        # a link's size is the length of its target
+        link[tree.A_TARGET] = target
+        tree.node_set(link, tree.A_SIZE, len(target))
+
+    for _, child in tree.iter_nodes(tree.find_dir(t, "proc")):
+        if child[tree.A_TYPE] == tree.T_LINK and isinstance(child[tree.A_TARGET], str):
+            target = re.sub(rf"(^|/)proc/{old}(?=/|$)", rf"\g<1>proc/{new}",
+                            re.sub(rf"/task/{old}(?=/|$)", f"/task/{new}", child[tree.A_TARGET]))
+            if target != child[tree.A_TARGET]:
+                retarget(child, target)
+    for rel in ("proc/self", "proc/thread-self", "proc/net", "proc/mounts"):
+        link = tree.find_node(t, rel)
+        if link is not None and link[tree.A_TYPE] == tree.T_LINK and isinstance(link[tree.A_TARGET], str):
+            target = re.sub(rf"(^|/){old}(?=/|$)", rf"\g<1>{new}", link[tree.A_TARGET])
+            if target != link[tree.A_TARGET]:
+                retarget(link, target)
 
 
 def _login_links(t, persona, ident, content_group=""):
@@ -423,6 +496,13 @@ def apply_to_tree(base_tree, persona, ident, content):
             for folder in ("bin", "sbin", "usr/bin", "usr/sbin"):
                 tree.remove_node(t, f"{folder}/{name}")
     if persona.kind == "device":
+        # lscpu and nproc only where the firmware has them (system.cpu_commands; their txtcmds there)
+        has_lscpu, has_nproc = system.cpu_commands(persona, ident)
+        for name, has in (("lscpu", has_lscpu), ("nproc", has_nproc)):
+            if not has:
+                for folder in ("bin", "sbin", "usr/bin", "usr/sbin"):
+                    tree.remove_node(t, f"{folder}/{name}")
+    if persona.kind == "device":
         # ip, ss, ifconfig and netstat as the firmware has them
         for name in network.NET_TOOLS:
             for folder in ("bin", "sbin", "usr/bin", "usr/sbin"):
@@ -448,6 +528,8 @@ def apply_to_tree(base_tree, persona, ident, content):
     for rel, target in (system.python_links(persona, ident) + system.links(persona) + ssh_links + tool_links
                         + system.init_links(persona)):
         link(t, persona, ident, rel, target, ident.installed_at)
+    if persona.kind != "server" and persona.family in system.SYSTEMD_DEVICES:
+        _unit_files(t, persona, ident, content.processes)
     if persona.kind == "server":
         _unit_files(t, persona, ident, content.processes)
         # the daemons of ps are programs of the tree
@@ -455,22 +537,134 @@ def apply_to_tree(base_tree, persona, ident, content):
             program = process["COMMAND"].split()[0]
             if program.startswith("/") and tree.find_node(t, program) is None:
                 tree.ensure_executable(t, program.lstrip("/"), program_size(ident, program), ctime=ident.installed_at)
+    _firmware_programs(t, persona, ident)
+    # the daemons of a device's ps list and the telnetd of its telnet sessions, where the tree has them not
+    for path, target in devices.daemon_programs(persona, ident, content.processes).items():
+        if tree.resolve(t, path.lstrip("/")) is not None:
+            continue
+        if target:
+            tree.ensure_link(t, path.lstrip("/"), target, ctime=ident.installed_at)
+        else:
+            tree.ensure_executable(t, path.lstrip("/"), program_size(ident, path), ctime=ident.installed_at)
+    links, gone = firmware.shell_links(persona)
+    for name in gone:
+        tree.remove_node(t, f"usr/bin/{name}")
+    for name, target in links.items():
+        tree.remove_node(t, f"usr/bin/{name}")
+        tree.ensure_link(t, f"usr/bin/{name}", target, ctime=ident.installed_at)
+    if links and (tree.find_node(t, "proc/1/exe") or [None] * 10)[tree.A_TARGET] == "/usr/bin/dash":
+        # PID 1 is BusyBox init (procd on OpenWrt) where Cowrie's tree had its container's dash
+        tree.remove_node(t, "proc/1/exe")
+        init = "/sbin/procd" if persona.family == "openwrt" and tree.find_node(t, "sbin/procd") else "/bin/busybox"
+        tree.ensure_link(t, "proc/1/exe", init, ctime=ident.booted_at)
+    if persona.family == "openwrt":
+        # lsmod and the other module tools of OpenWrt are kmodloader of ubox
+        tree.ensure_executable(t, "usr/sbin/kmodloader", program_size(ident, "/sbin/kmodloader"),
+                               ctime=ident.installed_at)
+        for name in system.KMODLOADER_LINKS:
+            tree.remove_node(t, f"usr/sbin/{name}")
+            tree.ensure_link(t, f"usr/sbin/{name}", "/sbin/kmodloader", ctime=ident.installed_at)
+    if persona.family == "ubiquiti":
+        # EdgeOS boots with systemd: no links of Cowrie's tree in the rc directories
+        for rel, node in list(tree.iter_nodes(t)):
+            if re.fullmatch(r"/etc/rc[0-6S]\.d/[SK]\d\d.*", rel) and node[tree.A_TYPE] == tree.T_LINK:
+                tree.remove_node(t, rel.lstrip("/"))
+    _shell_proc(t, content.processes)
     _login_links(t, persona, ident, content.files.get("etc/group", ""))
     _set_dirs(t, persona, ident.installed_at)
     return t
+
+
+def _firmware_programs(t, persona, ident):
+    """The program folders of a firmware image (firmware.programs) in place of Cowrie's: folders of
+    their own (no /usr merge), the BusyBox applets as links, the vendor's programs of its release, the
+    folders at the root of the image (firmware.root_dirs; the others of Cowrie's tree go, but /home).
+    ulimit is a builtin of its ash (its txtcmd answers without a program)."""
+    table = firmware.programs(persona, ident)
+    if table is None:
+        return
+    for folder in firmware.PROGRAM_FOLDERS:
+        tree.remove_node(t, folder)
+    for folder in firmware.PROGRAM_FOLDERS:
+        tree.ensure_dir(t, folder, ctime=ident.installed_at)
+    for rel, value in sorted(table.items()):
+        if isinstance(value, str):
+            tree.ensure_link(t, rel, value, ctime=ident.installed_at)
+        else:
+            tree.ensure_executable(t, rel, value, ctime=ident.installed_at)
+    root = firmware.root_dirs(persona)
+    for rel in root:
+        tree.ensure_dir(t, rel, ctime=ident.installed_at)
+    for child in list(tree.node_children(t)):
+        name = child[tree.A_NAME]
+        if name not in root and name not in firmware.ROOT_KEEP:
+            tree.remove_node(t, name)
+    # /var/run and /var/lock of Cowrie's tree are links into /run: folders of their own (in the images
+    #   /var is a link to /tmp, which holds them; unverified: their contents)
+    if root:
+        for rel in ("var/run", "var/lock"):
+            node = tree.find_node(t, rel)
+            if node is not None and node[tree.A_TYPE] == tree.T_LINK:
+                tree.remove_node(t, rel)
+            tree.ensure_dir(t, rel, ctime=ident.booted_at)
+    # the links of Cowrie's tree into the old folders (Debian's alternatives) go, init is BusyBox
+    tree.remove_node(t, "etc/alternatives")
+    if tree.find_node(t, "proc/1/exe") is not None:
+        tree.remove_node(t, "proc/1/exe")
+        tree.ensure_link(t, "proc/1/exe", "/bin/busybox", ctime=ident.booted_at)
+    folders = tuple(f"{folder}/" for folder in firmware.PROGRAM_FOLDERS)
+    for rel, node in list(tree.iter_nodes(t)):
+        if node[tree.A_TYPE] != tree.T_LINK or not node[tree.A_TARGET]:
+            continue
+        target = posixpath.normpath(posixpath.join(posixpath.dirname(rel), node[tree.A_TARGET])).lstrip("/") \
+            if not node[tree.A_TARGET].startswith("/") else node[tree.A_TARGET].lstrip("/")
+        if target.startswith(folders) and tree.resolve(t, rel) is None:
+            tree.remove_node(t, rel.lstrip("/"))
 
 
 def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, content=None):
     r = ident.release
     content = content if content is not None else persona.builder(persona, ident)
     busybox = f"busybox_help = {runtime_dir}/{BUSYBOX_HELP}\n" if content.busybox_help else ""
+    names = firmware.builtins(persona)
+    builtins = f"builtins = {','.join(names)}\n" if names is not None else ""
+    if firmware.program_dirs(persona, system.busybox_applets(persona, ident)) is not None:
+        builtins += f"which_dirs = {runtime_dir}/{PROGRAM_DIRS}\n"
+    # wget of the firmware's BusyBox (the patched wget.py writes its texts)
+    if content.busybox_help and persona.family != "ubiquiti" and "wget" in system.busybox_applets(persona, ident):
+        builtins += "wget_style = busybox\n"
+        if persona.family == "tplink":
+            # its BusyBox is built without FEATURE_WGET_TIMEOUT (wget of the image: no -T in its usage, no --timeout)
+            builtins += "wget_timeout = no\n"
+    if persona.family == "tplink":
+        # and without FEATURE_DD_THIRD_STATUS_LINE (dd of the image: the records only)
+        builtins += "dd_status_line = no\n"
+    builtins += "".join(f"{key} = {value}\n" for key, value in firmware.login_env(persona).items())
+    # HISTTIMEFORMAT as a JSON string: the format ends in a space, which the config file would drop
+    stamp = system.history_time_format(persona)
+    history_time_format = f"history_time_format = {json.dumps(stamp)}\n" if stamp else ""
+    if persona.family in system.ASH_FAMILIES:
+        # ls -l of BusyBox, the total line of a build with CONFIG_DESKTOP
+        builtins += "ls_style = busybox\n" + ("ls_total = yes\n" if system.busybox_desktop(persona) else "")
+    usage = firmware.usage_table(persona)
+    if usage is not None:
+        # the recorded usage of uname, head, grep and which of its BusyBox
+        builtins += f"busybox_usage = {usage}\n"
+    if system.command_not_found_lines(persona, ident) is not None:
+        busybox += (f"command_not_found = {runtime_dir}/{system.COMMAND_NOT_FOUND}\n"
+                    f"command_not_found_sudo = {','.join(system.sudo_users(content.files.get('etc/group', '')))}\n")
     tools = "".join(f"{key} = {value}\n"
                     for key, value in system.shell_keys(persona, ident, content.files, runtime_dir).items())
     top = "".join(f"{key} = {value}\n" for key, value in top_keys(persona, ident, content).items())
     top += f"df_table = {runtime_dir}/{DF_TABLE}\n"
+    top += f"kernel_thread_list = {runtime_dir}/{kthreads.KERNEL_THREADS}\n"
     top += "".join(f"{key} = {value}\n" for key, value in system.awk_keys(persona, ident).items())
     top += "".join(f"{key} = {value}\n" for key, value in system.text_keys(persona, ident).items())
     top += f"network = {runtime_dir}/{network.NETWORK_FILE}\n"
+    if network.telnet_server(persona, ident):
+        top += f"telnet_server = {network.telnet_server(persona, ident)}\n"
+    if devices.telnet_daemon(persona, ident):
+        top += f"telnet_daemon = {devices.telnet_daemon(persona, ident)}\n"
     profile = PROFILES[persona.ssh_profile]
     keys = "\n".join(
         f"{KEY_FILES[k]}_public_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key.pub\n"
@@ -506,11 +700,16 @@ kernel_build_string = {r.kernel_build}
 hardware_platform = {persona.hardware_platform}
 operating_system = {persona.operating_system}
 prompt_style = {persona.prompt_style}
-shell_name = {system.shell_style(persona)[0]}
+{builtins}shell_name = {system.shell_style(persona)[0]}
 not_found_style = {system.shell_style(persona)[1]}
 history_size = {system.history_sizes(persona, r)[1]}
 history_size_root = {system.history_sizes(persona, r)[0]}
-ssh_version = {r.ssh_version}
+history_control = {system.history_controls(persona)[1]}
+history_control_root = {system.history_controls(persona)[0]}
+history_file_size = {system.history_file_sizes(persona, r)[1]}
+history_file_size_root = {system.history_file_sizes(persona, r)[0]}
+history_export = {",".join(system.history_exports(persona))}
+{history_time_format}ssh_version = {r.ssh_version}
 skip_python_commands = {",".join(skip_python_commands(persona, ident, content))}
 {top}{busybox}{tools}
 [ssh]
@@ -518,6 +717,8 @@ enabled = true
 {keys}
 public_key_auth = {",".join(profile.host_keys)}
 host_key_algorithms = {",".join(host_key_algorithms(profile, r))}
+kex_algorithms = {",".join(kex_algorithms(profile, r))}
+server_sig_algs = {server_sig_algs(profile, r)}
 version = {r.ssh_banner}
 ciphers = {",".join(profile.ciphers)}
 macs = {",".join(profile.macs)}
@@ -552,8 +753,15 @@ format = text
 def runtime_json(persona, ident, processes):
     """The JSON files of a server's runtime folder: the units of systemctl, the rules of sudo -l,
     the packages of apt (Debian) and of dnf / rpm (RHEL 9)."""
+    if persona.kind == "device":
+        # EdgeOS and DSM have systemd, EdgeOS sudo
+        files = {system.SYSTEMD_UNITS: devices.device_units(persona, ident, processes)}
+        if "sudo" in system.python_answers(persona):
+            files[system.SUDO_LIST] = system.sudo_list(persona)
+        return files
     files = {system.SYSTEMD_UNITS: servers.systemd_units(persona, ident, processes),
              system.SUDO_LIST: system.sudo_list(persona)}
+    files[package_units.PACKAGE_UNITS] = package_units.package_units(persona, ident, files[system.SYSTEMD_UNITS])
     if system.has_dpkg(persona):
         files[system.APT_PACKAGES] = system.apt_packages(persona, ident)
     if persona.family == "rhel":
@@ -584,16 +792,27 @@ def render(persona, ident, base_tree, out_dir, runtime_dir, keys_dir, cowrie_roo
            json.dumps({"command": {"ps": content.processes}}, indent=2, sort_keys=True) + "\n")
     if content.busybox_help:
         _write(out_dir / BUSYBOX_HELP, content.busybox_help)
+    dirs = firmware.program_dirs(persona, system.busybox_applets(persona, ident))
+    if dirs is not None:
+        _write(out_dir / PROGRAM_DIRS, "".join(f"{name} {','.join(folders)}\n" for name, folders in sorted(dirs.items())))
+    cnf = system.command_not_found_lines(persona, ident)
+    if cnf is not None:
+        _write(out_dir / system.COMMAND_NOT_FOUND, "".join(f"{line}\n" for line in cnf))
     _write(out_dir / network.NETWORK_FILE,
            json.dumps(network.network(persona, ident, content.processes), indent=1, sort_keys=True) + "\n")
+    _write(out_dir / kthreads.KERNEL_THREADS,
+           json.dumps(kthreads.kernel_threads(persona, ident, content.processes, content.filesystems), indent=1) + "\n")
     _write(out_dir / DF_TABLE, json.dumps(system.df_table(persona, ident, content.filesystems), indent=1, sort_keys=True) + "\n")
     if persona.family == "openwrt":
         _write(out_dir / system.OPKG_HELP_FILE, system.OPKG_HELP)
     names = system.package_names(persona, ident)
     if names is not None:
         _write(out_dir / system.PACKAGE_NAMES, "".join(f"{line}\n" for line in names))
+    for name, lines in system.package_meta_files(persona, ident).items():
+        _write(out_dir / name, "".join(f"{line}\n" for line in lines))
     if persona.kind == "server":
         _write(out_dir / system.SERVICE_STATUS, system.service_status(persona))
+    if persona.kind == "server" or persona.family in system.SYSTEMD_DEVICES:
         for name, data in runtime_json(persona, ident, content.processes).items():
             _write(out_dir / name, json.dumps(data, indent=1, sort_keys=True) + "\n")
     _write(out_dir / "cowrie.cfg", render_cfg(persona, ident, Path(runtime_dir), Path(keys_dir), cowrie_root,

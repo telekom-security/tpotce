@@ -22,9 +22,10 @@ OUIS = {"kvm": ("52:54:00",), "pi4": ("dc:a6:32", "e4:5f:01", "d8:3a:dd"), "pi5"
         "tplink": ("50:c7:bf", "98:da:c4", "c0:06:c3"), "zyxel": ("bc:99:11", "5c:f4:ab"),
         "openwrt": ("00:0c:43",), "qnap": ("24:5e:be", "00:08:9b"), "synology": ("00:11:32", "90:09:d0"),
         "ubiquiti": ("24:a4:3c", "78:8a:20", "fc:ec:da"), "ipcam": ("44:19:b6", "c0:56:e3")}
-# the default LAN address of the routers (vendor manuals)
+# the default LAN address of the routers (vendor manuals); the Archer C7 bridges its LAN as br-lan
+#   (/etc/init.d/networkx of the image); unverified: the names of the WAN interfaces
 ROUTER_LAN = {"openwrt": ("br-lan", "192.168.1.1"), "dlink": ("br0", "192.168.0.1"),
-              "tplink": ("br0", "192.168.0.1"), "ubiquiti": ("switch0", "192.168.1.1")}
+              "tplink": ("br-lan", "192.168.0.1"), "ubiquiti": ("switch0", "192.168.1.1")}
 ROUTER_WAN = {"openwrt": "wan", "dlink": "eth1", "tplink": "eth1", "ubiquiti": "eth0"}
 DEVICE_IFACE = {"zyxel": "egiga0"}
 
@@ -140,6 +141,8 @@ DAEMONS = (
     (r"jupyter-lab", "jupyter-lab", (("tcp", "127.0.0.1", 8888, 7, 128), ("tcp", "::1", 8888, 8, 128))),
     (r"^nginx: master", "nginx", (("tcp", "0.0.0.0", 80, 6, 511), ("tcp", "0.0.0.0", 443, 7, 511),
                                   ("tcp", "0.0.0.0", 5000, 8, 511), ("tcp", "0.0.0.0", 5001, 9, 511))),
+    # the uhttpd of the Archer C7: listen_http and listen_https 0.0.0.0 of its /etc/config/uhttpd
+    (r"uhttpd .*-s 0\.0\.0\.0:443", "uhttpd", (("tcp", "0.0.0.0", 80, 3, 1024), ("tcp", "0.0.0.0", 443, 4, 1024))),
     (r"uhttpd", "uhttpd", (("tcp", "0.0.0.0", 80, 3, 1024), ("tcp", "::", 80, 4, 1024))),
     (r"dnsmasq", "dnsmasq", (("udp", "0.0.0.0", 67, 3, 0), ("udp", "0.0.0.0", 53, 4, 0), ("tcp", "0.0.0.0", 53, 5, 32))),
     (r"odhcpd", "odhcpd", (("udp", "::", 547, 7, 0),)),
@@ -149,7 +152,14 @@ DAEMONS = (
     (r"apache_proxy", "apache_proxy", (("tcp", "0.0.0.0", 8080, 4, 511), ("tcp", "0.0.0.0", 443, 5, 511))),
     (r"_thttpd_", "_thttpd_", (("tcp", "127.0.0.1", 58080, 3, 1024),)),
     (r"udhcpd", "udhcpd", (("udp", "0.0.0.0", 67, 3, 0),)),
+    # EdgeOS: the telnetd of its web UI's console (gui_telnet.service)
+    (r"telnetd -p 55523 -b 127\.0\.0\.101", "telnetd", (("tcp", "127.0.0.101", 55523, 3, 1),)),
     (r"telnetd", "telnetd", (("tcp", "0.0.0.0", 23, 3, 1),)),
+    # openbsd-inetd (refs systemd-telnet *-ss-tlnp-enabled: fd 7 and 8, backlog 128; 0.20160825 of 22.04 has
+    #   no IPv6 socket)
+    (r"^/usr/sbin/inetd$", "inetd", (("tcp", "0.0.0.0", 23, 7, 128), ("tcp", "::", 23, 8, 128))),
+    # dhclient of CentOS 7 (ref dhclient-c7-ifup-ss-ulnp: *:68 on fd 5)
+    (r"^/sbin/dhclient ", "dhclient", (("udp", "0.0.0.0", 68, 5, 0),)),
     (r"dnsProxy", "dnsProxy", (("udp", "0.0.0.0", 53, 3, 0), ("tcp", "0.0.0.0", 53, 4, 5))),
     (r"smbd", "smbd", (("tcp", "0.0.0.0", 445, 33, 50), ("tcp", "0.0.0.0", 139, 34, 50))),
     (r"nmbd", "nmbd", (("udp", "0.0.0.0", 137, 14, 0), ("udp", "0.0.0.0", 138, 15, 0))),
@@ -157,10 +167,27 @@ DAEMONS = (
 )
 
 
-def sockets(persona, ident, processes, interfaces):
+def ssh_fds(persona, ident):
+    """(listening fd of IPv4, of IPv6, fd of a session's connection) of the SSH server (refs network-dhcp
+    sshd-* and dropbear-alp-*: OpenSSH 7.4 3/4/3, 8.9 and 9.6 3/4/4, 10.0 6/7/7, dropbear 3/4/5;
+    unverified: OpenSSH 8.7 of RHEL 9 and 9.2 of Debian 12 as 8.9, the dropbear of the devices as Alpine's)."""
+    if "dropbear" in persona.ssh_profile:
+        return 3, 4, 5
+    match = re.search(r"OpenSSH_(\d+)\.(\d+)", ident.release.ssh_banner)
+    version = (int(match.group(1)), int(match.group(2))) if match else (8, 0)
+    if version >= (9, 8):
+        return 6, 7, 7
+    if version < (8, 0):
+        return 3, 4, 3
+    return 3, 4, 4
+
+
+def sockets(persona, ident, processes, interfaces, gateway=None):
     """The listening sockets of the daemons of ps, with their PID."""
     main = interfaces[0]
     out = []
+    listen4, listen6, _ = ssh_fds(persona, ident)
+    code = system.codename(persona, ident)
     for process in processes:
         command = process["COMMAND"]
         if process["TTY"] != "?" and not command.startswith("telnetd"):
@@ -169,9 +196,13 @@ def sockets(persona, ident, processes, interfaces):
             if not re.search(pattern, command):
                 continue
             for proto, address, port, fd, backlog in entries:
-                if address == "127.0.0.54" and system.codename(persona, ident) != "noble":
+                if address == "127.0.0.54" and code != "noble":
                     # the DNS proxy stub of systemd 251 and later
                     continue
+                if comm == "inetd" and address == "::" and code == "jammy":
+                    continue
+                if comm in ("sshd", "dropbear"):
+                    fd = listen4 if address == "0.0.0.0" else listen6
                 if address == "dhcp":
                     if not main.get("dynamic"):
                         continue
@@ -181,6 +212,30 @@ def sockets(persona, ident, processes, interfaces):
                             "pid": process["PID"], "comm": comm, "cmdline": command.split()[0] if command.startswith("/")
                             else command, "fd": fd, "backlog": backlog})
             break
+    init = processes[0]
+    if code == "noble":
+        # ssh.socket of 24.04: systemd holds the listening sockets and hands them to sshd (fd 3 and 4)
+        # (ref systemd-telnet ubuntu-24-04-session-ss-tanp: ("sshd",fd=3),("systemd",pid=1,fd=80), backlog 4096)
+        for entry in out:
+            if entry["comm"] == "sshd":
+                entry.update({"backlog": 4096, "also": [["systemd", init["PID"], 80 if entry["family"] == 4 else 82,
+                                                        init["COMMAND"].split()[0]]]})
+    if persona.family in ("rhel", "centos"):
+        # telnet.socket: systemd itself listens on 23, one socket for both families (ss: *:23)
+        # (unverified on CentOS 7: the fd and backlog of systemd 219)
+        out.append({"proto": "tcp", "family": 6, "address": "*", "port": 23, "pid": init["PID"], "comm": "systemd",
+                    "cmdline": init["COMMAND"].split()[0], "fd": 32 if persona.family == "rhel" else 25,
+                    "backlog": 4096 if persona.family == "rhel" else 128})
+    if main.get("dynamic") and any("NetworkManager" in p["COMMAND"] for p in processes) and persona.family != "centos":
+        # the internal DHCP client of NetworkManager: a connected socket to the server, no listener
+        # (refs nm-al9-after11s-ss-uanp, nm-d12-after11s-ss-uanp)
+        manager = next(p for p in processes if "NetworkManager" in p["COMMAND"])
+        # (the DHCP server: the gateway of the network)
+        server = gateway or main["inet"].rsplit(".", 1)[0] + ".1"
+        out.append({"proto": "udp", "family": 4, "address": f"{main['inet']}%{main['name']}", "port": 68,
+                    "peer": server, "peer_port": 67, "state": "ESTAB", "pid": manager["PID"],
+                    "comm": "NetworkManager", "cmdline": manager["COMMAND"], "fd": 26 if persona.family == "rhel" else 28,
+                    "backlog": 0})
     return out
 
 
@@ -238,8 +293,8 @@ def tool_styles(persona, ident):
         if name in applets:
             tools[name] = {"style": "busybox", "version": banner}
     if family == "tplink":
-        # the TL-WR841N has iproute2 3.0 (ss110629) as /usr/bin/ip
-        tools["ip"] = {"style": "iproute2", "version": "ss110629", "libbpf": ""}
+        # the Archer C7 has iproute2 3.3.0 as /usr/sbin/ip (ip -V: "ip utility, iproute2-ss3.3.0-1-openwrt")
+        tools["ip"] = {"style": "iproute2", "version": "ss3.3.0-1-openwrt", "libbpf": ""}
     return tools
 
 
@@ -257,7 +312,7 @@ def tool_paths(persona, ident):
             target = "busybox" if name == "netstat" else "../bin/busybox"
             found[name] = (paths[name], target)
         elif persona.family == "tplink" and name == "ip":
-            found[name] = ("usr/bin/ip", None)
+            found[name] = ("usr/sbin/ip", None)
         else:
             found[name] = (paths[name], None)
     return found
@@ -294,7 +349,19 @@ def network(persona, ident, processes):
         if iface.get("state") == "UP":
             iface["rates"] = [rng.randint(800, 6000), rng.randint(380, 1100)]
     return {"tools": tool_styles(persona, ident), "interfaces": interfaces, "gateway": gateway,
+            "session_fd": ssh_fds(persona, ident)[2], "telnet": telnet_server(persona, ident),
             "gateway_mac": gateway_mac, "manager": manager, "kernel": list(kernel), "booted_at": ident.booted_at,
-            "sockets": sockets(persona, ident, processes, interfaces), "family": family,
+            "sockets": sockets(persona, ident, processes, interfaces, gateway), "family": family,
             "resolved": any("systemd-resolved" in p["COMMAND"] for p in processes),
             "gateway_name": "gateway" if family == "centos" else "_gateway" if system.has_systemd(persona) else ""}
+
+
+def telnet_server(persona, ident):
+    """How the session of a telnet login looks in ps and ss ([shell] telnet_server, read by tpot_session):
+    inetutils (telnetd of inetd, then /bin/login -p -h; trixie's login -- user), netkit (in.telnetd of
+    telnet.socket, then login -- user), or "" (the BusyBox or vendor telnetd of a device serves it itself)."""
+    if persona.kind != "server":
+        return ""
+    if system.is_el(persona):
+        return "netkit"
+    return "inetutils-2.6" if system.codename(persona, ident) == "trixie" else "inetutils"

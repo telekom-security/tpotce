@@ -6,14 +6,16 @@ a type it does not know, so a bump that loses one would make a persona offer
 fewer host keys than its profile; zlib@openssh.com is Cowrie's own (ssh/transport.py).
 The host key algorithms (rsa-sha2-512, rsa-sha2-256 ...) must be Twisted's, sign
 with the key ssh_profiles names (SSHServerTransport._getHostKeys) and be what the
-patched factory advertises ([ssh] host_key_algorithms); run after the patch."""
+patched factory advertises ([ssh] host_key_algorithms). The key exchanges of the profiles
+(TWISTED_KEX) are Twisted's, the patched factory offers [ssh] kex_algorithms and the patched transport
+sends [ssh] server_sig_algs; run after the patch."""
 import argparse
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tpot_personas.ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, TWISTED_CIPHERS,  # noqa: E402
-                                        TWISTED_MACS, key_type)
+                                        TWISTED_KEX, TWISTED_MACS, key_type)
 
 
 def twisted_support():
@@ -38,6 +40,10 @@ def twisted_support():
             "macs": {m.decode() for m in T.supportedMACs},
             "public_keys": {k.decode() for k in T.supportedPublicKeys},
             "compressions": {c.decode() for c in T.supportedCompressions},
+            "kex": {k.decode() for k in T.supportedKeyExchanges},
+            # the patched transport replaces sendExtInfo: Twisted's server must send EXT_INFO through it
+            "ext_info": hasattr(SSHServerTransport, "sendExtInfo")
+            and "sendExtInfo" in inspect.getsource(SSHServerTransport._keySetup),
             "key_types": key_types,
             "sign_types": "signatureType" in inspect.signature(Key.sign).parameters}
 
@@ -49,7 +55,8 @@ def problems(twisted, cowrie_root):
     out = []
     for word, wanted, have in (("cipher", TWISTED_CIPHERS, twisted["ciphers"]),
                                ("mac", TWISTED_MACS, twisted["macs"]),
-                               ("host key", HOST_KEYS, twisted["public_keys"])):
+                               ("host key", HOST_KEYS, twisted["public_keys"]),
+                               ("key exchange", TWISTED_KEX, twisted["kex"])):
         out += [f"{word} not in Twisted: {name}" for name in sorted(wanted - have)]
     out += [f"host key not loaded by Cowrie (ssh/factory.py): {name}"
             for name in sorted(HOST_KEYS) if f'key == b"{name}"' not in factory]
@@ -62,6 +69,13 @@ def problems(twisted, cowrie_root):
     if ('CowrieConfig.get("ssh", "host_key_algorithms"' not in factory
             or "t.supportedPublicKeys = tpot_host_key_algorithms(self.privateKeys)" not in factory):
         out.append("host key algorithms: Cowrie (ssh/factory.py) does not advertise [ssh] host_key_algorithms")
+    if ('CowrieConfig.get("ssh", "kex_algorithms"' not in factory
+            or "t.supportedKeyExchanges = tpot_key_exchanges(t.supportedKeyExchanges)" not in factory):
+        out.append("key exchanges: Cowrie (ssh/factory.py) does not offer [ssh] kex_algorithms")
+    if not twisted.get("ext_info", False):
+        out.append("server-sig-algs: Twisted's server sends no EXT_INFO through sendExtInfo in _keySetup")
+    if 'CowrieConfig.get("ssh", "server_sig_algs"' not in transport or "def sendExtInfo(self" not in transport:
+        out.append("server-sig-algs: Cowrie (ssh/transport.py) does not send [ssh] server_sig_algs")
     if 'CowrieConfig.get("ssh", "compression")' not in factory:
         out.append("compression: Cowrie (ssh/factory.py) does not read [ssh] compression")
     out += [f"compression not in Twisted or Cowrie: {name}"
@@ -79,7 +93,8 @@ def main(argv=None, twisted=None):
         print(f"SSH support: {line}", file=sys.stderr)
     if found:
         return 1
-    print("SSH support: ciphers, MACs, host keys, host key algorithms and compressions of every profile are handled",
+    print("SSH support: ciphers, MACs, host keys, host key algorithms, key exchanges and compressions of every "
+          "profile are handled",
           flush=True)
     return 0
 

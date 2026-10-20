@@ -69,6 +69,7 @@ class Rule:
     unlock: str = ""
     offer: bool = False
     groups: Dict[str, List[str]] = field(default_factory=dict)
+    legacy: Dict[str, str] = field(default_factory=dict)
 
 
 class SchemaError(ValueError):
@@ -97,8 +98,23 @@ def load_schema(path: str = SCHEMA_PATH) -> Dict[str, Rule]:
         spec["choices"] = [{"value": str(c["value"]), "label": str(c.get("label") or c["value"]),
                             "help": str(c.get("help") or "")} for c in choices]
         spec["groups"] = _groups(key, spec)
+        spec["legacy"] = _legacy(key, spec)
         rules[key] = Rule(key=key, **spec)
     return rules
+
+
+def _legacy(key: str, spec: Dict) -> Dict[str, str]:
+    """legacy of a choice_list: {earlier name: value}, a name that is no value for one of the values."""
+    legacy = spec.get("legacy")
+    if legacy is None:
+        return {}
+    if spec.get("type") != "choice_list" or not isinstance(legacy, dict) or not legacy:
+        raise SchemaError(f"{key}: legacy is a mapping of earlier names to values, only for a choice_list")
+    out = {str(old): str(new) for old, new in legacy.items()}
+    for old, new in out.items():
+        if old in spec["values"] or new not in spec["values"]:
+            raise SchemaError(f"{key}: legacy {old} has to be no value and name one of the values")
+    return out
 
 
 def _groups(key: str, spec: Dict) -> Dict[str, List[str]]:
@@ -229,7 +245,8 @@ def check(rule: Rule, values: Dict[str, str], defaults: Dict[str, str], check_ho
     elif kind == "choice_list":
         entries = value.split()
         for entry in entries:
-            if entry not in rule.values:
+            # an earlier name of a value (legacy) is accepted too
+            if entry not in rule.values and entry not in rule.legacy:
                 out.append(Problem("error", rule.key,
                                    f'invalid value "{entry}", allowed: {" ".join(rule.values)}.'))
                 break

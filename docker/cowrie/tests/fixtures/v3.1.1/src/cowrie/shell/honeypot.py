@@ -3,10 +3,11 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Excerpt of Cowrie v3.1.1 (c17c9b73): the imports, the class line, the shell name of __init__,
-# error_prefix, showPrompt and command_not_found_message, the text
-# patch_cowrie_persona_support.py touches. The first two lines of __init__ (its def
-# line and "launcher = None") stand in for the start of __init__; the rest is verbatim.
+# Excerpt of Cowrie v3.1.1 (c17c9b73): the imports, the class line, the environment and the
+# shell name of __init__, error_prefix, showPrompt, command_not_found_message,
+# _write_shell_error and _run_pipeline, the text patch_cowrie_persona_support.py touches.
+# The first two lines of __init__ (its def line and "launcher = None") stand in for the
+# start of __init__; the rest is verbatim.
 
 from __future__ import annotations
 
@@ -23,6 +24,13 @@ class HoneyPotShell:
 
     def __init__(self, protocol, interactive=True):
         launcher = None
+        if protocol.cmdstack:
+            parent = protocol.cmdstack[-1]
+            self.environ: dict[str, str] = copy.copy(parent.environ)
+            self.exported: set[str] = copy.copy(parent.exported)
+        else:
+            self.environ = copy.copy(protocol.environ)
+            self.exported = set(protocol.environ.keys())
         # How this shell names itself in the errors it reports, as bash does
         # from $0: "-bash" for the login shell, the name as typed for bash -c
         # or a script (the launching command sets it). A non-interactive shell
@@ -97,3 +105,64 @@ class HoneyPotShell:
         # goes to the terminal as UTF-8, the way a real shell writes it.
         self.protocol.terminal.write(prompt.encode("utf-8"))
         self.protocol.ps = (prompt.encode("utf-8"), b"> ")
+
+    def _write_shell_error(
+        self, message: bytes, ops: list[dict[str, Any]] | None = None
+    ) -> None:
+        """Write an error the shell itself reports to its stderr (fd 2), with
+        ``ops`` -- the failing command's own redirections -- applied, so
+        `x 2>&1 | cat` and `( x ) 2>/dev/null` reroute it."""
+        pp = self._make_pipe(None, [], None, ops)
+        pp.errReceived(message)
+        for real_path, virtual_path in pp.redirect_real_files:
+            self.protocol.terminal.redirFiles.add((real_path, virtual_path))
+
+    def _run_pipeline(self, node: Pipeline) -> None:
+        """Run the stages left to right, each in its own child shell, the
+        stdout of one buffered as the stdin of the next, as a shell forks one
+        process per stage. The first stage reads what this shell reads and
+        the last writes where this shell writes; the pipeline's status is the
+        last stage's, as in bash without pipefail.
+
+        Stages that complete synchronously are driven by the loop here rather
+        than by nested callbacks, so a long pipeline does not grow the Python
+        stack by one frame per stage (issue #40352).
+        """
+        stages = node.stages
+        output: bytes | None = None
+
+        def stage_finished(child: HoneyPotShell) -> None:
+            nonlocal output
+            output = child.captured
+            self.last_exit_code = child.last_exit_code
+
+        def continue_from(_child: None, index: int) -> None:
+            run_from(index)
+
+        def run_from(index: int) -> None:
+            while index < len(stages):
+                last = index == len(stages) - 1
+                if last:
+                    # The last stage writes where this shell writes (terminal,
+                    # a file, or the enclosing capture sink).
+                    fds, buf = dict(self.fds), self._capture
+                else:
+                    # An intermediate stage's stdout is captured to feed the
+                    # next; its stderr still reaches this shell.
+                    fds, buf = self._capture_fds()
+                d = self.run_child(
+                    [stages[index]],
+                    fds=fds,
+                    capture_buf=buf,
+                    stdin=output,
+                    inherits_stdin=index == 0,
+                )
+                index += 1
+                finished = d.addCallback(stage_finished)
+                if not d.called:
+                    # The stage paused on a Deferred; carry on when it ends.
+                    finished.addCallback(continue_from, index)
+                    return
+            self._advance()
+
+        run_from(0)

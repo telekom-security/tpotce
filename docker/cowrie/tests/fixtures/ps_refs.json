@@ -1,0 +1,496 @@
+{
+ "source": "refs/procs.json of round 4 (ids as named) and the track C recordings (r4c:*, bb:*): ubuntu:24.04 / centos:7 with procps, openwrt/rootfs:armvirt-64-22.03.7 (BusyBox v1.35.0, musl); r4c-fix1:* recorded for fix round 1 (ubuntu:24.04 procps-ng 4.0.4, same on centos:7 3.3.10)",
+ "layout": [
+  {
+   "id": "ubuntu-24.04:ps-aux:tty80",
+   "format": [
+    "user",
+    "pid",
+    "%cpu",
+    "%mem",
+    "vsz",
+    "rss",
+    "tname",
+    "stat",
+    "start_time",
+    "bsdtime",
+    "args"
+   ],
+   "pid_width": 7,
+   "lines": [
+    "USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND",
+    "root           1  0.0  0.0   4044  3028 pts/0    Ss+  16:02   0:00 bash /r4.sh",
+    "root           8  0.0  0.0   2280  1284 pts/0    S+   16:02   0:00 sleep 100",
+    "root          10  0.0  0.0   7640  3652 pts/0    R+   16:02   0:00 ps aux"
+   ]
+  },
+  {
+   "id": "centos-7:ps-aux:notty",
+   "format": [
+    "user",
+    "pid",
+    "%cpu",
+    "%mem",
+    "vsz",
+    "rss",
+    "tname",
+    "stat",
+    "start_time",
+    "bsdtime",
+    "args"
+   ],
+   "pid_width": 7,
+   "lines": [
+    "USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND",
+    "root           1  0.0  0.0   3492  2240 ?        Ss   16:03   0:00 bash /r4.sh",
+    "root           6  0.0  0.0   2032  1072 ?        S    16:03   0:00 sleep 100",
+    "root           8  0.0  0.0   7824  2980 ?        R    16:03   0:00 ps aux"
+   ]
+  },
+  {
+   "id": "ubuntu-24.04:ps-ef:notty",
+   "format": [
+    "uid_hack",
+    "pid",
+    "ppid",
+    "c",
+    "stime",
+    "tname",
+    "time",
+    "cmd"
+   ],
+   "pid_width": 7,
+   "lines": [
+    "UID          PID    PPID  C STIME TTY          TIME CMD",
+    "root           1       0  0 16:03 ?        00:00:00 bash /r4.sh",
+    "root           7       1  0 16:03 ?        00:00:00 sleep 100",
+    "root           9       1  0 16:03 ?        00:00:00 ps -ef"
+   ]
+  },
+  {
+   "id": "ubuntu-24.04:ps-e:notty",
+   "format": [
+    "pid",
+    "tname",
+    "time",
+    "ucmd"
+   ],
+   "pid_width": 7,
+   "lines": [
+    "    PID TTY          TIME CMD",
+    "      1 ?        00:00:00 bash",
+    "      7 ?        00:00:00 sleep",
+    "      9 ?        00:00:00 ps"
+   ]
+  },
+  {
+   "id": "ubuntu-24.04:ps-o:notty",
+   "format": [
+    "pid",
+    "tty",
+    "time",
+    "cmd"
+   ],
+   "pid_width": 7,
+   "lines": [
+    "    PID TT           TIME CMD",
+    "      1 ?        00:00:00 bash /r4.sh",
+    "      7 ?        00:00:00 sleep 100",
+    "      9 ?        00:00:00 ps -o pid,tty,time,cmd"
+   ]
+  },
+  {
+   "id": "kthreads:ps-aux-head40",
+   "format": [
+    "user",
+    "pid",
+    "%cpu",
+    "%mem",
+    "vsz",
+    "rss",
+    "tname",
+    "stat",
+    "start_time",
+    "bsdtime",
+    "args"
+   ],
+   "pid_width": 5,
+   "lines": [
+    "USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND",
+    "root         1  0.0  0.4 2144312 66872 ?       Sl   14:44   0:00 /initd",
+    "root         2  0.0  0.0      0     0 ?        S    14:44   0:00 [kthreadd]",
+    "root         3  0.0  0.0      0     0 ?        S    14:44   0:00 [pool_workqueue_release]",
+    "root         4  0.0  0.0      0     0 ?        I<   14:44   0:00 [kworker/R-rcu_gp]",
+    "root         5  0.0  0.0      0     0 ?        I<   14:44   0:00 [kworker/R-sync_wq]",
+    "root         6  0.0  0.0      0     0 ?        I<   14:44   0:00 [kworker/R-kvfree_rcu_reclaim]",
+    "root         7  0.0  0.0      0     0 ?        I<   14:44   0:00 [kworker/R-slub_flushwq]",
+    "root         8  0.0  0.0      0     0 ?        I<   14:44   0:00 [kworker/R-netns]",
+    "root        10  0.0  0.0      0     0 ?        I<   14:44   0:00 [kworker/0:0H-kblockd]",
+    "root        12  0.0  0.0      0     0 ?        I    14:44   0:01 [kworker/u64:0-writeback]",
+    "root        13  0.0  0.0      0     0 ?        I<   14:44   0:00 [kworker/R-mm_percpu_wq]"
+   ]
+  },
+  {
+   "id": "kthreads:ps-ef-head40",
+   "format": [
+    "uid_hack",
+    "pid",
+    "ppid",
+    "c",
+    "stime",
+    "tname",
+    "time",
+    "cmd"
+   ],
+   "pid_width": 5,
+   "lines": [
+    "UID        PID  PPID  C STIME TTY          TIME CMD",
+    "root         1     0  0 14:44 ?        00:00:00 /initd",
+    "root         2     0  0 14:44 ?        00:00:00 [kthreadd]",
+    "root         3     2  0 14:44 ?        00:00:00 [pool_workqueue_release]",
+    "root         4     2  0 14:44 ?        00:00:00 [kworker/R-rcu_gp]",
+    "root         5     2  0 14:44 ?        00:00:00 [kworker/R-sync_wq]",
+    "root         6     2  0 14:44 ?        00:00:00 [kworker/R-kvfree_rcu_reclaim]",
+    "root         7     2  0 14:44 ?        00:00:00 [kworker/R-slub_flushwq]",
+    "root         8     2  0 14:44 ?        00:00:00 [kworker/R-netns]",
+    "root        10     2  0 14:44 ?        00:00:00 [kworker/0:0H-kblockd]",
+    "root        12     2  0 14:44 ?        00:00:01 [kworker/u64:0-events_unbound]",
+    "root        13     2  0 14:44 ?        00:00:00 [kworker/R-mm_percpu_wq]"
+   ]
+  },
+  {
+   "id": "kthreads:ps-eo-head40",
+   "format": [
+    "pid",
+    "ppid",
+    "tty",
+    "stat",
+    "comm"
+   ],
+   "pid_width": 5,
+   "lines": [
+    "  PID  PPID TT       STAT COMMAND",
+    "    1     0 ?        Sl   initd",
+    "    2     0 ?        S    kthreadd",
+    "    3     2 ?        S    pool_workqueue_release",
+    "    4     2 ?        I<   kworker/R-rcu_gp",
+    "    5     2 ?        I<   kworker/R-sync_wq",
+    "    6     2 ?        I<   kworker/R-kvfree_rcu_reclaim",
+    "    7     2 ?        I<   kworker/R-slub_flushwq",
+    "    8     2 ?        I<   kworker/R-netns",
+    "   10     2 ?        I<   kworker/0:0H-kblockd",
+    "   12     2 ?        I    kworker/u64:0-flush-254:0",
+    "   13     2 ?        I<   kworker/R-mm_percpu_wq"
+   ]
+  },
+  {
+   "id": "ssh:ubuntu-22.04:tester-shell:ps-aux-grep",
+   "format": [
+    "user",
+    "pid",
+    "%cpu",
+    "%mem",
+    "vsz",
+    "rss",
+    "tname",
+    "stat",
+    "start_time",
+    "bsdtime",
+    "args"
+   ],
+   "pid_width": 7,
+   "lines": [
+    "root           1  0.0  0.0    872   504 ?        Ss   16:13   0:00 /sbin/docker-init -- sh -c mkdir -p /run/sshd; /usr/sbin/sshd; exec sleep infinity",
+    "root          10  0.0  0.0  15328  6168 ?        Ss   16:13   0:00 sshd: /usr/sbin/sshd [listener] 0 of 10-100 startups",
+    "root         241  0.3  0.0  17972  9848 ?        Ss   16:13   0:00 sshd: tester [priv]",
+    "tester       252  0.0  0.0  18232  8764 ?        S    16:13   0:00 sshd: tester@pts/0"
+   ]
+  },
+  {
+   "id": "ssh:centos-7:root-shell+tester-shell:ps-ef",
+   "format": [
+    "uid_hack",
+    "pid",
+    "ppid",
+    "c",
+    "stime",
+    "tname",
+    "time",
+    "cmd"
+   ],
+   "pid_width": 7,
+   "lines": [
+    "UID          PID    PPID  C STIME TTY          TIME CMD",
+    "root           1       0  0 16:13 ?        00:00:00 /sbin/docker-init -- sh -c mkdir -p /run/sshd; /usr/sbin/sshd; exec sleep infinity",
+    "root           7       1  0 16:13 ?        00:00:00 sleep infinity",
+    "root          10       1  0 16:13 ?        00:00:00 /usr/sbin/sshd",
+    "root         273      10  0 16:13 ?        00:00:00 sshd: root@pts/0",
+    "root         275     273  0 16:13 pts/0    00:00:00 -bash",
+    "root         287      10  0 16:13 ?        00:00:00 sshd: tester [priv]",
+    "tester       289     287  0 16:13 ?        00:00:00 sshd: tester@pts/1",
+    "tester       290     289  0 16:13 pts/1    00:00:00 -bash",
+    "root         318       0  0 16:14 ?        00:00:00 ps -ef"
+   ]
+  },
+  {
+   "id": "r4c:ubuntu-24.04:ps-x:tty80",
+   "format": [
+    "pid",
+    "tname",
+    "stat",
+    "bsdtime",
+    "args"
+   ],
+   "pid_width": 7,
+   "lines": [
+    "    PID TTY      STAT   TIME COMMAND",
+    "      1 pts/0    Ss+    0:00 bash /long.sh",
+    "     15 pts/0    R+     0:00 ps x"
+   ]
+  }
+ ],
+ "busybox": {
+  "long": "sh -c sleep 100; : aaaaaaaaaa bbbbbbbbbb cccccccccc dddddddddd eeeeeeeeee ffffffffff gggggggggg hhhhhhhhhh",
+  "ps": "    7 root      1264 S    sh -c sleep 100; : aaaaaaaaaa bbbbbbbbbb cccccccccc ",
+  "psw": "    7 root      1264 S    sh -c sleep 100; : aaaaaaaaaa bbbbbbbbbb cccccccccc dddddddddd eeeeeeeeee ffffffffff gggggggggg hhhhhhhhh",
+  "psww": "    7 root      1264 S    sh -c sleep 100; : aaaaaaaaaa bbbbbbbbbb cccccccccc dddddddddd eeeeeeeeee ffffffffff gggggggggg hhhhhhhhhh",
+  "aux": "ps: unrecognized option: a\nBusyBox v1.35.0 (2024-07-15 22:25:54 UTC) multi-call binary.\n\nUsage: ps\n\nShow list of processes\n\n\tw\tWide output\n"
+ },
+ "cells": [
+  {
+   "id": "r4c-fix1:ubuntu-24.04:ps -l",
+   "format": [
+    "f",
+    "s",
+    "uid",
+    "pid",
+    "ppid",
+    "c",
+    "pri",
+    "ni",
+    "addr",
+    "sz",
+    "wchan",
+    "tname",
+    "time",
+    "ucmd"
+   ],
+   "pid_width": 7,
+   "lines": [
+    [
+     [
+      "F",
+      "S",
+      "UID",
+      "PID",
+      "PPID",
+      "C",
+      "PRI",
+      "NI",
+      "ADDR",
+      "SZ",
+      "WCHAN",
+      "TTY",
+      "TIME",
+      "CMD"
+     ],
+     "F S   UID     PID    PPID  C PRI  NI ADDR SZ WCHAN  TTY          TIME CMD"
+    ],
+    [
+     [
+      "4",
+      "S",
+      "0",
+      "1",
+      "0",
+      "0",
+      "80",
+      "0",
+      "-",
+      "1011",
+      "do_wai",
+      "?",
+      "00:00:00",
+      "bash"
+     ],
+     "4 S     0       1       0  0  80   0 -  1011 do_wai ?        00:00:00 bash"
+    ],
+    [
+     [
+      "4",
+      "R",
+      "0",
+      "41",
+      "1",
+      "0",
+      "80",
+      "0",
+      "-",
+      "1918",
+      "-",
+      "?",
+      "00:00:00",
+      "ps"
+     ],
+     "4 R     0      41       1  0  80   0 -  1918 -      ?        00:00:00 ps"
+    ]
+   ]
+  },
+  {
+   "id": "r4c-fix1:ubuntu-24.04:ps -F",
+   "format": [
+    "uid_hack",
+    "pid",
+    "ppid",
+    "c",
+    "sz",
+    "rss",
+    "psr",
+    "stime",
+    "tname",
+    "time",
+    "cmd"
+   ],
+   "pid_width": 7,
+   "lines": [
+    [
+     [
+      "UID",
+      "PID",
+      "PPID",
+      "C",
+      "SZ",
+      "RSS",
+      "PSR",
+      "STIME",
+      "TTY",
+      "TIME",
+      "CMD"
+     ],
+     "UID          PID    PPID  C    SZ   RSS PSR STIME TTY          TIME CMD"
+    ],
+    [
+     [
+      "root",
+      "15",
+      "1",
+      "0",
+      "1315",
+      "2476",
+      "8",
+      "19:29",
+      "?",
+      "00:00:00",
+      "su cloud-user -c sleep 100"
+     ],
+     "root          15       1  0  1315  2476   8 19:29 ?        00:00:00 su cloud-user -c sleep 100"
+    ],
+    [
+     [
+      "root",
+      "48",
+      "1",
+      "0",
+      "1914",
+      "3664",
+      "11",
+      "19:29",
+      "?",
+      "00:00:00",
+      "ps -F"
+     ],
+     "root          48       1  0  1914  3664  11 19:29 ?        00:00:00 ps -F"
+    ]
+   ]
+  },
+  {
+   "id": "r4c-fix1:ubuntu-24.04:ps -o user:20,pid,cmd",
+   "format": [
+    "user:20",
+    "pid",
+    "cmd"
+   ],
+   "pid_width": 7,
+   "lines": [
+    [
+     [
+      "USER",
+      "PID",
+      "CMD"
+     ],
+     "USER                     PID CMD"
+    ],
+    [
+     [
+      "root",
+      "15",
+      "su cloud-user -c sleep 100"
+     ],
+     "root                      15 su cloud-user -c sleep 100"
+    ]
+   ]
+  },
+  {
+   "id": "r4c-fix1:ubuntu-24.04:ps -o pid,args,comm",
+   "format": [
+    "pid",
+    "args",
+    "comm"
+   ],
+   "pid_width": 7,
+   "lines": [
+    [
+     [
+      "PID",
+      "COMMAND",
+      "COMMAND"
+     ],
+     "    PID COMMAND                     COMMAND"
+    ],
+    [
+     [
+      "15",
+      "su cloud-user -c sleep 100",
+      "su"
+     ],
+     "     15 su cloud-user -c sleep 100  su"
+    ]
+   ]
+  },
+  {
+   "id": "r4c-fix1:ubuntu-24.04:ps -o pid,cmd:10,comm",
+   "format": [
+    "pid",
+    "cmd:10",
+    "comm"
+   ],
+   "pid_width": 7,
+   "lines": [
+    [
+     [
+      "PID",
+      "CMD",
+      "COMMAND"
+     ],
+     "    PID CMD        COMMAND"
+    ],
+    [
+     [
+      "15",
+      "su cloud-user -c sleep 100",
+      "su"
+     ],
+     "     15 su cloud-u su"
+    ],
+    [
+     [
+      "83",
+      "ps -o pid,cmd:10,comm",
+      "ps"
+     ],
+     "     83 ps -o pid, ps"
+    ]
+   ]
+  }
+ ]
+}

@@ -141,7 +141,7 @@ fuENV_RULE() {
     local myKEY="$1" myTYPE="$2" myREQUIRED="$3" mySAFE="$4" mySCOPE="$5" mySERVICES="$6"
     local myVALUES="$7" myOPTIONAL="$8" myMIN="$9" myMAX="${10}" myPATTERN="${11}" myMESSAGE="${12}"
     local myDEFAULT="${13}" myINVALID="${14}" myRW_KEY="${15}" myRW_VALUES="${16}" myRW_MESSAGE="${17}"
-    local myWARN_EMPTY="${18}" myWW_KEY="${19}" myWW_VALUES="${20}" myWW_MESSAGE="${21}"
+    local myWARN_EMPTY="${18}" myWW_KEY="${19}" myWW_VALUES="${20}" myWW_MESSAGE="${21}" myLEGACY="${22}"
     local myVALUE myWHEN myIFACE myENTRY myLISTED
     myVALUE="$(fuVAL "${myKEY}")"
     [ -n "${mySCOPE}" ] && [ "${mySCOPE}" != "${TPOT_TYPE}" ] && return 0
@@ -198,7 +198,8 @@ fuENV_RULE() {
         read -r -a myENTRIES <<< "${myVALUE}"
         for myENTRY in "${myENTRIES[@]}";
           do
-            if [[ " ${myVALUES} " != *" ${myENTRY} "* ]];
+            # an earlier name of a value (legacy) is accepted too
+            if [[ " ${myVALUES} " != *" ${myENTRY} "* ]] && [[ " ${myLEGACY} " != *" ${myENTRY} "* ]];
               then
                 fuENV_ERROR "${myKEY}" "invalid value \"${myENTRY}\", allowed: ${myVALUES}."
                 break
@@ -302,7 +303,8 @@ fuENV_VALIDATE() {
         .value.warn_empty // "",
         .value.warn_when.key // "",
         ((.value.warn_when.values // []) | join(" ")),
-        .value.warn_message // ""
+        .value.warn_message // "",
+        ((.value.legacy // {}) | keys | join(" "))
       ] | map("x" + . | @sh) | join(" "))' "${myENV_SCHEMA}")" || {
         fuENV_ERROR "env.schema.yml" "cannot be read."
         return 0

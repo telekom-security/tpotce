@@ -280,7 +280,8 @@ class NetToolsTest(unittest.TestCase):
         wan = data["interfaces"][1]["inet"]
         row = [line for line in out.splitlines() if line.startswith("ESTAB")][0]
         self.assertEqual(row.split()[3], f"{wan}:22")
-        self.assertIn(f'users:(("sshd",pid={session.tpot_session_pid},fd=4))', row)
+        # dropbear's session holds the connection on fd 5 (ref network-dhcp dropbear-alp-session-root-ss-tanp-grep22)
+        self.assertIn(f'users:(("sshd",pid={session.tpot_session_pid},fd=5))', row)
         self.assertIn(f"{wan}:22", self.run_cmd(data, "netstat", ["-tn"], protocol=session)[0])
         # netstat names the process by its title (net-tools 2.10) or the program (2.0 of CentOS 7)
         for basename, name in ((False, "sshd: root@pts"), (True, "sshd")):
@@ -331,38 +332,50 @@ class NetToolsTest(unittest.TestCase):
     def test_the_session_belongs_to_the_daemon_of_the_persona(self):
         """dropbear on a dropbear device, the sshd (sshd-session from OpenSSH 9.8) of a server, with
         one PID just below the login shell of the ps list."""
-        for persona_id, ssh_version, comm, title in (
-                ("openwrt", None, "dropbear", "dropbear"),
+        # the fd of the connection: dropbear 5, OpenSSH 9.6 4, 10.0 7 (refs network-dhcp *-session-root-ss-tanp-grep22)
+        for persona_id, ssh_version, comm, title, fd in (
+                ("openwrt", None, "dropbear", "dropbear", 5),
                 ("ubuntu-noble", "OpenSSH_9.6p1 Ubuntu-3ubuntu13.14, OpenSSL 3.0.13 30 Jan 2024", "sshd",
-                 "sshd: root@pts/0"),
+                 "sshd: root@pts/0", 4),
                 ("debian-trixie", "OpenSSH_10.0p2 Debian-7, OpenSSL 3.5.1 1 Jul 2025", "sshd-session",
-                 "sshd-session: root@pts/0")):
+                 "sshd-session: root@pts/0", 7)):
             data, session, keys, processes = self.session_persona(persona_id, ssh_version=ssh_version)
             with self.subTest(persona=persona_id):
                 row = self.estab(data, session, keys)
                 self.assertEqual(len(row), 1, row)
-                self.assertIn(f'users:(("{comm}",pid={session.tpot_session_pid},fd=4))', row[0])
+                pid = session.tpot_session_pid
+                # from OpenSSH 9.8 the [priv] process of root holds it too, 8 PIDs below on Debian
+                # (ref sshd-d13-session-root-ss-tanp-grep22)
+                also = f',("{comm}",pid={pid - 8},fd={fd})' if comm == "sshd-session" else ""
+                self.assertIn(f'users:(("{comm}",pid={pid},fd={fd}){also})', row[0])
                 shell = [p["PID"] for p in processes if str(p["TTY"]).startswith("pts/")]
                 if shell:
                     self.assertEqual(session.tpot_session_pid, shell[0] - 1)
                 data["tools"]["netstat"] = {"style": "net-tools", "version": "2.10", "basename": False}
                 out = self.run_cmd(data, "netstat", ["-tnp"], keys, protocol=session)[0]
-                # net-tools 2.10: the title, PID/title cut to 19 characters
-                self.assertIn(f"ESTABLISHED {session.tpot_session_pid}/{title}"[:31], out)
+                # net-tools 2.10: the title, PID/title cut to 19 characters in a field of 20, the last column
+                # net-tools names the first process that holds it, the lowest PID: root's [priv] from 9.8
+                first, own = (pid - 8, "sshd-session: root [priv]") if comm == "sshd-session" else (pid, title)
+                fields = [line.split("ESTABLISHED ", 1)[1] for line in out.splitlines() if "ESTABLISHED " in line]
+                self.assertEqual(fields, [f"{f'{first}/{own}'[:19]:<20}"], out)
                 self.assertNotIn("/sshd", out) if comm == "dropbear" else None
 
     def test_a_telnet_session_is_always_a_connection(self):
         """A telnet session is a connection to :23 that belongs to the session's server process
-        (tpot_session: BusyBox telnetd where the persona has one, in.telnetd elsewhere), also where no
-        daemon of the persona listens on 23 (that listener is not shown: a known gap)."""
+        (tpot_session: BusyBox telnetd where the persona has one, inetd's telnetd on Debian and Ubuntu,
+        in.telnetd of telnet.socket on Red Hat), with the listener of the persona's daemon."""
         data, session, keys, _ = self.session_persona("ubuntu-noble", telnet=True)
+        keys["telnet_server"] = "inetutils"
         row = self.estab(data, session, keys)
         self.assertEqual(len(row), 1, row)
         self.assertIn(":23 ", row[0])
-        self.assertIn(f'users:(("in.telnetd",pid={session.tpot_session_pid},fd=4))', row[0])
-        self.assertNotIn(":23 ", self.run_cmd(data, "ss", ["-tlnp"], keys, protocol=session)[0])
+        # ref ubuntu-24-04-session-ss-tanp: stderr, stdout and stdin of telnetd
+        pid = session.tpot_session_pid
+        self.assertIn(f'users:(("telnetd",pid={pid},fd=2),("telnetd",pid={pid},fd=1),("telnetd",pid={pid},fd=0))',
+                      row[0])
+        self.assertIn(":23 ", self.run_cmd(data, "ss", ["-tlnp"], keys, protocol=session)[0])
         out = self.run_cmd(data, "netstat", ["-tnp"], keys, protocol=session)[0]
-        self.assertIn(f"ESTABLISHED {session.tpot_session_pid}/in.telnetd", out)
+        self.assertIn(f"ESTABLISHED {session.tpot_session_pid}/telnetd", out)
         for persona in catalog.PERSONAS:
             ident = draw(persona, 5)
             processes = persona.builder(persona, ident).processes
@@ -597,6 +610,20 @@ class NetToolsTest(unittest.TestCase):
                                  "    altname enp0s5")
         data["tools"]["ip"]["version"] = "5.3.0"
         self.assertNotIn("altname", self.run_cmd(data, "ip", ["-4", "a"])[0])
+
+    def test_ip_json_of_ipv6_addresses_has_no_qdisc_and_group(self):
+        """ip -j -6 address as its text: no qdisc and no group (iproute2 5.15.0, 6.1.0, 6.15.0 and 6.17.0,
+        refs t9.json ipj-*-addr6); -4 keeps both."""
+        data = container_network("ubuntu_24.04")
+        for iface in data["interfaces"]:
+            iface.setdefault("inet6", "fe80::42:acff:fe11:2" if not iface.get("loopback") else "::1")
+        six = json.loads(self.run_cmd(data, "ip", ["-j", "-6", "a"])[0])
+        self.assertTrue(six)
+        for entry in six:
+            self.assertEqual(list(entry), ["ifindex", "ifname", "flags", "mtu", "operstate", "txqlen", "addr_info"])
+        four = json.loads(self.run_cmd(data, "ip", ["-j", "-4", "a"])[0])
+        self.assertEqual(list(four[0]), ["ifindex", "ifname", "flags", "mtu", "qdisc", "operstate", "group", "txqlen",
+                                         "addr_info"])
 
     def test_ip_json_routes_in_the_layout_of_iproute2(self):
         """ip -j route, -j -p route, -j -6 route and -j route get as iproute2 writes them

@@ -35,6 +35,17 @@ class SelectTest(unittest.TestCase):
         self.assertEqual(message, 'COWRIE_PERSONA names "ipcam" twice, allowed: ubuntu-noble debian-trixie ipcam')
         self.assertNotIn("\n", message)
 
+    def test_an_earlier_id_is_its_persona(self):
+        ids = ["ubuntu-noble", "tplink-archer-c7"]
+        self.assertEqual(parse_selection("tplink-wr841n", ids), ["tplink-archer-c7"])
+        self.assertEqual(parse_selection("tplink-wr841n ubuntu-noble tplink-archer-c7", ids),
+                         ["tplink-archer-c7", "ubuntu-noble"])
+        with self.assertRaises(PersonaError):
+            parse_selection("tplink-wr841n tplink-wr841n", ids)
+        # an earlier ID whose persona is not in the pool stays unknown
+        with self.assertRaises(PersonaError):
+            parse_selection("tplink-wr841n", ["ubuntu-noble"])
+
     def test_choose_stays_in_selection(self):
         rng = random.Random(1)
         for _ in range(50):

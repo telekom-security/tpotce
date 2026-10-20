@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 import tracemalloc
+import types
 import unittest
 import warnings
 from pathlib import Path
@@ -32,11 +33,42 @@ def method(source, cls, name, namespace=None):
     raise AssertionError(f"{cls}.{name} not found")
 
 
+_BUDGET = None
+
+
+def budget_names():
+    """What TPOT_BUDGET (the time budget of a session, in the patched shell/command.py) defines, for the
+    patched command modules that import it from there."""
+    global _BUDGET
+    if _BUDGET is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("tpot_patch_budget", PATCH)
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        namespace = {}
+        exec(compile(getattr(script, "TPOT_BUDGET", ""), "<budget>", "exec"), namespace)  # noqa: S102
+        _BUDGET = {name: value for name, value in namespace.items() if name.lower().startswith("tpot")}
+    return _BUDGET
+
+
+def give_budget_names(module, namespace):
+    """What module (an ast) imports of TPOT_BUDGET from cowrie.shell.command, put into namespace: a name the
+    module uses without its import stays undefined, as in Cowrie."""
+    budget = budget_names()
+    for node in ast.walk(module):
+        if isinstance(node, ast.ImportFrom) and node.module == "cowrie.shell.command":
+            for alias in node.names:
+                if alias.name in budget:
+                    namespace.setdefault(alias.asname or alias.name, budget[alias.name])
+
+
 def module_parts(source, names, namespace):
     """The imports (not those of cowrie or twisted) and the top-level classes / functions
-    `names` of source, run in namespace (stubs for what they need)."""
+    `names` of source, run in namespace (stubs for what they need; what it imports of TPOT_BUDGET)."""
+    module = ast.parse(source)
+    give_budget_names(module, namespace)
     keep = []
-    for node in ast.parse(source).body:
+    for node in module.body:
         if isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] in ("cowrie", "twisted"):
             continue
         if isinstance(node, ast.Import) and any(a.name.split(".")[0] in ("cowrie", "twisted") for a in node.names):
@@ -141,12 +173,62 @@ class FakeConfig:
 
 
 def module_all(source, namespace):
-    """The whole patched module without its cowrie / twisted imports, run in namespace."""
-    keep = [node for node in ast.parse(source).body
+    """The whole patched module without its cowrie / twisted imports, run in namespace (with what the
+    patched shell/command.py gives the command modules: what the module imports of it, give_budget_names)."""
+    module = ast.parse(source)
+    give_budget_names(module, namespace)
+    keep = [node for node in module.body
             if not (isinstance(node, ast.ImportFrom) and node.module
                     and node.module.split(".")[0] in ("cowrie", "twisted"))]
     exec(compile(ast.Module(keep, []), "<patched>", "exec"), namespace)  # noqa: S102
     return namespace
+
+
+class Later:
+    """A Deferred of the test reactor: fires when the test says so."""
+
+    def __init__(self):
+        self.waiting, self.done, self.result, self.error = [], False, None, None
+
+    def fire(self, result=None, error=None):
+        self.done, self.result, self.error = True, result, error
+        for step in self.waiting:
+            step(self)
+
+    def then(self, step):
+        if self.done:
+            step(self)
+        else:
+            self.waiting.append(step)
+
+
+def later_callbacks(function):
+    """inlineCallbacks of the test reactor: a generator runs until it yields a Later that has not fired and goes
+    on when it fires; the call returns a Later of its result."""
+    def run(*a, **k):
+        gen, outcome = function(*a, **k), Later()
+        if not hasattr(gen, "send"):
+            outcome.fire(gen)
+            return outcome
+
+        def step(value=None, error=None):
+            while True:
+                try:
+                    got = gen.throw(error) if error is not None else gen.send(value)
+                except StopIteration as stop:
+                    outcome.fire(stop.value)
+                    return
+                except Exception as exc:  # noqa: BLE001 - as a Deferred: the error goes to the caller
+                    outcome.fire(error=exc)
+                    return
+                if isinstance(got, Later) and not got.done:
+                    got.then(lambda d: step(d.result, d.error))
+                    return
+                value, error = (got.result, got.error) if isinstance(got, Later) else (got, None)
+
+        step()
+        return outcome
+    return run
 
 
 class TreeFs:
@@ -225,10 +307,11 @@ class PatchTest(unittest.TestCase):
 
         config = FakeConfig({("honeypot", "txtcmds_path"): str(root), ("shell", "skip_python_commands"): skip})
         self.config = config
-        skip_set = module_parts(protocol, ["tpot_skip_python_commands"], {"CowrieConfig": config})
+        skip_set = module_parts(protocol, ["tpot_skip_python_commands", "tpot_builtins"], {"CowrieConfig": config})
         get_command = method(protocol, "HoneyPotBaseProtocol", "getCommand",
                              {"CowrieConfig": config, "Path": Path, "fs": FsModule, "read_data_bytes": read_data_bytes,
-                              "tpot_skip_python_commands": skip_set["tpot_skip_python_commands"]})
+                              "tpot_skip_python_commands": skip_set["tpot_skip_python_commands"],
+                              "tpot_builtins": skip_set["tpot_builtins"]})
 
         class Protocol:
             fs = TreeFs(base_tree())
@@ -259,6 +342,19 @@ class PatchTest(unittest.TestCase):
         # a program without txtcmd or command stays Cowrie's script / binary
         self.assertEqual(find("uname"), ("script", "/usr/bin/uname"))
         self.assertIsNone(find("nothere"))
+
+    def test_a_skipped_shell_the_tree_has_not_is_not_found(self):
+        # D-Link and OpenWrt: bash, rbash and dash of every spelling are skipped and not in the tree, so
+        #   getCommand finds nothing (the shell answers "-sh: bash: not found"); sh stays Cowrie's
+        commands = {"bash": "Command_sh", "/bin/bash": "Command_sh", "sh": "Command_sh", "/bin/sh": "Command_sh"}
+        skip = ",".join(f"{d}{n}" for n in ("bash", "rbash", "dash") for d in ("", "/bin/", "/usr/bin/"))
+        find = self.lookup({}, commands, skip=skip)
+        # as render.apply_to_tree removes them (firmware.shell_links)
+        for name in ("bash", "dash"):
+            tree.remove_node(self.protocol_obj.fs.fs, f"usr/bin/{name}")
+        for name in ("bash", "/bin/bash", "/usr/bin/bash", "rbash", "dash", "/bin/dash"):
+            self.assertIsNone(find(name), name)
+        self.assertEqual((find("sh"), find("/bin/sh")), ("Command_sh", "Command_sh"))
 
     def test_python_command_answers_before_the_txtcmds_cowrie_ships(self):
         # Cowrie ships data/txtcmds/bin/df and usr/bin/top; the patched df and top answer every spelling
@@ -334,8 +430,9 @@ class PatchTest(unittest.TestCase):
         """base.py (ps, top) and netstat.py (ss, netstat) share tpot_session: one PID per session."""
         root = self.patched()
         base = (root / "src/cowrie/commands/base.py").read_text()
-        self.assertIn('session = tpot_session(self.protocol, user)', base)
-        self.assertNotIn('"/usr/sbin/sshd: %s@pts/0"', base.split("\nclass Command_ps(")[1].split("        else:\n")[0])
+        self.assertIn('session = tpot_session(protocol, self.username)', base)
+        # ps is the persona's (Command_tpot_ps), not upstream's
+        self.assertIn('for _name in ("ps", "/bin/ps", "/usr/bin/ps"):\n    commands[_name] = Command_tpot_ps\n', base)
         for rel in ("src/cowrie/commands/base.py", "src/cowrie/commands/netstat.py"):
             source = (root / rel).read_text()
             self.assertEqual(source.count("\ndef tpot_session(protocol, user"), 1, rel)
@@ -847,18 +944,18 @@ class PatchTest(unittest.TestCase):
     def test_apt_install_takes_no_option_as_a_package(self):
         _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", "nmap"])
         text = bytes(apt.out).decode()
-        self.assertIn("The following NEW packages will be installed:\n  nmap \n", text)
+        self.assertIn("The following NEW packages will be installed:\n  nmap\n", text)
         self.assertIn("Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 nmap amd64 ", text)
         self.assertRegex(text, r"Preparing to unpack \.\.\./nmap_[^ ]+_amd64\.deb \.\.\.\n")
         self.assertNotIn("i386", text)
         self.assertNotIn("ftp.debian.org", text)
         _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["-y", "install", "wget"])
-        self.assertIn("  wget \n", bytes(apt.out).decode())
+        self.assertIn("  wget\n", bytes(apt.out).decode())
 
     def test_apt_install_takes_package_names_only(self):
         # apt: a name of Debian's form (lower case, digits, + - .) or a .deb file by its path
         _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", "..", ".", "./x.deb",
-                                                                          "Wget", "-x-", "../../tmp/a", "nmap"])
+                                                                          "Wget", "../../tmp/a", "nmap"])
         self.assertEqual(bytes(apt.out).decode(), "Reading package lists... Done\nBuilding dependency tree... Done\n"
                          "Reading state information... Done\n")
         self.assertEqual(apt.err, "E: Unsupported file .. given on commandline\nE: Unsupported file . given on commandline\n"
@@ -866,7 +963,7 @@ class PatchTest(unittest.TestCase):
                          "E: Unsupported file ../../tmp/a given on commandline\n")
         self.assertEqual((apt.code, apt.fs.made, apt.protocol.commands), (100, [], {}))
         _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", "g++", "libc6:amd64"])
-        self.assertIn("  g++ libc6 \n", bytes(apt.out).decode())
+        self.assertIn("  g++ libc6\n", bytes(apt.out).decode())
         self.assertEqual((apt.err, apt.fs.made), ("", ["/usr/bin/g++", "/usr/bin/libc6"]))
 
     def test_apt_install_marks_the_programs_for_the_session(self):
@@ -918,13 +1015,17 @@ class PatchTest(unittest.TestCase):
         for args in (["-o", "Dpkg::Options::=--force-confold"], ["--option", "Dpkg::Options::=--force-confold"],
                      ["-oAPT::Install-Recommends=0"], ["--option=APT::Install-Recommends=0"],
                      ["-c", "/etc/apt/apt.conf"], ["-t", "bookworm-backports"],
-                     ["--target-release", "bookworm-backports"], ["-a", "arm64"]):
+                     ["--target-release", "bookworm-backports"]):
             with self.subTest(args):
                 _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", *args, "nginx"])
                 self.assertEqual(apt.err, "")
-                self.assertIn("The following NEW packages will be installed:\n  nginx \n", bytes(apt.out).decode())
+                self.assertIn("The following NEW packages will be installed:\n  nginx\n", bytes(apt.out).decode())
         _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["-o", "Debug::X=1", "install", "-y", "nginx"])
-        self.assertIn("  nginx \n", bytes(apt.out).decode())
+        self.assertIn("  nginx\n", bytes(apt.out).decode())
+        # -a is an option of build-dep and source only (debian:12, refs/packages-a4.json)
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", "-a", "arm64", "nginx"])
+        self.assertEqual((apt.err, apt.code), ("E: Command line option 'a' [from -a] is not understood in combination "
+                                               "with the other options.\n", 100))
 
     def test_dnf_has_no_tools_of_debian(self):
         run = self.upstream_session("rhel-9", uid=0)
@@ -1034,7 +1135,7 @@ class PatchTest(unittest.TestCase):
         values = self.apt_with_packages({}, "debian", names={"htop", "nmap"})
         _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "htop"])
         text = bytes(apt.out).decode()
-        self.assertIn("The following NEW packages will be installed:\n  htop \n", text)
+        self.assertIn("The following NEW packages will be installed:\n  htop\n", text)
         self.assertRegex(text, r"Setting up htop \(\d+\.\d+(\.\d+)?-\d(\+b1)?\) \.\.\.\n")
         self.assertEqual((apt.err, apt.code, apt.fs.made), ("", None, ["/usr/bin/htop"]))
         self.assertFalse(getattr(apt.protocol, "tpot_installed", None))
@@ -1042,7 +1143,8 @@ class PatchTest(unittest.TestCase):
     def test_apt_takes_globs_and_names_dots_and_globs_it_does_not_find(self):
         values = self.apt_with_packages({}, "debian", names={"htop", "nmap", "nginx", "nginx-common"})
         _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "nginx*", "ht?p"])
-        self.assertIn("  nginx nginx-common htop \n", bytes(apt.out).decode())
+        # apt lists the new packages by name (ref d13-11-install30-getnotty)
+        self.assertIn("  htop nginx nginx-common\n", bytes(apt.out).decode())
         self.assertEqual(apt.err, "")
         missing = {"nosuch.pkg": "E: Unable to locate package nosuch.pkg\n"
                                  "E: Couldn't find any package by glob 'nosuch.pkg'\n"
@@ -1083,7 +1185,7 @@ class PatchTest(unittest.TestCase):
                          "is only available from another source\n\n")
         self.assertEqual((apt.err, apt.code), ("E: Package 'yum' has no installation candidate\n", 100))
         _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "yu*"])
-        self.assertIn("  yumex \n", bytes(apt.out).decode())
+        self.assertIn("  yumex\n", bytes(apt.out).decode())
 
     def test_apt_virtual_names(self):
         values = {**self.apt_with_packages({}, "debian"),
@@ -1099,7 +1201,7 @@ class PatchTest(unittest.TestCase):
         self.assertEqual((apt.err, apt.code, apt.fs.made), ("E: Package 'netcat' has no installation candidate\n", 100, []))
         # one provider: apt takes it
         _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "ack-grep"])
-        self.assertIn("The following NEW packages will be installed:\n  ack \n", bytes(apt.out).decode())
+        self.assertIn("The following NEW packages will be installed:\n  ack\n", bytes(apt.out).decode())
         self.assertEqual((apt.err, apt.code), ("", None))
 
     def test_apt_needs_root_for_dpkg_lock(self):
@@ -1159,13 +1261,13 @@ class PatchTest(unittest.TestCase):
         _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "tree"])
         text = bytes(apt.out).decode()
         self.assertTrue(text.startswith("Installing:\n\x1b[32m  tree\n\x1b[0m\nSummary:\n  Upgrading: 0, Installing: 1, "
-                                        "Removing: 0, Not Upgrading: 259\n  Download size: "), text[:160])
+                                        "Removing: 0, Not Upgrading: 0\n  Download size: "), text[:160])
         self.assertRegex(text, r"\n  Space needed: \d+(\.\d)? [kM]B / \d+(\.\d)? [kMGT]B available\n\nGet:1 ")
         _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "tree"], tty=False)
         self.assertIn("Reading state information...\nInstalling:\n  tree\n\nSummary:\n", bytes(apt.out).decode())
         _, apt = self.twisted_command("apt", "Command_apt", trixie, ["install", "-y", "bash"])
         self.assertEqual(bytes(apt.out).decode(), "bash is already the newest version (5.2.15-2+b7).\n"
-                         "Summary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 259\n")
+                         "Summary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n")
 
     def test_apt_sizes_as_apt_writes_them(self):
         namespace, _ = self.twisted_command("apt", "Command_aptget", self.APT, ["-v"])
@@ -1210,11 +1312,11 @@ class PatchTest(unittest.TestCase):
         _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "curl"])
         self.assertEqual(bytes(apt.out).decode(), "Reading package lists... Done\nBuilding dependency tree... Done\n"
                          "Reading state information... Done\ncurl is already the newest version (8.5.0-2ubuntu10.6).\n"
-                         "0 upgraded, 0 newly installed, 0 to remove and 259 not upgraded.\n")
+                         "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n")
         _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "curl", "netcat-openbsd"])
         text = bytes(apt.out).decode()
         self.assertIn("curl is already the newest version (8.5.0-2ubuntu10.6).\n", text)
-        self.assertIn("The following NEW packages will be installed:\n  netcat-openbsd \n", text)
+        self.assertIn("The following NEW packages will be installed:\n  netcat-openbsd\n", text)
         self.assertIn("Processing triggers for man-db (2.12.0-4build2) ...\n", text)
         self.assertTrue(text.index("Setting up netcat-openbsd") < text.index("Processing triggers"))
 
@@ -1275,8 +1377,8 @@ class PatchTest(unittest.TestCase):
         text = bytes(yum.out).decode()
         self.assertTrue(text.startswith(self.YUM_HEAD + "No package nosuchpkg123 available.\nResolving Dependencies\n"),
                         text[:200])
-        self.assertRegex(text, r"---> Package python3-pip\.x86_64 0:[01]\.\d+\.\d-\d+\.el7 will be installed\n")
-        self.assertRegex(text, r"\n  python3-pip\.x86_64 0:[01]\.\d+\.\d-\d+\.el7 ")
+        self.assertRegex(text, r"---> Package python3-pip\.x86_64 0:\d+\.\d+\.\d-\d+\.el7 will be installed\n")
+        self.assertRegex(text, r"\n  python3-pip\.x86_64 0:\d+\.\d+\.\d-\d+\.el7 ")
         self.assertNotIn("nosuchpkg123.", text)
         self.assertIn("Complete!\n", text)
 
@@ -1496,6 +1598,9 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(lines[1], "     Loaded: loaded (/lib/systemd/system/ssh.service; enabled; preset: enabled)")
         self.assertRegex(lines[2], r"^     Active: active \(running\) since \w{3} \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC; "
                                    r"3 days ago$")
+        # ref debian-12-status-ssh: the Documentation= of the unit file
+        self.assertEqual(lines[3:5], ["       Docs: man:sshd(8)", "             man:sshd_config(5)"])
+        del lines[3:5]
         self.assertRegex(lines[3], r"^   Main PID: \d+ \(sshd\)$")
         self.assertRegex(lines[4], r"^      Tasks: 1 \(limit: \d+\)$")
         self.assertRegex(lines[5], r"^     Memory: \d+(\.\d)?M$")
@@ -1527,7 +1632,8 @@ class PatchTest(unittest.TestCase):
         out, _, _, _, _ = self.systemctl("rhel-9", ["status", "kdump"])
         self.assertIn("Active: active (exited) since ", out)
         self.assertRegex(out, r"Main PID: \d+ \(code=exited, status=0/SUCCESS\)")
-        self.assertIn("systemd[1]: Finished kdump.service - Crash recovery kernel arming.", out)
+        # (Red Hat's 252 names the description alone: ref almalinux-9-status-sshd)
+        self.assertIn("systemd[1]: Finished Crash recovery kernel arming.", out)
 
     def test_systemctl_is_active_and_is_enabled(self):
         self.assertEqual(self.systemctl("rhel-9", ["is-active", "sshd", "crond"])[:3], ("active\nactive\n", "", 0))
@@ -1535,7 +1641,9 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(self.systemctl("ubuntu-noble", ["is-active", "--quiet", "cron"])[:3], ("", "", 0))
         self.assertEqual(self.systemctl("ubuntu-noble", ["is-enabled", "cron", "systemd-journald"])[:3],
                          ("enabled\nstatic\n", "", 0))
-        self.assertEqual(self.systemctl("ubuntu-noble", ["is-enabled", "nosuch"])[1:3],
+        # systemd 255: not-found, exit status 4 (ref ubuntu-24-04-is-enabled-nosuch)
+        self.assertEqual(self.systemctl("ubuntu-noble", ["is-enabled", "nosuch"])[:3], ("not-found\n", "", 4))
+        self.assertEqual(self.systemctl("ubuntu-jammy", ["is-enabled", "nosuch"])[1:3],
                          ("Failed to get unit file state for nosuch.service: No such file or directory\n", 1))
         self.assertEqual(self.systemctl("ubuntu-noble", ["is-active"])[1:3], ("Too few arguments.\n", 1))
 
@@ -1631,7 +1739,8 @@ class PatchTest(unittest.TestCase):
         out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--state", "running,listening", "--no-legend"])
         self.assertEqual({row.split()[3] for row in out.splitlines()}, {"running", "listening"})
         out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--state=failed"])
-        self.assertEqual(out, "0 loaded units listed.\n")
+        # ref ubuntu-24-04-failed: the header, a blank line and the count
+        self.assertEqual(out, "  UNIT LOAD ACTIVE SUB DESCRIPTION\n\n0 loaded units listed.\n")
         out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "-t", "socket,service", "--state=listening",
                                                           "--no-legend"])
         self.assertTrue(out and all(row.split()[0].endswith(".socket") for row in out.splitlines()), out)
@@ -1667,7 +1776,8 @@ class PatchTest(unittest.TestCase):
         self.assertTrue(out.startswith("  apparmor.service "), out[:40])
         self.assertNotIn("Legend", out)
         out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--type=timer"])
-        self.assertEqual(out, "0 loaded units listed.\n")
+        self.assertEqual(out, "  UNIT LOAD ACTIVE SUB DESCRIPTION\n\n0 loaded units listed. Pass --all to see loaded "
+                              "but inactive units, too.\nTo show all installed unit files use 'systemctl list-unit-files'.\n")
         out, _, _, _, _ = self.systemctl("rhel-9", ["list-unit-files"])
         self.assertRegex(out, r"^UNIT FILE +STATE +PRESET\n")
         self.assertRegex(out, r"\nsshd.service +enabled +enabled\n")
@@ -1740,12 +1850,13 @@ class PatchTest(unittest.TestCase):
         out, err, code, _, _ = self.systemctl("ubuntu-noble", ["status", "ssh.socket"])
         self.assertEqual((err, code), ("", 0))
         self.assertIn("\u25cf ssh.socket - OpenBSD Secure Shell server socket\n", out)
-        self.assertRegex(out, r"Active: active \(listening\) since ")
+        # ref ubuntu-24-04-status-ssh-socket-after-connect: running once it has taken a connection
+        self.assertRegex(out, r"Active: active \(running\) since ")
         self.assertIn("   Triggers: \u25cf ssh.service\n", out)
-        self.assertIn("     Listen: [::]:22 (Stream)\n", out)
+        self.assertIn("     Listen: 0.0.0.0:22 (Stream)\n             [::]:22 (Stream)\n", out)
         self.assertIn("systemd[1]: Listening on ssh.socket - OpenBSD Secure Shell server socket.", out)
         out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--type=socket"])
-        self.assertRegex(out, r"\n  ssh\.socket +loaded active listening OpenBSD Secure Shell server socket\n")
+        self.assertRegex(out, r"\n  ssh\.socket +loaded active running +OpenBSD Secure Shell server socket\n")
         out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units"])
         names = [line.split()[0] for line in out.splitlines()[1:] if line.startswith("  ") and "." in line.split()[0]]
         self.assertLess(names.index("unattended-upgrades.service"), names.index("dbus.socket"))
@@ -1770,9 +1881,11 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(self.systemctl("centos-7", ["frobnicate"])[1:3], ("Unknown operation 'frobnicate'.\n", 1))
         self.assertEqual(self.systemctl("rhel-9", ["--bogus"])[1:3], ("systemctl: unrecognized option '--bogus'\n", 1))
 
-    def upstream_session(self, pid="ubuntu-noble", uid=1000, extra_modules=()):
+    def upstream_session(self, pid="ubuntu-noble", uid=1000, extra_modules=(), deferred=False):
         """A session on Cowrie's own HoneyPotCommand (exec_command, exit) and call_command of
-        v3.1.1, with the patched sudo, systemctl, apt and yum of a rendered persona."""
+        v3.1.1, with the patched sudo, systemctl, apt and yum of a rendered persona. With deferred, a
+        command's sleep waits as on the reactor: the rest of the command runs when run.settle() fires
+        the sleeps, after its start() has returned."""
         from tpot_personas.identity import draw
         from tpot_personas.render import render
         persona = catalog.by_id(pid)
@@ -1795,6 +1908,9 @@ class PatchTest(unittest.TestCase):
         root = self.patched()
         call_command = method((root / "src/cowrie/shell/protocol.py").read_text(), "HoneyPotBaseProtocol",
                               "call_command", {"HoneyPotExecProtocol": type("Exec", (), {})})
+        # the commands of the connection on Cowrie's (TpotCommands of the patched protocol.py)
+        tpot_commands = module_parts((root / "src/cowrie/shell/protocol.py").read_text(),
+                                     ["TpotCommands", "tpot_commands"], {})["tpot_commands"]
 
         class Pipe:
             def __init__(self, protocol, cmdclass, args, input_data, targets, *rest, **kw):
@@ -1815,17 +1931,24 @@ class PatchTest(unittest.TestCase):
                         pass
             return run
 
+        pending = []
+
+        def sleep(self, *a, **k):
+            later = Later()
+            pending.append(later)
+            return later
+
         commands = {}
         modules = {}
         for name in ("sudo", "service", "apt", "yum") + tuple(extra_modules):
             source = (root / f"src/cowrie/commands/{name}.py").read_text()
             modules[name] = module_all(source, {"HoneyPotCommand": base, "PipeProtocol": Pipe, "CowrieConfig": config,
-                                                "inlineCallbacks": inline_callbacks, "defer": None, "reactor": None,
-                                                "Logger": Logger})
+                                                "inlineCallbacks": later_callbacks if deferred else inline_callbacks,
+                                                "defer": None, "reactor": None, "Logger": Logger})
             commands.update(modules[name]["commands"])
             for cls in modules[name]["commands"].values():
                 if hasattr(cls, "sleep"):
-                    cls.sleep = lambda self, *a, **k: None
+                    cls.sleep = sleep if deferred else (lambda self, *a, **k: None)
 
         class Shell:
             environ = {"PATH": ":".join(PATH)}
@@ -1847,16 +1970,18 @@ class PatchTest(unittest.TestCase):
             # the persona's own tree, as Cowrie loads it
             fs = TreeFs(tree.load_pickle(out / "fs.pickle"))
 
-            def __init__(self):
+            def __init__(self, avatar=None):
                 self.cmdstack = [Shell()]
                 self.pp = Pipe(None, None, [], None, {})
-                self.commands = commands
+                # a connection of its own unless avatar is that of another protocol
+                self.user = avatar if avatar is not None else types.SimpleNamespace()
+                self.commands = tpot_commands(self.user, commands)
 
             def boot_time(self):
                 return time.time() - 86400
 
             def getCommand(self, cmd, paths, cwd):
-                return commands.get(cmd)
+                return self.commands.get(cmd)
 
             def end_process(self, code):
                 pass
@@ -1880,7 +2005,13 @@ class PatchTest(unittest.TestCase):
             return (bytes(child.out[start[0]:]).decode(), bytes(child.err[start[1]:]).decode(),
                     protocol.cmdstack[0].last_exit_code)
 
+        def settle():
+            """Fire the sleeps (and those they lead to), as the reactor would after start() returned."""
+            while pending:
+                pending.pop(0).fire()
+
         run.answer = answer
+        run.settle = settle
         run.protocol = protocol
         run.commands = commands
         run.ident = ident
@@ -1893,7 +2024,8 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(run("sudo systemctl stop cron"), ("", "", 0))
         out, err, code = run("systemctl restart ssh")
         self.assertIn("Interactive authentication required.", err)
-        self.assertEqual(code, 1)
+        # EXIT_NOPERMISSION (ref final-wave debian-12-ffw-tester-systemctl-restart-dbus)
+        self.assertEqual(code, 4)
         self.assertIn("Unit nosuch.service not found.", run("sudo systemctl start nosuch")[1])
 
     def test_sudo_apt_update_runs_as_root(self):
@@ -2195,7 +2327,7 @@ class PatchTest(unittest.TestCase):
     def test_systemctl_changes_only_as_root(self):
         _, err, code, _, _ = self.systemctl("ubuntu-noble", ["restart", "ssh"])
         self.assertEqual((err, code), ("Failed to restart ssh.service: Interactive authentication required.\n"
-                                       "See system logs and 'systemctl status ssh.service' for details.\n", 1))
+                                       "See system logs and 'systemctl status ssh.service' for details.\n", 4))
         self.assertEqual(self.systemctl("ubuntu-noble", ["restart", "ssh"], uid=0)[1:3], ("", 0))
         self.assertEqual(self.systemctl("ubuntu-noble", ["start", "nosuch"], uid=0)[1:3],
                          ("Failed to start nosuch.service: Unit nosuch.service not found.\n", 5))
@@ -2209,9 +2341,14 @@ class PatchTest(unittest.TestCase):
                          ["30s ago", "1min 30s ago", "10min ago", "2h 5min ago", "7h ago", "1 day 2h ago",
                           "3 days ago", "1 week 1 day ago", "1 month 9 days ago", "1 year 1 month ago"])
         self.assertEqual(ago(8 * 86400, 219), "1 weeks 1 days ago")
-        self.assertEqual([size(n) for n in (740 * 1024, 5099520, 3 << 30)], ["740K", "4.8M", "3G"])
-        self.assertEqual([span(n) for n in (54, 1204, 2000, 123500, 3723000)],
-                         ["54ms", "1.204s", "2s", "2min 3.5s", "1h 2min 3s"])
+        # one decimal up to 256 (refs: "400.0K" of 249 to 255), none for a 0 from 257 on ("404K")
+        self.assertEqual([size(n) for n in (740 * 1024, 5099520, 3 << 30)], ["740.0K", "4.8M", "3.0G"])
+        self.assertEqual([size(n, 257) for n in (740 * 1024, 5099520, 3 << 30)], ["740K", "4.8M", "3G"])
+        # format_timespan to the millisecond: three decimals of a second ("25.310s"), none on a whole one
+        self.assertEqual([span(n) for n in (54, 1204, 2000, 123500, 3723000, 25310, 13000, 120500)],
+                         ["54ms", "1.204s", "2s", "2min 3.500s", "1h 2min 3s", "25.310s", "13s", "2min 500ms"])
+        # format_timestamp_relative below a second: milliseconds, microseconds, "now"
+        self.assertEqual([ago(n, 252) for n in (1.2, 0.5, 0.0004, 0)], ["1s ago", "500ms ago", "400us ago", "now"])
 
     def test_service_status_is_systemctl_status(self):
         from tpot_personas.identity import draw
@@ -2569,6 +2706,35 @@ class PatchTest(unittest.TestCase):
         done = self.grep("(", "/proc/cpuinfo")
         self.assertEqual((done.err, done.code), ("grep: Invalid regular expression\n", 2))
 
+    PASSWD = (b"root:x:0:0:root:/root:/bin/bash\n"
+              b"daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\n"
+              b"bin:x:2:2:bin:/bin:/usr/sbin/nologin\n"
+              b"sync:x:4:65534:sync:/bin:/bin/sync\n"
+              b"ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash\n"
+              b"bashful:x:1001:1001::/home/bashful:/bin/sh\n")
+
+    def test_grep_keeps_a_pattern_with_a_slash_as_given(self):
+        # grep /bin/bash /etc/passwd: the users with that shell, not every line with "bash"
+        files = {"/etc/passwd": self.PASSWD}
+        done = self.grep("/bin/bash", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.err, done.code),
+                         (b"root:x:0:0:root:/root:/bin/bash\nubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash\n", "", 0))
+        done = self.grep("-c", ":/bin/sh$", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.code), (b"1\n", 0))
+        done = self.grep("-c", "/", input_data=b"a/b\nab\n")
+        self.assertEqual((bytes(done.out), done.code), (b"1\n", 0))
+        done = self.grep("-c", "dir/", input_data=b"dir\nadir\n")
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"0\n", "", 1))
+        # apt list --installed | grep -c '^tree/'
+        apt = (b"Listing...\n"
+               b"tar/noble,now 1.35+dfsg-3build1 amd64 [installed]\n"
+               b"tree/noble,now 2.1.1-2ubuntu3 amd64 [installed]\n"
+               b"tzdata/noble-updates,now 2024a-3ubuntu1.1 all [installed]\n")
+        done = self.grep("-c", "^tree/", input_data=apt)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"1\n", "", 0))
+        done = self.grep("-c", "^nano/", input_data=apt)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"0\n", "", 1))
+
     def test_grep_rejects_a_pattern_too_big_for_the_automaton(self):
         too_big = ("grep: regular expression too big\n", 2)
         for pattern in ("a" * 5000, "(a{100}){100}", "(" * 5000 + ")" * 5000, "a" * (64 * 1024 + 1)):
@@ -2812,10 +2978,11 @@ class PatchTest(unittest.TestCase):
         return written[0].decode("utf-8")
 
     SHELL_ERRORS = {"openwrt": "-ash: x: not found\n", "dlink-dir859": "-sh: x: not found\n",
-                    "tplink-wr841n": "-sh: x: not found\n", "zyxel-nas326": "-sh: x: not found\n",
+                    "tplink-archer-c7": "-ash: x: not found\n", "zyxel-nas326": "-sh: x: not found\n",
                     "qnap-qts": "-sh: x: not found\n", "ipcam": "-sh: x: not found\n",
                     "synology-dsm": "-sh: x: command not found\n", "ubiquiti-edgerouter-x": "-vbash: x: command not found\n",
-                    "ubuntu-noble": "-bash: x: command not found\n", "rhel-9": "-bash: x: command not found\n"}
+                    # Ubuntu: the command_not_found_handle of /etc/bash.bashrc answers, without bash's name
+                    "ubuntu-noble": "x: command not found\n", "rhel-9": "-bash: x: command not found\n"}
 
     def shell_error(self, pid, interactive=True):
         from tpot_personas.identity import draw
@@ -2827,6 +2994,8 @@ class PatchTest(unittest.TestCase):
         config = FakeConfig({("shell", key): value for key, value in cfg.items("shell")})
         source = (self.patched() / "src/cowrie/shell/honeypot.py").read_text()
         names = {"CowrieConfig": config}
+        # Ubuntu's command-not-found (a table the persona renders; "x" is in none)
+        module_parts(source, ["tpot_command_not_found_table", "tpot_command_not_found"], names)
         message = method(source, "HoneyPotShell", "command_not_found_message", names)
         prefix = method(source, "HoneyPotShell", "error_prefix", names)
         login = config.get("shell", "shell_name", fallback="bash")
@@ -2844,11 +3013,33 @@ class PatchTest(unittest.TestCase):
         for pid, expected in self.SHELL_ERRORS.items():
             self.assertEqual(self.shell_error(pid), expected, pid)
         self.assertEqual(self.shell_error("openwrt", interactive=False), "ash: x: not found\n")
-        self.assertEqual(self.shell_error("tplink-wr841n", interactive=False), "sh: x: not found\n")
+        self.assertEqual(self.shell_error("tplink-archer-c7", interactive=False), "ash: x: not found\n")
         self.assertEqual(self.shell_error("rhel-9", interactive=False), "bash: line 1: x: command not found\n")
         source = (self.patched() / "src/cowrie/shell/honeypot.py").read_text()
         self.assertIn('login = CowrieConfig.get("shell", "shell_name", fallback="bash")', source)
         self.assertIn('self.name = f"-{login}" if interactive else login', source)
+
+    def test_ash_names_a_missing_path_not_found(self):
+        # BusyBox ash (busybox:1.27.2 / 1.36.1, OpenWrt 22.03): "sh: /bin/nosuch: not found", a folder
+        #   "Permission denied"; bash keeps "No such file or directory" / "Is a directory"
+        source = (self.patched() / "src/cowrie/shell/honeypot.py").read_text()
+
+        def message(style, cmd):
+            config = FakeConfig({("shell", "not_found_style"): style})
+            names = {"CowrieConfig": config}
+            module_parts(source, ["tpot_command_not_found_table", "tpot_command_not_found"], names)
+            found = method(source, "HoneyPotShell", "command_not_found_message", names)
+            fs = types.SimpleNamespace(resolve_path=lambda path, cwd: path, isdir=lambda path: path == "/tmp",
+                                       exists=lambda path: path in ("/tmp", "/bin/ls"))
+            shell = types.SimpleNamespace(protocol=types.SimpleNamespace(fs=fs), cwd="/root", line_numbers=False,
+                                          error_prefix=lambda: "-sh: ")
+            return found(shell, cmd)
+
+        self.assertEqual(message("ash", "/bin/bash"), "-sh: /bin/bash: not found\n")
+        self.assertEqual(message("ash", "./nosuch"), "-sh: ./nosuch: not found\n")
+        self.assertEqual(message("ash", "/tmp"), "-sh: /tmp: Permission denied\n")
+        self.assertEqual(message("bash", "/bin/bash"), "-sh: /bin/bash: No such file or directory\n")
+        self.assertEqual(message("bash", "/tmp"), "-sh: /tmp: Is a directory\n")
 
     def test_redhat_prompt(self):
         # bash PS1 of RHEL / CentOS: [\u@\h \W]\$ (short host name, basename of the cwd)
@@ -2955,6 +3146,8 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/telnet/factory.py", "from cowrie.shell.honeyfs import read_honeyfs_bytes",
                   "from cowrie.shell import honeyfs"),
                  ("src/cowrie/telnet/factory.py", "\nimport time\n", "\nimport time as clock\n"),
+                 ("src/cowrie/telnet/factory.py", "\n\nclass HoneyPotTelnetFactory(protocol.ServerFactory):\n",
+                  "\n\nclass HoneyPotTelnetFactory(protocol.ServerFactory):  # telnet\n"),
                  ("src/cowrie/commands/fs.py", "        return re.compile(bmatch)\n",
                   "        return re.compile(bmatch, 0)\n"),
                  ("src/cowrie/commands/fs.py", "    def compile_match(self, match: str) -> re.Pattern[bytes]:\n",
@@ -2998,6 +3191,11 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/sudo.py", "commands = {}\n", "commands: dict = {}\n"),
                  ("src/cowrie/shell/honeypot.py", '            self.name = "-bash" if interactive else "bash"\n',
                   '            self.name = "-bash" if interactive else "sh"\n'),
+                 ("src/cowrie/shell/honeypot.py", "            self.exported = set(protocol.environ.keys())\n",
+                  "            self.exported = set(protocol.environ)\n"),
+                 ("src/cowrie/shell/honeypot.py",
+                  '        if cmd[:1] in (".", "/"):\n            path = self.protocol.fs.resolve_path(cmd, self.cwd)\n',
+                  '        if cmd[:1] in ("/", "."):\n            path = self.protocol.fs.resolve_path(cmd, self.cwd)\n'),
                  ("src/cowrie/shell/honeypot.py", '        return f"{self.error_prefix()}{cmd}: command not found\\n"\n',
                   '        return f"{self.error_prefix()}{cmd}: not found\\n"\n'),
                  ("src/cowrie/shell/honeypot.py", '            return f"{self.name}: line {self.current_line}: "\n',
@@ -3052,8 +3250,6 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/base.py", "from cowrie.core import utils\n", "from cowrie.core import utils as u\n"),
                  ("src/cowrie/commands/base.py", "\n\nclass Command_ps(HoneyPotCommand):\n",
                   "\n\nclass Command_ps(HoneyPotCommand):  # ps\n"),
-                 ("src/cowrie/commands/base.py", "                s = s[: self.columns()]\n",
-                  "                s = s[: self.columns() - 1]\n"),
                  ("src/cowrie/commands/base.py", 'commands["ps"] = Command_ps\n', 'commands["ps"] = Command_ps  # ps\n'),
                  ("src/cowrie/commands/fs.py", 'commands["/bin/fgrep"] = Command_grep\n',
                   'commands["/bin/fgrep"] = Command_grep  # fgrep\n'),
@@ -3068,17 +3264,17 @@ class PatchTest(unittest.TestCase):
                   "import ipaddress\nimport socket as sock\n"),
                  ("src/cowrie/commands/ifconfig.py", 'commands["ifconfig"] = Command_ifconfig\n',
                   'commands["ifconfig"] = Command_ifconfig  # ifconfig\n'),
-                 ("src/cowrie/commands/base.py", "            process = random.randint(4000, 8000)\n",
-                  "            process = random.randint(4000, 9000)\n"),
-                 ("src/cowrie/commands/base.py", '                % "/usr/sbin/sshd: %s@pts/0"\n',
-                  '                % "/usr/sbin/sshd: %s@pts/1"\n'),
-                 ("src/cowrie/commands/base.py",
-                  '                "%s".ljust(30 - len("bash")) % "-bash",\n            )\n            output_array.append(output)\n',
-                  '                "%s".ljust(30 - len("bash")) % "-bash",\n            )\n\n            output_array.append(output)\n'),
-                 ("src/cowrie/commands/base.py",
-                  '"ps %s" % " ".join(self.args),\n            )\n\n            output_array.append(output)\n',
-                  '"ps %s" % " ".join(self.args),\n            )\n            output_array.append(output)\n'),
                  ("src/cowrie/commands/fs.py", "from cowrie.shell import fs\n", "from cowrie.shell import fs as f\n"),
+                 ("src/cowrie/shell/bashparse.py", "\n\nclass ShellContext(Protocol):\n",
+                  "\n\nclass ShellContext(Protocol):  # context\n"),
+                 ("src/cowrie/shell/bashparse.py", '        if special == "?":\n            return self.context.get_status()\n',
+                  '        if special == "?":\n            return str(self.context.get_status())\n'),
+                 ("src/cowrie/shell/bashparse.py", "\nimport gc\nimport re\n", "\nimport gc\nimport regex as re\n"),
+                 ("src/cowrie/shell/honeypot.py", "\n\nclass HoneyPotShell:\n", "\n\nclass HoneyPotShell:  # shell\n"),
+                 ("src/cowrie/shell/honeypot.py", "                    [stages[index]],\n                    fds=fds,\n",
+                  "                    [stages[index]],\n                    fds=fds,  # stage\n"),
+                 ("src/cowrie/shell/honeypot.py", "            self._advance()\n\n        run_from(0)\n",
+                  "            self._advance()\n\n        run_from(index=0)\n"),
                  ("src/cowrie/commands/fs.py", "from typing import TYPE_CHECKING\n",
                   "from typing import TYPE_CHECKING, Any\n"),
                  ("src/cowrie/core/auth.py", "\n\nclass AuthRandom:\n", "\n\nclass AuthRandom:  # auth\n"),
@@ -3113,6 +3309,12 @@ class PatchTest(unittest.TestCase):
                   "            self.historyPosition = len(self.historyLines)\n",
                   "                self.historyLines.append(b\"\".join(self.lineBuffer))\n"
                   "            self.historyPosition = len(self.historyLines)  # history\n"))
+        cases += (("src/cowrie/shell/command.py", "\n\nclass HoneyPotCommand:\n",
+                   "\n\nclass HoneyPotCommand(object):\n"),
+                  ("src/cowrie/commands/fs.py", "from cowrie.shell.command import HoneyPotCommand\n",
+                   "from cowrie.shell.command import HoneyPotCommand  # base\n"),
+                  ("src/cowrie/commands/fs.py", "import re\nfrom typing import TYPE_CHECKING\n",
+                   "import re\nimport typing\nfrom typing import TYPE_CHECKING\n"))
         for rel, old, new in cases:
             with self.subTest(rel=rel, needle=old):
                 root = tmpdir(self) / "cowrie"

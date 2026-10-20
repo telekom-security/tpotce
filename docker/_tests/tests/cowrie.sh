@@ -26,6 +26,8 @@ SHELL_OUTPUT_FILE=""
 # the second start with COWRIE_PERSONA_ROTATION; run_all_personas does it once, for the first persona
 ROTATION_STEP="true"
 ROTATION_DAYS="7"
+# the long lines of many commands (run_budget_probe); run_all_personas runs them once, for the first persona
+BUDGET_STEP="true"
 
 usage() {
   cat <<EOF
@@ -829,8 +831,9 @@ PY
 # the clients in a container in the honeypot's network: the echo of the whole line is back within
 # LONG_LINE_SECONDS, the shell answers both commands and gives the prompt back. Then a pasted line of
 # 70,000 characters over Telnet: the shell keeps 64 KiB of it and takes the next line.
-# Cowrie's wget (also the applet of the BusyBox personas) refuses an address that is not global before
-# it connects, with this answer and no download event; cowrie.command.input logs the line.
+# Cowrie's wget refuses an address that is not global before it connects, with this answer and no
+# download event (the BusyBox personas: BusyBox's answer, expected identity "wget_answer");
+# cowrie.command.input logs the line.
 LONG_LINE_LENGTH=10000
 # the seconds the echo of the line may take (TEST_LONG_LINE_SECONDS for a slow host)
 LONG_LINE_SECONDS="${TEST_LONG_LINE_SECONDS:-2}"
@@ -1117,6 +1120,228 @@ while True:
 PY
 }
 
+# A script of about 8 KB of ordinary commands, run as sh x (one line for Cowrie's parser): its grep, awk and
+# wc answer as in any session. Then long lines of many commands in one session (the session's time budget,
+# TPOT_BUDGET of the patched shell/command.py): 3000 times true, 640 endless awk loops, 20 rounds of apt-get
+# with hard patterns, awk, seq and sort. Each line must be back within BUDGET_LINE_SECONDS. Meanwhile new
+# connections wait for the SSH banner; their waits are reported (Cowrie's own parse of a line of 16 KiB holds
+# the reactor for a time of its own, which the budget does not cover).
+BUDGET_LINE_SECONDS="${TEST_BUDGET_LINE_SECONDS:-6}"
+
+run_budget_probe() {
+  docker run --rm -i --network "container:${TEST_CONTAINER_NAME}" --read-only --user 2000:2000 \
+    --entrypoint python3 "${IMAGE}" - "${BUDGET_LINE_SECONDS}" "${TEST_TIMEOUT}" <<'PY'
+import json
+import re
+import socket
+import statistics
+import sys
+import threading
+import time
+
+LIMIT = float(sys.argv[1])
+TIMEOUT = int(sys.argv[2])
+# the passwords of the long line probe: AuthRandom keeps the pair it accepted for this source
+PASSWORDS = [f"tpot-long-{n}" for n in range(1, 13)]
+PROMPT = re.compile(rb"[$#] ?$")
+ESCAPE = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
+DONE = re.compile(rb"(^|\n)TPOT_BUDGET_DONE\n")
+SCRIPT_DONE = re.compile(rb"(^|\n)TPOT_SCRIPT_DONE\n")
+SCRIPT = "/tmp/tpot-budget-script.sh"
+STEP = "cd /tmp || cd /var/tmp; uname -a; uname -m; id; echo checking; true; pwd; hostname; cat /etc/hostname; "
+# eight lines of ordinary commands, then the answers the script is checked for
+SCRIPT_LINES = [f"echo '{STEP * 10}' >> {SCRIPT}" for _ in range(8)] + [
+    f"echo \"grep -c processor /proc/cpuinfo; awk 'BEGIN{{print 6*7}}'; echo abc | wc -c; echo TPOT_SCRIPT_DONE\""
+    f" >> {SCRIPT}"]
+LOOP = "awk 'BEGIN{while(1){}}';"
+LINES = {
+    "true x3000": "true;" * 3000,
+    "awk x640": LOOP * 640,
+    "mixed x20": ("apt-get install -y 'lib[^x]*[^x]*[^x]*na' '.*.*.*[0-9]a$'; " + LOOP
+                  + " seq 1 0.0000001 100 | sort -r | wc -l; ") * 20,
+}
+
+
+def clean(data):
+    return ESCAPE.sub(b"", bytes(data)).replace(b"\r", b"")
+
+
+def last_line(data):
+    return clean(data).rstrip(b"\n").split(b"\n")[-1]
+
+
+def at_login(data):
+    return last_line(data).strip().lower().endswith((b"login:", b"username:"))
+
+
+def at_prompt(data):
+    return PROMPT.search(last_line(data)) is not None and not at_login(data)
+
+
+class Closed(Exception):
+    pass
+
+
+class Telnet:
+    """A Telnet client that refuses every option."""
+
+    def __init__(self):
+        self.sock = socket.create_connection(("127.0.0.1", 23), timeout=TIMEOUT)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.sock.settimeout(0.1)
+        self.data = bytearray()
+
+    def send(self, payload):
+        self.sock.sendall(payload)
+
+    def wait(self, done, deadline, quiet=0.0):
+        last = time.monotonic()
+        while time.monotonic() < deadline:
+            if done(self.data) and time.monotonic() - last >= quiet:
+                return True
+            try:
+                chunk = self.sock.recv(65536)
+            except socket.timeout:
+                continue
+            if not chunk:
+                raise Closed()
+            index = 0
+            while index < len(chunk):
+                if chunk[index] == 255 and index + 2 < len(chunk) and chunk[index + 1] in (251, 252, 253, 254):
+                    self.sock.sendall(bytes([255, 252 if chunk[index + 1] in (253, 254) else 254, chunk[index + 2]]))
+                    index += 3
+                    continue
+                if chunk[index] == 255 and index + 1 < len(chunk):
+                    index += 2
+                    continue
+                self.data.append(chunk[index])
+                index += 1
+            last = time.monotonic()
+        return False
+
+    def close(self):
+        self.sock.close()
+
+
+def telnet_shell(deadline):
+    session = None
+    for password in PASSWORDS:
+        if session is None:
+            session = Telnet()
+            session.wait(at_login, deadline)
+        session.data.clear()
+        session.send(b"root\r\n")
+        session.wait(lambda data: b"password:" in data.lower(), deadline)
+        session.data.clear()
+        session.send(password.encode() + b"\r\n")
+        try:
+            session.wait(lambda data: at_login(data) or at_prompt(data), deadline, quiet=1.0)
+        except Closed:
+            session = None
+            continue
+        if at_prompt(session.data):
+            return session
+    raise RuntimeError("telnet: no shell")
+
+
+class Banners(threading.Thread):
+    """New TCP connections to port 22, one after the other: the seconds until the SSH banner line."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.waits, self.failed, self.stop = [], 0, threading.Event()
+
+    def run(self):
+        while not self.stop.is_set():
+            started = time.monotonic()
+            try:
+                with socket.create_connection(("127.0.0.1", 22), timeout=TIMEOUT) as sock:
+                    data = b""
+                    while b"\n" not in data:
+                        chunk = sock.recv(256)
+                        if not chunk:
+                            break
+                        data += chunk
+                if data.startswith(b"SSH-"):
+                    self.waits.append(time.monotonic() - started)
+                else:
+                    self.failed += 1
+            except OSError:
+                self.failed += 1
+            self.stop.wait(0.1)
+
+
+def run_script(deadline):
+    """sh of a script of about 8 KB in a session of its own: the answers of its grep, awk and wc."""
+    session = telnet_shell(deadline)
+    for line in [f"rm -f {SCRIPT}"] + SCRIPT_LINES:
+        session.data.clear()
+        session.send(line.encode() + b"\r\n")
+        if not session.wait(at_prompt, deadline, quiet=0.3):
+            raise RuntimeError(f"no prompt after writing the script: {clean(session.data)[-200:]!r}")
+    session.data.clear()
+    started = time.monotonic()
+    session.send(f"sh {SCRIPT}\r\n".encode())
+    if not session.wait(lambda data: SCRIPT_DONE.search(clean(data)) is not None, deadline):
+        raise RuntimeError(f"the script did not end: {clean(session.data)[-300:]!r}")
+    took = time.monotonic() - started
+    lines = clean(session.data).decode("utf-8", errors="replace").split("\n")
+    answers = lines[lines.index("TPOT_SCRIPT_DONE") - 3:lines.index("TPOT_SCRIPT_DONE")]
+    session.close()
+    size = sum(len(line.split("'")[1]) + 1 for line in SCRIPT_LINES[:-1])
+    result = {"line": "sh script", "characters": size, "seconds": round(took, 3), "answers": answers}
+    if not (len(answers) == 3 and answers[0].isdigit() and int(answers[0]) > 0 and answers[1:] == ["42", "4"]):
+        raise RuntimeError(f"the script's grep, awk and wc answered {answers}")
+    return result
+
+
+results = []
+try:
+    deadline = time.monotonic() + 6 * TIMEOUT
+    results.append(run_script(deadline))
+    session = telnet_shell(deadline)
+    for name, line in LINES.items():
+        if len(line) > 16384:
+            raise RuntimeError(f"{name}: {len(line)} characters, more than max_input_size")
+        banners = Banners()
+        banners.start()
+        session.data.clear()
+        started = time.monotonic()
+        session.send(line.encode() + b" echo TPOT_BUDGET_DONE\r\n")
+        back = session.wait(lambda data: DONE.search(clean(data)) is not None, deadline)
+        took = time.monotonic() - started
+        banners.stop.set()
+        banners.join(TIMEOUT)
+        waits = banners.waits or [0.0]
+        results.append({"line": name, "characters": len(line), "seconds": round(took, 3),
+                        "banner_waits": len(banners.waits), "banner_max": round(max(waits), 3),
+                        "banner_median": round(statistics.median(waits), 3), "banner_failed": banners.failed})
+        if not back or took >= LIMIT:
+            raise RuntimeError(f"{name}: not back within {LIMIT} s ({took:.2f} s)")
+    session.close()
+except Exception as exc:
+    print(json.dumps(results))
+    sys.exit(f"budget probe failed: {exc}")
+print(json.dumps(results))
+PY
+}
+
+# The time of Cowrie's own parse of the lines of run_budget_probe in the container (reported, not asserted).
+measure_budget_parse() {
+  docker exec -i -e PYTHONDONTWRITEBYTECODE=1 "${TEST_CONTAINER_NAME}" python3 - <<'PY'
+import json
+import time
+
+from cowrie.shell.bashparse import BashParser
+
+LOOP = "awk 'BEGIN{while(1){}}';"
+LINES = {"true x3000": "true;" * 3000, "awk x640": LOOP * 640}
+parser = BashParser(None)
+print(json.dumps({name: round((lambda t: (parser.parse(line), time.perf_counter() - t)[1])(time.perf_counter()), 3)
+                  for name, line in LINES.items()}))
+PY
+}
+
 read_expected_identity() {
   docker exec -i -e PYTHONDONTWRITEBYTECODE=1 "${TEST_CONTAINER_NAME}" python3 - <<'PY'
 import configparser
@@ -1129,8 +1354,27 @@ from tpot_personas import catalog  # noqa: E402
 
 identity = json.loads(Path("/tmp/cowrie/identity.json").read_text(encoding="utf-8"))
 persona = catalog.by_id(identity["persona"])
-config = configparser.ConfigParser()
+config = configparser.ConfigParser(interpolation=None)
 config.read("/tmp/cowrie/runtime/cowrie.cfg")
+# the programs of the probe the persona has (a firmware has only those of its image)
+from tpot_personas import tree  # noqa: E402
+
+fs = tree.load_pickle(config.get("shell", "filesystem"))
+has = {name: any(tree.resolve(fs, f"{folder}/{name}") is not None
+                 for folder in ("bin", "sbin", "usr/bin", "usr/sbin"))
+       for name in ("uname", "hostname", "nproc", "grep", "awk", "wget", "df", "python3")}
+shell = config.get("shell", "shell_name", fallback="bash")
+ash = config.get("shell", "not_found_style", fallback="bash") == "ash"
+missing = (lambda name: f"-{shell}: {name}: not found") if ash else (lambda name: f"-{shell}: {name}: command not found")
+# what `wget http://127.0.0.1:1/x` answers: Cowrie's wget refuses the address before it connects (GNU),
+#   BusyBox's says its connection was refused ("cannot" up to 1.14)
+if not has["wget"]:
+    wget_answer = missing("wget")
+elif config.get("shell", "wget_style", fallback="gnu") == "busybox":
+    word = "cannot" if config.get("shell", "text_version", fallback="").startswith("1.14.") else "can't"
+    wget_answer = f"wget: {word} connect to remote host (127.0.0.1): Connection refused"
+else:
+    wget_answer = "wget: unable to resolve host address \u2018127.0.0.1\u2019"
 df = json.loads(Path(config.get("shell", "df_table")).read_text(encoding="utf-8"))
 # the first row df shows: a file system with a size
 first = [row for row in df["filesystems"] if row["size"] and row["source"] != "rootfs"][0]
@@ -1147,6 +1391,9 @@ print(json.dumps({
     "kernel_version": identity["release"]["kernel_version"],
     "cpus": identity["hardware"]["cpus"],
     "mem_kb": identity["hardware"]["mem_kb"],
+    "has": has,
+    "missing": {name: missing(name) for name in has},
+    "wget_answer": wget_answer,
 }))
 PY
 }
@@ -1167,27 +1414,44 @@ def line(index):
     return lines[index].strip() if index < len(lines) else "<missing>"
 
 
+has, missing = expected["has"], expected["missing"]
 checks = (
-    ("uname -r", line(0), expected["kernel_version"]),
-    ("hostname", line(1), expected["hostname"]),
-    ("nproc", line(2), str(expected["cpus"])),
-    ("grep -c ^processor /proc/cpuinfo", line(3), str(expected["cpus"])),
-    ("MemTotal of /proc/meminfo", line(4), str(expected["mem_kb"])),
+    ("uname -r", "uname", line(0), expected["kernel_version"]),
+    ("hostname", "hostname", line(1), expected["hostname"]),
+    ("nproc", "nproc", line(2), str(expected["cpus"])),
+    ("grep -c ^processor /proc/cpuinfo", "grep", line(3), str(expected["cpus"])),
+    ("MemTotal of /proc/meminfo", "awk", line(4), str(expected["mem_kb"])),
 )
-for name, got, want in checks:
+for name, program, got, want in checks:
+    # a program the persona has not: the shell says so, as its system does
+    want = want if has[program] else missing[program]
     if got != want:
         problems.append(f"{name}: {got!r}, identity.json says {want!r}")
+if not has["awk"]:
+    for index in (5, 6, 7):
+        if line(index) != missing["awk"]:
+            problems.append(f"df | awk (line {index}): {line(index)!r}, the persona has no awk")
+# a firmware without df (the Archer C7): the shell says so for each df, the END of the second awk
+#   prints its empty line
+no_df = has["awk"] and not has["df"]
+if no_df:
+    got = [line(index) for index in (5, 6, 7, 8)]
+    if got != [missing["df"], missing["df"], "", missing["df"]]:
+        problems.append(f"df | awk (lines 5 to 8): {got!r}, the persona has no df")
+    del lines[8]
 # BusyBox puts a device name of more than 20 characters on a line of its own: line 2 has no $4
 wrapped = expected["df_style"] == "busybox" and len(expected["df_source"]) > 20
 row = line(6).split()
-if row[:1] != [expected["df_source"]] or row[5:6] != [expected["df_target"]]:
+if not has["awk"] or no_df:
+    pass
+elif row[:1] != [expected["df_source"]] or row[5:6] != [expected["df_target"]]:
     problems.append(f"df -h line 2: {line(6)!r}, the df table starts with {expected['df_source']} on "
                     f"{expected['df_target']}")
 want = "[]" if wrapped else f"[{row[3] if len(row) > 3 else ''}]"
-if line(5) != want:
+if has["awk"] and not no_df and line(5) != want:
     problems.append(f"df -h | awk 'FNR == 2 {{print $4}}': {line(5)!r}, df -h says {want!r}")
 want = "[]" if wrapped else f"[{expected['df_avail']}]"
-if line(7) != want:
+if has["awk"] and not no_df and line(7) != want:
     problems.append(f"df -k | awk 'FNR == 2 {{print $4}}': {line(7)!r}, the df table says {want!r}")
 
 rest = lines[8:]
@@ -1195,9 +1459,11 @@ if "TPOT_PY" in rest:
     os_release, after = rest[:rest.index("TPOT_PY")], rest[rest.index("TPOT_PY") + 1:]
 else:
     os_release, after = rest, []
-# python3 -c 'print(1)' answers (a stand-in for code of any kind) and the line goes on
-if "TPOT_AFTER" not in [entry.strip() for entry in after]:
-    problems.append(f"the command line stopped at python3 -c, nothing came after it: {after!r}")
+# python3 -c 'print(1)' answers (a stand-in for code of any kind): 1, or the shell has no python3;
+#   the line goes on
+want = ["1" if has["python3"] else missing["python3"], "TPOT_AFTER"]
+if [entry.strip() for entry in after[:2]] != want:
+    problems.append(f"python3 -c 'print(1)': {after[:2]!r}, expected {want!r}")
 apt = after[[entry.strip() for entry in after].index("TPOT_APT") + 1:] if "TPOT_APT" in after else []
 # EdgeOS: apt-get is the emulated apt 1.4 of the persona (upstream's would install any name)
 if persona == "ubiquiti-edgerouter-x" and "E: Unable to locate package nosuchpkg" not in apt:
@@ -1359,7 +1625,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "/usr/local/lib/tpot-cowrie")
-from tpot_personas import catalog, tree, validate  # noqa: E402
+from tpot_personas import catalog, validate  # noqa: E402
 
 requested = sys.argv[1].split()
 root = Path("/home/cowrie/cowrie")
@@ -1385,7 +1651,7 @@ expected_package_managers = {
     "raspios": {"apt", "apt-get", "dpkg"},
     "gpu-ubuntu": {"apt", "apt-get", "dpkg"},
     "dlink-dir859": set(),
-    "tplink-wr841n": set(),
+    "tplink-archer-c7": set(),
     "zyxel-nas326": set(),
     "openwrt": {"opkg"},
     "qnap-qts": {"qpkg_cli"},
@@ -1462,7 +1728,7 @@ def check_forbidden_in_tree(fs, os_id):
     The markers are this test's own table, not validate.FORBIDDEN_MARKERS."""
     markers = forbidden_markers + (ubuntu_only_markers if os_id != "ubuntu" else ())
     found = {}
-    for path, data in validate._tree_texts(fs):
+    for path, data in validate.tree_texts(fs):
         data = data.lower()
         for marker in markers:
             if marker in data:
@@ -1557,7 +1823,10 @@ if config.get("honeypot", "hostname", fallback="") != identity["hostname"]:
     fail("Runtime config hostname does not match identity.json")
 if config.get("honeypot", "boot_offset", fallback="") != str(identity["boot_offset"]):
     fail("Runtime config boot_offset does not match identity.json")
-if "ssh-dss" in config_text.lower() or re.search(r"\bdsa", config_text.lower()):
+# server_sig_algs names what the emulated server accepts for user keys (OpenSSH 8.9 / 9.2 list ssh-dss),
+#   no host key; a DSA host key is a dsa_*_key option or a file ssh_host_dsa_key
+host_key_text = "\n".join(line for line in config_text.lower().splitlines() if not line.startswith("server_sig_algs"))
+if "ssh-dss" in host_key_text or re.search(r"(?m)^\s*dsa_\w*key\s*[=:]|ssh_host_dsa_key", host_key_text):
     fail("Runtime config names DSA host keys")
 # the live top of the patched Cowrie: its style, and the host key algorithms of the banner's server
 if config.get("shell", "top_style", fallback="") not in ("procps", "busybox"):
@@ -1596,6 +1865,8 @@ cmdoutput = json.loads(cmdoutput_path.read_text(encoding="utf-8"))
 if not cmdoutput.get("command", {}).get("ps"):
     fail(f"{selected} cmdoutput.json has no ps process list")
 package_managers = expected_package_managers[selected]
+# the txtcmds of the device commands; lscpu and nproc only where the system has them (the shell probe
+#   checks nproc), dmesg not on a firmware image without it
 for command_path in (
     "bin/dmesg",
     "bin/mount",
@@ -1603,6 +1874,10 @@ for command_path in (
     "usr/bin/lscpu",
     "usr/bin/nproc",
 ):
+    if command_path.startswith("usr/bin/") and persona["kind"] == "device":
+        continue
+    if command_path == "bin/dmesg" and config.has_option("shell", "builtins"):
+        continue
     if not (txtcmds_path / command_path).is_file():
         fail(f"{selected} txtcmds is missing {command_path}")
 # df and awk are commands of the patched Cowrie over the persona's file system table
@@ -1807,11 +2082,23 @@ run_smoke_test() {
 
   test_info "Typing and pasting a line of ${LONG_LINE_LENGTH} characters with a download over Telnet and SSH"
   local long_line_results=""
+  # the answer of wget of the persona (GNU wget of Cowrie, BusyBox's, or none where the firmware has no wget)
+  LONG_LINE_WGET="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["wget_answer"])' "${EXPECTED_IDENTITY_FILE}")"
   long_line_results="$(run_long_line_probe)" || test_die "The shell of ${persona} did not take the long line"
   test_info "Long line: ${long_line_results}"
   wait_for_long_line_events || test_die "The long lines of ${persona} are not in cowrie.json"
   test_wait_for_container || test_die "Cowrie container stopped after the long lines"
   test_ok "The long line came back within ${LONG_LINE_SECONDS} s, cowrie.command.input has it with its wget"
+
+  if [[ "${BUDGET_STEP}" == "true" ]]; then
+    test_info "Running long lines of many commands over Telnet while new connections wait for the SSH banner"
+    local budget_results=""
+    budget_results="$(run_budget_probe)" || test_die "The script or a long line of many commands failed on ${persona}: ${budget_results}"
+    test_info "Long lines of many commands: ${budget_results}"
+    test_info "Cowrie's own parse of the lines in the container: $(measure_budget_parse || echo n/a)"
+    test_wait_for_container || test_die "Cowrie container stopped after the long lines of many commands"
+    test_ok "The script's grep, awk and wc answered; each long line of many commands came back within ${BUDGET_LINE_SECONDS} s"
+  fi
 
   if [[ "${ROTATION_STEP}" == "true" ]]; then
     test_info "Starting ${persona} again with COWRIE_PERSONA_ROTATION=${ROTATION_DAYS}"
@@ -1840,6 +2127,7 @@ run_all_personas() {
     PERSONA="${id}"
     # the second start costs a container start: once, for the first persona
     ROTATION_STEP="${first}"
+    BUDGET_STEP="${first}"
     first="false"
     # one harness per persona: the subshell's EXIT trap takes it down
     set +e

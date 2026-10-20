@@ -1,8 +1,13 @@
 """Server personas (bash, systemd): package managers, command inventory,
 processes, package logs and one builder per family."""
 import calendar
+import functools
+import gzip
 import hashlib
+import json
+import re
 import time
+from pathlib import Path
 
 from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_group, el_home_files, el_hosts,
                      el_passwd, el_shadow, gm, lscpu, mount_text, pi_partuuid, proc_mounts_text, ps_entry, rng_for,
@@ -114,16 +119,8 @@ GPU_BUSES = ("07", "0f", "47", "4e", "87", "90", "b7", "bd")
 
 
 def package_manager_txtcmds(persona, ident):
-    """The package managers Cowrie does not emulate: dpkg and the rpm of CentOS 7. apt / apt-get
-    of Debian, yum 3 of CentOS 7 and dnf 4 / rpm of RHEL 9 are Cowrie's (system.python_answers)."""
-    p = ident.release.packages
-    if persona.family in ("ubuntu", "debian", "raspios"):
-        arch = deb_arch(persona)
-        return {
-            "usr/bin/dpkg": f"Debian 'dpkg' package management program version {p['dpkg']} ({arch}).\n",
-        }
-    if persona.family == "centos":
-        return {"usr/bin/rpm": f"RPM version {p['rpm']}\n"}
+    """The package managers Cowrie does not emulate: none on a server. apt / apt-get / dpkg of Debian,
+    yum 3 / rpm of CentOS 7 and dnf 4 / rpm of RHEL 9 are Cowrie's (system.python_answers)."""
     return {}
 
 
@@ -222,6 +219,11 @@ def command_inventory_txtcmds(persona, ident):
     return {"usr/bin/lspci": lspci}
 
 
+def machine_id(ident):
+    """/etc/machine-id of the host (systemd-machine-id-setup at the first boot): 32 hex digits."""
+    return hashlib.sha256(f"{ident.hostname}\0{ident.installed_at}\0machine-id".encode()).hexdigest()[:32]
+
+
 def _systemd_paths(ident):
     """Debian/Ubuntu releases after the /usr merge show /usr/lib/systemd in ps."""
     return "/usr/lib/systemd" if ident.release.extra.get("codename") in ("noble", "trixie") else "/lib/systemd"
@@ -237,6 +239,10 @@ def server_processes(persona, ident, extra=()):
             ps_entry("root", 0, "/usr/lib/systemd/systemd-udevd", mem=0.2, vsz=28964, rss=3900, stat="Ss"),
             ps_entry("root", 0, "/sbin/auditd", mem=0.1, vsz=25012, rss=2288, stat="S<sl"),
             ps_entry("dbus", 0, "/usr/bin/dbus-broker-launch --scope system --audit", mem=0.1, vsz=12844, rss=2636, stat="Ss"),
+            # the broker dbus-broker-launch forks (ref almalinux-9-t12-enable-now-mariadb-server)
+            ps_entry("dbus", 0, f"dbus-broker --log 4 --controller 9 --machine-id {machine_id(ident)} --max-bytes "
+                                "536870912 --max-fds 4096 --max-matches 16384 --audit", mem=0.0, vsz=4640, rss=2112,
+                     stat="S", parent="/usr/bin/dbus-broker-launch "),
             ps_entry("chrony", 0, "/usr/sbin/chronyd -F 2", mem=0.2, vsz=84564, rss=3508, stat="S"),
             ps_entry("root", 0, "/usr/sbin/NetworkManager --no-daemon", mem=0.9, vsz=258392, rss=18208, stat="Ssl"),
             ps_entry("root", 0, "/usr/lib/systemd/systemd-logind", mem=0.3, vsz=17736, rss=7492, stat="Ss"),
@@ -258,8 +264,12 @@ def server_processes(persona, ident, extra=()):
             ps_entry("root", 0, "/usr/sbin/crond -n", mem=0.0, vsz=126388, rss=1612, stat="Ss"),
             ps_entry("root", 0, "/usr/sbin/sshd -D", mem=0.2, vsz=112984, rss=4324, stat="Ss"),
             ps_entry("root", 0, "/usr/sbin/rsyslogd -n", mem=0.2, vsz=216404, rss=4964, stat="Ssl"),
+            # postfix's master and the daemons it forks (unverified: the sizes of pickup)
             ps_entry("root", 0, "/usr/libexec/postfix/master -w", mem=0.1, vsz=89804, rss=2100, stat="Ss"),
-            ps_entry("postfix", 0, "qmgr -l -t unix -u", mem=0.1, vsz=90084, rss=4044, stat="S"),
+            ps_entry("postfix", 0, "pickup -l -t unix -u", mem=0.1, vsz=89908, rss=4072, stat="S",
+                     parent="/usr/libexec/postfix/master "),
+            ps_entry("postfix", 0, "qmgr -l -t unix -u", mem=0.1, vsz=90084, rss=4044, stat="S",
+                     parent="/usr/libexec/postfix/master "),
         ]
     elif family == "raspios":
         entries = [
@@ -268,10 +278,11 @@ def server_processes(persona, ident, extra=()):
             ps_entry("root", 0, "/lib/systemd/systemd-udevd", mem=0.1, vsz=26880, rss=6744, stat="Ss"),
             ps_entry("avahi", 0, f"avahi-daemon: running [{ident.hostname}.local]", mem=0.1, vsz=7584, rss=3168, stat="Ss"),
             ps_entry("root", 0, "/usr/sbin/cron -f", mem=0.0, vsz=6740, rss=2560, stat="Ss"),
-            ps_entry("message+", 0, "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only", mem=0.1, vsz=9112, rss=4740, stat="Ss"),
+            ps_entry("messagebus", 0, "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only", mem=0.1, vsz=9112, rss=4740, stat="Ss"),
             ps_entry("root", 0, "/usr/sbin/NetworkManager --no-daemon", mem=0.4, vsz=258956, rss=17920, stat="Ssl"),
             ps_entry("root", 0, "/lib/systemd/systemd-logind", mem=0.2, vsz=17456, rss=7552, stat="Ss"),
-            ps_entry("avahi", 0, "avahi-daemon: chroot helper", mem=0.0, vsz=7424, rss=1408, stat="S"),
+            ps_entry("avahi", 0, "avahi-daemon: chroot helper", mem=0.0, vsz=7424, rss=1408, stat="S",
+                     parent="avahi-daemon: running"),
             ps_entry("root", 0, "/sbin/wpa_supplicant -u -s -O DIR=/run/wpa_supplicant GROUP=netdev", mem=0.2, vsz=16752, rss=8576, stat="Ss"),
             ps_entry("root", 0, "/usr/sbin/ModemManager", mem=0.2, vsz=239500, rss=9984, stat="Ssl"),
             ps_entry("root", 0, "/usr/libexec/bluetooth/bluetoothd", mem=0.1, vsz=9616, rss=5504, stat="Ss"),
@@ -284,9 +295,10 @@ def server_processes(persona, ident, extra=()):
             ps_entry("root", 0, "/sbin/init", mem=0.6, vsz=168520, rss=8140, stat="Ss"),
             ps_entry("root", 0, f"{sd}/systemd-journald", mem=0.3, vsz=40632, rss=5192, stat="Ss"),
             ps_entry("root", 0, f"{sd}/systemd-udevd", mem=0.2, vsz=28844, rss=3588, stat="Ss"),
-            ps_entry("systemd+", 0, f"{sd}/systemd-networkd", mem=0.2, vsz=24148, rss=4140, stat="Ss"),
-            ps_entry("systemd+", 0, f"{sd}/systemd-resolved", mem=0.3, vsz=25552, rss=7896, stat="Ss"),
-            ps_entry("message+", 0, "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only", mem=0.1, vsz=9240, rss=2984, stat="Ss"),
+            ps_entry("systemd-network", 0, f"{sd}/systemd-networkd", mem=0.2, vsz=24148, rss=4140, stat="Ss"),
+            ps_entry("systemd-resolve", 0, f"{sd}/systemd-resolved", mem=0.3, vsz=25552, rss=7896, stat="Ss"),
+            # Ubuntu's dbus.service starts it as @dbus-daemon (ExecStart=@/usr/bin/dbus-daemon @dbus-daemon ...)
+            ps_entry("messagebus", 0, "@dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only", mem=0.1, vsz=9240, rss=2984, stat="Ss"),
             ps_entry("root", 0, f"{sd}/systemd-logind", mem=0.2, vsz=17972, rss=6380, stat="Ss"),
             ps_entry("syslog", 0, "/usr/sbin/rsyslogd -n -iNONE", mem=0.1, vsz=222508, rss=4536, stat="Ssl"),
             ps_entry("root", 0, "/usr/sbin/cron -f -P", mem=0.1, vsz=6816, rss=2196, stat="Ss"),
@@ -300,15 +312,74 @@ def server_processes(persona, ident, extra=()):
             ps_entry("root", 0, "/sbin/init", mem=0.6, vsz=166200, rss=7904, stat="Ss"),
             ps_entry("root", 0, f"{sd}/systemd-journald", mem=0.3, vsz=40376, rss=5028, stat="Ss"),
             ps_entry("root", 0, f"{sd}/systemd-udevd", mem=0.2, vsz=28772, rss=3512, stat="Ss"),
-            ps_entry("systemd+", 0, f"{sd}/systemd-networkd", mem=0.2, vsz=24124, rss=4072, stat="Ss"),
-            ps_entry("message+", 0, "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only", mem=0.1, vsz=9192, rss=2900, stat="Ss"),
+            ps_entry("systemd-network", 0, f"{sd}/systemd-networkd", mem=0.2, vsz=24124, rss=4072, stat="Ss"),
+            ps_entry("messagebus", 0, "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only", mem=0.1, vsz=9192, rss=2900, stat="Ss"),
             ps_entry("root", 0, f"{sd}/systemd-logind", mem=0.2, vsz=17852, rss=6012, stat="Ss"),
             ps_entry("root", 0, "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups", mem=0.2, vsz=15824, rss=5044, stat="Ss"),
             ps_entry("root", 0, "/usr/sbin/cron -f", mem=0.1, vsz=6812, rss=2180, stat="Ss"),
         ]
+    entries = _with_daemons(persona, ident, entries)
     entries += list(extra)
     entries.append(ps_entry(user, 0, "-bash", mem=0.1, vsz=8688, rss=3376, stat="Ss", tty="pts/0"))
     return assign_processes(ident, entries)
+
+
+# the daemons of a booted host every server family has besides those above: the time client, inetd with
+#   its telnetd (Debian, Ubuntu: openbsd-inetd and inetutils-telnetd; the honeypot answers on 23), the
+#   subscription and tuning daemons of Red Hat and the getty of the first console (command lines from the
+#   ExecStart= of the release's unit files, unit_files.json.gz; a container has no console, so the getty is
+#   the one of a host)
+_AGETTY = {"jammy": "/sbin/agetty -o -p -- \\u --noclear tty1 linux",
+           "trixie": "/sbin/agetty -o -- \\u --noreset --noclear - linux"}
+
+
+def agetty_command(persona, ident):
+    return _AGETTY.get(ident.release.extra.get("codename"), "/sbin/agetty -o -p -- \\u --noclear - linux")
+
+
+def has_inetd(persona):
+    return persona.family in ("ubuntu", "debian", "raspios")
+
+
+# /etc/inetd.conf of openbsd-inetd with the telnet line of inetutils-telnetd enabled (refs systemd-telnet
+#   *-inetd-conf-enabled: update-inetd --enable telnet; 0.20160825 of 22.04 lists echo and chargen not)
+INETD_CONF = '# /etc/inetd.conf:  see inetd(8) for further informations.\n#\n# Internet superserver configuration database\n#\n#\n# Lines starting with "#:LABEL:" or "#<off>#" should not\n# be changed unless you know what you are doing!\n#\n# If you want to disable an entry so it isn\'t touched during\n# package updates just comment it out with a single \'#\' character.\n#\n# Packages should modify this file by using update-inetd(8)\n#\n# <service_name> <sock_type> <proto> <flags> <user> <server_path> <args>\n#\n#:INTERNAL: Internal services\n#echo\t\tstream\ttcp\tnowait\troot\tinternal\n#discard\t\tstream\ttcp\tnowait\troot\tinternal\n#discard\t\tdgram\tudp\twait\troot\tinternal\n#daytime\t\tstream\ttcp\tnowait\troot\tinternal\n#time\t\tstream\ttcp\tnowait\troot\tinternal\n#chargen\t\tstream\ttcp\tnowait\troot\tinternal\n\n#:STANDARD: These are standard services.\ntelnet\tstream\ttcp\tnowait\troot\t/usr/sbin/tcpd\t/usr/sbin/telnetd\n\n#:BSD: Shell, login, exec and talk are BSD protocols.\n\n#:MAIL: Mail, news and uucp services.\n\n#:INFO: Info services\n\n#:BOOT: TFTP service is provided primarily for booting.  Most sites\n#       run this only on machines acting as "boot servers."\n\n#:RPC: RPC based services\n\n#:HAM-RADIO: amateur-radio services\n\n#:OTHER: Other services\n\n'
+
+
+def inetd_conf(ident):
+    if ident.release.extra.get("codename") == "jammy":
+        return INETD_CONF.replace("#echo\t\tstream\ttcp\tnowait\troot\tinternal\n", "").replace(
+            "#chargen\t\tstream\ttcp\tnowait\troot\tinternal\n", "")
+    return INETD_CONF
+
+
+def _with_daemons(persona, ident, entries):
+    family, sd = persona.family, _systemd_paths(ident)
+    ssh = next((i for i, e in enumerate(entries) if e["COMMAND"].startswith(("sshd:", "/usr/sbin/sshd"))), len(entries))
+    if family in ("ubuntu", "debian", "raspios"):
+        after = next((i for i, e in enumerate(entries) if "systemd-udevd" in e["COMMAND"]), 2) + 1
+        entries.insert(after, ps_entry("systemd-timesync", 0, f"{sd}/systemd-timesyncd", mem=0.1, vsz=89356, rss=6528,
+                                       stat="Ssl"))
+        ssh += 1
+        entries.insert(ssh + 1, ps_entry("root", 0, "/usr/sbin/inetd", mem=0.0, vsz=8632, rss=3872, stat="Ss"))
+    elif family == "rhel":
+        entries.insert(ssh, ps_entry("root", 0, "/usr/bin/python3 -Es /usr/sbin/tuned -l -P", mem=1.1,
+                                     vsz=272452, rss=22184, stat="Ssl"))
+        entries.append(ps_entry("root", 0, "/usr/bin/rhsmcertd", mem=0.0, vsz=6264, rss=1784, stat="Ss"))
+    elif family == "centos":
+        entries.insert(ssh, ps_entry("root", 0, "/usr/bin/python2 -Es /usr/sbin/tuned -l -P", mem=0.7,
+                                     vsz=574276, rss=13040, stat="Ssl"))
+        # NetworkManager 1.18 runs dhclient for the DHCP of eth0 ("System eth0" of its ifcfg file;
+        #   unverified: the options of the command line)
+        manager = next(i for i, e in enumerate(entries) if "NetworkManager" in e["COMMAND"])
+        entries.insert(manager + 1, ps_entry(
+            "root", 0, "/sbin/dhclient -d -q -sf /usr/libexec/nm-dhcp-helper -pf /var/run/dhclient-eth0.pid -lf "
+            "/var/lib/NetworkManager/dhclient-5fb06bd0-0bb0-7ffb-45f1-d6edd65f3e03-eth0.lease -cf "
+            "/var/lib/NetworkManager/dhclient-eth0.conf eth0", mem=0.1, vsz=102904, rss=5524, stat="S",
+            parent="/usr/sbin/NetworkManager "))
+    entries.append(ps_entry("root", 0, agetty_command(persona, ident), mem=0.0, vsz=5832, rss=1864, stat="Ss+",
+                            tty="tty1"))
+    return entries
 
 
 # --- package logs ---------------------------------------------------------------
@@ -410,8 +481,8 @@ def dnf_packages(persona, ident):
     openssh = r.packages["openssh-server"]
     versions = {"cloud-init": system.cloud_init_version(persona, ident)[0], "dnf": system.RHEL_DNF[minor],
                 "kernel": kernel, "kernel-core": kernel, "openssh": openssh, "openssh-clients": openssh,
-                "openssl": system.RHEL_OPENSSL[minor], "perl-interpreter": system.RHEL_PERL,
-                "python3": system.RHEL_PYTHON_RPM[minor], "rpm": system.RHEL_RPM[minor], "sudo": system.RHEL_SUDO,
+                "openssl": system.RHEL_OPENSSL[minor], "perl-interpreter": system.rpm_evr(system.RHEL_PERL, minor),
+                "python3": system.RHEL_PYTHON_RPM[minor], "rpm": system.RHEL_RPM[minor], "sudo": system.rpm_evr(system.RHEL_SUDO, minor),
                 "systemd": systemd_version(persona, ident)[1], "yum": system.RHEL_DNF[minor],
                 "systemd-udev": systemd_version(persona, ident)[1], "redhat-release": system.RHEL_RELEASE_RPM[minor],
                 **{name: version for name, version in r.packages.items() if name not in TOOL_PACKAGES}}
@@ -440,6 +511,8 @@ def dnf_packages(persona, ident):
                            "programs": ["/" + rel for rel in system.RPM_AVAILABLE_PROGRAMS.get(name, ())]}
     owners = {}
     for package, (programs, sbin) in system.RPM_OWNED.items():
+        if package == "dhclient" and package not in installed:
+            continue  # the DHCP client of CentOS 7 (RHEL 9's NetworkManager has its own)
         owners.update({f"/usr/bin/{name}": package for name in programs.split()})
         owners.update({f"/usr/sbin/{name}": package for name in sbin.split()})
     for package, files in system.RPM_OWNED_FILES.items():
@@ -447,6 +520,8 @@ def dnf_packages(persona, ident):
     for tool in system.installed_tools(persona, ident):
         for rel in system.tool_paths(persona, tool).values():
             owners["/" + rel] = system.RPM_TOOLS[tool]
+    # RHEL 9's agetty of the console is util-linux-core's (ref almalinux-9-t12-owners)
+    owners["/usr/sbin/agetty"] = "util-linux-core"
     rng = rng_for(ident, "dnf-version")
     built = updated_at(r) or ident.installed_at
 
@@ -558,6 +633,33 @@ def _gecos(user):
     return user.replace("-", " ").title()
 
 
+# the accounts of the daemons of ps that the generic Debian / Ubuntu lists leave out: the time client of every
+#   release, Ubuntu's rsyslog (refs t12 *-own-accounts, made by the postinst / sysusers of systemd-timesyncd and
+#   rsyslog): (name, uid, gid, gecos, home, shadow password, the shadow fields after the change day); where the
+#   recorded number is taken by an account of the persona the next free one (noble's syslog 101:102,
+#   bookworm's systemd-timesync 997)
+DAEMON_ACCOUNTS = {
+    "noble": (("systemd-timesync", 996, 996, "systemd Time Synchronization", "/", "!*", "::::::"),
+              ("syslog", 102, 104, "", "/nonexistent", "!", "::::::")),
+    "jammy": (("systemd-timesync", 104, 106, "systemd Time Synchronization,,,", "/run/systemd", "*", ":0:99999:7:::"),
+              ("syslog", 105, 111, "", "/home/syslog", "*", ":0:99999:7:::")),
+    "trixie": (("systemd-timesync", 996, 996, "systemd Time Synchronization", "/", "!*", ":::::1:"),),
+    "bookworm": (("systemd-timesync", 996, 996, "systemd Time Synchronization", "/", "!*", "::::::"),),
+    # Raspberry Pi OS: below the groups of pi-gen (997 to 999) and systemd-network (994)
+    "raspios": (("systemd-timesync", 995, 995, "systemd Time Synchronization", "/", "!*", "::::::"),),
+}
+
+
+def daemon_accounts(persona, ident):
+    """(passwd lines, group lines, shadow entries) of DAEMON_ACCOUNTS for the release."""
+    accounts = DAEMON_ACCOUNTS.get("raspios" if persona.family == "raspios" else ident.release.extra.get("codename"),
+                                   ()) if persona.family in ("ubuntu", "debian", "raspios") else ()
+    passwd = "".join(f"{name}:x:{uid}:{gid}:{gecos}:{home}:/usr/sbin/nologin\n"
+                     for name, uid, gid, gecos, home, _, _ in accounts)
+    group = "".join(f"{name}:x:{gid}:\n" for name, _, gid, _, _, _, _ in accounts)
+    return passwd, group, tuple((name, password, rest) for name, _, _, _, _, password, rest in accounts)
+
+
 def efi_partition(persona, ident, root_dev):
     """The EFI partition of Ubuntu's cloud images (LABEL=UEFI of their fstab, partition 15 of
     the root disk, 105 MiB of which about 6 are used), else None."""
@@ -569,7 +671,7 @@ def efi_partition(persona, ident, root_dev):
             0.055, 0.06)
 
 
-def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None, home=None, extra_ps=(),
+def _server_content(persona, ident, files, run_lock=False, accounts=None, home=None, extra_ps=(),
                     boot=None, ctimes=None):
     hw = ident.hardware
     root_dev, root_type, root_options = root_disk(persona, ident)
@@ -578,27 +680,32 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
                                      root_options=root_options, run_lock=run_lock, boot=boots)
     cmdline, fstab = boot_config(persona, ident)
     processes = server_processes(persona, ident, extra_ps)
+    made = daemon_accounts(persona, ident)
     passwd, group, shadow = accounts or (
-        server_passwd(persona.user, persona.uid, persona.gid, _gecos(persona.user), persona.shell),
-        server_group(persona.user, persona.gid),
-        server_shadow(persona.user, ident))
+        server_passwd(persona.user, persona.uid, persona.gid, _gecos(persona.user), persona.shell, extra=made[0]),
+        server_group(persona.user, persona.gid, extra=made[1]),
+        server_shadow(persona.user, ident, lines=made[2]))
     all_files = base_files(persona, ident, passwd, group, shadow, home=home)
     all_files["etc/fstab"] = fstab
+    all_files["etc/machine-id"] = machine_id(ident) + "\n"
     all_files["proc/modules"] = proc_modules(persona, ident)
     all_files.update(system.files(persona))
     all_files.update(system.init_scripts(persona))
     sudoers = system.sudoers_files(persona, ident)
     all_files.update(sudoers)
+    if has_inetd(persona):
+        all_files["etc/inetd.conf"] = inetd_conf(ident)
     all_files.update(files)
     all_files["proc/mounts"] = proc_mounts_text(filesystems)
     txtcmds = base_txtcmds(persona, ident, cmdline=cmdline, mount=mount_text(filesystems),
                            lscpu_text=lscpu(persona, hw, op_modes="32-bit, 64-bit"))
+    txtcmds["sbin/lsmod"] = system.lsmod_text(persona, all_files["proc/modules"])
     txtcmds.update(package_manager_txtcmds(persona, ident))
     txtcmds.update(command_inventory_txtcmds(persona, ident))
     all_ctimes = {"etc/shadow": shadow_ctime(ident)}
     all_ctimes.update({rel: ident.installed_at for rel in sudoers})
     all_ctimes.update(ctimes or {})
-    return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes=all_ctimes, tasks=tasks,
+    return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes=all_ctimes,
                    filesystems=filesystems)
 
 
@@ -663,7 +770,7 @@ deb http://security.ubuntu.com/ubuntu {code}-security universe
 
 def build_ubuntu(persona, ident):
     files, ctimes = _ubuntu_files(persona, ident)
-    return _server_content(persona, ident, files, tasks=93, run_lock=True, ctimes=ctimes)
+    return _server_content(persona, ident, files, run_lock=True, ctimes=ctimes)
 
 
 def build_gpu_ubuntu(persona, ident):
@@ -687,12 +794,13 @@ def build_gpu_ubuntu(persona, ident):
             "nvidia-smi",
         )) + "\n",
     })
+    made = daemon_accounts(persona, ident)
     accounts = (
         server_passwd(user, persona.uid, persona.gid, _gecos(user), persona.shell,
-                      extra="nvidia-persistenced:x:121:128:NVIDIA Persistence Daemon,,,:/nonexistent:/usr/sbin/nologin\n"
-                            "ollama:x:996:996::/usr/share/ollama:/bin/false\n"),
-        server_group(user, persona.gid, extra="nvidia-persistenced:x:128:\nollama:x:996:\n"),
-        server_shadow(user, ident, extra=("nvidia-persistenced", "ollama")),
+                      extra=made[0] + "nvidia-persistenced:x:121:128:NVIDIA Persistence Daemon,,,:/nonexistent:"
+                                      "/usr/sbin/nologin\nollama:x:995:995::/usr/share/ollama:/bin/false\n"),
+        server_group(user, persona.gid, extra=made[1] + "nvidia-persistenced:x:128:\nollama:x:995:\n"),
+        server_shadow(user, ident, extra=("nvidia-persistenced", "ollama"), lines=made[2]),
     )
     extra_ps = (
         ps_entry("nvidia-persistenced", 0, "/usr/bin/nvidia-persistenced --user nvidia-persistenced --no-persistence-mode --verbose",
@@ -701,7 +809,7 @@ def build_gpu_ubuntu(persona, ident):
         ps_entry(user, 0, "/opt/conda/bin/python /opt/conda/bin/jupyter-lab --no-browser --port=8888",
                  mem=0.0, vsz=1152664, rss=112836, stat="Ssl"),
     )
-    content = _server_content(persona, ident, files, tasks=412, run_lock=True, accounts=accounts,
+    content = _server_content(persona, ident, files, run_lock=True, accounts=accounts,
                               extra_ps=extra_ps, ctimes=ctimes)
     content.txtcmds["usr/bin/nvidia-smi"] = nvidia_smi(ident)
     return content
@@ -765,7 +873,7 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp
 deb http://deb.debian.org/debian-security {code}-security main
 deb http://deb.debian.org/debian {code}-updates main
 """
-    return _server_content(persona, ident, files, tasks=87, ctimes=ctimes)
+    return _server_content(persona, ident, files, ctimes=ctimes)
 
 
 _PI_CONFIG_TXT = """# For more options and information see
@@ -822,6 +930,13 @@ dtoverlay=dwc2,dr_mode=host
 """
 
 
+def _pi_accounts(text):
+    """passwd, group or shadow of Raspberry Pi OS: systemd-network moved from 998 to 994, no systemd-resolve."""
+    lines = [line for line in text.splitlines(keepends=True) if not line.startswith("systemd-resolve:")]
+    return "".join(line.replace("systemd-network:x:998:998:", "systemd-network:x:994:994:")
+                   .replace("systemd-network:x:998:", "systemd-network:x:994:") for line in lines)
+
+
 def build_raspios(persona, ident):
     """Raspberry Pi OS (Bookworm, arm64) as written by pi-gen: Debian plus the Pi bits."""
     r, user = ident.release, persona.user
@@ -842,15 +957,19 @@ deb http://deb.debian.org/debian {r.extra['codename']}-updates main contrib non-
     pi_groups = "\n".join(f"{name}:x:{gid}:{user}" for name, gid in
                           (("netdev", 105), ("gpio", 997), ("i2c", 998), ("spi", 999), ("input", 101),
                            ("render", 106), ("lpadmin", 110))) + "\n"
+    made = daemon_accounts(persona, ident)
     accounts = (
         server_passwd(user, persona.uid, persona.gid, ",,,", persona.shell,
-                      extra="avahi:x:107:113:Avahi mDNS daemon,,,:/run/avahi-daemon:/usr/sbin/nologin\n"),
-        server_group(user, persona.gid, extra=pi_groups + "avahi:x:113:\n"),
-        server_shadow(user, ident, extra=("avahi",)),
+                      extra=made[0] + "avahi:x:107:113:Avahi mDNS daemon,,,:/run/avahi-daemon:/usr/sbin/nologin\n"),
+        server_group(user, persona.gid, extra=made[1] + pi_groups + "avahi:x:113:\n"),
+        server_shadow(user, ident, extra=("avahi",), lines=made[2]),
     )
+    # pi-gen's gpio, i2c and spi take 997 to 999; systemd's network account takes the next free one and the Pi runs
+    #   no systemd-resolved (unverified: the numbers of a real image)
+    accounts = tuple(_pi_accounts(text) for text in accounts)
     boot = ("/dev/mmcblk0p1", 522232, "/boot/firmware", "vfat",
             "rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=ascii,shortname=mixed,errors=remount-ro", 0.12, 0.14)
-    return _server_content(persona, ident, files, tasks=172, run_lock=True, accounts=accounts,
+    return _server_content(persona, ident, files, run_lock=True, accounts=accounts,
                            boot=boot, ctimes=ctimes)
 
 
@@ -892,7 +1011,7 @@ REDHAT_SUPPORT_PRODUCT_VERSION="{r.os_version_id}"
     accounts = (el_passwd("rhel", persona.user, persona.uid, persona.gid),
                 el_group("rhel", persona.user, persona.gid),
                 el_shadow("rhel", persona.user, ident))
-    return _server_content(persona, ident, files, tasks=104, accounts=accounts,
+    return _server_content(persona, ident, files, accounts=accounts,
                            home=el_home_files("rhel", persona.user),
                            ctimes={"var/log/dnf.log": dnf_ctime})
 
@@ -962,7 +1081,7 @@ REDHAT_SUPPORT_PRODUCT_VERSION="7"
     accounts = (el_passwd("centos", persona.user, persona.uid, persona.gid),
                 el_group("centos", persona.user, persona.gid),
                 el_shadow("centos", persona.user, ident))
-    return _server_content(persona, ident, files, tasks=98, accounts=accounts,
+    return _server_content(persona, ident, files, accounts=accounts,
                            home=el_home_files("centos", persona.user),
                            ctimes=log_ctimes)
 
@@ -972,7 +1091,7 @@ REDHAT_SUPPORT_PRODUCT_VERSION="7"
 #   (unverified: the package version of each patch level, the feature lists)
 SYSTEMD = {"noble": (255, "255.4-1ubuntu8.10"), "jammy": (249, "249.11-0ubuntu3.16"),
            "trixie": (257, "257.9-1~deb13u1"), "bookworm": (252, "252.39-1~deb12u1"), "centos": (219, "")}
-RHEL_SYSTEMD = {"9.4": "252-32.el9_4.7", "9.5": "252-46.el9_5.3", "9.6": "252-51.el9_6.1"}
+RHEL_SYSTEMD = {"9.4": "252-32.el9_4.7", "9.5": "252-46.el9_5.3", "9.6": "252-51.el9_6.3"}
 _FEATURES_DEBIAN = ("+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL "
                     "+ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT "
                     "+QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK -XKBCOMMON +UTMP +SYSVINIT "
@@ -1101,6 +1220,7 @@ UNIT_EXEC = {
     "systemd-resolved.service": "{sd}/systemd-resolved",
     "cloud-init-local.service": "/usr/bin/cloud-init init --local",
     "cloud-init.service": "/usr/bin/cloud-init init",
+    "cloud-init-network.service": "/usr/bin/cloud-init init",
     "cloud-config.service": "/usr/bin/cloud-init modules --mode=config",
     "cloud-final.service": "/usr/bin/cloud-init modules --mode=final",
     "apparmor.service": "/lib/apparmor/apparmor.systemd reload",
@@ -1143,6 +1263,11 @@ UNIT_EXEC = {
     "nvidia-persistenced.service": "/usr/bin/nvidia-persistenced --user nvidia-persistenced --no-persistence-mode "
                                    "--verbose",
     "ollama.service": "/usr/local/bin/ollama serve",
+    "getty@tty1.service": "-/sbin/agetty --noclear %I $TERM",
+    "systemd-timesyncd.service": "!!{sd}/systemd-timesyncd",
+    "inetd.service": "/usr/sbin/inetd",
+    "tuned.service": "/usr/sbin/tuned -l -P",
+    "rhsmcertd.service": "/usr/bin/rhsmcertd",
 }
 # the Type= of a running unit other than simple (unverified: the units of each release)
 UNIT_TYPE = {"systemd-journald.service": "notify", "systemd-logind.service": "notify", "systemd-udevd.service": "notify",
@@ -1151,7 +1276,9 @@ UNIT_TYPE = {"systemd-journald.service": "notify", "systemd-logind.service": "no
              "ModemManager.service": "dbus", "avahi-daemon.service": "dbus", "bluetooth.service": "dbus",
              "wpa_supplicant.service": "dbus", "polkit.service": "dbus", "auditd.service": "forking",
              "chronyd.service": "forking", "postfix.service": "forking", "nvidia-persistenced.service": "forking",
-             "ssh.service": "notify"}
+             "ssh.service": "notify", "systemd-timesyncd.service": "notify", "inetd.service": "notify",
+             "tuned.service": "dbus", "rhsmcertd.service": "forking", "getty@tty1.service": "idle",
+             "sshd.service": "notify"}
 # the programs of the units that are scripts on a real system: shortened text (unverified)
 _SH_SCRIPT = "#!/bin/sh\n# {what}\n\nset -e\n\ncase \"$1\" in\n    *)\n        exit 0\n        ;;\nesac\n"
 _PY_SCRIPT = "#!/usr/bin/python3\n# {what}\n\nimport sys\n\nfrom {module} import main\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n"
@@ -1197,18 +1324,79 @@ def wants_target(name):
         return "cloud-init.target"
     if name.endswith("-wait-online.service"):
         return "network-online.target"
+    if name.startswith("getty@"):
+        return "getty.target"
+    if name == "systemd-timesyncd.service":
+        return "sysinit.target"
     return "multi-user.target"
 
 
+# --- the unit files of the releases ---------------------------------------------------------------
+# unit_files.json.gz: {release: {unit file: text, or {"link": target}}}, read from the official images
+#   (2026-10-14, linux/arm64) after installing the packages of the units: ubuntu:22.04 (jammy) and
+#   ubuntu:24.04 (noble), debian:12 (bookworm, also Raspberry Pi OS) and debian:13 (trixie), almalinux:9
+#   (RHEL 9); centos:7 only telnet.socket, telnet@.service and sshd.service (its systemd does not boot in
+#   a container). Units of no image (NVIDIA, Ollama, the Pi's own) keep the short text of unit_file.
+UNIT_FILES = Path(__file__).resolve().parent / "unit_files.json.gz"
+
+
+@functools.cache
+def _unit_file_data():
+    with gzip.open(UNIT_FILES, "rt", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def unit_texts(persona, ident):
+    """{unit file: text} of the release."""
+    family = persona.family
+    key = family if family in ("rhel", "centos") else "edgeos" if family == "ubiquiti" else \
+        ident.release.extra.get("codename")
+    return {name: text for name, text in _unit_file_data().get(key, {}).items() if isinstance(text, str)}
+
+
+def unit_links(persona, ident):
+    """{unit file: target} of the release's packaged links between unit files of one directory
+    (openbsd-inetd.service -> inetd.service)."""
+    family = persona.family
+    key = family if family in ("rhel", "centos") else "edgeos" if family == "ubiquiti" else \
+        ident.release.extra.get("codename")
+    return {name: entry["link"] for name, entry in _unit_file_data().get(key, {}).items()
+            if isinstance(entry, dict) and "/" not in entry.get("link", "/")}
+
+
+def unit_keys(text):
+    """{key: [values]} of a unit file (the keys of every section, an empty value clears)."""
+    keys = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line[0] in "#;[" or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values = keys.setdefault(key.strip(), [])
+        if value.strip():
+            values.append(value.strip())
+        else:
+            values.clear()
+    return keys
+
+
 def unit_file(persona, ident, unit):
-    """The text of a unit file the image has (shortened to what systemctl shows of it; unverified)."""
+    """The text of a unit file the image has: the release's (unit_texts), else a short one (unverified)."""
+    real = unit_texts(persona, ident).get(unit["path"].rsplit("/", 1)[-1])
+    if real is not None:
+        return real
     name, sd = unit["name"], unit_dir(persona, ident).rsplit("/system", 1)[0]
+    if name.endswith(".slice"):
+        return (f"[Unit]\nDescription={unit['description']}\nDocumentation=man:systemd.special(7)\n"
+                "Before=slices.target\n")
+    if name.endswith(".target"):
+        return f"[Unit]\nDescription={unit['description']}\nDocumentation=man:systemd.special(7)\n"
     if name.endswith(".socket"):
         listen = "".join(f"Listen{'Stream' if 'Stream' in entry else 'Datagram' if 'Datagram' in entry else 'Netlink'}="
                          f"{entry.rsplit(' (', 1)[0]}\n" for entry in unit["listen"])
         body = f"[Socket]\n{listen}"
     else:
-        command = UNIT_EXEC_FAMILY.get(persona.family, {}).get(name, UNIT_EXEC[name]).format(sd=sd)
+        command = (unit.get("exec") or UNIT_EXEC_FAMILY.get(persona.family, {}).get(name, UNIT_EXEC[name])).format(sd=sd)
         kind = (f"Type={UNIT_TYPE[name]}\n" if name in UNIT_TYPE else "") if unit["sub"] == "running" \
             else "Type=oneshot\nRemainAfterExit=yes\n"
         body = f"[Service]\n{kind}ExecStart={command}\n"
@@ -1221,11 +1409,15 @@ GPU_UNITS = (("nvidia-persistenced.service", "NVIDIA Persistence Daemon", "nvidi
 
 
 def systemd_version(persona, ident):
-    """(version, package version) of systemd."""
+    """(version, package version) of systemd: on Debian and Ubuntu the version of the installed package (dpkg -l
+    and systemctl --version agree)."""
     if persona.family == "rhel":
         return 252, RHEL_SYSTEMD.get(ident.release.os_version_id, "252-51.el9_6.1")
     code = "centos" if persona.family == "centos" else ident.release.extra["codename"]
-    return SYSTEMD[code]
+    version, full = SYSTEMD[code]
+    if persona.family in ("ubuntu", "debian", "raspios"):
+        full = system.apt_packages(persona, ident)["installed"].get("systemd", full)
+    return version, full
 
 
 def unit_dir(persona, ident):
@@ -1235,11 +1427,77 @@ def unit_dir(persona, ident):
 
 
 def process_name(command):
-    """The process name systemd shows (comm): the script of an interpreter, else the program."""
-    words = command.split()
-    if len(words) > 1 and words[0].rsplit("/", 1)[-1].startswith("python"):
-        return words[1].rsplit("/", 1)[-1][:15]
-    return words[0].rstrip(":").rsplit("/", 1)[-1][:15]
+    """The process name systemd shows (comm, 15 characters): the program ("nginx: master process ..." -> nginx), of
+    an interpreter the script it runs, after the interpreter's options ("/usr/bin/python3 -Es /usr/sbin/tuned -l -P"
+    -> tuned); the rule of tpot_unit_comm in the patched systemctl."""
+    words = str(command).split()
+    if not words:
+        return ""
+    name = words[0].rstrip(":").lstrip("@").rsplit("/", 1)[-1].lstrip("-")
+    if re.fullmatch(r"(python|perl|ruby|bash|sh)[0-9.]*", name):
+        rest = words[1:]
+        while rest and rest[0].startswith("-"):
+            rest = rest[1:]
+        if rest and rest[0].startswith("/"):
+            name = rest[0].rsplit("/", 1)[-1]
+    return name[:15]
+
+
+# the units of a host the lists above leave out: the getty of the first console, the time client, inetd
+#   (Debian, Ubuntu) and telnet.socket (Red Hat, CentOS) of the telnet daemon, tuned and rhsmcertd (Red Hat)
+#   (unit, description, the text of its process in ps or None, unit file state)
+_HOST_UNITS = {
+    "debian": (("getty@tty1.service", "Getty on tty1", "agetty", "enabled"),
+               ("systemd-timesyncd.service", "Network Time Synchronization", "systemd-timesyncd", "enabled"),
+               ("inetd.service", "Internet superserver", "/usr/sbin/inetd", "enabled")),
+    "rhel": (("getty@tty1.service", "Getty on tty1", "agetty", "enabled"),
+             ("tuned.service", "Dynamic System Tuning Daemon", "/usr/sbin/tuned", "enabled"),
+             ("rhsmcertd.service", "Enable periodic update of entitlement certificates.", "rhsmcertd", "enabled")),
+    "centos": (("getty@tty1.service", "Getty on tty1", "agetty", "enabled"),
+               ("tuned.service", "Dynamic System Tuning Daemon", "/usr/sbin/tuned", "enabled")),
+}
+# the Documentation= of the units of no unit file (CentOS 7; unverified: those of RHEL 9's files)
+_DOCS = {"sshd.service": ["man:sshd(8)", "man:sshd_config(5)"], "tuned.service": ["man:tuned(8)", "man:tuned.conf(5)",
+         "man:tuned-adm(8)"], "user.slice": ["man:systemd.special(7)"], "telnet.socket": ["man:telnetd(8)"],
+         "getty@tty1.service": ["man:agetty(8)", "man:systemd-getty-generator(8)",
+                                "http://0pointer.de/blog/projects/serial-console.html"],
+         "systemd-journald.service": ["man:systemd-journald.service(8)", "man:journald.conf(5)"]}
+# the targets of a booted server (unit, description, seconds after boot; unverified: when each is reached)
+TARGETS = (("basic.target", "Basic System", 3.0), ("getty.target", "Login Prompts", 9.0),
+           ("local-fs.target", "Local File Systems", 1.5), ("multi-user.target", "Multi-User System", 9.5),
+           ("network-online.target", "Network is Online", 8.0), ("network.target", "Network", 7.5),
+           ("paths.target", "Path Units", 2.8), ("slices.target", "Slice Units", 0.5),
+           ("sockets.target", "Socket Units", 2.9), ("swap.target", "Swaps", 1.4),
+           ("sysinit.target", "System Initialization", 2.7), ("timers.target", "Timer Units", 2.9))
+# Red Hat's telnet.socket: systemd itself listens on 23 and starts in.telnetd for each connection
+TELNET_SOCKET = ("telnet.socket", "Telnet Server Activation Socket", "telnet@.service", ("[::]:23 (Stream)",))
+# the sockets that carry connections at once (SUB running; the others listen)
+_RUNNING_SOCKETS = frozenset({"dbus.socket", "systemd-journald-dev-log.socket", "systemd-journald.socket"})
+
+
+def _unit_details(unit, text, family):
+    """Docs, Type, the .wants / .requires links, the aliases and the command of a unit from its file."""
+    name = unit["name"]
+    if text is None:
+        unit.update({"docs": list(_DOCS.get(name, ())), "wants": [f"{wants_target(name)}.wants"]
+                     if unit["state"] in ("enabled", "disabled") else [], "alias": []})
+        if name in UNIT_EXEC or name in UNIT_EXEC_FAMILY.get(family, {}):
+            unit["exec"] = UNIT_EXEC_FAMILY.get(family, {}).get(name, UNIT_EXEC.get(name, ""))
+        return
+    keys = unit_keys(text)
+
+    def words(key):
+        return [word for value in keys.get(key, []) for word in value.split()]
+
+    unit["description"] = (keys.get("Description") or [unit["description"]])[-1].replace("%I", name.split("@")[-1]
+                                                                                         .rsplit(".", 1)[0])
+    unit["docs"] = words("Documentation")
+    unit["wants"] = [f"{t}.wants" for t in words("WantedBy")] + [f"{t}.requires" for t in words("RequiredBy")]
+    unit["alias"] = words("Alias")
+    if keys.get("Type"):
+        unit["kind"] = keys["Type"][-1]
+    if keys.get("ExecStart"):
+        unit["exec"] = keys["ExecStart"][-1].lstrip("@-+!:")
 
 
 def systemd_units(persona, ident, processes):
@@ -1247,10 +1505,13 @@ def systemd_units(persona, ident, processes):
     and the services of the image, each daemon with its process of ps."""
     version, full = systemd_version(persona, ident)
     family = persona.family
-    entries = SERVICE_UNITS[family] + (GPU_UNITS if ident.hardware.gpus else ())
+    entries = SERVICE_UNITS[family] + (GPU_UNITS if ident.hardware.gpus else ()) + \
+        _HOST_UNITS["debian" if family in ("ubuntu", "raspios") else family]
+    code = ident.release.extra.get("codename")
     core = tuple((name, _CORE_219.get(name, text) if version < 220 else
                   ("Load/Save OS Random Seed" if name == "systemd-random-seed.service" and version >= 254 else text),
-                  match, state) for name, text, match, state in _CORE)
+                  match, state) for name, text, match, state in _CORE
+                 if not (name == "systemd-update-utmp.service" and code == "trixie"))
     if version < 250:
         entries = tuple(e if e[0] != "systemd-networkd.service" else (e[0], "Network Service") + e[2:]
                         for e in entries)
@@ -1258,14 +1519,21 @@ def systemd_units(persona, ident, processes):
         # apport of 24.04 is a native unit
         entries = tuple(e if e[0] != "apport.service" else (e[0], "automatic crash report generation") + e[2:]
                         for e in entries)
+    if code == "trixie":
+        # cloud-init 25 of Debian 13 names its network stage cloud-init-network.service
+        entries = tuple(e if e[0] != "cloud-init.service" else ("cloud-init-network.service",) + e[1:]
+                        for e in entries)
     rng = rng_for(ident, "systemd")
     pids = {p["PID"] for p in processes}
     directory = unit_dir(persona, ident)
-    noble = ident.release.extra.get("codename") == "noble"
+    noble = code == "noble"
+    texts = unit_texts(persona, ident)
     units = []
     for name, description, match, state in sorted(core + entries, key=lambda e: e[0].lower()):
         unit = {"name": name, "description": description, "state": state, "preset": "enabled",
                 "path": f"{directory}/{name}"}
+        if name.startswith("getty@"):
+            unit.update({"path": f"{directory}/getty@.service", "file": "getty@.service"})
         if name == "apport.service" and version < 255:
             # before 24.04 apport is an LSB script, the SysV generator makes its unit
             unit.update({"path": "/etc/init.d/apport", "state": "generated"})
@@ -1280,14 +1548,27 @@ def systemd_units(persona, ident, processes):
             while pid in pids:
                 pid += 1
             unit.update({"sub": "exited", "start": round(rng.uniform(0.8, 4.0), 3), "pid": pid,
-                         "cpu_ms": rng.randint(4, 420)})
+                         "cpu_ms": rng.randint(4, 420), "kind": "oneshot"})
         else:
             memory = int(process["RSS"] * 1024 * rng.uniform(1.1, 1.5))
+            # the processes the daemon forked stay in its CGroup
+            children = [[p["PID"], p["COMMAND"]] for p in processes if p.get("PPID") == process["PID"]]
             unit.update({"sub": "running", "start": round(rng.uniform(2.0, 9.0), 3), "pid": process["PID"],
                          "comm": process_name(process["COMMAND"]), "command": process["COMMAND"],
-                         "tasks": rng.randint(2, 12) if "l" in process["STAT"] else 1, "memory": memory,
-                         "peak": int(memory * rng.uniform(1.05, 1.4)),
+                         "children": children,
+                         "tasks": (rng.randint(2, 12) if "l" in process["STAT"] else 1) + len(children),
+                         "memory": memory,
+                         "peak": int(memory * rng.uniform(1.05, 1.4)), "kind": UNIT_TYPE.get(name, "simple"),
                          "cpu_ms": rng.randint(30, 900) + int(ident.boot_offset / 3600 * rng.uniform(2, 60))})
+        text = texts.get(unit["path"].rsplit("/", 1)[-1]) if unit["path"].startswith(directory) else None
+        _unit_details(unit, text, family)
+        if unit["sub"] == "running" and not any(unit_keys(text or "").get(k) for k in
+                                                ("ExecStartPre", "ExecStartPost", "ExecCondition")):
+            # the CPU of a running unit is that of its processes (systemctl counts them as ps does at the call);
+            #   only a unit that ran helpers before its daemon has more
+            unit["cpu_ms"] = 0
+        if unit["sub"] == "exited":
+            unit["kind"] = "oneshot"
         if name in ("ssh.service", "sshd.service"):
             unit["log"] = list(SSH_LOG)
             if noble:
@@ -1296,22 +1577,61 @@ def systemd_units(persona, ident, processes):
         units.append(unit)
     services = {u["name"] for u in units}
     dbus = "dbus-broker.service" if "dbus-broker.service" in services else "dbus.service"
-    for name, description, triggers, listen in SOCKETS + ((SSH_SOCKET,) if noble else ()):
+    sockets = SOCKETS + ((SSH_SOCKET,) if noble else ()) + ((TELNET_SOCKET,) if family in ("rhel", "centos") else ())
+    for name, description, triggers, listen in sockets:
         triggers = dbus if name == "dbus.socket" else triggers
-        static = name != "ssh.socket"
-        units.append({"name": name, "description": description, "state": "static" if static else "enabled",
-                      "preset": "enabled", "path": f"{directory}/{name}", "sub": "listening",
-                      "start": round(rng.uniform(0.3, 1.5), 3), "triggers": triggers, "listen": list(listen),
-                      "memory": rng.choice((4096, 8192, 12288)), "peak": rng.choice((262144, 393216, 524288)),
-                      "cpu_ms": rng.randint(1, 9)})
+        static = name not in ("ssh.socket", "telnet.socket")
+        unit = {"name": name, "description": description, "state": "static" if static else "enabled",
+                "preset": "disabled" if name == "telnet.socket" else "enabled", "path": f"{directory}/{name}",
+                "sub": "running" if name in _RUNNING_SOCKETS or name == "ssh.socket" else "listening",
+                "start": round(rng.uniform(0.3, 1.5), 3), "triggers": triggers, "listen": list(listen),
+                "memory": rng.choice((4096, 8192, 12288)), "peak": rng.choice((262144, 393216, 524288)),
+                "cpu_ms": rng.randint(1, 9)}
+        if name == "telnet.socket":
+            # Accept=yes: an instance of telnet@.service per connection, counted since boot
+            unit.update({"accept": True, "triggers": "", "accepted": rng.randint(40, 4000)})
+        if name == "ssh.socket":
+            unit["listen"] = ["0.0.0.0:22 (Stream)", "[::]:22 (Stream)"]
+        _unit_details(unit, texts.get(name), family)
+        units.append(unit)
+    memory = rng.randint(6, 40) << 20
+    units.append({"name": "user.slice", "description": "User and Session Slice", "state": "static",
+                  "preset": "enabled", "path": f"{directory}/user.slice", "sub": "active",
+                  "start": round(rng.uniform(4.0, 9.0), 3), "memory": memory, "peak": int(memory * rng.uniform(1.2, 1.8)),
+                  "cpu_ms": rng.randint(400, 9000), "docs": ["man:systemd.special(7)"], "wants": [], "alias": []})
+    # system.slice (no unit file: "Loaded: loaded") with the daemons of ps, and the targets of the boot
+    running = [u for u in units if u.get("sub") == "running" and u["name"].endswith(".service")]
+    memory = sum(int(u.get("memory", 0)) for u in running)
+    units.append({"name": "system.slice", "description": "System Slice", "state": "", "preset": "", "path": "",
+                  "sub": "active", "start": 0.4, "memory": memory, "peak": int(memory * 1.15),
+                  "cpu_ms": sum(int(u.get("cpu_ms", 0)) for u in running), "docs": ["man:systemd.special(7)"],
+                  "tasks": sum(int(u.get("tasks", 1)) for u in running), "wants": [], "alias": [], "system": True})
+    for name, description, start in TARGETS:
+        units.append({"name": name, "description": description, "state": "static", "preset": "enabled",
+                      "path": f"{directory}/{name}", "sub": "active", "start": start + rng.uniform(0, 0.4),
+                      "docs": ["man:systemd.special(7)"], "wants": [], "alias": []})
+    if family in ("rhel", "centos"):
+        # the template telnet.socket starts per connection (a unit file, no unit of its own)
+        units.append({"name": "telnet@.service", "description": "Telnet Server", "state": "static",
+                      "preset": "disabled", "path": f"{directory}/telnet@.service", "sub": "dead", "template": True,
+                      "exec": "-/usr/sbin/in.telnetd", "docs": [], "wants": [], "alias": []})
     units.sort(key=lambda u: (u["name"].rsplit(".", 1)[-1], u["name"].lower()))
     data = {"version": version, "full": full, "features": SYSTEMD_FEATURES.get(
                 "centos" if family == "centos" else "rhel" if family == "rhel" else ident.release.extra["codename"],
                 _FEATURES_DEBIAN),
             "unit_dir": directory, "tasks_max": int(ident.hardware.mem_kb / 128 * 0.15),
-            "init": processes[0]["COMMAND"], "units": units}
-    if family in ("ubuntu", "debian", "raspios") and not noble:
-        data["aliases"] = {"sshd.service": "ssh.service"}
+            "init": processes[0]["COMMAND"], "units": units,
+            # the preset of a unit no preset file names: Debian enables, Red Hat disables
+            "preset": "disabled" if family in ("rhel", "centos") else "enabled"}
+    if family in ("ubuntu", "debian", "raspios"):
+        data["sysv_install"] = f"{_systemd_paths(ident)}/systemd-sysv-install"
+        if not noble:
+            data["aliases"] = {"sshd.service": "ssh.service"}
+        data["aliases"] = {**data.get("aliases", {}), "openbsd-inetd.service": "inetd.service"}
     if family in ("rhel", "centos"):
         data["redirect"] = True
+    if family == "rhel":
+        # Red Hat's 252 has the peak memory and the Until: line of later releases, and names units in its journal
+        #   by their description (refs almalinux-9-status-sshd)
+        data.update({"peak": True, "until": True, "description_label": True})
     return data

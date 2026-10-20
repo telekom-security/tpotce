@@ -7,7 +7,8 @@ import unittest.mock
 from pathlib import Path
 
 from tests.helpers import DIST, tmpdir
-from tpot_personas.ssh_profiles import COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, TWISTED_CIPHERS, TWISTED_MACS
+from tpot_personas.ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, TWISTED_CIPHERS, TWISTED_KEX,
+                                        TWISTED_MACS)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.1"
 # what Twisted 26.4.0 offers (SSHTransportBase.supported*), from the image build
@@ -21,6 +22,9 @@ TWISTED = {
     "key_types": {"ecdsa-sha2-nistp256": "ecdsa-sha2-nistp256", "rsa-sha2-256": "ssh-rsa", "rsa-sha2-512": "ssh-rsa",
                   "ssh-ed25519": "ssh-ed25519", "ssh-rsa": "ssh-rsa"},
     "sign_types": True,
+    "kex": set(TWISTED_KEX),
+    # SSHServerTransport.sendExtInfo, called by its _keySetup
+    "ext_info": True,
 }
 
 
@@ -97,7 +101,26 @@ class SshSupportTest(unittest.TestCase):
         shutil.rmtree(self.root)
         shutil.copytree(FIXTURE, self.root)
         self.assertEqual(self.problems(),
-                         ["host key algorithms: Cowrie (ssh/factory.py) does not advertise [ssh] host_key_algorithms"])
+                         ["host key algorithms: Cowrie (ssh/factory.py) does not advertise [ssh] host_key_algorithms",
+                          "key exchanges: Cowrie (ssh/factory.py) does not offer [ssh] kex_algorithms",
+                          "server-sig-algs: Cowrie (ssh/transport.py) does not send [ssh] server_sig_algs"])
+
+    def test_twisted_without_a_key_exchange(self):
+        twisted = dict(TWISTED, kex=TWISTED["kex"] - {"curve25519-sha256"})
+        self.assertEqual(self.problems(twisted), ["key exchange not in Twisted: curve25519-sha256"])
+
+    def test_twisted_without_send_ext_info(self):
+        self.assertEqual(self.problems(dict(TWISTED, ext_info=False)),
+                         ["server-sig-algs: Twisted's server sends no EXT_INFO through sendExtInfo in _keySetup"])
+
+    def test_cowrie_without_the_kex_and_sig_algs_patch(self):
+        self.edit("src/cowrie/ssh/factory.py", 'CowrieConfig.get("ssh", "kex_algorithms"',
+                  'CowrieConfig.get("ssh", "kex"')
+        self.edit("src/cowrie/ssh/transport.py", 'CowrieConfig.get("ssh", "server_sig_algs"',
+                  'CowrieConfig.get("ssh", "sig_algs"')
+        self.assertEqual(self.problems(), [
+            "key exchanges: Cowrie (ssh/factory.py) does not offer [ssh] kex_algorithms",
+            "server-sig-algs: Cowrie (ssh/transport.py) does not send [ssh] server_sig_algs"])
 
     def test_main_fails_and_names_the_problem(self):
         twisted = dict(TWISTED, public_keys={"ssh-rsa"})

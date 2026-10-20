@@ -121,10 +121,13 @@ _SERVER_SYSTEM_ACCOUNTS = ("daemon", "bin", "sys", "sync", "games", "man", "lp",
                            "systemd-resolve", "messagebus", "sshd")
 
 
-def server_shadow(user, ident, extra=()):
+def server_shadow(user, ident, extra=(), lines=()):
+    """lines: (name, password, the fields after the change day) of accounts made later (adduser, sysusers)."""
     system, root, own = shadow_days(ident)
+    made = [f"{name}:{password}:{system}{rest}" for name, password, rest in lines]
     lines = [f"root:*:{root}:0:99999:7:::"]
     lines += [f"{name}:*:{system}:0:99999:7:::" for name in _SERVER_SYSTEM_ACCOUNTS + tuple(extra)]
+    lines += made
     lines.append(f"{user}:*:{own}:0:99999:7:::")
     return "\n".join(lines) + "\n"
 
@@ -604,11 +607,14 @@ def kernel_series(kernel_version):
 
 def cpuinfo_mips(persona, hw, kernel=""):
     """MIPS /proc/cpuinfo as the kernel prints it: 2.6 kernels without machine, isa
-    and Options lines; 4.x and later with them, kscratch, package and the VPE of MT cores."""
+    and Options lines; 3.x with machine, the newer ASEs and kscratch, without isa, Options and
+    package (Linux 3.3.8 of the Archer C7; unverified: the minor releases between); 4.x and later
+    with them all and the VPE of MT cores."""
     _, watch, ases_old, ases_new, mt = MIPS_CORES.get(hw.cpu_model, (None, None, "mips16 dsp", "mips16 dsp", False))
-    new = kernel_series(kernel) >= (3, 0)
+    series = kernel_series(kernel)
+    three, new = series >= (3, 0), series >= (4, 0)
     head = f"system type\t\t: {hw.board}\n" if hw.board else ""
-    if new and hw.machine:
+    if three and hw.machine:
         head += f"machine\t\t\t: {hw.machine}\n"
     blocks = []
     for i in range(hw.cpus):
@@ -623,12 +629,14 @@ def cpuinfo_mips(persona, hw, kernel=""):
             lines.append(f"hardware watchpoint\t: yes, count: 4, address/irw mask: {watch}")
         if new:
             lines.append("isa\t\t\t: mips1 mips2 mips32r1 mips32r2")
-        lines.append(f"ASEs implemented\t: {ases_new if new else ases_old}")
+        lines.append(f"ASEs implemented\t: {ases_new if three else ases_old}")
         if new:
             lines.append(f"Options implemented\t: {_MIPS_OPTIONS}")
         lines.append("shadow register sets\t: 1")
+        if three:
+            lines.append("kscratch registers\t: 0")
         if new:
-            lines += ["kscratch registers\t: 0", "package\t\t\t: 0"]
+            lines.append("package\t\t\t: 0")
         lines.append(f"core\t\t\t: {i // 2 if mt else i}")
         if new and mt:
             lines.append(f"VPE\t\t\t: {i % 2}")
@@ -727,9 +735,9 @@ def nproc(hw):
 
 # procps-ng of each system (top -v; patched top: KiB and the old columns before 3.3.13): Ubuntu, Debian
 #   and Raspberry Pi OS per release, RHEL 9 3.3.17 (as its dnf data), CentOS 7 3.3.10, EdgeOS (Debian 9)
-#   3.3.12; unverified: DSM 7.2 (3.3.17 here)
+#   3.3.12, DSM 7.2 3.3.15 (the procps-ng-3.x of Synology's GPL sources of 7.2-64570 and 7.2-72806)
 PROCPS_VERSIONS = {"noble": "4.0.4", "jammy": "3.3.17", "trixie": "4.0.4", "bookworm": "4.0.2"}
-PROCPS_FAMILIES = {"rhel": "3.3.17", "centos": "3.3.10", "ubiquiti": "3.3.12", "synology": "3.3.17"}
+PROCPS_FAMILIES = {"rhel": "3.3.17", "centos": "3.3.10", "ubiquiti": "3.3.12", "synology": "3.3.15"}
 
 
 def procps_version(persona, ident):
@@ -745,13 +753,15 @@ def load_base(ident):
 
 
 def top_keys(persona, ident, content):
-    """[shell] keys of the patched top: its style (BusyBox without coreutils), procps-ng's version,
-    the kernel threads ps does not list (the tasks of the system less the ps list, the session's
-    server process and top itself) and the base load."""
+    """[shell] keys of the patched top and ps: the style (BusyBox without coreutils), procps-ng's
+    version, the number of kernel threads (those of kthreads.kernel_threads, which ps lists), the
+    pid_max of the system and the base load."""
+    from .kthreads import kernel_threads, pid_max
     keys = {"top_style": content.top_style}
     if content.top_style == "procps":
         keys["procps_version"] = procps_version(persona, ident)
-    keys["kernel_threads"] = max(0, content.tasks - len(content.processes) - 2)
+    keys["kernel_threads"] = len(kernel_threads(persona, ident, content.processes, content.filesystems))
+    keys["pid_max"] = pid_max(persona)
     keys["load_base"] = f"{load_base(ident):.2f}"
     return keys
 
@@ -872,9 +882,12 @@ def ps_user(name):
     return name if len(name) <= 8 else name[:7] + "+"
 
 
-def ps_entry(user, pid, command, cpu=0.0, mem=0.1, vsz=0, rss=0, stat="S", tty="?", start=None):
-    return {
+def ps_entry(user, pid, command, cpu=0.0, mem=0.1, vsz=0, rss=0, stat="S", tty="?", start=None, parent=None):
+    """parent: the start of the command of the daemon that forked it (assign_processes makes it its PPID)."""
+    entry = {
         "USER": ps_user(user),
+        # the full name: ps selects and prints it (-u, user:20)
+        "USERNAME": user,
         "PID": pid,
         "CPU": cpu,
         "MEM": mem,
@@ -886,10 +899,14 @@ def ps_entry(user, pid, command, cpu=0.0, mem=0.1, vsz=0, rss=0, stat="S", tty="
         "TIME": 0.0,
         "COMMAND": command,
     }
+    if parent:
+        entry["PARENT"] = parent
+    return entry
 
 
 def is_login_shell(entry):
-    return entry["TTY"].startswith(TTY_PREFIXES)
+    # a getty waits on its console from boot on: no login
+    return entry["TTY"].startswith(TTY_PREFIXES) and "getty" not in entry["COMMAND"]
 
 
 def ps_start(ts, now):
@@ -920,10 +937,21 @@ def assign_processes(ident, entries):
             pid = 1 if pid == 0 else pid + (rng.randint(150, 450) if pid == 1 else rng.randint(8, 220))
             entry["START"] = boot
         entry["PID"] = pid
+    # a forked daemon is the child of the daemon before it whose command its PARENT starts (ps PPID, the
+    #   CGroup of the daemon's unit); the others are children of init
+    for index, entry in enumerate(entries):
+        parent = entry.pop("PARENT", None)
+        if parent:
+            entry["PPID"] = next((e["PID"] for e in reversed(entries[:index]) if e["COMMAND"].startswith(parent)), 1)
     return entries
 
 
 # --- the parts every persona has -------------------------------------------------
+
+def _pid_max(persona):
+    from .kthreads import pid_max
+    return pid_max(persona)
+
 
 def base_files(persona, ident, passwd, group, shadow, home=None):
     serial = pi_serial(ident) if persona.hardware_platform == "aarch64" else "0000000000000000"
@@ -937,6 +965,7 @@ def base_files(persona, ident, passwd, group, shadow, home=None):
         "proc/mounts": PROC_MOUNTS,
         "proc/cpuinfo": cpuinfo(persona, ident.hardware, serial, ident.release.kernel_version),
         "proc/meminfo": meminfo(ident),
+        "proc/sys/kernel/pid_max": f"{_pid_max(persona)}\n",
     }
     if persona.kind == "server" and persona.user != "root":
         files.update(home_files(persona.user) if home is None else home)

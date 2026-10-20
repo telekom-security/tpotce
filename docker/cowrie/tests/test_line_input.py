@@ -419,7 +419,7 @@ class LineInputTest(unittest.TestCase):
         source = (root / PROTOCOL).read_text()
         namespace = {"CowrieConfig": FakeConfig(values)}
         if root != FIXTURE:
-            module_parts(source, ["tpot_history_size"], namespace)
+            module_parts(source, ["tpot_history_size", "tpot_history_control"], namespace)
 
         class RecvLine:
             @staticmethod
@@ -460,6 +460,17 @@ class LineInputTest(unittest.TestCase):
                 self.assertEqual(protocol.historyPosition, size)
                 self.assertEqual(protocol.received, lines)
 
+    def test_the_history_holds_at_most_1000_lines(self):
+        """HISTSIZE=10000 of EdgeOS: the variable says 10000, the line editor holds the last 1000 lines and
+        numbers on from those it dropped."""
+        protocol = self.history_protocol(self.patched, {("shell", "history_size_root"): "10000"})
+        lines = [f"echo {n}".encode() for n in range(1, 1501)]
+        for line in lines:
+            protocol.enter(line)
+        self.assertEqual(protocol.historyLines, lines[-1000:])
+        self.assertEqual(protocol.tpot_history_base, 500)
+        self.assertEqual(len(protocol.tpot_history_times), 1000)
+
     def test_below_the_cap_the_history_is_upstream(self):
         rng = random.Random(5)
         lines = [b"" if rng.random() < 0.1 else f"ls {rng.randrange(50)}".encode() for _ in range(300)]
@@ -486,13 +497,13 @@ class LineInputTest(unittest.TestCase):
 
     def test_history_sizes_of_the_personas(self):
         """HISTSIZE of the login shell, (root, other users): Ubuntu's /root/.bashrc and /etc/skel/.bashrc
-        set 1000; Debian's /root/.bashrc sets none (bash's 500), its /etc/skel/.bashrc 1000; RHEL and
-        CentOS set 1000 in /etc/profile; BusyBox keeps FEATURE_EDITING_HISTORY lines (15 up to 1.16,
+        set 1000; Debian's /root/.bashrc sets none (bash's 500), its /etc/skel/.bashrc 1000; EdgeOS 10000
+        (vyatta-cfg of the ER-e50 image); RHEL and CentOS set 1000 in /etc/profile; BusyBox keeps FEATURE_EDITING_HISTORY lines (15 up to 1.16,
         255 from 1.17, OpenWrt's build 256)."""
         expected = {"ubuntu-noble": (1000, 1000), "ubuntu-jammy": (1000, 1000), "gpu-ubuntu": (1000, 1000),
                     "debian-trixie": (500, 1000), "debian-bookworm": (500, 1000), "raspios": (500, 1000),
-                    "ubiquiti-edgerouter-x": (500, 1000), "rhel-9": (1000, 1000), "centos-7": (1000, 1000),
-                    "synology-dsm": (500, 500), "dlink-dir859": (15, 15), "tplink-wr841n": (255, 255),
+                    "ubiquiti-edgerouter-x": (10000, 10000), "rhel-9": (1000, 1000), "centos-7": (1000, 1000),
+                    "synology-dsm": (500, 500), "dlink-dir859": (15, 15), "tplink-archer-c7": (255, 255),
                     "zyxel-nas326": (255, 255), "qnap-qts": (255, 255), "ipcam": (255, 255),
                     "openwrt": (256, 256)}
         self.assertEqual(set(expected), set(catalog.ids()))
@@ -505,12 +516,310 @@ class LineInputTest(unittest.TestCase):
     def test_the_other_keys_of_the_line_editor_stay_upstream(self):
         upstream = class_methods((FIXTURE / PROTOCOL).read_text(), "HoneyPotInteractiveProtocol")
         patched = class_methods((self.patched / PROTOCOL).read_text(), "HoneyPotInteractiveProtocol")
-        self.assertEqual(set(upstream), set(patched))
+        # tpot_one_write and _deliverBuffer: the line of the history in one write
+        self.assertEqual(set(upstream) | {"tpot_one_write", "_deliverBuffer", "handle_UP", "handle_DOWN"}, set(patched))
         # characterReceived: the bound (and top's keys); timeoutConnection: top gives the cursor back;
-        # handle_RETURN: the history keeps HISTSIZE lines
-        for name in sorted(set(upstream) - {"characterReceived", "timeoutConnection", "handle_RETURN"}):
+        # handle_RETURN: the history keeps HISTSIZE lines; handle_CTRL_U: one write
+        for name in sorted(set(upstream) - {"characterReceived", "timeoutConnection", "handle_RETURN",
+                                            "handle_CTRL_U"}):
             with self.subTest(name=name):
                 self.assertEqual(patched[name], upstream[name])
+
+
+    # -- HISTCONTROL and the numbers of `history` -----------------------------------------------
+
+    def test_ignoredups_and_ignorespace_as_bash(self):
+        # bash 5.2 / 4.2 with HISTCONTROL=ignoreboth: "echo a", "echo a", " echo b", "history" keep
+        #   "echo a" and "history"; ignoredups (RHEL's /etc/profile) keeps " echo b"
+        lines = [b"echo a", b"echo a", b" echo b", b"history"]
+        for control, kept in (("ignoreboth", [b"echo a", b"history"]),
+                              ("ignoredups:ignorespace", [b"echo a", b"history"]),
+                              ("ignoredups", [b"echo a", b" echo b", b"history"]),
+                              ("ignorespace", [b"echo a", b"echo a", b"history"]),
+                              ("", lines), ("erasedups", lines)):
+            with self.subTest(control=control):
+                protocol = self.history_protocol(self.patched, {("shell", "history_control_root"): control})
+                for line in lines:
+                    protocol.enter(line)
+                self.assertEqual(protocol.historyLines, kept)
+                self.assertEqual(protocol.historyPosition, len(kept))
+                # every line still runs
+                self.assertEqual(protocol.received, lines)
+
+    def test_history_control_of_root_and_users(self):
+        values = {("shell", "history_control_root"): "", ("shell", "history_control"): "ignoreboth"}
+        for uid, kept in ((0, 3), (1000, 1)):
+            with self.subTest(uid=uid):
+                protocol = self.history_protocol(self.patched, values, uid)
+                for line in (b"ls", b"ls", b" ls"):
+                    protocol.enter(line)
+                self.assertEqual(len(protocol.historyLines), kept)
+
+    def test_the_numbers_go_on_past_the_cap(self):
+        protocol = self.history_protocol(self.patched, {("shell", "history_size_root"): "3"})
+        for line in (b"echo 1", b"echo 2", b"echo 3", b"echo 4", b"echo 5", b"history"):
+            protocol.enter(line)
+        self.assertEqual(protocol.historyLines, [b"echo 4", b"echo 5", b"history"])
+        self.assertEqual(protocol.tpot_history_base, 3)
+
+    def history_output(self, protocol, args=(), style="bash"):
+        source = (self.patched / "src/cowrie/commands/base.py").read_text()
+        config = FakeConfig({("shell", "not_found_style"): style})
+        call = method(source, "Command_history", "call", {"CowrieConfig": config})
+        out = []
+
+        class Command:
+            pass
+
+        command = Command()
+        command.args, command.protocol, command.write = list(args), protocol, out.append
+        call(command)
+        return "".join(out)
+
+    def test_history_numbers_as_bash(self):
+        # bash 5.2 (debian:12) with HISTSIZE=3 after five lines: "    4  echo 4" ... "    6  history"
+        protocol = self.history_protocol(self.patched, {("shell", "history_size_root"): "3"})
+        for line in (b"echo 1", b"echo 2", b"echo 3", b"echo 4", b"echo 5", b"history"):
+            protocol.enter(line)
+        self.assertEqual(self.history_output(protocol), "    4  echo 4\n    5  echo 5\n    6  history\n")
+        for line in (b"echo 6", b"history"):
+            protocol.enter(line)
+        self.assertEqual(self.history_output(protocol), "    6  history\n    7  echo 6\n    8  history\n")
+        # history -c: bash numbers from 1 again ("    1  echo 3", "    2  history")
+        self.history_output(protocol, ["-c"])
+        for line in (b"echo 3", b"history"):
+            protocol.enter(line)
+        self.assertEqual(self.history_output(protocol), "    1  echo 3\n    2  history\n")
+
+    def test_history_takes_a_number_of_bash(self):
+        """history N: a count bash takes (intmax_t), else "history: N: numeric argument required" and status 1 (refs
+        final-wave debian-12-ffw-history-*: bash -c writes "bash: line 1: ", the login shell "-bash: ")."""
+        import json
+        refs = [e for e in json.loads((Path(__file__).parent / "fixtures" / "final_wave.json").read_text())["entries"]
+                if e["id"].startswith("debian-12-ffw-history-")]
+        self.assertEqual(len(refs), 7)
+        protocol = self.history_protocol(self.patched, {})
+        for line in (b"echo 1", b"history"):
+            protocol.enter(line)
+        source = (self.patched / "src/cowrie/commands/base.py").read_text()
+        call = method(source, "Command_history", "call", {"CowrieConfig": FakeConfig({})})
+        for ref in refs:
+            word = ref["cmd"].split(" ", 1)[1]
+            with self.subTest(word=word[:24]):
+                out, err = [], []
+
+                class Command:
+                    exit_code = 0
+
+                command = Command()
+                command.args, command.protocol, command.write, command.errorWrite = [word], protocol, out.append, \
+                    err.append
+                command.shell = type("Shell", (), {"error_prefix": staticmethod(lambda: "-bash: ")})()
+                call(command)
+                self.assertEqual(("".join(err), command.exit_code),
+                                 (ref["stderr"].replace("bash: line 1: ", "-bash: "), ref["rc"]))
+                self.assertEqual("".join(out), "" if ref["rc"] else "    1  echo 1\n    2  history\n"[
+                    : None if int(word) > 1 else 0] or "    2  history\n" * (int(word) == 1))
+
+    def test_history_with_histtimeformat(self):
+        """HISTTIMEFORMAT='%FT%T%z ' of EdgeOS (vyatta-cfg, in the shell's environment): bash writes the time each line
+        was typed before it ("    1  2026-10-20T01:26:35+0000 echo a", bash 4.4); a line without its time "??"
+        (histtime of bash 4.4); history N keeps the times with their lines; without the variable no times."""
+        protocol = self.history_protocol(self.patched, {("shell", "history_size_root"): "3"})
+        for line in (b"echo 1", b"echo 2", b"echo 3", b"history"):
+            protocol.enter(line)
+        protocol.tpot_history_times = [1792462282.0, 1792462283.0, 1792462342.0]
+        source = (self.patched / "src/cowrie/commands/base.py").read_text()
+        call = method(source, "Command_history", "call",
+                      {"CowrieConfig": FakeConfig({("shell", "not_found_style"): "bash"})})
+
+        def history(args=(), environ=None):
+            out = []
+            call(types.SimpleNamespace(args=list(args), protocol=protocol, write=out.append,
+                                       environ={"HISTTIMEFORMAT": "%FT%T%z "} if environ is None else environ))
+            return "".join(out)
+
+        self.assertEqual(history(), "    2  2026-10-20T02:11:22+0000 echo 2\n"
+                                    "    3  2026-10-20T02:11:23+0000 echo 3\n"
+                                    "    4  2026-10-20T02:12:22+0000 history\n")
+        self.assertEqual(history(["1"]), "    4  2026-10-20T02:12:22+0000 history\n")
+        protocol.tpot_history_times = [1792462342.0]
+        self.assertEqual(history(), "    2  ??echo 2\n    3  ??echo 3\n    4  2026-10-20T02:12:22+0000 history\n")
+        # after `unset HISTTIMEFORMAT` (and without it) as before
+        self.assertEqual(history(environ={}), "    2  echo 2\n    3  echo 3\n    4  history\n")
+        self.assertEqual(self.history_output(protocol), "    2  echo 2\n    3  echo 3\n    4  history\n")
+
+    def test_history_n_prints_the_last_n_lines(self):
+        # bash 5.2: `history 2` gives the last two lines with their numbers (the history 2 line itself
+        #   among them); BusyBox ash's history takes no count and lists every line
+        protocol = self.history_protocol(self.patched, {("shell", "history_size_root"): "3"})
+        for line in (b"echo 1", b"echo 2", b"echo 3", b"echo 4", b"history 2"):
+            protocol.enter(line)
+        self.assertEqual(self.history_output(protocol, ["2"]), "    4  echo 4\n    5  history 2\n")
+        self.assertEqual(self.history_output(protocol, ["9"]), "    3  echo 3\n    4  echo 4\n    5  history 2\n")
+        self.assertEqual(self.history_output(protocol, ["0"]), "")
+        self.assertEqual(self.history_output(protocol, ["2"], style="ash"),
+                         "   0 echo 3\n   1 echo 4\n   2 history 2\n")
+
+    def test_history_of_busybox_ash(self):
+        # BusyBox 1.27.2 / 1.31.1 / 1.36.1 ash: "%4d %s" from 0, a repeated line is not kept, a line
+        #   with a leading space is
+        protocol = self.history_protocol(self.patched, {("shell", "history_control_root"): "ignoredups"})
+        for line in (b"echo 1", b"echo 1", b" echo 2", b"echo 3", b"history"):
+            protocol.enter(line)
+        self.assertEqual(self.history_output(protocol, style="ash"),
+                         "   0 echo 1\n   1  echo 2\n   2 echo 3\n   3 history\n")
+
+    def test_history_without_tpot_keys_is_upstream(self):
+        protocol = self.history_protocol(self.patched, {})
+        for line in (b"a", b"a", b" b"):
+            protocol.enter(line)
+        source = (FIXTURE / "src/cowrie/commands/base.py").read_text()
+        out = []
+        command = types.SimpleNamespace(args=[], protocol=protocol, write=out.append)
+        method(source, "Command_history", "call")(command)
+        self.assertEqual(self.history_output(protocol), "".join(out))
+
+    def test_history_control_of_the_personas(self):
+        """(root, other users): Ubuntu's /root/.bashrc ignoredups:ignorespace and /etc/skel/.bashrc
+        ignoreboth; Debian's /root/.bashrc none, its /etc/skel/.bashrc ignoreboth; EdgeOS none; RHEL / CentOS
+        ignoredups of /etc/profile (a login shell); BusyBox ash keeps no repeated line."""
+        ubuntu = ("ignoredups:ignorespace", "ignoreboth")
+        expected = {"ubuntu-noble": ubuntu, "ubuntu-jammy": ubuntu, "gpu-ubuntu": ubuntu, "debian-trixie": ("", "ignoreboth"),
+                    "debian-bookworm": ("", "ignoreboth"), "raspios": ("", "ignoreboth"),
+                    "ubiquiti-edgerouter-x": ("", ""), "rhel-9": ("ignoredups", "ignoredups"),
+                    "centos-7": ("ignoredups", "ignoredups"), "synology-dsm": ("", ""),
+                    **{pid: ("ignoredups", "ignoredups") for pid in ("dlink-dir859", "tplink-archer-c7",
+                                                                     "zyxel-nas326", "qnap-qts", "ipcam", "openwrt")}}
+        self.assertEqual(set(expected), set(catalog.ids()))
+        for pid, controls in expected.items():
+            with self.subTest(persona=pid):
+                self.assertEqual(system.history_controls(catalog.by_id(pid)), controls)
+
+    def test_history_file_sizes_and_exports_of_the_personas(self):
+        """HISTFILESIZE (root, other users): Ubuntu's /root/.bashrc and /etc/skel/.bashrc 2000 (ubuntu:24.04),
+        Debian's /etc/skel/.bashrc 2000 and its /root/.bashrc none, so bash's HISTSIZE (debian:12); Red Hat
+        none, so bash's HISTSIZE of /etc/profile; /etc/profile of Red Hat exports HISTSIZE and HISTCONTROL
+        (centos:7), the .bashrc of Debian and Ubuntu exports nothing."""
+        expected = {"ubuntu-noble": (2000, 2000), "debian-bookworm": (500, 2000), "raspios": (500, 2000),
+                    "ubiquiti-edgerouter-x": (10000, 10000), "centos-7": (1000, 1000), "rhel-9": (1000, 1000),
+                    "synology-dsm": (500, 500)}
+        for pid, sizes in expected.items():
+            persona = catalog.by_id(pid)
+            with self.subTest(persona=pid):
+                self.assertEqual(system.history_file_sizes(persona, persona.releases[0]), sizes)
+                exports = {"centos-7": ("HISTSIZE", "HISTCONTROL"), "rhel-9": ("HISTSIZE", "HISTCONTROL"),
+                           "ubiquiti-edgerouter-x": ("HISTSIZE", "HISTFILESIZE", "HISTCONTROL", "HISTTIMEFORMAT")}
+                self.assertEqual(system.history_exports(persona), exports.get(pid, ()))
+
+    # -- one write for a line of the history and for ctrl-U -----------------------------------------
+
+    def editor(self, root, writes):
+        source = (root / PROTOCOL).read_text()
+        names = {"recvline": types.SimpleNamespace(HistoricRecvLine=types.SimpleNamespace(
+            _deliverBuffer=lambda protocol, buf: [protocol.characterReceived(buf[i:i + 1], i < len(buf) - 1)
+                                                  for i in range(len(buf))]))}
+        cls = protocol_class(source)
+        for name in ("tpot_one_write", "_deliverBuffer", "handle_CTRL_U"):
+            try:
+                setattr(cls, name, method(source, "HoneyPotInteractiveProtocol", name, names))
+            except AssertionError:
+                pass
+
+        class Terminal:
+            def write(self, data):
+                writes.append(data)
+
+            def cursorBackward(self, n=1):
+                self.write(b"\x1b[%dD" % n)
+
+            def deleteCharacter(self, n=1):
+                self.write(b"\x1b[%dP" % n)
+
+        return cls(Terminal())
+
+    def test_a_line_of_the_history_is_one_write(self):
+        for root, count in ((FIXTURE, 12), (self.patched, 1)):
+            writes = []
+            protocol = self.editor(root, writes)
+            if root == FIXTURE:
+                protocol._deliverBuffer = lambda buf: [protocol.characterReceived(buf[i:i + 1], True)
+                                                       for i in range(len(buf))]
+            protocol._deliverBuffer(b"echo history")
+            self.assertEqual(len(writes), count, root)
+            self.assertEqual(b"".join(writes), b"echo history")
+            self.assertEqual(b"".join(protocol.lineBuffer), b"echo history")
+
+    def test_up_and_down_are_one_write_with_upstreams_bytes(self):
+        # recvline.HistoricRecvLine.handle_UP / handle_DOWN of Twisted 26.4: HOME, erase to the end of the
+        #   line, the line of the history (each a write of its own upstream)
+        def up(protocol):
+            protocol.terminal.cursorBackward(protocol.lineBufferIndex)
+            protocol.terminal.write(b"\x1b[K")
+            protocol.historyPosition -= 1
+            protocol.lineBuffer, protocol.lineBufferIndex = [], 0
+            for i, ch in enumerate(protocol.historyLines[protocol.historyPosition]):
+                protocol.characterReceived(bytes([ch]), True)
+
+        source = (self.patched / PROTOCOL).read_text()
+        names = {"recvline": types.SimpleNamespace(HistoricRecvLine=types.SimpleNamespace(
+            handle_UP=up, handle_DOWN=up, _deliverBuffer=lambda protocol, buf: None))}
+        results = []
+        for wrapped in (False, True):
+            writes = []
+            protocol = self.editor(self.patched, writes)
+            protocol.historyLines, protocol.historyPosition = [b"ls -la", b"uname -a"], 2
+            for value in b"pwd":
+                protocol.characterReceived(bytes([value]), False)
+            del writes[:]
+            if wrapped:
+                for name in ("handle_UP", "handle_DOWN", "tpot_one_write"):
+                    setattr(type(protocol), name, method(source, "HoneyPotInteractiveProtocol", name, names))
+                protocol.handle_UP()
+            else:
+                up(protocol)
+            results.append((b"".join(writes), len(writes), b"".join(protocol.lineBuffer)))
+        self.assertEqual(results[0][0], results[1][0])
+        self.assertEqual(results[0][2], results[1][2])
+        self.assertEqual(results[1][1], 1)
+        self.assertGreater(results[0][1], 1)
+
+    def test_ctrl_u_is_one_write_with_upstreams_bytes(self):
+        results = []
+        for root in (FIXTURE, self.patched):
+            writes = []
+            protocol = self.editor(root, writes)
+            for value in b"ls -la /tmp":
+                protocol.characterReceived(bytes([value]), False)
+            protocol.lineBufferIndex = 6
+            del writes[:]
+            protocol.handle_CTRL_U()
+            results.append((b"".join(writes), len(writes), b"".join(protocol.lineBuffer), protocol.lineBufferIndex))
+        self.assertEqual(results[0][0], results[1][0])
+        self.assertEqual(results[0][2:], results[1][2:])
+        self.assertEqual((results[0][1], results[1][1]), (12, 1))
+
+
+    def test_fails_loudly_on_unknown_upstream(self):
+        cases = (("src/cowrie/shell/protocol.py",
+                  "        for _ in range(self.lineBufferIndex):\n            self.terminal.cursorBackward()\n",
+                  "        for _i in range(self.lineBufferIndex):\n            self.terminal.cursorBackward()\n"),
+                 ("src/cowrie/commands/base.py", "            count = 1\n            for line in self.protocol.historyLines:\n",
+                  "            count = 0\n            for line in self.protocol.historyLines:\n"),
+                 ("src/cowrie/commands/base.py", "                self.protocol.historyPosition = 0\n                return\n",
+                  "                self.protocol.historyPosition = 0\n                return None\n"))
+        for rel, old, new in cases:
+            with self.subTest(rel=rel, needle=old):
+                root = self.dir / f"fail-{len(old)}" / "cowrie"
+                shutil.copytree(FIXTURE, root)
+                path = root / rel
+                text = path.read_text()
+                self.assertEqual(text.count(old), 1)
+                path.write_text(text.replace(old, new))
+                done = subprocess.run([sys.executable, str(PATCH), "--cowrie-root", str(root)],
+                                      capture_output=True, text=True)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("Could not find expected text", done.stderr)
 
 
 if __name__ == "__main__":

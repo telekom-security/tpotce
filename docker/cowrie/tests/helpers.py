@@ -110,7 +110,7 @@ def base_tree():
                       ("usr/bin/ssh", 1125408), ("usr/bin/vim.basic", 3800000),
                       ("usr/bin/ls", 151344), ("usr/bin/cat", 44016), ("usr/bin/ps", 154440),
                       ("usr/bin/mount", 59704), ("usr/bin/mawk", 162088), ("usr/bin/dash", 125688),
-                      ("usr/bin/run-parts", 27200)):
+                      ("usr/bin/run-parts", 27200), ("usr/bin/rm", 72160)):
         _program(root, rel, size)
     _link(root, "usr/bin/python3", "usr/bin/python3.11")
     _link(root, "usr/bin/vim", "usr/bin/vim.basic")

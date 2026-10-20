@@ -228,6 +228,46 @@ class GroupsTest(unittest.TestCase):
         self.assertIn("LIST", str(caught.exception))
 
 
+@unittest.skipUnless(yaml, "PyYAML is not installed")
+class LegacyTest(unittest.TestCase):
+    """legacy of a list setting: an earlier name of a value, accepted in a list, not offered."""
+
+    def load(self, spec):
+        from tpotctl import envschema
+        rule = {"type": "choice_list", "values": ["a", "b"], "widget": "choice_many"}
+        rule.update(spec)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "env.schema.yml")
+            with open(path, "w", encoding="utf-8") as handle:
+                yaml.safe_dump({"version": 1, "keys": {"LIST": rule}}, handle)
+            return envschema.load_schema(path)["LIST"]
+
+    def test_an_earlier_name_is_accepted(self):
+        from tpotctl import envschema
+        rule = self.load({"legacy": {"old-a": "a"}})
+        self.assertEqual(rule.legacy, {"old-a": "a"})
+        self.assertEqual(self.load({}).legacy, {})
+        self.assertEqual(envschema.check(rule, {"LIST": "old-a b"}, {}), [])
+        problems = envschema.check(rule, {"LIST": "old-b"}, {})
+        self.assertEqual([p.text for p in problems], ['invalid value "old-b", allowed: a b.'])
+
+    def test_bad_legacy_is_a_schema_error(self):
+        from tpotctl import envschema
+        bad = {"a value": {"legacy": {"a": "b"}}, "no value": {"legacy": {"old": "c"}},
+               "no mapping": {"legacy": ["old"]}, "not a choice_list": {"type": "enum", "legacy": {"old": "a"}}}
+        for label, spec in bad.items():
+            with self.subTest(label), self.assertRaises(envschema.SchemaError):
+                self.load(spec)
+
+    def test_the_persona_list_names_the_new_id(self):
+        from tpotctl import envschema
+        rule = envschema.load_schema()["COWRIE_PERSONA"]
+        self.assertEqual(rule.legacy, {"tplink-wr841n": "tplink-archer-c7"})
+        self.assertNotIn("tplink-wr841n", rule.values)
+        self.assertNotIn("tplink-wr841n", [v for members in rule.groups.values() for v in members])
+        self.assertEqual(envschema.check(rule, {"COWRIE_PERSONA": "tplink-wr841n ipcam"}, {}), [])
+
+
 class EnvFileTest(unittest.TestCase):
 
     SAMPLE = ("# T-Pot config file. Do not remove.\n"

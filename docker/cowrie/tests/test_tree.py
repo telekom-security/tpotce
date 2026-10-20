@@ -14,6 +14,48 @@ class TreeTest(unittest.TestCase):
         self.assertEqual(tree.node_get(node, tree.A_MODE) & 0o777, 0o600)
         self.assertIsNotNone(tree.find_node(root, "etc/ssh/ssh_config.d"))
 
+    def test_ensure_file_keeps_the_ctime_of_an_existing_file(self):
+        root = base_tree()
+        motd = tree.ensure_file(root, "etc/motd", b"new\n", ctime=42)
+        self.assertEqual(tree.node_get(motd, tree.A_CTIME), 1_300_000_000)
+        self.assertEqual(tree.node_get(motd, tree.A_CONTENTS), b"new\n")
+        # a node without a ctime (0) takes the one given
+        tree.node_set(motd, tree.A_CTIME, 0)
+        self.assertEqual(tree.node_get(tree.ensure_file(root, "etc/motd", b"x", ctime=42), tree.A_CTIME), 42)
+        # ctime=0 gives none
+        self.assertEqual(tree.node_get(tree.ensure_file(root, "etc/new.conf", b"x"), tree.A_CTIME), 0)
+
+    def test_ensure_dir_gives_the_ctime_to_new_folders_only(self):
+        root = base_tree()
+        tree.ensure_file(root, "etc/tpot/a/b.conf", b"x", ctime=42)
+        self.assertEqual([tree.node_get(tree.find_node(root, rel), tree.A_CTIME)
+                          for rel in ("etc", "etc/tpot", "etc/tpot/a")], [1_300_000_000, 42, 42])
+        tree.ensure_dir(root, "etc/tpot/a", mode=0o700, ctime=99)
+        node = tree.find_node(root, "etc/tpot/a")
+        self.assertEqual((tree.node_get(node, tree.A_CTIME), tree.node_get(node, tree.A_MODE) & 0o777), (42, 0o700))
+
+    def test_ensure_link_and_device_take_the_ctime(self):
+        root = base_tree()
+        link = tree.ensure_link(root, "etc/motd", "/run/motd", ctime=42)
+        self.assertEqual((tree.node_get(link, tree.A_TYPE), tree.node_get(link, tree.A_CTIME)), (tree.T_LINK, 42))
+        device = tree.ensure_device(root, "dev/pts/0", ctime=43)
+        self.assertEqual(tree.node_get(device, tree.A_CTIME), 43)
+        self.assertEqual(tree.node_get(tree.find_node(root, "dev/pts"), tree.A_CTIME), 43)
+
+    def test_iter_nodes_goes_into_every_folder_and_no_link(self):
+        root = base_tree()
+        tree.ensure_file(root, "etc/tpot/a/b/c.conf", b"x")
+        paths = [p for p, _ in tree.iter_nodes(root)]
+        self.assertEqual([p for p in paths if p.startswith("/etc/tpot")],
+                         ["/etc/tpot", "/etc/tpot/a", "/etc/tpot/a/b", "/etc/tpot/a/b/c.conf"])
+        # bin -> usr/bin: its programs are listed once, under usr/bin
+        self.assertIn("/bin", paths)
+        self.assertEqual([p for p in paths if p.startswith("/bin/")], [])
+        self.assertIn("/usr/bin/top", paths)
+        self.assertEqual(len(paths), len(set(paths)))
+        self.assertEqual([p for p, _ in tree.iter_nodes(tree.find_node(root, "etc/tpot"), "/etc/tpot")],
+                         ["/etc/tpot/a", "/etc/tpot/a/b", "/etc/tpot/a/b/c.conf"])
+
     def test_remove_node_and_find(self):
         root = base_tree()
         tree.remove_node(root, "home/phil")

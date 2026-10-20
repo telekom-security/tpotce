@@ -125,6 +125,7 @@ EXCLUDED = (
     Exclusion(("tpotctl/tests/**/*", "compose/tests/**/*", "docker/tpotinit/tests/**/*"), None,
               "test data, fixed so the tests do not change with a release"),
     Exclusion(("docker/**/*.ndjson",), None, "Kibana saved objects carry their own version fields"),
+    Exclusion(("docker/cowrie/tests/**/*",), r"ubuntu\d+(\.\d+)*\.24\.04\.\d", "Ubuntu package versions of noble"),
 )
 
 # the scripts and modules that must read the version (fuUI_VERSION, the file `version`)

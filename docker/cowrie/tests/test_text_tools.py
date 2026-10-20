@@ -253,15 +253,27 @@ class TextToolsTest(unittest.TestCase):
     def test_busybox_wc_of_a_firmware_without_unicode(self):
         """-m counts bytes and is left out of the usage text (the usage of the OpenWrt BusyBox is
         "[-clwL] [FILE]..."); 1.14 has no -m and the older texts (libbb/appletlib.c and usage.h of 1.14.1)."""
-        keys = {"text_style": "busybox", "text_banner": "BusyBox v1.19.2 (2025-03-28 14:13:40 CST)",
-                "text_version": "1.19.2", "text_libc": "uclibc"}
+        keys = {"text_style": "busybox", "text_banner": "BusyBox v1.19.4 (2022-07-14 23:31:52 EDT)",
+                "text_version": "1.19.4", "text_libc": "uclibc"}
         self.assertEqual(self.run_cmd(keys, "wc", ["-m", "/tmp/u.txt"]), ("13 /tmp/u.txt\n", "", 0))
         out, err, code = self.run_cmd(keys, "wc", ["-x"])
         self.assertEqual((out, code), ("", 1))
-        self.assertEqual(err, "wc: invalid option -- x\nBusyBox v1.19.2 (2025-03-28 14:13:40 CST) multi-call binary.\n"
-                              "\nUsage: wc [-clwL] [FILE]...\n\nCount lines, words, and bytes for each FILE (or stdin)\n"
-                              "\n\t-c\tCount bytes\n\t-l\tCount newlines\n\t-w\tCount words\n"
-                              "\t-L\tPrint longest line length\n")
+        # wc -x of the BusyBox v1.19.4 of the Archer C7 v5 (qemu-mips-static): before 1.21 the usage ends
+        #   with a blank line
+        self.assertEqual(err, (
+            'wc: invalid option -- x\n'
+            'BusyBox v1.19.4 (2022-07-14 23:31:52 EDT) multi-call binary.\n'
+            '\n'
+            'Usage: wc [-clwL] [FILE]...\n'
+            '\n'
+            'Count lines, words, and bytes for each FILE (or stdin)\n'
+            '\n'
+            '\t-c\tCount bytes\n'
+            '\t-l\tCount newlines\n'
+            '\t-w\tCount words\n'
+            '\t-L\tPrint longest line length\n'
+            '\n'
+        ))
         self.assertEqual(self.run_cmd(keys, "wc", ["-l", "/tmp/p.txt", "/tmp/w.txt"])[0],
                          "        3 /tmp/p.txt\n        2 /tmp/w.txt\n        5 total\n")
         keys.update(text_banner="BusyBox v1.14.1 (2016-06-28 10:53:08 CST)", text_version="1.14.1")
@@ -271,7 +283,7 @@ class TextToolsTest(unittest.TestCase):
                               "\nUsage: wc [OPTION]... [FILE]...\n\nPrint line, word, and byte counts for each FILE, "
                               "and a total line if\nmore than one FILE is specified. With no FILE, read standard "
                               "input.\n\nOptions:\n\t-c\tPrint the byte counts\n\t-l\tPrint the newline counts\n"
-                              "\t-L\tPrint the length of the longest line\n\t-w\tPrint the word counts\n")
+                              "\t-L\tPrint the length of the longest line\n\t-w\tPrint the word counts\n\n")
 
     def test_sort_collates_like_the_locale(self):
         """sort with LC_ALL=en_US.UTF-8 in centos:7 (glibc 2.17, coreutils 8.22 of Red Hat) and in

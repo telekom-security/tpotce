@@ -234,6 +234,21 @@ cases:
     errors: [COWRIE_PERSONA]
     warnings: [LS_WEB_USER]
     messages: ['invalid value "*", allowed:']
+  - name: cowrie persona by its earlier name
+    # the legacy of the schema: an existing .env keeps its selection
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "tplink-wr841n raspios"}
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona by its earlier and its new name
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "tplink-wr841n tplink-archer-c7"}
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona earlier name twice
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "tplink-wr841n tplink-wr841n"}
+    errors: [COWRIE_PERSONA]
+    warnings: [LS_WEB_USER]
+    messages: ['"tplink-wr841n" is listed twice.']
   - name: cowrie persona not checked without cowrie
     services: [tpotinit, suricata]
     set: {COWRIE_PERSONA: "nope"}

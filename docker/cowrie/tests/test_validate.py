@@ -24,6 +24,24 @@ class KeptIdentityTest(unittest.TestCase):
         self.assertTrue((out / "honeyfs/var/log/yum.log").read_text())
         self.assertEqual(validate.problems(persona, kept, out, out, keys, min_pickle=0), [])
 
+    def test_the_history_of_a_kept_identity_ends_at_its_draw(self):
+        # the logs and the password changes end where the identity was drawn (drawn_at), for the
+        #   builders and the validator alike; a date between the draw and now is no part of it
+        persona = catalog.by_id("debian-bookworm")
+        drawn = draw(persona, 3, NOW)
+        kept = restore(persona, to_state(persona, drawn), NOW + 30 * DAY)
+        _, out, keys = render_ident(self, persona, kept)
+        self.assertEqual(validate.problems(persona, kept, out, out, keys, min_pickle=0), [])
+        day = time.strftime("%Y-%m-%d", time.gmtime(NOW + 10 * DAY))
+        (out / "honeyfs/var/log/tpot.log").write_text(f"{day} 12:00:00 startup\n")
+        shadow = out / "honeyfs/etc/shadow"
+        shadow.write_text(re.sub(r"(?m)^(debian:[^:]*:)\d+:", rf"\g<1>{(NOW + 10 * DAY) // DAY}:", shadow.read_text()))
+        problems = validate.problems(persona, kept, out, out, keys, min_pickle=0)
+        drawn_day = time.strftime("%Y-%m-%d", time.gmtime(NOW))
+        self.assertIn(f"date {day} in var/log/tpot.log is not between "
+                      f"{time.strftime('%Y-%m-%d', time.gmtime(kept.installed_at))} and {drawn_day}", problems)
+        self.assertIn("date: shadow lastchange of debian is after the draw", problems)
+
 
 class ValidateNegativeTest(unittest.TestCase):
     def setUp(self):
@@ -187,6 +205,17 @@ class ValidateNegativeTest(unittest.TestCase):
         self.assertIn(b"phil", (out / "fs.pickle").read_bytes())
         self.assertEqual(validate.problems(self.persona, ident, out, out, keys, min_pickle=0), [])
 
+    def test_tree_texts_are_what_the_shell_shows(self):
+        # the texts the smoke test scans too: paths, file contents and link targets, no ctime
+        fs = base_tree()
+        tree.node_set(tree.find_node(fs, "etc/motd"), tree.A_CTIME, int.from_bytes(b"phil", "little"))
+        tree.node_set(tree.find_node(fs, "etc/motd"), tree.A_CONTENTS, b"hello\n")
+        texts = list(validate.tree_texts(fs))
+        self.assertIn(("/etc/motd", b"/etc/motd"), texts)
+        self.assertIn(("/etc/motd", b"hello\n"), texts)
+        self.assertIn(("/bin", b"usr/bin"), texts)
+        self.assertEqual([path for path, data in texts if b"phil" in data], ["/home/phil"])
+
     def test_forbidden_marker_in_a_pickled_name_or_file(self):
         fs = tree.load_pickle(self.out / "fs.pickle")
         tree.ensure_dir(fs, "home/phil", ctime=self.ident.installed_at)
@@ -221,7 +250,8 @@ class ValidateNegativeTest(unittest.TestCase):
         self.assertIn("busybox: Cowrie's busybox answers", self.problems())
 
     def test_package_manager_without_command(self):
-        (self.out / "txtcmds/usr/bin/dpkg").unlink()
+        # dpkg is the patched dpkg: skipped, nothing answers it
+        self.edit("cowrie.cfg", "skip_python_commands = ", "skip_python_commands = /bin/dpkg,/usr/bin/dpkg,dpkg,")
         self.assertIn("package manager", self.problems())
 
     def test_ctime_in_the_future(self):
@@ -340,11 +370,13 @@ class ValidateDeviceTest(unittest.TestCase):
                       " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
 
     def test_dropbear_version_mismatch(self):
-        persona = catalog.by_id("tplink-wr841n")
+        persona = catalog.by_id("tplink-archer-c7")
         ident, out, keys = render_one(self, persona, 2)
         path = out / "cowrie.cfg"
-        # the v14 firmware has dropbear 2012.55 (the brief's 2015.67 is in no image)
-        path.write_text(path.read_text().replace("Dropbear sshd 2012.55", "Dropbear sshd 2019.78"))
+        # the Archer C7 v5 images have dropbear 2019.78 (dropbear -V of each image)
+        text = path.read_text()
+        self.assertIn("Dropbear v2019.78", text)
+        path.write_text(text.replace("Dropbear v2019.78", "Dropbear v2020.81"))
         self.assertIn("ssh_version", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
 
     def test_ubuntu_marker_outside_ubuntu(self):
@@ -378,7 +410,7 @@ class ValidateSystemTest(unittest.TestCase):
         self.assertIn("foreign: x86_64 names on openwrt", found)
 
     def test_debian_tools_on_red_hat_and_devices(self):
-        for pid in ("rhel-9", "tplink-wr841n"):
+        for pid in ("rhel-9", "tplink-archer-c7"):
             found = self.problems(pid, lambda fs, out: (tree.ensure_file(fs, "etc/adduser.conf", b""),
                                                         tree.ensure_dir(fs, "etc/rcS.d"),
                                                         tree.ensure_file(fs, "usr/share/man/man1/which.debianutils.1.gz",
@@ -386,9 +418,16 @@ class ValidateSystemTest(unittest.TestCase):
             self.assertIn(f"foreign: /etc/adduser.conf, /etc/rcS.d on {pid}", found)
             self.assertIn(f"foreign: debian names on {pid}: /usr/share/man/man1/which.debianutils.1.gz", found)
 
+    def test_the_programs_of_a_firmware_image_are_its_own(self):
+        # the adduser applet of the Archer C7's BusyBox is no name of Debian's package; one elsewhere is
+        found = self.problems("tplink-archer-c7", lambda fs, out: tree.ensure_file(fs, "usr/share/adduser/x", b""))
+        self.assertIn("foreign: adduser names on tplink-archer-c7: /usr/share/adduser", found)
+        self.assertNotIn("/bin/adduser", found)
+
     def test_link_without_target(self):
         found = self.problems("ubuntu-noble", lambda fs, out: tree.ensure_link(fs, "proc/self/cwd", ""))
-        self.assertIn("link: 1 links name nothing: /proc/969/cwd -> ", found)
+        self.assertRegex(found, r"link: 1 links name nothing: /proc/\d+/cwd -> ")
+        self.assertNotIn("/proc/969/", found)
         found = self.problems("ubuntu-noble", lambda fs, out: tree.ensure_link(fs, "etc/os-release2", "usr/lib/os-release"))
         self.assertIn("link: 1 links name nothing: /etc/os-release2 -> usr/lib/os-release", found)
 
@@ -403,7 +442,7 @@ class ValidateSystemTest(unittest.TestCase):
             fs, "usr/lib64/ld-linux-x86-64.so.2", "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"))
         self.assertIn("link: 1 links name nothing: /usr/lib64/ld-linux-x86-64.so.2 -> "
                       "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", found)
-        found = self.problems("tplink-wr841n", lambda fs, out: tree.ensure_link(fs, "dev/stdout", "proc/969/fd/pipe:[7685]"))
+        found = self.problems("tplink-archer-c7", lambda fs, out: tree.ensure_link(fs, "dev/stdout", "proc/969/fd/pipe:[7685]"))
         self.assertIn("link: 1 links name nothing: /dev/stdout -> proc/969/fd/pipe:[7685]", found)
 
     def test_sshd_config_and_systemd_on_dropbear(self):
@@ -423,7 +462,7 @@ class ValidateSystemTest(unittest.TestCase):
     def test_proc_modules_on_a_device(self):
         found = self.problems("qnap-qts", lambda fs, out: tree.ensure_file(fs, "proc/modules", b"nft_chain_nat 12288\n"))
         self.assertIn("modules: /proc/modules is not the persona's", found)
-        found = self.problems("tplink-wr841n", lambda fs, out: (tree.remove_node(fs, "proc/modules"),
+        found = self.problems("tplink-archer-c7", lambda fs, out: (tree.remove_node(fs, "proc/modules"),
                                                                 (out / "honeyfs/proc/modules").unlink()))
         self.assertIn("modules: /proc/modules is not the persona's", found)
 
@@ -433,7 +472,7 @@ class ValidateSystemTest(unittest.TestCase):
             text = path.read_text().replace("Live 0xc0", "Live 0x00000000c0")
             path.write_text(text)
             tree.ensure_file(fs, "proc/modules", text.encode())
-        self.assertIn("is no /proc/modules line", self.problems("tplink-wr841n", change))
+        self.assertIn("is no /proc/modules line", self.problems("tplink-archer-c7", change))
 
     def test_proc_modules_of_cowries_tree(self):
         found = self.problems("ubuntu-jammy", lambda fs, out: tree.ensure_file(
@@ -604,7 +643,7 @@ class ValidateServerCommandTest(unittest.TestCase):
 
 class ValidateBusyboxTest(unittest.TestCase):
     def setUp(self):
-        self.persona = catalog.by_id("tplink-wr841n")
+        self.persona = catalog.by_id("tplink-archer-c7")
         self.ident, self.out, self.keys = render_one(self, self.persona, 1)
 
     def problems(self):
@@ -620,7 +659,7 @@ class ValidateBusyboxTest(unittest.TestCase):
 
     def test_help_of_another_version(self):
         path = self.out / "busybox-help.txt"
-        path.write_text(path.read_text().replace("BusyBox v1.19.2", "BusyBox v1.20.2"))
+        path.write_text(path.read_text().replace("BusyBox v1.19.4", "BusyBox v1.20.2"))
         self.assertIn("busybox: the help does not start with", self.problems())
 
     def test_no_busybox_program(self):
@@ -830,9 +869,9 @@ class ValidateDeviceBootTest(unittest.TestCase):
         self.assertIn("boot:", _problems(persona, ident, out, keys))
 
     def test_mtd_root_on_another_device(self):
-        persona = catalog.by_id("tplink-wr841n")
+        persona = catalog.by_id("dlink-dir859")
         ident, out, keys = render_one(self, persona, 1)
-        _edit(self, out / "txtcmds/bin/dmesg", "root=/dev/mtdblock5", "root=/dev/mtdblock3")
+        _edit(self, out / "txtcmds/bin/dmesg", "root=/dev/mtdblock0", "root=/dev/mtdblock3")
         self.assertIn("boot:", _problems(persona, ident, out, keys))
 
     def test_initramfs_with_a_root_device(self):
@@ -941,7 +980,7 @@ class ValidateHostKeyAlgorithmsTest(unittest.TestCase):
         self.check("rhel-9", "rsa-sha2-512,rsa-sha2-256,", "rsa-sha2-512,rsa-sha2-256,ssh-rsa,", "differ from")
 
     def test_old_dropbear_has_no_rsa_sha2(self):
-        self.check("tplink-wr841n", "ssh-rsa", "rsa-sha2-256,ssh-rsa", "dropbear 2012.55 has no rsa-sha2")
+        self.check("tplink-archer-c7", "ssh-rsa", "rsa-sha2-256,ssh-rsa", "dropbear 2019.78 has no rsa-sha2")
 
     def test_dropbear_has_no_rsa_sha2_512(self):
         self.check("openwrt", "ssh-ed25519,rsa-sha2-256,ssh-rsa", "ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa",
@@ -950,5 +989,5 @@ class ValidateHostKeyAlgorithmsTest(unittest.TestCase):
     def test_every_key_is_offered_and_every_algorithm_has_its_key(self):
         self.check("openwrt", "ssh-ed25519,rsa-sha2-256,ssh-rsa", "rsa-sha2-256,ssh-rsa",
                    "host key ssh-ed25519 is not offered")
-        self.check("tplink-wr841n", "ssh-rsa", "ssh-rsa,ssh-ed25519", "ssh-ed25519 has no ssh-ed25519 key")
+        self.check("tplink-archer-c7", "ssh-rsa", "ssh-rsa,ssh-ed25519", "ssh-ed25519 has no ssh-ed25519 key")
         self.check("ubuntu-noble", "rsa-sha2-512,", "ssh-ed448,rsa-sha2-512,", "host key algorithm not supported: ssh-ed448")

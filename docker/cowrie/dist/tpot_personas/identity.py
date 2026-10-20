@@ -5,8 +5,10 @@ COWRIE_PERSONA_ROTATION the identity of an earlier start comes back
 (restore): drawn again from its seed and its time, only `now` moves on."""
 import calendar
 import dataclasses
+import functools
 import hashlib
 import json
+import pathlib
 import random
 import re
 import string
@@ -288,11 +290,40 @@ def _plain(value):
     raise TypeError(f"no catalog value: {type(value).__name__}")
 
 
+def code_digest(root):
+    """sha256 of the files of the package in the folder root: its code and its data
+    (package names, unit files, firmware tables). The bytecode caches of Python, the
+    notes (*.md) and hidden files are left out; a file that cannot be read counts by its
+    name (the start goes on, a state made with it is another one)."""
+    digest = hashlib.sha256()
+    files = sorted((path.relative_to(root).as_posix(), path) for path in root.rglob("*") if path.is_file())
+    for rel, path in files:
+        parts = rel.split("/")
+        if "__pycache__" in parts or any(part.startswith(".") for part in parts) or rel.endswith((".pyc", ".md")):
+            continue
+        try:
+            data = path.read_bytes()
+        except OSError:
+            digest.update(f"{rel}\0unreadable\0".encode("utf-8"))
+            continue
+        digest.update(f"{rel}\0{len(data)}\0".encode("utf-8"))
+        digest.update(data)
+    return digest.hexdigest()
+
+
+@functools.cache
+def package_digest():
+    """code_digest of this package, once per process."""
+    return code_digest(pathlib.Path(__file__).resolve().parent)
+
+
 def persona_digest(persona):
     """sha256 of the catalog data of the persona (pools, files to remove, tokens,
-    the builder by name): another image with other data for it does not keep a
-    state made from the old one."""
-    data = json.dumps(dataclasses.asdict(persona), sort_keys=True, default=_plain, ensure_ascii=True)
+    the builder by name) and of the code that renders it (package_digest): another
+    image with other data or other code for it does not keep a state made from the
+    old one."""
+    data = json.dumps({"persona": dataclasses.asdict(persona), "code": package_digest()}, sort_keys=True,
+                      default=_plain, ensure_ascii=True)
     return hashlib.sha256(data.encode("ascii")).hexdigest()
 
 
