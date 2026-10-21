@@ -1,0 +1,187 @@
+{
+ "_source": "awk on a regular expression that does not compile, at parse time and at run time (one sh -c per line), in containers of these images (docker exec, sh -c), 2026-10-21. The recording merged stdout and stderr (2>&1); the line x is the output of print, every other line is stderr. centos_7 gawk 4.0.2, rockylinux_9 gawk 5.1.0, debian_12 mawk 1.3.4 20200120, debian_9 mawk 1.3.3, the BusyBox 1.36.1 images of awk_regex.json.",
+ "images": {
+  "busybox_1.36.1-glibc": {
+   "cases": {
+    "awk 'BEGIN{print \"x\"} /[/]/{print \"s\"}' </dev/null": [
+     "",
+     "awk: bad regex '[': Invalid regular expression\n",
+     1
+    ],
+    "awk 'BEGIN{print \"x\"} /a(/' </dev/null": [
+     "",
+     "awk: bad regex 'a(': Unmatched ( or \\(\n",
+     1
+    ],
+    "echo x | awk '/a(/'": [
+     "",
+     "awk: bad regex 'a(': Unmatched ( or \\(\n",
+     1
+    ],
+    "echo x | awk '{sub(\"(\", \"y\")} BEGIN{print \"x\"}'": [
+     "x\n",
+     "",
+     0
+    ]
+   },
+   "image": "busybox:1.36.1-glibc",
+   "kind": "busybox glibc"
+  },
+  "busybox_1.36.1-musl": {
+   "cases": {
+    "awk 'BEGIN{print \"x\"} /[/]/{print \"s\"}' </dev/null": [
+     "",
+     "awk: bad regex '[': Missing ']'\n",
+     1
+    ],
+    "awk 'BEGIN{print \"x\"} /a(/' </dev/null": [
+     "",
+     "awk: bad regex 'a(': Missing ')'\n",
+     1
+    ],
+    "echo x | awk '/a(/'": [
+     "",
+     "awk: bad regex 'a(': Missing ')'\n",
+     1
+    ],
+    "echo x | awk '{sub(\"(\", \"y\")} BEGIN{print \"x\"}'": [
+     "x\n",
+     "",
+     0
+    ]
+   },
+   "image": "busybox:1.36.1-musl",
+   "kind": "busybox musl"
+  },
+  "busybox_1.36.1-uclibc": {
+   "cases": {
+    "awk 'BEGIN{print \"x\"} /[/]/{print \"s\"}' </dev/null": [
+     "",
+     "awk: bad regex '[': Invalid regular expression\n",
+     1
+    ],
+    "awk 'BEGIN{print \"x\"} /a(/' </dev/null": [
+     "",
+     "awk: bad regex 'a(': Unmatched ( or \\(\n",
+     1
+    ],
+    "echo x | awk '/a(/'": [
+     "",
+     "awk: bad regex 'a(': Unmatched ( or \\(\n",
+     1
+    ],
+    "echo x | awk '{sub(\"(\", \"y\")} BEGIN{print \"x\"}'": [
+     "x\n",
+     "",
+     0
+    ]
+   },
+   "image": "busybox:1.36.1-uclibc",
+   "kind": "busybox uclibc"
+  },
+  "centos_7": {
+   "cases": {
+    "awk 'BEGIN{print \"x\"} /[/]/{print \"s\"}' </dev/null": [
+     "x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print \"x\"} /a(/' </dev/null": [
+     "",
+     "awk: cmd. line:1: error: Unmatched ( or \\(: /a(/\n",
+     1
+    ],
+    "echo x | awk '/a(/'": [
+     "",
+     "awk: cmd. line:1: error: Unmatched ( or \\(: /a(/\n",
+     1
+    ],
+    "echo x | awk '{sub(\"(\", \"y\")} BEGIN{print \"x\"}'": [
+     "x\n",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: Unmatched ( or \\(: /(/\n",
+     2
+    ]
+   },
+   "image": "centos:7",
+   "kind": "gnu 8.22 en-2.17"
+  },
+  "debian_12": {
+   "cases": {
+    "awk 'BEGIN{print \"x\"} /[/]/{print \"s\"}' </dev/null": [
+     "x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print \"x\"} /a(/' </dev/null": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\na(\n",
+     2
+    ],
+    "echo x | awk '/a(/'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\na(\n",
+     2
+    ],
+    "echo x | awk '{sub(\"(\", \"y\")} BEGIN{print \"x\"}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ]
+   },
+   "image": "debian:12",
+   "kind": "gnu 9.1 c"
+  },
+  "debian_9": {
+   "cases": {
+    "awk 'BEGIN{print \"x\"} /[/]/{print \"s\"}' </dev/null": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[\nawk: line 1: syntax error at or near ]\n",
+     2
+    ],
+    "awk 'BEGIN{print \"x\"} /a(/' </dev/null": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\na(\n",
+     2
+    ],
+    "echo x | awk '/a(/'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\na(\n",
+     2
+    ],
+    "echo x | awk '{sub(\"(\", \"y\")} BEGIN{print \"x\"}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ]
+   },
+   "image": "debian:9",
+   "kind": "gnu 8.26 c"
+  },
+  "rockylinux_9": {
+   "cases": {
+    "awk 'BEGIN{print \"x\"} /[/]/{print \"s\"}' </dev/null": [
+     "x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print \"x\"} /a(/' </dev/null": [
+     "",
+     "awk: cmd. line:1: error: Unmatched ( or \\(: /a(/\n",
+     1
+    ],
+    "echo x | awk '/a(/'": [
+     "",
+     "awk: cmd. line:1: error: Unmatched ( or \\(: /a(/\n",
+     1
+    ],
+    "echo x | awk '{sub(\"(\", \"y\")} BEGIN{print \"x\"}'": [
+     "x\n",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: invalid regexp: Unmatched ( or \\(: /(/\n",
+     2
+    ]
+   },
+   "image": "rockylinux:9",
+   "kind": "gnu 8.32 en"
+  }
+ }
+}

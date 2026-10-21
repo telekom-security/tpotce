@@ -839,6 +839,31 @@ def _check_text_tools(persona, ident, cfg, fs, txtcmds, out):
                 out.append(f"text tools: a txtcmd /{directory}/{name} answers {name}")
 
 
+def _check_fs_tools(persona, ident, cfg, out):
+    """rm, cp, mv, touch, rmdir and mkdir answer with a variant of fs_texts.json ([shell] fs_texts, fs_variant)
+    that exists and fits the persona: the style of its text tools and, but for the stand-ins of
+    system.FS_STAND_INS, their C library."""
+    for key, value in system.fs_keys(persona, ident).items():
+        if cfg.get("shell", key, fallback=None) != value:
+            out.append(f"fs tools: cfg {key}: {cfg.get('shell', key, fallback=None)!r}, expected {value!r}")
+    try:
+        variants = json.loads(Path(cfg.get("shell", "fs_texts", fallback="")).read_text(encoding="utf-8"))["variants"]
+    except (OSError, ValueError, KeyError, TypeError):
+        out.append("fs tools: fs_texts is no table of variants")
+        return
+    name = cfg.get("shell", "fs_variant", fallback=None)
+    variant = variants.get(name)
+    if not isinstance(variant, dict):
+        out.append(f"fs tools: the variant {name!r} is not in fs_texts")
+        return
+    text = system.text_keys(persona, ident)
+    if variant.get("style") != text["text_style"]:
+        out.append(f"fs tools: the {variant.get('style')} variant {name} for a {text['text_style']} persona")
+    libc = text.get("text_libc", "glibc")
+    if variant.get("libc") != libc and persona.family not in system.FS_STAND_INS:
+        out.append(f"fs tools: the variant {name} is of {variant.get('libc')}, the persona's BusyBox of {libc}")
+
+
 def _answered(cfg, name):
     """Cowrie's Python answers the command (it is not in skip_python_commands)."""
     skipped = _skipped(cfg)
@@ -1293,6 +1318,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         _check_device_boot(honeyfs, txtcmds, out)
     _check_df(persona, ident, cfg, out_dir, runtime_dir, honeyfs, txtcmds, out)
     _check_text_tools(persona, ident, cfg, fs, txtcmds, out)
+    _check_fs_tools(persona, ident, cfg, out)
     _check_network(persona, ident, cfg, out_dir, runtime_dir, fs, out)
 
     os_release = _text(honeyfs / "etc/os-release")

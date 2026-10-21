@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # ABOUTME: Lark-based bash-subset parser that turns a command line into a list
-# (excerpt of v3.1.1: imports, ShellContext and BashParser._special_param)
+# (excerpt of v3.1.3: imports, ShellContext and BashParser._special_param)
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class ShellContext(Protocol):
 
 
 class BashParser:
-    """..."""
+    """Parse a command line into a list of statements for the shell to run."""
 
     def _special_param(self, node: Tree) -> str | None:
         """Expand a special parameter ($?, $@, $#, ...) to its string value, or

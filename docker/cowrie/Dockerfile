@@ -1,6 +1,6 @@
 FROM alpine:3.24
-ARG COWRIE_VERSION=v3.1.1
-ARG COWRIE_COMMIT=c17c9b73d6af0972334ea1e90b20d974cb24eeca
+ARG COWRIE_VERSION=v3.1.3
+ARG COWRIE_COMMIT=c7773f49758bc021c8276924f05b5c58dc20d542
 ENV COWRIE_COMMIT=${COWRIE_COMMIT}
 #
 # Include dist
@@ -37,6 +37,11 @@ RUN apk --no-cache -U upgrade && \
     pip3 install --break-system-packages --no-cache-dir -e . && \
     python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie && \
     python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie --self-test && \
+#
+# Cowrie's own tests on the patched checkout: a failure must be one of upstream_test_exceptions.json, with its
+#   reason (on a bump of COWRIE_VERSION, a new failure or a listed test that passes stops the build)
+    python3 /root/dist/run_upstream_tests.py --cowrie-root /home/cowrie/cowrie \
+                                             --exceptions /root/dist/upstream_test_exceptions.json && \
 #
 # Personas: library, SSH algorithms (ciphers, MACs, host keys and their algorithms, compressions) of this Twisted and Cowrie,
 # build check of every persona

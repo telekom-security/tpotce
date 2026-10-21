@@ -1639,7 +1639,7 @@ runtime = Path("/tmp/cowrie/runtime")
 runtime_config_path = runtime / "cowrie.cfg"
 protocol_path = root / "src" / "cowrie" / "shell" / "protocol.py"
 offenders = []
-expected_source_commit = "c17c9b73d6af0972334ea1e90b20d974cb24eeca"
+expected_source_commit = "c7773f49758bc021c8276924f05b5c58dc20d542"
 # docker/cowrie/tests/test_catalog.py PACKAGES + DEVICE_PACKAGES
 expected_package_managers = {
     "ubuntu-noble": {"apt", "apt-get", "dpkg"},

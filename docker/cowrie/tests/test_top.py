@@ -159,6 +159,10 @@ class Base:
     def eofReceived(self):  # noqa: N802 - Cowrie's name
         pass
 
+    def callLater(self, delay, fn, *args):  # noqa: N802 - Cowrie's name
+        """HoneyPotCommand.callLater: the call on the session's reactor."""
+        return self.protocol.reactor.callLater(delay, fn, *args)
+
 
 class Session:
     """A patched base.py / uptime.py / protocol with one session: config, clock, reactor, terminal."""
@@ -238,6 +242,7 @@ class Session:
         self.protocol.cmdstack = []
         self.protocol.environ = {} if window is None else {"COLUMNS": str(window[1]), "LINES": str(window[0])}
         self.protocol.username = username
+        self.protocol.reactor = self.reactor
         self.protocol.fs = Fs({"/proc/meminfo": MEMINFO, "/proc/cpuinfo": CPUINFO} if files is None else files)
         if exec_mode:
             self.protocol.execcmd = "top"

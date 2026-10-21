@@ -12,11 +12,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
-from twisted.internet import error
+from twisted.internet import error, reactor
 from twisted.logger import Logger
 from twisted.python import failure
+
+if TYPE_CHECKING:
+    from twisted.internet.interfaces import IDelayedCall
 
 
 def process_status(code: int) -> failure.Failure:
@@ -42,6 +45,10 @@ class HoneyPotCommand:
     # late exit() is a no-op. Class-level so it holds even for instances
     # created without __init__ (tests).
     exited: bool = False
+    # Reactor calls scheduled through callLater(), cancelled when the session
+    # ends before they fire. The immutable default is never appended to, so
+    # instances do not share a list.
+    _delayed_calls: Sequence[IDelayedCall] = ()
 
     # This command's stdio wiring, set at spawn (see __init__). Class-level so
     # it holds even for instances created without __init__ (tests).
@@ -124,6 +131,31 @@ class HoneyPotCommand:
 
     def set_input_data(self, data: bytes) -> None:
         self.input_data = data
+
+    def callLater(
+        self, delay: float, func: Callable[..., Any], *args: Any
+    ) -> IDelayedCall:
+        """
+        Schedule ``func`` on the reactor, as ``reactor.callLater`` does.
+
+        The call is cancelled if the client disconnects before it fires, so a
+        command that paces itself (ping's replies, a sleep, yes) stops with the
+        session instead of ticking on against a dead terminal.
+        """
+        call = reactor.callLater(delay, func, *args)
+        pending = [c for c in self._delayed_calls if c.active()]
+        pending.append(call)
+        self._delayed_calls = pending
+        return call
+
+    def connectionLost(self) -> None:
+        """
+        The client is gone: stop whatever this command still has scheduled.
+        """
+        for call in self._delayed_calls:
+            if call.active():
+                call.cancel()
+        self._delayed_calls = ()
 
     def start(self) -> None:
         self.call()

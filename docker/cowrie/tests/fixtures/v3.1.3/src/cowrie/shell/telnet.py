@@ -3,6 +3,9 @@
 # SPDX-FileCopyrightText: 2016-2026 Michel Oosterhof <michel@oosterhof.net>
 #
 # SPDX-License-Identifier: BSD-3-Clause
+
+# ABOUTME: Telnet session management for the emulated shell backend.
+# ABOUTME: Connects an authenticated telnet user to the honeypot shell protocol.
 """
 Telnet User Session management for the Honeypot
 

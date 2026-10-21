@@ -34,7 +34,7 @@ class CommTest(SessionCase):
 
 class PrivilegeTest(unittest.TestCase):
     def test_apt_and_yum_ask_tpot_privileged(self):
-        root = test_patch.PatchTest("test_applies_to_v3_1_1")
+        root = test_patch.PatchTest("test_applies_to_v3_1_3")
         root.addCleanup = self.addCleanup
         patched = root.patched()
         for name in ("apt", "yum"):

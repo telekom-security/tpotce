@@ -125,13 +125,15 @@ class Command_uname(HoneyPotCommand):
                 # letter by letter
                 a = a[1:]
                 if len(a) == 0:
-                    self.write(uname_fail_extra("-"))
+                    self.errorWrite(uname_fail_extra("-"))
+                    self.exit_code = 1
                     return
 
                 for split_arg in a:
                     arg_block.append(split_arg)
             else:
-                self.write(uname_fail_extra(a))
+                self.errorWrite(uname_fail_extra(a))
+                self.exit_code = 1
                 return
 
             for arg in arg_block:
@@ -154,9 +156,10 @@ class Command_uname(HoneyPotCommand):
                     break  # Next arg please
 
                 if not arg_parsed:
-                    self.write(
+                    self.errorWrite(
                         uname_fail_long(a) if was_long else uname_fail_short(arg)
                     )
+                    self.exit_code = 1
                     return
 
         # All the options set, let's get the output

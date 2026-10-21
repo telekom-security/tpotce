@@ -10,7 +10,7 @@ from tests.helpers import DIST, tmpdir
 from tpot_personas.ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, TWISTED_CIPHERS, TWISTED_KEX,
                                         TWISTED_MACS)
 
-FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.1"
+FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.3"
 # what Twisted 26.4.0 offers (SSHTransportBase.supported*), from the image build
 TWISTED = {
     "ciphers": set(TWISTED_CIPHERS) | {"aes256-gcm@openssh.com"},
@@ -53,7 +53,7 @@ class SshSupportTest(unittest.TestCase):
         self.assertIn(old, text)
         path.write_text(text.replace(old, new))
 
-    def test_v3_1_1_with_twisted_26_4_handles_every_algorithm(self):
+    def test_v3_1_3_with_twisted_26_4_handles_every_algorithm(self):
         self.assertEqual(self.problems(), [])
         self.assertEqual(self.check.main(["--cowrie-root", str(self.root)], twisted=TWISTED), 0)
 

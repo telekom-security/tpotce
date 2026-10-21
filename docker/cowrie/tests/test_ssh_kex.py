@@ -15,7 +15,7 @@ from tpot_personas import catalog, ssh_profiles
 from tpot_personas.identity import draw
 from tpot_personas.render import render_cfg
 
-FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.1"
+FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.3"
 PATCH = DIST / "patch_cowrie_persona_support.py"
 # Twisted 26.4: _kex.getSupportedKeyExchanges() (by preference)
 TWISTED_ORDER = [b"curve25519-sha256", b"curve25519-sha256@libssh.org", b"ecdh-sha2-nistp256", b"ecdh-sha2-nistp384",

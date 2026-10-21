@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Excerpt of Cowrie v3.1.1 (c17c9b73): the text check_ssh_support.py reads and the methods the
+# Excerpt of Cowrie v3.1.3 (c7773f49): the text check_ssh_support.py reads and the methods the
 # server-sig-algs patch (patch_ssh_sig_algs) adds its method before.
 
     def setService(self, service):

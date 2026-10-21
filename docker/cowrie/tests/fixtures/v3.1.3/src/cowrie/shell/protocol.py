@@ -23,6 +23,7 @@ import cowrie.commands
 from cowrie.core.config import CowrieConfig
 from cowrie.core.resources import read_data_bytes
 from cowrie.shell import command, fs, honeypot
+from cowrie.shell.script import run_script_file
 
 if TYPE_CHECKING:
     from twisted.python import failure
@@ -183,6 +184,9 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
         self.setTimeout(None)
         insults.TerminalProtocol.connectionLost(self, reason)
         self.terminal = None  # (this should be done by super above)
+        for cmd in self.cmdstack:
+            if isinstance(cmd, command.HoneyPotCommand):
+                cmd.connectionLost()
         self.cmdstack = []
         self.fs = None
         self.pp = None
@@ -198,7 +202,6 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
 
     def scriptcmd(self, path: str, name: str) -> object:
         """Return a command class that executes a shell script from the virtual filesystem."""
-        from cowrie.shell.script import run_script_file
 
         class Command_scriptcmd(command.HoneyPotCommand):
             def call(self):
@@ -206,6 +209,12 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
                 # ENOEXEC ("cannot execute binary file"); a shell script is run
                 # through the parser (the shebang is parsed as a comment).
                 prefix = self.shell.error_prefix()
+                # exec() refuses a file without an applicable execute bit
+                # (EACCES) before it looks at the contents.
+                if not self.fs.is_executable(path, self.user["uid"], self.user["gid"]):
+                    self.errorWrite(f"{prefix}{name}: Permission denied\n")
+                    self.exit_code = 126
+                    return
                 run_script_file(
                     self,
                     path,

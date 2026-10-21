@@ -25,11 +25,16 @@ class Command_which(HoneyPotCommand):
 
         # Look up each file
         for f in self.args:
+            found = False
             for path in self.environ["PATH"].split(":"):
                 resolved = self.fs.resolve_path(f, path)
 
                 if self.fs.exists(resolved):
                     self.write(f"{path}/{f}\n")
+                    found = True
+            if not found:
+                # A name not found prints nothing but makes which fail.
+                self.exit_code = 1
 
 
 commands["which"] = Command_which

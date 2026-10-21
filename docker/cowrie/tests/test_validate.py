@@ -102,6 +102,14 @@ class ValidateNegativeTest(unittest.TestCase):
         (self.out / "txtcmds/usr/bin/top").write_text("top - 10:00:00 up 1 day\n")
         self.assertIn("static txtcmd usr/bin/top", self.problems())
 
+    def test_fs_variant_of_the_persona(self):
+        self.edit("cowrie.cfg", "\nfs_variant = ubuntu_22.04\n", "\nfs_variant = fw_tplink_c7v5\n")
+        problems = self.problems()
+        self.assertIn("fs tools: cfg fs_variant: 'fw_tplink_c7v5', expected 'ubuntu_22.04'", problems)
+        self.assertIn("fs tools: the busybox variant fw_tplink_c7v5 for a gnu persona", problems)
+        self.edit("cowrie.cfg", "\nfs_variant = fw_tplink_c7v5\n", "\nfs_variant = ubuntu_99\n")
+        self.assertIn("fs tools: the variant 'ubuntu_99' is not in fs_texts", self.problems())
+
     def test_top_keys_of_the_persona(self):
         self.edit("cowrie.cfg", "\ntop_style = procps\n", "\ntop_style = busybox\n")
         self.assertIn("top_style 'busybox' does not fit server ubuntu-jammy", self.problems())
@@ -651,6 +659,12 @@ class ValidateBusyboxTest(unittest.TestCase):
 
     def test_clean(self):
         self.assertEqual(self.problems(), "")
+
+    def test_fs_variant_of_another_libc(self):
+        path = self.out / "cowrie.cfg"
+        path.write_text(path.read_text().replace("\nfs_variant = fw_tplink_c7v5\n", "\nfs_variant = busybox_1.36.1-musl\n"))
+        self.assertIn("fs tools: the variant busybox_1.36.1-musl is of musl, the persona's BusyBox of uclibc",
+                      self.problems())
 
     def test_skipped_busybox(self):
         path = self.out / "cowrie.cfg"

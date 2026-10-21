@@ -149,6 +149,36 @@ class AnswerTest(unittest.TestCase):
         start = source.index("    def _write_shell_error(")
         self.assertIn("pp.outReceived(", source[start:start + 1200])
 
+    def write_shell_error(self, redirection_error):
+        """_write_shell_error of the patched shell with the command-not-found stdout pending: what the
+        pipe got, in order, and what stays pending."""
+        got = []
+
+        class Pipe:
+            has_redirection_error = redirection_error
+            redirect_real_files = []
+
+            def errReceived(self, data):  # noqa: N802 - Twisted's name
+                got.append(("err", data))
+
+            def outReceived(self, data):  # noqa: N802 - Twisted's name
+                got.append(("out", data))
+
+        shell = types.SimpleNamespace(tpot_cnf_stdout=b"Please ask your administrator.\n",
+                                      _make_pipe=lambda *args: Pipe(),
+                                      protocol=types.SimpleNamespace(terminal=types.SimpleNamespace(redirFiles=set())))
+        function = method(self.source, "HoneyPotShell", "_write_shell_error", {"Any": object})
+        written = function(shell, b"htop: not found\n")
+        return written, got, shell.tpot_cnf_stdout
+
+    def test_the_stdout_part_follows_the_error_once(self):
+        self.assertEqual(self.write_shell_error(False),
+                         (True, [("err", b"htop: not found\n"), ("out", b"Please ask your administrator.\n")], b""))
+
+    def test_a_failed_redirection_leaves_nothing_for_a_later_error(self):
+        # bash reports only the redirection and runs no handler; its text must not follow the next error
+        self.assertEqual(self.write_shell_error(True), (False, [], b""))
+
     def test_a_missing_or_broken_table_is_no_table(self):
         values = {("shell", "command_not_found"): "/nonexistent/table", ("shell", "command_not_found_sudo"): ""}
         namespace = {"CowrieConfig": FakeConfig(values)}

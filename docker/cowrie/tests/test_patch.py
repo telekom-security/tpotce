@@ -16,7 +16,7 @@ from pathlib import Path
 from tests.helpers import DIST, base_tree, tmpdir
 from tpot_personas import catalog, system, tree
 
-FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.1"
+FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.3"
 PATCH = DIST / "patch_cowrie_persona_support.py"
 
 
@@ -149,7 +149,7 @@ class FakeCommand:
         self.code = code
 
     def check_arguments(self, application, args):
-        # verbatim logic of HoneyPotCommand.check_arguments in v3.1.1
+        # verbatim logic of HoneyPotCommand.check_arguments in v3.1.3
         files = []
         for arg in args:
             path = self.fs.resolve_path(arg, self.cwd)
@@ -272,6 +272,31 @@ class FsModule:
 PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".split(":")
 
 
+def unbound_names(source):
+    """The names source reads that it binds nowhere (an import, a def, a class, an argument, an
+    assignment, ...) and that are no builtins; one list for the whole module, scopes not told apart."""
+    import builtins
+    tree = ast.parse(source)
+    bound = set(dir(builtins)) | {"__file__", "__name__"}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            bound |= {(alias.asname or alias.name).split(".")[0] for alias in node.names}
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            bound.add(node.name)
+        elif isinstance(node, ast.arg):
+            bound.add(node.arg)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            bound.add(node.id)
+        elif isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name:
+            bound.add(node.name)
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            bound.add(node.rest)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            bound |= set(node.names)
+    loads = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+    return sorted(loads - bound)
+
+
 class PatchTest(unittest.TestCase):
     def patched(self):
         root = tmpdir(self) / "cowrie"
@@ -280,7 +305,7 @@ class PatchTest(unittest.TestCase):
                        check=True, capture_output=True, text=True)
         return root
 
-    def test_applies_to_v3_1_1(self):
+    def test_applies_to_v3_1_3(self):
         protocol = (self.patched() / "src/cowrie/shell/protocol.py").read_text()
         self.assertIn("skip_python_commands", protocol)
         self.assertIn("self.fs.resolve_path(cmd, cwd)", protocol)
@@ -289,6 +314,45 @@ class PatchTest(unittest.TestCase):
         self.assertIn("if spelling in self.commands and not skip_python_command(spelling):", protocol)
         # the smoke test looks for upstream's txtcmds_path lookup: it stays, the spellings follow it
         self.assertIn("operator_path = Path(txtcmds_path) / relpath", protocol)
+
+    def test_the_added_code_uses_only_names_its_module_binds(self):
+        """A needle can still match after upstream dropped an import the added code relies on
+        (v3.1.3 took reactor out of base.py and yum.py): every name a patched module reads is bound
+        somewhere in it. The excerpts of the fixture are no whole modules and are left out."""
+        root = self.patched()
+        found = {}
+        for path in sorted((root / "src").rglob("*.py")):
+            text = path.read_text()
+            if "xcerpt of" in text[:2000]:
+                continue
+            names = unbound_names(text)
+            if names:
+                found[str(path.relative_to(root))] = names
+        self.assertEqual(found, {})
+
+    def test_the_build_self_test_finds_a_name_without_its_import(self):
+        """--self-test (in the Dockerfile) checks the whole patched tree, scope by scope: the excerpts of the
+        fixture are left out of the test above, the real modules are whole."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("tpot_patch_names", PATCH)
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        root = tmpdir(self) / "cowrie"
+        commands = root / "src/cowrie/commands"
+        commands.mkdir(parents=True)
+        (root / "src/cowrie/test").mkdir()
+        (root / "src/cowrie/test/test_x.py").write_text("print(undefined_in_a_test)\n")
+        yum = commands / "yum.py"
+        yum.write_text("from twisted.internet import defer\n\n\nclass Command_dnf:\n"
+                       "    def sleep(self, reactor=None):\n        return 1\n\n"
+                       "    def later(self):\n        return reactor.callLater(1, defer.succeed)\n")
+        with self.assertRaisesRegex(RuntimeError, r"commands/yum.py.*'reactor'"):
+            script.names_self_test(root)
+        yum.write_text("from twisted.internet import defer, reactor\n" + yum.read_text().split("\n", 1)[1])
+        # the module's own dunders and the annotations of a class body (Python 3.14 binds them itself)
+        (commands / "base.py").write_text("from __future__ import annotations\n\n\nclass C:\n    x: int = 1\n"
+                                          "    if __debug__:\n        y: int = 2\n\n\nprint(__doc__, __spec__)\n")
+        script.names_self_test(root)
 
     def lookup(self, txtcmds, commands, skip="", shipped=None):
         """getCommand of the patched protocol.py on base_tree() (bin -> usr/bin) with these
@@ -1883,7 +1947,7 @@ class PatchTest(unittest.TestCase):
 
     def upstream_session(self, pid="ubuntu-noble", uid=1000, extra_modules=(), deferred=False):
         """A session on Cowrie's own HoneyPotCommand (exec_command, exit) and call_command of
-        v3.1.1, with the patched sudo, systemctl, apt and yum of a rendered persona. With deferred, a
+        v3.1.3, with the patched sudo, systemctl, apt and yum of a rendered persona. With deferred, a
         command's sleep waits as on the reactor: the rest of the command runs when run.settle() fires
         the sleeps, after its start() has returned."""
         from tpot_personas.identity import draw
@@ -2564,7 +2628,7 @@ class PatchTest(unittest.TestCase):
         return command
 
     def test_grep_c_counts_the_matching_lines(self):
-        # miner bots ask `grep -c processor /proc/cpuinfo`; v3.1.1 printed the lines
+        # miner bots ask `grep -c processor /proc/cpuinfo`; upstream prints the lines
         done = self.grep("-c", "^processor", "/proc/cpuinfo")
         self.assertEqual((bytes(done.out), done.err, done.code), (b"4\n", "", 0))
         done = self.grep("-c", "processor", "/proc/cpuinfo")
@@ -2642,6 +2706,16 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(bytes(done.out), MEMINFO)
         done = self.grep("-c", "PROCESSOR", "/proc/cpuinfo")
         self.assertEqual((bytes(done.out), done.code), (b"0\n", 1))
+
+    def test_grep_q_ends_at_the_first_selected_line(self):
+        # GNU grep -q reads no file after a match, so a missing one after it is no error
+        done = self.grep("-q", "processor", "/proc/cpuinfo", "/nonexistent")
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "", 0))
+        done = self.grep("--quiet", "processor", "/nonexistent", "/proc/cpuinfo")
+        self.assertEqual((bytes(done.out), done.err, done.code),
+                         (b"", "grep: /nonexistent: No such file or directory\n", 0))
+        done = self.grep("processor", "/nonexistent", "/proc/cpuinfo")
+        self.assertEqual(done.code, 2)
 
     def test_grep_q_only_sets_the_status(self):
         # grep -qi "model name" /proc/cpuinfo && echo yes
@@ -2872,9 +2946,22 @@ class PatchTest(unittest.TestCase):
                               capture_output=True, text=True)
 
     def test_grep_self_test_passes_on_the_patched_source(self):
-        done = self.self_test(self.patched())
+        root = self.patched()
+        # the excerpts of the fixture are no whole modules (the names self-test needs whole ones); grep's
+        #   self-test reads the excerpt of fs.py, whose Command_grep is whole
+        for path in (root / "src").rglob("*.py"):
+            if "xcerpt of" in path.read_text()[:2000] and path.name != "fs.py":
+                path.unlink()
+        done = self.self_test(root)
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertRegex(done.stdout, r"^grep matcher self-test: \d+ patterns OK\n$")
+        self.assertRegex(done.stdout, r"^grep matcher self-test: \d+ patterns OK\n"
+                                      r"names self-test: every module binds the names it reads\n$")
+
+    def test_the_names_self_test_fails_on_a_module_that_does_not_parse(self):
+        root = self.patched()
+        done = self.self_test(root)
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("'ssh/transport.py': ['does not parse:", done.stderr)
 
     def test_grep_self_test_fails_loudly(self):
         # a Python whose re parser moved, a construct the matcher no longer knows, a wrong result, no size limit
@@ -3143,8 +3230,8 @@ class PatchTest(unittest.TestCase):
                   "self.grep_application(f.read(), self.match)\n        return self.exit("),
                  ("src/cowrie/commands/fs.py", "            self.grep_application(contents, match)\n",
                   "            self.grep_application(contents, match=match)\n"),
-                 ("src/cowrie/telnet/factory.py", "from cowrie.shell.honeyfs import read_honeyfs_bytes",
-                  "from cowrie.shell import honeyfs"),
+                 ("src/cowrie/telnet/factory.py", "from cowrie.core.honeyfs import read_honeyfs_bytes",
+                  "from cowrie.core import honeyfs"),
                  ("src/cowrie/telnet/factory.py", "\nimport time\n", "\nimport time as clock\n"),
                  ("src/cowrie/telnet/factory.py", "\n\nclass HoneyPotTelnetFactory(protocol.ServerFactory):\n",
                   "\n\nclass HoneyPotTelnetFactory(protocol.ServerFactory):  # telnet\n"),
@@ -3159,12 +3246,14 @@ class PatchTest(unittest.TestCase):
                   "            self.compile_match(self.match)\n        except (re.error, ValueError):\n"),
                  ("src/cowrie/commands/fs.py", "            if matcher.search(line):\n",
                   "            if matcher.search(line) is not None:\n"),
+                 ("src/cowrie/shell/honeypot.py",
+                  "        if pp.has_redirection_error:\n            return False\n        pp.errReceived(message)\n",
+                  "        if pp.has_redirection_error:\n            return False\n\n        pp.errReceived(message)\n"),
+                 ("src/cowrie/commands/which.py", "                    found = True\n",
+                  "                    found = path\n"),
                  ("src/cowrie/commands/fs.py",
-                  "            self.errorWrite(f\"grep: invalid option -- {err.opt}\\n\")\n            self.help()\n",
-                  "            self.errorWrite(f\"grep: invalid option -- {err.opt}\\n\")\n"),
-                 ("src/cowrie/commands/fs.py",
-                  "            self.interactive = True\n            return\n\n        self.exit(0 if",
-                  "            self.interactive = True\n            return\n        self.exit(0 if"),
+                  "            self.interactive = True\n            return\n\n        self.exit(self._status())",
+                  "            self.interactive = True\n            return\n        self.exit(self._status())"),
                  ("src/cowrie/shell/honeypot.py",
                   "            prompt = f\"{username}@{self.protocol.hostname}:{cwd}\"\n",
                   "            prompt = f\"{username}@{self.protocol.hostname}:{cwd} \"\n"),

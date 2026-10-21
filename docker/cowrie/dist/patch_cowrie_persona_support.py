@@ -1009,11 +1009,16 @@ def tpot_which_dirs() -> dict[str, str]:
         path,
         """        # Look up each file
         for f in self.args:
+            found = False
             for path in self.environ["PATH"].split(":"):
                 resolved = self.fs.resolve_path(f, path)
 
                 if self.fs.exists(resolved):
                     self.write(f"{path}/{f}\\n")
+                    found = True
+            if not found:
+                # A name not found prints nothing but makes which fail.
+                self.exit_code = 1
 """,
         """        # Look up each file (T-Pot: -a every match on PATH, -s only the status)
         every = silent = False
@@ -8493,7 +8498,7 @@ class Command_dnf(HoneyPotCommand):
         d: defer.Deferred = defer.Deferred()
         if time2:
             time = random.randint(int(time * 100), int(time2 * 100)) / 100.0
-        reactor.callLater(time, d.callback, None)
+        self.callLater(time, d.callback, None)
         return d
 
     def tpot_out(self, text: str) -> None:
@@ -10119,7 +10124,7 @@ class Command_top(HoneyPotCommand):
         if self.frames >= self.limit or now - self.began >= TPOT_TOP_SECONDS or self.pipe_quit:
             self.tpot_end()
             return
-        self.scheduled = reactor.callLater(min(max(self.delay, 0.5), 60.0), self.tpot_tick)
+        self.scheduled = self.callLater(min(max(self.delay, 0.5), 60.0), self.tpot_tick)
 
     def tpot_restore(self) -> None:
         """The cursor the screen hid comes back, once, on every way the screen ends."""
@@ -11397,6 +11402,51 @@ GREP_SELF_TEST_LINES = (b"", b"processor\t: 0", b"model name\t: Intel", b"MemTot
                         b"Ab_c", b"foo bar", b"x-y", b" 42 ", b"ab", b"a b", b"amd64")
 
 
+def unbound_globals(source: str, name: str) -> list[str]:
+    """The global names a module reads in any scope that it binds nowhere at module level (an import, a
+    def, a class, an assignment) and that are no builtins."""
+    import builtins
+    import symtable
+
+    top = symtable.symtable(source, name, "exec")
+    bound = {symbol.get_name() for symbol in top.get_symbols()
+             if symbol.is_assigned() or symbol.is_imported() or symbol.is_namespace()}
+    bound |= set(dir(builtins)) | {"__file__", "__name__"}
+    missing, tables = set(), [top]
+    while tables:
+        table = tables.pop()
+        for symbol in table.get_symbols():
+            name = symbol.get_name()
+            # a dunder is the module's own (__doc__, __spec__) or the compiler's (__conditional_annotations__
+            #   of Python 3.14)
+            dunder = name.startswith("__") and name.endswith("__")
+            if symbol.is_referenced() and (table is top or symbol.is_global()) and name not in bound and not dunder:
+                missing.add(name)
+        tables += table.get_children()
+    return sorted(missing)
+
+
+def names_self_test(cowrie_root):
+    """Every module of the patched Cowrie binds the global names it reads: a needle still matches when
+    upstream drops an import the added code relies on (v3.1.3 took the reactor out of base.py and yum.py),
+    which no needle and no test of a single function sees. Upstream's tests and vendored code are left out."""
+    source = cowrie_root / "src" / "cowrie"
+    found = {}
+    for path in sorted(source.rglob("*.py")):
+        rel = path.relative_to(source).as_posix()
+        if rel.startswith(("test/", "vendor/")):
+            continue
+        try:
+            names = unbound_globals(path.read_text(encoding="utf-8"), str(path))
+        except SyntaxError as error:
+            names = [f"does not parse: {error.msg} (line {error.lineno})"]
+        if names:
+            found[rel] = names
+    if found:
+        raise RuntimeError(f"names without a binding in the patched Cowrie: {found}")
+    print("names self-test: every module binds the names it reads")
+
+
 def grep_self_test(cowrie_root):
     """Runs TpotGrepMatcher of the patched fs.py in this Python: every pattern of
     GREP_SELF_TEST is read as a regular expression and selects the lines re.search
@@ -11459,6 +11509,7 @@ def patch_grep(cowrie_root):
             self.grep_application(contents, match)
         except Exception:
             self.errorWrite(f"grep: {filename}: No such file or directory\\n")
+            self.errored = True
 """,
         """    count_only: bool = False
     invert: bool = False
@@ -11467,8 +11518,6 @@ def patch_grep(cowrie_root):
     tpot_exhausted: bool = False
     tpot_until: float | None = None
     ignore_case: bool = False
-    quiet: bool = False
-    failed: bool = False
 
     def write_count(self, label: str | None = None) -> None:
         if self.quiet or self.tpot_exhausted:
@@ -11477,11 +11526,10 @@ def patch_grep(cowrie_root):
         self.write(f"{prefix}{self.match_count}\\n")
 
     def exit_status(self) -> int:
+        # upstream's status (_status: errored, -q), and 2 once the work budget is used up
         if self.tpot_exhausted:
             return 2
-        if self.matched and (self.quiet or not self.failed):
-            return 0
-        return 2 if self.failed else 1
+        return self._status()
 
     def grep_get_contents(
         self, filename: str, match: str, label: str | None = None, show_name: bool = False
@@ -11493,7 +11541,7 @@ def patch_grep(cowrie_root):
             self.grep_application(contents, match)
         except Exception:
             self.errorWrite(f"grep: {name}: No such file or directory\\n")
-            self.failed = True
+            self.errored = True
             return
         if self.count_only:
             self.write_count(name if show_name else None)
@@ -11527,7 +11575,8 @@ def patch_grep(cowrie_root):
             if matcher.search(line):
                 self.matched = True
                 self.match_count += 1
-                self.writeBytes(line + b"\\n")
+                if not self.quiet:
+                    self.writeBytes(line + b"\\n")
 """,
         """        if self.tpot_exhausted or (self.quiet and self.matched):
             return
@@ -11558,17 +11607,6 @@ def patch_grep(cowrie_root):
     )
     replace_once(
         path,
-        """            self.errorWrite(f"grep: invalid option -- {err.opt}\\n")
-            self.help()
-            self.exit()
-""",
-        """            self.errorWrite(f"grep: invalid option -- {err.opt}\\n")
-            self.help()
-            self.exit(2)
-""",
-    )
-    replace_once(
-        path,
         """        for opt, arg in optlist:
             if opt == "-h":
 """,
@@ -11579,8 +11617,6 @@ def patch_grep(cowrie_root):
                 self.invert = True
             elif opt == "-i":
                 self.ignore_case = True
-            elif opt == "-q":
-                self.quiet = True
             elif opt == "-h":
 """,
     )
@@ -11598,11 +11634,12 @@ def patch_grep(cowrie_root):
                 self.write_count()
         elif files:
             for arg in files:
-                if self.tpot_exhausted:
+                if self.tpot_exhausted or (self.quiet and self.matched):
+                    # as GNU grep: -q ends at the first selected line, the files after it are not read
                     break
                 pnames = self.check_arguments("grep", [arg])
                 if not pnames:
-                    self.failed = True
+                    self.errored = True
                 for pname in pnames:
                     self.grep_get_contents(pname, self.match, arg, len(files) > 1)
 """,
@@ -11625,7 +11662,7 @@ def patch_grep(cowrie_root):
         """            self.interactive = True
             return
 
-        self.exit(0 if self.matched else 1)
+        self.exit(self._status())
 """,
         """            self.interactive = True
             return
@@ -11646,7 +11683,7 @@ def patch_grep(cowrie_root):
     replace_once(
         path,
         """                    self.grep_application(f.read(), self.match)
-        self.exit(0 if self.matched else 1)
+        self.exit(self._status())
 """,
         """                    self.grep_application(f.read(self.tpot_input_left), self.match)
             if self.count_only:
@@ -12391,10 +12428,13 @@ def tpot_awk_bytes(text: str) -> bytes:
     return TPOT_AWK_NON_ASCII.sub("\xff", text).encode("latin-1")
 
 
-def tpot_awk_ere(source: str, intervals: bool) -> str:
+def tpot_awk_ere(source: str, intervals: bool, strict_braces: bool = False, lone_paren: bool = False) -> str:
     """An awk extended regular expression in the syntax of Python's re: bracket classes, braces as
-    literals where the awk has no intervals, * + ? as literals where nothing precedes them."""
-    out, i, n, start = [], 0, len(source), True
+    literals where the awk has no intervals, * + ? as literals where nothing precedes them, a ) without
+    its ( as a literal (regcomp of glibc, uClibc and musl, mawk 1.3.4) or, with lone_paren, an error
+    (mawk 1.3.3: "missing '('"); with strict_braces a { that starts no interval is an error (BusyBox's
+    regcomp of a /regex/: "Unmatched \\{"). A [ or [^ at the end is REG_BADPAT of regcomp."""
+    out, i, n, start, depth = [], 0, len(source), True, 0
     while i < n:
         c = source[i]
         if c == "\\" and i + 1 < n:
@@ -12407,6 +12447,8 @@ def tpot_awk_ere(source: str, intervals: bool) -> str:
             if source.startswith("^", j):
                 body.append("^")
                 j += 1
+            if j >= n:
+                raise re.error("empty bracket")
             if source.startswith("]", j):
                 body.append("\\]")
                 j += 1
@@ -12435,13 +12477,21 @@ def tpot_awk_ere(source: str, intervals: bool) -> str:
                 out.append(found.group(0))
                 i, start = found.end(), False
                 continue
+            if strict_braces:
+                raise re.error("brace")
             out.append("\\{")
         elif c in "*+?":
             out.append("\\" + c if start else c)
         elif c == "(" and source.startswith("(?", i):
             out.append("(\\?")
+            depth += 1
             i += 1
+        elif c == ")" and not depth:
+            if lone_paren:
+                raise re.error("rparen")
+            out.append("\\)")
         elif c in "^$.|()":
+            depth += {"(": 1, ")": -1}.get(c, 0)
             out.append(c)
         else:
             out.append(re.escape(c) if c.isascii() else "\\xff")
@@ -12450,17 +12500,75 @@ def tpot_awk_ere(source: str, intervals: bool) -> str:
     return "".join(out)
 
 
+def tpot_awk_bre(source: str) -> str:
+    """A basic regular expression as an extended one: \\( \\) \\{ \\} \\| are the operators, ( ) { } | + ?
+    are characters (as_regex() of BusyBox's awk retries a regex without REG_EXTENDED)."""
+    out, i, n = [], 0, len(source)
+    while i < n:
+        c = source[i]
+        if c == "\\" and i + 1 < n and source[i + 1] in "(){}|":
+            out.append(source[i + 1])
+            i += 2
+            continue
+        if c == "\\" and i + 1 < n:
+            out.append(source[i:i + 2])
+            i += 2
+            continue
+        out.append("\\" + c if c in "(){}|+?" else c)
+        i += 1
+    return "".join(out)
+
+
+def tpot_awk_fault(error: Exception) -> str:
+    """The kind of fault of a regular expression the translation or re rejected: bracket, badpat (a [ at
+    the end), paren, rparen (a ) without its (, mawk 1.3.3), brace."""
+    text = str(error)
+    if text in ("rparen", "empty bracket"):
+        return {"rparen": "rparen", "empty bracket": "badpat"}[text]
+    if "brace" in text:
+        return "brace"
+    if "subpattern" in text or "parenthesis" in text:
+        return "paren"
+    return "bracket"
+
+
+# what regerror() of the C library says, and mawk's own words
+TPOT_AWK_REGERROR = {
+    ("glibc", "bracket"): "Unmatched [, [^, [:, [., or [=", ("glibc-2.17", "bracket"): "Unmatched [ or [^",
+    ("uclibc", "bracket"): "Unmatched [ or [^", ("musl", "bracket"): "Missing ']'",
+    ("glibc", "paren"): "Unmatched ( or \\(", ("glibc-2.17", "paren"): "Unmatched ( or \\(",
+    ("uclibc", "paren"): "Unmatched ( or \\(", ("musl", "paren"): "Missing ')'",
+    ("glibc", "brace"): "Unmatched \\{", ("glibc-2.17", "brace"): "Unmatched \\{",
+    ("uclibc", "brace"): "Unmatched \\{", ("musl", "brace"): "Invalid contents of {}",
+    # a [ or [^ at the end: REG_BADPAT of parse_bracket_exp (glibc, uClibc, the regex gawk bundles), REG_EBRACK of
+    #   musl (recorded: BusyBox 1.36.1 on each)
+    ("glibc", "badpat"): "Invalid regular expression", ("glibc-2.17", "badpat"): "Invalid regular expression",
+    ("uclibc", "badpat"): "Invalid regular expression", ("musl", "badpat"): "Missing ']'",
+}
+TPOT_AWK_MAWK_FAULT = {"bracket": "bad class -- [], [^] or [", "badpat": "bad class -- [], [^] or [",
+                       "paren": "missing ')'", "rparen": "missing '('", "brace": "bad interval expression"}
+
+
 class TpotAwkRegex:
     """An awk regular expression on TpotGrepMatcher, in time that grows with the text: whether a
     text has a match, and the leftmost longest match (sub, gsub, FS)."""
 
-    def __init__(self, awk, source: str) -> None:
+    def __init__(self, awk, source: str, context: str = "dynamic") -> None:
         self.awk = awk
+        busybox = awk.style == "busybox"
         try:
-            pattern = tpot_awk_ere(source, awk.intervals)
-            re.compile(pattern)
+            try:
+                pattern = tpot_awk_ere(source, awk.intervals, busybox and context == "ere", awk.old_mawk)
+                re.compile(pattern)
+            except re.error:
+                if not busybox or context == "ere":
+                    raise
+                pattern = tpot_awk_ere(tpot_awk_bre(source), True)
+                re.compile(pattern)
             self.matcher = TpotGrepMatcher("".join(c if c.isascii() else "\\xff" for c in pattern).encode("ascii"))
-        except (re.error, RecursionError, OverflowError, TpotGrepMatcher.TooBig):
+        except re.error as error:
+            awk.regex_error(source, tpot_awk_fault(error), context)
+        except (RecursionError, OverflowError, TpotGrepMatcher.TooBig):
             raise TpotAwkStop(2) from None
         awk.charge(awk.STATE_STEPS * len(self.matcher.kind))
         if not self.matcher.regular:
@@ -12531,6 +12639,7 @@ class TpotAwkLexer:
 
     def tokens(self) -> list:
         text, n, out = self.text, len(self.text), []
+        self.out = out  # the tokens read so far, also after a syntax error
         i, line, line_start = 0, 1, 0
         while True:
             while i < n:
@@ -12558,7 +12667,8 @@ class TpotAwkLexer:
                 while j < n and text[j] != "\n" and (text[j] != c or bracket):
                     if text[j] == "\\" and j + 1 < n:
                         j += 1
-                    elif c == "/" and text[j] in "[]":
+                    elif c == "/" and text[j] in "[]" and self.awk.style != "busybox" and not self.awk.old_mawk:
+                        # gawk and mawk 1.3.4 read a / inside [...] as a character; BusyBox and mawk 1.3.3 end there
                         bracket = text[j] == "["
                     j += 1
                 if j >= n or text[j] != c:
@@ -12590,9 +12700,13 @@ class TpotAwkLexer:
             punct = next((p for p in TPOT_AWK_PUNCT if text.startswith(p, i)), None)
             if punct is None:
                 raise TpotAwkSyntax(("?", c, line, col, c))
-            if punct in ("[", "]", "|", ">>"):  # arrays, pipes, appending output
+            if punct in ("[", "|", ">>"):  # arrays, pipes, appending output
                 raise TpotAwkStop(2)
             out.append((punct, punct, line, col, punct))
+            if punct == "]":
+                # without arrays a ] is always the syntax error the parser names, nothing after it is read
+                out.append(("eof", "", line, col + 1, "end of file"))
+                return out
             i += len(punct)
 
     @staticmethod
@@ -12895,9 +13009,12 @@ class TpotAwkParser:
     def primary(self):
         token = self.peek()
         kind = token[0]
-        if kind in ("num", "str", "ere"):
+        if kind == "num":
             self.take()
             return (kind, token[1])
+        if kind in ("str", "ere"):
+            self.take()
+            return (kind, token[1], token[2])  # the line, for the messages of a regex compiled with the program
         if kind == "name":
             self.take()
             return ("var", token[1])
@@ -12973,6 +13090,8 @@ class TpotAwk:
         self.limit = limit  # the session's deadline (TPOT_BUDGET)
         new_mawk = style == "mawk" and (version.split() + ["0"])[1] >= "20230000"
         self.intervals = style != "mawk" or (version.split() + ["0"])[1] >= "20200717"
+        self.old_mawk = style == "mawk" and (version.split() + ["0"])[0] < "1.3.4"
+        self.parse_line = None  # the line of the regex compiled with the program
         self.int_limit = 2.0 ** 31 if style == "mawk" and not new_mawk else 2.0 ** 63
         self.source_name = "cmd. line"
         self.out, self.err = [], []
@@ -12982,6 +13101,8 @@ class TpotAwk:
         self.deadline = min(time.monotonic() + self.MAX_SECONDS, self.limit)
         self.sizes, self.live = {}, 0  # characters per variable, in all of them
         self.record, self.fields, self.regexes, self.in_begin = TPOT_AWK_UNINIT, [], {}, True
+        self.libc = CowrieConfig.get("shell", "text_libc", fallback="glibc")
+        self.fs_option = False  # FS of -F: compiled at the start, as the real awk does
 
     # -- limits and messages
 
@@ -13018,6 +13139,20 @@ class TpotAwk:
 
     def syntax_message(self, error: TpotAwkSyntax, program: str) -> tuple:
         kind, _, line, col, text = error.token
+        if kind == "str" and text.startswith("/") and self.style != "busybox":
+            if self.style == "mawk":
+                return 2, f"awk: line {line}: runaway regular expression {text[:10]} ...\n"
+            where = f"awk: {self.source_name}:{line}: "
+            source = (program.split("\n") + [""])[line - 1]
+            message = f"{where}{source}\n{where}{' ' * (col + 1)}^ unterminated regexp\n"
+            try:
+                re.compile(tpot_awk_ere(text[1:], self.intervals))
+            except re.error as fault:
+                # gawk then reads the rest of the line as the regex
+                kind_of = tpot_awk_fault(fault)
+                regerror = TPOT_AWK_REGERROR[("glibc-2.17" if self.version.startswith("4.0") else "glibc", kind_of)]
+                message += f"{where}error: {regerror}: /{text[1:]}/\n"
+            return 1, message
         if self.style == "busybox":
             return 1, f"awk: cmd. line:{line}: Unexpected token\n"
         if self.style == "mawk":
@@ -13085,17 +13220,82 @@ class TpotAwk:
         x = self.num(value)
         return int(x) if math.isfinite(x) else 0
 
-    def regex(self, source: str) -> TpotAwkRegex:
-        found = self.regexes.get(source)
+    def regex(self, source: str, context: str = "dynamic") -> TpotAwkRegex:
+        """The compiled regex; context says where it comes from (ere: a /regex/, const: a string constant,
+        fs: FS of -F, dynamic: any other value), which BusyBox's compile and every message depend on."""
+        key = (source, context == "ere")
+        found = self.regexes.get(key)
         if found is None:
             if len(self.regexes) >= 64:
                 self.regexes.clear()
             self.charge(16 * len(source) + 16)  # the build costs about that before its states
-            found = self.regexes[source] = TpotAwkRegex(self, source)
+            found = self.regexes[key] = TpotAwkRegex(self, source, context)
         return found
 
+    def regex_constants(self, rules) -> list:
+        """(source, line, context) of every regex the awk compiles with the program, in the order of the
+        program: each /regex/, for mawk also a string constant where a regex goes (the right of ~ and !~,
+        the first argument of sub and gsub; gawk and BusyBox compile those when they run)."""
+        found, stack = [], [rules]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, tuple) and node and node[0] == "ere":
+                found.append((node[1], node[2], "ere"))
+                continue
+            if self.style == "mawk" and isinstance(node, tuple) and node:
+                const = node[3] if node[0] == "match" else node[2][0] if (
+                    node[0] == "fn" and node[1] in ("sub", "gsub")) else None
+                if const is not None and const[0] == "str":
+                    found.append((const[1], const[2], "const"))
+            stack.extend(reversed([child for child in node if isinstance(child, (tuple, list))]))
+        return found
+
+    def compile_constants(self, constants: list) -> str:
+        """Compile the regexes of the program: the messages of those that do not compile (gawk and mawk name
+        each); BusyBox ends at the first."""
+        said = []
+        for source, line, context in constants:
+            self.parse_line = line
+            try:
+                self.regex(source, context)
+            except TpotAwkStop as stop:
+                if self.style == "busybox" or not stop.text:
+                    raise
+                said.append(stop.text)
+            finally:
+                self.parse_line = None
+        return "".join(said)
+
     def regex_of(self, node) -> TpotAwkRegex:
-        return self.regex(node[1] if node[0] == "ere" else self.text(self.value(node)))
+        if node[0] == "ere":
+            return self.regex(node[1], "ere")
+        return self.regex(self.text(self.value(node)), "const" if node[0] == "str" else "dynamic")
+
+    def regex_error(self, source: str, fault: str, context: str):
+        """End awk as the persona's awk does on a regex its regcomp rejects (recorded: gawk 4.0.2 of
+        CentOS 7 with glibc 2.17, gawk 5.1.0, mawk 1.3.4, BusyBox on glibc, uClibc and musl)."""
+        if self.style == "busybox":
+            text = TPOT_AWK_REGERROR.get((self.libc, fault), TPOT_AWK_REGERROR[("glibc", fault)])
+            raise TpotAwkStop(1, f"awk: bad regex '{source}': {text}\n")
+        if self.style == "mawk":
+            why = f"regular expression compile failed ({TPOT_AWK_MAWK_FAULT[fault]})\n{source}"
+            if context == "fs":
+                raise TpotAwkStop(2, f"awk: line 0: {why}\n")
+            if context in ("ere", "const"):
+                # mawk compiles a regex constant with the program
+                raise TpotAwkStop(2, f"awk: line {self.parse_line or 1}: {why}\n")
+            self.fatal("", why, "")
+        # gawk: regerror of its bundled regex, the texts of glibc 2.17 under gawk 4.0 (CentOS 7, recorded), the
+        #   newer ones from 4.1 (the regcomp.c of gawk 4.1.4 already has "Unmatched [, [^, [:, [., or [=");
+        #   "invalid regexp" before a run time error from gawk 5 (not in 4.1.4)
+        text = TPOT_AWK_REGERROR[("glibc-2.17" if self.version.startswith("4.0") else "glibc", fault)]
+        if self.parse_line is not None:
+            # a /regex/ compiled with the program: an error that ends gawk before BEGIN, never with the prefix
+            raise TpotAwkStop(1, f"awk: {self.source_name}:{self.parse_line}: error: {text}: /{source}/\n")
+        what = f"{'invalid regexp: ' if not self.version.startswith('4') else ''}{text}: /{source}/"
+        if context == "fs":
+            raise TpotAwkStop(2, f"awk: fatal: {what}\n")
+        self.fatal(what, "", "")
 
     # -- records and fields
 
@@ -13205,7 +13405,7 @@ class TpotAwk:
         if op == "group":
             return self.value(node[1])
         if op == "ere":
-            return 1.0 if self.regex(node[1]).search(self.record) else 0.0
+            return 1.0 if self.regex(node[1], "ere").search(self.record) else 0.0
         if op == "cmp":
             return 1.0 if self.compare(node[1], self.value(node[2]), self.value(node[3])) else 0.0
         if op == "match":
@@ -13564,11 +13764,23 @@ class TpotAwk:
         try:
             if len(program) > self.MAX_PROGRAM:
                 raise TpotAwkStop(2)
+            fs = self.text(self.vars["FS"])
+            if self.fs_option and len(fs) > 1:
+                self.regex(fs, "fs")
+            lexer, parser = TpotAwkLexer(self, program), None
             try:
-                parser = TpotAwkParser(self, TpotAwkLexer(self, program).tokens())
+                parser = TpotAwkParser(self, lexer.tokens())
                 rules = parser.program()
             except TpotAwkSyntax as error:
-                raise TpotAwkStop(*self.syntax_message(error, program)) from None
+                # mawk compiles a /regex/ as it reads it, BusyBox as it parses it: before the syntax error
+                read = lexer.out if parser is None else parser.tokens[:parser.pos + (self.style == "mawk")]
+                said = self.compile_constants([(t[1], t[2], "ere") for t in read if t[0] == "ere"]
+                                              if self.style != "gawk" else [])
+                code, text = self.syntax_message(error, program)
+                raise TpotAwkStop(code, said + text) from None
+            said = self.compile_constants(self.regex_constants(rules))
+            if said:
+                raise TpotAwkStop(2 if self.style == "mawk" else 1, said)
             if parser.undefined:
                 raise TpotAwkStop(*self.undefined_message(parser.undefined, program))
             if not tpot_awk_shallow(rules, self.MAX_DEPTH):
@@ -13913,6 +14125,7 @@ class Command_tpot_awk(Command_awk):
                 if letter == "F":
                     value = tpot_awk_unescape(value, gawk)
                     awk.vars["FS"] = "\t" if gawk and value == "t" else value
+                    awk.fs_option = True
                 elif letter == "v":
                     if not TPOT_AWK_ASSIGNMENT.match(value):
                         return self.tpot_usage(f"`{value}' argument to `-v' not in `var=value' form\n",
@@ -15668,15 +15881,1548 @@ commands["seq"] = Command_tpot_seq
 '''
 
 
+MKDIR_COMMAND = r'''
+
+
+# --- rm, cp, mv, touch, rmdir and mkdir --------------------------------------------------------
+
+# T-Pot: the file commands of the persona (GNU coreutils or BusyBox). Their texts, options and build flags are
+#   the persona's variant of fs_texts.json ([shell] fs_texts and fs_variant; tools/build_fs_texts.py makes it
+#   from recordings of the real tools), the code decides which of its conditions applies. Upstream's
+#   commands quote as coreutils 6 did and take options for names; from v3.1.3 on their status 1 ends a
+#   `mkdir -p DIR && ...` chain at an existing folder.
+import calendar
+import errno as tpot_errno
+import json
+import os
+from pathlib import Path
+
+TPOT_FS_NAMES = 4096
+# the nodes one command walks (rm -r, cp -r, the checks of a user), the error lines it writes
+TPOT_FS_NODES = 10_000
+TPOT_FS_ERRORS = 2_000
+# new nodes of a session, as Cowrie's mkfile and mkdir count them
+TPOT_FS_NEW = 10_000
+TPOT_FS_SPECIAL = ("/sys", "/proc", "/dev/pts")
+TPOT_FS_FIELD = re.compile(r"\{(\d+)(:q)?\}")
+TPOT_FS_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+TPOT_FS_ESCAPES = {"\a": "\\a", "\b": "\\b", "\t": "\\t", "\n": "\\n", "\v": "\\v", "\f": "\\f", "\r": "\\r",
+                   "\x1b": "\\E"}
+TPOT_FS_STRERROR = {"ENOENT": "No such file or directory", "ENOTDIR": "Not a directory", "EISDIR": "Is a directory",
+                    "EACCES": "Permission denied", "EPERM": "Operation not permitted",
+                    "ENOTEMPTY": "Directory not empty", "EINVAL": "Invalid argument", "EEXIST": "File exists",
+                    "EBUSY": "Device or resource busy", "EDQUOT": "Disk quota exceeded",
+                    "ENAMETOOLONG": "File name too long"}
+# PATH_MAX of Linux with its NUL: the longest name cp reads or writes a node by
+TPOT_FS_PATH_MAX = 4095
+TPOT_FS_CACHE: dict = {}
+TPOT_MKDIR_NAMES = TPOT_FS_NAMES
+TPOT_MKDIR_CLAUSE = re.compile(r"([ugoa]*)((?:[-+=](?:[rwxXst]*|[ugo]))+)")
+TPOT_MKDIR_UMASK = 0o022
+
+
+def tpot_fs_table() -> dict:
+    """fs_texts.json of [shell] fs_texts, else the copy the patch put into Cowrie's data folder; read once per
+    change of the file."""
+    path = tpot_text("fs_texts")
+    if not path:
+        here = globals().get("__file__")
+        path = str(Path(here).resolve().parent.parent / "data" / "tpot_fs_texts.json") if here else ""
+    stamp = os.stat(path).st_mtime_ns
+    cached = TPOT_FS_CACHE.get(path)
+    if cached is None or cached[0] != stamp:
+        with open(path, encoding="utf-8") as handle:
+            cached = (stamp, json.load(handle))
+        TPOT_FS_CACHE.clear()
+        TPOT_FS_CACHE[path] = cached
+    return cached[1]
+
+
+def tpot_fs_variant(gnu: bool, libc: str) -> tuple:
+    """(variant, authors of --version): [shell] fs_variant, else coreutils 9.1 / the BusyBox 1.36.1 of the libc."""
+    table = tpot_fs_table()
+    variants = table["variants"]
+    name = tpot_text("fs_variant")
+    if name not in variants:
+        name = "debian_12" if gnu else f"busybox_1.36.1-{libc}"
+        name = name if name in variants else "busybox_1.36.1-musl"
+    return variants[name], table.get("authors", {})
+
+
+def tpot_fs_quote(name: str) -> str:
+    """A name as quoteaf of coreutils 8.25 and later quotes it (shell-escape-always): in single quotes; with a
+    single quote and nothing a shell expands in double quotes in double quotes; control characters as $'\\n'."""
+    if TPOT_FS_CONTROL.search(name):
+        out, plain = "", ""
+        for char in name:
+            if TPOT_FS_CONTROL.match(char):
+                if plain:
+                    out += "'" + plain.replace("'", "'\\''") + "'"
+                    plain = ""
+                out += "$'" + TPOT_FS_ESCAPES.get(char, f"\\{ord(char):03o}") + "'"
+            else:
+                plain += char
+        return out + ("'" + plain.replace("'", "'\\''") + "'" if plain else "")
+    if "'" in name:
+        if not re.search(r'["$`\\!]', name):
+            return '"' + name + '"'
+        return "'" + name.replace("'", "'\\''") + "'"
+    return "'" + name + "'"
+
+
+def tpot_fs_format(template: str, values) -> str:
+    """A template of fs_texts.json with its values: {N} as it is, {N:q} quoted as quoteaf does."""
+    return TPOT_FS_FIELD.sub(lambda found: tpot_fs_quote(str(values[int(found.group(1))])) if found.group(2)
+                             else str(values[int(found.group(1))]), template)
+
+
+class TpotFsTool(TpotTextTool):
+    """What rm, cp, mv, touch, rmdir and mkdir share: the persona's variant (texts, options, build flags), its
+    option parsers, the user (root under sudo) and the checks of the emulated file system."""
+
+    consumes_stdin = False
+
+    # --- running ---------------------------------------------------------------------------
+
+    def tpot_main(self, terminal: bytes | None) -> int:
+        self.fs_texts, self.fs_authors = tpot_fs_variant(self.gnu, self.libc)
+        self.tpot_errors = self.tpot_walked = 0
+        self.tpot_answers = None
+        sudo = bool(getattr(getattr(self, "pp", None), "tpot_sudo", False))
+        user = getattr(self, "user", None) or {}
+        self.uid, self.gid = (0, 0) if sudo else (int(user.get("uid", 0)), int(user.get("gid", 0)))
+        options, operands = self.tpot_fs_options(list(self.args))
+        for key, _value in options:
+            if key == "help":
+                self.tpot_emit(self.fs_texts["help"][self.tool])
+                return 0
+            if key == "version":
+                self.tpot_emit(self.tpot_gnu_version(self.fs_authors.get(self.tool, "")))
+                return 0
+        private = getattr(self.fs, "_ensure_private_fs", None)
+        if callable(private):
+            private()  # the session's own copy of the tree before a node is read for a change
+        return self.tpot_fs_main(options, operands[:TPOT_FS_NAMES])
+
+    def tpot_fs_main(self, options: list, names: list) -> int:
+        raise NotImplementedError
+
+    # --- texts -----------------------------------------------------------------------------
+
+    def tpot_say(self, key: str, *values, errno: str | None = None) -> str:
+        """The text of a condition: the variant's own for this errno, else its template with the errno's text."""
+        templates = self.fs_texts["templates"]
+        if errno and f"{key}.{errno}" in templates:
+            return tpot_fs_format(templates[f"{key}.{errno}"], values)
+        return tpot_fs_format(templates[key], values + ((TPOT_FS_STRERROR[errno],) if errno else ()))
+
+    def tpot_fail(self, key: str, *values, errno: str | None = None) -> None:
+        if self.tpot_errors < TPOT_FS_ERRORS:
+            self.tpot_err.append(self.tpot_say(key, *values, errno=errno))
+        self.tpot_errors += 1
+
+    def tpot_tell(self, key: str, *values) -> None:
+        self.tpot_emit(self.tpot_say(key, *values))
+
+    def tpot_verbose(self) -> bool:
+        """-v prints: always on GNU, on BusyBox where it is built with FEATURE_VERBOSE."""
+        return self.gnu or bool(self.fs_texts.get("verbose", {}).get(self.tool, True))
+
+    def tpot_ask(self, prompt: str) -> bool:
+        """A prompt on stderr and the answer, a line of standard input (a pipe; the terminal and a closed
+        input answer no)."""
+        self.tpot_err.append(prompt)
+        if self.tpot_answers is None:
+            self.tpot_answers = bytes(self.input_data or b"").split(b"\n")
+        answer = self.tpot_answers.pop(0) if self.tpot_answers else b""
+        return answer.lstrip()[:1] in (b"y", b"Y")
+
+    # --- options ---------------------------------------------------------------------------
+
+    def tpot_busybox_usage(self) -> str:
+        return self.fs_texts["usage"][self.tool]
+
+    def tpot_usage_stop(self, prefix: str = "", code: int | None = None) -> TpotTextStop:
+        # the usage of the variant ends as its bb_show_usage does (a blank line before 1.21)
+        banner = tpot_text("text_banner", self.fs_texts.get("banner", "BusyBox v1.36.1"))
+        head = f"{banner} multi-call binary.\n" if self.version >= (1, 15) else f"{banner} multi-call binary\n"
+        return TpotTextStop(f"{prefix}{head}\nUsage: {self.tool} {self.tpot_busybox_usage()}",
+                            self.status if code is None else code)
+
+    def tpot_fs_options(self, args: list[str]):
+        spec = self.fs_texts["options"][self.tool]
+        if self.gnu:
+            self.shorts = spec["short"]
+            self.longs = {name: (key, takes) for name, (key, takes) in spec["long"].items()}
+            return self.tpot_gnu_options(args)
+        if args == ["--help"]:
+            # the applet's --help (of BusyBox, not of its getopt): the usage, status 1 up to 1.19
+            raise self.tpot_usage_stop(code=int(self.fs_texts.get("help_status", 0)))
+        return self.tpot_fs_busybox(args, spec["short"], spec["long"])
+
+    def tpot_bb_long_error(self, kind: str, arg: str, name: str) -> str:
+        """The getopt_long message of the firmware's C library for a long option."""
+        word = arg[2:].partition("=")[0]
+        if self.libc == "musl":
+            text = {"unknown": f"unrecognized option: {word}", "ambiguous": f"option is ambiguous: {word}",
+                    "needs": f"option requires an argument: {name}",
+                    "takes": f"option does not take an argument: {name}"}[kind]
+        else:
+            left = "`" if self.libc == "uclibc" else "'"
+            text = {"unknown": f"unrecognized option {left}{arg}'", "ambiguous": f"option {left}--{word}' is ambiguous",
+                    "needs": f"option {left}--{name}' requires an argument",
+                    "takes": f"option {left}--{name}' doesn't allow an argument"}[kind]
+        return f"{self.tool}: {text}\n"
+
+    def tpot_bb_short_error(self, kind: str, letter: str) -> str:
+        if kind == "unknown":
+            text = {"musl": f"unrecognized option: {letter}", "uclibc": f"invalid option -- {letter}"}.get(
+                self.libc, f"invalid option -- '{letter}'")
+        else:
+            text = {"musl": f"option requires an argument: {letter}",
+                    "uclibc": f"option requires an argument -- {letter}"}.get(
+                self.libc, f"option requires an argument -- '{letter}'")
+        return f"{self.tool}: {text}\n"
+
+    def tpot_fs_busybox(self, args: list[str], shorts: str, longs: dict):
+        """getopt32 of BusyBox: the short options of the variant and its long ones (getopt_long: a unique
+        prefix), the messages of the firmware's C library, then the usage text; musl does not reorder."""
+        found, operands, index = [], [], 0
+        permute = self.libc != "musl"
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if arg == "--":
+                operands += args[index:]
+                break
+            if not arg.startswith("-") or arg == "-":
+                operands.append(arg)
+                if not permute:
+                    operands += args[index:]
+                    break
+                continue
+            if arg.startswith("--"):
+                word, eq, value = arg[2:].partition("=")
+                names = [word] if word in longs else [name for name in longs if name.startswith(word)]
+                if len(names) != 1:
+                    raise self.tpot_usage_stop(self.tpot_bb_long_error("ambiguous" if names else "unknown",
+                                                                       arg, word))
+                key, takes = longs[names[0]]
+                if eq and not takes:
+                    raise self.tpot_usage_stop(self.tpot_bb_long_error("takes", arg, names[0]))
+                if takes == 1 and not eq:
+                    if index >= len(args):
+                        raise self.tpot_usage_stop(self.tpot_bb_long_error("needs", arg, names[0]))
+                    value, index = args[index], index + 1
+                found.append((key, value if (eq or takes == 1) else None))
+                continue
+            letters = arg[1:]
+            for at, letter in enumerate(letters):
+                spot = shorts.find(letter)
+                if spot < 0 or letter == ":":
+                    raise self.tpot_usage_stop(self.tpot_bb_short_error("unknown", letter))
+                if shorts[spot + 1:spot + 2] == ":":
+                    value = letters[at + 1:]
+                    if not value:
+                        if index >= len(args):
+                            raise self.tpot_usage_stop(self.tpot_bb_short_error("needs", letter))
+                        value, index = args[index], index + 1
+                    found.append((letter, value))
+                    break
+                found.append((letter, None))
+        return found, operands
+
+    # --- the file system -------------------------------------------------------------------
+
+    def tpot_path(self, name: str) -> str:
+        return self.fs.resolve_path(name, self.cwd)
+
+    @staticmethod
+    def tpot_is_dir(node) -> bool:
+        return isinstance(node, list) and node[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_DIR
+
+    def tpot_special(self, path: str) -> bool:
+        return any(path == p or path.startswith(p + "/")
+                   for p in getattr(tpot_shell_fs, "SPECIAL_PATHS", TPOT_FS_SPECIAL))
+
+    def tpot_missing(self, path: str) -> str:
+        """The errno of a path without a node: ENOTDIR where one of its folders is no folder."""
+        at = ""
+        for part in [p for p in path.split("/") if p][:-1]:
+            at += "/" + part
+            node = self.fs.getfile(at)
+            if not isinstance(node, list):
+                return "ENOENT"
+            if not self.tpot_is_dir(node):
+                return "ENOTDIR"
+        return "ENOENT"
+
+    def tpot_node(self, name: str, follow: bool = True):
+        """(node, None) of an operand, else (None, errno); a name with a slash at its end has to be a folder."""
+        if not name:
+            return None, "ENOENT"
+        path = self.tpot_path(name)
+        node = self.fs.getfile(path, follow_symlinks=follow)
+        if not isinstance(node, list):
+            return None, self.tpot_missing(path)
+        if name.endswith("/") and path != "/" and not self.tpot_is_dir(self.fs.getfile(path)):
+            return None, "ENOTDIR"
+        return node, None
+
+    def tpot_unlink_errno(self, path: str, node, parent=None) -> str | None:
+        """Whether the user may take a node out of its folder (unlink, rmdir, rename): write and search on the
+        folder, and in a sticky folder own the node or the folder; nothing of /proc and /sys. parent is the
+        folder's node where the caller holds it."""
+        if self.tpot_special(path):
+            return "EPERM"
+        if self.uid == 0:
+            return None
+        if parent is None:
+            parent = self.fs.getfile(posixpath.dirname(path) or "/")
+        if not tpot_may_write(parent, self.uid, self.gid):
+            return "EACCES"
+        if (isinstance(parent, list) and int(parent[tpot_shell_fs.A_MODE] or 0) & 0o1000
+                and node[tpot_shell_fs.A_UID] != self.uid and parent[tpot_shell_fs.A_UID] != self.uid):
+            return "EPERM"
+        return None
+
+    def tpot_create_errno(self, path: str, parent=None) -> str | None:
+        """Whether the user may make a node at path: its folder exists, is one and is writable (parent: the
+        folder's node where the caller holds it)."""
+        if parent is None:
+            parent = self.fs.getfile(posixpath.dirname(path) or "/")
+        if not isinstance(parent, list):
+            return self.tpot_missing(path)
+        if not self.tpot_is_dir(parent):
+            return "ENOTDIR"
+        if self.tpot_special(path) or not tpot_may_write(parent, self.uid, self.gid):
+            return "EACCES"
+        if int(getattr(self.fs, "newcount", 0) or 0) > TPOT_FS_NEW:
+            return "EDQUOT"
+        return None
+
+    def tpot_walk_more(self) -> bool:
+        """One more node to walk: within TPOT_FS_NODES and the time of the command."""
+        self.tpot_walked += 1
+        return self.tpot_walked <= TPOT_FS_NODES and not self.tpot_late()
+
+    @staticmethod
+    def tpot_join(shown: str, name: str) -> str:
+        return (shown if shown.endswith("/") else shown + "/") + name
+
+    # a walk (rm -r, cp -r) keeps the folder nodes it is in: what fs.link_entry and fs.unlink_entry do, on
+    #   such a node, with no lookup of its path from / (fs.getfile), which makes a deep tree quadratic; the
+    #   nodes are those of the session's own tree (_ensure_private_fs in tpot_main)
+
+    @staticmethod
+    def tpot_link(parent, node, replace: bool = True) -> None:
+        """node into the folder parent, in place of one of its name (replace: such a node may be there)."""
+        contents = parent[tpot_shell_fs.A_CONTENTS]
+        if replace:
+            name = node[tpot_shell_fs.A_NAME]
+            contents[:] = [entry for entry in contents if entry[tpot_shell_fs.A_NAME] != name]
+        contents.append(node)
+
+    @staticmethod
+    def tpot_unlink(parent, node) -> None:
+        """node out of the folder parent."""
+        contents = parent[tpot_shell_fs.A_CONTENTS]
+        for index, entry in enumerate(contents):
+            if entry is node:
+                del contents[index]
+                return
+
+    def tpot_new_node(self, source, name: str, preserve: bool, now: float) -> list:
+        """A copy of a node for cp: the user's, its mode within the umask (the source's own with -p / -a), the
+        time of now (the source's with -p)."""
+        node = list(source)
+        node[tpot_shell_fs.A_NAME] = name
+        if not (preserve and self.uid == 0):
+            node[tpot_shell_fs.A_UID], node[tpot_shell_fs.A_GID] = self.uid, self.gid
+        if not preserve and node[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_LINK:
+            node[tpot_shell_fs.A_CTIME] = now  # a link keeps its mode, 0777
+        elif not preserve:
+            node[tpot_shell_fs.A_MODE] = int(source[tpot_shell_fs.A_MODE] or 0) & ~0o7022
+            node[tpot_shell_fs.A_CTIME] = now
+        if self.tpot_is_dir(node) or not isinstance(node[tpot_shell_fs.A_CONTENTS], bytes):
+            node[tpot_shell_fs.A_CONTENTS] = []
+        try:
+            self.fs.newcount += 1
+        except Exception:  # noqa: BLE001 - a file system without the counter
+            pass
+        return node
+
+
+# --- rm ----------------------------------------------------------------------------------------
+
+class TpotRmFolder:
+    """A folder of rm's walk: what is left in it, and whether it stays (GNU: a node in it failed or was not let
+    into, mark_ancestor_dirs of remove.c; BusyBox: a node in it failed, the status of remove_file.c)."""
+
+    __slots__ = ("shown", "path", "node", "parent", "link", "left", "marked", "failed")
+
+    def __init__(self, shown: str, path: str, node, parent, link: bool) -> None:
+        self.shown, self.path, self.node, self.parent, self.link = shown, path, node, parent, link
+        self.left = list(reversed(node[tpot_shell_fs.A_CONTENTS]))
+        self.marked = self.failed = False
+
+
+class Command_tpot_rm(TpotFsTool):
+    """rm of the persona: -f, -i (the answer from a pipe; the terminal and a closed input answer no), -I, -r,
+    -d, -v, the refusal of / (GNU, --no-preserve-root) and of . and .."""
+
+    tool = "rm"
+
+    def tpot_fs_main(self, options: list, names: list) -> int:
+        self.force = self.interactive = self.recursive = self.dirs = self.verbose = False
+        once, preserve = False, True
+        for key, value in options:
+            if key == "f":
+                self.force, self.interactive, once = True, False, False
+            elif key == "i":
+                self.interactive, self.force, once = True, False, False
+            elif key == "I":
+                once, self.interactive, self.force = True, False, False
+            elif key == "interactive":
+                when = (value or "always").lower()
+                self.interactive = when not in ("never", "no", "none", "once")
+                once = when == "once"
+            elif key in ("r", "R", "recursive"):
+                self.recursive = True
+            elif key == "d":
+                self.dirs = True
+            elif key == "v":
+                self.verbose = self.tpot_verbose()
+            elif key == "no-preserve-root":
+                preserve = False
+            elif key == "preserve-root":
+                preserve = True
+        if not names:
+            if self.force:
+                return 0
+            if self.gnu:
+                raise TpotTextStop(self.tpot_say("rm.missing_operand"), 1)
+            raise self.tpot_usage_stop()
+        if self.gnu and once and (self.recursive or len(names) > 3):
+            key = "rm.prompt_some_r" if self.recursive else "rm.prompt_some"
+            if not self.tpot_ask(self.tpot_say(key + ("_one" if len(names) == 1 else ""), len(names))):
+                return 0
+        code = 0
+        for name in names:
+            if self.tpot_late():
+                return 1
+            if not self.tpot_rm_operand(name, preserve):
+                code = 1
+        return code
+
+    def tpot_rm_operand(self, name: str, preserve: bool) -> bool:
+        base = name.rstrip("/").rpartition("/")[2] if name.rstrip("/") else "/"
+        if base in (".", "..") and (not self.gnu or self.recursive or self.dirs):
+            self.tpot_fail("rm.dot", name)
+            return False
+        path = self.tpot_path(name)
+        if self.gnu and self.recursive and preserve and path == "/":
+            self.tpot_fail("rm.preserve_root", name)
+            return False
+        node, errno = self.tpot_node(name, follow=False)
+        if node is None:
+            if errno == "ENOENT" and self.force:
+                return True
+            self.tpot_fail("rm.cannot_remove" if self.gnu or errno == "ENOENT" else "rm.stat", name, errno=errno)
+            return False
+        parent, link = self.fs.getfile(posixpath.dirname(path) or "/"), False
+        if name.endswith("/") and node[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_LINK:
+            # a slash at the end names the folder the link points to (lstat of "ld/"): GNU (remove.c) and
+            #   BusyBox (remove_file.c) take it as a folder, and its rmdir at the end says ENOTDIR
+            node, link = self.fs.getfile(path), True
+        if self.tpot_is_dir(node) and not self.recursive:
+            if self.gnu and self.dirs:
+                if node[tpot_shell_fs.A_CONTENTS]:
+                    self.tpot_fail("rm.cannot_remove", name, errno="ENOTEMPTY")
+                    return False
+                return self.tpot_rm_one(name, path, node, parent, link)
+            if self.gnu:
+                self.tpot_fail("rm.cannot_remove", name, errno="EISDIR")
+            else:
+                self.tpot_fail("rm.is_dir", name)
+            return False
+        return self.tpot_rm_walk(name, path, node, parent, link)
+
+    def tpot_fast(self, path: str, node, parent) -> bool:
+        """Without -i and -v a tree goes at once (none of /proc and /sys in it): root's always, another
+        user's when that user may remove every node of it."""
+        if self.interactive or self.verbose or self.tpot_special(path) or any(
+                p.startswith(path.rstrip("/") + "/") for p in getattr(tpot_shell_fs, "SPECIAL_PATHS", TPOT_FS_SPECIAL)):
+            return False
+        return self.uid == 0 or self.tpot_may_remove(path, node, parent)
+
+    def tpot_may_remove(self, path: str, node, parent) -> bool:
+        """Whether a user other than root may remove a whole tree: the tree out of its folder, and in it each
+        folder that holds nodes writable and searchable, its sticky bit kept; one pass over the nodes."""
+        if self.tpot_unlink_errno(path, node, parent):
+            return False
+        a_mode, a_uid, a_contents = tpot_shell_fs.A_MODE, tpot_shell_fs.A_UID, tpot_shell_fs.A_CONTENTS
+        folders = [node]
+        while folders:
+            if self.tpot_late():
+                return False
+            folder = folders.pop()
+            contents = folder[a_contents]
+            if not contents:
+                continue
+            if not tpot_may_write(folder, self.uid, self.gid):
+                return False
+            sticky = int(folder[a_mode] or 0) & 0o1000 and folder[a_uid] != self.uid
+            for child in contents:
+                if sticky and child[a_uid] != self.uid:
+                    return False
+                if self.tpot_is_dir(child):
+                    folders.append(child)
+        return True
+
+    def tpot_prompt(self, shown: str, node) -> str:
+        if not self.gnu:
+            return self.tpot_say("rm.prompt_dir" if self.tpot_is_dir(node) else "rm.prompt", shown)
+        kinds = self.fs_texts["rm_kinds"]
+        if self.tpot_is_dir(node):
+            kind = kinds["dir"]
+        elif node[tpot_shell_fs.A_TYPE] == getattr(tpot_shell_fs, "T_LINK", 0):
+            kind = kinds["link"]
+        else:
+            kind = kinds["file"] if node[tpot_shell_fs.A_SIZE] else kinds["empty"]
+        return self.tpot_say("rm.prompt", shown, kind)
+
+    def tpot_rm_one(self, shown: str, path: str, node, parent, link: bool = False) -> bool:
+        """One node, after the question of -i (declined: it stays, which is no failure)."""
+        if self.interactive and not self.tpot_ask(self.tpot_prompt(shown, node)):
+            return True
+        return self.tpot_rm_unlink(shown, path, node, parent, link)
+
+    def tpot_rm_unlink(self, shown: str, path: str, node, parent, link: bool = False) -> bool:
+        """unlink(2) or rmdir(2) of a node: the rights on its folder, / busy, the folder a link names no folder,
+        a folder that still holds a node not empty."""
+        errno = self.tpot_unlink_errno(path, node, parent)
+        if errno is None and path == "/":
+            errno = "EBUSY"
+        if errno is None and link:
+            errno = "ENOTDIR"
+        if errno is None and self.tpot_is_dir(node) and node[tpot_shell_fs.A_CONTENTS]:
+            errno = "ENOTEMPTY"
+        if errno:
+            self.tpot_fail("rm.cannot_remove", shown, errno=errno)
+            return False
+        self.tpot_unlink(parent, node)
+        if self.verbose:
+            self.tpot_tell("rm.removed_dir" if self.tpot_is_dir(node) else "rm.removed", shown)
+        return True
+
+    def tpot_rm_walk(self, shown: str, path: str, node, parent, link: bool = False) -> bool:
+        """A node and, of a folder, everything in it first (as far as TPOT_FS_NODES and the time reach). The
+        folders of the walk are a stack (TpotRmFolder), so the depth of a tree costs no recursion; / is never
+        removed."""
+        if not self.tpot_walk_more():
+            return False
+        if not self.tpot_is_dir(node):
+            return self.tpot_rm_one(shown, path, node, parent)
+        if path != "/" and not link and self.tpot_fast(path, node, parent):
+            self.tpot_unlink(parent, node)
+            return True
+        self.tpot_failed, stack = False, []
+        self.tpot_rm_enter(shown, path, node, parent, link, stack)
+        while stack:
+            if self.tpot_walked > TPOT_FS_NODES or self.tpot_late():
+                return False
+            folder = stack[-1]
+            if not folder.left:
+                stack.pop()
+                self.tpot_rm_leave(folder, stack)
+                continue
+            child = folder.left.pop()
+            if not self.tpot_walk_more():
+                return False
+            name = child[tpot_shell_fs.A_NAME]
+            child_shown, child_path = self.tpot_join(folder.shown, name), self.tpot_join(folder.path, name)
+            if self.tpot_is_dir(child):
+                self.tpot_rm_enter(child_shown, child_path, child, folder.node, False, stack)
+            elif not self.tpot_rm_one(child_shown, child_path, child, folder.node):
+                self.tpot_rm_failed(stack)
+        return not self.tpot_failed
+
+    def tpot_rm_enter(self, shown: str, path: str, node, parent, link: bool, stack: list) -> None:
+        """A folder of the walk before what is in it: root's goes at once (rm -rf of /), -i asks to descend
+        (GNU asks to remove an empty one, remove.c); a declined descent leaves it, and GNU the folders above."""
+        if stack and self.uid == 0 and self.tpot_fast(path, node, parent):
+            self.tpot_unlink(parent, node)
+            return
+        if self.interactive:
+            if self.gnu and not node[tpot_shell_fs.A_CONTENTS]:
+                if not self.tpot_ask(self.tpot_prompt(shown, node)):
+                    self.tpot_rm_mark(stack)
+                elif not self.tpot_rm_unlink(shown, path, node, parent, link):
+                    self.tpot_rm_failed(stack)
+                return
+            if not self.tpot_ask(self.tpot_say("rm.descend", shown)):
+                self.tpot_rm_mark(stack)
+                return
+        stack.append(TpotRmFolder(shown, path, node, parent, link))
+
+    def tpot_rm_leave(self, folder: TpotRmFolder, stack: list) -> None:
+        """A folder of the walk after what was in it: GNU leaves a marked one without a word; BusyBox asks with
+        -i, and leaves one whose nodes failed; else the folder goes, or says why not (Directory not empty)."""
+        if folder.path == "/":
+            self.tpot_failed = True
+            return
+        if self.gnu and folder.marked:
+            return
+        if not self.gnu and folder.failed:
+            if self.interactive:
+                self.tpot_ask(self.tpot_say("rm.prompt_dir", folder.shown))
+            if stack:
+                stack[-1].failed = True
+            return
+        if not self.tpot_rm_one(folder.shown, folder.path, folder.node, folder.parent, folder.link):
+            self.tpot_rm_failed(stack)
+
+    def tpot_rm_mark(self, stack: list) -> None:
+        """GNU: the folders above a node that stays are not asked for (mark_ancestor_dirs)."""
+        if self.gnu:
+            for folder in stack:
+                folder.marked = True
+
+    def tpot_rm_failed(self, stack: list) -> None:
+        """A node could not be removed: the status is 1; GNU marks the folders above it, BusyBox's folder above
+        it fails in turn (remove_file returns -1)."""
+        self.tpot_failed = True
+        if self.gnu:
+            self.tpot_rm_mark(stack)
+        elif stack:
+            stack[-1].failed = True
+
+
+# --- cp ----------------------------------------------------------------------------------------
+
+class Command_tpot_cp(TpotFsTool):
+    """cp of the persona: files and, with -r / -a, trees into a new or an existing folder; -t, -T, -n, -i, -u,
+    -p, -v; the other options are taken and change nothing here."""
+
+    tool = "cp"
+
+    def tpot_fs_main(self, options: list, names: list) -> int:
+        self.recursive = self.verbose = self.no_clobber = self.interactive = self.newer = self.preserve = False
+        target, no_target, deref, always = None, False, None, False
+        for key, value in options:
+            if key in ("r", "R", "a", "recursive"):
+                self.recursive = True
+            if key in ("a", "d", "P"):
+                deref = False
+            elif key == "L" or (key == "H" and self.gnu):
+                deref, always = True, always or key == "L"
+            if key in ("a", "p") or (key == "preserve" and (value is None or re.search(r"mode|time|all", value))):
+                self.preserve = True
+            if key == "v":
+                self.verbose = self.tpot_verbose()
+            elif key == "n":
+                self.no_clobber, self.interactive = True, False
+            elif key == "i":
+                self.interactive, self.no_clobber = True, False
+            elif key == "u":
+                self.newer = True
+            elif key == "update":
+                self.newer = value in (None, "older")
+                self.no_clobber = value in ("none", "none-fail")
+            elif key == "t":
+                target = value
+            elif key == "T":
+                no_target = True
+        # whether an operand that is a link is copied as what it points to: GNU takes the last of -a, -d, -H,
+        #   -L, -P and else follows without -r (cp.c, DEREF_NEVER with -R); BusyBox follows with -L, else
+        #   without -r, -a, -d and -P ("Preserve symlinks (default if -R)"); the links in a tree stay links
+        if self.gnu:
+            self.deref = (not self.recursive) if deref is None else deref
+        else:
+            self.deref = always or (deref is None and not self.recursive)
+        if self.gnu:
+            sources, dest, into = self.tpot_gnu_targets(names, target, no_target)
+        else:
+            if len(names) < (1 if target is not None else 2):
+                raise self.tpot_usage_stop()
+            sources, dest = (names, target) if target is not None else (names[:-1], names[-1])
+            node, _ = self.tpot_node(dest)
+            into = target is not None or (not no_target and (len(sources) > 1 or self.tpot_is_dir(node)))
+        code = 0
+        for src in sources:
+            if self.tpot_late():
+                return 1
+            shown = self.tpot_join(dest, posixpath.basename(src.rstrip("/")) or src) if into else dest
+            if not self.tpot_cp_operand(src, shown):
+                code = 1
+        return code
+
+    def tpot_gnu_targets(self, names: list, target, no_target: bool):
+        """The sources, the destination and whether they go into it as GNU cp and mv take their operands."""
+        if not names:
+            raise TpotTextStop(self.tpot_say(f"{self.tool}.missing_operand"), 1)
+        if target is not None:
+            node, errno = self.tpot_node(target)
+            if not self.tpot_is_dir(node):
+                raise TpotTextStop(self.tpot_say(f"{self.tool}.target", target, errno=errno or "ENOTDIR"), 1)
+            return names, target, True
+        if len(names) == 1:
+            raise TpotTextStop(self.tpot_say(f"{self.tool}.missing_dest", names[0]), 1)
+        if no_target:
+            if len(names) > 2:
+                raise TpotTextStop(self.tpot_say(f"{self.tool}.extra", names[2]), 1)
+            return names[:1], names[1], False
+        node, errno = self.tpot_node(names[-1])
+        if len(names) > 2 and not self.tpot_is_dir(node):
+            raise TpotTextStop(self.tpot_say(f"{self.tool}.target", names[-1], errno=errno or "ENOTDIR"), 1)
+        return names[:-1], names[-1], self.tpot_is_dir(node)
+
+    def tpot_cp_operand(self, src: str, shown: str) -> bool:
+        # a slash at the end follows a link as path resolution does
+        source, errno = self.tpot_node(src, follow=self.deref or src.endswith("/"))
+        if source is None:
+            self.tpot_fail("cp.stat", src, errno=errno)
+            return False
+        spath, tpath = self.tpot_path(src), self.tpot_path(shown)
+        if not self.gnu:
+            # copy_file() of BusyBox: the destination is looked at before the kind of the source
+            found, errno = self.tpot_node(shown, follow=False)
+            if found is None and errno != "ENOENT":
+                self.tpot_fail("cp.stat", shown, errno=errno)
+                return False
+        if self.tpot_is_dir(source) and not self.recursive:
+            self.tpot_fail("cp.omit_dir", src)
+            return False
+        dest = self.fs.getfile(tpath)
+        if dest is source or spath == tpath:
+            self.tpot_fail("cp.same", src, shown)
+            return False
+        if self.tpot_is_dir(source):
+            if tpath.startswith(spath.rstrip("/") + "/"):
+                if self.gnu:
+                    self.tpot_fail("cp.into_itself", src, shown)
+                else:
+                    self.tpot_fail("cp.recursion", src)
+                return False
+            return self.tpot_cp_tree(src, shown, spath, tpath, source, time.time())
+        return self.tpot_cp_file(src, shown, spath, tpath, source, time.time())
+
+    def tpot_cp_file(self, src: str, shown: str, spath: str, tpath: str, source, now: float, parent=None,
+                     dest=None, replace: bool = True) -> bool:
+        """A file, or a link as a link, to tpath; a walk gives the folder node there and what it holds of that
+        name (the node a link there points to), an operand neither."""
+        if parent is None:
+            dest = self.fs.getfile(tpath)
+            parent = self.fs.getfile(posixpath.dirname(tpath) or "/")
+        link = source[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_LINK
+        if self.tpot_is_dir(dest):
+            if self.gnu:
+                self.tpot_fail("cp.dir", shown)
+            else:
+                self.tpot_fail("cp.create", shown, errno="EISDIR")
+            return False
+        if dest is None and shown.endswith("/"):
+            # a name with a slash at its end that is no folder: GNU says ENOTDIR, open(2) of BusyBox EISDIR
+            self.tpot_fail("cp.create", shown, errno="ENOTDIR" if self.gnu else "EISDIR")
+            return False
+        if dest is None:
+            errno = "ENAMETOOLONG" if len(tpath) > TPOT_FS_PATH_MAX else self.tpot_create_errno(tpath, parent)
+        else:
+            if self.no_clobber:
+                return True
+            if self.newer and float(dest[tpot_shell_fs.A_CTIME] or 0) >= float(source[tpot_shell_fs.A_CTIME] or 0):
+                return True
+            if self.interactive and not self.tpot_ask(self.tpot_say("cp.overwrite", shown)):
+                return True
+            errno = None if tpot_may_write(dest, self.uid, self.gid) and not self.tpot_special(tpath) else "EACCES"
+        if errno:
+            self.tpot_fail("cp.create", shown, errno=errno)
+            return False
+        generated = getattr(self.fs, "generated_files", {}).get(spath)
+        if dest is not None and dest[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_FILE and not link:
+            # an existing file keeps its node (owner, mode), it gets the data of the source
+            for field in (tpot_shell_fs.A_CONTENTS, tpot_shell_fs.A_REALFILE, tpot_shell_fs.A_SIZE):
+                dest[field] = source[field]
+            dest[tpot_shell_fs.A_CTIME] = source[tpot_shell_fs.A_CTIME] if self.preserve else now
+        else:
+            # a new node; a link replaces the file of its name (GNU unlinks it first, BusyBox too)
+            dest = self.tpot_new_node(source, posixpath.basename(tpath), self.preserve, now)
+            self.tpot_link(parent, dest, replace)
+        if callable(generated):
+            # a file the persona makes when it is read (/proc): the copy holds what it read
+            data = bytes(generated())[:TPOT_TEXT_INPUT]
+            dest[tpot_shell_fs.A_CONTENTS], dest[tpot_shell_fs.A_REALFILE] = data, None
+            dest[tpot_shell_fs.A_SIZE] = len(data)
+        if self.verbose:
+            self.tpot_tell("cp.verbose", src, shown)
+        return True
+
+    def tpot_cp_tree(self, src: str, shown: str, spath: str, tpath: str, source, now: float) -> bool:
+        """A folder and what is in it (as far as TPOT_FS_NODES and the time reach): into a new folder, or into
+        the existing one of that name. The folders of the walk are a stack of the nodes on both sides
+        (TpotCpFolder), so the depth of a tree costs no recursion and no lookup of each path from /."""
+        parent = self.fs.getfile(posixpath.dirname(tpath) or "/")
+        folder = self.tpot_cp_enter(src, shown, spath, tpath, source, parent,
+                                    self.fs.getfile(tpath, follow_symlinks=False), now)
+        if folder is None:
+            return False
+        done, stack = True, [folder]
+        while stack:
+            if self.tpot_walked > TPOT_FS_NODES or self.tpot_late():
+                return False
+            folder = stack[-1]
+            if not folder.left:
+                stack.pop()
+                if self.verbose and not self.gnu:
+                    # BusyBox's copy_file() names a folder after its contents
+                    self.tpot_tell("cp.verbose", folder.src, folder.shown)
+                continue
+            child = folder.left.pop()
+            name = child[tpot_shell_fs.A_NAME]
+            parts = (self.tpot_join(folder.src, name), self.tpot_join(folder.shown, name),
+                     self.tpot_join(folder.spath, name), self.tpot_join(folder.tpath, name))
+            there = folder.names.get(name)
+            if self.tpot_is_dir(child):
+                inner = self.tpot_cp_enter(*parts, child, folder.dest, there, now)
+                if inner is None:
+                    done = False
+                else:
+                    stack.append(inner)
+                continue
+            if there is not None and there[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_LINK:
+                found = self.fs.getfile(parts[3])  # a file is written through a link there
+            else:
+                found = there
+            if not (self.tpot_walk_more() and self.tpot_cp_file(*parts, child, now, folder.dest, found,
+                                                                 there is not None)):
+                done = False
+        return done
+
+    def tpot_cp_enter(self, src: str, shown: str, spath: str, tpath: str, source, parent, there, now: float):
+        """The folder of the walk for a source folder: the existing one there (or the one a link there points
+        to), else a new one; None with the error of a node there that is no folder, or of mkdir."""
+        if not self.tpot_walk_more():
+            return None
+        dest = there
+        if there is not None and there[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_LINK:
+            dest = self.fs.getfile(tpath)
+        if there is not None and not self.tpot_is_dir(dest):
+            if self.gnu:
+                self.tpot_fail("cp.nondir", shown, src)
+            else:
+                self.tpot_fail("cp.target_not_dir", shown)
+            return None
+        if there is None:
+            if len(spath) > TPOT_FS_PATH_MAX:
+                self.tpot_fail("cp.stat", src, errno="ENAMETOOLONG")
+                return None
+            errno = "ENAMETOOLONG" if len(tpath) > TPOT_FS_PATH_MAX else self.tpot_create_errno(tpath, parent)
+            if errno:
+                self.tpot_fail("cp.mkdir", shown, errno=errno)
+                return None
+            dest = self.tpot_new_node(source, posixpath.basename(tpath), self.preserve, now)
+            self.tpot_link(parent, dest, False)
+        if self.verbose and self.gnu:
+            self.tpot_tell("cp.verbose", src, shown)
+        return TpotCpFolder(src, shown, spath, tpath, source, dest)
+
+
+class TpotCpFolder:
+    """A folder of cp's walk: the names on both sides, the source's nodes left, the nodes of the copy by name."""
+
+    __slots__ = ("src", "shown", "spath", "tpath", "dest", "left", "names")
+
+    def __init__(self, src: str, shown: str, spath: str, tpath: str, source, dest) -> None:
+        self.src, self.shown, self.spath, self.tpath, self.dest = src, shown, spath, tpath, dest
+        self.left = list(reversed(source[tpot_shell_fs.A_CONTENTS]))
+        self.names = {entry[tpot_shell_fs.A_NAME]: entry for entry in dest[tpot_shell_fs.A_CONTENTS]}
+
+
+# --- mv ----------------------------------------------------------------------------------------
+
+class Command_tpot_mv(Command_tpot_cp):
+    """mv of the persona: rename(2) in the emulated file system, a file or a folder into a folder; -t, -T, -n,
+    -i, -f, -v."""
+
+    tool = "mv"
+
+    def tpot_fs_main(self, options: list, names: list) -> int:
+        self.verbose = self.no_clobber = self.interactive = False
+        target, no_target = None, False
+        for key, value in options:
+            if key == "v":
+                self.verbose = self.tpot_verbose()
+            elif key == "n":
+                self.no_clobber, self.interactive = True, False
+            elif key == "i":
+                self.interactive, self.no_clobber = True, False
+            elif key == "f":
+                self.interactive = self.no_clobber = False
+            elif key == "update":
+                self.no_clobber = value in ("none", "none-fail")
+            elif key == "t":
+                target = value
+            elif key == "T":
+                no_target = True
+        if self.gnu:
+            sources, dest, into = self.tpot_gnu_targets(names, target, no_target)
+            code = 0
+            for src in sources:
+                if self.tpot_late():
+                    return 1
+                shown = self.tpot_join(dest, posixpath.basename(src.rstrip("/")) or src) if into else dest
+                if not self.tpot_mv_gnu(src, shown):
+                    code = 1
+            return code
+        return self.tpot_mv_busybox(names, target, no_target)
+
+    def tpot_mv_gnu(self, src: str, shown: str) -> bool:
+        source, errno = self.tpot_node(src, follow=False)
+        if source is None:
+            self.tpot_fail("mv.stat", src, errno=errno)
+            return False
+        spath, tpath = self.tpot_path(src), self.tpot_path(shown)
+        dest = self.fs.getfile(tpath, follow_symlinks=False)
+        if dest is source or spath == tpath:
+            self.tpot_fail("mv.same", src, shown)
+            return False
+        if self.tpot_is_dir(source) and (tpath + "/").startswith(spath.rstrip("/") + "/"):
+            self.tpot_fail("mv.subdir", src, shown)
+            return False
+        if dest is not None:
+            if self.tpot_is_dir(source) and not self.tpot_is_dir(dest):
+                self.tpot_fail("mv.nondir", shown, src)
+                return False
+            if not self.tpot_is_dir(source) and self.tpot_is_dir(dest):
+                self.tpot_fail("mv.dir", shown)
+                return False
+            if self.no_clobber:
+                return True
+            if self.interactive and not self.tpot_ask(self.tpot_say("mv.overwrite", shown)):
+                return True
+        errno = self.tpot_rename_errno(spath, tpath, source, dest)
+        if errno:
+            self.tpot_fail("mv.cannot_move", src, shown, errno=errno)
+            return False
+        self.fs.rename(spath, tpath)
+        if self.verbose:
+            self.tpot_tell("mv.verbose", src, shown)
+        return True
+
+    def tpot_rename_errno(self, spath: str, tpath: str, source, dest) -> str | None:
+        """The errno of rename(2) of the kernel: the target's folder, the source in the target, the rights on
+        both folders, a folder onto a file or a full folder, a file onto a folder."""
+        parent = self.fs.getfile(posixpath.dirname(tpath) or "/")
+        if not self.tpot_is_dir(parent):
+            return self.tpot_missing(tpath) if parent is None else "ENOTDIR"
+        if self.tpot_is_dir(source) and tpath.startswith(spath.rstrip("/") + "/"):
+            return "EINVAL"
+        errno = self.tpot_unlink_errno(spath, source) or (None if dest is None else self.tpot_unlink_errno(tpath, dest))
+        if errno is None and dest is None:
+            errno = self.tpot_create_errno(tpath)
+            errno = None if errno == "EDQUOT" else errno
+        if errno:
+            return errno
+        if dest is not None:
+            if self.tpot_is_dir(dest) and not self.tpot_is_dir(source):
+                return "EISDIR"
+            if self.tpot_is_dir(source) and not self.tpot_is_dir(dest):
+                return "ENOTDIR"
+            if self.tpot_is_dir(dest) and dest[tpot_shell_fs.A_CONTENTS]:
+                return "ENOTEMPTY"
+        return None
+
+    def tpot_mv_busybox(self, names: list, target, no_target: bool) -> int:
+        """mv_main() of BusyBox: two operands rename onto a name that is no folder, else into the folder."""
+        if len(names) < (1 if target is not None else 2):
+            raise self.tpot_usage_stop()
+        last = target if target is not None else names[-1]
+        sources = names if target is not None else names[:-1]
+        if target is None and len(sources) == 1:
+            found, errno = self.tpot_node(last)
+            if found is None and errno != "ENOENT":
+                self.tpot_fail("mv.stat", last, errno=errno)
+                return 1
+            if not self.tpot_is_dir(found) or no_target:
+                return 0 if self.tpot_mv_move(sources[0], last) else 1
+        code = 0
+        for src in sources:
+            if self.tpot_late():
+                return 1
+            dest = self.tpot_join(last, posixpath.basename(src.rstrip("/")) or src)
+            found, errno = self.tpot_node(dest)
+            if found is None and errno != "ENOENT":
+                self.tpot_fail("mv.stat", dest, errno=errno)
+                code = 1
+                continue
+            if not self.tpot_mv_move(src, dest):
+                code = 1
+        return code
+
+    def tpot_mv_move(self, src: str, shown: str) -> bool:
+        spath, tpath = self.tpot_path(src), self.tpot_path(shown)
+        source, errno = self.tpot_node(src, follow=False)
+        dest = self.fs.getfile(tpath, follow_symlinks=False)
+        if source is not None and dest is not None and dest is not source:
+            if self.no_clobber:
+                return True
+            if self.interactive and not self.tpot_ask(self.tpot_say("mv.overwrite", shown)):
+                return True
+        if source is not None and (dest is source or spath == tpath):
+            return True
+        errno = errno or self.tpot_rename_errno(spath, tpath, source, dest)
+        if errno:
+            self.tpot_fail("mv.rename", src, errno=errno)
+            return False
+        self.fs.rename(spath, tpath)
+        if self.verbose:
+            self.tpot_tell("mv.verbose", src, shown)
+        return True
+
+
+# --- touch -------------------------------------------------------------------------------------
+
+def tpot_touch_gnu_stamp(text: str, now: float):
+    """-t [[CC]YY]MMDDhhmm[.ss] of GNU touch (posixtime), in the persona's UTC; None if it is no date."""
+    found = re.fullmatch(r"(\d{8}|\d{10}|\d{12})(?:\.(\d\d))?", text)
+    if not found:
+        return None
+    digits, year = found.group(1), time.gmtime(now).tm_year
+    if len(digits) == 12:
+        year, digits = int(digits[:4]), digits[4:]
+    elif len(digits) == 10:
+        short = int(digits[:2])
+        year, digits = (1900 + short if short >= 69 else 2000 + short), digits[2:]
+    return tpot_touch_epoch(year, int(digits[0:2]), int(digits[2:4]), int(digits[4:6]), int(digits[6:8]),
+                            int(found.group(2) or 0))
+
+
+def tpot_touch_epoch(year, month, day, hour, minute, second):
+    if not (1 <= month <= 12 and 1 <= day <= calendar.monthrange(year, month)[1] and hour < 24 and minute < 60
+            and second <= 60):
+        return None
+    return calendar.timegm((year, month, day, hour, minute, second))
+
+
+# the items of GNU's date strings (parse-datetime.y of gnulib) the persona reads
+TPOT_TOUCH_TOKEN = re.compile(r"""\s*(?:
+    (?P<iso>(\d{4})-(\d{1,2})-(\d{1,2}))(?:T(?=\d))? |
+    (?P<slash>(\d{1,2})/(\d{1,2})(?:/(\d{1,4}))?) |
+    (?P<time>(\d{1,2}):(\d\d)(?::(\d\d)(?:[.,]\d+)?)?)(?:\s*(?P<mer>[ap])\.?m\b\.?)? |
+    (?P<snum>[-+]\d+(?::\d\d)?) | (?P<num>\d+) | (?P<word>[a-z]+)\.? | (?P<comma>,)
+)""", re.X | re.I)
+TPOT_TOUCH_MONTHS = {name: number for number, names in enumerate(
+    (("jan", "january"), ("feb", "february"), ("mar", "march"), ("apr", "april"), ("may",), ("jun", "june"),
+     ("jul", "july"), ("aug", "august"), ("sep", "sept", "september"), ("oct", "october"), ("nov", "november"),
+     ("dec", "december")), 1) for name in names}
+TPOT_TOUCH_DAYS = {name: number for number, names in enumerate(
+    (("sun", "sunday"), ("mon", "monday"), ("tue", "tues", "tuesday"), ("wed", "wednes", "wednesday"),
+     ("thu", "thur", "thurs", "thursday"), ("fri", "friday"), ("sat", "saturday"))) for name in names}
+TPOT_TOUCH_UNITS = {"year": (12, 0, 0), "month": (1, 0, 0), "fortnight": (0, 14, 0), "week": (0, 7, 0),
+                    "day": (0, 1, 0), "hour": (0, 0, 3600), "minute": (0, 0, 60), "min": (0, 0, 60),
+                    "second": (0, 0, 1), "sec": (0, 0, 1)}
+TPOT_TOUCH_ORDINALS = {"last": -1, "this": 0, "next": 1, "first": 1, "third": 3, "fourth": 4, "fifth": 5,
+                       "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10, "eleventh": 11,
+                       "twelfth": 12}
+TPOT_TOUCH_SHIFTS = {"now": 0, "today": 0, "yesterday": -1, "tomorrow": 1}
+TPOT_TOUCH_ZONES = {"utc", "gmt", "ut", "z"}
+
+
+def tpot_touch_unit(word: str):
+    """(months, days, seconds) of a unit word, singular or plural; None for none."""
+    word = word.lower()
+    return TPOT_TOUCH_UNITS.get(word) or (TPOT_TOUCH_UNITS.get(word[:-1]) if word.endswith("s") else None)
+
+
+def tpot_touch_gnu_date(text: str, now: float):
+    """-d of GNU touch, the items of gnulib's parse_datetime in the persona's UTC: @EPOCH; a date (YYYY-MM-DD,
+    YYYYMMDD, MM/DD[/YYYY], a month's name with its day and year, as date(1) prints it), a weekday, a time
+    (HH:MM[:SS] with am / pm), a zone (UTC, GMT, Z, +HHMM, +HH:MM, +HH after the time), relative items
+    (N unit[s] [ago], next / last / this unit or weekday, a unit alone, now, today, yesterday, tomorrow).
+    Without a time a date or a weekday is midnight, relative items alone keep the time of now. None for any
+    other text."""
+    text = text.strip()
+    found = re.fullmatch(r"@([-+]?\d{1,12})(?:\.\d+)?", text)
+    if found:
+        return int(found.group(1))
+    tokens, at = [], 0
+    while at < len(text):
+        found = TPOT_TOUCH_TOKEN.match(text, at)
+        if found is None or found.end() == at:
+            if text[at:].strip():
+                return None
+            break
+        kind = next(name for name in ("iso", "slash", "time", "snum", "num", "word", "comma") if found.group(name))
+        tokens.append((kind, found.group(kind), found))
+        at = found.end()
+    date = clock = zone = weekday = None
+    rel, last, shifted = [0, 0, 0], None, False
+    i = 0
+    while i < len(tokens):
+        kind, value, token = tokens[i]
+        follow = tokens[i + 1] if i + 1 < len(tokens) else (None, None, None)
+        word = follow[1] if follow[0] == "word" else None
+        unit = tpot_touch_unit(word) if word else None
+        i += 1
+        if kind == "comma":
+            continue
+        if kind in ("num", "snum") and unit and ":" not in value:
+            last = [int(value) * part for part in unit]
+            rel, i = [a + b for a, b in zip(rel, last)], i + 1
+        elif kind == "snum":
+            if clock is None or zone is not None:
+                return None
+            digits = value[1:].replace(":", "")
+            hours, minutes = (int(digits), 0) if len(digits) <= 2 else (int(digits[:-2]), int(digits[-2:]))
+            zone = (-1 if value[0] == "-" else 1) * (hours * 3600 + minutes * 60)
+        elif kind == "iso" and date is None:
+            date = [int(token.group(2)), int(token.group(3)), int(token.group(4))]
+        elif kind == "slash" and date is None:
+            date = [int(token.group(8)) if token.group(8) else None, int(token.group(6)), int(token.group(7))]
+        elif kind == "time" and clock is None:
+            hour, minute, second = int(token.group(10)), int(token.group(11)), int(token.group(12) or 0)
+            meridian = (token.group("mer") or "").lower()
+            if meridian:
+                if not 1 <= hour <= 12:
+                    return None
+                hour = hour % 12 + (12 if meridian == "p" else 0)
+            clock = [hour, minute, second]
+        elif kind == "num":
+            digits = value
+            if word and word.lower() in TPOT_TOUCH_MONTHS and date is None:
+                # "1 Jan [2024]"
+                date, i = [None, TPOT_TOUCH_MONTHS[word.lower()], int(digits)], i + 1
+                if i < len(tokens) and tokens[i][0] == "num":
+                    date[0], i = int(tokens[i][1]), i + 1
+            elif date is not None and date[0] is None and (clock is not None or len(digits) > 2):
+                date[0] = int(digits)
+            elif date is None and len(digits) > 4:
+                date = [int(digits[:-4]), int(digits[-4:-2]), int(digits[-2:])]
+            elif clock is None and len(digits) <= 4:
+                clock = [int(digits[:-2]), int(digits[-2:]), 0] if len(digits) > 2 else [int(digits), 0, 0]
+            else:
+                return None
+        elif kind == "word":
+            name = value.lower()
+            if name in TPOT_TOUCH_MONTHS and date is None:
+                date = [None, TPOT_TOUCH_MONTHS[name], None]
+                if follow[0] == "num":
+                    date[2], i = int(follow[1]), i + 1
+                    while i < len(tokens) and tokens[i][0] == "comma":
+                        i += 1
+                    if i < len(tokens) and tokens[i][0] == "num" and len(tokens[i][1]) == 4:
+                        date[0], i = int(tokens[i][1]), i + 1
+                else:
+                    return None
+            elif name in TPOT_TOUCH_DAYS and weekday is None:
+                weekday = (0, TPOT_TOUCH_DAYS[name])
+            elif name in TPOT_TOUCH_ORDINALS and (unit or (word and word.lower() in TPOT_TOUCH_DAYS)):
+                ordinal, i = TPOT_TOUCH_ORDINALS[name], i + 1
+                if unit:
+                    last = [ordinal * part for part in unit]
+                    rel = [a + b for a, b in zip(rel, last)]
+                elif weekday is None:
+                    weekday = (ordinal, TPOT_TOUCH_DAYS[word.lower()])
+                else:
+                    return None
+            elif name == "ago" and last is not None:
+                rel, last = [a - 2 * b for a, b in zip(rel, last)], None
+            elif name in TPOT_TOUCH_SHIFTS:
+                rel[1], shifted = rel[1] + TPOT_TOUCH_SHIFTS[name], True
+            elif name in TPOT_TOUCH_ZONES and zone is None:
+                zone = 0
+            elif tpot_touch_unit(name):
+                last = list(tpot_touch_unit(name))
+                rel = [a + b for a, b in zip(rel, last)]
+            else:
+                return None
+        else:
+            return None
+    today = time.gmtime(now)
+    year, month, day = today.tm_year, today.tm_mon, today.tm_mday
+    if date is not None:
+        year = today.tm_year if date[0] is None else date[0] + (2000 if date[0] < 69 else 1900 if date[0] < 100 else 0)
+        month, day = date[1], date[2]
+        if day is None or tpot_touch_epoch(year, month, day, 0, 0, 0) is None:
+            return None
+    if clock is not None:
+        hour, minute, second = clock
+        if tpot_touch_epoch(2000, 1, 1, hour, minute, second) is None:
+            return None
+    elif (any(rel) or shifted) and date is None and weekday is None:
+        hour, minute, second = today.tm_hour, today.tm_min, today.tm_sec
+    else:
+        hour = minute = second = 0
+    if weekday is not None and date is None:
+        ordinal, number = weekday
+        wday = (calendar.weekday(year, month, day) + 1) % 7
+        day += (number - wday + 7) % 7 + 7 * (ordinal - (0 < ordinal and wday != number))
+    month += rel[0]
+    year, month = year + (month - 1) // 12, (month - 1) % 12 + 1
+    try:
+        return calendar.timegm((year, month, day + rel[1], hour, minute, second)) - (zone or 0) + rel[2]
+    except (ValueError, OverflowError):
+        return None
+
+
+def tpot_touch_busybox_date(text: str, now: float):
+    """parse_datestr() of BusyBox (libbb/time.c of 1.36.1, CONFIG_DESKTOP): @EPOCH, HH:MM, mm.dd-HH:MM,
+    yyyy.mm.dd-HH:MM, yyyy-mm-dd HH:MM, each with :SS, yyyy-mm-dd HH, yyyy-mm-dd (a field not given is that of
+    now, the seconds too) and [[[[[YY]YY]MM]DD]hh]mm[.ss] (seconds 0); None if it is no date."""
+    today = time.gmtime(now)
+    if text.startswith("@"):
+        return int(text[1:]) if re.fullmatch(r"[-+]?\d{1,12}", text[1:]) else None
+    fields = [today.tm_year, today.tm_mon, today.tm_mday, today.tm_hour, today.tm_min, today.tm_sec]
+    forms = ((r"(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", (3, 4, 5)),
+             (r"(\d{1,2})\.(\d{1,2})-(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", (1, 2, 3, 4, 5)),
+             (r"(\d{4})\.(\d{1,2})\.(\d{1,2})-(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", (0, 1, 2, 3, 4, 5)),
+             (r"(\d{4})-(\d{1,2})-(\d{1,2}) (\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", (0, 1, 2, 3, 4, 5)),
+             (r"(\d{4})-(\d{1,2})-(\d{1,2}) (\d{1,2})", (0, 1, 2, 3)),
+             (r"(\d{4})-(\d{1,2})-(\d{1,2})", (0, 1, 2)))
+    for form, places in forms:
+        found = re.fullmatch(form, text)
+        if found:
+            for place, value in zip(places, found.groups()):
+                if value is not None:
+                    fields[place] = int(value)
+            return tpot_touch_epoch(*fields)
+    found = re.fullmatch(r"(\d+)(?:\.(\d{1,2}))?", text)
+    if not found or len(found.group(1)) not in (2, 4, 6, 8, 10, 12):
+        return None
+    digits = found.group(1)
+    if len(digits) == 12:
+        fields[0], digits = int(digits[:4]), digits[4:]
+    elif len(digits) == 10:
+        # yy in the century of now, within 50 years of it
+        year = today.tm_year // 100 * 100 + int(digits[:2])
+        fields[0] = year + 100 if year < today.tm_year - 50 else year - 100 if year > today.tm_year + 50 else year
+        digits = digits[2:]
+    pairs = [int(digits[at:at + 2]) for at in range(0, len(digits), 2)]
+    for place, value in zip(range(5 - len(pairs), 5), pairs):
+        fields[place] = value
+    fields[5] = int(found.group(2) or 0)
+    return tpot_touch_epoch(*fields)
+
+
+class Command_tpot_touch(TpotFsTool):
+    """touch of the persona: makes a file or sets its time, -c, -h, -a / -m, -d, -t and -r as far as the
+    variant has them."""
+
+    tool = "touch"
+
+    def tpot_fs_main(self, options: list, names: list) -> int:
+        no_create = no_deref = False
+        only, when, ref, date, stamp = None, None, None, None, None
+        now = time.time()
+        for key, value in options:
+            if key == "c":
+                no_create = True
+            elif key == "h":
+                no_deref = True
+            elif key in ("a", "m"):
+                only = key if only in (None, key) else "both"
+            elif key == "time":
+                word = (value or "").lower()
+                only = "a" if word in ("access", "atime", "use") else "m"
+            elif key == "d":
+                date = value
+            elif key == "t":
+                stamp = value
+            elif key == "r":
+                ref = value
+        if not names:
+            if self.gnu:
+                raise TpotTextStop(self.tpot_say("touch.missing_operand"), 1)
+            raise self.tpot_usage_stop()
+        if stamp is not None and self.gnu:
+            # posixtime() of GNU touch reads -t while it reads the options
+            when = tpot_touch_gnu_stamp(stamp, now)
+            if when is None:
+                raise TpotTextStop(self.tpot_say("touch.invalid_date", stamp), 1)
+        if ref is not None:
+            node, errno = self.tpot_node(ref, follow=not no_deref)
+            if node is None:
+                raise TpotTextStop(self.tpot_say("touch.reference", ref, errno=errno), 1)
+            when = float(node[tpot_shell_fs.A_CTIME] or 0)
+        for given in ([date] if date is not None else []) + ([stamp] if stamp is not None and not self.gnu else []):
+            when = tpot_touch_gnu_date(given, now) if self.gnu else tpot_touch_busybox_date(given, now)
+            if when is None:
+                raise TpotTextStop(self.tpot_say("touch.invalid_date", given), 1)
+        code = 0
+        for name in names:
+            if self.tpot_late():
+                return 1
+            if not self.tpot_touch(name, when, no_create or (self.gnu and no_deref), no_deref, only):
+                code = 1
+        return code
+
+    def tpot_touch(self, name: str, when, no_create: bool, no_deref: bool, only) -> bool:
+        node, errno = self.tpot_node(name, follow=not no_deref)
+        if node is None:
+            if errno != "ENOENT" or no_create:
+                if errno != "ENOENT":
+                    self.tpot_fail("touch.cannot_touch", name, errno=errno)
+                return errno == "ENOENT"
+            path = self.tpot_path(name)
+            errno = "EISDIR" if name.endswith("/") else self.tpot_create_errno(path)
+            if errno is None:
+                try:
+                    made = self.fs.mkfile(path, self.uid, self.gid, 0, stat.S_IFREG | 0o644,
+                                          time.time() if when is None else when)
+                except Exception:  # noqa: BLE001 - the file system refuses the path (/proc, /sys)
+                    made, errno = False, "EACCES"
+                if made is False and errno is None:
+                    errno = "EDQUOT"
+            if errno:
+                self.tpot_fail("touch.cannot_touch", name, errno=errno)
+                return False
+            return True
+        if self.uid != 0 and node[tpot_shell_fs.A_UID] != self.uid:
+            # the time of now takes write access, a given time the owner (utimensat(2))
+            if not tpot_may_write(node, self.uid, self.gid):
+                self.tpot_fail("touch.cannot_touch", name, errno="EACCES")
+                return False
+            if when is not None:
+                self.tpot_fail("touch.setting_times" if self.gnu else "touch.cannot_touch", name, errno="EPERM")
+                return False
+        if only != "a":
+            node[tpot_shell_fs.A_CTIME] = time.time() if when is None else when
+        return True
+
+
+# --- rmdir -------------------------------------------------------------------------------------
+
+class Command_tpot_rmdir(TpotFsTool):
+    """rmdir of the persona: empty folders, -p (the parents of the name), -v and --ignore-fail-on-non-empty
+    where the variant has them."""
+
+    tool = "rmdir"
+
+    def tpot_fs_main(self, options: list, names: list) -> int:
+        parents = verbose = ignore = False
+        for key, _value in options:
+            if key == "p":
+                parents = True
+            elif key == "v":
+                verbose = self.tpot_verbose()
+            elif key == "ignore-fail-on-non-empty":
+                ignore = True
+        if not names:
+            if self.gnu:
+                raise TpotTextStop(self.tpot_say("rmdir.missing_operand"), 1)
+            raise self.tpot_usage_stop()
+        code = 0
+        for name in names:
+            if self.tpot_late():
+                return 1
+            if not self.tpot_rmdir_chain(name, parents, verbose, ignore):
+                code = 1
+        return code
+
+    def tpot_rmdir_errno(self, name: str) -> str | None:
+        """rmdir(2): the errno, None when the folder is gone."""
+        node, errno = self.tpot_node(name, follow=False)
+        if node is None:
+            return errno
+        path = self.tpot_path(name)
+        base = name.rstrip("/").rpartition("/")[2]
+        if path == "/":
+            return "EBUSY"
+        if base == ".":
+            return "EINVAL"
+        if base == "..":
+            return "ENOTEMPTY"
+        errno = self.tpot_unlink_errno(path, node)
+        if errno:
+            return errno
+        if not self.tpot_is_dir(node):
+            return "ENOTDIR"
+        if node[tpot_shell_fs.A_CONTENTS]:
+            return "ENOTEMPTY"
+        self.fs.remove(path)
+        return None
+
+    def tpot_rmdir_chain(self, name: str, parents: bool, verbose: bool, ignore: bool) -> bool:
+        first = True
+        while True:
+            if verbose:
+                self.tpot_tell("rmdir.verbose", name)
+            errno = self.tpot_rmdir_errno(name)
+            if errno:
+                if ignore and errno == "ENOTEMPTY":
+                    return True
+                self.tpot_fail("rmdir.failed_parent" if self.gnu and not first else "rmdir.failed", name,
+                               errno=errno)
+                return False
+            if not parents:
+                return True
+            first = False
+            if self.gnu:
+                # remove_parents() of GNU rmdir: the name up to its last slash, "/" stays a name
+                stripped = name.rstrip("/")
+                if "/" not in stripped:
+                    return True
+                name = stripped[:stripped.rfind("/")].rstrip("/") or "/"
+            else:
+                # dirname() of BusyBox: "." ends it
+                name = posixpath.dirname(name.rstrip("/")) or "."
+                if name == ".":
+                    return True
+            if self.tpot_late():
+                return False
+
+
+# --- mkdir -------------------------------------------------------------------------------------
+
+def tpot_mkdir_mode(text: str) -> int | None:
+    # the mode of -m as chmod takes it: octal, or symbolic from a=rwx, a clause without "who" within the umask
+    if re.fullmatch(r"[0-7]{1,4}", text):
+        return int(text, 8)
+    mode = 0o777
+    for clause in text.split(","):
+        found = TPOT_MKDIR_CLAUSE.fullmatch(clause)
+        if found is None:
+            return None
+        who = found.group(1).replace("a", "ugo")
+        bits = 0
+        for letter in who or "ugo":
+            bits |= {"u": 0o4700, "g": 0o2070, "o": 0o1007}[letter]
+        if not who:
+            bits &= ~TPOT_MKDIR_UMASK
+        for op, perms in re.findall(r"([-+=])([rwxXst]*|[ugo])", found.group(2)):
+            if perms in ("u", "g", "o"):
+                value = ((mode >> {"u": 6, "g": 3, "o": 0}[perms]) & 0o7) * 0o111
+            else:
+                value = 0
+                for letter in perms:
+                    value |= {"r": 0o444, "w": 0o222, "x": 0o111, "X": 0o111, "s": 0o6000, "t": 0o1000}[letter]
+            value &= bits
+            if op == "+":
+                mode |= value
+            elif op == "-":
+                mode &= ~value
+            else:
+                mode = (mode & ~bits) | value
+    return mode
+
+
+class Command_tpot_mkdir(TpotFsTool):
+    """mkdir of the persona: GNU coreutils or BusyBox, -p (no error for an existing folder, the parents as
+    needed), -m MODE, -v where the variant prints it, with the texts and the exit status of the real tool."""
+
+    tool = "mkdir"
+
+    def tpot_failed(self, shown: str, errno: str) -> None:
+        self.tpot_fail("mkdir.cannot_create", shown, errno=errno)
+
+    def tpot_create(self, shown: str, path: str, mode: int, verbose: bool) -> bool:
+        parent = posixpath.dirname(path.rstrip("/")) or "/"
+        if not self.fs.exists(parent):
+            self.tpot_failed(shown, "ENOENT")
+            return False
+        if not self.fs.isdir(parent):
+            self.tpot_failed(shown, "ENOTDIR")
+            return False
+        if not tpot_may_write(self.fs.getfile(parent), self.uid, self.gid):
+            self.tpot_failed(shown, "EACCES")
+            return False
+        try:
+            self.fs.mkdir(path, self.uid, self.gid, 4096, 0o40000 | mode)
+        except OSError as error:
+            name = tpot_errno.errorcode.get(error.errno or 0, "ENOENT")
+            self.tpot_failed(shown, name if name in TPOT_FS_STRERROR else "ENOENT")
+            return False
+        if verbose:
+            self.tpot_tell("mkdir.verbose", shown)
+        return True
+
+    def tpot_make(self, name: str, parents: bool, verbose: bool, mode: int) -> bool:
+        if not self.gnu and name in ("/", "."):
+            # make_directory() of BusyBox
+            return True
+        if not parents:
+            path = self.fs.resolve_path(name, self.cwd)
+            if self.fs.exists(path):
+                self.tpot_failed(name, "EEXIST")
+                return False
+            return self.tpot_create(name, path, mode, verbose)
+        lead = name[:len(name) - len(name.lstrip("/"))]
+        parts = re.findall(r"[^/]+/*", name[len(lead):]) or [""]
+        prefix = lead
+        for index, part in enumerate(parts):
+            last = index == len(parts) - 1
+            prefix += part
+            # GNU names a parent without its slashes, BusyBox with them
+            shown = prefix if last or not self.gnu else (prefix.rstrip("/") or "/")
+            path = self.fs.resolve_path(prefix, self.cwd)
+            if self.fs.exists(path):
+                if self.fs.isdir(path):
+                    continue
+                self.tpot_failed(shown, "EEXIST" if last else "ENOTDIR")
+                return False
+            if not self.tpot_create(shown, path, mode if last else 0o755, verbose):
+                return False
+        return True
+
+    def tpot_fs_main(self, options: list, names: list) -> int:
+        parents = verbose = False
+        given = None
+        for key, value in options:
+            if key == "p":
+                parents = True
+            elif key == "v":
+                verbose = self.tpot_verbose()
+            elif key == "m":
+                given = value
+        mode = 0o777 & ~TPOT_MKDIR_UMASK
+        if given is not None:
+            mode = tpot_mkdir_mode(given)
+            if mode is None:
+                raise TpotTextStop(self.tpot_say("mkdir.invalid_mode", given), 1)
+        if not names:
+            if self.gnu:
+                raise TpotTextStop(self.tpot_say("mkdir.missing_operand"), 1)
+            raise self.tpot_usage_stop()
+        code = 0
+        for name in names[:TPOT_MKDIR_NAMES]:
+            if self.tpot_late():
+                break
+            if not self.tpot_make(name, parents, verbose, mode):
+                code = 1
+        return code
+
+
+for tpot_tool, tpot_class in (("rm", Command_tpot_rm), ("cp", Command_tpot_cp), ("mv", Command_tpot_mv),
+                              ("touch", Command_tpot_touch), ("rmdir", Command_tpot_rmdir),
+                              ("mkdir", Command_tpot_mkdir)):
+    commands[f"/bin/{tpot_tool}"] = tpot_class
+    commands[f"/usr/bin/{tpot_tool}"] = tpot_class
+    commands[tpot_tool] = tpot_class
+'''
+
+
 def patch_text_tools(cowrie_root):
     """wc, sort and seq of the persona (TEXT_COMMAND after the commands of wc.py): GNU coreutils or
-    BusyBox, files of the emulated file system, a pipe or the terminal."""
+    BusyBox, files of the emulated file system, a pipe or the terminal; rm, cp, mv, touch, rmdir and mkdir
+    (MKDIR_COMMAND) with the texts of fs_texts.json, of which Cowrie's data folder gets a copy (the
+    persona names its own with [shell] fs_texts)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "wc.py"
     replace_once(path, 'commands["/usr/bin/wc"] = Command_wc\ncommands["/bin/wc"] = Command_wc\n'
                        'commands["wc"] = Command_wc\n',
                  'commands["/usr/bin/wc"] = Command_wc\ncommands["/bin/wc"] = Command_wc\n'
-                 'commands["wc"] = Command_wc\n' + TEXT_COMMAND
-                 + tpot_metering("TpotTextTool", "Command_tpot_wc", "Command_tpot_seq", "Command_tpot_sort"))
+                 'commands["wc"] = Command_wc\n' + TEXT_COMMAND + MKDIR_COMMAND
+                 + tpot_metering("TpotTextTool", "Command_tpot_wc", "Command_tpot_seq", "Command_tpot_sort",
+                                 "TpotFsTool", "Command_tpot_rm", "Command_tpot_cp", "Command_tpot_mv",
+                                 "Command_tpot_touch", "Command_tpot_rmdir", "Command_tpot_mkdir"))
+    data = cowrie_root / "src" / "cowrie" / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    texts = Path(__file__).resolve().parent / "tpot_personas" / "fs_texts.json"
+    (data / "tpot_fs_texts.json").write_bytes(texts.read_bytes())
+    # the file commands of wc.py (MKDIR_COMMAND) replace upstream's of fs.py: the commands of a later module win
+    order = (cowrie_root / "src" / "cowrie" / "commands" / "__init__.py").read_text(encoding="utf-8")
+    if not 0 <= order.find('"fs",') < order.find('"wc",'):
+        raise RuntimeError("commands/__init__.py no longer loads fs before wc: mkdir of the persona would not apply")
 
 
 def patch_prompt(cowrie_root):
@@ -15778,9 +17524,9 @@ def patch_telnet_banner(cowrie_root):
     replace_once(path, "\nimport time\n", "\nimport re\nimport time\n")
     replace_once(
         path,
-        "from cowrie.shell.honeyfs import read_honeyfs_bytes\n",
+        "from cowrie.core.honeyfs import read_honeyfs_bytes\n",
         "from cowrie.core.config import CowrieConfig\n"
-        "from cowrie.shell.honeyfs import read_honeyfs_bytes\n",
+        "from cowrie.core.honeyfs import read_honeyfs_bytes\n",
     )
     replace_once(
         path,
@@ -16775,7 +18521,13 @@ class HoneyPotShell:
     )
     replace_once(
         path,
+        "        if pp.has_redirection_error:\n"
+        "            return False\n"
         "        pp.errReceived(message)\n",
+        "        if pp.has_redirection_error:\n"
+        "            # T-Pot: bash runs no command-not-found handler then, its stdout is dropped\n"
+        "            self.tpot_cnf_stdout = b\"\"\n"
+        "            return False\n"
         "        pp.errReceived(message)\n"
         "        # T-Pot: the stdout of command-not-found after its error (tpot_command_not_found)\n"
         "        extra = getattr(self, \"tpot_cnf_stdout\", b\"\")\n"
@@ -17597,10 +19349,10 @@ TPOT_HISTORY_ENV = """        # T-Pot: an interactive bash has the HISTSIZE, HIS
 
 
 def patch_login_env(cowrie_root):
-    """PATH and SHELL of a login over SSH (shell/session.py) and Telnet (telnet/session.py): those of
+    """PATH and SHELL of a login over SSH (shell/session.py) and Telnet (shell/telnet.py): those of
     the persona ([shell] login_path / login_shell, the Archer C7: the PATH of its /etc/profile for
     every user and its /bin/ash), upstream's Debian PATH and /bin/bash without the keys."""
-    for rel in ("shell/session.py", "telnet/session.py"):
+    for rel in ("shell/session.py", "shell/telnet.py"):
         path = cowrie_root / "src" / "cowrie" / rel
         replace_once(path, "from cowrie.insults import insults\n",
                      "from cowrie.core.config import CowrieConfig\nfrom cowrie.insults import insults\n")
@@ -17611,7 +19363,7 @@ def patch_login_env(cowrie_root):
         tpot_shell = CowrieConfig.get("shell", "login_shell", fallback="")
         if tpot_shell:
             self.environ["SHELL"] = tpot_shell
-""" + (TPOT_HISTORY_ENV if rel == "telnet/session.py" else ""))
+""" + (TPOT_HISTORY_ENV if rel == "shell/telnet.py" else ""))
     # SSH: the shell of openShell is interactive, that of execCommand not
     replace_once(cowrie_root / "src" / "cowrie" / "shell" / "session.py",
                  "    def openShell(self, processprotocol):\n",
@@ -17877,11 +19629,12 @@ def main():
     parser = argparse.ArgumentParser(description="Patch Cowrie v3.1 persona command support.")
     parser.add_argument("--cowrie-root", required=True, type=Path)
     parser.add_argument("--self-test", action="store_true",
-                        help="check the grep matcher of an already patched Cowrie in this Python")
+                        help="check the grep matcher and the names of an already patched Cowrie in this Python")
     args = parser.parse_args()
     cowrie_root = args.cowrie_root.resolve()
     if args.self_test:
         grep_self_test(cowrie_root)
+        names_self_test(cowrie_root)
         return
     patch_protocol(cowrie_root)
     patch_fs_links(cowrie_root)

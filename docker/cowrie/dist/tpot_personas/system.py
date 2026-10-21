@@ -1264,6 +1264,41 @@ def text_keys(persona, ident):
             "text_libc": FIRMWARE_LIBC.get(persona.family, "glibc")}
 
 
+# the texts of rm, cp, mv, touch, rmdir and mkdir (tools/build_fs_texts.py from the recordings of the real tools)
+FS_TEXTS = Path(__file__).resolve().parent / "fs_texts.json"
+# GNU: the recording of the persona's coreutils (version, Red Hat build, locale): 8.30 of DSM in the POSIX locale
+#   is that of debian:10, 9.1 in en_GB.UTF-8 of Raspberry Pi OS that of debian:12 with en_GB.UTF-8
+FS_GNU_VARIANTS = {"8.22": "centos_7", "8.30": "debian_10", "8.32": "ubuntu_22.04", "9.1": "debian_12",
+                   "9.4": "ubuntu_24.04", "9.7": "debian_13"}
+# BusyBox: the firmware's own BusyBox where it was recorded (under qemu-user), the D-Link's 1.14.1 derived from
+#   the Archer C7 v5 build and the 1.14.1 sources; unverified: the NAS326, the IP camera and QTS, whose
+#   firmware could not be run, take the minimal build of the Archer C7 v5 (no CONFIG_DESKTOP, as
+#   busybox_desktop assumes of them; the texts of their option errors follow their own text_libc)
+FS_BUSYBOX_VARIANTS = {"tplink": "fw_tplink_c7v5", "ubiquiti": "fw_edgeos_209hf5", "dlink": "src_busybox_1.14.1",
+                       "zyxel": "fw_tplink_c7v5", "ipcam": "fw_tplink_c7v5", "qnap": "fw_tplink_c7v5"}
+# the families whose BusyBox variant stands in for a build of another C library (see FS_BUSYBOX_VARIANTS)
+FS_STAND_INS = frozenset({"zyxel", "ipcam", "qnap"})
+
+
+def fs_variant(persona, ident):
+    """The variant of fs_texts.json the persona's file commands answer with."""
+    text = text_keys(persona, ident)
+    if text["text_style"] == "gnu":
+        if is_el(persona) and text["text_version"] == "8.32":
+            return "rockylinux_9"
+        if persona.family == "raspios":
+            return "debian_12_en"
+        return FS_GNU_VARIANTS.get(text["text_version"], "debian_12")
+    if persona.family == "openwrt":
+        return "fw_openwrt_21.02.7" if ident.release.label.startswith("21.") else "fw_openwrt_22.03.7"
+    return FS_BUSYBOX_VARIANTS.get(persona.family, "fw_tplink_c7v5")
+
+
+def fs_keys(persona, ident):
+    """[shell] keys of the patched rm, cp, mv, touch, rmdir and mkdir: the file of their texts and the variant."""
+    return {"fs_texts": str(FS_TEXTS), "fs_variant": fs_variant(persona, ident)}
+
+
 def df_table(persona, ident, filesystems):
     """What the patched df reads ([shell] df_table): the file system table of the persona, the
     style of df (GNU coreutils on servers and the devices with coreutils, else BusyBox) and its

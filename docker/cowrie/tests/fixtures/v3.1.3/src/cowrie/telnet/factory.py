@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Excerpt of Cowrie v3.1.1 (c17c9b73), the text patch_cowrie_persona_support.py touches.
+# Excerpt of Cowrie v3.1.3 (c7773f49), the text patch_cowrie_persona_support.py touches.
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from twisted.internet import protocol
 from twisted.logger import Logger
 
-from cowrie.shell.honeyfs import read_honeyfs_bytes
+from cowrie.core.honeyfs import read_honeyfs_bytes
 from cowrie.telnet.transport import CowrieTelnetTransport
 from cowrie.telnet.userauth import HoneyPotTelnetAuthProtocol
 from cowrie.telnet_proxy.server_transport import FrontendTelnetTransport

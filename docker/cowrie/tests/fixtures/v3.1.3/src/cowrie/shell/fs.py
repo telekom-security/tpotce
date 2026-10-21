@@ -20,10 +20,10 @@ from typing import TYPE_CHECKING, Any, TypeAlias
 
 from twisted.logger import Logger
 
+from cowrie.core import honeyfs
 from cowrie.core.artifact import temp_download_path
 from cowrie.core.config import CowrieConfig
 from cowrie.core.resources import read_data_bytes
-from cowrie.shell import honeyfs
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -419,6 +419,24 @@ class HoneyPotFilesystem:
         )
         self.newcount += 1
 
+    def is_executable(self, path: str, uid: int, gid: int) -> bool:
+        """
+        Return True if the user uid/gid may execute the file at path, picking
+        the owner, group or other execute bit the way the kernel does. Root may
+        execute any file that has at least one execute bit set.
+        """
+        f: Node | None = self.getfile(path)
+        if f is None:
+            return False
+        mode = f[A_MODE]
+        if uid == 0:
+            return bool(mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH))
+        if f[A_UID] == uid:
+            return bool(mode & stat.S_IXUSR)
+        if f[A_GID] == gid:
+            return bool(mode & stat.S_IXGRP)
+        return bool(mode & stat.S_IXOTH)
+
     def isfile(self, path: str) -> bool:
         """
         Return True if path is an existing regular file. This follows symbolic
@@ -616,7 +634,7 @@ class HoneyPotFilesystem:
         the rename(2) semantics real mv(1) and the SFTP client rely on.
         """
         self._ensure_private_fs()
-        old: Node | None = self.getfile(oldpath)
+        old: Node | None = self.getfile(oldpath, follow_symlinks=False)
         if not old:
             raise OSError(errno.ENOENT, os.strerror(errno.ENOENT))
         self.unlink_entry(old, posixpath.dirname(oldpath))

@@ -1,4 +1,4 @@
-"""SSH algorithms a persona may offer: only what Twisted 26.4.0 (Cowrie 3.1.1)
+"""SSH algorithms a persona may offer: only what Twisted 26.4.0 (Cowrie 3.1.3)
 can negotiate, ordered as the emulated server orders them. The Docker build
 checks these sets against the installed Twisted."""
 import re

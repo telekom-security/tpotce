@@ -660,6 +660,7 @@ def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, c
     top += f"kernel_thread_list = {runtime_dir}/{kthreads.KERNEL_THREADS}\n"
     top += "".join(f"{key} = {value}\n" for key, value in system.awk_keys(persona, ident).items())
     top += "".join(f"{key} = {value}\n" for key, value in system.text_keys(persona, ident).items())
+    top += "".join(f"{key} = {value}\n" for key, value in system.fs_keys(persona, ident).items())
     top += f"network = {runtime_dir}/{network.NETWORK_FILE}\n"
     if network.telnet_server(persona, ident):
         top += f"telnet_server = {network.telnet_server(persona, ident)}\n"

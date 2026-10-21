@@ -15,7 +15,7 @@ import random
 import re
 from typing import TYPE_CHECKING, Any
 
-from twisted.internet import defer, reactor
+from twisted.internet import defer
 from twisted.internet.defer import inlineCallbacks
 from twisted.logger import Logger
 
@@ -66,7 +66,7 @@ class Command_yum(HoneyPotCommand):
         d: defer.Deferred = defer.Deferred()
         if time2:
             time = random.randint(int(time * 100), int(time2 * 100)) / 100.0
-        reactor.callLater(time, d.callback, None)
+        self.callLater(time, d.callback, None)
         return d
 
     @inlineCallbacks

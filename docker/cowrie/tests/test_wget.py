@@ -321,7 +321,7 @@ class ImportNeedleTest(unittest.TestCase):
 
 
 class UpstreamWgetTest(unittest.TestCase):
-    """The subclass over Command_wget of the patched fixture (upstream v3.1.1 wget.py): the texts upstream's
+    """The subclass over Command_wget of the patched fixture (upstream v3.1.3 wget.py): the texts upstream's
     download path writes come out as BusyBox writes them."""
 
     @classmethod

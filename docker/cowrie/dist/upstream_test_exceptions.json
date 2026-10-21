@@ -1,0 +1,43 @@
+{
+ "_about": "Cowrie's own tests that run_upstream_tests.py leaves out or expects to fail on the patched checkout, each with its reason; an expected failure also names the text its failure has to hold (expect). Remove an entry once it passes; the build fails on a listed test that passes or fails without its text.",
+ "skip_modules": {
+  "cowrie.test.test_output_mongodb": "output plugin, T-Pot installs no requirements-output.txt (bson / txmongo)",
+  "cowrie.test.test_output_redis": "output plugin, T-Pot installs no requirements-output.txt (txredisapi)",
+  "cowrie.test.test_output_rethinkdblog": "output plugin, T-Pot installs no requirements-output.txt (rethinkdb)",
+  "cowrie.test.test_output_rmq": "output plugin, T-Pot installs no requirements-output.txt (pika)"
+ },
+ "expected_failures": {
+  "cowrie.test.test_awk.ShellEchoCommandTests.test_invalid_separator_regex_does_not_wedge": {
+   "reason": "the persona's awk rejects the regular expression [( as the real awk does, upstream splits on it",
+   "expect": "AssertionError: b'awk: fatal: invalid regexp: Unmatched [, [^, [:, [., or [=: /[(/\\n' != b'b\\n'"
+  },
+  "cowrie.test.test_base_commands.ShellFileCommandsTests.test_cp_error_output": {
+   "reason": "cp of the persona quotes as its coreutils / BusyBox, upstream's test expects `x'",
+   "expect": "AssertionError: b\"cp: cannot stat '/path/to/the/file/that/does/not/exist': "
+  },
+  "cowrie.test.test_base_commands.ShellFileCommandsTests.test_mkdir_error_output": {
+   "reason": "mkdir of the persona quotes as its coreutils / BusyBox, upstream's test expects `x'",
+   "expect": "AssertionError: b'mkdir: cannot create directory \\xe2\\x80\\"
+  },
+  "cowrie.test.test_base_commands.ShellFileCommandsTests.test_mv_error_output": {
+   "reason": "mv of the persona quotes as its coreutils / BusyBox, upstream's test expects `x'",
+   "expect": "AssertionError: b\"mv: cannot stat '/path/to/the/file/that/does/not/exist': "
+  },
+  "cowrie.test.test_base_commands.ShellFileCommandsTests.test_rm_error_output": {
+   "reason": "rm of the persona quotes as its coreutils / BusyBox, upstream's test expects `x'",
+   "expect": "AssertionError: b\"rm: cannot remove '/path/to/the/file/that/does/not/exist': "
+  },
+  "cowrie.test.test_base_commands.ShellFileCommandsTests.test_rmdir_error_output": {
+   "reason": "rmdir of the persona quotes as its coreutils / BusyBox, upstream's test expects `x'",
+   "expect": "AssertionError: b\"rmd[16 chars]move '/path/to/the/file/that/does/not/exist': "
+  },
+  "cowrie.test.test_rmdir_touch.ShellTouchCommandTests.test_touch_processes_all_arguments_after_failure": {
+   "reason": "touch of the persona quotes as its coreutils / BusyBox, upstream's test expects `x` (tests/test_fs_tools.py checks that touch goes on with the next name)",
+   "expect": "not found in b\"touch: cannot touch '/nonexistent/f1': No such file or directory\\n"
+  },
+  "cowrie.test.test_rmdir_touch.ShellTouchCommandTests.test_touch_processes_all_arguments_after_permission_denied": {
+   "reason": "touch of the persona quotes as its coreutils / BusyBox, upstream's test expects `x` (tests/test_fs_tools.py checks that touch goes on with the next name)",
+   "expect": "not found in b\"touch: cannot touch '/proc/x': Permission denied\\n"
+  }
+ }
+}

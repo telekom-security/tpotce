@@ -1,7 +1,7 @@
 """Every persona on Cowrie's own fs.pickle (the tree the image renders from), before any image build.
 
 Set TPOT_COWRIE_FS_PICKLE to the fs.pickle of the pinned Cowrie release, e.g.
-    git -C <cowrie clone> show v3.1.1:src/cowrie/data/fs.pickle > /tmp/fs.pickle
+    git -C <cowrie clone> show v3.1.3:src/cowrie/data/fs.pickle > /tmp/fs.pickle
     TPOT_COWRIE_FS_PICKLE=/tmp/fs.pickle python3 -m unittest tests.test_upstream_tree
 The pickle is read as data only (tests.helpers.load_data_pickle); without the variable the test skips."""
 import os

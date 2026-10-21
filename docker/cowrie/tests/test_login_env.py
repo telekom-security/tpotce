@@ -1,4 +1,4 @@
-"""PATH and SHELL of a login (shell/session.py for SSH, telnet/session.py for Telnet): upstream's
+"""PATH and SHELL of a login (shell/session.py for SSH, shell/telnet.py for Telnet): upstream's
 Debian PATH and /bin/bash, or [shell] login_path / login_shell of the persona (the Archer C7:
 the PATH of its /etc/profile and its /bin/ash)."""
 import configparser
@@ -30,7 +30,7 @@ class LoginEnvTest(unittest.TestCase):
         subprocess.run([sys.executable, str(PATCH), "--cowrie-root", str(root)], check=True, capture_output=True)
         cls.root = root
         cls.ssh = (root / "src/cowrie/shell/session.py").read_text()
-        cls.telnet = (root / "src/cowrie/telnet/session.py").read_text()
+        cls.telnet = (root / "src/cowrie/shell/telnet.py").read_text()
 
     def ssh_environ(self, values, uid=0):
         init = method(self.ssh, "SSHSessionForCowrieUser", "__init__", {"CowrieConfig": FakeConfig(values),
@@ -159,7 +159,7 @@ class LoginEnvTest(unittest.TestCase):
         result = subprocess.run([sys.executable, str(PATCH), "--cowrie-root", str(root)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Could not find expected text", result.stderr)
-        for rel in ("src/cowrie/shell/session.py", "src/cowrie/telnet/session.py"):
+        for rel in ("src/cowrie/shell/session.py", "src/cowrie/shell/telnet.py"):
             for old, new in (('            self.environ["PATH"] = (\n                "/usr/local/bin:/usr/bin:/bin:',
                               '            self.environ["PATH"] = (\n                "/usr/bin:/bin:'),
                              ("from cowrie.insults import insults\n", "from cowrie import insults\n")):
