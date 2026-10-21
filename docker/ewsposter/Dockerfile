@@ -1,7 +1,7 @@
 FROM alpine:3.24
 #
-# Upstream commit; dist/patches/*.patch are applied on top (one file per open
-# upstream PR). Once a PR is merged, bump the commit and delete its patch file.
+# Builds the upstream commit as it is. Fixes go upstream as pull requests to
+# telekom-security/ewsposter, T-Pot carries no local changes.
 ARG EWSPOSTER_COMMIT=c6b44c7544e71a637d1bcc019abf4a248afb05d4
 #
 # Include dist
@@ -40,7 +40,6 @@ RUN apk --no-cache -U upgrade && \
     git clone https://github.com/telekom-security/ewsposter /opt/ewsposter && \
     cd /opt/ewsposter && \
     git checkout ${EWSPOSTER_COMMIT} && \
-    for p in /root/dist/patches/*.patch; do [ -e "$p" ] || continue; git apply -v "$p" || exit 1; done && \
     cd / && \
     mkdir -p /opt/ewsposter/spool /opt/ewsposter/log && \
 #

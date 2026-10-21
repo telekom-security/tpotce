@@ -48,7 +48,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Cyberchef** has been updated to 11.0.0.
 * **Galah** has been updated to 1.1.1 and is built from upstream again instead of the T-Pot fork. The log format stays as it was, failed LLM responses now show up in the Galah dashboard, and all LLM settings (API key, temperature, GCP Vertex AI) can be set in `.env`.
 * **Elasticvue** has been updated to 1.15.0.
-* **EWSPoster** has been updated to 1.33, pinned to a commit of the master branch, and no longer stops on an empty honeypot log file (Python 3.13 and later).
+* **EWSPoster** has been updated to 1.33, pinned to a commit of the master branch, and builds the upstream commit without local changes. Until the open ewsposter pull requests ([#22](https://github.com/telekom-security/ewsposter/pull/22), [#25](https://github.com/telekom-security/ewsposter/pull/25)) are merged, an empty honeypot log file (Python 3.13 and later) and the Telnet label of Cowrie sessions behave as upstream does.
 * **Go-Pot** has been updated to 1.2.0-rc-7.
 * **H0neytr4p** has been updated to 0.44.
 * **Hellpot** has been updated to 0.60.

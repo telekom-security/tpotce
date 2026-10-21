@@ -157,7 +157,7 @@ runs the `asyncua` client of the image inside the container's network namespace.
 
 The EWSPoster test runs the image with its real entrypoint (the loop of
 `ews.py` passes) and sends EWS submissions to a local sink container that keeps
-every POST. The first pass over empty Honeytrap, Endlessh, Heralding, IPPHoney
+every POST. The first pass without Honeytrap, Endlessh, Heralding, IPPHoney
 and Cowrie logs sends nothing; then line 1 of the Honeytrap and IPPHoney logs
 and three Cowrie sessions (labelled SSH or Telnet) must arrive. A line written
 right before the hold marker `data/ews/hold` is still sent by the normal pass
