@@ -1,0 +1,6790 @@
+{
+ "_source": "awk run with sh -c in containers of these images (docker run -d, one docker exec per case), 2026-10-21, as fixtures/awk_regex.json: split(), match(), arrays, for (k in a), delete and the clash of a name used as a scalar and as an array, in gawk 4.0.2 (centos:7), gawk 5.1.0 (rockylinux:9), mawk 1.3.4 (debian:12, debian:13, ubuntu:22.04, ubuntu:24.04), mawk 1.3.3 (debian:9, debian:10) and the awk of the busybox images; the order of `for (k in a)` is the order of each awk's hash table.",
+ "images": {
+  "busybox_1.25.1": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:29f5d56d12684887bdfa50dcd29fc31eea4aaf4ad3bec43daf19026a7ce69912",
+   "image": "busybox:1.25",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/amd64",
+   "uid": 0
+  },
+  "busybox_1.26.2": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:be3c11fdba7cfe299214e46edc642e09514dbb9bbefcd0d3836c05a1e0cd0642",
+   "image": "busybox:1.26",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/amd64",
+   "uid": 0
+  },
+  "busybox_1.27.2": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:bbc3a03235220b170ba48a157dd097dd1379299370e1ed99ce976df0355d24f0",
+   "image": "busybox:1.27",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.28.4": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:141c253bc4c3fd0a201d32dc1f493bcf3fff003b6df416dea4f41046e0f37d47",
+   "image": "busybox:1.28",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.29.3": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:8ccbac733d19c0dd4d70b4f0c1e12245b5fa3ad24758a11035ee505c629c0796",
+   "image": "busybox:1.29",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.30.1": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:4b6ad3a68d34da29bf7c8ccb5d355ba8b4babcad1f99798204e7abb43e54ee3d",
+   "image": "busybox:1.30",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.31.1": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:95cf004f559831017cdf4628aaf1bb30133677be8702a8c5f2994629f637a209",
+   "image": "busybox:1.31",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.32.1": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:ae39a6f5c07297d7ab64dbd4f82c77c874cc6a94cea29fdec309d0992574b4f7",
+   "image": "busybox:1.32",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.33.1": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:f7ca5a32c10d51aeda3b4d01c61c6061f497893d7f6628b92f822f7117182a57",
+   "image": "busybox:1.33",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.33.1-musl": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Missing ']'\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Invalid contents of {}\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Missing ']'\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:5b10c7344dc49babf0ab258c94cb1ffc513832bc51dd35bb559fccdca0d1fdfe",
+   "image": "busybox:1.33.1-musl",
+   "kind": "busybox musl",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.34.1": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [, [^, [:, [., or [=\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [, [^, [:, [., or [=\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:05a79c7279f71f86a2a0d05eb72fcb56ea36139150f0a75cd87e80a4272e4e39",
+   "image": "busybox:1.34",
+   "kind": "busybox glibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.35.0": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [, [^, [:, [., or [=\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [, [^, [:, [., or [=\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:98ad9d1a2be345201bb0709b0d38655eb1b370145c7d94ca1fe9c421f76e245a",
+   "image": "busybox:1.35",
+   "kind": "busybox glibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.36.1-glibc": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [, [^, [:, [., or [=\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [, [^, [:, [., or [=\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:7e567dff0fbaa48cddc5f52ae5201a7f417436aa20e70c8750814692043dfa38",
+   "image": "busybox:1.36.1-glibc",
+   "kind": "busybox glibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.36.1-musl": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Missing ']'\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Invalid contents of {}\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Missing ']'\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "image": "busybox:1.36.1-musl",
+   "kind": "busybox musl",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "busybox_1.36.1-uclibc": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "z\nw\nx\ny\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: Not an array\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "",
+     0
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "",
+     0
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "2 2\n",
+     "",
+     0
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "",
+     "awk: bad regex 'a{2': Unmatched \\{\n",
+     1
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: bad regex '[(': Unmatched [ or [^\n",
+     1
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:0872fb3a7632ba9d0ae46a8e832a62b30ce83a6f220b8bb52903d9cf477dabe3",
+   "image": "busybox:1.36.1-uclibc",
+   "kind": "busybox uclibc",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "centos_7": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context\n",
+     2
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "w\nx\ny\nz\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "awk: cmd. line:1: fatal: attempt to use scalar `b' as an array\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: BEGIN{a[1]=1; delete a[1], a[2]}\nawk: cmd. line:1:                          ^ syntax error\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "",
+     "awk: cmd. line:1: BEGIN{a[1]=1; for ((k) in a) print k}\nawk: cmd. line:1:                            ^ syntax error\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "",
+     "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "4\n5\n1\n2\n3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "awk: cmd. line:1: fatal: attempt to use scalar `s' as an array\n",
+     2
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: split: second argument is not an array\n",
+     2
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: Unmatched ( or \\(: /(/\n",
+     2
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: Unmatched ( or \\(: /(/\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: Unmatched [ or [^: /[(/\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: Unmatched [ or [^: /[(/\n",
+     2
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "x\nxy\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "image": "centos:7",
+   "kind": "gnu 8.22 en-2.17",
+   "locale": "en_US.UTF-8",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "debian_10": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "w\nx\ny\nz\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "",
+     "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to variable b\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: line 1: syntax error at or near ,\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "",
+     "awk: line 1: syntax error at or near )\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "",
+     "awk: line 1: illegal reference to array u\n",
+     2
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "awk: line 1: illegal reference to variable s\n",
+     2
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "awk: line 1: syntax error at or near $\n",
+     2
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "debian@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+   "image": "debian:10",
+   "kind": "gnu 8.30 posix",
+   "locale": "POSIX",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "debian_12": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "x\nz\ny\nw\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "",
+     "awk: line 1: illegal reference to variable b\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: line 1: syntax error at or near ,\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "",
+     "awk: line 1: syntax error at or near )\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "3\n5\n2\n1\n4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "awk: line 1: illegal reference to variable s\n",
+     2
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "awk: line 1: syntax error at or near $\n",
+     2
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "x\nxy\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "c\nb\na\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "image": "debian:12",
+   "kind": "gnu 9.1 c",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "debian_13": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "x\nz\ny\nw\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: line 1: syntax error at or near ,\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "",
+     "awk: line 1: syntax error at or near )\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "3\n5\n2\n1\n4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "awk: line 1: illegal reference to variable s\n",
+     2
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "awk: line 1: syntax error at or near $\n",
+     2
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "x\nxy\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "c\nb\na\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "image": "debian:13",
+   "kind": "gnu 9.7 c",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "debian_9": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "w\nx\ny\nz\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "",
+     "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to variable b\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: line 1: syntax error at or near ,\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "",
+     "awk: line 1: syntax error at or near )\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "",
+     "awk: line 1: illegal reference to array u\n",
+     2
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "awk: line 1: illegal reference to variable s\n",
+     2
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "awk: line 1: syntax error at or near $\n",
+     2
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "xy\nx\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "debian@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+   "image": "debian:9",
+   "kind": "gnu 8.26 c",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "rockylinux_9": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context\n",
+     2
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "w\nx\ny\nz\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "awk: cmd. line:1: fatal: attempt to use scalar `b' as an array\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: cmd. line:1: BEGIN{a[1]=1; delete a[1], a[2]}\nawk: cmd. line:1:                          ^ syntax error\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "",
+     "awk: cmd. line:1: BEGIN{a[1]=1; for ((k) in a) print k}\nawk: cmd. line:1:                            ^ syntax error\n",
+     1
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "",
+     "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "1\n2\n3\n4\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "awk: cmd. line:1: fatal: attempt to use scalar `s' as an array\n",
+     2
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: split: second argument is not an array\n",
+     2
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: invalid regexp: Unmatched ( or \\(: /(/\n",
+     2
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: invalid regexp: Unmatched ( or \\(: /(/\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: invalid regexp: Unmatched [, [^, [:, [., or [=: /[(/\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: invalid regexp: Unmatched [, [^, [:, [., or [=: /[(/\n",
+     2
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "x\nxy\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "a\nb\nc\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "image": "rockylinux:9",
+   "kind": "gnu 8.32 en",
+   "locale": "en_US.UTF-8",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "ubuntu_22.04": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "x\nz\ny\nw\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "",
+     "awk: line 1: illegal reference to variable b\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: line 1: syntax error at or near ,\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "",
+     "awk: line 1: syntax error at or near )\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "3\n5\n2\n1\n4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "awk: line 1: illegal reference to variable s\n",
+     2
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "awk: line 1: syntax error at or near $\n",
+     2
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "x\nxy\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "c\nb\na\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "image": "ubuntu:22.04",
+   "kind": "gnu 8.32 c",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "ubuntu_24.04": {
+   "cases": {
+    "awk 'BEGIN { a[\"k\"]; if (\"k\" in a) print \"yes\"; print length(a) }'": [
+     "yes\n1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{RSTART=5; print RSTART; print match(\"\", /x/), RSTART, RLENGTH}'": [
+     "5\n0 0 -1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{SUBSEP=\":\"; a[1,2]=1; for (k in a) print k}'": [
+     "1:2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a=\"s\"}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; a[\"w\"]=4; for (k in a) print k}'": [
+     "x\nz\ny\nw\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[0.1+0.2]=1; for (k in a) print k}'": [
+     "0.3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[01]=1; a[\"01\"]=2; a[1.0]=3; for (k in a) n++; print n, a[1], a[\"01\"]}'": [
+     "2 3 2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1,2]=3; for (k in a) {split(k, p, SUBSEP); print p[1], p[2]}; print ((1,2) in a), ((2,1) in a)}'": [
+     "1 2\n1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]+=5; a[1]*=2; a[\"s\"]=a[\"s\"] \"x\"; print a[1], a[\"s\"]}'": [
+     "10 x\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]; delete a[2]; print length(a); print length(b); b[1]=1}'": [
+     "1\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; a[2]=2; delete a[1]; print length(a), (1 in a); delete a; print length(a)}'": [
+     "1 0\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; b=a[1]; delete a; print b, length(a)}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; delete a[1], a[2]}'": [
+     "",
+     "awk: line 1: syntax error at or near ,\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for ((k) in a) print k}'": [
+     "",
+     "awk: line 1: syntax error at or near )\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; for (k in a) delete a[k]; print length(a)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print (1 in a) + (2 in a)}'": [
+     "1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print 1 in a, 2 in a}'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a[1]++ , a[1], ++a[1], a[1]--, --a[1]}'": [
+     "1 2 3 3 1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{a[1]=1; print a}'": [
+     "",
+     "awk: line 1: illegal reference to array a\n",
+     2
+    ],
+    "awk 'BEGIN{a[1]=1; print length(a) a[1]}'": [
+     "11\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (i=1;i<=5;i++) a[i]=i; for (k in a) print k}'": [
+     "3\n5\n2\n1\n4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in a) ; print \"ok\"}'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{for (k in u) print k; print \"done\", length(u)}'": [
+     "done 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{if (1 in a) print \"in\"; else print \"out\"; print length(a)}'": [
+     "out\n0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{match(\"abc\", /b/); print RSTART, RLENGTH; print match(\"abc\", /d/) RSTART RLENGTH}'": [
+     "2 1\n00-1\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a b\", a); print n; for (i=1;i<=n;i++) print i, a[i]}'": [
+     "2\n1 a\n2 b\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{n=split(\"a,b,c\", arr, \",\"); s=\"\"; for (i=n;i>0;i--) s=s arr[i]; print s}'": [
+     "cba\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print length(x); x=\"ab\"; print length(x)}'": [
+     "0\n2\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print match(\"aaa\", /a*/), RLENGTH; print match(\"xaaa\", /a*/), RSTART, RLENGTH}'": [
+     "1 3\n1 1 0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{print split(\"a:b\", a, \":\") split(\"c\", b); print a[1] b[1]}'": [
+     "21\nac\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{s=1; s[\"x\"]=2}'": [
+     "",
+     "awk: line 1: illegal reference to variable s\n",
+     2
+    ],
+    "awk 'BEGIN{split(\"\", a); print length(a); n=split(\"a\", a, \"a\"); print n, \"[\" a[1] \"]\", \"[\" a[2] \"]\"}'": [
+     "0\n2 [] []\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x = 1 in a; print x}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN{x[1]=1; print (1 in x) ? \"y\" : \"n\"; if (!(2 in x)) print \"no2\"}'": [
+     "y\nno2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) {return x+1} BEGIN{print f(1)}'": [
+     "2\n",
+     "",
+     0
+    ],
+    "echo '1 2' | awk '{$3 = $1 + $2; a[NR]=$0} END{print a[1]}'": [
+     "1 2 3\n",
+     "",
+     0
+    ],
+    "echo 'a b  c' | awk '{n=split($0,a); print n, a[2], a[3]}'": [
+     "3 b c\n",
+     "",
+     0
+    ],
+    "echo 'a b' | awk '{split($0, $1)}'": [
+     "",
+     "awk: line 1: syntax error at or near $\n",
+     2
+    ],
+    "echo 'a(b' | awk '{print match($0, \"(\"), RSTART}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a1b22c' | awk '{n=split($0,a,/[0-9]+/); print n, a[1], a[2], a[3]}'": [
+     "3 a b c\n",
+     "",
+     0
+    ],
+    "echo 'a:b' | awk '{split($0,a,\":\"); print (1 in a), (3 in a), (\"1\" in a); print a[5] == \"\"; print (5 in a)}'": [
+     "1 0 1\n1\n1\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print length(a)}'": [
+     "3\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,\":\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo 'a:b:c' | awk '{n=split($0,a,/:/); print n, a[2]}'": [
+     "3 b\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (missing ')')\n(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, \"[(\")}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'a[(b' | awk '{print match($0, /a{2/)}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "echo 'a[(b' | awk '{split($0, x, \"[(\"); print x[2]}'": [
+     "",
+     "awk: line 1: regular expression compile failed (bad class -- [], [^] or [)\n[(\n",
+     2
+    ],
+    "echo 'abc' | awk '{n=split($0,a,\"\"); print n, a[1], a[3]}'": [
+     "3 a c\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{if (match($0, \"b.\")) print substr($0, RSTART, RLENGTH)}'": [
+     "ba\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, \"\"), RSTART, RLENGTH}'": [
+     "1 1 0\n",
+     "",
+     0
+    ],
+    "echo foobar | awk '{print match($0, /o+/), RSTART, RLENGTH; print match($0, \"z\"), RSTART, RLENGTH}'": [
+     "2 2 2\n0 0 -1\n",
+     "",
+     0
+    ],
+    "echo x | awk '{a[$1]; a[$1 \"y\"]} END{for (k in a) print k}'": [
+     "x\nxy\n",
+     "",
+     0
+    ],
+    "printf '3\\n1\\n2\\n' | awk '{a[NR]=$1} END{for (i=NR;i>=1;i--) printf \"%s \", a[i]; print \"\"}'": [
+     "2 1 3 \n",
+     "",
+     0
+    ],
+    "printf 'b\\na\\nc\\n' | awk '{a[$1]=NR} END{for (k in a) print k}'": [
+     "c\nb\na\n",
+     "",
+     0
+    ],
+    "printf 'x 1\\ny 2\\nx 3\\n' | awk '{c[$1]+=$2} END{for (k in c) print k, c[k]}'": [
+     "x 4\ny 2\n",
+     "",
+     0
+    ],
+    "printf 'x\\ny\\nx\\n' | awk '{c[$1]++} END{n=0; for (k in c) n++; print n, c[\"x\"], c[\"y\"], c[\"z\"]+0}'": [
+     "2 2 1 0\n",
+     "",
+     0
+    ]
+   },
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "image": "ubuntu:24.04",
+   "kind": "gnu 9.4 c",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "uid": 0
+  }
+ }
+}

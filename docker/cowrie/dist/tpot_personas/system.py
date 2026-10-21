@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .common import deb_arch
 from .firmware import TPLINK_APPLETS
+from .firmware import program_dirs as firmware_program_dirs
 from .firmware import programs as firmware_programs
 
 # the Docker container Cowrie's tree was taken from (runit started its sshd): on no persona
@@ -1040,7 +1041,8 @@ def foreign_paths(persona):
     """Paths (glob patterns in their last part) of Cowrie's tree the persona's system does not have."""
     paths = ()
     if not has_dpkg(persona):
-        # Red Hat has an installkernel of its own (grubby)
+        # Red Hat has an installkernel of its own (grubby); the applet links of a BusyBox device of these names
+        #   (start-stop-daemon of the NAS326) are its own (validate._check_system)
         paths += DEBIAN_PATHS + tuple(p for p in DEBIAN_SYSTEM_PATHS
                                       if not (is_el(persona) and p == "usr/sbin/installkernel"))
     if persona.hardware_platform != "x86_64":
@@ -1087,7 +1089,7 @@ def foreign_words(persona):
     the Debian packages of DEBIAN_WORDS without dpkg)."""
     words = ()
     if not has_dpkg(persona):
-        words += DEBIAN_WORDS
+        words += DEBIAN_WORDS  # the applet links of a BusyBox device of these names are its own (validate)
     if persona.hardware_platform != "x86_64":
         words += X86_WORDS
     return words
@@ -1183,10 +1185,50 @@ _BB_EDGEOS = ("[, [[, arping, base64, basename, blkdiscard, bunzip2, bzcat, bzip
               "split, ssl_client, stat, stty, sum, svc, sync, tac, tail, tee, telnet, telnetd, test, tftp, touch, tr, "
               "traceroute, true, truncate, tty, uname, unexpand, uniq, unix2dos, unlink, usleep, uudecode, uuencode, "
               "vi, wc, who, whoami, whois, xzcat, yes")
+# the applet lists of `busybox --list` (the NAS326 firmware V5.21(AAZF.18)C0, 174; QNAP's busybox-1.24.1 of its
+#   GPL tree of QTS 5.2.3, 160) and of `busybox` of the DIR-859 1.05B03 (79; its shell is msh, no ash), read
+#   from the firmware under qemu-user / natively (w1 of the recording notes)
+_BB_ZYXEL = ("[, [[, acpid, addgroup, adduser, adjtimex, arp, ash, awk, basename, beep, bzip2, cat, catv, chat, "
+             "chgrp, chmod, chown, chroot, chrt, chvt, cksum, clear, cmp, cp, crond, crontab, cryptpw, cttyhack, cut, "
+             "date, dd, deallocvt, delgroup, deluser, depmod, devmem, df, diff, dirname, dmesg, dnsdomainname, du, "
+             "echo, ed, egrep, eject, env, expand, expr, false, fgrep, find, flock, free, freeramdisk, fsync, getopt, "
+             "getty, grep, gunzip, gzip, halt, hdparm, head, hexdump, hostname, hwclock, id, ifconfig, ifplugd, init, "
+             "insmod, install, ionice, ipcrm, ipcs, kill, killall, less, linuxrc, ln, logger, login, losetup, ls, "
+             "lsmod, lspci, lsusb, lzop, lzopcat, man, md5sum, mdev, microcom, mkdir, mke2fs, mkfs.ext2, mknod, "
+             "mkpasswd, mkswap, mktemp, modinfo, modprobe, more, mountpoint, mv, netstat, nice, nslookup, openvt, "
+             "passwd, pgrep, pidof, ping, ping6, pivot_root, poweroff, printenv, printf, ps, pwd, raidautorun, rdev, "
+             "readahead, readlink, reboot, reset, resize, rev, rm, rmdir, rmmod, route, rtcwake, script, "
+             "scriptreplay, sed, seq, setfont, setlogcons, setsid, sh, sha256sum, sha512sum, showkey, sleep, sort, "
+             "split, start-stop-daemon, strings, su, swapoff, swapon, sync, tac, tail, tar, tee, telnet, telnetd, "
+             "test, time, timeout, top, touch, tr, traceroute, traceroute6, true, tty, ttysize, udhcpc, udpsvd, "
+             "uname, unexpand, uniq, unlzop, unxz, unzip, uptime, usleep, vi, volname, wall, watchdog, wc, wget, "
+             "which, who, whoami, xargs, xz, xzcat, yes, zcat, zcip")
+_BB_QNAP = ("[, [[, addgroup, adduser, arping, ash, awk, base64, basename, bunzip2, bzcat, bzip2, cat, chattr, "
+            "chgrp, chmod, chown, chroot, chvt, cksum, clear, cmp, cp, cpio, crond, crontab, cut, date, dc, dd, "
+            "deallocvt, delgroup, deluser, depmod, df, diff, dirname, dmesg, dnsdomainname, dos2unix, du, echo, "
+            "egrep, env, expr, false, fdisk, fgrep, find, free, fsync, getty, grep, groups, gunzip, gzip, halt, hd, "
+            "head, hexdump, hostname, hwclock, id, ifconfig, init, insmod, install, ip, ipaddr, iplink, iproute, "
+            "iprule, iptunnel, kill, killall, killall5, klogd, less, linuxrc, ln, logger, login, logread, ls, "
+            "lsattr, lsmod, lspci, md5sum, mkdir, mknod, mktemp, modprobe, more, mount, mv, nameif, netstat, "
+            "nslookup, openvt, passwd, pidof, ping, ping6, pivot_root, poweroff, printf, ps, pwd, rdate, readlink, "
+            "realpath, reboot, renice, reset, resize, rm, rmdir, rmmod, route, sed, seq, sh, sha1sum, sleep, sort, "
+            "split, start-stop-daemon, stat, strings, swapoff, swapon, switch_root, sync, sysctl, syslogd, tail, "
+            "tar, taskset, tee, telnet, test, tftp, time, top, touch, tr, traceroute, traceroute6, true, tty, "
+            "umount, uname, uniq, unix2dos, unzip, uptime, usleep, vi, watch, wc, wget, which, whoami, xargs, yes, "
+            "zcat")
+_BB_DLINK = ("[, [[, arp, arping, awk, basename, bunzip2, bzcat, bzip2, cat, chmod, cp, cut, date, echo, egrep, expr, "
+             "false, fgrep, free, grep, gunzip, gzip, halt, hostname, ifconfig, init, insmod, ip, ipaddr, iplink, "
+             "iproute, iprule, iptunnel, kill, killall, killall5, ln, ls, lsmod, mkdir, mknod, modprobe, mount, msh, "
+             "mv, netstat, ping, ping6, poweroff, ps, pwd, reboot, rm, rmmod, route, sed, sh, sleep, sysctl, tar, "
+             "test, top, touch, tr, true, tunctl, umount, uname, uptime, vconfig, vi, wc, wget, xargs, yes, zcat")
+# the camera (unverified: no image of it): a typical small build
 BB_SHARED = ("[, [[, ash, awk, basename, cat, chmod, chown, cp, cut, date, dd, df, dmesg, echo, egrep, env, "
              "false, free, grep, gunzip, gzip, head, hostname, ifconfig, kill, killall, ln, login, ls, mkdir, "
-             "mknod, mount, mv, netstat, ping, ps, pwd, reboot, rm, route, sed, sh, sleep, sync, tail, tar, "
+             "mknod, mount, mv, netstat, ping, ps, pwd, reboot, rm, rmdir, route, sed, sh, sleep, sync, tail, tar, "
              "telnetd, test, top, touch, tr, true, udhcpc, umount, uname, uptime, vi, wc, wget")
+# the file commands of the persona (MKDIR_COMMAND of the patch): on a BusyBox device each is an applet of its
+#   BusyBox, or missing (the DIR-859 has no rmdir)
+FS_TOOLS = ("rm", "cp", "mv", "touch", "rmdir", "mkdir")
 # the C library of the firmware (the texts of option errors): ld-musl of OpenWrt, ld-uClibc 0.9.33.2 of the
 #   Archer C7, glibc (libc.so.6) of EdgeOS, read from their BusyBox; unverified: the others
 FIRMWARE_LIBC = {"openwrt": "musl", "tplink": "uclibc", "ubiquiti": "glibc", "dlink": "uclibc", "ipcam": "uclibc",
@@ -1205,6 +1247,12 @@ def busybox_applets(persona, ident):
         text = _BB_OPENWRT if ident.release.label.startswith("21.") else _BB_OPENWRT.replace("bunzip2, bzcat, ", "")
     elif persona.family == "ubiquiti":
         text = _BB_EDGEOS
+    elif persona.family == "zyxel":
+        text = _BB_ZYXEL
+    elif persona.family == "qnap":
+        text = _BB_QNAP
+    elif persona.family == "dlink":
+        text = _BB_DLINK
     else:
         text = BB_SHARED
     return text.split(", ")
@@ -1213,6 +1261,34 @@ def busybox_applets(persona, ident):
 # the device firmware with util-linux and coreutils (EdgeOS: Debian 9; DSM: util-linux-2.x and coreutils-8.x
 #   of Synology's GPL sources of 7.2-72806)
 UTIL_LINUX_DEVICES = frozenset({"ubiquiti", "synology"})
+# the applets placed by their own rules: busybox itself, the shells (firmware.shell_links), init (the daemons)
+APPLET_OWN = frozenset({"busybox", "sh", "ash", "init"})
+# the link target of an applet by its folder, as `busybox --install -s` makes them (relative to the program)
+APPLET_TARGETS = {"bin": "busybox", "sbin": "../bin/busybox"}
+
+
+def missing_fs_tools(persona, ident):
+    """The file commands (FS_TOOLS) a BusyBox device has not: no applet of its BusyBox (the rmdir of the
+    DIR-859); none on a server, with coreutils (EdgeOS, DSM) or the folders of its image (the Archer C7)."""
+    if applet_links(persona, ident) is None:
+        return ()
+    applets = set(busybox_applets(persona, ident))
+    return tuple(name for name in FS_TOOLS if name not in applets)
+
+
+def applet_links(persona, ident):
+    """{path: link target} of the applets of a device's BusyBox, as `busybox --install -s` places them
+    (/bin/ls -> busybox, /sbin/ifconfig -> ../bin/busybox, /usr/bin/awk -> ../../bin/busybox, in the folders
+    of firmware.BUSYBOX_DIRS): ls, cat, mount ... of OpenWrt are no programs of their own. None for a server,
+    a device with the folders of its image (the Archer C7), one with coreutils (EdgeOS, DSM) or without a
+    BusyBox. The shells, init and busybox itself are left to their own rules (APPLET_OWN)."""
+    if persona.family in UTIL_LINUX_DEVICES or not ident.release.extra.get("busybox"):
+        return None
+    dirs = firmware_program_dirs(persona, busybox_applets(persona, ident))
+    if dirs is None:
+        return None
+    return {f"{folder}/{name}": APPLET_TARGETS.get(folder, "../../bin/busybox")
+            for name, folders in dirs.items() if name not in APPLET_OWN for folder in folders}
 
 
 def cpu_commands(persona, ident):
@@ -1270,14 +1346,14 @@ FS_TEXTS = Path(__file__).resolve().parent / "fs_texts.json"
 #   is that of debian:10, 9.1 in en_GB.UTF-8 of Raspberry Pi OS that of debian:12 with en_GB.UTF-8
 FS_GNU_VARIANTS = {"8.22": "centos_7", "8.30": "debian_10", "8.32": "ubuntu_22.04", "9.1": "debian_12",
                    "9.4": "ubuntu_24.04", "9.7": "debian_13"}
-# BusyBox: the firmware's own BusyBox where it was recorded (under qemu-user), the D-Link's 1.14.1 derived from
-#   the Archer C7 v5 build and the 1.14.1 sources; unverified: the NAS326, the IP camera and QTS, whose
-#   firmware could not be run, take the minimal build of the Archer C7 v5 (no CONFIG_DESKTOP, as
-#   busybox_desktop assumes of them; the texts of their option errors follow their own text_libc)
-FS_BUSYBOX_VARIANTS = {"tplink": "fw_tplink_c7v5", "ubiquiti": "fw_edgeos_209hf5", "dlink": "src_busybox_1.14.1",
-                       "zyxel": "fw_tplink_c7v5", "ipcam": "fw_tplink_c7v5", "qnap": "fw_tplink_c7v5"}
+# BusyBox: the firmware's own BusyBox where it was recorded (under qemu-user: the Archer C7 v5, EdgeOS, OpenWrt,
+#   the NAS326 and the DIR-859; QNAP's own x86_64 build of its GPL tree of QTS 5.2.3 natively); unverified: the
+#   IP camera, whose firmware is no image, takes the minimal build of the Archer C7 v5 (no CONFIG_DESKTOP, as
+#   busybox_desktop assumes of it; the texts of its option errors follow its own text_libc)
+FS_BUSYBOX_VARIANTS = {"tplink": "fw_tplink_c7v5", "ubiquiti": "fw_edgeos_209hf5", "dlink": "fw_dlink_dir859_105b03",
+                       "zyxel": "fw_zyxel_nas326_aazf18", "ipcam": "fw_tplink_c7v5", "qnap": "src_qnap_1.24.1"}
 # the families whose BusyBox variant stands in for a build of another C library (see FS_BUSYBOX_VARIANTS)
-FS_STAND_INS = frozenset({"zyxel", "ipcam", "qnap"})
+FS_STAND_INS = frozenset({"ipcam"})
 
 
 def fs_variant(persona, ident):
@@ -1668,13 +1744,13 @@ ASH_FAMILIES = frozenset({"dlink", "tplink", "zyxel", "openwrt", "qnap", "ipcam"
 
 def busybox_desktop(persona):
     """Whether the persona's BusyBox is built with CONFIG_DESKTOP, which gives ls -l of a folder its total line
-    from 1.16 (coreutils/ls.c 1.16.0 to 1.36.1; busybox:1.26.2 and 1.27.2 have it). None of the persona builds
-    has it: 1.14.1 of the DIR-859 has no total line, the Archer C7 v5 (recorded), the NAS326 (no total format
-    in its BusyBox) and OpenWrt 21.02 / 22.03 (recorded) are built without; QTS and the camera are taken as
-    those (unverified). None without BusyBox ash."""
+    from 1.16 (coreutils/ls.c 1.16.0 to 1.36.1; busybox:1.26.2 and 1.27.2 have it). QNAP's busybox-1.24.1 has
+    it (CONFIG_DESKTOP=y in the .config of its GPL tree of QTS 5.2.3); 1.14.1 of the DIR-859 has no total line,
+    the Archer C7 v5 (recorded), the NAS326 (no total format in its BusyBox) and OpenWrt 21.02 / 22.03
+    (recorded) are built without; the camera is taken as those (unverified). None without BusyBox ash."""
     if persona.family not in ASH_FAMILIES:
         return None
-    return False
+    return persona.family == "qnap"
 
 
 def shell_style(persona):

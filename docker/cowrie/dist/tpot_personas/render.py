@@ -185,9 +185,11 @@ def skip_python_commands(persona, ident, content):
         commands |= {"journalctl", "/bin/journalctl", "/usr/bin/journalctl"}
     # the tools of packages the server has not installed
     commands |= set(system.skipped_tools(persona, ident))
-    # wc, sort and seq where the firmware's BusyBox has no such applet
+    # wc, sort and seq where the firmware's BusyBox has no such applet; rm, cp, mv, touch, rmdir and mkdir too
     present = system.text_programs(persona, ident)
     commands |= {spelling for name in system.TEXT_TOOLS if name not in present
+                 for spelling in (name, f"/bin/{name}", f"/usr/bin/{name}")}
+    commands |= {spelling for name in system.missing_fs_tools(persona, ident)
                  for spelling in (name, f"/bin/{name}", f"/usr/bin/{name}")}
     # ip, ss, ifconfig and netstat where the firmware has no such program
     if persona.kind == "device":
@@ -489,6 +491,19 @@ def apply_to_tree(base_tree, persona, ident, content):
         tree.ensure_executable(t, rel, program_size(ident, rel, sizes), ctime=ident.installed_at)
     for rel in system.directories(persona):
         tree.ensure_dir(t, rel, ctime=ident.installed_at)
+    # the applets of the firmware's BusyBox are links to it (ls -l /bin/ls of OpenWrt: `-> busybox`), Cowrie's
+    #   Debian program of that name goes; the tools placed below (wc, ip, lsmod, ...) win
+    links = system.applet_links(persona, ident)
+    if links:
+        for rel in links:
+            for folder in firmware.PROGRAM_FOLDERS:
+                tree.remove_node(t, f"{folder}/{rel.rsplit('/', 1)[1]}")
+        for rel, target in links.items():
+            tree.ensure_link(t, rel, target, ctime=ident.installed_at)
+        # a file command the firmware's BusyBox has not (the rmdir of the DIR-859) is no program either
+        for name in system.missing_fs_tools(persona, ident):
+            for folder in firmware.PROGRAM_FOLDERS:
+                tree.remove_node(t, f"{folder}/{name}")
     # wc, sort and seq as the system has them: coreutils (Cowrie's tree has those of Debian) or the
     # applets of the firmware's BusyBox
     if persona.kind == "device":

@@ -155,10 +155,15 @@ DIFFERENT = [
 ]
 # valid awk the interpreter leaves out: no output, status 2
 LEFT_OUT = ['BEGIN { system("uname") }', 'BEGIN { "uname" | getline x; print x }', "{ getline; print }",
-            "{ a[$1]++ } END { for (k in a) print k }", "!seen[$0]++", "function f(x) { return x } { print f($1) }",
+            "function f(x) { return x } { print f($1) }",
             '{ print $1 > "/tmp/out" }', '{ print $1 >> "/tmp/out" }', '{ print $1 | "sort" }',
-            "{ n = split($0, p, \":\") }", "BEGIN { print rand() }", "NR==1, NR==2", "{ print match($0, /a/) }",
-            "BEGIN { print strftime() }"]
+            "BEGIN { print rand() }", "NR==1, NR==2", "BEGIN { print strftime() }"]
+# arrays, split and match (tests.test_awk_arrays has the recorded cases): the same in every awk
+ARRAYS = [("!seen[$0]++", "a:b\nc:d\na:b\n", "a:b\nc:d\n"),
+          ('{ n = split($0, p, ":") } END { print n, p[1], p[n] }', "a:b\nc:d\n", "2 c d\n"),
+          ("{ print match($0, /[bd]/), RSTART, RLENGTH }", "a:b\nc:d\nxyz\n", "3 3 1\n3 3 1\n0 0 -1\n"),
+          ("{ a[$1]++ } END { for (k in a) n++; print n, a[\"a:b\"] }", "a:b\nc:d\na:b\n", "2 2\n"),
+          ('BEGIN { SUBSEP = ":"; a[1, 2] = 3; for (k in a) print k, a[k] }', "", "1:2 3\n")]
 EXISTING = {"/etc/passwd": PASSWD.encode(), "/proc/meminfo": MEMINFO.encode()}
 
 _ROOT = None
@@ -343,6 +348,12 @@ class AwkTest(unittest.TestCase):
                 with self.subTest(program=program, style=style):
                     self.assertEqual(awk(style, [program], "a:b\nc:d\n"), ("", "", 2))
 
+    def test_arrays_split_and_match(self):
+        for program, data, out in ARRAYS:
+            for style in VERSIONS:
+                with self.subTest(program=program, style=style):
+                    self.assertEqual(awk(style, [program], data), (out, "", 0))
+
     def test_help_and_version_follow_the_persona(self):
         self.assertTrue(awk("gawk", ["--version"])[0].startswith("GNU Awk 5.1.0, API: 3.0"))
         self.assertTrue(awk("gawk", ["-V"], version="4.0.2")[0].startswith("GNU Awk 4.0.2\n"))
@@ -504,7 +515,7 @@ class AwkTest(unittest.TestCase):
 
     def test_record_separator_is_left_out(self):
         self.assertEqual(awk("gawk", ['BEGIN { printf "[%s][%s]", RS, SUBSEP }']), ("[\n][\x1c]", "", 0))
-        for program in ('BEGIN { RS = "" } { print }', "BEGIN { RS = \";\" } { print }", 'BEGIN { SUBSEP = ":" }'):
+        for program in ('BEGIN { RS = "" } { print }', "BEGIN { RS = \";\" } { print }"):
             for style in VERSIONS:
                 with self.subTest(program=program, style=style):
                     self.assertEqual(awk(style, [program], "a\nb\n"), ("", "", 2))
@@ -541,7 +552,7 @@ class AwkTest(unittest.TestCase):
             log = FakeLog()
             with self.subTest(style=style):
                 self.assertEqual(awk(style, ["-v", "RS=x", "{ print }"], "a\n", log=log), ("", "", 2))
-                self.assertEqual(awk(style, ["-vSUBSEP=:", "{ print }"], "a\n", log=log), ("", "", 2))
+                self.assertEqual(awk(style, ["-vSUBSEP=:", "{ print }"], "a\n", log=log), ("a\n", "", 0))
                 self.assertEqual(log.errors, [])
 
     def test_internal_errors_go_to_the_log(self):

@@ -22,8 +22,10 @@ class TreeTest(unittest.TestCase):
         found = node(fs, path)
         self.assertIsNotNone(found, path)
         self.assertEqual(found[tree.A_TYPE], tree.T_LINK, path)
-        self.assertEqual(found[tree.A_TARGET], "/bin/busybox", path)
-        self.assertIsNotNone(tree.resolve(fs, path.lstrip("/")), path)
+        # a link to busybox: as the daemons place it (/bin/busybox) or as `busybox --install -s` does
+        #   (../../bin/busybox, system.applet_links)
+        self.assertIn(found[tree.A_TARGET], ("/bin/busybox", "../../bin/busybox", "../bin/busybox", "busybox"), path)
+        self.assertIs(tree.resolve(fs, path.lstrip("/")), tree.find_node(fs, "usr/bin/busybox"), path)
 
     def assert_program(self, fs, path):
         found = tree.resolve(fs, path.lstrip("/"))
@@ -33,9 +35,10 @@ class TreeTest(unittest.TestCase):
 
     def test_the_daemons_of_the_dir859_and_the_camera(self):
         out, fs = self.rendered("dlink-dir859")
-        # dropbear of the persona (a deviation of the catalog) and the telnetd applet of `telnetd -i br0`
+        # dropbear of the persona (a deviation of the catalog); the BusyBox of the DIR-859 1.05B03 has no telnetd
+        #   applet (its `busybox` list), so the telnetd of `telnetd -i br0` is a program of its own
         self.assert_program(fs, "/usr/sbin/dropbear")
-        self.assert_applet(fs, "/usr/sbin/telnetd")
+        self.assert_program(fs, "/usr/sbin/telnetd")
         self.assert_program(fs, "/usr/sbin/xmldb")
         out, fs = self.rendered("ipcam")
         # /etc/init.d/rcS: /usr/sbin/telnetd, /sbin/dropbear -R
@@ -56,7 +59,8 @@ class TreeTest(unittest.TestCase):
                 self.assertGreater(len(processes), 2)
 
     def test_the_telnetd_of_a_session(self):
-        for pid, applet in (("zyxel-nas326", True), ("qnap-qts", True), ("openwrt", False),
+        # the NAS326's BusyBox has the telnetd applet, QNAP's busybox-1.24.1 has not (their `busybox --list`)
+        for pid, applet in (("zyxel-nas326", True), ("qnap-qts", False), ("openwrt", False),
                             ("tplink-archer-c7", False), ("synology-dsm", False)):
             with self.subTest(persona=pid):
                 out, fs = self.rendered(pid)

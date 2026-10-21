@@ -2,7 +2,7 @@
  "_about": "Texts of the persona's rm, cp, mv, touch, rmdir and mkdir per variant, made by docker/cowrie/tools/build_fs_texts.py from tests/fixtures/fs_tools.json and fs_help.json (recordings of the real programs); do not edit.",
  "authors": {
   "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
-  "cp": "Torbjorn Granlund, David MacKenzie, and Jim Meyering.",
+  "cp": "Torbjörn Granlund, David MacKenzie, and Jim Meyering.",
   "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
   "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
   "rmdir": "David MacKenzie.",
@@ -170,17 +170,18 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -197,6 +198,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -362,17 +364,18 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -389,6 +392,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -554,17 +558,18 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -581,6 +586,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -750,17 +756,19 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
+    "cp.too_many": "cp: too many arguments\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -777,6 +785,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -946,17 +955,19 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
+    "cp.too_many": "cp: too many arguments\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -973,6 +984,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -1142,17 +1154,19 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
+    "cp.too_many": "cp: too many arguments\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -1169,6 +1183,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -1338,17 +1353,19 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
+    "cp.too_many": "cp: too many arguments\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -1365,6 +1382,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -1534,17 +1552,19 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
+    "cp.too_many": "cp: too many arguments\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -1561,6 +1581,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -1730,17 +1751,19 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
+    "cp.too_many": "cp: too many arguments\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -1757,6 +1780,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -1926,17 +1950,19 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
+    "cp.too_many": "cp: too many arguments\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -1953,6 +1979,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -2138,17 +2165,18 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -2165,6 +2193,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -2350,17 +2379,18 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -2377,6 +2407,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -2562,17 +2593,18 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -2589,6 +2621,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -2774,17 +2807,18 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -2801,6 +2835,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -2986,17 +3021,18 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -3013,6 +3049,7 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
@@ -3344,58 +3381,65 @@
     "dir": "directory",
     "link": "symbolic link"
    },
+   "authors": {
+    "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
+    "cp": "Torbjörn Granlund, David MacKenzie, and Jim Meyering.",
+    "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
+    "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
+    "rmdir": "David MacKenzie.",
+    "mkdir": "David MacKenzie."
+   },
    "templates": {
-    "cp.create": "cp: cannot create regular file ‘{0}’: {1}\n",
-    "cp.dir": "cp: cannot overwrite directory ‘{0}’ with non-directory\n",
-    "cp.extra": "cp: extra operand ‘{0}’\nTry 'cp --help' for more information.\n",
-    "cp.into_itself": "cp: cannot copy a directory, ‘{0}’, into itself, ‘{1}’\n",
-    "cp.missing_dest": "cp: missing destination file operand after ‘{0}’\nTry 'cp --help' for more information.\n",
+    "cp.create": "cp: cannot create regular file ‘{0:c}’: {1}\n",
+    "cp.dir": "cp: cannot overwrite directory ‘{0:c}’ with non-directory\n",
+    "cp.extra": "cp: extra operand ‘{0:c}’\nTry 'cp --help' for more information.\n",
+    "cp.into_itself": "cp: cannot copy a directory, ‘{0:c}’, into itself, ‘{1:c}’\n",
+    "cp.missing_dest": "cp: missing destination file operand after ‘{0:c}’\nTry 'cp --help' for more information.\n",
     "cp.missing_operand": "cp: missing file operand\nTry 'cp --help' for more information.\n",
-    "cp.mkdir": "cp: cannot create directory ‘{0}’: {1}\n",
-    "cp.nondir": "cp: cannot overwrite non-directory ‘{0}’ with directory ‘{1}’\n",
-    "cp.omit_dir": "cp: omitting directory ‘{0}’\n",
-    "cp.overwrite": "cp: overwrite ‘{0}’? ",
-    "cp.same": "cp: ‘{0}’ and ‘{1}’ are the same file\n",
-    "cp.stat": "cp: cannot stat ‘{0}’: {1}\n",
-    "cp.target": "cp: target ‘{0}’ is not a directory\n",
-    "cp.verbose": "‘{0}’ -> ‘{1}’\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0}’: {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0}’\n",
+    "cp.mkdir": "cp: cannot create directory ‘{0:c}’: {1}\n",
+    "cp.nondir": "cp: cannot overwrite non-directory ‘{0:c}’ with directory ‘{1:c}’\n",
+    "cp.omit_dir": "cp: omitting directory ‘{0:c}’\n",
+    "cp.overwrite": "cp: overwrite ‘{0:c}’? ",
+    "cp.same": "cp: ‘{0:c}’ and ‘{1:c}’ are the same file\n",
+    "cp.stat": "cp: cannot stat ‘{0:c}’: {1}\n",
+    "cp.target": "cp: target ‘{0:c}’ is not a directory\n",
+    "cp.verbose": "‘{0:c}’ -> ‘{1:c}’\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0:c}’: {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0:c}’\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
-    "mkdir.verbose": "mkdir: created directory ‘{0}’\n",
-    "mv.cannot_move": "mv: cannot move ‘{0}’ to ‘{1}’: {2}\n",
-    "mv.dir": "mv: cannot overwrite directory ‘{0}’ with non-directory\n",
-    "mv.extra": "mv: extra operand ‘{0}’\nTry 'mv --help' for more information.\n",
-    "mv.missing_dest": "mv: missing destination file operand after ‘{0}’\nTry 'mv --help' for more information.\n",
+    "mkdir.verbose": "mkdir: created directory ‘{0:c}’\n",
+    "mv.cannot_move": "mv: cannot move ‘{0:c}’ to ‘{1:c}’: {2}\n",
+    "mv.dir": "mv: cannot overwrite directory ‘{0:c}’ with non-directory\n",
+    "mv.extra": "mv: extra operand ‘{0:c}’\nTry 'mv --help' for more information.\n",
+    "mv.missing_dest": "mv: missing destination file operand after ‘{0:c}’\nTry 'mv --help' for more information.\n",
     "mv.missing_operand": "mv: missing file operand\nTry 'mv --help' for more information.\n",
-    "mv.nondir": "mv: cannot overwrite non-directory ‘{0}’ with directory ‘{1}’\n",
-    "mv.overwrite": "mv: overwrite ‘{0}’? ",
-    "mv.same": "mv: ‘{0}’ and ‘{1}’ are the same file\n",
-    "mv.stat": "mv: cannot stat ‘{0}’: {1}\n",
-    "mv.subdir": "mv: cannot move ‘{0}’ to a subdirectory of itself, ‘{1}’\n",
-    "mv.target": "mv: target ‘{0}’ is not a directory\n",
-    "mv.verbose": "‘{0}’ -> ‘{1}’\n",
-    "rm.cannot_remove": "rm: cannot remove ‘{0}’: {1}\n",
-    "rm.descend": "rm: descend into directory ‘{0}’? ",
-    "rm.dot": "rm: cannot remove directory: ‘{0}’\n",
+    "mv.nondir": "mv: cannot overwrite non-directory ‘{0:c}’ with directory ‘{1:c}’\n",
+    "mv.overwrite": "mv: overwrite ‘{0:c}’? ",
+    "mv.same": "mv: ‘{0:c}’ and ‘{1:c}’ are the same file\n",
+    "mv.stat": "mv: cannot stat ‘{0:c}’: {1}\n",
+    "mv.subdir": "mv: cannot move ‘{0:c}’ to a subdirectory of itself, ‘{1:c}’\n",
+    "mv.target": "mv: target ‘{0:c}’ is not a directory\n",
+    "mv.verbose": "‘{0:c}’ -> ‘{1:c}’\n",
+    "rm.cannot_remove": "rm: cannot remove ‘{0:c}’: {1}\n",
+    "rm.descend": "rm: descend into directory ‘{0:c}’? ",
+    "rm.dot": "rm: refusing to remove ‘.’ or ‘..’ directory: skipping ‘{0:c}’\n",
     "rm.missing_operand": "rm: missing operand\nTry 'rm --help' for more information.\n",
-    "rm.preserve_root": "rm: it is dangerous to operate recursively on ‘{0}’\nrm: use --no-preserve-root to override this failsafe\n",
-    "rm.prompt": "rm: remove {1} ‘{0}’? ",
+    "rm.preserve_root": "rm: it is dangerous to operate recursively on ‘{0:c}’\nrm: use --no-preserve-root to override this failsafe\n",
+    "rm.prompt": "rm: remove {1} ‘{0:c}’? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
-    "rm.removed": "removed ‘{0}’\n",
-    "rm.removed_dir": "removed directory: ‘{0}’\n",
-    "rmdir.failed": "rmdir: failed to remove ‘{0}’: {1}\n",
-    "rmdir.failed_parent": "rmdir: failed to remove directory ‘{0}’: {1}\n",
+    "rm.removed": "removed ‘{0:c}’\n",
+    "rm.removed_dir": "removed directory: ‘{0:c}’\n",
+    "rmdir.failed": "rmdir: failed to remove ‘{0:c}’: {1}\n",
+    "rmdir.failed_parent": "rmdir: failed to remove directory ‘{0:c}’: {1}\n",
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
-    "rmdir.verbose": "rmdir: removing directory, ‘{0}’\n",
-    "touch.cannot_touch": "touch: cannot touch ‘{0}’: {1}\n",
-    "touch.invalid_date": "touch: invalid date format ‘{0}’\n",
+    "rmdir.verbose": "rmdir: removing directory, ‘{0:c}’\n",
+    "touch.cannot_touch": "touch: cannot touch ‘{0:c}’: {1}\n",
+    "touch.invalid_date": "touch: invalid date format ‘{0:c}’\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
-    "touch.reference": "touch: failed to get attributes of ‘{0}’: {1}\n",
-    "touch.setting_times": "touch: setting times of ‘{0}’: {1}\n"
+    "touch.reference": "touch: failed to get attributes of ‘{0:c}’: {1}\n",
+    "touch.setting_times": "touch: setting times of ‘{0:c}’: Operation not permitted\n"
    }
   },
   "debian_10": {
@@ -3725,6 +3769,14 @@
     "dir": "directory",
     "link": "symbolic link"
    },
+   "authors": {
+    "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
+    "cp": "Torbjorn Granlund, David MacKenzie, and Jim Meyering.",
+    "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
+    "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
+    "rmdir": "David MacKenzie.",
+    "mkdir": "David MacKenzie."
+   },
    "templates": {
     "cp.create": "cp: cannot create regular file {0:q}: {1}\n",
     "cp.dir": "cp: cannot overwrite directory {0:q} with non-directory\n",
@@ -3740,8 +3792,8 @@
     "cp.stat": "cp: cannot stat {0:q}: {1}\n",
     "cp.target": "cp: target {0:q} is not a directory\n",
     "cp.verbose": "{0:q} -> {1:q}\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory '{0}': {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory '{0:c}': {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode '{0:c}'\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
     "mkdir.verbose": "mkdir: created directory {0:q}\n",
     "mv.cannot_move": "mv: cannot move {0:q} to {1:q}: {2}\n",
@@ -3763,7 +3815,6 @@
     "rm.preserve_root": "rm: it is dangerous to operate recursively on {0:q}\nrm: use --no-preserve-root to override this failsafe\n",
     "rm.prompt": "rm: remove {1} {0:q}? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
     "rm.removed": "removed {0:q}\n",
@@ -3773,10 +3824,10 @@
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
     "rmdir.verbose": "rmdir: removing directory, {0:q}\n",
     "touch.cannot_touch": "touch: cannot touch {0:q}: {1}\n",
-    "touch.invalid_date": "touch: invalid date format '{0}'\n",
+    "touch.invalid_date": "touch: invalid date format '{0:c}'\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
-    "touch.setting_times": "touch: setting times of {0:q}: {1}\n"
+    "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
    }
   },
   "debian_12": {
@@ -4106,6 +4157,14 @@
     "dir": "directory",
     "link": "symbolic link"
    },
+   "authors": {
+    "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
+    "cp": "Torbjorn Granlund, David MacKenzie, and Jim Meyering.",
+    "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
+    "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
+    "rmdir": "David MacKenzie.",
+    "mkdir": "David MacKenzie."
+   },
    "templates": {
     "cp.create": "cp: cannot create regular file {0:q}: {1}\n",
     "cp.dir": "cp: cannot overwrite directory {0:q} with non-directory\n",
@@ -4121,8 +4180,8 @@
     "cp.stat": "cp: cannot stat {0:q}: {1}\n",
     "cp.target": "cp: target {0:q}: {1}\n",
     "cp.verbose": "{0:q} -> {1:q}\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0}’: {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0}’\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0:c}’: {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0:c}’\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
     "mkdir.verbose": "mkdir: created directory {0:q}\n",
     "mv.cannot_move": "mv: cannot move {0:q} to {1:q}: {2}\n",
@@ -4144,7 +4203,6 @@
     "rm.preserve_root": "rm: it is dangerous to operate recursively on {0:q}\nrm: use --no-preserve-root to override this failsafe\n",
     "rm.prompt": "rm: remove {1} {0:q}? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
     "rm.removed": "removed {0:q}\n",
@@ -4154,10 +4212,10 @@
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
     "rmdir.verbose": "rmdir: removing directory, {0:q}\n",
     "touch.cannot_touch": "touch: cannot touch {0:q}: {1}\n",
-    "touch.invalid_date": "touch: invalid date format ‘{0}’\n",
+    "touch.invalid_date": "touch: invalid date format ‘{0:c}’\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
-    "touch.setting_times": "touch: setting times of {0:q}: {1}\n"
+    "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
    }
   },
   "debian_12_en": {
@@ -4502,8 +4560,8 @@
     "cp.stat": "cp: cannot stat {0:q}: {1}\n",
     "cp.target": "cp: target {0:q}: {1}\n",
     "cp.verbose": "{0:q} -> {1:q}\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0}’: {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0}’\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0:c}’: {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0:c}’\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
     "mkdir.verbose": "mkdir: created directory {0:q}\n",
     "mv.cannot_move": "mv: cannot move {0:q} to {1:q}: {2}\n",
@@ -4525,7 +4583,6 @@
     "rm.preserve_root": "rm: it is dangerous to operate recursively on {0:q}\nrm: use --no-preserve-root to override this failsafe\n",
     "rm.prompt": "rm: remove {1} {0:q}? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
     "rm.removed": "removed {0:q}\n",
@@ -4535,7 +4592,7 @@
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
     "rmdir.verbose": "rmdir: removing directory, {0:q}\n",
     "touch.cannot_touch": "touch: cannot touch {0:q}: {1}\n",
-    "touch.invalid_date": "touch: invalid date format ‘{0}’\n",
+    "touch.invalid_date": "touch: invalid date format ‘{0:c}’\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
     "touch.setting_times": "touch: setting times of {0:q}: {1}\n"
@@ -4888,9 +4945,17 @@
     "dir": "directory",
     "link": "symbolic link"
    },
+   "authors": {
+    "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
+    "cp": "Torbjörn Granlund, David MacKenzie, and Jim Meyering.",
+    "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
+    "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
+    "rmdir": "David MacKenzie.",
+    "mkdir": "David MacKenzie."
+   },
    "templates": {
     "cp.create": "cp: cannot create regular file {0:q}: {1}\n",
-    "cp.dir": "cp: cannot overwrite directory {0:q} with non-directory\n",
+    "cp.dir": "cp: cannot overwrite directory {0:q} with non-directory 'a'\n",
     "cp.extra": "cp: extra operand {0:q}\nTry 'cp --help' for more information.\n",
     "cp.into_itself": "cp: cannot copy a directory, {0:q}, into itself, {1:q}\n",
     "cp.missing_dest": "cp: missing destination file operand after {0:q}\nTry 'cp --help' for more information.\n",
@@ -4903,12 +4968,12 @@
     "cp.stat": "cp: cannot stat {0:q}: {1}\n",
     "cp.target": "cp: target {0:q}: {1}\n",
     "cp.verbose": "{0:q} -> {1:q}\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0}’: {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0}’\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0:c}’: {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0:c}’\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
     "mkdir.verbose": "mkdir: created directory {0:q}\n",
     "mv.cannot_move": "mv: cannot move {0:q} to {1:q}: {2}\n",
-    "mv.dir": "mv: cannot overwrite directory {0:q} with non-directory\n",
+    "mv.dir": "mv: cannot overwrite directory {0:q} with non-directory 'a'\n",
     "mv.extra": "mv: extra operand {0:q}\nTry 'mv --help' for more information.\n",
     "mv.missing_dest": "mv: missing destination file operand after {0:q}\nTry 'mv --help' for more information.\n",
     "mv.missing_operand": "mv: missing file operand\nTry 'mv --help' for more information.\n",
@@ -4926,7 +4991,6 @@
     "rm.preserve_root": "rm: it is dangerous to operate recursively on {0:q}\nrm: use --no-preserve-root to override this failsafe\n",
     "rm.prompt": "rm: remove {1} {0:q}? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
     "rm.removed": "removed {0:q}\n",
@@ -4936,10 +5000,10 @@
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
     "rmdir.verbose": "rmdir: removing directory, {0:q}\n",
     "touch.cannot_touch": "touch: cannot touch {0:q}: {1}\n",
-    "touch.invalid_date": "touch: invalid date format ‘{0}’\n",
+    "touch.invalid_date": "touch: invalid date format ‘{0:c}’\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
-    "touch.setting_times": "touch: setting times of {0:q}: {1}\n"
+    "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
    }
   },
   "debian_8": {
@@ -5275,58 +5339,65 @@
     "dir": "directory",
     "link": "symbolic link"
    },
+   "authors": {
+    "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
+    "cp": "Torbjörn Granlund, David MacKenzie, and Jim Meyering.",
+    "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
+    "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
+    "rmdir": "David MacKenzie.",
+    "mkdir": "David MacKenzie."
+   },
    "templates": {
-    "cp.create": "cp: cannot create regular file ‘{0}’: {1}\n",
-    "cp.dir": "cp: cannot overwrite directory ‘{0}’ with non-directory\n",
-    "cp.extra": "cp: extra operand ‘{0}’\nTry 'cp --help' for more information.\n",
-    "cp.into_itself": "cp: cannot copy a directory, ‘{0}’, into itself, ‘{1}’\n",
-    "cp.missing_dest": "cp: missing destination file operand after ‘{0}’\nTry 'cp --help' for more information.\n",
+    "cp.create": "cp: cannot create regular file ‘{0:c}’: {1}\n",
+    "cp.dir": "cp: cannot overwrite directory ‘{0:c}’ with non-directory\n",
+    "cp.extra": "cp: extra operand ‘{0:c}’\nTry 'cp --help' for more information.\n",
+    "cp.into_itself": "cp: cannot copy a directory, ‘{0:c}’, into itself, ‘{1:c}’\n",
+    "cp.missing_dest": "cp: missing destination file operand after ‘{0:c}’\nTry 'cp --help' for more information.\n",
     "cp.missing_operand": "cp: missing file operand\nTry 'cp --help' for more information.\n",
-    "cp.mkdir": "cp: cannot create directory ‘{0}’: {1}\n",
-    "cp.nondir": "cp: cannot overwrite non-directory ‘{0}’ with directory ‘{1}’\n",
-    "cp.omit_dir": "cp: omitting directory ‘{0}’\n",
-    "cp.overwrite": "cp: overwrite ‘{0}’? ",
-    "cp.same": "cp: ‘{0}’ and ‘{1}’ are the same file\n",
-    "cp.stat": "cp: cannot stat ‘{0}’: {1}\n",
-    "cp.target": "cp: target ‘{0}’ is not a directory\n",
-    "cp.verbose": "‘{0}’ -> ‘{1}’\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0}’: {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0}’\n",
+    "cp.mkdir": "cp: cannot create directory ‘{0:c}’: {1}\n",
+    "cp.nondir": "cp: cannot overwrite non-directory ‘{0:c}’ with directory ‘{1:c}’\n",
+    "cp.omit_dir": "cp: omitting directory ‘{0:c}’\n",
+    "cp.overwrite": "cp: overwrite ‘{0:c}’? ",
+    "cp.same": "cp: ‘{0:c}’ and ‘{1:c}’ are the same file\n",
+    "cp.stat": "cp: cannot stat ‘{0:c}’: {1}\n",
+    "cp.target": "cp: target ‘{0:c}’ is not a directory\n",
+    "cp.verbose": "‘{0:c}’ -> ‘{1:c}’\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0:c}’: {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0:c}’\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
-    "mkdir.verbose": "mkdir: created directory ‘{0}’\n",
-    "mv.cannot_move": "mv: cannot move ‘{0}’ to ‘{1}’: {2}\n",
-    "mv.dir": "mv: cannot overwrite directory ‘{0}’ with non-directory\n",
-    "mv.extra": "mv: extra operand ‘{0}’\nTry 'mv --help' for more information.\n",
-    "mv.missing_dest": "mv: missing destination file operand after ‘{0}’\nTry 'mv --help' for more information.\n",
+    "mkdir.verbose": "mkdir: created directory ‘{0:c}’\n",
+    "mv.cannot_move": "mv: cannot move ‘{0:c}’ to ‘{1:c}’: {2}\n",
+    "mv.dir": "mv: cannot overwrite directory ‘{0:c}’ with non-directory\n",
+    "mv.extra": "mv: extra operand ‘{0:c}’\nTry 'mv --help' for more information.\n",
+    "mv.missing_dest": "mv: missing destination file operand after ‘{0:c}’\nTry 'mv --help' for more information.\n",
     "mv.missing_operand": "mv: missing file operand\nTry 'mv --help' for more information.\n",
-    "mv.nondir": "mv: cannot overwrite non-directory ‘{0}’ with directory ‘{1}’\n",
-    "mv.overwrite": "mv: overwrite ‘{0}’? ",
-    "mv.same": "mv: ‘{0}’ and ‘{1}’ are the same file\n",
-    "mv.stat": "mv: cannot stat ‘{0}’: {1}\n",
-    "mv.subdir": "mv: cannot move ‘{0}’ to a subdirectory of itself, ‘{1}’\n",
-    "mv.target": "mv: target ‘{0}’ is not a directory\n",
-    "mv.verbose": "‘{0}’ -> ‘{1}’\n",
-    "rm.cannot_remove": "rm: cannot remove ‘{0}’: {1}\n",
-    "rm.descend": "rm: descend into directory ‘{0}’? ",
-    "rm.dot": "rm: cannot remove directory: ‘{0}’\n",
+    "mv.nondir": "mv: cannot overwrite non-directory ‘{0:c}’ with directory ‘{1:c}’\n",
+    "mv.overwrite": "mv: overwrite ‘{0:c}’? ",
+    "mv.same": "mv: ‘{0:c}’ and ‘{1:c}’ are the same file\n",
+    "mv.stat": "mv: cannot stat ‘{0:c}’: {1}\n",
+    "mv.subdir": "mv: cannot move ‘{0:c}’ to a subdirectory of itself, ‘{1:c}’\n",
+    "mv.target": "mv: target ‘{0:c}’ is not a directory\n",
+    "mv.verbose": "‘{0:c}’ -> ‘{1:c}’\n",
+    "rm.cannot_remove": "rm: cannot remove ‘{0:c}’: {1}\n",
+    "rm.descend": "rm: descend into directory ‘{0:c}’? ",
+    "rm.dot": "rm: refusing to remove ‘.’ or ‘..’ directory: skipping ‘{0:c}’\n",
     "rm.missing_operand": "rm: missing operand\nTry 'rm --help' for more information.\n",
-    "rm.preserve_root": "rm: it is dangerous to operate recursively on ‘{0}’\nrm: use --no-preserve-root to override this failsafe\n",
-    "rm.prompt": "rm: remove {1} ‘{0}’? ",
+    "rm.preserve_root": "rm: it is dangerous to operate recursively on ‘{0:c}’\nrm: use --no-preserve-root to override this failsafe\n",
+    "rm.prompt": "rm: remove {1} ‘{0:c}’? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
-    "rm.removed": "removed ‘{0}’\n",
-    "rm.removed_dir": "removed directory: ‘{0}’\n",
-    "rmdir.failed": "rmdir: failed to remove ‘{0}’: {1}\n",
-    "rmdir.failed_parent": "rmdir: failed to remove directory ‘{0}’: {1}\n",
+    "rm.removed": "removed ‘{0:c}’\n",
+    "rm.removed_dir": "removed directory: ‘{0:c}’\n",
+    "rmdir.failed": "rmdir: failed to remove ‘{0:c}’: {1}\n",
+    "rmdir.failed_parent": "rmdir: failed to remove directory ‘{0:c}’: {1}\n",
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
-    "rmdir.verbose": "rmdir: removing directory, ‘{0}’\n",
-    "touch.cannot_touch": "touch: cannot touch ‘{0}’: {1}\n",
-    "touch.invalid_date": "touch: invalid date format ‘{0}’\n",
+    "rmdir.verbose": "rmdir: removing directory, ‘{0:c}’\n",
+    "touch.cannot_touch": "touch: cannot touch ‘{0:c}’: {1}\n",
+    "touch.invalid_date": "touch: invalid date format ‘{0:c}’\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
-    "touch.reference": "touch: failed to get attributes of ‘{0}’: {1}\n",
-    "touch.setting_times": "touch: setting times of ‘{0}’: {1}\n"
+    "touch.reference": "touch: failed to get attributes of ‘{0:c}’: {1}\n",
+    "touch.setting_times": "touch: setting times of ‘{0:c}’: Operation not permitted\n"
    }
   },
   "debian_9": {
@@ -5662,6 +5733,14 @@
     "dir": "directory",
     "link": "symbolic link"
    },
+   "authors": {
+    "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
+    "cp": "Torbjorn Granlund, David MacKenzie, and Jim Meyering.",
+    "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
+    "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
+    "rmdir": "David MacKenzie.",
+    "mkdir": "David MacKenzie."
+   },
    "templates": {
     "cp.create": "cp: cannot create regular file {0:q}: {1}\n",
     "cp.dir": "cp: cannot overwrite directory {0:q} with non-directory\n",
@@ -5677,8 +5756,8 @@
     "cp.stat": "cp: cannot stat {0:q}: {1}\n",
     "cp.target": "cp: target {0:q} is not a directory\n",
     "cp.verbose": "{0:q} -> {1:q}\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0}’: {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0}’\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0:c}’: {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0:c}’\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
     "mkdir.verbose": "mkdir: created directory {0:q}\n",
     "mv.cannot_move": "mv: cannot move {0:q} to {1:q}: {2}\n",
@@ -5700,7 +5779,6 @@
     "rm.preserve_root": "rm: it is dangerous to operate recursively on {0:q}\nrm: use --no-preserve-root to override this failsafe\n",
     "rm.prompt": "rm: remove {1} {0:q}? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
     "rm.removed": "removed {0:q}\n",
@@ -5710,10 +5788,84 @@
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
     "rmdir.verbose": "rmdir: removing directory, {0:q}\n",
     "touch.cannot_touch": "touch: cannot touch {0:q}: {1}\n",
-    "touch.invalid_date": "touch: invalid date format ‘{0}’\n",
+    "touch.invalid_date": "touch: invalid date format ‘{0:c}’\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
-    "touch.setting_times": "touch: setting times of {0:q}: {1}\n"
+    "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
+   }
+  },
+  "fw_dlink_dir859_105b03": {
+   "style": "busybox",
+   "version": "1.14.1",
+   "libc": "uclibc",
+   "recorded": "D-Link DIR-859 rev A firmware 1.05B03 (zip sha256 cd8a6411...), rootfs bin/busybox (sha256 65f6d0e5..., static, uClibc toolchain) under qemu-mips-static -L rootfs in a debian:12 container; the 1.07b02 beta image of the 1.07B03 hotfix has the same applets and options, the 1.07B03 image is encrypted",
+   "usage": {
+    "cp": "[OPTION]... SOURCE DEST\n\nCopy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY\n\nOptions:\n\t-a\tSame as -dpR\n\t-d,-P\tPreserve links\n\t-H,-L\tDereference all symlinks (default)\n\t-p\tPreserve file attributes if possible\n\t-f\tForce overwrite\n\t-i\tPrompt before overwrite\n\t-R,-r\tRecurse directories\n\t-l,-s\tCreate (sym)links\n\n",
+    "mkdir": "[OPTION] DIRECTORY...\n\nCreate DIRECTORY\n\nOptions:\n\t-m\tSet permission mode (as in chmod), not rwxrwxrwx - umask\n\t-p\tNo error if existing, make parent directories as needed\n\n",
+    "mv": "[OPTION]... SOURCE DEST\nor: mv [OPTION]... SOURCE... DIRECTORY\n\nRename SOURCE to DEST, or move SOURCE(s) to DIRECTORY\n\nOptions:\n\t-f\tDon't prompt before overwriting\n\t-i\tInteractive, prompt before overwrite\n\n",
+    "rm": "[OPTION]... FILE...\n\nRemove (unlink) the FILE(s). Use '--' to\nindicate that all following arguments are non-options.\n\nOptions:\n\t-i\tAlways prompt before removing\n\t-f\tNever prompt\n\t-r,-R\tRemove directories recursively\n\n",
+    "touch": "[-c] FILE [FILE...]\n\nUpdate the last-modified date on the given FILE[s]\n\nOptions:\n\t-c\tDo not create any files\n\n"
+   },
+   "banner": "BusyBox v1.14.1 (2016-06-28 10:53:08 CST)",
+   "help_status": 1,
+   "long_options": false,
+   "verbose": {
+    "rm": false,
+    "cp": false,
+    "mv": false,
+    "touch": false,
+    "rmdir": false,
+    "mkdir": false
+   },
+   "options": {
+    "rm": {
+     "short": "fiRrv",
+     "long": {}
+    },
+    "cp": {
+     "short": "pdRfilsLarPHv",
+     "long": {}
+    },
+    "mv": {
+     "short": "fi",
+     "long": {}
+    },
+    "touch": {
+     "short": "cfma",
+     "long": {}
+    },
+    "mkdir": {
+     "short": "m:p",
+     "long": {}
+    }
+   },
+   "missing": [
+    "rmdir"
+   ],
+   "templates": {
+    "cp.create": "cp: cannot create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
+    "cp.mkdir": "cp: cannot create directory '{0}': {1}\n",
+    "cp.omit_dir": "cp: omitting directory '{0}'\n",
+    "cp.overwrite": "cp: overwrite '{0}'? ",
+    "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
+    "cp.same": "cp: '{0}' and '{1}' are the same file\n",
+    "cp.stat": "cp: cannot stat '{0}': {1}\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory '{0}': {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
+    "mv.overwrite": "mv: overwrite '{0}'? ",
+    "mv.rename": "mv: cannot rename '{0}': {1}\n",
+    "mv.stat": "mv: cannot stat '{0}': {1}\n",
+    "rm.cannot_remove": "rm: cannot remove '{0}': {1}\n",
+    "rm.descend": "rm: descend into directory '{0}'? ",
+    "rm.dot": "rm: cannot remove '.' or '..'\n",
+    "rm.is_dir": "rm: {0}: is a directory\n",
+    "rm.prompt": "rm: remove '{0}'? ",
+    "rm.prompt_dir": "rm: remove directory '{0}'? ",
+    "rm.removed_dir": "removed directory: '{0}'\n",
+    "rm.stat": "rm: cannot stat '{0}': {1}\n",
+    "touch.cannot_touch": "touch: {0}: {1}\n"
    }
   },
   "fw_edgeos_209hf5": {
@@ -5878,17 +6030,18 @@
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
     "cp.create.ENOENT": "cp: can't create '{0}': Path does not exist\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "cp.verbose": "'{0}' -> '{1}'\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
     "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': Path has non-directory component\n",
@@ -6058,15 +6211,16 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -6253,15 +6407,16 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -6331,15 +6486,178 @@
    },
    "templates": {
     "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
     "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
     "cp.stat": "cp: can't stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
     "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
+    "mv.overwrite": "mv: overwrite '{0}'? ",
+    "mv.rename": "mv: can't rename '{0}': {1}\n",
+    "mv.stat": "mv: can't stat '{0}': {1}\n",
+    "rm.cannot_remove": "rm: can't remove '{0}': {1}\n",
+    "rm.descend": "rm: descend into directory '{0}'? ",
+    "rm.dot": "rm: can't remove '.' or '..'\n",
+    "rm.is_dir": "rm: {0}: is a directory\n",
+    "rm.prompt": "rm: remove '{0}'? ",
+    "rm.prompt_dir": "rm: remove directory '{0}'? ",
+    "rm.removed_dir": "removed directory: '{0}'\n",
+    "rm.stat": "rm: can't stat '{0}': {1}\n",
+    "rmdir.failed": "rmdir: '{0}': {1}\n",
+    "touch.cannot_touch": "touch: {0}: {1}\n"
+   }
+  },
+  "fw_zyxel_nas326_aazf18": {
+   "style": "busybox",
+   "version": "1.19.4",
+   "libc": "glibc",
+   "recorded": "Zyxel NAS326 firmware V5.21(AAZF.18)C0 (zip sha256 61d8d801...), bin/busybox of the initramfs in its kernel (sha256 4134ebe4..., glibc 2.20) under qemu-arm-static -L initramfs in a debian:12 container; V5.21(AAZF.14)C0 (sha256 2e488245...) answers the same in every case",
+   "usage": {
+    "cp": "[OPTIONS] SOURCE DEST\n\n",
+    "mkdir": "[OPTIONS] DIRECTORY...\n\n",
+    "mv": "[-fin] SOURCE DEST\nor: mv [-fin] SOURCE... DIRECTORY\n\n",
+    "rm": "[-irf] FILE...\n\n",
+    "rmdir": "[OPTIONS] DIRECTORY...\n\n",
+    "touch": "[-c] FILE [FILE]...\n\n"
+   },
+   "banner": "BusyBox v1.19.4 (2024-06-06 16:40:04 CST)",
+   "help_status": 1,
+   "long_options": true,
+   "verbose": {
+    "rm": false,
+    "cp": false,
+    "mv": false,
+    "touch": false,
+    "rmdir": false,
+    "mkdir": false
+   },
+   "options": {
+    "rm": {
+     "short": "fiRrv",
+     "long": {}
+    },
+    "cp": {
+     "short": "pdRfilsLHarPv",
+     "long": {
+      "archive": [
+       "a",
+       0
+      ],
+      "force": [
+       "f",
+       0
+      ],
+      "interactive": [
+       "i",
+       0
+      ],
+      "link": [
+       "l",
+       0
+      ],
+      "dereference": [
+       "L",
+       0
+      ],
+      "no-dereference": [
+       "P",
+       0
+      ],
+      "recursive": [
+       "R",
+       0
+      ],
+      "symbolic-link": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "update": [
+       "u",
+       0
+      ],
+      "remove-destination": [
+       "remove-destination",
+       0
+      ],
+      "parents": [
+       "parents",
+       0
+      ]
+     }
+    },
+    "mv": {
+     "short": "fin",
+     "long": {
+      "interactive": [
+       "i",
+       0
+      ],
+      "force": [
+       "f",
+       0
+      ],
+      "no-clobber": [
+       "n",
+       0
+      ]
+     }
+    },
+    "touch": {
+     "short": "cfma",
+     "long": {
+      "no-create": [
+       "c",
+       0
+      ]
+     }
+    },
+    "rmdir": {
+     "short": "p",
+     "long": {
+      "parents": [
+       "p",
+       0
+      ],
+      "ignore-fail-on-non-empty": [
+       "ignore-fail-on-non-empty",
+       0
+      ]
+     }
+    },
+    "mkdir": {
+     "short": "m:p",
+     "long": {
+      "mode": [
+       "m",
+       1
+      ],
+      "parents": [
+       "p",
+       0
+      ]
+     }
+    }
+   },
+   "templates": {
+    "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
+    "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
+    "cp.omit_dir": "cp: omitting directory '{0}'\n",
+    "cp.overwrite": "cp: overwrite '{0}'? ",
+    "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
+    "cp.same": "cp: '{0}' and '{1}' are the same file\n",
+    "cp.stat": "cp: can't stat '{0}': {1}\n",
+    "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
     "mv.rename": "mv: can't rename '{0}': {1}\n",
     "mv.stat": "mv: can't stat '{0}': {1}\n",
@@ -6682,6 +7000,14 @@
     "dir": "directory",
     "link": "symbolic link"
    },
+   "authors": {
+    "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
+    "cp": "Torbjorn Granlund, David MacKenzie, and Jim Meyering.",
+    "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
+    "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
+    "rmdir": "David MacKenzie.",
+    "mkdir": "David MacKenzie."
+   },
    "templates": {
     "cp.create": "cp: cannot create regular file {0:q}: {1}\n",
     "cp.dir": "cp: cannot overwrite directory {0:q} with non-directory\n",
@@ -6697,8 +7023,8 @@
     "cp.stat": "cp: cannot stat {0:q}: {1}\n",
     "cp.target": "cp: target {0:q} is not a directory\n",
     "cp.verbose": "{0:q} -> {1:q}\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0}’: {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0}’\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0:c}’: {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0:c}’\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
     "mkdir.verbose": "mkdir: created directory {0:q}\n",
     "mv.cannot_move": "mv: cannot move {0:q} to {1:q}: {2}\n",
@@ -6720,7 +7046,6 @@
     "rm.preserve_root": "rm: it is dangerous to operate recursively on {0:q}\nrm: use --no-preserve-root to override this failsafe\n",
     "rm.prompt": "rm: remove {1} {0:q}? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
     "rm.removed": "removed {0:q}\n",
@@ -6730,35 +7055,35 @@
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
     "rmdir.verbose": "rmdir: removing directory, {0:q}\n",
     "touch.cannot_touch": "touch: cannot touch {0:q}: {1}\n",
-    "touch.invalid_date": "touch: invalid date format ‘{0}’\n",
+    "touch.invalid_date": "touch: invalid date format ‘{0:c}’\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
-    "touch.setting_times": "touch: setting times of {0:q}: {1}\n"
+    "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
    }
   },
-  "src_busybox_1.14.1": {
+  "src_qnap_1.24.1": {
    "style": "busybox",
-   "version": "1.14.1",
-   "libc": "uclibc",
-   "recorded": "derived: fw_tplink_c7v5 with the usage and texts of the busybox-1.14.1 sources (not recorded)",
+   "version": "1.24.1",
+   "libc": "glibc",
+   "recorded": "QNAP's own x86_64 build of busybox-1.24.1 in its GPL tree QTS_OSS_5.2.3.20250218.0 (SourceForge qosgpl; binary sha256 ecf914cc..., .config sha256 87096cde...), run natively in an amd64 debian:12 container; a rebuild from the same sources and .config answers the same",
    "usage": {
-    "cp": "[OPTION]... SOURCE DEST\n\nCopy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY\n\nOptions:\n\t-a\tSame as -dpR\n\t-d,-P\tPreserve links\n\t-H,-L\tDereference all symlinks (default)\n\t-p\tPreserve file attributes if possible\n\t-f\tForce overwrite\n\t-i\tPrompt before overwrite\n\t-R,-r\tRecurse directories\n\t-l,-s\tCreate (sym)links\n\n",
-    "mkdir": "[OPTION] DIRECTORY...\n\nCreate DIRECTORY\n\nOptions:\n\t-m\tSet permission mode (as in chmod), not rwxrwxrwx - umask\n\t-p\tNo error if existing, make parent directories as needed\n\n",
-    "mv": "[OPTION]... SOURCE DEST\nor: mv [OPTION]... SOURCE... DIRECTORY\n\nRename SOURCE to DEST, or move SOURCE(s) to DIRECTORY\n\nOptions:\n\t-f\tDon't prompt before overwriting\n\t-i\tInteractive, prompt before overwrite\n\n",
-    "rm": "[OPTION]... FILE...\n\nRemove (unlink) the FILE(s). Use '--' to\nindicate that all following arguments are non-options.\n\nOptions:\n\t-i\tAlways prompt before removing\n\t-f\tNever prompt\n\t-r,-R\tRemove directories recursively\n\n",
-    "rmdir": "[OPTION]... DIRECTORY...\n\nRemove the DIRECTORY, if it is empty.\n\nOptions:\n\t-p\tInclude parents\n\n",
-    "touch": "[-c] FILE [FILE...]\n\nUpdate the last-modified date on the given FILE[s]\n\nOptions:\n\t-c\tDo not create any files\n\n"
+    "cp": "[OPTIONS] SOURCE... DEST\n\nCopy SOURCE(s) to DEST\n\n\t-a\tSame as -dpR\n\t-R,-r\tRecurse\n\t-d,-P\tPreserve symlinks (default if -R)\n\t-L\tFollow all symlinks\n\t-H\tFollow symlinks on command line\n\t-p\tPreserve file attributes if possible\n\t-f\tOverwrite\n\t-i\tPrompt before overwrite\n\t-l,-s\tCreate (sym)links\n",
+    "mkdir": "[OPTIONS] DIRECTORY...\n\nCreate DIRECTORY\n\n\t-m MODE\tMode\n\t-p\tNo error if exists; make parent directories as needed\n",
+    "mv": "[-fin] SOURCE DEST\nor: mv [-fin] SOURCE... DIRECTORY\n\nRename SOURCE to DEST, or move SOURCE(s) to DIRECTORY\n\n\t-f\tDon't prompt before overwriting\n\t-i\tInteractive, prompt before overwrite\n\t-n\tDon't overwrite an existing file\n",
+    "rm": "[-irf] FILE...\n\nRemove (unlink) FILEs\n\n\t-i\tAlways prompt before removing\n\t-f\tNever prompt\n\t-R,-r\tRecurse\n",
+    "rmdir": "[OPTIONS] DIRECTORY...\n\nRemove DIRECTORY if it is empty\n\n\t-p|--parents\tInclude parents\n\t--ignore-fail-on-non-empty\n",
+    "touch": "[-c] [-d DATE] [-t DATE] [-r FILE] FILE...\n\nUpdate the last-modified date on the given FILE[s]\n\n\t-c\tDon't create files\n\t-h\tDon't follow links\n\t-d DT\tDate/time to use\n\t-t DT\tDate/time to use\n\t-r FILE\tUse FILE's date/time\n"
    },
-   "banner": "BusyBox v1.14.1",
-   "help_status": 1,
-   "long_options": false,
+   "banner": "BusyBox v1.24.1 (2025-02-18 02:13:25 CST)",
+   "help_status": 0,
+   "long_options": true,
    "verbose": {
-    "rm": false,
-    "cp": false,
-    "mv": false,
-    "touch": false,
-    "rmdir": false,
-    "mkdir": false
+    "rm": true,
+    "cp": true,
+    "mv": true,
+    "touch": true,
+    "rmdir": true,
+    "mkdir": true
    },
    "options": {
     "rm": {
@@ -6766,50 +7091,167 @@
      "long": {}
     },
     "cp": {
-     "short": "pdRfilsLarPHv",
-     "long": {}
+     "short": "pdRfilsLHarPv",
+     "long": {
+      "archive": [
+       "a",
+       0
+      ],
+      "force": [
+       "f",
+       0
+      ],
+      "interactive": [
+       "i",
+       0
+      ],
+      "link": [
+       "l",
+       0
+      ],
+      "dereference": [
+       "L",
+       0
+      ],
+      "no-dereference": [
+       "P",
+       0
+      ],
+      "recursive": [
+       "R",
+       0
+      ],
+      "symbolic-link": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "update": [
+       "u",
+       0
+      ],
+      "remove-destination": [
+       "remove-destination",
+       0
+      ],
+      "parents": [
+       "parents",
+       0
+      ]
+     }
     },
     "mv": {
-     "short": "fi",
-     "long": {}
+     "short": "finv",
+     "long": {
+      "interactive": [
+       "i",
+       0
+      ],
+      "force": [
+       "f",
+       0
+      ],
+      "no-clobber": [
+       "n",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ]
+     }
     },
     "touch": {
-     "short": "cfma",
-     "long": {}
+     "short": "cr:d:t:hfma",
+     "long": {
+      "no-create": [
+       "c",
+       0
+      ],
+      "reference": [
+       "r",
+       1
+      ],
+      "date": [
+       "d",
+       1
+      ],
+      "no-dereference": [
+       "h",
+       0
+      ]
+     }
     },
     "rmdir": {
-     "short": "p",
-     "long": {}
+     "short": "pv",
+     "long": {
+      "parents": [
+       "p",
+       0
+      ],
+      "ignore-fail-on-non-empty": [
+       "ignore-fail-on-non-empty",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ]
+     }
     },
     "mkdir": {
-     "short": "m:p",
-     "long": {}
+     "short": "m:pv",
+     "long": {
+      "mode": [
+       "m",
+       1
+      ],
+      "parents": [
+       "p",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ]
+     }
     }
    },
    "templates": {
-    "cp.create": "cp: cannot create '{0}': {1}\n",
-    "cp.mkdir": "cp: cannot create directory '{0}': {1}\n",
+    "cp.create": "cp: can't create '{0}': {1}\n",
+    "cp.is_dir": "cp: '{0}' is a directory\n",
+    "cp.mkdir": "cp: can't create directory '{0}': {1}\n",
     "cp.omit_dir": "cp: omitting directory '{0}'\n",
     "cp.overwrite": "cp: overwrite '{0}'? ",
     "cp.recursion": "cp: recursion detected, omitting directory '{0}'\n",
     "cp.same": "cp: '{0}' and '{1}' are the same file\n",
-    "cp.stat": "cp: cannot stat '{0}': {1}\n",
-    "cp.target_not_dir": "cp: target '{0}' is not a directory\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory '{0}': {1}\n",
+    "cp.stat": "cp: can't stat '{0}': {1}\n",
+    "cp.verbose": "'{0}' -> '{1}'\n",
+    "mkdir.cannot_create": "mkdir: can't create directory '{0}': {1}\n",
     "mkdir.invalid_mode": "mkdir: invalid mode '{0}'\n",
+    "mkdir.verbose": "created directory: '{0}'\n",
+    "mv.is_dir": "mv: '{0}' is a directory\n",
     "mv.overwrite": "mv: overwrite '{0}'? ",
-    "mv.rename": "mv: cannot rename '{0}': {1}\n",
-    "mv.stat": "mv: cannot stat '{0}': {1}\n",
-    "rm.cannot_remove": "rm: cannot remove '{0}': {1}\n",
+    "mv.rename": "mv: can't rename '{0}': {1}\n",
+    "mv.stat": "mv: can't stat '{0}': {1}\n",
+    "mv.verbose": "'{0}' -> '{1}'\n",
+    "rm.cannot_remove": "rm: can't remove '{0}': {1}\n",
     "rm.descend": "rm: descend into directory '{0}'? ",
-    "rm.dot": "rm: cannot remove '.' or '..'\n",
-    "rm.is_dir": "rm: {0}: is a directory\n",
+    "rm.dot": "rm: can't remove '.' or '..'\n",
+    "rm.is_dir": "rm: '{0}' is a directory\n",
     "rm.prompt": "rm: remove '{0}'? ",
     "rm.prompt_dir": "rm: remove directory '{0}'? ",
+    "rm.removed": "removed '{0}'\n",
     "rm.removed_dir": "removed directory: '{0}'\n",
-    "rm.stat": "rm: cannot stat '{0}': {1}\n",
+    "rm.stat": "rm: can't stat '{0}': {1}\n",
     "rmdir.failed": "rmdir: '{0}': {1}\n",
-    "touch.cannot_touch": "touch: {0}: {1}\n"
+    "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
+    "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.invalid_date": "touch: invalid date '{0}'\n",
+    "touch.reference": "touch: can't stat '{0}': {1}\n"
    }
   },
   "ubuntu_22.04": {
@@ -7139,6 +7581,14 @@
     "dir": "directory",
     "link": "symbolic link"
    },
+   "authors": {
+    "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
+    "cp": "Torbjorn Granlund, David MacKenzie, and Jim Meyering.",
+    "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
+    "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
+    "rmdir": "David MacKenzie.",
+    "mkdir": "David MacKenzie."
+   },
    "templates": {
     "cp.create": "cp: cannot create regular file {0:q}: {1}\n",
     "cp.dir": "cp: cannot overwrite directory {0:q} with non-directory\n",
@@ -7154,8 +7604,8 @@
     "cp.stat": "cp: cannot stat {0:q}: {1}\n",
     "cp.target": "cp: target {0:q} is not a directory\n",
     "cp.verbose": "{0:q} -> {1:q}\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0}’: {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0}’\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0:c}’: {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0:c}’\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
     "mkdir.verbose": "mkdir: created directory {0:q}\n",
     "mv.cannot_move": "mv: cannot move {0:q} to {1:q}: {2}\n",
@@ -7177,7 +7627,6 @@
     "rm.preserve_root": "rm: it is dangerous to operate recursively on {0:q}\nrm: use --no-preserve-root to override this failsafe\n",
     "rm.prompt": "rm: remove {1} {0:q}? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
     "rm.removed": "removed {0:q}\n",
@@ -7187,10 +7636,10 @@
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
     "rmdir.verbose": "rmdir: removing directory, {0:q}\n",
     "touch.cannot_touch": "touch: cannot touch {0:q}: {1}\n",
-    "touch.invalid_date": "touch: invalid date format ‘{0}’\n",
+    "touch.invalid_date": "touch: invalid date format ‘{0:c}’\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
-    "touch.setting_times": "touch: setting times of {0:q}: {1}\n"
+    "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
    }
   },
   "ubuntu_24.04": {
@@ -7532,6 +7981,14 @@
     "dir": "directory",
     "link": "symbolic link"
    },
+   "authors": {
+    "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
+    "cp": "Torbjörn Granlund, David MacKenzie, and Jim Meyering.",
+    "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
+    "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
+    "rmdir": "David MacKenzie.",
+    "mkdir": "David MacKenzie."
+   },
    "templates": {
     "cp.create": "cp: cannot create regular file {0:q}: {1}\n",
     "cp.dir": "cp: cannot overwrite directory {0:q} with non-directory\n",
@@ -7547,8 +8004,8 @@
     "cp.stat": "cp: cannot stat {0:q}: {1}\n",
     "cp.target": "cp: target {0:q}: {1}\n",
     "cp.verbose": "{0:q} -> {1:q}\n",
-    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0}’: {1}\n",
-    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0}’\n",
+    "mkdir.cannot_create": "mkdir: cannot create directory ‘{0:c}’: {1}\n",
+    "mkdir.invalid_mode": "mkdir: invalid mode ‘{0:c}’\n",
     "mkdir.missing_operand": "mkdir: missing operand\nTry 'mkdir --help' for more information.\n",
     "mkdir.verbose": "mkdir: created directory {0:q}\n",
     "mv.cannot_move": "mv: cannot move {0:q} to {1:q}: {2}\n",
@@ -7570,7 +8027,6 @@
     "rm.preserve_root": "rm: it is dangerous to operate recursively on {0:q}\nrm: use --no-preserve-root to override this failsafe\n",
     "rm.prompt": "rm: remove {1} {0:q}? ",
     "rm.prompt_some": "rm: remove {0} arguments? ",
-    "rm.prompt_some_one": "rm: remove {0} argument? ",
     "rm.prompt_some_r": "rm: remove {0} arguments recursively? ",
     "rm.prompt_some_r_one": "rm: remove {0} argument recursively? ",
     "rm.removed": "removed {0:q}\n",
@@ -7580,10 +8036,10 @@
     "rmdir.missing_operand": "rmdir: missing operand\nTry 'rmdir --help' for more information.\n",
     "rmdir.verbose": "rmdir: removing directory, {0:q}\n",
     "touch.cannot_touch": "touch: cannot touch {0:q}: {1}\n",
-    "touch.invalid_date": "touch: invalid date format ‘{0}’\n",
+    "touch.invalid_date": "touch: invalid date format ‘{0:c}’\n",
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
-    "touch.setting_times": "touch: setting times of {0:q}: {1}\n"
+    "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
    }
   }
  }

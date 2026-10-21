@@ -1142,8 +1142,10 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
     them, with their versions."""
     honeyfs, txtcmds = out_dir / "honeyfs", out_dir / "txtcmds"
     own = {"/" + rel for rel, _ in system.links(persona)}
-    # the programs of a firmware image are its own (the adduser applet of the Archer C7's BusyBox)
+    # the programs of a firmware image are its own (the adduser applet of the Archer C7's BusyBox), and the applet
+    #   links of a device's BusyBox (adduser, start-stop-daemon of the NAS326: system.applet_links)
     own |= {"/" + rel for rel in firmware.programs(persona, ident) or {}}
+    own |= {"/" + (tree.real_path(fs, rel) or rel) for rel in system.applet_links(persona, ident) or {}}
     found = [hit for rel in system.CONTAINER_PATHS + system.foreign_paths(persona) for hit in _matches(fs, rel)
              if "/" + hit not in own]
     if found:

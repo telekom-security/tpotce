@@ -22,9 +22,8 @@ fs_help.json); this script turns them into one object per variant (the key of th
   rm_kinds   {kind: the word of rm's prompt} (GNU)
 
 Templates the recordings do not cover (rm -v of a folder, cp of a file onto itself, ...) come from SOURCE
-below, each with its source; they are marked unverified there. One variant is derived, not recorded:
-src_busybox_1.14.1 (the D-Link firmware's BusyBox, no image of it could be run) is fw_tplink_c7v5 with the
-usage texts of 1.14.1 and its "cannot" (busybox_sources.md of the recording notes).
+below, each with its source; they are marked unverified there. A BusyBox without one of the applets (the
+DIR-859 has no rmdir) lists it in "missing": the persona answers "not found" for it.
 
 Run it with `python3 -I docker/cowrie/tools/build_fs_texts.py [--check]`; --check compares the written file
 with a fresh build (the tests run it).
@@ -43,9 +42,46 @@ ERRNO = {"ENOENT": "No such file or directory", "ENOTDIR": "Not a directory", "E
          "EEXIST": "File exists"}
 
 # (case, stream, line or None for all of it, key, arguments, errno of the reason or None, style or None)
-#   the arguments as the case wrote them; a template is made where the recorded text is no option error
+#   the arguments as the case wrote them; a template is made where the recorded text is no option error; a line
+#   given as text is the part of the stream after that text (the prompts have no line of their own)
 RULES = (
     ("rm", 1, None, "rm.missing_operand", (), None, "gnu"),
+    ("rm -rv d", 0, 1, "rm.removed_dir", ("d",), None, None),
+    ("rm -ri d </dev/null", 1, None, "rm.descend", ("d",), None, None),
+    ("rm -ri e </dev/null", 1, None, "rm.prompt", ("e", "directory"), None, "gnu"),
+    ("printf 'y\\nn\\n' | rm -ri e; ls e", 1, "? ", "rm.prompt_dir", ("e",), None, "busybox"),
+    ("rm -r .", 1, None, "rm.dot", (".",), None, "gnu", True),
+    ("rm -r .", 1, None, "rm.dot", (), None, "busybox"),
+    ("rm file/x", 1, None, "rm.stat", ("file/x",), "ENOTDIR", "busybox"),
+    ("rm file/x", 1, None, "rm.cannot_remove", ("file/x",), "ENOTDIR", "gnu"),
+    ("rm -I a b file d/f </dev/null; ls a", 1, None, "rm.prompt_some", ("4",), None, "gnu"),
+    ("rm -I -r d </dev/null; ls d", 1, None, "rm.prompt_some_r_one", ("1",), None, "gnu"),
+    ("rm -I -r d e </dev/null", 1, None, "rm.prompt_some_r", ("2",), None, "gnu"),
+    ("cp a a", 1, None, "cp.same", ("a", "a"), None, None),
+    ("cp -r d d/x", 1, None, "cp.into_itself", ("d", "d/x"), None, "gnu"),
+    ("cp -r d d/x", 1, None, "cp.recursion", ("d/x",), None, "busybox"),
+    ("cp -r d file", 1, None, "cp.nondir", ("file", "d"), None, "gnu"),
+    ("cp -r d file", 1, None, "cp.stat", ("file/d",), "ENOTDIR", "busybox"),
+    ("cp -T a d", 1, None, "cp.dir", ("d",), None, "gnu"),
+    ("cp -T a d", 1, None, "cp.is_dir", ("d",), None, "busybox"),
+    ("cp -i a b </dev/null", 1, None, "cp.overwrite", ("b",), None, None),
+    ("cp -T a b file", 1, None, "cp.extra", ("file",), None, "gnu"),
+    ("cp -T a b file", 1, None, "cp.too_many", (), None, "busybox"),
+    ("cp -r d /r/x", 1, None, "cp.mkdir", ("/r/x",), "EACCES", None),
+    ("mv a a", 1, None, "mv.same", ("a", "a"), None, "gnu"),
+    ("mv d file", 1, None, "mv.nondir", ("file", "d"), None, "gnu"),
+    ("mv -T a d", 1, None, "mv.dir", ("d",), None, "gnu"),
+    ("mv -T a d", 1, None, "mv.is_dir", ("d",), None, "busybox"),
+    ("mv -i a b </dev/null", 1, None, "mv.overwrite", ("b",), None, None),
+    ("mv -T a b file", 1, None, "mv.extra", ("file",), None, "gnu"),
+    ("mv d /r/x", 1, None, "mv.cannot_move", ("d", "/r/x"), "EACCES", "gnu"),
+    ("touch -t 202401021530 /r/w", 1, None, "touch.setting_times", ("/r/w",), "EPERM", "gnu"),
+    ("touch -t 202401021530 /r/w", 1, None, "touch.cannot_touch", ("/r/w",), "EPERM", "busybox"),
+    ("mkdir", 1, None, "mkdir.missing_operand", (), None, "gnu"),
+    ("mkdir -m xyz q", 1, None, "mkdir.invalid_mode", ("xyz",), None, None),
+    ("mkdir -v q2", 0, None, "mkdir.verbose", ("q2",), None, None),
+    ("rmdir -v e", 0, None, "rmdir.verbose", ("e",), None, None),
+    ("rmdir d e", 1, None, "rmdir.failed", ("d",), "ENOTEMPTY", None),
     ("rm -d d", 1, None, "rm.cannot_remove", ("d",), "ENOTEMPTY", "gnu"),
     ("rm -i file </dev/null", 1, None, "rm.prompt", ("file", "regular empty file"), None, "gnu"),
     ("rm -i file </dev/null", 1, None, "rm.prompt", ("file",), None, "busybox"),
@@ -118,10 +154,10 @@ RULES = (
 #   coreutils, DEREF_NEVER with -R; coreutils/cp.c of BusyBox, "Preserve symlinks (default if -R)").
 SOURCE = {
     "gnu": {
-        "rm.removed_dir": ("removed directory {0:q}\n", "removed directory: \u2018{0}\u2019\n"),
+        "rm.removed_dir": ("removed directory {0:q}\n", "removed directory: \u2018{0:c}\u2019\n"),
         "rm.descend": ("rm: descend into directory {0:q}? ", None),
         "rm.dot": ("rm: refusing to remove '.' or '..' directory: skipping {0:q}\n",
-                   "rm: cannot remove directory: \u2018{0}\u2019\n"),
+                   "rm: cannot remove directory: \u2018{0:c}\u2019\n"),
         "cp.same": ("cp: {0:q} and {1:q} are the same file\n", None),
         "cp.into_itself": ("cp: cannot copy a directory, {0:q}, into itself, {1:q}\n", None),
         "cp.nondir": ("cp: cannot overwrite non-directory {0:q} with directory {1:q}\n", None),
@@ -129,7 +165,6 @@ SOURCE = {
         "mv.nondir": ("mv: cannot overwrite non-directory {0:q} with directory {1:q}\n", None),
         "mv.dir": ("mv: cannot overwrite directory {0:q} with non-directory\n", None),
         "rm.prompt_some": ("rm: remove {0} arguments? ", None),
-        "rm.prompt_some_one": ("rm: remove {0} argument? ", None),
         "rm.prompt_some_r": ("rm: remove {0} arguments recursively? ", None),
         "rm.prompt_some_r_one": ("rm: remove {0} argument recursively? ", None),
         "cp.overwrite": ("cp: overwrite {0:q}? ", None),
@@ -141,7 +176,7 @@ SOURCE = {
         "touch.setting_times": ("touch: setting times of {0:q}: {1}\n", None),
         "mkdir.missing_operand": ("mkdir: missing operand\nTry 'mkdir --help' for more information.\n", None),
         # quote() of mkdir.c, as "cannot create directory" of the same variant
-        "mkdir.invalid_mode": ("mkdir: invalid mode \u2018{0}\u2019\n", None),
+        "mkdir.invalid_mode": ("mkdir: invalid mode \u2018{0:c}\u2019\n", None),
     },
     "busybox": {
         "rm.removed_dir": ("removed directory: '{0}'\n", None),
@@ -154,7 +189,8 @@ SOURCE = {
         "mv.overwrite": ("mv: overwrite '{0}'? ", None),
         "cp.same": ("cp: '{0}' and '{1}' are the same file\n", None),
         "cp.recursion": ("cp: recursion detected, omitting directory '{0}'\n", None),
-        "cp.target_not_dir": ("cp: target '{0}' is not a directory\n", None),
+        "cp.is_dir": ("cp: '{0}' is a directory\n", None),
+        "mv.is_dir": ("mv: '{0}' is a directory\n", None),
         "mkdir.invalid_mode": ("mkdir: invalid mode '{0}'\n", None),
     },
 }
@@ -162,34 +198,14 @@ SOURCE = {
 RM_KINDS = {"empty": "regular empty file", "file": "regular file", "dir": "directory", "link": "symbolic link"}
 # "Written by" of --version (the AUTHORS of each program in the coreutils sources)
 AUTHORS = {"rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
-           "cp": "Torbjorn Granlund, David MacKenzie, and Jim Meyering.",
+           "cp": "Torbj\u00f6rn Granlund, David MacKenzie, and Jim Meyering.",
            "mv": "Mike Parker, David MacKenzie, and Jim Meyering.",
            "touch": "Paul Rubin, Arnold Robbins, Jim Kingdon,\nDavid MacKenzie, and Randy Smith.",
            "rmdir": "David MacKenzie.", "mkdir": "David MacKenzie."}
 
-# BusyBox 1.14.1 (the D-Link persona): the usage texts of include/usage.h of busybox-1.14.1.tar.bz2 (sha256
-#   5165792f..., the recording notes busybox_sources.md), without SELinux and the long options, as the
-#   minimal build of the Archer C7 v5 has them; bb_show_usage of 1.14 to 1.20 ends with a blank line
-USAGE_1_14_1 = {
-    "rm": "[OPTION]... FILE...\n\nRemove (unlink) the FILE(s). Use '--' to\nindicate that all following arguments "
-          "are non-options.\n\nOptions:\n\t-i\tAlways prompt before removing\n\t-f\tNever prompt\n"
-          "\t-r,-R\tRemove directories recursively\n\n",
-    "cp": "[OPTION]... SOURCE DEST\n\nCopy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY\n\nOptions:\n"
-          "\t-a\tSame as -dpR\n\t-d,-P\tPreserve links\n\t-H,-L\tDereference all symlinks (default)\n"
-          "\t-p\tPreserve file attributes if possible\n\t-f\tForce overwrite\n\t-i\tPrompt before overwrite\n"
-          "\t-R,-r\tRecurse directories\n\t-l,-s\tCreate (sym)links\n\n",
-    "mv": "[OPTION]... SOURCE DEST\nor: mv [OPTION]... SOURCE... DIRECTORY\n\nRename SOURCE to DEST, or move "
-          "SOURCE(s) to DIRECTORY\n\nOptions:\n\t-f\tDon't prompt before overwriting\n"
-          "\t-i\tInteractive, prompt before overwrite\n\n",
-    "touch": "[-c] FILE [FILE...]\n\nUpdate the last-modified date on the given FILE[s]\n\nOptions:\n"
-             "\t-c\tDo not create any files\n\n",
-    "rmdir": "[OPTION]... DIRECTORY...\n\nRemove the DIRECTORY, if it is empty.\n\nOptions:\n\t-p\tInclude parents\n\n",
-    "mkdir": "[OPTION] DIRECTORY...\n\nCreate DIRECTORY\n\nOptions:\n"
-             "\t-m\tSet permission mode (as in chmod), not rwxrwxrwx - umask\n"
-             "\t-p\tNo error if existing, make parent directories as needed\n\n",
-}
-# the options of 1.14.1 (getopt32 strings of coreutils/*.c and FILEUTILS_CP_OPTSTR of include/libbb.h); touch
-#   without CONFIG_DESKTOP (as the minimal build): -c and the ignored -f -m -a
+# the options of 1.14.1 (getopt32 strings of coreutils/*.c and FILEUTILS_CP_OPTSTR of include/libbb.h of
+#   busybox-1.14.1; the DIR-859 is such a build: rm -v and cp -v are taken, mv -v / -n are not, touch has
+#   -c and the ignored -f -m -a, no long options, as the recording shows)
 OPTIONS_1_14_1 = {"rm": "fiRrv", "cp": "pdRfilsLarPHv", "mv": "fi", "touch": "cfma", "rmdir": "p", "mkdir": "m:p"}
 
 
@@ -206,6 +222,9 @@ def busybox_options(version: tuple, long_options: bool, verbose: bool, usage: di
     else:
         cp = "pdRfilsLHarPv"
     mv = "finTt:v" if version >= (1, 34) else "finv" if version >= (1, 24) else "fin"
+    if version < (1, 15):
+        # 1.14.1 (the DIR-859): the getopt32 strings of its coreutils/*.c (OPTIONS_1_14_1), mv without -n
+        return {tool: {"short": OPTIONS_1_14_1[tool], "long": {}} for tool in TOOLS}
     susv3 = "-d DT" in usage.get("touch", "")
     noderef = "\t-h\t" in usage.get("touch", "")
     if version >= (1, 34):
@@ -295,30 +314,38 @@ def quoted(text: str, value: str, start: int):
     return (bare.start(), bare.end(), "") if bare else None
 
 
-def template_of(text: str, args, errno, gnu_quoteaf: bool):
+def template_of(text: str, args, errno, mode: str, last: bool = False):
     """The template of a recorded text: each argument a placeholder (its number in args; the first place of
-    each, the arguments do not overlap), the reason of errno one too. Returns (template, has the reason)."""
+    each, the arguments do not overlap), the reason of errno one too; mode says how the tool wrote the name:
+    "quoteaf" (GNU, quotes and escapes of the shell: {N:q}), "quote" (GNU's quote(), the locale's quotes with C
+    escapes inside: {N:c}) or "raw" (BusyBox). Returns (template, has the reason)."""
     spots, taken = [], []
     for index, value in enumerate(args):
-        at = 0
+        at, spot = 0, None
         while True:
-            spot = quoted(text, value, at)
-            if spot is None:
+            next_spot = quoted(text, value, at)
+            if next_spot is None:
+                if spot is not None:
+                    break
                 raise ValueError(f"{value!r} not in {text!r}")
-            if not any(spot[0] < end and begin < spot[1] for begin, end in taken):
-                break
-            at = spot[0] + 1
+            if not any(next_spot[0] < end and begin < next_spot[1] for begin, end in taken):
+                spot = next_spot
+                if not last:  # the last place of the value (rm.dot names '.' in its text before the name)
+                    break
+            at = next_spot[0] + 1
         taken.append(spot[:2])
         spots.append((spot, index))
     out, at = "", 0
     for (begin, end, kind), index in sorted(spots):
         out += text[at:begin]
-        if kind == "'" and gnu_quoteaf:
+        if kind == "'" and mode == "quoteaf":
             out += f"{{{index}:q}}"
+        elif kind == "'" and mode == "quote":
+            out += f"'{{{index}:c}}'"
         elif kind == "'":
             out += f"'{{{index}}}'"
         elif kind == "\u2018":
-            out += f"\u2018{{{index}}}\u2019"
+            out += f"\u2018{{{index}:c}}\u2019"
         else:
             out += f"{{{index}}}"
         at = end
@@ -334,6 +361,8 @@ def stream_text(result, stream, line):
     text = result[stream]
     if line is None:
         return text
+    if isinstance(line, str):
+        return text.partition(line)[2]
     lines = text.splitlines(keepends=True)
     return lines[line] if line < len(lines) else ""
 
@@ -356,14 +385,14 @@ def build_templates(style: str, version: tuple, cases: dict, quote_keys: set) ->
     """The templates of one variant from its cases (RULES), then those of SOURCE it lacks."""
     gnu = style == "gnu"
     found: dict = {}
-    for case, stream, line, key, args, errno, only in RULES:
+    for case, stream, line, key, args, errno, only, *last in RULES:
         if only not in (None, style) or case not in cases:
             continue
         text = stream_text(cases[case], stream, line)
-        if not text or "multi-call binary" in text or "option" in text:
+        if not text or "multi-call binary" in text or "option" in text or "applet not found" in text:
             continue
-        quoteaf = gnu and version >= (8, 25) and key not in quote_keys
-        found.setdefault(key, []).append((template_of(text, args, errno, quoteaf), errno))
+        mode = "raw" if not gnu else "quoteaf" if version >= (8, 25) and key not in quote_keys else "quote"
+        found.setdefault(key, []).append((template_of(text, args, errno, mode, bool(last and last[0])), errno))
     templates = {}
     for key, entries in found.items():
         generic = {template for (template, reason), _ in entries if reason}
@@ -383,11 +412,13 @@ def build_templates(style: str, version: tuple, cases: dict, quote_keys: set) ->
         if key in templates:
             continue
         if curly:
-            text = old or re.sub(r"\{(\d+):q\}", "\u2018{\\1}\u2019", text)
+            text = old or re.sub(r"\{(\d+):q\}", "\u2018{\\1:c}\u2019", text)
         elif gnu and "\u2018" in text and "{0:q}" not in text and templates.get("mkdir.cannot_create", "").find(
                 "\u2018") < 0:
             # quote() in the POSIX locale: ASCII quotes, as "cannot create directory" of the same variant
             text = text.replace("\u2018", "'").replace("\u2019", "'")
+        if not gnu and version < (1, 17):
+            text = text.replace("can't", "cannot")  # libbb before 1.17 (the 1.14.1 of the DIR-859)
         templates[key] = text
     return dict(sorted(templates.items()))
 
@@ -397,7 +428,7 @@ def quote_keys_of(images: dict) -> set:
     recording of a UTF-8 coreutils from 8.25 on (debian_12, 9.1) writes in curly quotes."""
     cases = images["debian_12"]["cases"]
     keys = set()
-    for case, stream, line, key, args, errno, only in RULES:
+    for case, stream, line, key, args, errno, only, *_last in RULES:
         if only in (None, "gnu") and case in cases and "\u2018" in stream_text(cases[case], stream, line):
             keys.add(key)
     return keys
@@ -442,37 +473,38 @@ def build() -> dict:
                 options[tool] = gnu_options(text)
             variant["options"] = options
             variant["rm_kinds"] = dict(RM_KINDS)
+            # the "Written by" of --version where it was recorded whole (cp names Torbj\u00f6rn Granlund with its
+            #   umlaut in 8.22 / 8.23 and from 9.4 on, without it in 8.26 to 9.1)
+            authors = {tool: cases[f"{tool} --version"][0].partition("\nWritten by ")[2].rstrip("\n")
+                       for tool in TOOLS if f"{tool} --version" in cases}
+            if authors:
+                variant["authors"] = {tool: authors.get(tool, AUTHORS[tool]) for tool in TOOLS}
         else:
-            usage = {tool: usage_of(tool, cases[tool][1]) for tool in TOOLS if tool != "mkdir"}
+            # an applet the build has not (the DIR-859 has no rmdir): `busybox rmdir` says "applet not found"
+            missing = [tool for tool in TOOLS if "applet not found" in (cases.get(tool) or cases[f"{tool} --help"])[1]]
+            present = [tool for tool in TOOLS if tool not in missing]
+            usage = {tool: usage_of(tool, cases[tool][1]) for tool in present if tool != "mkdir"}
             usage["mkdir"] = usage_of("mkdir", cases["mkdir --help"][1])
             variant["usage"] = dict(sorted(usage.items()))
             variant["banner"] = re.match(r"(BusyBox v[^\n]*?) multi-call binary", cases["rm"][1]).group(1)
             variant["help_status"] = cases["rm --help"][2]
-            long_options = "unrecognized" not in cases["rmdir --ignore-fail-on-non-empty d; echo $?"][1]
+            # long options: rmdir takes --ignore-fail-on-non-empty; a build without getopt_long takes `--version`
+            #   as the option `-` (1.14.1)
+            long_options = ("unrecognized" not in cases["rmdir --ignore-fail-on-non-empty d; echo $?"][1]
+                            and "invalid option -- -" not in cases["rm --version | head -1"][1])
             variant["long_options"] = long_options
             verbose = bool(cases["rm -v file"][0])
             variant["verbose"] = {tool: verbose for tool in TOOLS}
-            variant["options"] = busybox_options(version, long_options, verbose, usage)
+            variant["options"] = {tool: spec for tool, spec in busybox_options(version, long_options, verbose,
+                                                                              usage).items() if tool in present}
+            if missing:
+                variant["missing"] = missing
         variant["templates"] = build_templates(style, version, cases, quote_keys)
         variants[key] = variant
-    variants["src_busybox_1.14.1"] = derived_1_14_1(variants["fw_tplink_c7v5"])
     return {"_about": "Texts of the persona's rm, cp, mv, touch, rmdir and mkdir per variant, made by "
                       "docker/cowrie/tools/build_fs_texts.py from tests/fixtures/fs_tools.json and fs_help.json "
                       "(recordings of the real programs); do not edit.",
             "authors": AUTHORS, "variants": dict(sorted(variants.items()))}
-
-
-def derived_1_14_1(c7: dict) -> dict:
-    """BusyBox 1.14.1 of the D-Link firmware, derived (no image of it could be run): the Archer C7 v5 variant
-    (a minimal build: no long options, no FEATURE_VERBOSE, touch without -d / -r / -t) with the usage texts
-    of 1.14.1 and its "cannot" where 1.17 and later write "can't" (libbb of busybox-1.14.1)."""
-    variant = json.loads(json.dumps(c7))
-    variant.update(version="1.14.1", recorded="derived: fw_tplink_c7v5 with the usage and texts of the "
-                                              "busybox-1.14.1 sources (not recorded)",
-                   banner="BusyBox v1.14.1", usage=dict(sorted(USAGE_1_14_1.items())))
-    variant["options"] = {tool: {"short": OPTIONS_1_14_1[tool], "long": {}} for tool in TOOLS}
-    variant["templates"] = {key: text.replace("can't", "cannot") for key, text in variant["templates"].items()}
-    return variant
 
 
 def render(data: dict) -> str:

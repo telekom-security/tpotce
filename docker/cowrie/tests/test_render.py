@@ -6,7 +6,7 @@ import re
 import unittest
 
 from tests.helpers import base_tree, tmpdir
-from tpot_personas import catalog, firmware, servers, system, tree, validate
+from tpot_personas import catalog, firmware, network, servers, system, tree, validate
 from tpot_personas.common import kernel_series
 from tpot_personas.identity import DAY, draw, fits, kernel_time, restore, specialize, to_state, updated_at
 from tpot_personas.render import render
@@ -56,10 +56,47 @@ class ProgramTest(unittest.TestCase):
                 self.assertTrue(tree.node_get(node, tree.A_MODE) & 0o111, (persona.id, rel))
                 self.assertGreater(tree.node_get(node, tree.A_SIZE), 10_000, (persona.id, rel))
                 self.assertNotIsInstance(tree.node_get(node, tree.A_CONTENTS), bytes, (persona.id, rel))
-            # usr/bin/top of Cowrie's pickle keeps its size (the Archer C7 has the applet of its image)
-            if persona.family != "tplink":
+            # usr/bin/top of Cowrie's pickle keeps its size where the system has procps (the Archer C7 has the
+            #   applet of its image, the other BusyBox devices a link to their busybox)
+            if persona.family != "tplink" and system.applet_links(persona, ident) is None:
                 self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/top"), tree.A_SIZE), 134736,
                                  persona.id)
+
+    def test_the_applets_of_a_busybox_device_are_links_to_it(self):
+        """ls -l /bin/ls of OpenWrt says `-> busybox`: every applet of the firmware's BusyBox is a link to it
+        in the folder BusyBox installs it (firmware.BUSYBOX_DIRS), Cowrie's Debian program of that name is
+        gone; a server, EdgeOS and DSM (coreutils) and the Archer C7 (the folders of its image) keep theirs."""
+        linked = {"openwrt", "zyxel-nas326", "qnap-qts", "ipcam", "dlink-dir859"}
+        for persona in catalog.PERSONAS:
+            ident, out, _ = render_one(self, persona, 1)
+            fs = fs_of(out)
+            links = system.applet_links(persona, ident)
+            self.assertEqual(links is not None, persona.id in linked, persona.id)
+            ls = tree.find_node(fs, "usr/bin/ls")
+            if links is None:
+                if ls is not None:
+                    self.assertEqual(tree.node_get(ls, tree.A_TYPE), tree.T_FILE, persona.id)
+                continue
+            self.assertEqual((tree.node_get(ls, tree.A_TYPE), tree.node_get(ls, tree.A_TARGET)),
+                             (tree.T_LINK, "busybox"), persona.id)
+            self.assertIs(tree.resolve(fs, "bin/ls"), tree.find_node(fs, "usr/bin/busybox"), persona.id)
+            self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/awk"), tree.A_TARGET), "../../bin/busybox")
+            self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/top"), tree.A_TARGET), "../../bin/busybox")
+            for rel, target in links.items():
+                node = tree.find_node(fs, rel)
+                self.assertIsNotNone(node, (persona.id, rel))
+                if tree.node_get(node, tree.A_TYPE) == tree.T_LINK:
+                    self.assertIs(tree.resolve(fs, rel), tree.find_node(fs, "usr/bin/busybox"), (persona.id, rel))
+            # the shells, init and busybox itself are placed by their own rules
+            self.assertFalse({"bin/sh", "bin/ash", "sbin/init", "bin/busybox"} & set(links), persona.id)
+            # the specific tools of the persona win (network.tool_paths, system.text_programs)
+            for rel, target in list(network.tool_paths(persona, ident).values()) + list(
+                    system.text_programs(persona, ident).values()):
+                node = tree.find_node(fs, rel)
+                self.assertEqual(tree.node_get(node, tree.A_TYPE), tree.T_LINK if target else tree.T_FILE,
+                                 (persona.id, rel))
+                if target:
+                    self.assertEqual(tree.node_get(node, tree.A_TARGET), target, (persona.id, rel))
 
     def test_bin_stays_a_link_to_usr_bin(self):
         # a /bin of its own held only the txtcmds: `ls /bin` showed five files, `df` ran Debian's binary
@@ -72,7 +109,11 @@ class ProgramTest(unittest.TestCase):
                 self.assertEqual((tree.node_get(node, tree.A_TYPE), tree.node_get(node, tree.A_TARGET)),
                                  (tree.T_LINK, f"usr/{name}"), (pid, name))
             self.assertIs(tree.find_node(fs, "bin/df"), tree.find_node(fs, "usr/bin/df"))
-            self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/df"), tree.A_SIZE), 105824)
+            if pid == "openwrt":
+                # df of OpenWrt is the applet of its BusyBox
+                self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/df"), tree.A_TARGET), "busybox")
+            else:
+                self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/df"), tree.A_SIZE), 105824)
 
     def test_sizes_are_drawn_per_identity(self):
         persona = catalog.by_id("openwrt")
@@ -140,7 +181,9 @@ class NetToolsTest(unittest.TestCase):
         expected = {"debian-bookworm": {"ip", "ss"}, "ubuntu-noble": {"ip", "ss", "ifconfig", "netstat"},
                     "rhel-9": {"ip", "ss"}, "centos-7": {"ip", "ss", "ifconfig", "netstat"},
                     "openwrt": {"ip", "ifconfig", "netstat"}, "tplink-archer-c7": {"ip", "ifconfig"},
-                    "ubiquiti-edgerouter-x": {"ip", "ss", "ifconfig", "netstat"}, "dlink-dir859": {"ifconfig", "netstat"}}
+                    "ubiquiti-edgerouter-x": {"ip", "ss", "ifconfig", "netstat"},
+                    # the ip applet of the DIR-859's BusyBox (its `busybox` list)
+                    "dlink-dir859": {"ip", "ifconfig", "netstat"}}
         paths = {"rhel-9": {"ip": "usr/sbin/ip"}, "debian-bookworm": {"ip": "usr/bin/ip", "ss": "usr/bin/ss"},
                  "ubuntu-noble": {"ip": "usr/bin/ip", "ifconfig": "usr/sbin/ifconfig", "netstat": "usr/bin/netstat"},
                  "openwrt": {"ip": "sbin/ip"}, "tplink-archer-c7": {"ip": "usr/sbin/ip", "ifconfig": "sbin/ifconfig"}}
@@ -365,9 +408,9 @@ class SystemTest(unittest.TestCase):
             for rel in ("etc/adduser.conf", "etc/rcS.d", "usr/bin/which.debianutils"):
                 self.assertEqual(tree.find_node(fs, rel) is not None, debian, (persona.id, rel))
             which = tree.find_node(fs, "usr/bin/which")
-            if persona.family == "tplink":
-                # the which applet of the Archer C7's BusyBox
-                self.assertEqual(which[tree.A_TARGET], "../../bin/busybox")
+            if persona.family == "tplink" or "usr/bin/which" in (system.applet_links(persona, draw(persona, 1, NOW)) or {}):
+                # the which applet of the device's BusyBox
+                self.assertEqual(which[tree.A_TARGET], "../../bin/busybox", persona.id)
                 continue
             self.assertEqual(tree.node_get(which, tree.A_TYPE), tree.T_LINK if debian else tree.T_FILE, persona.id)
 

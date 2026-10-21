@@ -12370,14 +12370,16 @@ class TpotAwkUninit(TpotAwkStrnum):
 
 TPOT_AWK_UNINIT = TpotAwkUninit("")
 TPOT_AWK_KEYWORDS = frozenset({"BEGIN", "END", "if", "else", "while", "for", "break", "continue", "next", "exit",
-                               "print", "printf"})
+                               "print", "printf", "delete", "in"})
 # name: (fewest, most arguments)
 TPOT_AWK_FUNCTIONS = {"length": (0, 1), "substr": (2, 3), "index": (2, 2), "tolower": (1, 1), "toupper": (1, 1),
-                      "int": (1, 1), "sprintf": (1, 255), "sub": (2, 3), "gsub": (2, 3)}
+                      "int": (1, 1), "sprintf": (1, 255), "sub": (2, 3), "gsub": (2, 3), "split": (2, 3),
+                      "match": (2, 2)}
 # the awk left out: words of every awk, then gawk's functions (names of variables elsewhere)
-TPOT_AWK_OTHER = frozenset({"function", "func", "getline", "delete", "in", "do", "return", "nextfile", "split",
-                            "match", "system", "close", "fflush", "srand", "rand", "sin", "cos", "atan2", "exp",
-                            "log", "sqrt"})
+TPOT_AWK_OTHER = frozenset({"function", "func", "getline", "do", "return", "nextfile", "system", "close", "fflush",
+                            "srand", "rand", "sin", "cos", "atan2", "exp", "log", "sqrt"})
+# the nodes of every array of one run (keys and values are charged as the variables are, MAX_LIVE)
+TPOT_AWK_ELEMENTS = 500_000
 TPOT_AWK_GAWK = frozenset({"gensub", "strftime", "systime", "mktime", "asort", "asorti", "patsplit", "strtonum",
                            "and", "or", "xor", "lshift", "rshift", "compl", "isarray", "typeof"})
 TPOT_AWK_PUNCT = ("&&", "||", "==", "!=", "<=", ">=", "!~", "++", "--", "+=", "-=", "*=", "/=", "%=", "^=", ">>",
@@ -12700,13 +12702,9 @@ class TpotAwkLexer:
             punct = next((p for p in TPOT_AWK_PUNCT if text.startswith(p, i)), None)
             if punct is None:
                 raise TpotAwkSyntax(("?", c, line, col, c))
-            if punct in ("[", "|", ">>"):  # arrays, pipes, appending output
+            if punct in ("|", ">>"):  # pipes, appending output
                 raise TpotAwkStop(2)
             out.append((punct, punct, line, col, punct))
-            if punct == "]":
-                # without arrays a ] is always the syntax error the parser names, nothing after it is read
-                out.append(("eof", "", line, col + 1, "end of file"))
-                return out
             i += len(punct)
 
     @staticmethod
@@ -12715,7 +12713,7 @@ class TpotAwkLexer:
         if not out:
             return True
         kind = out[-1][0]
-        return kind not in ("num", "str", "ere", "name", "func", ")", "++", "--", "$")
+        return kind not in ("num", "str", "ere", "name", "func", ")", "]", "++", "--", "$")
 
 
 class TpotAwkParser:
@@ -12830,6 +12828,13 @@ class TpotAwkParser:
         if kind == "for":
             self.take()
             self.take("(")
+            heads = [t[0] for t in self.tokens[self.pos:self.pos + 4]]
+            if heads == ["name", "in", "name", ")"]:
+                # for (key in array)
+                var, _, array, _ = self.tokens[self.pos:self.pos + 4]
+                self.pos += 4
+                self.newlines()
+                return ("forin", var[1], array[1], self.nested(self.statement), var[2])
             init = None if self.kind() == ";" else self.simple_expr()
             self.take(";")
             self.newlines()
@@ -12875,6 +12880,11 @@ class TpotAwkParser:
         if kind == "exit":
             self.take()
             return ("exit", None if self.kind() in self.TERMINATORS else self.expr())
+        if kind == "delete":
+            self.take()
+            token = self.take("name")
+            items = self.subscripts() if self.kind() == "[" else None
+            return ("delete", token[1], items, token[2])
         return ("expr", self.expr())
 
     def print_args(self) -> list:
@@ -12891,22 +12901,27 @@ class TpotAwkParser:
             self.pos = mark
         return self.expr_list(True)
 
-    def expr_list(self, no_gt: bool) -> list:
+    def expr_list(self, no_gt: bool, starts: list | None = None) -> list:
+        """The expressions of a list; starts collects the token each one begins with."""
         old, self.no_gt = self.no_gt, no_gt
         try:
             items = [self.expr()]
             while self.kind() == ",":
                 self.take()
                 self.newlines()
+                if starts is not None:
+                    starts.append(self.peek())
                 items.append(self.expr())
             return items
         finally:
             self.no_gt = old
 
+    LVALUES = ("var", "field", "index")
+
     def expr(self):
         left = self.ternary()
         if self.kind() in TPOT_AWK_ASSIGN:
-            if left[0] not in ("var", "field"):
+            if left[0] not in self.LVALUES:
                 raise self.fail()
             op = self.take()[0]
             return ("assign", op, left, self.nested(self.expr))
@@ -12952,6 +12967,10 @@ class TpotAwkParser:
         if kind in TPOT_AWK_COMPARE and not (kind == ">" and self.no_gt):
             self.take()
             return ("cmp", kind, left, self.concat())
+        while self.kind() == "in":  # whether a subscript is in an array
+            self.take()
+            token = self.take("name")
+            left = ("in", [left], token[1], token[2])
         return left
 
     def concat(self):
@@ -12996,15 +13015,24 @@ class TpotAwkParser:
 
     def postfix(self):
         node = self.primary()
-        if node[0] in ("var", "field") and self.kind() in ("++", "--"):
+        if node[0] in self.LVALUES and self.kind() in ("++", "--"):
             return ("incr", False, 1.0 if self.take()[0] == "++" else -1.0, node)
         return node
 
     def lvalue(self):
         node = self.nested(self.primary)
-        if node[0] not in ("var", "field"):
+        if node[0] not in self.LVALUES:
             raise self.fail()
         return node
+
+    def subscripts(self) -> list:
+        """The expressions between [ and ] (joined by SUBSEP when they are more than one)."""
+        self.take("[")
+        self.newlines()
+        items = self.nested(self.expr_list, False)
+        self.newlines()
+        self.take("]")
+        return items
 
     def primary(self):
         token = self.peek()
@@ -13017,14 +13045,21 @@ class TpotAwkParser:
             return (kind, token[1], token[2])  # the line, for the messages of a regex compiled with the program
         if kind == "name":
             self.take()
-            return ("var", token[1])
+            if self.kind() == "[":
+                return ("index", token[1], self.subscripts(), token[2])
+            return ("var", token[1], token[2])
         if kind == "(":
             self.take()
             old, self.no_gt = self.no_gt, False
-            node = self.nested(self.expr)
+            items = self.nested(self.expr_list, False)
             self.no_gt = old
             self.take(")")
-            return ("group", node)
+            if len(items) > 1:
+                # (a, b) in array: the subscript of more than one expression
+                self.take("in")
+                name = self.take("name")
+                return ("in", items, name[1], name[2])
+            return ("group", items[0])
         if kind == "$":
             self.take()
             if self.kind() == "-":
@@ -13045,14 +13080,18 @@ class TpotAwkParser:
             args = args or []
             fewest, most = TPOT_AWK_FUNCTIONS[token[1]]
             if not fewest <= len(args) <= most or (token[1] in ("sub", "gsub") and len(args) == 3
-                                                     and args[2][0] not in ("var", "field")):
+                                                     and args[2][0] not in self.LVALUES):
                 raise TpotAwkSyntax(token, self.braces)
+            if token[1] == "split" and args[1][0] != "var" and self.awk.style == "mawk":
+                # mawk takes the second argument of split as an array while it parses
+                raise TpotAwkSyntax(self.arg_tokens[1], self.braces)
             return ("fn", token[1], args)
         raise self.fail()
 
     def call_args(self) -> list:
         self.take("(")
-        args = [] if self.kind() == ")" else self.nested(self.expr_list, False)
+        self.arg_tokens = [self.peek()]
+        args = [] if self.kind() == ")" else self.nested(self.expr_list, False, self.arg_tokens)
         self.take(")")
         return args
 
@@ -13066,6 +13105,134 @@ def tpot_awk_shallow(tree, limit: int) -> bool:
             return False
         stack.extend((child, depth + 1) for child in node if isinstance(child, (tuple, list)))
     return True
+
+
+TPOT_AWK_INTEGER = re.compile(r"-?(?:0|[1-9][0-9]{0,17})")
+
+
+def tpot_awk_hash_elf(data: bytes) -> int:
+    """gst_hash_string of gawk 4.1 and later (the ELF hash), as its str_array uses it."""
+    h = 0
+    for byte in data:
+        h = ((h << 4) + byte) & 0xffffffff
+        g = h & 0xf0000000
+        if g:
+            h ^= g >> 24
+            h ^= g
+    return h
+
+
+def tpot_awk_hash_sdbm(data: bytes) -> int:
+    """gst_hash_string of gawk 4.0 (the sdbm hash)."""
+    h = 0
+    for byte in data:
+        h = (byte + (h << 6) + (h << 16) - h) & 0xffffffff
+    return h
+
+
+def tpot_awk_hash_fnv1a(data: bytes) -> int:
+    """The hash of mawk 1.3.4's arrays (FNV-1a)."""
+    h = 2166136261
+    for byte in data:
+        h = ((h ^ byte) * 16777619) & 0xffffffff
+    return h
+
+
+def tpot_awk_hash_mawk(data: bytes) -> int:
+    """ahash() of mawk 1.3.3."""
+    first = second = len(data)
+    for byte in data:
+        first = (first + first + byte) & 0xffffffff
+        second = (second + first) & 0xffffffff
+    return second
+
+
+def tpot_awk_hash_busybox(data: bytes) -> int:
+    """hashidx() of BusyBox awk."""
+    h = 0
+    for byte in data:
+        h = (byte + (h << 6) + (h >> 26)) & 0xffffffff
+    return h
+
+
+def tpot_awk_hash_order(keys: list, hash_of, sizes: tuple, grow) -> list:
+    """The keys of an array as a hash table with chains lists them: the keys came in their order, each at the
+    head of its bucket; the table grows to the next size when grow(count, size) says so (the old buckets are
+    walked in order and each key put at the head of its new bucket); the listing walks the buckets in order."""
+    size_at, size = 0, sizes[0]
+    buckets: dict = {}
+    hashes = {key: hash_of(key.encode("utf-8", "surrogateescape")) for key in keys}
+    for count, key in enumerate(keys, 1):
+        if size_at + 1 < len(sizes) and grow(count, size):
+            size_at, size = size_at + 1, sizes[size_at + 1]
+            moved: dict = {}
+            for index in sorted(buckets):
+                for old in buckets[index]:
+                    moved.setdefault(hashes[old] % size, []).insert(0, old)
+            buckets = moved
+        buckets.setdefault(hashes[key] % size, []).insert(0, key)
+    return [key for index in sorted(buckets) for key in buckets[index]]
+
+
+class TpotAwkTypes:
+    """mawk's view of the names while it parses: an array or a scalar by the first use, the other use is
+    "illegal reference to array a" / "illegal reference to variable b" (the first clash, status 2). length(x):
+    mawk 1.3.3 has no length(array), so x is a scalar there; 1.3.4 of 2020 takes an array but makes an untyped
+    x a scalar; from 2023 on it leaves x as it is (recorded with debian:9, debian:12 and debian:13)."""
+
+    def __init__(self, old_mawk: bool, new_mawk: bool = False) -> None:
+        self.kinds: dict = {}
+        self.old_mawk, self.new_mawk = old_mawk, new_mawk
+
+    def check(self, rules) -> str:
+        try:
+            self.walk(rules)
+        except TpotAwkStop as stop:
+            return stop.text
+        return ""
+
+    def use(self, name: str, kind: str, line) -> None:
+        before = self.kinds.setdefault(name, kind)
+        if before != kind:
+            what = "array" if before == "array" else "variable"
+            raise TpotAwkStop(2, f"awk: line {line}: illegal reference to {what} {name}\n")
+
+    def walk(self, node) -> None:
+        stack = [node]
+        while stack:
+            node = stack.pop()
+            if not isinstance(node, (tuple, list)):
+                continue
+            op = node[0] if node and isinstance(node[0], str) else None
+            if op == "var":
+                self.use(node[1], "scalar", node[2])
+                continue
+            if op == "index":
+                self.use(node[1], "array", node[3])
+                stack.extend(reversed(node[2]))
+                continue
+            if op == "in":
+                self.use(node[2], "array", node[3])
+                stack.extend(reversed(node[1]))
+                continue
+            if op == "forin":
+                self.use(node[1], "scalar", node[4])
+                self.use(node[2], "array", node[4])
+                stack.append(node[3])
+                continue
+            if op == "delete":
+                self.use(node[1], "array", node[3])
+                stack.extend(reversed(node[2] or []))
+                continue
+            if op == "fn" and node[1] == "split" and len(node[2]) >= 2 and node[2][1][0] == "var":
+                self.use(node[2][1][1], "array", node[2][1][2])
+                stack.extend(reversed([node[2][0]] + node[2][2:]))
+                continue
+            if op == "fn" and node[1] == "length" and node[2] and node[2][0][0] == "var" and not self.old_mawk:
+                if not self.new_mawk and node[2][0][1] not in self.kinds:
+                    self.use(node[2][0][1], "scalar", node[2][0][2])
+                continue  # length(a) takes a scalar or an array
+            stack.extend(reversed([child for child in node if isinstance(child, (tuple, list))]))
 
 
 class TpotAwk:
@@ -13088,7 +13255,7 @@ class TpotAwk:
     def __init__(self, style: str, version: str, read_file, stdin: bytes | None, limit: float = math.inf) -> None:
         self.style, self.version, self.read_file, self.stdin = style, version, read_file, stdin or b""
         self.limit = limit  # the session's deadline (TPOT_BUDGET)
-        new_mawk = style == "mawk" and (version.split() + ["0"])[1] >= "20230000"
+        new_mawk = self.new_mawk = style == "mawk" and (version.split() + ["0"])[1] >= "20230000"
         self.intervals = style != "mawk" or (version.split() + ["0"])[1] >= "20200717"
         self.old_mawk = style == "mawk" and (version.split() + ["0"])[0] < "1.3.4"
         self.parse_line = None  # the line of the regex compiled with the program
@@ -13100,6 +13267,7 @@ class TpotAwk:
                      "NF": 0.0, "FILENAME": TPOT_AWK_UNINIT, "RS": "\n", "SUBSEP": "\x1c"}
         self.deadline = min(time.monotonic() + self.MAX_SECONDS, self.limit)
         self.sizes, self.live = {}, 0  # characters per variable, in all of them
+        self.arrays, self.elements = {}, 0  # the arrays by name (keys in the order they came), nodes in all
         self.record, self.fields, self.regexes, self.in_begin = TPOT_AWK_UNINIT, [], {}, True
         self.libc = CowrieConfig.get("shell", "text_libc", fallback="glibc")
         self.fs_option = False  # FS of -F: compiled at the start, as the real awk does
@@ -13244,7 +13412,9 @@ class TpotAwk:
                 continue
             if self.style == "mawk" and isinstance(node, tuple) and node:
                 const = node[3] if node[0] == "match" else node[2][0] if (
-                    node[0] == "fn" and node[1] in ("sub", "gsub")) else None
+                    node[0] == "fn" and node[1] in ("sub", "gsub")) else node[2][1] if (
+                    node[0] == "fn" and node[1] == "match") else node[2][2] if (
+                    node[0] == "fn" and node[1] == "split" and len(node[2]) == 3) else None
                 if const is not None and const[0] == "str":
                     found.append((const[1], const[2], "const"))
             stack.extend(reversed([child for child in node if isinstance(child, (tuple, list))]))
@@ -13299,12 +13469,15 @@ class TpotAwk:
 
     # -- records and fields
 
-    def split(self, text: str) -> list:
-        fs = self.text(self.vars["FS"])
+    def split(self, text: str, fs=None, regex=None) -> list:
+        """The fields of text: by FS, or the separator fs of split() (a string), or a compiled regex."""
+        fs = self.text(self.vars["FS"]) if fs is None and regex is None else fs
         if not text:
             return []
         self.charge(len(text) >> 6)
-        if fs == " ":
+        if regex is not None:
+            pass
+        elif fs == " ":
             text = text.strip(" \t\n")
             fields = TPOT_AWK_BLANKS.split(text) if text else []
         elif len(fs) == 1 and fs != "\\" or not any(c in fs for c in "\\^$.[]|()*+?{}"):
@@ -13312,7 +13485,9 @@ class TpotAwk:
                 raise TpotAwkStop(2)
             fields = text.split(fs) if fs else list(text)
         else:
-            regex, data, fields, start, pos = self.regex(fs), tpot_awk_bytes(text), [], 0, 0
+            regex = self.regex(fs)
+        if regex is not None:
+            data, fields, start, pos = tpot_awk_bytes(text), [], 0, 0
             while pos <= len(text) and len(fields) < self.MAX_FIELDS:
                 found = regex.find(data, pos)
                 if found is None:
@@ -13369,25 +13544,108 @@ class TpotAwk:
         self.fields = self.fields[:count] + [TPOT_AWK_UNINIT] * (count - len(self.fields))
         self.rebuild()
 
+    # -- variables and arrays: a name is a scalar or an array by its first use (gawk says so when the other
+    #    use comes, mawk while it parses: TpotAwkTypes; BusyBox, and mawk at run time, take both without a word)
+
+    def scalar(self, name: str):
+        """The value of a scalar; an untyped name becomes one."""
+        if name in self.arrays:
+            if self.style != "gawk":
+                return TPOT_AWK_UNINIT
+            self.fatal(f"attempt to use array `{name}' in a scalar context", "", "")
+        if name not in self.vars:
+            self.vars[name] = TPOT_AWK_UNINIT
+        return self.vars[name]
+
+    def array(self, name: str) -> dict:
+        """The array of a name; an untyped name becomes one."""
+        found = self.arrays.get(name)
+        if found is None:
+            if name in self.vars:
+                if self.style == "gawk":
+                    self.fatal(f"attempt to use scalar `{name}' as an array", "", "")
+                self.vars.pop(name, None)
+            found = self.arrays[name] = {}
+        return found
+
+    def key(self, items: list) -> str:
+        """The subscript of an element: the texts of its expressions, joined by SUBSEP."""
+        return self.text(self.vars["SUBSEP"]).join(self.text(self.value(item)) for item in items)
+
+    def element(self, name: str, items: list):
+        """The element (made as the uninitialized value where there is none)."""
+        array, key = self.array(name), self.key(items)
+        if key not in array:
+            self.insert(array, key, TPOT_AWK_UNINIT)
+        return array[key]
+
+    def insert(self, array: dict, key: str, value) -> None:
+        if key not in array:
+            self.elements += 1
+            if self.elements > TPOT_AWK_ELEMENTS:
+                raise TpotAwkStop(2)
+            self.live += len(key) + 16
+        else:
+            self.live -= 0 if isinstance(array[key], float) else len(array[key])
+        self.live += 0 if isinstance(value, float) else len(value)
+        if self.live > self.MAX_LIVE:
+            raise TpotAwkStop(2)
+        array[key] = value
+
+    def remove(self, name: str, items) -> None:
+        """delete a[k], or delete a."""
+        array = self.array(name)
+        if items is None:
+            array.clear()
+            return
+        array.pop(self.key(items), None)
+
     def get(self, target):
         if target[0] == "var":
-            return self.vars.get(target[1], TPOT_AWK_UNINIT)
+            return self.scalar(target[1])
+        if target[0] == "index":
+            return self.element(target[1], target[2])
         return self.field(self.field_index(self.value(target[1])))
 
     def set(self, target, value) -> None:
         if target[0] == "field":
             self.set_field(self.field_index(self.value(target[1])), value)
+        elif target[0] == "index":
+            self.insert(self.array(target[1]), self.key(target[2]), value)
         elif target[1] == "NF":
             self.set_nf(value)
-        elif target[1] in ("RS", "SUBSEP"):  # records end at newlines; there are no arrays
+        elif target[1] == "RS":  # records end at newlines
             raise TpotAwkStop(2)
         else:
+            if target[1] in self.arrays:
+                if self.style == "gawk":
+                    self.fatal(f"attempt to use array `{target[1]}' in a scalar context", "", "")
+                del self.arrays[target[1]]
             size = 0 if isinstance(value, float) else len(value)
             self.live += size - self.sizes.get(target[1], 0)
             if self.live > self.MAX_LIVE:
                 raise TpotAwkStop(2)
             self.sizes[target[1]] = size
             self.vars[target[1]] = value
+
+    def keys_in_order(self, array: dict) -> list:
+        """The keys as `for (k in a)` of the persona's awk lists them: the order of its hash table (recorded
+        with gawk 4.0.2 and 5.1.0, mawk 1.3.3 and 1.3.4, BusyBox 1.25 to 1.36: tpot_awk_hash_order)."""
+        keys = list(array)
+        if self.style == "busybox":
+            return tpot_awk_hash_order(keys, tpot_awk_hash_busybox, (61, 251, 1021, 4093, 16381, 65521),
+                                       lambda count, size: count // size > 10)
+        if self.style == "mawk":
+            hash_of = tpot_awk_hash_mawk if self.old_mawk else tpot_awk_hash_fnv1a
+            return tpot_awk_hash_order(keys, hash_of, (64,), lambda count, size: False)
+        if self.version.startswith("4.0"):
+            return tpot_awk_hash_order(keys, tpot_awk_hash_sdbm, (13, 127, 1021, 8191, 131071, 1048573),
+                                       lambda count, size: count // size > 2)
+        # gawk 4.1 and later: the integers in their order (cint_array), then the strings by their hash
+        integers = sorted((int(k) for k in keys if TPOT_AWK_INTEGER.fullmatch(k)), key=lambda k: (k < 1, k))
+        strings = [k for k in keys if not TPOT_AWK_INTEGER.fullmatch(k)]
+        return [str(k) for k in integers] + tpot_awk_hash_order(
+            strings, tpot_awk_hash_elf, tuple(16 << i for i in range(24)), lambda count, size: count // size > 2)
 
     # -- expressions
 
@@ -13399,7 +13657,11 @@ class TpotAwk:
         if op in ("num", "str"):
             return node[1]
         if op == "var":
-            return self.vars.get(node[1], TPOT_AWK_UNINIT)
+            return self.scalar(node[1])
+        if op == "index":
+            return self.element(node[1], node[2])
+        if op == "in":
+            return 1.0 if self.key(node[1]) in self.array(node[2]) else 0.0
         if op == "field":
             return self.field(self.field_index(self.value(node[1])))
         if op == "group":
@@ -13474,9 +13736,20 @@ class TpotAwk:
 
     def builtin(self, name: str, args: list):
         if name == "length":
+            if args and args[0][0] == "var" and args[0][1] in self.arrays:
+                return float(len(self.arrays[args[0][1]]))
             return float(len(self.text(self.value(args[0])) if args else self.record))
         if name in ("sub", "gsub"):
             return self.substitute(name == "gsub", args)
+        if name == "split":
+            return self.split_into(args)
+        if name == "match":
+            text = self.touch(self.text(self.value(args[0])))
+            found = self.regex_of(args[1]).find(tpot_awk_bytes(text), 0)
+            start, length = (found[0] + 1, found[1] - found[0]) if found else (0, -1)
+            self.set(("var", "RSTART"), float(start))
+            self.set(("var", "RLENGTH"), float(length))
+            return float(start)
         values = [self.value(arg) for arg in args]
         text = self.touch(self.text(values[0]))
         if name == "substr":
@@ -13506,6 +13779,28 @@ class TpotAwk:
             x = self.num(values[0])
             return float(math.trunc(x)) if math.isfinite(x) else x
         return self.format(text, values[1:])
+
+    def split_into(self, args: list) -> float:
+        """split(s, a [, fs]): the pieces of s into a[1..n]; the separator as FS is read (a string), or a regex."""
+        text = self.touch(self.text(self.value(args[0])))
+        if args[1][0] != "var":
+            if self.style == "busybox":
+                return 0.0
+            self.fatal("split: second argument is not an array", "", "")
+        fs = regex = None
+        if len(args) == 3:
+            if args[2][0] == "ere":
+                regex = self.regex(args[2][1], "ere")
+            else:
+                fs = self.text(self.value(args[2]))
+                if len(fs) > 1 and any(c in fs for c in "\\^$.[]|()*+?{}"):
+                    regex, fs = self.regex(fs, "const" if args[2][0] == "str" else "dynamic"), None
+        pieces = self.split(text, fs, regex)
+        array = self.array(args[1][1])
+        array.clear()
+        for index, piece in enumerate(pieces, 1):
+            self.insert(array, str(index), TpotAwkStrnum(piece))
+        return float(len(pieces))
 
     def mawk_substr(self, text: str, start: float, length) -> str:
         """substr of mawk, start and length truncated to its int (as recorded with mawk 1.3.3 of
@@ -13695,6 +13990,19 @@ class TpotAwk:
                         raise
                 if step is not None:
                     self.value(step)
+        elif op == "forin":
+            _, var, name, body, _ = node
+            for key in self.keys_in_order(self.array(name)):
+                self.set(("var", var), TpotAwkStrnum(key))
+                try:
+                    self.execute(body)
+                except TpotAwkJump as jump:
+                    if jump.kind == "break":
+                        break
+                    if jump.kind != "continue":
+                        raise
+        elif op == "delete":
+            self.remove(node[1], node[2])
         elif op == "exit":
             raise TpotAwkJump("exit", None if node[1] is None else self.integer(self.value(node[1])) & 255)
         else:
@@ -13778,6 +14086,10 @@ class TpotAwk:
                                               if self.style != "gawk" else [])
                 code, text = self.syntax_message(error, program)
                 raise TpotAwkStop(code, said + text) from None
+            if self.style == "mawk":
+                clash = TpotAwkTypes(self.old_mawk, self.new_mawk).check(rules)
+                if clash:
+                    raise TpotAwkStop(2, clash)
             said = self.compile_constants(self.regex_constants(rules))
             if said:
                 raise TpotAwkStop(2 if self.style == "mawk" else 1, said)
@@ -14328,8 +14640,13 @@ class TpotTextTool(HoneyPotCommand):
     def tpot_run(self, terminal: bytes | None) -> None:
         self.tpot_out, self.tpot_size, self.tpot_err = [], 0, []
         self.tpot_deadline = min(time.monotonic() + TPOT_TEXT_SECONDS, tpot_deadline(getattr(self, "protocol", None)))
+        self.tpot_finish(lambda: self.tpot_main(terminal))
+
+    def tpot_finish(self, step) -> None:
+        """step (the command, or what is left of it after a line of the terminal) to its exit status; None
+        means the command waits for the terminal (its lines until ctrl-d, or an answer: TpotFsTool)."""
         try:
-            code = self.tpot_main(terminal)
+            code = step()
         except TpotTextStop as stop:
             self.tpot_err.append(stop.text)
             code = stop.code
@@ -14340,12 +14657,17 @@ class TpotTextTool(HoneyPotCommand):
             # standard input is the terminal: its lines until ctrl-d
             self.tpot_lines, self.tpot_read_size = [], 0
             return
+        self.tpot_flush()
+        self.exit_code = code
+        self.exit()
+
+    def tpot_flush(self) -> None:
+        """What the command said so far goes to the terminal."""
         if self.tpot_out:
             self.writeBytes(b"".join(self.tpot_out))
         if self.tpot_err:
             self.errorWrite("".join(self.tpot_err))
-        self.exit_code = code
-        self.exit()
+        self.tpot_out, self.tpot_err = [], []
 
     def tpot_main(self, terminal: bytes | None) -> int | None:
         raise NotImplementedError
@@ -15895,6 +16217,7 @@ import calendar
 import errno as tpot_errno
 import json
 import os
+import types
 from pathlib import Path
 
 TPOT_FS_NAMES = 4096
@@ -15904,10 +16227,15 @@ TPOT_FS_ERRORS = 2_000
 # new nodes of a session, as Cowrie's mkfile and mkdir count them
 TPOT_FS_NEW = 10_000
 TPOT_FS_SPECIAL = ("/sys", "/proc", "/dev/pts")
-TPOT_FS_FIELD = re.compile(r"\{(\d+)(:q)?\}")
-TPOT_FS_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
-TPOT_FS_ESCAPES = {"\a": "\\a", "\b": "\\b", "\t": "\\t", "\n": "\\n", "\v": "\\v", "\f": "\\f", "\r": "\\r",
-                   "\x1b": "\\E"}
+TPOT_FS_FIELD = re.compile(r"\{(\d+)(:q|:c)?\}")
+# what quoteaf and quote() of coreutils write as an escape: control characters, DEL and the bytes of no UTF-8
+#   character (surrogates of the names here); \a \b \t \n \v \f \r by their letter, the others in octal
+TPOT_FS_CONTROL = re.compile(r"[\x00-\x1f\x7f\udc80-\udcff]")
+TPOT_FS_ESCAPES = {"\a": "\\a", "\b": "\\b", "\t": "\\t", "\n": "\\n", "\v": "\\v", "\f": "\\f", "\r": "\\r"}
+# the characters a name with a single quote may hold for quoteaf to write it in double quotes (gnulib's
+#   c_and_shell_quote_compat: letters, digits, space and these; recorded with coreutils 8.30 to 9.7: `it's 1`
+#   and `a'b` in double quotes, `it's (1)`, `it's!`, `it's?` and `it's~` in single quotes)
+TPOT_FS_COMPAT = frozenset(" %+,-./:@_{}")
 TPOT_FS_STRERROR = {"ENOENT": "No such file or directory", "ENOTDIR": "Not a directory", "EISDIR": "Is a directory",
                     "EACCES": "Permission denied", "EPERM": "Operation not permitted",
                     "ENOTEMPTY": "Directory not empty", "EINVAL": "Invalid argument", "EEXIST": "File exists",
@@ -15946,34 +16274,65 @@ def tpot_fs_variant(gnu: bool, libc: str) -> tuple:
     if name not in variants:
         name = "debian_12" if gnu else f"busybox_1.36.1-{libc}"
         name = name if name in variants else "busybox_1.36.1-musl"
-    return variants[name], table.get("authors", {})
+    return variants[name], variants[name].get("authors", table.get("authors", {}))
 
 
-def tpot_fs_quote(name: str) -> str:
-    """A name as quoteaf of coreutils 8.25 and later quotes it (shell-escape-always): in single quotes; with a
-    single quote and nothing a shell expands in double quotes in double quotes; control characters as $'\\n'."""
-    if TPOT_FS_CONTROL.search(name):
-        out, plain = "", ""
-        for char in name:
-            if TPOT_FS_CONTROL.match(char):
-                if plain:
-                    out += "'" + plain.replace("'", "'\\''") + "'"
-                    plain = ""
-                out += "$'" + TPOT_FS_ESCAPES.get(char, f"\\{ord(char):03o}") + "'"
-            else:
-                plain += char
-        return out + ("'" + plain.replace("'", "'\\''") + "'" if plain else "")
-    if "'" in name:
-        if not re.search(r'["$`\\!]', name):
+def tpot_fs_escape(char: str) -> str:
+    """The escape of a control character, a byte of no character or (in the POSIX locale) a character beyond
+    ASCII: \\n, \\033, \\377, \\303\\244."""
+    code = ord(char)
+    if code >= 0x80 and not 0xdc80 <= code <= 0xdcff:
+        return "".join(f"\\{byte:03o}" for byte in char.encode("utf-8", "surrogateescape"))
+    return TPOT_FS_ESCAPES.get(char, f"\\{code - 0xdc00 if code >= 0xdc00 else code:03o}")
+
+
+def tpot_fs_escaped(char: str, posix: bool) -> bool:
+    """Whether quoteaf and quote() write char as an escape: control characters and bytes of no character
+    always, every character beyond ASCII in the POSIX locale (nothing of it is printable there)."""
+    return bool(TPOT_FS_CONTROL.match(char)) or (posix and ord(char) >= 0x80)
+
+
+def tpot_fs_quote(name: str, posix: bool = False) -> str:
+    """A name as quoteaf of coreutils 8.25 and later quotes it (shell-escape-always; recorded with 8.30 to 9.7):
+    in single quotes, a single quote as '\\''; in double quotes when it holds a single quote and nothing but
+    letters, digits, space and TPOT_FS_COMPAT; a run of control characters and bytes of no character leaves the
+    single quotes for $'...' with their escapes ('a'$'\\n\\n''b', ''$'\\033' at the start, 'a'$'\\n' at the end)."""
+    if not any(tpot_fs_escaped(c, posix) for c in name):
+        if "'" in name and all(c.isascii() and (c.isalnum() or c in TPOT_FS_COMPAT or c == "'") for c in name):
             return '"' + name + '"'
         return "'" + name.replace("'", "'\\''") + "'"
-    return "'" + name + "'"
+    out, escaping = "'", False
+    for char in name:
+        if tpot_fs_escaped(char, posix):
+            if not escaping:
+                out, escaping = out + "'$'", True
+            out += tpot_fs_escape(char)
+            continue
+        if escaping:
+            out, escaping = out + "''", False
+        out += "'\\''" if char == "'" else char
+    return out + "'"
 
 
-def tpot_fs_format(template: str, values) -> str:
-    """A template of fs_texts.json with its values: {N} as it is, {N:q} quoted as quoteaf does."""
-    return TPOT_FS_FIELD.sub(lambda found: tpot_fs_quote(str(values[int(found.group(1))])) if found.group(2)
-                             else str(values[int(found.group(1))]), template)
+def tpot_fs_quote_c(name: str, posix: bool = False) -> str:
+    """A name inside the quotes of quote() (the locale's ‘…’, or '…' in the POSIX locale; recorded with 8.22 to
+    9.7): control characters and bytes of no character as escapes, a backslash doubled; in the POSIX locale
+    every character beyond ASCII as escapes too and the quote itself as \\'."""
+    return "".join(tpot_fs_escape(c) if tpot_fs_escaped(c, posix) else "\\\\" if c == "\\"
+                   else "\\'" if c == "'" and posix else c for c in name)
+
+
+def tpot_fs_format(template: str, values, posix: bool = False) -> str:
+    """A template of fs_texts.json with its values: {N} as it is, {N:q} quoted as quoteaf does, {N:c} escaped as
+    quote() does inside the quotes the template carries; posix: the locale of the persona is the POSIX one."""
+    def field(found):
+        value = str(values[int(found.group(1))])
+        if found.group(2) == ":q":
+            return tpot_fs_quote(value, posix)
+        if found.group(2) == ":c":
+            return tpot_fs_quote_c(value, posix)
+        return value
+    return TPOT_FS_FIELD.sub(field, template)
 
 
 class TpotFsTool(TpotTextTool):
@@ -15986,6 +16345,10 @@ class TpotFsTool(TpotTextTool):
 
     def tpot_main(self, terminal: bytes | None) -> int:
         self.fs_texts, self.fs_authors = tpot_fs_variant(self.gnu, self.libc)
+        if self.tool in self.fs_texts.get("missing", ()):
+            # no applet of this name in the firmware's BusyBox (the rmdir of the DIR-859; the shell itself says
+            #   "not found", render.skip_python_commands): what `busybox rmdir` answers
+            raise TpotTextStop(f"{self.tool}: applet not found\n", 1)
         self.tpot_errors = self.tpot_walked = 0
         self.tpot_answers = None
         sudo = bool(getattr(getattr(self, "pp", None), "tpot_sudo", False))
@@ -16002,19 +16365,60 @@ class TpotFsTool(TpotTextTool):
         private = getattr(self.fs, "_ensure_private_fs", None)
         if callable(private):
             private()  # the session's own copy of the tree before a node is read for a change
-        return self.tpot_fs_main(options, operands[:TPOT_FS_NAMES])
+        self.tpot_pending, self.tpot_eof = None, False
+        return self.tpot_drive(self.tpot_fs_main(options, operands[:TPOT_FS_NAMES]), None)
 
-    def tpot_fs_main(self, options: list, names: list) -> int:
+    def tpot_fs_main(self, options: list, names: list):
+        """The exit status; rm, cp and mv ask (-i, -I), so theirs is a generator that yields each prompt
+        standard input has no answer for (tpot_ask) and returns the status."""
         raise NotImplementedError
+
+    def tpot_drive(self, run, answer):
+        """The exit status of the command, or None where it waits for a line of the terminal at a question
+        (run, the generator of its work, is kept in tpot_pending until the line comes)."""
+        if not isinstance(run, types.GeneratorType):
+            return run
+        try:
+            run.send(answer)
+        except StopIteration as done:
+            return done.value
+        self.tpot_flush()  # the prompt, after what was said before it
+        self.tpot_pending = run
+        return None
+
+    def tpot_continue(self, answer: bytes) -> None:
+        """A line of the terminal (or its end) at a question: the command goes on, with its time anew."""
+        run, self.tpot_pending = self.tpot_pending, None
+        self.tpot_deadline = min(time.monotonic() + TPOT_TEXT_SECONDS, tpot_deadline(getattr(self, "protocol", None)))
+        self.tpot_finish(lambda: self.tpot_drive(run, answer))
+
+    def lineReceived(self, line: str) -> None:
+        if self.tpot_pending is None:
+            super().lineReceived(line)
+            return
+        self.protocol.events.dispatch("cowrie.command.input", "INPUT (%(realm)s): %(input)s",
+                                      realm=self.tool, input=line)
+        self.tpot_continue(line.encode("utf-8", "surrogateescape"))
+
+    def eofReceived(self) -> None:
+        if self.tpot_pending is None:
+            super().eofReceived()
+            return
+        # the end of standard input at a question: what an exec channel sent are the answers; then, and at
+        #   a terminal (ctrl-d), every question is answered no
+        data = bytes(getattr(self.protocol, "input_data", b"") or b"") if hasattr(self.protocol, "execcmd") else b""
+        self.tpot_answers, self.tpot_eof = (data.split(b"\n") if data else []), True
+        self.tpot_continue(self.tpot_answers.pop(0) if self.tpot_answers else b"")
 
     # --- texts -----------------------------------------------------------------------------
 
     def tpot_say(self, key: str, *values, errno: str | None = None) -> str:
         """The text of a condition: the variant's own for this errno, else its template with the errno's text."""
         templates = self.fs_texts["templates"]
+        posix = self.gnu and self.collate == "posix"
         if errno and f"{key}.{errno}" in templates:
-            return tpot_fs_format(templates[f"{key}.{errno}"], values)
-        return tpot_fs_format(templates[key], values + ((TPOT_FS_STRERROR[errno],) if errno else ()))
+            return tpot_fs_format(templates[f"{key}.{errno}"], values, posix)
+        return tpot_fs_format(templates[key], values + ((TPOT_FS_STRERROR[errno],) if errno else ()), posix)
 
     def tpot_fail(self, key: str, *values, errno: str | None = None) -> None:
         if self.tpot_errors < TPOT_FS_ERRORS:
@@ -16028,13 +16432,18 @@ class TpotFsTool(TpotTextTool):
         """-v prints: always on GNU, on BusyBox where it is built with FEATURE_VERBOSE."""
         return self.gnu or bool(self.fs_texts.get("verbose", {}).get(self.tool, True))
 
-    def tpot_ask(self, prompt: str) -> bool:
-        """A prompt on stderr and the answer, a line of standard input (a pipe; the terminal and a closed
-        input answer no)."""
+    def tpot_ask(self, prompt: str):
+        """A prompt on stderr and the answer (`yield from`): a line of a pipe, else of the terminal (the
+        command waits for it: tpot_drive); a closed input and the lines after the last one answer no."""
         self.tpot_err.append(prompt)
         if self.tpot_answers is None:
-            self.tpot_answers = bytes(self.input_data or b"").split(b"\n")
-        answer = self.tpot_answers.pop(0) if self.tpot_answers else b""
+            if self.input_data is None and not self.tpot_eof:
+                answer = yield prompt
+            else:
+                self.tpot_answers = bytes(self.input_data or b"").split(b"\n")
+                answer = self.tpot_answers.pop(0) if self.tpot_answers else b""
+        else:
+            answer = self.tpot_answers.pop(0) if self.tpot_answers else b""
         return answer.lstrip()[:1] in (b"y", b"Y")
 
     # --- options ---------------------------------------------------------------------------
@@ -16101,6 +16510,9 @@ class TpotFsTool(TpotTextTool):
                     operands += args[index:]
                     break
                 continue
+            if arg.startswith("--") and not longs and self.version < (1, 15):
+                # getopt32 without getopt_long (1.14.1 of the DIR-859): -- is the option `-`
+                raise self.tpot_usage_stop(self.tpot_bb_short_error("unknown", "-"))
             if arg.startswith("--"):
                 word, eq, value = arg[2:].partition("=")
                 names = [word] if word in longs else [name for name in longs if name.startswith(word)]
@@ -16273,7 +16685,7 @@ class Command_tpot_rm(TpotFsTool):
 
     tool = "rm"
 
-    def tpot_fs_main(self, options: list, names: list) -> int:
+    def tpot_fs_main(self, options: list, names: list):
         self.force = self.interactive = self.recursive = self.dirs = self.verbose = False
         once, preserve = False, True
         for key, value in options:
@@ -16305,17 +16717,17 @@ class Command_tpot_rm(TpotFsTool):
             raise self.tpot_usage_stop()
         if self.gnu and once and (self.recursive or len(names) > 3):
             key = "rm.prompt_some_r" if self.recursive else "rm.prompt_some"
-            if not self.tpot_ask(self.tpot_say(key + ("_one" if len(names) == 1 else ""), len(names))):
+            if not (yield from self.tpot_ask(self.tpot_say(key + ("_one" if len(names) == 1 else ""), len(names)))):
                 return 0
         code = 0
         for name in names:
             if self.tpot_late():
                 return 1
-            if not self.tpot_rm_operand(name, preserve):
+            if not (yield from self.tpot_rm_operand(name, preserve)):
                 code = 1
         return code
 
-    def tpot_rm_operand(self, name: str, preserve: bool) -> bool:
+    def tpot_rm_operand(self, name: str, preserve: bool):
         base = name.rstrip("/").rpartition("/")[2] if name.rstrip("/") else "/"
         if base in (".", "..") and (not self.gnu or self.recursive or self.dirs):
             self.tpot_fail("rm.dot", name)
@@ -16340,13 +16752,13 @@ class Command_tpot_rm(TpotFsTool):
                 if node[tpot_shell_fs.A_CONTENTS]:
                     self.tpot_fail("rm.cannot_remove", name, errno="ENOTEMPTY")
                     return False
-                return self.tpot_rm_one(name, path, node, parent, link)
+                return (yield from self.tpot_rm_one(name, path, node, parent, link))
             if self.gnu:
                 self.tpot_fail("rm.cannot_remove", name, errno="EISDIR")
             else:
                 self.tpot_fail("rm.is_dir", name)
             return False
-        return self.tpot_rm_walk(name, path, node, parent, link)
+        return (yield from self.tpot_rm_walk(name, path, node, parent, link))
 
     def tpot_fast(self, path: str, node, parent) -> bool:
         """Without -i and -v a tree goes at once (none of /proc and /sys in it): root's always, another
@@ -16392,9 +16804,9 @@ class Command_tpot_rm(TpotFsTool):
             kind = kinds["file"] if node[tpot_shell_fs.A_SIZE] else kinds["empty"]
         return self.tpot_say("rm.prompt", shown, kind)
 
-    def tpot_rm_one(self, shown: str, path: str, node, parent, link: bool = False) -> bool:
+    def tpot_rm_one(self, shown: str, path: str, node, parent, link: bool = False):
         """One node, after the question of -i (declined: it stays, which is no failure)."""
-        if self.interactive and not self.tpot_ask(self.tpot_prompt(shown, node)):
+        if self.interactive and not (yield from self.tpot_ask(self.tpot_prompt(shown, node))):
             return True
         return self.tpot_rm_unlink(shown, path, node, parent, link)
 
@@ -16416,26 +16828,26 @@ class Command_tpot_rm(TpotFsTool):
             self.tpot_tell("rm.removed_dir" if self.tpot_is_dir(node) else "rm.removed", shown)
         return True
 
-    def tpot_rm_walk(self, shown: str, path: str, node, parent, link: bool = False) -> bool:
+    def tpot_rm_walk(self, shown: str, path: str, node, parent, link: bool = False):
         """A node and, of a folder, everything in it first (as far as TPOT_FS_NODES and the time reach). The
         folders of the walk are a stack (TpotRmFolder), so the depth of a tree costs no recursion; / is never
         removed."""
         if not self.tpot_walk_more():
             return False
         if not self.tpot_is_dir(node):
-            return self.tpot_rm_one(shown, path, node, parent)
+            return (yield from self.tpot_rm_one(shown, path, node, parent))
         if path != "/" and not link and self.tpot_fast(path, node, parent):
             self.tpot_unlink(parent, node)
             return True
         self.tpot_failed, stack = False, []
-        self.tpot_rm_enter(shown, path, node, parent, link, stack)
+        yield from self.tpot_rm_enter(shown, path, node, parent, link, stack)
         while stack:
             if self.tpot_walked > TPOT_FS_NODES or self.tpot_late():
                 return False
             folder = stack[-1]
             if not folder.left:
                 stack.pop()
-                self.tpot_rm_leave(folder, stack)
+                yield from self.tpot_rm_leave(folder, stack)
                 continue
             child = folder.left.pop()
             if not self.tpot_walk_more():
@@ -16443,12 +16855,12 @@ class Command_tpot_rm(TpotFsTool):
             name = child[tpot_shell_fs.A_NAME]
             child_shown, child_path = self.tpot_join(folder.shown, name), self.tpot_join(folder.path, name)
             if self.tpot_is_dir(child):
-                self.tpot_rm_enter(child_shown, child_path, child, folder.node, False, stack)
-            elif not self.tpot_rm_one(child_shown, child_path, child, folder.node):
+                yield from self.tpot_rm_enter(child_shown, child_path, child, folder.node, False, stack)
+            elif not (yield from self.tpot_rm_one(child_shown, child_path, child, folder.node)):
                 self.tpot_rm_failed(stack)
         return not self.tpot_failed
 
-    def tpot_rm_enter(self, shown: str, path: str, node, parent, link: bool, stack: list) -> None:
+    def tpot_rm_enter(self, shown: str, path: str, node, parent, link: bool, stack: list):
         """A folder of the walk before what is in it: root's goes at once (rm -rf of /), -i asks to descend
         (GNU asks to remove an empty one, remove.c); a declined descent leaves it, and GNU the folders above."""
         if stack and self.uid == 0 and self.tpot_fast(path, node, parent):
@@ -16456,17 +16868,17 @@ class Command_tpot_rm(TpotFsTool):
             return
         if self.interactive:
             if self.gnu and not node[tpot_shell_fs.A_CONTENTS]:
-                if not self.tpot_ask(self.tpot_prompt(shown, node)):
+                if not (yield from self.tpot_ask(self.tpot_prompt(shown, node))):
                     self.tpot_rm_mark(stack)
                 elif not self.tpot_rm_unlink(shown, path, node, parent, link):
                     self.tpot_rm_failed(stack)
                 return
-            if not self.tpot_ask(self.tpot_say("rm.descend", shown)):
+            if not (yield from self.tpot_ask(self.tpot_say("rm.descend", shown))):
                 self.tpot_rm_mark(stack)
                 return
         stack.append(TpotRmFolder(shown, path, node, parent, link))
 
-    def tpot_rm_leave(self, folder: TpotRmFolder, stack: list) -> None:
+    def tpot_rm_leave(self, folder: TpotRmFolder, stack: list):
         """A folder of the walk after what was in it: GNU leaves a marked one without a word; BusyBox asks with
         -i, and leaves one whose nodes failed; else the folder goes, or says why not (Directory not empty)."""
         if folder.path == "/":
@@ -16474,13 +16886,15 @@ class Command_tpot_rm(TpotFsTool):
             return
         if self.gnu and folder.marked:
             return
-        if not self.gnu and folder.failed:
+        if not self.gnu and folder.failed and self.version >= (1, 30):
+            # remove_file() of BusyBox 1.30 and later leaves a folder a node of which failed; 1.25 to 1.29 still
+            #   try its rmdir and say why not (recorded)
             if self.interactive:
-                self.tpot_ask(self.tpot_say("rm.prompt_dir", folder.shown))
+                yield from self.tpot_ask(self.tpot_say("rm.prompt_dir", folder.shown))
             if stack:
                 stack[-1].failed = True
             return
-        if not self.tpot_rm_one(folder.shown, folder.path, folder.node, folder.parent, folder.link):
+        if not (yield from self.tpot_rm_one(folder.shown, folder.path, folder.node, folder.parent, folder.link)):
             self.tpot_rm_failed(stack)
 
     def tpot_rm_mark(self, stack: list) -> None:
@@ -16507,7 +16921,7 @@ class Command_tpot_cp(TpotFsTool):
 
     tool = "cp"
 
-    def tpot_fs_main(self, options: list, names: list) -> int:
+    def tpot_fs_main(self, options: list, names: list):
         self.recursive = self.verbose = self.no_clobber = self.interactive = self.newer = self.preserve = False
         target, no_target, deref, always = None, False, None, False
         for key, value in options:
@@ -16546,6 +16960,11 @@ class Command_tpot_cp(TpotFsTool):
         else:
             if len(names) < (1 if target is not None else 2):
                 raise self.tpot_usage_stop()
+            if no_target and len(names) != 2:
+                # -T with more operands: the usage from 1.34 on, "too many arguments" before (recorded 1.28 to 1.33)
+                if self.version >= (1, 34):
+                    raise self.tpot_usage_stop()
+                raise TpotTextStop(self.tpot_say("cp.too_many"), 1)
             sources, dest = (names, target) if target is not None else (names[:-1], names[-1])
             node, _ = self.tpot_node(dest)
             into = target is not None or (not no_target and (len(sources) > 1 or self.tpot_is_dir(node)))
@@ -16554,7 +16973,7 @@ class Command_tpot_cp(TpotFsTool):
             if self.tpot_late():
                 return 1
             shown = self.tpot_join(dest, posixpath.basename(src.rstrip("/")) or src) if into else dest
-            if not self.tpot_cp_operand(src, shown):
+            if not (yield from self.tpot_cp_operand(src, shown)):
                 code = 1
         return code
 
@@ -16578,7 +16997,7 @@ class Command_tpot_cp(TpotFsTool):
             raise TpotTextStop(self.tpot_say(f"{self.tool}.target", names[-1], errno=errno or "ENOTDIR"), 1)
         return names[:-1], names[-1], self.tpot_is_dir(node)
 
-    def tpot_cp_operand(self, src: str, shown: str) -> bool:
+    def tpot_cp_operand(self, src: str, shown: str):
         # a slash at the end follows a link as path resolution does
         source, errno = self.tpot_node(src, follow=self.deref or src.endswith("/"))
         if source is None:
@@ -16603,13 +17022,13 @@ class Command_tpot_cp(TpotFsTool):
                 if self.gnu:
                     self.tpot_fail("cp.into_itself", src, shown)
                 else:
-                    self.tpot_fail("cp.recursion", src)
+                    self.tpot_fail("cp.recursion", shown)
                 return False
-            return self.tpot_cp_tree(src, shown, spath, tpath, source, time.time())
-        return self.tpot_cp_file(src, shown, spath, tpath, source, time.time())
+            return (yield from self.tpot_cp_tree(src, shown, spath, tpath, source, time.time()))
+        return (yield from self.tpot_cp_file(src, shown, spath, tpath, source, time.time()))
 
     def tpot_cp_file(self, src: str, shown: str, spath: str, tpath: str, source, now: float, parent=None,
-                     dest=None, replace: bool = True) -> bool:
+                     dest=None, replace: bool = True):
         """A file, or a link as a link, to tpath; a walk gives the folder node there and what it holds of that
         name (the node a link there points to), an operand neither."""
         if parent is None:
@@ -16617,10 +17036,8 @@ class Command_tpot_cp(TpotFsTool):
             parent = self.fs.getfile(posixpath.dirname(tpath) or "/")
         link = source[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_LINK
         if self.tpot_is_dir(dest):
-            if self.gnu:
-                self.tpot_fail("cp.dir", shown)
-            else:
-                self.tpot_fail("cp.create", shown, errno="EISDIR")
+            # a file onto a folder (-T): BusyBox says "'d' is a directory" (recorded with 1.28 to 1.36)
+            self.tpot_fail("cp.dir" if self.gnu else "cp.is_dir", shown)
             return False
         if dest is None and shown.endswith("/"):
             # a name with a slash at its end that is no folder: GNU says ENOTDIR, open(2) of BusyBox EISDIR
@@ -16633,8 +17050,8 @@ class Command_tpot_cp(TpotFsTool):
                 return True
             if self.newer and float(dest[tpot_shell_fs.A_CTIME] or 0) >= float(source[tpot_shell_fs.A_CTIME] or 0):
                 return True
-            if self.interactive and not self.tpot_ask(self.tpot_say("cp.overwrite", shown)):
-                return True
+            if self.interactive and not (yield from self.tpot_ask(self.tpot_say("cp.overwrite", shown))):
+                return not (self.gnu and self.version >= (9, 4))  # a declined overwrite fails from 9.4 on
             errno = None if tpot_may_write(dest, self.uid, self.gid) and not self.tpot_special(tpath) else "EACCES"
         if errno:
             self.tpot_fail("cp.create", shown, errno=errno)
@@ -16658,7 +17075,7 @@ class Command_tpot_cp(TpotFsTool):
             self.tpot_tell("cp.verbose", src, shown)
         return True
 
-    def tpot_cp_tree(self, src: str, shown: str, spath: str, tpath: str, source, now: float) -> bool:
+    def tpot_cp_tree(self, src: str, shown: str, spath: str, tpath: str, source, now: float):
         """A folder and what is in it (as far as TPOT_FS_NODES and the time reach): into a new folder, or into
         the existing one of that name. The folders of the walk are a stack of the nodes on both sides
         (TpotCpFolder), so the depth of a tree costs no recursion and no lookup of each path from /."""
@@ -16694,8 +17111,8 @@ class Command_tpot_cp(TpotFsTool):
                 found = self.fs.getfile(parts[3])  # a file is written through a link there
             else:
                 found = there
-            if not (self.tpot_walk_more() and self.tpot_cp_file(*parts, child, now, folder.dest, found,
-                                                                 there is not None)):
+            if not (self.tpot_walk_more() and (yield from self.tpot_cp_file(*parts, child, now, folder.dest, found,
+                                                                               there is not None))):
                 done = False
         return done
 
@@ -16711,7 +17128,9 @@ class Command_tpot_cp(TpotFsTool):
             if self.gnu:
                 self.tpot_fail("cp.nondir", shown, src)
             else:
-                self.tpot_fail("cp.target_not_dir", shown)
+                # copy_file() of BusyBox looks for the source's name under the destination
+                self.tpot_fail("cp.stat", self.tpot_join(shown, posixpath.basename(src.rstrip("/")) or src),
+                               errno="ENOTDIR")
             return None
         if there is None:
             if len(spath) > TPOT_FS_PATH_MAX:
@@ -16747,7 +17166,7 @@ class Command_tpot_mv(Command_tpot_cp):
 
     tool = "mv"
 
-    def tpot_fs_main(self, options: list, names: list) -> int:
+    def tpot_fs_main(self, options: list, names: list):
         self.verbose = self.no_clobber = self.interactive = False
         target, no_target = None, False
         for key, value in options:
@@ -16772,12 +17191,12 @@ class Command_tpot_mv(Command_tpot_cp):
                 if self.tpot_late():
                     return 1
                 shown = self.tpot_join(dest, posixpath.basename(src.rstrip("/")) or src) if into else dest
-                if not self.tpot_mv_gnu(src, shown):
+                if not (yield from self.tpot_mv_gnu(src, shown)):
                     code = 1
             return code
-        return self.tpot_mv_busybox(names, target, no_target)
+        return (yield from self.tpot_mv_busybox(names, target, no_target))
 
-    def tpot_mv_gnu(self, src: str, shown: str) -> bool:
+    def tpot_mv_gnu(self, src: str, shown: str):
         source, errno = self.tpot_node(src, follow=False)
         if source is None:
             self.tpot_fail("mv.stat", src, errno=errno)
@@ -16799,8 +17218,8 @@ class Command_tpot_mv(Command_tpot_cp):
                 return False
             if self.no_clobber:
                 return True
-            if self.interactive and not self.tpot_ask(self.tpot_say("mv.overwrite", shown)):
-                return True
+            if self.interactive and not (yield from self.tpot_ask(self.tpot_say("mv.overwrite", shown))):
+                return not self.version >= (9, 4)  # a declined overwrite fails from 9.4 on (recorded 9.4, 9.7)
         errno = self.tpot_rename_errno(spath, tpath, source, dest)
         if errno:
             self.tpot_fail("mv.cannot_move", src, shown, errno=errno)
@@ -16833,9 +17252,9 @@ class Command_tpot_mv(Command_tpot_cp):
                 return "ENOTEMPTY"
         return None
 
-    def tpot_mv_busybox(self, names: list, target, no_target: bool) -> int:
+    def tpot_mv_busybox(self, names: list, target, no_target: bool):
         """mv_main() of BusyBox: two operands rename onto a name that is no folder, else into the folder."""
-        if len(names) < (1 if target is not None else 2):
+        if len(names) < (1 if target is not None else 2) or (no_target and len(names) != 2):
             raise self.tpot_usage_stop()
         last = target if target is not None else names[-1]
         sources = names if target is not None else names[:-1]
@@ -16845,7 +17264,7 @@ class Command_tpot_mv(Command_tpot_cp):
                 self.tpot_fail("mv.stat", last, errno=errno)
                 return 1
             if not self.tpot_is_dir(found) or no_target:
-                return 0 if self.tpot_mv_move(sources[0], last) else 1
+                return 0 if (yield from self.tpot_mv_move(sources[0], last)) else 1
         code = 0
         for src in sources:
             if self.tpot_late():
@@ -16856,21 +17275,24 @@ class Command_tpot_mv(Command_tpot_cp):
                 self.tpot_fail("mv.stat", dest, errno=errno)
                 code = 1
                 continue
-            if not self.tpot_mv_move(src, dest):
+            if not (yield from self.tpot_mv_move(src, dest)):
                 code = 1
         return code
 
-    def tpot_mv_move(self, src: str, shown: str) -> bool:
+    def tpot_mv_move(self, src: str, shown: str):
         spath, tpath = self.tpot_path(src), self.tpot_path(shown)
         source, errno = self.tpot_node(src, follow=False)
         dest = self.fs.getfile(tpath, follow_symlinks=False)
         if source is not None and dest is not None and dest is not source:
             if self.no_clobber:
                 return True
-            if self.interactive and not self.tpot_ask(self.tpot_say("mv.overwrite", shown)):
+            if self.interactive and not (yield from self.tpot_ask(self.tpot_say("mv.overwrite", shown))):
                 return True
         if source is not None and (dest is source or spath == tpath):
             return True
+        if source is not None and dest is not None and self.tpot_is_dir(dest) and not self.tpot_is_dir(source):
+            self.tpot_fail("mv.is_dir", shown)  # -T of a file onto a folder (recorded with 1.28 to 1.36)
+            return False
         errno = errno or self.tpot_rename_errno(spath, tpath, source, dest)
         if errno:
             self.tpot_fail("mv.rename", src, errno=errno)
@@ -17150,6 +17572,7 @@ class Command_tpot_touch(TpotFsTool):
             if when is None:
                 raise TpotTextStop(self.tpot_say("touch.invalid_date", given), 1)
         code = 0
+        self.tpot_folders = {}
         for name in names:
             if self.tpot_late():
                 return 1
@@ -17157,16 +17580,63 @@ class Command_tpot_touch(TpotFsTool):
                 code = 1
         return code
 
+    def tpot_folder(self, path: str):
+        """(node, {name: node} of what it holds) of the folder of path, None where there is none; the folders
+        of one command are kept with their names (thousands of names in one folder would look each one up
+        among all the others: fs.getfile and fs.mkfile scan a folder's list, which makes a wide folder
+        quadratic), and a file this command makes joins its folder's names."""
+        parent_path = posixpath.dirname(path) or "/"
+        found = self.tpot_folders.get(parent_path)
+        if found is None:
+            parent = self.fs.getfile(parent_path)
+            names = {child[tpot_shell_fs.A_NAME]: child for child in parent[tpot_shell_fs.A_CONTENTS]} \
+                if self.tpot_is_dir(parent) else None
+            found = self.tpot_folders[parent_path] = (parent, names)
+        return found
+
+    def tpot_touch_node(self, name: str, path: str, follow: bool):
+        """(node, None) of an operand, else (None, errno), as tpot_node, through the folders of the command."""
+        if path == "/":
+            return self.fs.fs, None
+        parent, names = self.tpot_folder(path)
+        if parent is None:
+            return None, self.tpot_missing(path)
+        if names is None:
+            return None, "ENOTDIR"
+        node = names.get(posixpath.basename(path))
+        if node is None:
+            return None, "ENOENT"
+        if node[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_LINK and (follow or name.endswith("/")):
+            node = self.fs.getfile(path)
+            if node is None:
+                return None, "ENOENT"
+        if name.endswith("/") and not self.tpot_is_dir(node):
+            return None, "ENOTDIR"
+        return node, None
+
     def tpot_touch(self, name: str, when, no_create: bool, no_deref: bool, only) -> bool:
-        node, errno = self.tpot_node(name, follow=not no_deref)
+        path = self.tpot_path(name) if name else ""
+        node, errno = (None, "ENOENT") if not name else self.tpot_touch_node(name, path, not no_deref)
         if node is None:
             if errno != "ENOENT" or no_create:
                 if errno != "ENOENT":
                     self.tpot_fail("touch.cannot_touch", name, errno=errno)
                 return errno == "ENOENT"
-            path = self.tpot_path(name)
-            errno = "EISDIR" if name.endswith("/") else self.tpot_create_errno(path)
-            if errno is None:
+            parent, names = self.tpot_folder(path) if name else (None, None)
+            if names is not None and names.get(posixpath.basename(path)) is not None:
+                # a link to nothing: open(2) makes the file it points to (as the file system resolves it)
+                parent, names, path = None, None, self.fs.resolve_path(self.fs.readlink(path), posixpath.dirname(path))
+            errno = "EISDIR" if name.endswith("/") else self.tpot_create_errno(path, parent)
+            if errno is None and names is not None:
+                node = [posixpath.basename(path), tpot_shell_fs.T_FILE, self.uid, self.gid, 0, stat.S_IFREG | 0o644,
+                        time.time() if when is None else when, [], None, None]
+                parent[tpot_shell_fs.A_CONTENTS].append(node)
+                names[node[tpot_shell_fs.A_NAME]] = node
+                try:
+                    self.fs.newcount += 1
+                except Exception:  # noqa: BLE001 - a file system without the counter
+                    pass
+            elif errno is None:
                 try:
                     made = self.fs.mkfile(path, self.uid, self.gid, 0, stat.S_IFREG | 0o644,
                                           time.time() if when is None else when)

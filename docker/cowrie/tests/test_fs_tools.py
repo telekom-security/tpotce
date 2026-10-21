@@ -40,8 +40,8 @@ YEARS = {"8.22": "2013", "8.23": "2014", "8.26": "2016", "8.30": "2018", "8.32":
 PERSONA_VARIANTS = {
     "ubuntu-noble": "ubuntu_24.04", "ubuntu-jammy": "ubuntu_22.04", "debian-trixie": "debian_13",
     "debian-bookworm": "debian_12", "rhel-9": "rockylinux_9", "centos-7": "centos_7", "raspios": "debian_12_en",
-    "gpu-ubuntu": "ubuntu_22.04", "dlink-dir859": "src_busybox_1.14.1", "tplink-archer-c7": "fw_tplink_c7v5",
-    "zyxel-nas326": "fw_tplink_c7v5", "openwrt": "fw_openwrt_21.02.7", "qnap-qts": "fw_tplink_c7v5",
+    "gpu-ubuntu": "ubuntu_22.04", "dlink-dir859": "fw_dlink_dir859_105b03", "tplink-archer-c7": "fw_tplink_c7v5",
+    "zyxel-nas326": "fw_zyxel_nas326_aazf18", "openwrt": "fw_openwrt_21.02.7", "qnap-qts": "src_qnap_1.24.1",
     "synology-dsm": "debian_10", "ubiquiti-edgerouter-x": "fw_edgeos_209hf5", "ipcam": "fw_tplink_c7v5",
 }
 T_LINK, T_DIR, T_FILE = 0, 1, 2
@@ -121,6 +121,8 @@ def keys_of(name, image):
     if variant["style"] == "gnu":
         keys.update(text_year=YEARS[variant["version"]],
                     text_collate="posix" if image.get("locale") == "POSIX" else "c")
+        if variant["version"] == "9.7":
+            keys["text_packager"] = "Debian (9.7-3)"  # the line of Debian 13's coreutils (system.text_keys)
     else:
         keys.update(text_libc=variant["libc"], text_banner=variant["banner"])
     return keys
@@ -153,8 +155,12 @@ def setup_of(case, result, uid):
     setup = {"r": [], "bin": []}
     if uid and case == "rm -f /r/x":
         setup["r"].append(node("x", T_FILE, 0o100644))
-    if uid and case == "rm /r/y":
+    if uid and case in ("rm /r/y", "rm -r /r", "rm -rf /r"):
         setup["r"].append(node("y", T_FILE, 0o100644))
+    if uid and case.endswith("/r/w"):
+        setup["r"].append(node("w", T_FILE, 0o100666))  # root's, writable by all: the time of now, not a given one
+    if uid and case == "touch /r/v":
+        setup["r"].append(node("v", T_FILE, 0o100644))
     if "touch -r /bin/sh" in case:
         lines = result[0].splitlines()
         sh = next((line for line in lines if line.endswith("/bin/sh") or " /bin/sh -> " in line), None)
@@ -173,10 +179,14 @@ def setup_of(case, result, uid):
 
 
 def split_part(part):
-    """(words, stdin, lines of head) of one command of a case."""
+    """(words, stdin, lines of head) of one command of a case: `CMD </dev/null`, `printf 'X' | CMD` (the
+    answers of -i), `CMD | head -N`."""
     stdin, head = None, None
     if part.endswith(" </dev/null"):
         part, stdin = part[:-len(" </dev/null")], b""
+    piped = re.fullmatch(r"printf '([^']*)' \| (.*)", part)
+    if piped:
+        part, stdin = piped.group(2), piped.group(1).encode().decode("unicode_escape").encode()
     found = re.fullmatch(r"(.*) \| head -(\d+)", part)
     if found:
         part, head = found.group(1), int(found.group(2))
@@ -305,18 +315,28 @@ class FsToolsTest(unittest.TestCase):
         for label, variant in seen.items():
             self.assertEqual(variant, "fw_openwrt_21.02.7" if label.startswith("21.") else "fw_openwrt_22.03.7")
 
-    def test_the_derived_variant_says_so(self):
-        variant = TEXTS["variants"]["src_busybox_1.14.1"]
-        self.assertIn("derived", variant["recorded"])
-        self.assertEqual(variant["version"], "1.14.1")
-        self.assertNotIn("can't", "".join(variant["templates"].values()))
+    def test_every_variant_is_recorded(self):
+        for name, variant in TEXTS["variants"].items():
+            self.assertNotIn("derived", variant["recorded"], name)
+        dlink = TEXTS["variants"]["fw_dlink_dir859_105b03"]
+        self.assertEqual((dlink["version"], dlink["missing"], dlink["long_options"]), ("1.14.1", ["rmdir"], False))
+        self.assertNotIn("rmdir", dlink["usage"])
+        self.assertNotIn("can't", "".join(dlink["templates"].values()))
+        self.assertEqual(dlink["options"]["mv"], {"short": "fi", "long": {}})
+        zyxel = TEXTS["variants"]["fw_zyxel_nas326_aazf18"]
+        self.assertEqual((zyxel["libc"], zyxel["long_options"], zyxel["verbose"]["rm"], zyxel["help_status"]),
+                         ("glibc", True, False, 1))
+        self.assertEqual(zyxel["options"]["touch"]["short"], "cfma")
+        qnap = TEXTS["variants"]["src_qnap_1.24.1"]
+        self.assertEqual((qnap["long_options"], qnap["verbose"]["mkdir"], qnap["help_status"]), (True, True, 0))
+        self.assertIn("d:", qnap["options"]["touch"]["short"])
 
 
 # the templates the commands read, per style (a BusyBox variant needs those of -v, -d / -t and -r only where it
 #   has the option and prints)
 NEEDED = {
     "gnu": ("rm.missing_operand", "rm.cannot_remove", "rm.prompt", "rm.preserve_root", "rm.removed", "rm.removed_dir",
-            "rm.descend", "rm.dot", "rm.prompt_some", "rm.prompt_some_one", "rm.prompt_some_r",
+            "rm.descend", "rm.dot", "rm.prompt_some", "rm.prompt_some_r",
             "rm.prompt_some_r_one", "cp.missing_operand", "cp.missing_dest", "cp.target", "cp.extra", "cp.stat",
             "cp.omit_dir", "cp.same", "cp.into_itself", "cp.nondir", "cp.dir", "cp.create", "cp.mkdir",
             "cp.overwrite", "cp.verbose", "mv.missing_operand", "mv.missing_dest", "mv.target", "mv.extra",
@@ -326,7 +346,7 @@ NEEDED = {
             "touch.setting_times", "mkdir.cannot_create", "mkdir.invalid_mode", "mkdir.missing_operand",
             "mkdir.verbose"),
     "busybox": ("rm.cannot_remove", "rm.stat", "rm.is_dir", "rm.prompt", "rm.prompt_dir", "rm.descend", "rm.dot",
-                "cp.stat", "cp.omit_dir", "cp.same", "cp.recursion", "cp.target_not_dir", "cp.create", "cp.mkdir",
+                "cp.stat", "cp.omit_dir", "cp.same", "cp.recursion", "cp.is_dir", "mv.is_dir", "cp.create", "cp.mkdir",
                 "cp.overwrite", "mv.stat", "mv.rename", "mv.overwrite", "rmdir.failed", "touch.cannot_touch",
                 "mkdir.cannot_create", "mkdir.invalid_mode"),
 }
@@ -340,18 +360,20 @@ class VariantTest(unittest.TestCase):
             with self.subTest(name):
                 needed = set(NEEDED[variant["style"]])
                 if variant["style"] == "busybox":
+                    missing = set(variant.get("missing", ()))
                     for tool, keys in VERBOSE.items():
-                        if variant["verbose"][tool] and "v" in variant["options"][tool]["short"]:
+                        if tool not in missing and variant["verbose"][tool] and "v" in variant["options"][tool]["short"]:
                             needed.update(keys)
                     touch = variant["options"]["touch"]["short"]
                     needed.update(key for key, letter in (("touch.invalid_date", "d:"), ("touch.reference", "r:"))
                                   if letter in touch)
-                    self.assertEqual(set(variant["usage"]), set(TOOLS))
+                    needed = {key for key in needed if key.split(".")[0] not in missing}
+                    self.assertEqual(set(variant["usage"]), set(TOOLS) - missing)
                 else:
                     self.assertEqual(set(variant["help"]), set(TOOLS))
                     self.assertEqual(set(variant["rm_kinds"]), {"empty", "file", "dir", "link"})
                 self.assertEqual(needed - set(variant["templates"]), set())
-                self.assertEqual(set(variant["options"]), set(TOOLS))
+                self.assertEqual(set(variant["options"]), set(TOOLS) - set(variant.get("missing", ())))
 
 
 class BehaviourTest(unittest.TestCase):
@@ -618,3 +640,182 @@ SHELLS = {}
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WideFolderTest(unittest.TestCase):
+    """touch of thousands of names in one folder: every name is made, the status is 0 (the real touch does
+    that in well under a second; the persona's looked each name up among all the others and ended at its
+    time budget with status 1 and nothing said)."""
+
+    def test_touch_makes_thousands_of_names_in_one_folder(self):
+        shell = Shell(keys_of("debian_12", REFS["debian_12"]))
+        fs = make_fs({"r": [], "bin": []})
+        for batch in range(2):
+            names = [f"f{i}" for i in range(batch * 4000, (batch + 1) * 4000)]
+            start = time.monotonic()
+            out, err, status = shell.run(fs, ["touch"] + names, 0, None)
+            self.assertEqual((out, err, status), ("", "", 0), batch)
+            self.assertLess(time.monotonic() - start, 0.5, batch)
+            held = {child[0] for child in fs.getfile("/tmp/w")[fs_module()["A_CONTENTS"]]}
+            self.assertTrue(set(names) <= held, batch)
+        # the same names again set their time, a link is followed, a link to nothing becomes its file
+        out, err, status = shell.run(fs, ["touch", "f1", "f2", "/tmp/w/d/../f3"], 0, None)
+        self.assertEqual((out, err, status), ("", "", 0))
+        w = fs.getfile("/tmp/w")[fs_module()["A_CONTENTS"]]
+        w.append(node("la", T_LINK, 0o120777, target="/tmp/w/a"))
+        w.append(node("lg", T_LINK, 0o120777, target="gone"))
+        out, err, status = shell.run(fs, ["touch", "-d", "@1700000000", "la", "lg"], 0, None)
+        self.assertEqual((out, err, status), ("", "", 0))
+        self.assertEqual(fs.getfile("/tmp/w/a")[fs_module()["A_CTIME"]], 1700000000)
+        self.assertEqual(fs.getfile("/tmp/w/gone")[fs_module()["A_TYPE"]], T_FILE)
+        self.assertEqual(fs.getfile("/tmp/w/lg", follow_symlinks=False)[fs_module()["A_TYPE"]], T_LINK)
+        # -h sets the time of the link itself; a name through a file, a slash after a file
+        out, err, status = shell.run(fs, ["touch", "-h", "-d", "@1600000000", "la"], 0, None)
+        self.assertEqual(status, 0)
+        self.assertEqual(fs.getfile("/tmp/w/la", follow_symlinks=False)[fs_module()["A_CTIME"]], 1600000000)
+        self.assertEqual(fs.getfile("/tmp/w/a")[fs_module()["A_CTIME"]], 1700000000)
+        out, err, status = shell.run(fs, ["touch", "file/x", "a/", "nosuch/y", "d/"], 0, None)
+        self.assertEqual(err, "touch: cannot touch 'file/x': Not a directory\n"
+                              "touch: cannot touch 'a/': Not a directory\n"
+                              "touch: cannot touch 'nosuch/y': No such file or directory\n")
+        self.assertEqual(status, 1)
+
+
+class TerminalQuestionTest(unittest.TestCase):
+    """-i and -I of rm, cp and mv at the terminal: the prompt is written and the command waits for a line
+    (lineReceived), ctrl-d answers no; a pipe answers at once (the recorded cases), an exec channel's bytes
+    are the answers at the end of its input."""
+
+    def setUp(self):
+        self.shell = Shell(keys_of("debian_12", REFS["debian_12"]))
+        self.busybox = Shell(keys_of("busybox_1.36.1-musl", REFS["busybox_1.36.1-musl"]))
+
+    def start(self, shell, fs, words, stdin=None, protocol=None):
+        cmd = shell.namespace["commands"][words[0]](words[1:], stdin, fs)
+        cmd.cwd, cmd.user = "/tmp/w", {"uid": 0, "gid": 0}
+        if protocol is not None:
+            cmd.protocol = protocol
+        Log.errors.clear()
+        cmd.start()
+        self.assertEqual(Log.errors, [])
+        return cmd
+
+    def exists(self, fs, path):
+        return fs.getfile(path, follow_symlinks=False) is not None
+
+    def test_rm_i_waits_for_the_answer(self):
+        for answer, kept in (("y", False), ("yes", False), ("Y", False), ("n", True), ("", True), ("maybe", True)):
+            fs = make_fs({"r": [], "bin": []})
+            cmd = self.start(self.shell, fs, ["rm", "-i", "file"])
+            self.assertFalse(cmd.exited)
+            self.assertEqual(cmd.err, "rm: remove regular empty file 'file'? ")
+            cmd.lineReceived(answer)
+            self.assertTrue(cmd.exited, answer)
+            self.assertEqual((cmd.exit_code, cmd.err), (0, "rm: remove regular empty file 'file'? "), answer)
+            self.assertEqual(self.exists(fs, "/tmp/w/file"), kept, answer)
+
+    def test_ctrl_d_answers_no_to_every_question(self):
+        fs = make_fs({"r": [], "bin": []})
+        cmd = self.start(self.shell, fs, ["rm", "-i", "a", "b"])
+        self.assertEqual(cmd.err, "rm: remove regular empty file 'a'? ")
+        cmd.eofReceived()
+        self.assertTrue(cmd.exited)
+        self.assertEqual(cmd.err, "rm: remove regular empty file 'a'? rm: remove regular empty file 'b'? ")
+        self.assertEqual(cmd.exit_code, 0)
+        self.assertTrue(self.exists(fs, "/tmp/w/a") and self.exists(fs, "/tmp/w/b"))
+
+    def test_rm_ri_asks_down_the_tree(self):
+        fs = make_fs({"r": [], "bin": []})
+        cmd = self.start(self.shell, fs, ["rm", "-ri", "d"])
+        self.assertEqual(cmd.err, "rm: descend into directory 'd'? ")
+        cmd.lineReceived("y")
+        self.assertFalse(cmd.exited)
+        self.assertEqual(cmd.err, "rm: descend into directory 'd'? rm: remove regular empty file 'd/f'? ")
+        cmd.lineReceived("n")
+        # the folder is asked for although a node in it stays, and then cannot go (recorded with 9.1)
+        self.assertEqual((cmd.exited, cmd.err.rsplit("? ", 2)[-2]), (False, "rm: remove directory 'd'"))
+        cmd.lineReceived("y")
+        self.assertEqual((cmd.exited, cmd.exit_code), (True, 1))
+        self.assertTrue(cmd.err.endswith("rm: remove directory 'd'? rm: cannot remove 'd': Directory not empty\n"))
+        self.assertTrue(self.exists(fs, "/tmp/w/d/f"))
+        fs = make_fs({"r": [], "bin": []})
+        cmd = self.start(self.shell, fs, ["rm", "-ri", "d"])
+        cmd.lineReceived("y")
+        cmd.lineReceived("y")
+        self.assertFalse(cmd.exited)
+        self.assertTrue(cmd.err.endswith("rm: remove directory 'd'? "))
+        cmd.lineReceived("y")
+        self.assertEqual((cmd.exited, cmd.exit_code, self.exists(fs, "/tmp/w/d")), (True, 0, False))
+
+    def test_rm_I_asks_once(self):
+        fs = make_fs({"r": [], "bin": []})
+        cmd = self.start(self.shell, fs, ["rm", "-I", "-r", "d", "e"])
+        self.assertEqual(cmd.err, "rm: remove 2 arguments recursively? ")
+        cmd.lineReceived("y")
+        self.assertEqual((cmd.exited, cmd.exit_code), (True, 0))
+        self.assertFalse(self.exists(fs, "/tmp/w/d") or self.exists(fs, "/tmp/w/e"))
+
+    def test_cp_and_mv_ask_before_they_overwrite(self):
+        for words, prompt in ((["cp", "-i", "a", "b"], "cp: overwrite 'b'? "), (["mv", "-i", "a", "b"], "mv: overwrite 'b'? ")):
+            fs = make_fs({"r": [], "bin": []})
+            cmd = self.start(self.shell, fs, words)
+            self.assertEqual((cmd.exited, cmd.err), (False, prompt), words)
+            cmd.lineReceived("n")
+            self.assertEqual((cmd.exited, cmd.exit_code, self.exists(fs, "/tmp/w/a")), (True, 0, True), words)
+            fs = make_fs({"r": [], "bin": []})
+            cmd = self.start(self.shell, fs, words)
+            cmd.lineReceived("y")
+            self.assertEqual((cmd.exited, cmd.exit_code), (True, 0), words)
+            self.assertEqual(self.exists(fs, "/tmp/w/a"), words[0] == "cp", words)
+        # the output before a question is written before it, and what follows after the answer
+        fs = make_fs({"r": [], "bin": []})
+        cmd = self.start(self.shell, fs, ["rm", "-vi", "a", "b"])
+        self.assertEqual((cmd.out, cmd.err), (b"", "rm: remove regular empty file 'a'? "))
+        cmd.lineReceived("y")
+        self.assertEqual((cmd.out, cmd.err), (b"removed 'a'\n", "rm: remove regular empty file 'a'? "
+                                                                "rm: remove regular empty file 'b'? "))
+        cmd.lineReceived("n")
+        self.assertEqual((cmd.exited, cmd.exit_code, cmd.out), (True, 0, b"removed 'a'\n"))
+
+    def test_busybox_asks_the_same_way(self):
+        fs = make_fs({"r": [], "bin": []})
+        cmd = self.start(self.busybox, fs, ["rm", "-ri", "d"])
+        self.assertEqual(cmd.err, "rm: descend into directory 'd'? ")
+        cmd.lineReceived("y")
+        self.assertEqual(cmd.err, "rm: descend into directory 'd'? rm: remove 'd/f'? ")
+        cmd.lineReceived("y")
+        self.assertTrue(cmd.err.endswith("rm: remove directory 'd'? "))
+        cmd.lineReceived("y")
+        self.assertEqual((cmd.exited, cmd.exit_code, self.exists(fs, "/tmp/w/d")), (True, 0, False))
+
+    def test_a_pipe_answers_at_once_and_an_exec_channel_at_its_end(self):
+        fs = make_fs({"r": [], "bin": []})
+        cmd = self.start(self.shell, fs, ["rm", "-i", "a", "b"], stdin=b"y\n")
+        self.assertEqual((cmd.exited, cmd.exit_code), (True, 0))
+        self.assertEqual((self.exists(fs, "/tmp/w/a"), self.exists(fs, "/tmp/w/b")), (False, True))
+
+        class Exec:
+            execcmd = "rm -i a b"
+            input_data = b""
+
+            class events:
+                @staticmethod
+                def dispatch(*args, **kwargs):
+                    pass
+
+        fs = make_fs({"r": [], "bin": []})
+        protocol = Exec()
+        cmd = self.start(self.shell, fs, ["rm", "-i", "a", "b"], protocol=protocol)
+        self.assertEqual((cmd.exited, cmd.err), (False, "rm: remove regular empty file 'a'? "))
+        protocol.input_data = b"n\ny\n"
+        cmd.eofReceived()
+        self.assertEqual((cmd.exited, cmd.exit_code), (True, 0))
+        self.assertEqual((self.exists(fs, "/tmp/w/a"), self.exists(fs, "/tmp/w/b")), (True, False))
+
+    def test_a_line_outside_a_question_goes_on_as_before(self):
+        fs = make_fs({"r": [], "bin": []})
+        cmd = self.start(self.shell, fs, ["rm", "a"])
+        self.assertTrue(cmd.exited)
+        cmd.lineReceived("x")  # the dispatch of the input, nothing else
+        cmd.eofReceived()
+

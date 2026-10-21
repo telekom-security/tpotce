@@ -212,7 +212,7 @@ class MkdirTest(unittest.TestCase):
         self.assertEqual(self.run_mkdir(old, "-v", "/tmp/v"), ("", "mkdir: invalid option -- v\n" + usage, 1))
         self.assertEqual(self.run_mkdir(old, "/tmp")[1], "mkdir: can't create directory '/tmp': File exists\n")
         oldest = {"text_style": "busybox", "text_banner": "BusyBox v1.14.1 (2016-06-28 10:53:08 CST)",
-                  "text_version": "1.14.1", "text_libc": "uclibc", "fs_variant": "src_busybox_1.14.1"}
+                  "text_version": "1.14.1", "text_libc": "uclibc", "fs_variant": "fw_dlink_dir859_105b03"}
         self.assertEqual(self.run_mkdir(oldest, "/tmp")[1], "mkdir: cannot create directory '/tmp': File exists\n")
         self.assertEqual(self.run_mkdir(oldest)[1], (
             "BusyBox v1.14.1 (2016-06-28 10:53:08 CST) multi-call binary\n\nUsage: mkdir [OPTION] DIRECTORY...\n\n"
