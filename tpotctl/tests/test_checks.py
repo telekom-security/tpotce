@@ -1588,13 +1588,13 @@ class HptestUnderTheHoldTest(HoldFolder):
         self.assertNotIn("Ciscoasa IKE", result.stdout)
 
     def test_the_ports_the_probe_table_leaves_alone_are_not_scanned(self):
-        """hptest.sh leaves out what tpot check never sends to or only knocks at (dionaea 20, 42; the LLM
+        """hptest.sh leaves out what tpot check never sends to or only knocks at (dionaea 20; the LLM
         honeypots; ddospot), from the block generated
         from the probe table; a late writer (ciscoasa) keeps the hold its time + 10 s."""
         def ports(*pairs):
             return [{"target": t, "published": str(t), "protocol": proto} for t, proto in pairs]
         config = {"services": {
-            "dionaea": {"ports": ports((20, "tcp"), (21, "tcp"), (42, "tcp"), (69, "udp"), (81, "tcp"), (445, "tcp"))},
+            "dionaea": {"ports": ports((20, "tcp"), (21, "tcp"), (69, "udp"), (81, "tcp"), (445, "tcp"))},
             "galah": {"ports": ports((8080, "tcp"))},
             "ddospot": {"ports": ports((53, "udp"), (123, "udp"))},
             "ciscoasa": {"ports": ports((8443, "tcp"))}}}
@@ -1794,31 +1794,27 @@ GROUPS = {"tpotinit": "core", "cowrie": "honeypots", "dionaea": "honeypots", "ci
 class ProbeTableTest(unittest.TestCase):
     """Ports the probes leave alone, and the sources honeypots do not log."""
 
-    def test_dionaea_leaves_ftp_data_and_the_mirror_alone(self):
+    def test_dionaea_leaves_ftp_data_alone(self):
         table = probes.PROBES["dionaea"]
-        for target, protocol, why in ((20, "tcp", probes.FTP_DATA_REASON), (42, "tcp", probes.MIRROR_REASON)):
-            with self.subTest(port=target):
-                with self.assertRaises(probes._NotTried) as caught:
-                    table.handler_for(Port(target, target, protocol))(None)
-                self.assertEqual(str(caught.exception), f"not probed, {why}")
+        with self.assertRaises(probes._NotTried) as caught:
+            table.handler_for(Port(20, 20, "tcp"))(None)
+        self.assertEqual(str(caught.exception), f"not probed, {probes.FTP_DATA_REASON}")
         # TFTP and the HTTP service on 81 are probed with an answer: nothing is left out for them
         for target, protocol in ((69, "udp"), (81, "tcp")):
             self.assertIsNone(getattr(table.handler_for(Port(target, target, protocol)), "leave_out", None))
-        self.assertEqual(probes.hptest_table()["skipped"]["dionaea"], [["20", "tcp"], ["42", "tcp"]])
+        self.assertEqual(probes.hptest_table()["skipped"]["dionaea"], [["20", "tcp"]])
         self.assertEqual(probes.FTP_DATA_REASON, "FTP data port, nothing listens on it")
-        self.assertEqual(probes.MIRROR_REASON, "dionaea mirrors a connection on this port back to its source")
         # skipped ports do not make the honeypot closed
         outcomes = [probes._Outcome(Port(20, 20), probes.SKIPPED, None, "not probed, x"),
                     probes._Outcome(Port(21, 21), probes.OPEN, True, "220")]
         self.assertEqual(probes._combine(outcomes, False, []).state, probes.OPEN)
 
-    def test_the_mirror_is_the_only_service_that_connects_back(self):
-        """T-Pot enables no nfq ihandler (nfqmirrord); the mirror service of dionaea has no ports of
-        its own in its config (mirror.py listens on 42)."""
+    def test_dionaea_enables_nothing_that_connects_back(self):
+        """T-Pot enables no mirror service and no nfq ihandler (nfqmirrord), so dionaea opens no
+        connection back to a client."""
         etc = os.path.join(REPO, "docker", "dionaea", "dist", "etc")
+        self.assertFalse(os.path.exists(os.path.join(etc, "services", "mirror.yaml")))
         self.assertNotIn("nfq.yaml", os.listdir(os.path.join(etc, "ihandlers")))
-        with open(os.path.join(etc, "services", "mirror.yaml"), encoding="utf-8") as handle:
-            self.assertEqual(handle.read().split(), ["-", "name:", "mirror"])
 
     def test_sources_the_honeypot_does_not_log(self):
         """No probe names sources its honeypot leaves out; the mechanism holds addresses and networks."""

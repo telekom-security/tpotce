@@ -102,6 +102,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ### Dionaea
 - Dionaea 0.12.4 builds on Ubuntu 26.04 with bundled libemu and fixed TFTP, FTP and HTTP download paths. Dionaea stays idle when stdin is closed and when a mirror connect-back ends.
+- The mirror service of Dionaea (port 42) is no longer enabled, port 42 is not published.
 - TFTP events carry `dst_port` 69 (the port of the service) in `dionaea.json` and `local_port` 69 in the `connections` table of the SQLite database; before it was the port of the transfer.
 - `dionaea-errors.log` is quieter and also shows errors of the services: it has the level `critical` now (`errors.levels=warning,error,critical`), and what clients send (unreadable or unknown messages of SMB, MQTT, MSSQL, DCERPC, SIP, memcache, printer and TFTP, ignored POST data) is logged at info or debug. If you use a `dionaea.cfg` of your own, set `errors.levels=warning,error,critical`.
 - A part of a multipart POST whose headers can not be read is left out with one info line; the other files of the POST are stored.

@@ -107,7 +107,7 @@ function fuPORTS {
 import json, sys
 # >>> probe table >>>
 # generated from tpotctl/checks/probes.py by python3 -m tpotctl.checks.probes --hptest
-skipped = {"beelzebub": "*", "conpot_IEC104": [["20000", "tcp"]], "conpot_beckhoff_cx": [["48898", "tcp"]], "conpot_kamstrup_382": [["1025", "tcp"]], "conpot_plc_modbus": [["502", "tcp"]], "ddospot": "*", "dionaea": [["20", "tcp"], ["42", "tcp"]], "galah": "*"}
+skipped = {"beelzebub": "*", "conpot_IEC104": [["20000", "tcp"]], "conpot_beckhoff_cx": [["48898", "tcp"]], "conpot_kamstrup_382": [["1025", "tcp"]], "conpot_plc_modbus": [["502", "tcp"]], "ddospot": "*", "dionaea": [["20", "tcp"]], "galah": "*"}
 late = {"ciscoasa": 60, "ddospot": 60}
 # <<< probe table <<<
 config = json.load(sys.stdin)

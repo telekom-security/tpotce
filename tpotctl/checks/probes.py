@@ -13,7 +13,7 @@ a port the time of its honeypot did not reach is "not reached", never closed (`P
 a budget for all probes. A refused or timed-out connection is a result (`port_open=False`), never
 an exception. The LLM honeypots (galah, beelzebub) are only knocked at: an answer would call the
 LLM. Some ports are left alone (skipped, the reason in the detail): dionaea's FTP data port 20
-(nothing listens) and its mirror port 42 (the mirror service connects back to the source). Its TFTP
+(nothing listens). Its TFTP
 port 69 gets a read request: the answer comes from a port of the session, so that probe takes an
 answer from any port (`from_any`). A
 honeypot that does not log some sources by its configuration names them (`PortProbe.ignores`):
@@ -864,7 +864,6 @@ LATE_MARGIN = 10.0
 # scripts (dns-recursion) make ddospot ask Quad9, so they would leave the host
 NMAP_LEAVE_OUT = {"ddospot": "nmap's DNS scripts make it recurse to Quad9 (DDOSPOT_DNS_RECURSION)"}
 FTP_DATA_REASON = "FTP data port, nothing listens on it"
-MIRROR_REASON = "dionaea mirrors a connection on this port back to its source"
 
 PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
     "adbhoney": PortProbe({(5555, TCP): adb}),
@@ -927,9 +926,6 @@ PROBES: Dict[str, Callable[[str, List[Port], str], ProbeResult]] = {
         # the source port of FTP data in active mode: nothing listens on it
         (20, TCP): not_tried(FTP_DATA_REASON),
         (21, TCP): ftp_login,
-        # the mirror service connects back to the source of a connection (dionaea's mirror.py,
-        # mirrord on 42): a probe would start a loop of connections, hundreds of events
-        (42, TCP): not_tried(MIRROR_REASON),
         # a read request for a file that does not exist: the ERROR (or DATA) comes from a port of
         # the session, not from 69 (RFC 1350), so the socket takes an answer from any port
         (69, UDP): udp_exchange(b"\x00\x01{token}.txt\x00octet\x00", lambda d: d[:2] in (b"\x00\x03", b"\x00\x05"),

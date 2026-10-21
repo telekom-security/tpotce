@@ -227,7 +227,7 @@ Ciscoasa v2 uses dynamic host ports by default and probes HTTPS, AnyConnect, ASD
 
 ### Dionaea 0.12.4
 
-The Dionaea smoke test uses only the Python standard library. It checks TFTP
+The Dionaea smoke test uses only the Python standard library. It checks that nothing listens on 42/tcp (the mirror service is not enabled) and TFTP
 responses, passive and active FTP uploads, sample store with mode 0440, and
 SMB2 2.02/2.10 with NTLMv1/v2: rejected logins must appear in JSON and SQLite
 with username, domain, workstation, dialect and variant, and empty passwords.

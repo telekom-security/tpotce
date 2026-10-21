@@ -44,7 +44,7 @@ LIMIT_LINES_DEFAULTS=(
   "store: max_size 1024 MiB (from store.yaml)"
 )
 
-DIONAEA_TCP_PORTS=(20 21 42 81 135 443 445 1433 1723 1883 3306 27017)
+DIONAEA_TCP_PORTS=(20 21 81 135 443 445 1433 1723 1883 3306 27017)
 DIONAEA_UDP_PORTS=(69)
 declare -A MAPPED_TCP_PORTS=()
 declare -A MAPPED_UDP_PORTS=()
@@ -57,7 +57,7 @@ Run an isolated post-build smoke test for the Dionaea image.
 
 The test exposes and probes Dionaea ports from docker/dionaea/docker-compose.yml,
 except the SIP ports 5060/tcp, 5060/udp, and 5061/tcp:
-20/tcp, 21/tcp, 42/tcp, 69/udp, 81/tcp, 135/tcp, 443/tcp, 445/tcp,
+20/tcp, 21/tcp, 69/udp, 81/tcp, 135/tcp, 443/tcp, 445/tcp,
 1433/tcp, 1723/tcp, 1883/tcp, 3306/tcp, and 27017/tcp.
 
 The roots of the FTP, TFTP, HTTP and UPnP services are mounted read-only as in
@@ -257,7 +257,6 @@ services:
     ports:
       - "${TEST_BIND_IP}::20"
       - "${TEST_BIND_IP}:${FTP_PORT}:21"
-      - "${TEST_BIND_IP}::42"
       - "${TEST_BIND_IP}::69/udp"
       - "${TEST_BIND_IP}::81"
       - "${TEST_BIND_IP}::135"
@@ -928,6 +927,42 @@ except (CheckError, OSError) as exc:
 PY
 }
 
+# The mirror service (port 42) is not enabled: nothing listens on 42/tcp in the container (any
+# address, IPv4 and IPv6) and a connection to it from inside is refused.
+assert_no_mirror() {
+  docker exec -i "${TEST_CONTAINER_NAME}" python3 - <<'PYMIRROR' || test_die "Something listens on 42/tcp: the mirror service must not be enabled"
+import socket
+import sys
+
+listening = []
+for name in ("/proc/net/tcp", "/proc/net/tcp6"):
+    try:
+        with open(name, encoding="ascii") as handle:
+            rows = handle.read().splitlines()[1:]
+    except OSError:
+        continue
+    for row in rows:
+        fields = row.split()
+        # fields[1] is local_address:port in hex, fields[3] the state (0A = LISTEN)
+        if len(fields) > 3 and fields[3] == "0A" and int(fields[1].rsplit(":", 1)[1], 16) == 42:
+            listening.append(f"{name} {fields[1]}")
+if listening:
+    print("listening on 42/tcp: " + ", ".join(listening), file=sys.stderr)
+    sys.exit(1)
+sock = socket.socket()
+sock.settimeout(3)
+try:
+    sock.connect(("127.0.0.1", 42))
+except OSError:
+    pass
+else:
+    print("a connection to 127.0.0.1:42 was accepted", file=sys.stderr)
+    sys.exit(1)
+finally:
+    sock.close()
+PYMIRROR
+}
+
 assert_tmp_tmpfs() {
   # the files of the emulation (CreateFile, _lcreat) are made in /tmp, the root filesystem is read-only
   docker exec "${TEST_CONTAINER_NAME}" sh -c \
@@ -1216,6 +1251,8 @@ main() {
   test_info "Waiting for all Dionaea listener sockets"
   wait_for_container_ports || test_die "Not all Dionaea listener sockets became available"
   test_ok "All Dionaea listener sockets are available"
+  assert_no_mirror
+  test_ok "Nothing listens on 42/tcp: the mirror service is not enabled"
 
   local token="dionaea-test-$(date +%s)-$$"
   test_info "Running Dionaea protocol probes with token: ${token}"
