@@ -10,6 +10,7 @@ source "${SCRIPT_DIR}/../lib/common.sh"
 TEST_NAME="dionaea"
 DEFAULT_IMAGE="dtagdevsec/dionaea:24.04.2"
 IMAGE=""
+SELF_TEST_WARNINGS=""
 FTP_PORT=""
 DIONAEA_DIR=""
 CONFIG_DIR=""
@@ -83,6 +84,7 @@ Options:
   --timeout SEC       Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP        Host IP to bind. Default: 127.0.0.1.
   --keep-artifacts    Keep temporary compose file and logs for debugging.
+  --self-test-warnings  Only check the counting of warnings on a made-up log (no Docker).
   -h, --help          Show this help message.
 EOF
 }
@@ -128,6 +130,10 @@ parse_args() {
         ;;
       --keep-artifacts)
         TEST_KEEP_ARTIFACTS="true"
+        shift
+        ;;
+      --self-test-warnings)
+        SELF_TEST_WARNINGS="true"
         shift
         ;;
       -h|--help)
@@ -993,6 +999,51 @@ assert_roots_untouched() {
   done
 }
 
+# count_warning_keys ERRORS_LOG: the warnings of the log per message, the most frequent first, as
+# "COUNT domain: message" (numbers as N, addresses as ADDR). The key of a summary ends at the first
+# " in the last minute, the last: ", and only where the text before it ends in ": N <unit>": its
+# last text may hold the words of a summary itself (the rule of the fork, tests/functional/tools/
+# count_warnings.sh).
+count_warning_keys() {
+  { grep -E '^\[[0-9]{8} [0-9:]{8}\] [^ ]+( [^ ]+)?-warning: ' "$1" || true; } \
+    | sed -E 's/^\[[^]]*\] ([^ ]+)( [^ ]+)?-warning: /\1: /; s/0x[0-9a-fA-F]+/ADDR/g; s/\.incoming\/[^ :]+/.incoming\/FILE/g; s/(^|[^A-Za-z0-9_])[0-9]+/\1N/g' \
+    | awk '
+        {
+          at = index($0, " in the last minute, the last: ")
+          if (at > 0 && substr($0, 1, at - 1) ~ /: N [^:,]+$/)
+            $0 = substr($0, 1, at - 1) " in the last minute"
+          print
+        }' \
+    | sort | uniq -c | sort -rn
+}
+
+# self_test_warning_keys: count_warning_keys on a made-up log, no Docker. A summary whose last text
+# holds the words of a summary is one key; a message that is no summary keeps its whole text.
+self_test_warning_keys() {
+  local tmp counts="" lines=""
+
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/dionaea-warnkeys.XXXXXX")"
+  cat > "${tmp}/errors.log" <<'LOG'
+[21102026 10:00:01] processor-warning: scans stopped at a limit: 3 scan(s) in the last minute, the last: a: 1 byte in the last minute, the last: x
+[21102026 10:01:01] processor-warning: scans stopped at a limit: 5 scan(s) in the last minute, the last: b
+[21102026 10:02:01] processor-warning: scans stopped at a limit: 7 scan(s) in the last minute, the last: c: 9 thing(s) in the last minute, the last: y
+[21102026 10:02:02] log_sqlite log_sqlite.py:1-warning: incidents not recorded in the sqlite log: 2 incident(s) in the last minute, the last: d
+[21102026 10:02:03] connection-warning: peer 0x7f00 sent a, in the last minute, the last: z
+LOG
+  counts="$(count_warning_keys "${tmp}/errors.log")"
+  rm -rf "${tmp}"
+  lines="$(printf '%s\n' "${counts}" | sed -E 's/^ *//' | sort)"
+  [[ "$(printf '%s\n' "${lines}" | grep -c .)" == "3" ]] \
+    || test_die "warning keys self-test: expected 3 keys, got: ${lines}"
+  grep -qxF '3 processor: scans stopped at a limit: N scan(s) in the last minute' <<< "${lines}" \
+    || test_die "warning keys self-test: the summaries with a nested summary text are not one key: ${lines}"
+  grep -qxF '1 log_sqlite: incidents not recorded in the sqlite log: N incident(s) in the last minute' <<< "${lines}" \
+    || test_die "warning keys self-test: the sqlite summary key is wrong: ${lines}"
+  grep -qxF '1 connection: peer ADDR sent a, in the last minute, the last: z' <<< "${lines}" \
+    || test_die "warning keys self-test: a message that is no summary was cut: ${lines}"
+  test_ok "Warning keys: a summary with the words of a summary in its last text is one key"
+}
+
 # assert_warnings_summed ERRORS_LOG LABEL: a warning that every connection can write is info, with
 # one warning a minute that sums it up ("<what>: N <unit> in the last minute, the last: <text>").
 # So no warning message is more than 5 times in the errors log of a run, and a summary is there
@@ -1010,10 +1061,7 @@ assert_warnings_summed() {
            END { if (NR == 0) { print 1; exit }
                  if (last < first) last += 86400
                  print int(last / 60) - int(first / 60) + 1 }')"
-  counts="$({ grep -E '^\[[0-9]{8} [0-9:]{8}\] [^ ]+( [^ ]+)?-warning: ' "${log}" || true; } \
-    | sed -E 's/^\[[^]]*\] ([^ ]+)( [^ ]+)?-warning: /\1: /; s/0x[0-9a-fA-F]+/ADDR/g; s/\.incoming\/[^ :]+/.incoming\/FILE/g; s/(^|[^A-Za-z0-9_])[0-9]+/\1N/g' \
-    | sed -E 's/^(.*: N [^:,]+ in the last minute), the last: .*$/\1/' \
-    | sort | uniq -c | sort -rn)"
+  counts="$(count_warning_keys "${log}")"
   if [[ -n "${counts}" ]]; then
     test_info "Warnings of dionaea-errors.log (${label}, ${minutes} minute(s) started), per message:"
     printf '%s\n' "${counts}" | head -n 12 | sed 's/^/    /'
@@ -1135,6 +1183,10 @@ assert_storage_limits_logged() {
 
 main() {
   parse_args "$@"
+  if [[ -n "${SELF_TEST_WARNINGS}" ]]; then
+    self_test_warning_keys
+    exit 0
+  fi
   validate_args
   test_check_dependencies
 
@@ -1190,6 +1242,7 @@ main() {
   assert_health_under_load
   test_ok "The healthcheck passes while the emu workers are busy"
 
+  self_test_warning_keys
   test_wait_for_container || test_die "Dionaea container stopped after port probes"
   assert_storage_limits_logged
   test_ok "The storage limits of the environment and of the config are in dionaea.log"

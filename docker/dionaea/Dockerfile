@@ -3,10 +3,10 @@
 # (at DIONAEA_COMMIT) to test a change of the fork before it is tagged.
 FROM ubuntu:26.04 AS checkout
 ARG DEBIAN_FRONTEND=noninteractive
-ARG DIONAEA_COMMIT=9c6213e3a6cdde072e8a77ee4acfb80696d4aff5
+ARG DIONAEA_COMMIT=3d71fb939f147db31c569c8af40620fae8b62fd0
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git ca-certificates && \
-    git clone --depth 1 --branch 0.12.3 https://github.com/t3chn0m4g3/dionaea.git /checkout && \
+    git clone --depth 1 --branch 0.12.4 https://github.com/t3chn0m4g3/dionaea.git /checkout && \
     test "$(git -C /checkout rev-parse HEAD)" = "${DIONAEA_COMMIT}" && \
     rm -rf /checkout/.git
 

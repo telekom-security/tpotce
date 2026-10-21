@@ -132,7 +132,7 @@ multipart `POST` (port 81), expects both in `binaries/` with mode `0440`, and
 then tries to get each file back from a second connection over FTP `RETR`
 (`550`), HTTP `GET` (`404`) and TFTP `RRQ` (`ERROR`). A TFTP `WRQ` must be
 rejected, the four roots must stay empty, and the logs must have no `Traceback`
-or `LoaderError`. The image needs Dionaea 0.12.3 with the sample store (`store`
+or `LoaderError`. The image needs Dionaea 0.12.4 with the sample store (`store`
 option `max_size`, samples `0440`).
 
 The Logstash fixture test renders the sample event of every honeypot
@@ -225,7 +225,7 @@ data in memory only (`/etc/redis.conf`).
 
 Ciscoasa v2 uses dynamic host ports by default and probes HTTPS, AnyConnect, ASDM, JSON credentials, inert uploads and IKE on both UDP listeners. Its identity is checked again after restart.
 
-### Dionaea 0.12.3
+### Dionaea 0.12.4
 
 The Dionaea smoke test uses only the Python standard library. It checks TFTP
 responses, passive and active FTP uploads, sample store with mode 0440, and
@@ -252,7 +252,11 @@ docker build --build-context dionaea-src=<path to a checkout of the fork> \
 ./docker/_tests/run.sh dionaea
 ```
 
-The default source stage checks tag `0.12.3` against `DIONAEA_COMMIT`.
+The default source stage checks tag `0.12.4` against `DIONAEA_COMMIT`.
+
+`./docker/_tests/tests/dionaea.sh --self-test-warnings` checks without Docker how the
+test counts warnings (a summary whose last text holds the words of a summary is one
+key); the full run does the same check as well.
 
 The ewsposter compatibility helper uses the installed reader and sample checker,
 with a stub for message output. Run it against functional-suite artifacts;

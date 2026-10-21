@@ -101,11 +101,14 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 - The folders `data/ddospot/bl` and `data/ddospot/db` are not used by Ddospot 2.0 and can be deleted with `sudo rm -rf ~/tpotce/data/ddospot/bl ~/tpotce/data/ddospot/db`.
 
 ### Dionaea
-- Dionaea 0.12.3 builds on Ubuntu 26.04 with bundled libemu and fixed TFTP, FTP and HTTP download paths. Dionaea stays idle when stdin is closed and when a mirror connect-back ends.
+- Dionaea 0.12.4 builds on Ubuntu 26.04 with bundled libemu and fixed TFTP, FTP and HTTP download paths. Dionaea stays idle when stdin is closed and when a mirror connect-back ends.
 - TFTP events carry `dst_port` 69 (the port of the service) in `dionaea.json` and `local_port` 69 in the `connections` table of the SQLite database; before it was the port of the transfer.
 - `dionaea-errors.log` is quieter and also shows errors of the services: it has the level `critical` now (`errors.levels=warning,error,critical`), and what clients send (unreadable or unknown messages of SMB, MQTT, MSSQL, DCERPC, SIP, memcache, printer and TFTP, ignored POST data) is logged at info or debug. If you use a `dionaea.cfg` of your own, set `errors.levels=warning,error,critical`.
 - A part of a multipart POST whose headers can not be read is left out with one info line; the other files of the POST are stored.
 - `dionaea-errors.log` sums up the warnings that every connection can write, one line a minute per message.
+- The SQLite log keeps the rows of every connection apart after an error that undoes a transaction: a later event of a connection whose row was undone writes no row, and no row goes to another connection.
+- A service config that asks for an unknown transport does not start and writes one line with the service and the transport; another entry of the same service starts.
+- The DTLS transport is removed, no service used it.
 - The emulation of shellcode computes MUL and IMUL with the full product and sets CF and OF as x86 does. The emulated fwrite and WriteFile write at most 1 MiB per call, and profiles of long byte arguments are written in full.
 - SMB2 2.02/2.10 captures NTLM logins and returns `STATUS_LOGON_FAILURE`; SMB1 retains upload capture, including automatic multi-dialect clients. Plaintext SMB1 legacy passwords are captured, while NTLM password fields stay empty.
 - JSON adds `downloads` (`path`, `url`, `md5`, `sha256`), `smb.commands` and SMB login metadata (`domain`, `workstation`, `dialect`, `ntlm_version`). Existing field types and SQLite schemas remain compatible.
