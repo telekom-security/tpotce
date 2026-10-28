@@ -273,6 +273,21 @@ class FsToolsTest(unittest.TestCase):
         self.assertEqual(sum(done for done, _ in counts.values()) + sum(left for _, left in counts.values()),
                          sum(len(image["cases"]) for image in REFS.values()))
 
+    def test_the_firmware_variants_hold_the_permission_cases(self):
+        # the uid 1000 cases of the BusyBox images (record.py fs_cases: /r/w 666 and /r/v 644 of root, /r/y in /r)
+        #   are those of the firmware recorded with the same set (wave 1, help2 of wave 2); the older firmware
+        #   recordings (EdgeOS, OpenWrt, Archer C7) ran a smaller set of their own
+        busybox = {key: set(image["cases"]) for key, image in REFS.items()
+                   if key.startswith("busybox_") and key.endswith("_user")}
+        cases = set.union(*busybox.values())
+        self.assertTrue(all(found == cases for found in busybox.values()), busybox)
+        # the six cases merged from help2 (the uid-1000 cases that need /r/w 666, /r/v 644, /r/y), by label
+        merged = {"touch -t 202401021530 /r/w", "touch /r/w", "touch -r a /r/w", "touch /r/v", "rm -r /r", "rm -rf /r"}
+        for key in ("fw_zyxel_nas326_aazf18_user", "fw_dlink_dir859_105b03_user", "src_qnap_1.24.1_user"):
+            with self.subTest(key):
+                self.assertEqual(cases - set(REFS[key]["cases"]), set())
+                self.assertEqual(merged - set(REFS[key]["cases"]), set())
+
     def test_the_texts_are_the_build_of_the_recordings(self):
         done = subprocess.run([sys.executable, "-I", str(BUILDER), "--check"], capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
@@ -314,6 +329,21 @@ class FsToolsTest(unittest.TestCase):
             seen[ident.release.label[:5]] = system.fs_variant(persona, ident)
         for label, variant in seen.items():
             self.assertEqual(variant, "fw_openwrt_21.02.7" if label.startswith("21.") else "fw_openwrt_22.03.7")
+
+    def test_the_camera_takes_the_variant_of_its_busybox(self):
+        # the BusyBox version of each firmware release (catalog busybox=): 1.19.4 of V5.5.82 is the recorded
+        #   build of the Archer C7 v5, 1.26.2 of V5.7.3 that of the busybox:1.26 image; both uClibc stand-ins
+        persona = catalog.by_id("ipcam")
+        seen = {}
+        for seed in range(40):
+            ident = draw(persona, seed, NOW)
+            seen[ident.release.label] = system.fs_variant(persona, ident)
+        self.assertEqual(seen, {"V5.5.82_190909": "fw_tplink_c7v5", "V5.7.3_220112": "busybox_1.26.2"})
+        for release in persona.releases:
+            version = re.match(r"BusyBox v(\S+)", release.extra["busybox"]).group(1)
+            with self.subTest(release.label):
+                self.assertEqual(TEXTS["variants"][seen[release.label]]["version"], version)
+        self.assertIn("ipcam", system.FS_STAND_INS)
 
     def test_every_variant_is_recorded(self):
         for name, variant in TEXTS["variants"].items():
@@ -399,6 +429,20 @@ class BehaviourTest(unittest.TestCase):
         self.assertEqual(self.run_in("busybox_1.36.1-musl", "cp -v file d"), ("'file' -> 'd/file'\n", "", 0))
         self.assertEqual(self.run_in("busybox_1.36.1-musl", "mv d e"), ("", "", 0))
         self.assertTrue(self.exists("/tmp/w/e/d/file") and not self.exists("/tmp/w/d"))
+
+    def test_a_declined_overwrite_fails_from_coreutils_9_2_on(self):
+        # NEWS of coreutils 9.2 (2023-03-20): "... and likewise for 'cp -i', 'ln -i', and 'mv -i' when the user
+        #   declines"; recorded: 0 with 9.1, 1 with 9.4 and 9.7. No persona runs 9.2 or 9.3, their status is the
+        #   one of the NEWS (the texts of 9.1 stand in)
+        for version, status in (("9.1", 0), ("9.2", 1), ("9.3", 1), ("9.4", 1)):
+            shell = Shell(keys_of("debian_12", {}) | {"text_version": version})
+            for line in ("cp -i a b", "mv -i a b"):
+                with self.subTest(version=version, line=line):
+                    fs = make_fs(setup_of("", ["", "", 0], 0))
+                    out, err, code = shell.run(fs, shlex.split(line), 0, b"n\n")
+                    self.assertEqual((out, code), ("", status))
+                    self.assertIn("overwrite 'b'?", err)
+                    self.assertIsNotNone(fs.getfile("/tmp/w/a"))
 
     def test_the_same_file(self):
         self.assertEqual(self.run_in("debian_12", "cp a a"), ("", "cp: 'a' and 'a' are the same file\n", 1))
@@ -487,6 +531,16 @@ class BehaviourTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(self.run_in("debian_12", f"touch -d '{text}' a"),
                                  ("", f"touch: invalid date format \u2018{text}\u2019\n", 1))
+
+    def test_touch_d_takes_a_military_zone_letter_but_not_j_or_t(self):
+        # gnulib's military letters: A to I, K to M and N to Y with T left out (Z is UTC); a letter alone after
+        #   the time is a zone, J and T are no zone and the date is refused (source, not recorded; offsets unverified)
+        self.assertEqual(self.run_in("debian_12", "touch -d '2024-01-02 12:00 a' a"), ("", "", 0))
+        self.assertTrue(self.exists("/tmp/w/a"))
+        for letter in ("j", "t"):
+            with self.subTest(letter=letter):
+                self.assertEqual(self.run_in("debian_12", f"touch -d '2024-01-02 12:00 {letter}' a"),
+                                 ("", f"touch: invalid date format \u20182024-01-02 12:00 {letter}\u2019\n", 1))
 
     def test_touch_goes_on_with_the_next_name(self):
         # what upstream's tests of touch check (cowrie.test.test_rmdir_touch), with the persona's quotes
@@ -683,8 +737,8 @@ class WideFolderTest(unittest.TestCase):
 
 class TerminalQuestionTest(unittest.TestCase):
     """-i and -I of rm, cp and mv at the terminal: the prompt is written and the command waits for a line
-    (lineReceived), ctrl-d answers no; a pipe answers at once (the recorded cases), an exec channel's bytes
-    are the answers at the end of its input."""
+    (lineReceived), ctrl-d answers no; a pipe answers at once (the recorded cases), an exec channel with its
+    next line (tpot_key) and with what is left at the end of its input."""
 
     def setUp(self):
         self.shell = Shell(keys_of("debian_12", REFS["debian_12"]))
@@ -818,4 +872,149 @@ class TerminalQuestionTest(unittest.TestCase):
         self.assertTrue(cmd.exited)
         cmd.lineReceived("x")  # the dispatch of the input, nothing else
         cmd.eofReceived()
+
+    def exec_protocol(self, line, buffered=b""):
+        """An exec channel as the patched HoneyPotExecProtocol: each key goes to the command's tpot_key
+        first, else into the buffer of the channel (input_data)."""
+
+        class Exec:
+            execcmd = line
+            input_data = buffered
+
+            class events:
+                @staticmethod
+                def dispatch(*args, **kwargs):
+                    pass
+
+        return Exec()
+
+    def type_keys(self, protocol, cmd, data: bytes):
+        for at in range(len(data)):
+            key = data[at:at + 1]
+            hook = getattr(cmd, "tpot_key", None)
+            if hook is None or not hook(key):
+                protocol.input_data += key
+
+    def test_an_exec_channel_answers_the_question_with_its_next_line(self):
+        """ssh host 'rm -i x' and a line on stdin after the prompt: rm takes the line as its answer when it
+        comes, not only at the end of the input. An approximation: the persona takes one line per question
+        and leaves what follows in the buffer; the real rm reads its stdin through stdio and takes whatever
+        has arrived by then."""
+        fs = make_fs({"r": [], "bin": []})
+        protocol = self.exec_protocol("rm -i file")
+        cmd = self.start(self.shell, fs, ["rm", "-i", "file"], protocol=protocol)
+        self.assertEqual((cmd.exited, cmd.err), (False, "rm: remove regular empty file 'file'? "))
+        self.type_keys(protocol, cmd, b"y")
+        self.assertFalse(cmd.exited)
+        self.type_keys(protocol, cmd, b"\n")
+        self.assertEqual((cmd.exited, cmd.exit_code, self.exists(fs, "/tmp/w/file")), (True, 0, False))
+        self.assertEqual(protocol.input_data, b"")
+        # one line per question, a line of a pty ends with \r (its \n after it is no answer of its own)
+        fs = make_fs({"r": [], "bin": []})
+        protocol = self.exec_protocol("rm -i a b file")
+        cmd = self.start(self.shell, fs, ["rm", "-i", "a", "b", "file"], protocol=protocol)
+        self.type_keys(protocol, cmd, b"n\r\n")
+        self.assertEqual((cmd.exited, cmd.err), (False, "rm: remove regular empty file 'a'? "
+                                                        "rm: remove regular empty file 'b'? "))
+        self.type_keys(protocol, cmd, b"yes\n")
+        self.assertEqual((cmd.exited, cmd.err.count("? ")), (False, 3))
+        # the end of the input: what is left of the line, then no
+        self.type_keys(protocol, cmd, b"y")
+        cmd.eofReceived()
+        self.assertEqual((cmd.exited, cmd.exit_code), (True, 0))
+        self.assertEqual([self.exists(fs, "/tmp/w/" + name) for name in ("a", "b", "file")], [True, False, False])
+        # lines the channel sent before the question answer it at once; what follows them stays for later
+        fs = make_fs({"r": [], "bin": []})
+        protocol = self.exec_protocol("sleep 1; rm -i a b", buffered=b"y\nn\nrest")
+        cmd = self.start(self.shell, fs, ["rm", "-i", "a", "b"], protocol=protocol)
+        self.assertEqual((cmd.exited, cmd.exit_code), (True, 0))
+        self.assertEqual((self.exists(fs, "/tmp/w/a"), self.exists(fs, "/tmp/w/b")), (False, True))
+        self.assertEqual(protocol.input_data, b"rest")
+
+    def test_an_exec_channel_without_a_question_runs_the_chain_unchanged(self):
+        """Keys of an exec channel while no question waits go into its buffer as before: for a command
+        without -i, after the last answer (keys that come after rm ended), and at an interactive terminal
+        (no exec channel) always."""
+        fs = make_fs({"r": [], "bin": []})
+        protocol = self.exec_protocol("rm a; cat")
+        cmd = self.start(self.shell, fs, ["rm", "a"], protocol=protocol)
+        self.assertEqual((cmd.exited, cmd.exit_code, cmd.err), (True, 0, ""))
+        self.type_keys(protocol, cmd, b"y\nmore\n")
+        self.assertEqual(protocol.input_data, b"y\nmore\n")
+        fs = make_fs({"r": [], "bin": []})
+        protocol = self.exec_protocol("rm -i a; cat")
+        cmd = self.start(self.shell, fs, ["rm", "-i", "a"], protocol=protocol)
+        self.type_keys(protocol, cmd, b"y\nfor cat\n")
+        self.assertEqual((cmd.exited, cmd.exit_code, self.exists(fs, "/tmp/w/a")), (True, 0, False))
+        self.assertEqual(protocol.input_data, b"for cat\n")
+        for words in (["mkdir", "n"], ["touch", "t"], ["cp", "a", "c"]):
+            fs = make_fs({"r": [], "bin": []})
+            protocol = self.exec_protocol(" ".join(words), buffered=b"y\n")
+            cmd = self.start(self.shell, fs, words, protocol=protocol)
+            self.assertEqual((cmd.exited, cmd.exit_code, cmd.err), (True, 0, ""), words)
+            self.assertEqual(protocol.input_data, b"y\n", words)
+        # a terminal: the key goes on to the line editor, the line comes by lineReceived
+        fs = make_fs({"r": [], "bin": []})
+        cmd = self.start(self.shell, fs, ["rm", "-i", "a"])
+        self.assertFalse(cmd.tpot_key(b"y"))
+        self.assertFalse(cmd.exited)
+        cmd.lineReceived("y")
+        self.assertEqual((cmd.exited, self.exists(fs, "/tmp/w/a")), (True, False))
+
+    def test_the_line_mode_of_an_exec_channel_keeps_its_lines(self):
+        """ssh host bash: upstream's interactive_shell (commands/bash.py) sets stdin_line_mode and the
+        protocol hands each line to the command on top by lineReceived (the \\n of a \\r\\n dropped). The
+        question of rm -i takes those lines; the \\n after `rm -i file\\r` is no empty answer."""
+        test = self
+        fs = make_fs({"r": [], "bin": []})
+
+        class LineExec:
+            execcmd = "bash"
+            input_data = b""
+            stdin_line_mode = True
+            last_cr = False
+            line = b""
+            cmd = None
+
+            class events:
+                @staticmethod
+                def dispatch(*args, **kwargs):
+                    pass
+
+            def key(self, key):
+                # the patched keystrokeReceived of v3.1.3: the hook of the command on top, then the line mode
+                hook = getattr(self.cmd, "tpot_key", None)
+                if hook is not None and hook(key):
+                    return
+                last_cr, self.last_cr = self.last_cr, key == b"\r"
+                if key == b"\n" and last_cr:
+                    return
+                if key in (b"\r", b"\n"):
+                    line, self.line = self.line, b""
+                    if self.cmd is None:  # the shell runs the line
+                        words = line.decode().split()
+                        self.cmd = test.start(test.shell, fs, words, protocol=self)
+                    else:
+                        self.cmd.lineReceived(line.decode())
+                else:
+                    self.line += key
+
+        protocol = LineExec()
+        for at, key in enumerate(b"rm -i file\r\n"):
+            protocol.key(bytes([key]))
+        cmd = protocol.cmd
+        self.assertEqual((cmd.exited, cmd.err), (False, "rm: remove regular empty file 'file'? "))
+        for key in b"y\r\n":
+            protocol.key(bytes([key]))
+        self.assertEqual((cmd.exited, cmd.exit_code, self.exists(fs, "/tmp/w/file")), (True, 0, False))
+        self.assertEqual(protocol.input_data, b"")
+        # the end of the input in line mode: the protocol sent the last line itself, the buffer is no answer
+        fs = make_fs({"r": [], "bin": []})
+        protocol = LineExec()
+        protocol.input_data = b"y\n"
+        for key in b"rm -i file\r\n":
+            protocol.key(bytes([key]))
+        self.assertFalse(protocol.cmd.exited)
+        protocol.cmd.eofReceived()
+        self.assertEqual((protocol.cmd.exited, self.exists(fs, "/tmp/w/file")), (True, True))
 

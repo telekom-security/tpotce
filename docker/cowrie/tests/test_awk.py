@@ -2,7 +2,10 @@
 /proc/cpuinfo, in the awk of the persona (gawk, mawk or BusyBox). The reference texts are the
 output of awk in almalinux:9 (gawk 5.1.0), debian:12 (mawk 1.3.4 20200120), ubuntu:24.04
 (mawk 1.3.4 20240123) and busybox:1.36 containers for the same programs and input."""
+import json
 import random
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -154,10 +157,11 @@ DIFFERENT = [
         "busybox": ("", "awk: /nonexistent: No such file or directory\n", 1)}),
 ]
 # valid awk the interpreter leaves out: no output, status 2
-LEFT_OUT = ['BEGIN { system("uname") }', 'BEGIN { "uname" | getline x; print x }', "{ getline; print }",
-            "function f(x) { return x } { print f($1) }",
-            '{ print $1 > "/tmp/out" }', '{ print $1 >> "/tmp/out" }', '{ print $1 | "sort" }',
-            "BEGIN { print rand() }", "NR==1, NR==2", "BEGIN { print strftime() }"]
+LEFT_OUT = ['BEGIN { system("uname") }',  # runs a command of the shell
+            'BEGIN { "uname" | getline x; print x }',  # getline from a command
+            "{ getline; print }",  # getline: reads past the record the rule runs on
+            '{ print $1 > "/tmp/out" }', '{ print $1 >> "/tmp/out" }',  # output to files of the session
+            '{ print $1 | "sort" }']  # output to a command
 # arrays, split and match (tests.test_awk_arrays has the recorded cases): the same in every awk
 ARRAYS = [("!seen[$0]++", "a:b\nc:d\na:b\n", "a:b\nc:d\n"),
           ('{ n = split($0, p, ":") } END { print n, p[1], p[n] }', "a:b\nc:d\n", "2 c d\n"),
@@ -165,6 +169,63 @@ ARRAYS = [("!seen[$0]++", "a:b\nc:d\na:b\n", "a:b\nc:d\n"),
           ("{ a[$1]++ } END { for (k in a) n++; print n, a[\"a:b\"] }", "a:b\nc:d\na:b\n", "2 2\n"),
           ('BEGIN { SUBSEP = ":"; a[1, 2] = 3; for (k in a) print k, a[k] }', "", "1:2 3\n")]
 EXISTING = {"/etc/passwd": PASSWD.encode(), "/proc/meminfo": MEMINFO.encode()}
+# language parts recorded in containers (fixtures/awk_lang.json): image -> (awk_style, awk_version, text_libc)
+LANG = json.loads((Path(__file__).parent / "fixtures" / "awk_lang.json").read_text(encoding="utf-8"))["images"]
+LANG_STYLES = {
+    "centos_7": ("gawk", "4.0.2", None), "debian_9": ("gawk", "4.1.4", None), "rockylinux_9": ("gawk", "5.1.0", None),
+    "debian_12": ("gawk", "5.2.1", None), "debian_10": ("mawk", "1.3.3", None),
+    "ubuntu_22.04": ("mawk", "1.3.4 20200120", None), "ubuntu_24.04": ("mawk", "1.3.4 20240123", None),
+    "debian_13": ("mawk", "1.3.4 20250131", None),
+    "busybox_1.36.1-musl": ("busybox", "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC)", "musl")}
+# the part of the language a recorded case is about, by the start of its label
+LANG_PARTS = (("index empty", "strings"), ("function", "functions"), ("param shadows", "functions"),
+              ("recursion", "functions"), ("array by reference", "functions"), ("local parameter", "functions"),
+              ("undefined function", "functions"), ("range", "ranges"), ("rand", "rand"), ("srand", "rand"),
+              ("CONVFMT", "numbers"), ("arithmetic", "numbers"), ("exponent form", "numbers"),
+              ("big literal", "numbers"), ("printf", "numbers"), ("index/toupper", "bytes"), ("length utf8", "bytes"),
+              ("substr utf8", "bytes"))
+CLOCK_SEEDED = ("srand()", "srand() two runs 1 s apart")
+OLD_MAWK_CLOCK = ("rand in two runs", "rand in two runs 1 s apart", "rand twice in one run", "srand return value",
+                  "srand return value 2") + CLOCK_SEEDED
+
+
+def lang_volatile(key, label):
+    """Whether a recorded case carries the clock or the entropy of its run (its form is compared, not its text)."""
+    style, version, _ = LANG_STYLES[key]
+    if style != "mawk":
+        return label in CLOCK_SEEDED + ("srand return value 2",)
+    if version == "1.3.4 20250131":
+        return label in ("srand return value", "srand return value 2")
+    if version == "1.3.4 20240123" and label.startswith(("srand(1)", "CONVFMT %d")):
+        return True
+    return label in OLD_MAWK_CLOCK
+
+
+def lang_runs(case):
+    """The awk runs of a recorded line: `for i in 1 2 3; do X; done`, `X; X`, `X; sleep 1; X` or X."""
+    found = re.fullmatch(r"for i in 1 2 3; do (.*); done", case)
+    if found:
+        return [found.group(1)] * 3
+    return [run for run in re.split(r"; (?=awk |sleep 1)", case) if run != "sleep 1"]
+
+
+def lang_form(text):
+    return re.sub(r"-?[0-9][0-9.e+-]*", "N", text)
+
+
+ARM64 = "linux-aarch64-lsb"  # the platform of the recordings of awk_lang.json and awk_big.json
+# the cases that depend on the platform, recorded on amd64 and arm64 (fixtures/awk_platform.json):
+#   image -> (awk_style, awk_version, text_libc, [shell] arch)
+PLATFORM = json.loads((Path(__file__).parent / "fixtures" / "awk_platform.json").read_text(encoding="utf-8"))["images"]
+PLATFORM_STYLES = {
+    "debian_13_amd64": ("mawk", "1.3.4 20250131", None, "linux-x64-lsb"),
+    "busybox_1.36.1-musl_amd64": ("busybox", "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC)", "musl", "linux-x64-lsb"),
+    "busybox_1.36.1-musl_arm64": ("busybox", "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC)", "musl", ARM64),
+    "busybox_1.25.1_amd64": ("busybox", "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC)", "uclibc", "linux-x64-lsb"),
+    "rockylinux_9_amd64": ("gawk", "5.1.0", None, "linux-x64-lsb"),
+    "rockylinux_9_arm64": ("gawk", "5.1.0", None, ARM64),
+    "rockylinux_9_arm64_utf8": ("gawk", "5.1.0", None, ARM64)}
+PLATFORM_VOLATILE = ("print rand(), rand() }'; ", "srand(); print rand()", "print srand(5)")
 
 _ROOT = None
 
@@ -198,6 +259,9 @@ class Base:
 
     def write(self, text):
         self.out += text
+
+    def writeBytes(self, data):  # noqa: N802 - Cowrie's name
+        self.out += data.decode("utf-8", "surrogateescape")
 
     def errorWrite(self, text):  # noqa: N802 - Cowrie's name
         self.err += text
@@ -287,8 +351,10 @@ class FakeLog:
         self.errors.append((args, kwargs))
 
 
-def awk(style, args, data=None, version=None, log=None, broken=False, libc=None):
-    """(stdout, stderr, status) of the patched awk of a style; broken makes the interpreter fail."""
+def awk(style, args, data=None, version=None, log=None, broken=False, libc=None, collate=None, clock=None, arch=None):
+    """(stdout, stderr, status) of the patched awk of a style; broken makes the interpreter fail; collate is
+    [shell] text_collate (posix: the C locale of the persona); clock the seconds of time.time(); arch [shell] arch
+    (linux-x64-lsb when not given)."""
     global _MATCHER
     root = patched_root()
     if _MATCHER is None:
@@ -296,13 +362,16 @@ def awk(style, args, data=None, version=None, log=None, broken=False, libc=None)
                         {"HoneyPotCommand": Base, "fs": object(), "CowrieConfig": FakeConfig({})})
         _MATCHER = fs["TpotGrepMatcher"]
     config = FakeConfig({("shell", "awk_style"): style, ("shell", "awk_version"): version or VERSIONS[style],
-                         **({("shell", "text_libc"): libc} if libc else {})})
+                         **({("shell", "text_libc"): libc} if libc else {}),
+                         **({("shell", "text_collate"): collate} if collate else {}),
+                         **({("shell", "arch"): arch} if arch else {})})
     namespace = module_all((root / "src/cowrie/commands/awk.py").read_text(),
                            {"HoneyPotCommand": Base, "FileNotFound": FileNotFoundError, "TpotGrepMatcher": _MATCHER,
                             "CowrieConfig": config, "log": log or FakeLog()})
     if broken:
         namespace["TpotAwk"].run = lambda *_: 1 // 0
-    cmd = namespace["Command_tpot_awk"](args, None if data is None else data.encode())
+    namespace["TpotAwk"].clock = staticmethod(time.time if clock is None else lambda: clock)
+    cmd = namespace["Command_tpot_awk"](args, None if data is None else data.encode("utf-8", "surrogateescape"))
     cmd.start()
     return cmd.out, cmd.err, cmd.exit_code
 
@@ -331,6 +400,164 @@ class AwkTest(unittest.TestCase):
         self.assertEqual(awk("mawk", ["BEGIN { print 2147483648, 2^53 }"], "", "1.3.4 20240123")[0],
                          "2147483648 9007199254740992\n")
         self.assertEqual(awk("mawk", ['BEGIN { printf "%d\\n", 2147483648 }'], "")[0], "2147483647\n")
+
+    def test_language_parts_as_recorded(self):
+        count = 0
+        for key, (style, version, libc) in LANG_STYLES.items():
+            entry = LANG[key]
+            for case, expected in entry["cases"].items():
+                label = entry["meta"].get(case)
+                part = next((part for start, part in LANG_PARTS if label and label.startswith(start)), None)
+                if part is None:
+                    continue
+                out, err, code = "", "", 0
+                for run in lang_runs(case):
+                    locale, _, run = run.partition(" ") if run.startswith("LC_ALL=") else ("", "", run)
+                    data = None
+                    found = re.fullmatch(r"printf '([^']*)' \| (.*)", run)
+                    if found:
+                        data, run = found.group(1).encode().decode("unicode_escape"), found.group(2)
+                    # gawk counts bytes in the C locale (centos:7 has no C.UTF-8: C); mawk and BusyBox always
+                    collate = "posix" if style == "gawk" and locale in ("LC_ALL=C",) + (
+                        ("LC_ALL=C.UTF-8",) if key == "centos_7" else ()) else None
+                    got = awk(style, shlex.split(run)[1:], data, version=version, libc=libc, collate=collate,
+                              arch=ARM64)
+                    out, err, code = out + got[0], err + got[1], got[2]
+                with self.subTest(image=key, case=label):
+                    if lang_volatile(key, label):
+                        self.assertEqual((lang_form(out), err, code), (lang_form(expected[0]), *expected[1:]))
+                    else:
+                        self.assertEqual((out, err, code), tuple(expected))
+                count += 1
+        self.assertEqual(count, 366)  # every recorded case but the version calls
+
+    def test_functions_end_awk_where_they_go_too_deep(self):
+        for style in VERSIONS:
+            with self.subTest(style=style):
+                self.assertEqual(awk(style, ["function f(n) { return f(n + 1) } BEGIN { f(1) }"]), ("", "", 2))
+                self.assertEqual(awk(style, ["function f(n) { return n < 2 ? n : f(n-1) + f(n-2) } BEGIN { print f(15) }"]),
+                                 ("610\n", "", 0))
+                self.assertEqual(awk(style, ['function f(a, k) { for (k in a) n++; delete a; return n } '
+                                             'BEGIN { x[1]; x[2]; print f(x), length(x) }']), ("2 0\n", "", 0))
+                self.assertEqual(awk(style, ["function f(x) { x[1] = 1 } BEGIN { f(y); f(y); print length(y) }"]),
+                                 ("1\n", "", 0))
+                self.assertEqual(awk(style, ["BEGIN { return 1 }"])[2], 1 if style != "mawk" else 2)
+
+    def test_range_patterns(self):
+        for style in VERSIONS:
+            with self.subTest(style=style):
+                self.assertEqual(awk(style, ["NR==2, NR==3 { print NR } /c/, /a/"], "a\nb\nc\nd\na\n"),
+                                 ("2\n3\nc\nd\na\n", "", 0))
+                self.assertEqual(awk(style, ["/b/,/b/ { n++ } END { print n }"], "b\nb\n"), ("2\n", "", 0))
+
+    def test_rand_seeded_by_the_clock_as_recorded(self):
+        """srand() and mawk's start seed take the clock: the second of each recorded value (derived: the second
+        within 200 of the recording whose seed gives the recorded value, one each)."""
+        cases = (("gawk", "4.0.2", 1792616316, "BEGIN { srand(); print rand() }", "0.655639\n"),
+                 ("gawk", "4.1.4", 1792616329, "BEGIN { srand(); print rand() }", "0.237515\n"),
+                 ("gawk", "5.1.0", 1792616348, "BEGIN { srand(); print rand() }", "0.0458192\n"),
+                 ("gawk", "5.2.1", 1792616326, "BEGIN { srand(); print rand() }", "0.389894\n"),
+                 ("busybox", None, 1792616340, "BEGIN { srand(); print rand() }", "0.399931\n"),
+                 ("mawk", "1.3.3", 1792616327, "BEGIN { print rand(), rand() }", "0.774445 0.0905174\n"),
+                 ("mawk", "1.3.3", 1792616329, "BEGIN { srand(); print rand() }", "0.0375202\n"),
+                 ("mawk", "1.3.4 20200120", 1792616333, "BEGIN { print rand(), rand() }", "0.841277 0.941606\n"),
+                 ("mawk", "1.3.4 20200120", 1792616334, "BEGIN { srand(); print rand() }", "0.201178\n"))
+        for style, version, clock, program, out in cases:
+            with self.subTest(style=style, version=version, program=program):
+                libc = "musl" if style == "busybox" else None
+                self.assertEqual(awk(style, [program], version=version, libc=libc, clock=clock + 0.5), (out, "", 0))
+        self.assertEqual(awk("mawk", ["BEGIN { print srand(5); print srand() }"], version="1.3.3", clock=1792616331.2),
+                         ("1792616331\n5\n", "", 0))
+        # mawk 1.3.4 of 2025 seeds from the clock in nanoseconds: arm64 casts it to 2**32 - 1, x86_64 keeps its low
+        #   32 bits (fixtures/awk_platform.json)
+        program = ["BEGIN { print rand(); srand(); print rand() }"]
+        self.assertEqual(awk("mawk", program, version="1.3.4 20250131", arch=ARM64), ("0.118709\n0.118709\n", "", 0))
+        clock = 1792666980.1
+        low = int(clock * 1e9) & 0xffffffff
+        self.assertNotEqual(awk("mawk", program, version="1.3.4 20250131", clock=clock),
+                            awk("mawk", program, version="1.3.4 20250131", clock=clock + 1))
+        self.assertEqual(awk("mawk", ["BEGIN { print rand() }"], version="1.3.4 20250131", clock=clock),
+                         awk("mawk", [f"BEGIN {{ srand({low}); print rand() }}"], version="1.3.4 20250131"))
+
+    def test_busybox_keeps_the_first_text_of_a_number_in_its_variable(self):
+        program = 'BEGIN { x = 0.5; CONVFMT = "%.2f"; a = x ""; CONVFMT = "%.3f"; print a, x "", 0.5 "", x + 0 "" }'
+        self.assertEqual(awk("busybox", [program]), ("0.50 0.50 0.500 0.500\n", "", 0))
+        self.assertEqual(awk("gawk", [program]), ("0.50 0.500 0.500 0.500\n", "", 0))
+        program = ['BEGIN { printf "%d %x %u|%d\\n", 2^32 + 5, -1, -1, -2^40 }']
+        self.assertEqual(awk("busybox", program, arch=ARM64), ("2147483647 ffffffff 4294967295|-2147483648\n", "", 0))
+        self.assertEqual(awk("busybox", program), ("-2147483648 ffffffff 4294967295|-2147483648\n", "", 0))
+
+    def test_busybox_copies_of_a_number_have_their_own_text(self):
+        """A copy takes the cached text of a number, if any, and then has its own (BusyBox copyvar; awk_platform.json)."""
+        program = 'BEGIN { x = 0.5; s = x ""; y = x; CONVFMT = "%.2f"; print y "" }'
+        self.assertEqual(awk("busybox", [program]), ("0.5\n", "", 0))
+        cases = (
+            ('BEGIN { x = 0.5; y = x; CONVFMT = "%.2f"; a = y ""; CONVFMT = "%.3f"; print a, y "", x "" }',
+             "0.50 0.50 0.500\n", "0.50 0.500 0.500\n"),
+            ('BEGIN { x = 0.5; CONVFMT = "%.2f"; s = x ""; y = x; CONVFMT = "%.3f"; print y "", x "" }',
+             "0.50 0.50\n", "0.500 0.500\n"),
+            ('function f(v) { CONVFMT = "%.2f"; return v "" } '
+             'BEGIN { x = 0.5; a = f(x); CONVFMT = "%.3f"; print a, x "" }', "0.50 0.500\n", "0.50 0.500\n"),
+            ('function f(v) { return v "" } '
+             'BEGIN { x = 0.5; CONVFMT = "%.2f"; s = x ""; CONVFMT = "%.3f"; print f(x), x "" }',
+             "0.50 0.50\n", "0.500 0.500\n"),
+            ('BEGIN { x = 0.5; a[1] = x; CONVFMT = "%.2f"; s = a[1] ""; CONVFMT = "%.3f"; print s, x "", a[1] "" }',
+             "0.50 0.500 0.50\n", "0.50 0.500 0.500\n"),
+        )
+        for program, busybox, gawk in cases:
+            with self.subTest(program=program):
+                self.assertEqual(awk("busybox", [program]), (busybox, "", 0))
+                self.assertEqual(awk("gawk", [program]), (gawk, "", 0))
+                self.assertEqual(awk("mawk", [program]), (gawk, "", 0))
+
+    def test_qnap_busybox_1_24_1_awk_follows_its_x86_64_platform(self):
+        """QNAP's BusyBox 1.24.1 on x86_64: C conversions of the x86_64 kind, hash and numbers as in every BusyBox
+        (the 1.14.1 to 1.36.1 sources; derived, not recorded for 1.24.1)."""
+        persona = next(p for p in catalog.PERSONAS if p.id == "qnap-qts")
+        keys = system.awk_keys(persona, draw(persona, 4))
+        self.assertEqual((persona.arch, keys["awk_style"], keys["awk_version"].split(" (")[0]),
+                         ("linux-x64-lsb", "busybox", "BusyBox v1.24.1"))
+        program = ['BEGIN { printf "%d %x %u|%d\\n", 2^32 + 5, -1, -1, -2^40; print 2^62, 2^63, 0.5 "" }']
+        self.assertEqual(awk("busybox", program, version=keys["awk_version"], arch=persona.arch, libc="glibc"),
+                         ("-2147483648 ffffffff 4294967295|-2147483648\n4611686018427387904 9.22337e+18 0.5\n", "", 0))
+
+    def test_platform_cases_as_recorded(self):
+        count = 0
+        for key, (style, version, libc, arch) in PLATFORM_STYLES.items():
+            for case, expected in PLATFORM[key]["cases"].items():
+                if not case.startswith("awk '"):
+                    continue  # uname -m and the version calls
+                out, err, code = "", "", 0
+                for run in lang_runs(case):
+                    got = awk(style, shlex.split(run)[1:], version=version, libc=libc, arch=arch)
+                    out, err, code = out + got[0], err + got[1], got[2]
+                with self.subTest(image=key, case=case):
+                    if style == "mawk" and any(part in case for part in PLATFORM_VOLATILE):
+                        self.assertEqual((lang_form(out), err, code), (lang_form(expected[0]), *expected[1:]))
+                    elif "Invalid multibyte" in expected[1]:  # gawk's warning of length() is not emulated
+                        self.assertEqual((out, err, code), (expected[0], "", expected[2]))
+                    else:
+                        self.assertEqual((out, err, code), tuple(expected))
+                count += 1
+        self.assertEqual(count, 57)
+
+    def test_mawk_deletes_a_large_array_in_time(self):
+        started = time.monotonic()
+        program = "BEGIN { for (i = 0; i < 50000; i++) a[i]; for (k in a) delete a[k]; print length(a) }"
+        self.assertEqual(awk("mawk", [program]), ("0\n", "", 0))
+        self.assertLess(time.monotonic() - started, LIMIT_SECONDS)
+
+    def test_bytes_of_input_and_of_the_program(self):
+        """mawk and BusyBox count bytes, gawk characters in a UTF-8 locale and bytes in the C locale of a persona
+        (DSM: text_collate posix); a byte that is no UTF-8 passes through."""
+        program = '{ print length($0), length("é"), substr($0, 2, 1), toupper($0) }'
+        data = "aé\n"
+        self.assertEqual(awk("gawk", [program], data), ("2 1 é AÉ\n", "", 0))
+        expected = "3 2 \udcc3 Aé\n"
+        for style, collate in (("gawk", "posix"), ("mawk", None), ("busybox", None)):
+            with self.subTest(style=style):
+                self.assertEqual(awk(style, [program], data, collate=collate), (expected, "", 0))
+        self.assertEqual(awk("gawk", ["{ print }"], "a\udcff\n"), ("a\udcff\n", "", 0))
 
     def test_files_of_the_emulated_file_system(self):
         self.assertEqual(awk("mawk", ["-F:", "$3 >= 1000 {print $1}", "/etc/passwd"]), ("ubuntu\n", "", 0))

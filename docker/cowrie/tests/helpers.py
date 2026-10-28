@@ -81,6 +81,14 @@ def base_tree():
     _link(root, "etc/alternatives/rmt.8.gz", "usr/share/man/man8/rmt-tar.8.gz")
     # Debian's own packages (adduser, debianutils) and the process of the container
     tree.ensure_file(root, "etc/adduser.conf", b"DSHELL=/bin/bash\n", ctime=OLD)
+    # the rest of Debian's /etc as Cowrie's pickle has it (base-files, login, PAM, shadow, bash, ld.so)
+    for rel in ("etc/default/useradd", "etc/pam.d/login", "etc/skel/.bashrc", "etc/bash.bashrc", "etc/profile",
+                "etc/shells", "etc/login.defs", "etc/ld.so.conf", "etc/passwd-", "etc/gshadow", "etc/subuid",
+                "etc/hosts", "etc/resolv.conf", "etc/security/limits.conf", "etc/cron.d/e2scrub_all"):
+        tree.ensure_file(root, rel, b"", ctime=OLD)
+    tree.ensure_dir(root, "etc/cron.daily", ctime=OLD)
+    _program(root, "usr/bin/bashbug", 7100)
+    _link(root, "usr/bin/rbash", "usr/bin/bash")
     tree.ensure_file(root, "etc/rcS.d/README", b"", ctime=OLD)
     for name in ("hwclock.sh", "procps", "ssh"):
         tree.ensure_file(root, f"etc/init.d/{name}", b"#!/bin/sh\n", mode=0o755, ctime=OLD)
@@ -92,6 +100,9 @@ def base_tree():
     _link(root, "usr/bin/which", "usr/bin/which.debianutils")
     tree.ensure_file(root, "proc/969/status", b"Name:\tpython3\n", ctime=OLD)
     _link(root, "proc/self", "proc/969")
+    # /proc/thread-self as Cowrie's pickle has it: its task folder is empty (the renderer makes the thread)
+    tree.ensure_dir(root, "proc/969/task", ctime=OLD)
+    _link(root, "proc/thread-self", "proc/969/task/969")
     _link(root, "proc/969/exe", "usr/bin/python3.11")
     _link(root, "dev/stdout", "proc/969/fd/pipe:[7685]")
     _link(root, "proc/969/cwd", "")
@@ -112,6 +123,14 @@ def base_tree():
                       ("usr/bin/mount", 59704), ("usr/bin/mawk", 162088), ("usr/bin/dash", 125688),
                       ("usr/bin/run-parts", 27200), ("usr/bin/rm", 72160)):
         _program(root, rel, size)
+    # links of Cowrie's pickle to programs a persona may not have (targets from the root, as upstream has them)
+    for rel, size in (("usr/bin/last", 47240), ("usr/bin/hostname", 22584), ("usr/sbin/killall5", 22872)):
+        _program(root, rel, size)
+    for rel, target in (("usr/bin/lastb", "usr/bin/last"), ("usr/bin/slogin", "usr/bin/ssh"),
+                        ("usr/bin/dnsdomainname", "usr/bin/hostname"), ("usr/bin/domainname", "usr/bin/hostname"),
+                        ("usr/bin/nisdomainname", "usr/bin/hostname"), ("usr/bin/ypdomainname", "usr/bin/hostname"),
+                        ("usr/bin/pidof", "usr/sbin/killall5")):
+        _link(root, rel, target)
     _link(root, "usr/bin/python3", "usr/bin/python3.11")
     _link(root, "usr/bin/vim", "usr/bin/vim.basic")
     # Debian's alternatives of awk and sh

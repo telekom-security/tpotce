@@ -129,7 +129,7 @@ def _device_interfaces(persona, ident, rng):
 #   file descriptors and backlogs other than those of sshd (128, as in the containers of the
 #   releases), the ports of the vendor daemons
 DAEMONS = (
-    (r"sshd: |/usr/s?bin/sshd\b|^/usr/bin/sshd", "sshd", (("tcp", "0.0.0.0", 22, 3, 128), ("tcp", "::", 22, 4, 128))),
+    (r"sshd: |/usr/s?bin/sshd\b|^/usr/bin/sshd|^/sbin/sshd\b", "sshd", (("tcp", "0.0.0.0", 22, 3, 128), ("tcp", "::", 22, 4, 128))),
     (r"dropbear", "dropbear", (("tcp", "0.0.0.0", 22, 3, 20), ("tcp", "::", 22, 4, 20))),
     (r"systemd-resolved", "systemd-resolve", (("udp", "127.0.0.53%lo", 53, 13, 0), ("tcp", "127.0.0.53%lo", 53, 14, 4096),
                                               ("udp", "127.0.0.54", 53, 15, 0), ("tcp", "127.0.0.54", 53, 16, 4096))),
@@ -147,8 +147,11 @@ DAEMONS = (
     (r"dnsmasq", "dnsmasq", (("udp", "0.0.0.0", 67, 3, 0), ("udp", "0.0.0.0", 53, 4, 0), ("tcp", "0.0.0.0", 53, 5, 32))),
     (r"odhcpd", "odhcpd", (("udp", "::", 547, 7, 0),)),
     (r"lighttpd", "lighttpd", (("tcp", "0.0.0.0", 80, 4, 1024), ("tcp", "0.0.0.0", 443, 5, 1024))),
+    # the httpd of the NAS326 (/usr/sbin/httpd of its system image, /etc/service_conf/httpd.conf; unverified: its
+    #   sockets, kept from the earlier row of the persona)
+    (r"^/usr/sbin/httpd -f /etc/service_conf/httpd\.conf", "httpd", (("tcp", "0.0.0.0", 80, 4, 511),
+                                                                     ("tcp", "0.0.0.0", 443, 5, 511))),
     (r"^/usr/sbin/httpd|^/usr/bin/httpd", "httpd", (("tcp", "0.0.0.0", 80, 3, 5),)),
-    (r"apache/bin/httpd", "httpd", (("tcp", "0.0.0.0", 80, 4, 511), ("tcp", "0.0.0.0", 443, 5, 511))),
     (r"apache_proxy", "apache_proxy", (("tcp", "0.0.0.0", 8080, 4, 511), ("tcp", "0.0.0.0", 443, 5, 511))),
     (r"_thttpd_", "_thttpd_", (("tcp", "127.0.0.1", 58080, 3, 1024),)),
     (r"udhcpd", "udhcpd", (("udp", "0.0.0.0", 67, 3, 0),)),
@@ -170,7 +173,10 @@ DAEMONS = (
 def ssh_fds(persona, ident):
     """(listening fd of IPv4, of IPv6, fd of a session's connection) of the SSH server (refs network-dhcp
     sshd-* and dropbear-alp-*: OpenSSH 7.4 3/4/3, 8.9 and 9.6 3/4/4, 10.0 6/7/7, dropbear 3/4/5;
-    unverified: OpenSSH 8.7 of RHEL 9 and 9.2 of Debian 12 as 8.9, the dropbear of the devices as Alpine's)."""
+    unverified: OpenSSH 8.7 of RHEL 9 and 9.2 of Debian 12 as 8.9, the dropbear of the devices as Alpine's).
+    None for each without an SSH server (its sessions come over Telnet)."""
+    if persona.ssh_profile is None:
+        return None, None, None
     if "dropbear" in persona.ssh_profile:
         return 3, 4, 5
     match = re.search(r"OpenSSH_(\d+)\.(\d+)", ident.release.ssh_banner)
@@ -266,6 +272,9 @@ def tool_styles(persona, ident):
                 libbpf = IPROUTE2_LIBBPF.get(code, "")
             for name in ("ip", "ss"):
                 tools[name] = {"style": "iproute2", "version": version, "libbpf": libbpf}
+            if family == "rhel":
+                # ss -D FILE of a user who may not write FILE: Rocky 9 says so, recorded (ref systemd_ssdump.json)
+                tools["ss"]["dump_error"] = True
         if "net-tools" in installed:
             if code in ("bookworm", "trixie", "noble"):
                 version = "2.10"
@@ -295,6 +304,10 @@ def tool_styles(persona, ident):
     if family == "tplink":
         # the Archer C7 has iproute2 3.3.0 as /usr/sbin/ip (ip -V: "ip utility, iproute2-ss3.3.0-1-openwrt")
         tools["ip"] = {"style": "iproute2", "version": "ss3.3.0-1-openwrt", "libbpf": ""}
+    if family == "zyxel":
+        # the NAS326 has iproute2 as /bin/ip of its initramfs (its format string "ip utility, iproute2-ss%s" and
+        #   the snapshot 141224, read as bytes; not run)
+        tools["ip"] = {"style": "iproute2", "version": "ss141224", "libbpf": ""}
     return tools
 
 
@@ -313,6 +326,8 @@ def tool_paths(persona, ident):
             found[name] = (paths[name], target)
         elif persona.family == "tplink" and name == "ip":
             found[name] = ("usr/sbin/ip", None)
+        elif persona.family == "zyxel" and name == "ip":
+            found[name] = ("bin/ip", None)
         else:
             found[name] = (paths[name], None)
     return found

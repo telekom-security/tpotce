@@ -3,6 +3,7 @@ tools/build_command_not_found.py (command -> package of the cnf indexes of the r
 file of the persona's release and the answer of the patched shell (shell/honeypot.py), as
 command-not-found 23.04.0 / 22.04.0 print it (ubuntu:24.04 / ubuntu:22.04, round 4 references)."""
 import configparser
+import json
 import shutil
 import subprocess
 import sys
@@ -209,6 +210,144 @@ class AnswerTest(unittest.TestCase):
                 self.assertNotEqual(done.returncode, 0)
                 self.assertIn("Could not find expected text", done.stderr)
 
+
+
+MSH = json.loads((Path(__file__).parent / "fixtures" / "msh.json").read_text(encoding="utf-8"))["images"]
+MSH_C = MSH["fw_dlink_dir859_105b03_msh_c"]["cases"]
+MSH_PTY = MSH["fw_dlink_dir859_105b03_msh_pty"]["cases"]
+
+
+class MshTest(unittest.TestCase):
+    """The DIR-859 speaks BusyBox msh (1.14.1 of its 1.05B03 image, tests/fixtures/msh.json): a command it
+    cannot find is "x: not found" without the shell's name (127), a folder or a file without an x bit
+    "x: can't execute" (126), the builtins msh has not are not found."""
+
+    @classmethod
+    def setUpClass(cls):
+        handle = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(handle.cleanup)
+        root = Path(handle.name) / "cowrie"
+        shutil.copytree(FIXTURE, root)
+        subprocess.run([sys.executable, str(PATCH), "--cowrie-root", str(root)], check=True, capture_output=True,
+                       text=True)
+        cls.source = (root / HONEYPOT).read_text()
+        cls.protocol = (root / "src/cowrie/shell/protocol.py").read_text()
+        cls.base = (root / "src/cowrie/commands/base.py").read_text()
+        cls.persona = catalog.by_id("dlink-dir859")
+        cfg = configparser.ConfigParser(interpolation=None)
+        cfg.read_string(render_cfg(cls.persona, draw(cls.persona, 0), Path("/tmp/r"), Path("/tmp/k")))
+        cls.cfg = cfg
+
+    def message(self, cmd, interactive=True, folders=(), files=()):
+        namespace = {"CowrieConfig": FakeConfig({("shell", key): value for key, value in self.cfg.items("shell")})}
+        module_parts(self.source, ["tpot_command_not_found_table", "tpot_command_not_found"], namespace)
+        function = method(self.source, "HoneyPotShell", "command_not_found_message", namespace)
+        fs = types.SimpleNamespace(isdir=lambda p: p in folders, exists=lambda p: p in folders or p in files,
+                                   resolve_path=lambda p, c: p)
+        login = self.cfg.get("shell", "shell_name")
+        shell = types.SimpleNamespace(protocol=types.SimpleNamespace(fs=fs), cwd="/", line_numbers=not interactive,
+                                      current_line=1, syntax_label=None if interactive else "-c",
+                                      name=f"-{login}" if interactive else login)
+        shell.error_prefix = lambda: method(self.source, "HoneyPotShell", "error_prefix", namespace)(shell)
+        return function(shell, cmd)
+
+    def status(self, message):
+        namespace = {"CowrieConfig": FakeConfig({("shell", "not_found_style"): "msh"})}
+        module_parts(self.source, ["tpot_not_found_status"], namespace)
+        return namespace["tpot_not_found_status"](message.encode())
+
+    def test_the_persona_speaks_msh(self):
+        self.assertIn("dlink", system.MSH_FAMILIES)
+        self.assertNotIn("dlink", system.ASH_FAMILIES)
+        self.assertEqual(system.shell_style(self.persona), ("sh", "msh"))
+        self.assertEqual(self.cfg.get("shell", "not_found_style"), "msh")
+
+    def test_a_missing_command(self):
+        for interactive in (True, False):
+            with self.subTest(interactive=interactive):
+                out, err, code = MSH_C["nosuch"]
+                self.assertEqual(self.message("nosuch", interactive), err)
+                self.assertEqual(self.status(err), code)
+                self.assertIn("# nosuch\r\nnosuch: not found\r\n# echo $?\r\n127\r\n", MSH_PTY["nosuch\necho $?\nexit\n"][0])
+                out, err, code = MSH_C["/nosuch/x"]
+                self.assertEqual(self.message("/nosuch/x", interactive), err)
+                self.assertEqual(self.status(err), code)
+
+    def test_a_folder_cannot_be_executed(self):
+        out, err, code = MSH_C["/tmp"]
+        self.assertEqual(self.message("/tmp", folders=("/tmp",)), err)
+        self.assertEqual(self.status(err), code)
+        self.assertEqual(MSH_PTY["/tmp\nexit\n"][2], 126)
+        # the shell takes its status from the message
+        self.assertIn("self.last_exit_code = tpot_not_found_status(message)", self.source)
+
+    def test_a_file_without_an_x_bit(self):
+        out, err, code = MSH_C["./nx"]
+        namespace = {"CowrieConfig": FakeConfig({("shell", "not_found_style"): "msh"})}
+        module_parts(self.protocol, ["tpot_exec_denied"], namespace)
+        self.assertEqual(namespace["tpot_exec_denied"]("", "./nx"), (err, code))
+        namespace = {"CowrieConfig": FakeConfig({})}
+        module_parts(self.protocol, ["tpot_exec_denied"], namespace)
+        self.assertEqual(namespace["tpot_exec_denied"]("-bash: ", "./nx"), ("-bash: ./nx: Permission denied\n", 126))
+
+    def test_the_builtins_msh_has_not(self):
+        skipped = {name.strip() for name in self.cfg.get("shell", "skip_python_commands").split(",")}
+        for case in ("alias", "type ls", "history", "jobs", "unset HOME; echo $HOME"):
+            name = case.split()[0]
+            with self.subTest(command=name):
+                self.assertEqual(MSH_C[case][1], f"{name}: not found\n")
+                self.assertIn(name, skipped)
+                self.assertEqual(self.message(name), MSH_C[case][1])
+        self.assertEqual(MSH_C["ulimit -a | head -2"][1], "ulimit: not found\n")
+        self.assertIn("ulimit", skipped)
+        # msh's own builtins and the applets of the firmware (kill) stay
+        for name in ("cd", "export", "set", "exit", "help", "umask", "echo", "kill", "test"):
+            self.assertNotIn(name, skipped, name)
+
+    def test_fails_loudly_on_unknown_upstream(self):
+        # the needles of patch_msh and patch_bash_version
+        cases = (("src/cowrie/shell/honeypot.py", "\n\nclass HoneyPotShell:\n"),
+                 ("src/cowrie/shell/honeypot.py", "            self.last_exit_code = 127  # command not found\n"),
+                 ("src/cowrie/shell/protocol.py", "class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):\n"),
+                 ("src/cowrie/shell/protocol.py", '                    self.errorWrite(f"{prefix}{name}: Permission denied\\n")\n'
+                                                  "                    self.exit_code = 126\n"),
+                 ("src/cowrie/shell/protocol.py", '            self.terminal.write(self.fs.file_contents("/etc/motd"))\n'),
+                 ("src/cowrie/commands/base.py", "class Command_help(HoneyPotCommand):\n    def call(self) -> None:\n"),
+                 ("src/cowrie/commands/bash.py", "from cowrie.shell.command import HoneyPotCommand\n"),
+                 ("src/cowrie/commands/bash.py", "    def start(self) -> None:\n"
+                                                 '        if self.args and self.args[0].strip() == "-c":\n'))
+        for rel, old in cases:
+            with self.subTest(file=rel, needle=old.strip()[:40]), tempfile.TemporaryDirectory() as handle:
+                root = Path(handle) / "cowrie"
+                shutil.copytree(FIXTURE, root)
+                path = root / rel
+                text = path.read_text()
+                self.assertEqual(text.count(old), 1)
+                path.write_text(text.replace(old, old[:-1] + "  # x\n"))
+                done = subprocess.run([sys.executable, str(PATCH), "--cowrie-root", str(root)],
+                                      capture_output=True, text=True)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("Could not find expected text", done.stderr)
+
+    def test_help_lists_the_builtins_of_msh(self):
+        # on a terminal (a Telnet login); under -c msh prints nothing
+        transcript = MSH_PTY["help\nexit\n"][0].replace("\r\n", "\n")
+        text = transcript.split("# help\n", 1)[1].rsplit("# exit\n", 1)[0]
+        self.assertTrue(text.startswith("\nBuilt-in commands:\n"))
+        self.assertEqual(MSH_C["help"], ["", "", 0])
+        for interactive, expected in ((True, text), (False, "")):
+            written = []
+            command = types.SimpleNamespace(write=written.append,
+                                            shell=types.SimpleNamespace(interactive=interactive))
+            call = method(self.base, "Command_help", "call",
+                          {"CowrieConfig": FakeConfig({("shell", "not_found_style"): "msh"})})
+            call(command)
+            self.assertEqual("".join(written), expected, interactive)
+        # bash's help stays elsewhere
+        written = []
+        call = method(self.base, "Command_help", "call", {"CowrieConfig": FakeConfig({})})
+        call(types.SimpleNamespace(write=written.append, shell=types.SimpleNamespace(interactive=True)))
+        self.assertTrue("".join(written).startswith("GNU bash, version"))
 
 
 class PythonFloorTest(unittest.TestCase):

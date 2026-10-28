@@ -49,9 +49,13 @@ class CatalogTest(unittest.TestCase):
     def test_fields(self):
         for p in catalog.PERSONAS:
             self.assertIn(p.kind, ("server", "device"), p.id)
-            self.assertIn(p.ssh_profile, PROFILES, p.id)
+            # None: no SSH server (the DIR-859), no banner and no ssh -V
+            self.assertTrue(p.ssh_profile is None or p.ssh_profile in PROFILES, p.id)
             self.assertTrue(p.releases and p.hardware and p.hostnames, p.id)
             for r in p.releases:
+                if p.ssh_profile is None:
+                    self.assertEqual((r.ssh_banner, r.ssh_version), ("", ""), (p.id, r.label))
+                    continue
                 self.assertTrue(r.ssh_banner.startswith("SSH-2.0-"), (p.id, r.label))
                 product = "dropbear" if p.ssh_profile.startswith("dropbear") else "OpenSSH"
                 self.assertIn(product, r.ssh_banner, (p.id, r.label))
@@ -245,6 +249,15 @@ class DeviceCatalogTest(unittest.TestCase):
             self.assertEqual(arches[pid], "linux-arm-lsb", pid)
         self.assertEqual(arches["raspios"], "linux-aarch64-lsb")
 
+    def test_dlink_banners_carry_recorded_build_dates_only(self):
+        # a banner date is read from a BusyBox of a firmware image (1.05B03, the 1.07b02 beta); the encrypted
+        # 1.07B03 image takes the one of the beta, no date is derived from a release day
+        recorded = {"BusyBox v1.14.1 (2016-06-28 10:53:08 CST)", "BusyBox v1.14.1 (2019-01-24 09:05:19 CST)"}
+        banners = {r.label: r.extra["busybox"] for r in catalog.by_id("dlink-dir859").releases}
+        self.assertEqual(set(banners), {"1.05B03", "1.07B03"})
+        for version, banner in banners.items():
+            self.assertIn(banner, recorded, version)
+
     def test_ipcam_is_a_busybox_camera(self):
         p = catalog.by_id("ipcam")
         self.assertEqual((p.ssh_profile, p.hardware_platform), ("dropbear", "armv7l"))
@@ -289,6 +302,8 @@ class DeviceCatalogTest(unittest.TestCase):
     def test_device_ssh_version_names_the_banner(self):
         for pid in DEVICES:
             p = catalog.by_id(pid)
+            if p.ssh_profile is None:
+                continue
             for r in p.releases:
                 product = r.ssh_banner[len("SSH-2.0-"):].split(" ", 1)[0]
                 if p.ssh_profile.startswith("dropbear"):
@@ -298,13 +313,22 @@ class DeviceCatalogTest(unittest.TestCase):
                 else:
                     self.assertRegex(r.ssh_version, rf"^{re.escape(product)}(p\d+)?[ ,]", (pid, r.label))
 
+    def test_qnap_names_the_bash_and_openssh_of_its_gpl_build(self):
+        # QTS_OSS_5.2.3.20250218: bash 3.2.57 (every build, taken as 5.2.3's), OpenSSH 9.8p1 of 5.2.3 with the
+        #   inferred OpenSSL 3.0.9 of the same tree
+        for release in catalog.by_id("qnap-qts").releases:
+            self.assertEqual(release.extra["bash"], "3.2.57(1)-release", release.label)
+            if release.os_version == "5.2.3":
+                self.assertEqual(release.ssh_version, "OpenSSH_9.8p1, OpenSSL 3.0.9 30 May 2023")
+
     def test_prompt_style_fits_the_family(self):
-        # bash PS1 of Red Hat is [\u@\h \W]\$, Debian / Ubuntu and the devices keep Cowrie's \u@\h:\w\$
+        # bash PS1 of Red Hat is [\u@\h \W]\$, msh of the DIR-859 "# ", Debian / Ubuntu and the other devices
+        #   keep Cowrie's \u@\h:\w\$
         from tpot_personas.model import PROMPT_STYLES
         for p in catalog.PERSONAS:
             self.assertIn(p.prompt_style, PROMPT_STYLES, p.id)
-            expected = {"rhel": "redhat", "centos": "redhat", "qnap": "qnap"}.get(p.family, "debian")
-        self.assertEqual(p.prompt_style, expected, p.id)
+            expected = {"rhel": "redhat", "centos": "redhat", "qnap": "qnap", "dlink": "msh"}.get(p.family, "debian")
+            self.assertEqual(p.prompt_style, expected, p.id)
 
     def test_uname_names_gnu_linux(self):
         # BusyBox uname -o / -a prints "GNU/Linux" (uname.c of 1.14.1, 1.19.4; CONFIG_UNAME_OSNAME since)

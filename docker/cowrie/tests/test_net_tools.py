@@ -235,7 +235,8 @@ class NetToolsTest(unittest.TestCase):
         self.assertNotIn("ESTAB", out)
 
     def test_every_persona_shows_one_network(self):
-        """ip, ifconfig, ss and netstat of a persona name the same MAC, address and listening ports."""
+        """ip, ifconfig, ss and netstat of a persona name the same MAC, address and listening ports; port 22
+        only where the persona has an SSH server (none on the DIR-859, telnetd only)."""
         for persona in catalog.PERSONAS:
             ident = draw(persona, 5)
             content = persona.builder(persona, ident)
@@ -243,7 +244,10 @@ class NetToolsTest(unittest.TestCase):
             main = data["interfaces"][0]
             ports = sorted({s["port"] for s in data["sockets"] if s["proto"] == "tcp"})
             with self.subTest(persona=persona.id):
-                self.assertIn(22, ports)
+                if persona.ssh_profile is not None:
+                    self.assertIn(22, ports)
+                else:
+                    self.assertNotIn(22, ports)
                 if "ip" in data["tools"]:
                     out = self.run_cmd(data, "ip", ["a"])[0]
                     self.assertIn(main["mac"], out)
@@ -257,9 +261,13 @@ class NetToolsTest(unittest.TestCase):
                 if "ss" in data["tools"]:
                     out = self.run_cmd(data, "ss", ["-tlnp"])[0]
                     self.assertEqual(sorted({int(m) for m in re.findall(r":(\d+)\s", out)}), ports)
+                    if persona.ssh_profile is None:
+                        self.assertNotRegex(out, r":22\s")
                 if "netstat" in data["tools"]:
                     out = self.run_cmd(data, "netstat", ["-tlnp"])[0]
                     self.assertEqual(sorted({int(m) for m in re.findall(r"^tcp6? .*?:(\d+) ", out, re.M)}), ports)
+                    if persona.ssh_profile is None:
+                        self.assertNotRegex(out, r":22 ")
                 if ident.hardware.provider == "aws":
                     self.assertEqual(main["inet"], ident.hostname[3:].replace("-", "."))
 

@@ -115,10 +115,11 @@ class FakeCommand:
 
     pp = None
 
-    def __init__(self, args, input_data=None, files=None, cwd="/root"):
+    def __init__(self, args, input_data=None, files=None, cwd="/root", dirs=None):
         self.args = list(args)
         self.input_data = input_data
-        self.fs = FakeFs({"/proc/cpuinfo": CPUINFO, "/proc/meminfo": MEMINFO} if files is None else files)
+        self.fs = FakeFs({"/proc/cpuinfo": CPUINFO, "/proc/meminfo": MEMINFO} if files is None else files,
+                         *(() if dirs is None else (dirs,)))
         self.cwd = cwd
         self.out = bytearray()
         self.err = ""
@@ -169,6 +170,10 @@ class FakeConfig:
 
     def has_option(self, section, option):
         return (section, option) in self.values
+
+    def getboolean(self, section, option, fallback=None):
+        value = self.values.get((section, option))
+        return fallback if value is None else str(value).strip().lower() in ("1", "yes", "true", "on")
 
 
 
@@ -314,6 +319,11 @@ class PatchTest(unittest.TestCase):
         self.assertIn("if spelling in self.commands and not skip_python_command(spelling):", protocol)
         # the smoke test looks for upstream's txtcmds_path lookup: it stays, the spellings follow it
         self.assertIn("operator_path = Path(txtcmds_path) / relpath", protocol)
+        # a persona without an SSH server: its connections close before the version string
+        transport = (self.patched() / "src/cowrie/ssh/transport.py").read_text()
+        self.assertIn('if CowrieConfig.getboolean("ssh", "drop_connections", fallback=False):', transport)
+        self.assertLess(transport.index("drop_connections"),
+                        transport.index("self.transport.write(self.ourVersionString"))
 
     def test_the_added_code_uses_only_names_its_module_binds(self):
         """A needle can still match after upstream dropped an import the added code relies on
@@ -513,6 +523,34 @@ class PatchTest(unittest.TestCase):
         self.assertTrue(4000 <= first["pid"] <= 8000)
         self.assertEqual((first["name"], first["title"]), ("sshd", "sshd: root@pts/0"))
 
+    def test_the_session_makes_its_proc_at_its_start(self):
+        """connectionMade of the protocol runs tpot_proc_session of base.py, after the generated files of
+        /proc; the node fields tpot_proc_session writes are those of fs.py."""
+        root = self.patched()
+        protocol = (root / "src/cowrie/shell/protocol.py").read_text()
+        self.assertIn('        self.fs.generated_files["/proc/loadavg"] = self.proc_loadavg\n'
+                      "        # T-Pot: the PIDs of the session (one counter for all sessions) and its processes in /proc\n"
+                      "        try:\n            from cowrie.commands.base import tpot_proc_session\n\n"
+                      "            tpot_proc_session(self)\n", protocol)
+        connection = protocol.split("    def connectionMade(self) -> None:\n", 1)[1].split("\n    def ", 1)[0]
+        self.assertIn("tpot_proc_session(self)", connection)
+        self.assertIn("    TPOT_PIDS: ClassVar[dict] = {", protocol)
+        base = (root / "src/cowrie/commands/base.py").read_text()
+        self.assertEqual(base.count("\ndef tpot_proc_session(protocol) -> None:\n"), 1)
+        fields = re.search(r"\n\(\n((?:    A_\w+,\n)+)\) = list\(range\(0, 10\)\)\n",
+                           (FIXTURE / "src/cowrie/shell/fs.py").read_text())
+        names = [name.strip() for name in fields.group(1).split(",") if name.strip()] if fields else []
+        self.assertEqual(names[:10], ["A_NAME", "A_TYPE", "A_UID", "A_GID", "A_SIZE", "A_MODE", "A_CTIME", "A_CONTENTS",
+                                      "A_TARGET", "A_REALFILE"])
+        self.assertIn("T_LINK, T_DIR, T_FILE, T_BLK, T_CHR, T_SOCK, T_FIFO = list(range(0, 7))",
+                      (FIXTURE / "src/cowrie/shell/fs.py").read_text())
+        namespace = module_all(base, {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig({}),
+                                      "Logger": lambda: None, "utils": None, "A_MODE": 0, "A_SIZE": 0,
+                                      "LoopSignal": type("LoopSignal", (), {"BREAK": 1, "CONTINUE": 2})})
+        self.assertEqual([namespace[f"TPOT_NODE_{name[2:]}"] for name in names[:10]], list(range(10)))
+        self.assertEqual((namespace["TPOT_NODE_LINK"], namespace["TPOT_NODE_DIR"], namespace["TPOT_NODE_FILE"]),
+                         (0, 1, 2))
+
     def test_links_resolve_from_their_directory(self):
         from tpot_personas.identity import draw
         from tpot_personas.render import apply_to_tree
@@ -634,6 +672,18 @@ class PatchTest(unittest.TestCase):
             self.assertEqual(bytes(command.out), help_path.read_bytes(), args)
             self.assertEqual((command.err, executed), ("", []))
 
+    def test_busybox_list_prints_the_applets_of_the_persona_help_one_per_line(self):
+        help_path = tmpdir(self) / "busybox-help.txt"
+        help_path.write_text("BusyBox v1.19.4 (2022-07-14 23:31:52 EDT) multi-call binary.\n\nUsage: busybox --list[-full]\n\n"
+                             "Currently defined functions:\n\t[, [[, addgroup, ash, cat,\n\twget, which, xargs\n\n")
+        command, _, executed = self.busybox(["--list"], help_path)
+        self.assertEqual((bytes(command.out), command.err, command.code, executed),
+                         (b"[\n[[\naddgroup\nash\ncat\nwget\nwhich\nxargs\n", "", None, []))
+
+    def test_busybox_list_without_a_help_file_names_no_applet(self):
+        command, _, _ = self.busybox(["--list"])
+        self.assertEqual((bytes(command.out), command.err), (b"", "--list: applet not found\n"))
+
     def test_busybox_without_the_key_keeps_upstream_help(self):
         command, _, _ = self.busybox([])
         self.assertIn("BusyBox v1.20.2 (Debian 1:1.20.0-7) multi-call binary.", command.err)
@@ -692,7 +742,7 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(self.python(["-c", "print('a', 2.5, None, sep='-', end='')"]), ("a-2.5-None", "", 0))
         self.assertEqual(self.python(["-c", "import sys\nx = 'hi'\nprint(x)\nprint('e', file=sys.stderr)"]),
                          ("hi\n", "e\n", 0))
-        self.assertEqual(self.python(["-c", "sys.stdout.write('w')"]), ("w", "", 0))
+        self.assertEqual(self.python(["-c", "import sys; sys.stdout.write('w')"]), ("w", "", 0))
 
     def test_python_c_ends_the_option_list(self):
         # the words after the code are sys.argv, no options and no files
@@ -714,6 +764,8 @@ class PatchTest(unittest.TestCase):
         self.assertFalse(marker.exists())
         for module in ("python", "perl"):
             source = (self.patched() / f"src/cowrie/commands/{module}.py").read_text()
+            # the recorded tables of python.py name builtins and modules, they run nothing
+            source = re.sub(r"(?ms)^TPOT_PY_(BUILTINS|STDLIB|GLOBALS|HELP) = \{.*?^\}\n", "", source)
             # ast.literal_eval and re.compile only
             self.assertIsNone(re.search(r"(?<![\w.])(eval|exec|compile)\(", source), module)
             for word in ("subprocess", "os.system", "__import__", "importlib"):
@@ -802,7 +854,7 @@ class PatchTest(unittest.TestCase):
         spaces = " " * 60000
         self.assertEqual(self.python(["-c", "print(1)" + spaces], quick=True), ("1\n", "", 0))
         self.assertEqual(self.python(["-c", "print 1;" + " \t" * 30000 + "print 2"], "2.7.5", quick=True), ("1\n2\n", "", 0))
-        self.assertEqual(self.python(["-c", "print" + spaces + "x"], "2.7.5", quick=True)[2], 0)
+        self.assertEqual(self.python(["-c", "x = 1\nprint" + spaces + "x"], "2.7.5", quick=True), ("1\n", "", 0))
 
     def test_python_c_deep_or_large_values_are_silent(self):
         self.assertEqual(self.python(["-c", "a" + ".b" * 1000 + "()"]), ("", "", 0))
@@ -840,10 +892,13 @@ class PatchTest(unittest.TestCase):
                          "[arg] ...\nTry `python -h' for more information.\n")
         self.assertTrue(self.python(["-m"])[1].startswith("Argument expected for the -m option\n"))
 
-    def test_python_version_and_help_stay_upstream(self):
+    def test_python_version_stays_upstream_and_help_is_the_one_of_the_persona(self):
         self.assertEqual(self.python(["-V"]), ("Python 3.12.3\n", "", None))
         self.assertEqual(self.python(["--version"]), ("Python 3.12.3\n", "", None))
-        self.assertTrue(self.python(["-h"])[0].startswith("usage: python [option]"))
+        out, err, code = self.python(["-h"])
+        self.assertTrue(out.startswith("usage: python3 [option]"))
+        self.assertEqual((err, code), ("", 0))
+        self.assertEqual(self.python(["-V", "-h"]), (out, "", 0))
 
     def perl(self, args, quick=False):
         """Command_perl started with args: (stdout bytes, stderr, exit code)."""
@@ -2083,11 +2138,11 @@ class PatchTest(unittest.TestCase):
         return run
 
     def test_sudo_runs_its_command_as_root(self):
-        run = self.upstream_session()
+        run = self.upstream_session("debian-bookworm")
         self.assertEqual(run("sudo systemctl restart ssh"), ("", "", 0))
         self.assertEqual(run("sudo systemctl stop cron"), ("", "", 0))
         out, err, code = run("systemctl restart ssh")
-        self.assertIn("Interactive authentication required.", err)
+        self.assertIn("Access denied", err)
         # EXIT_NOPERMISSION (ref final-wave debian-12-ffw-tester-systemctl-restart-dbus)
         self.assertEqual(code, 4)
         self.assertIn("Unit nosuch.service not found.", run("sudo systemctl start nosuch")[1])
@@ -2389,9 +2444,12 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(namespace["tpot_dnf_section"]("Name Matched: x"), "=" * 31 + " Name Matched: x " + "=" * 32)
 
     def test_systemctl_changes_only_as_root(self):
+        _, err, code, _, _ = self.systemctl("debian-bookworm", ["restart", "ssh"])
+        self.assertEqual((err, code), ("Failed to restart ssh.service: Access denied\n"
+                                       "See system logs and 'systemctl status ssh.service' for details.\n", 4))
         _, err, code, _, _ = self.systemctl("ubuntu-noble", ["restart", "ssh"])
         self.assertEqual((err, code), ("Failed to restart ssh.service: Interactive authentication required.\n"
-                                       "See system logs and 'systemctl status ssh.service' for details.\n", 4))
+                                       "See system logs and 'systemctl status ssh.service' for details.\n", 1))
         self.assertEqual(self.systemctl("ubuntu-noble", ["restart", "ssh"], uid=0)[1:3], ("", 0))
         self.assertEqual(self.systemctl("ubuntu-noble", ["start", "nosuch"], uid=0)[1:3],
                          ("Failed to start nosuch.service: Unit nosuch.service not found.\n", 5))
@@ -2621,8 +2679,8 @@ class PatchTest(unittest.TestCase):
 
     def grep(self, *args, **kwargs):
         fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
-        command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher"],
-                                    {"HoneyPotCommand": FakeCommand})["Command_grep"]
+        command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher", "TpotGrepSyntax"],
+                                    {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig({})})["Command_grep"]
         command = command_grep(args, **kwargs)
         command.start()
         return command
@@ -2748,13 +2806,13 @@ class PatchTest(unittest.TestCase):
         self.assertEqual((bytes(done.out), done.err, done.code), (b"", "grep: nope: No such file or directory\n", 2))
         done = self.grep("-K", "x", "/proc/cpuinfo")
         self.assertEqual(done.code, 2)
-        self.assertIn("grep: invalid option -- K", done.err)
+        self.assertIn("grep: invalid option -- 'K'\nUsage: grep [OPTION]... PATTERNS [FILE]...\n", done.err)
 
     def grep_timed(self, *args, limit=1.0, **kwargs):
         """grep as above; start() must return within limit seconds."""
         fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
-        command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher"],
-                                    {"HoneyPotCommand": FakeCommand})["Command_grep"]
+        command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher", "TpotGrepSyntax"],
+                                    {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig({})})["Command_grep"]
         command = command_grep(args, **kwargs)
         begin = time.monotonic()
         command.start()
@@ -2775,10 +2833,13 @@ class PatchTest(unittest.TestCase):
         done = self.grep("-c", "a" * 4000, "/proc/cpuinfo")
         self.assertEqual((bytes(done.out), done.err, done.code), (b"0\n", "", 1))
         # 255 nested groups
-        done = self.grep("(" * 255 + "M" + ")" * 255, "/proc/meminfo")
+        done = self.grep("-E", "(" * 255 + "M" + ")" * 255, "/proc/meminfo")
         self.assertEqual((bytes(done.out), done.err, done.code), (MEMINFO, "", 0))
-        done = self.grep("(", "/proc/cpuinfo")
-        self.assertEqual((done.err, done.code), ("grep: Invalid regular expression\n", 2))
+        done = self.grep("-E", "(", "/proc/cpuinfo")
+        self.assertEqual((done.err, done.code), ("grep: Unmatched ( or \\(\n", 2))
+        # a basic pattern has no groups without a backslash
+        done = self.grep("-c", "(", "/proc/cpuinfo")
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"4\n", "", 0))
 
     PASSWD = (b"root:x:0:0:root:/root:/bin/bash\n"
               b"daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\n"
@@ -2809,21 +2870,87 @@ class PatchTest(unittest.TestCase):
         done = self.grep("-c", "^nano/", input_data=apt)
         self.assertEqual((bytes(done.out), done.err, done.code), (b"0\n", "", 1))
 
+    def test_grep_e_takes_the_pattern_and_the_file(self):
+        # grep -e root /etc/passwd: the pattern of -e, every operand a file (upstream took /etc/passwd as the
+        #   pattern and waited for the terminal)
+        files = {"/etc/passwd": self.PASSWD, "/root/p": b"^daemon:\n^sync:\n", "/root/empty": b"",
+                 "/root/blank": b"^bin:\n\n"}
+        done = self.grep("-e", "root", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"root:x:0:0:root:/root:/bin/bash\n", "", 0))
+        # several -e: a line with any of them; -e takes a pattern that starts with -
+        done = self.grep("-e", "^bin:", "-e", "^sync:", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.code), (b"bin:x:2:2:bin:/bin:/usr/sbin/nologin\n"
+                                                        b"sync:x:4:65534:sync:/bin:/bin/sync\n", 0))
+        done = self.grep("-c", "-e", "-x", input_data=b"a-x\nb\n")
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"1\n", "", 0))
+        # -f FILE: a pattern per line of a file of the emulated file system, with -e too
+        done = self.grep("-f", "p", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.err, done.code),
+                         (b"daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nsync:x:4:65534:sync:/bin:/bin/sync\n", "", 0))
+        done = self.grep("-c", "-e", "^root:", "-f", "/root/p", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.code), (b"3\n", 0))
+        # an empty file has no pattern and selects no line, an empty line in it selects every line
+        done = self.grep("-f", "empty", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "", 1))
+        done = self.grep("-vc", "-f", "empty", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.code), (b"6\n", 0))
+        done = self.grep("-c", "-f", "blank", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.code), (b"6\n", 0))
+        # a file that is not there, a folder: the error, nothing read
+        done = self.grep("-f", "nope", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "grep: nope: No such file or directory\n", 2))
+        done = self.grep("-f", "/root", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "grep: /root: Is a directory\n", 2))
+        # a newline in -e PATTERN parts two patterns; the bytes of a -f FILE stay as they are
+        done = self.grep("-c", "-e", "^bin:\n^sync:", "/etc/passwd", files=files)
+        self.assertEqual((bytes(done.out), done.code), (b"2\n", 0))
+        done = self.grep("-f", "/root/bytes", input_data=b"a\xffb\nab\n", files={"/root/bytes": b"\xff\n"})
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"a\xffb\n", "", 0))
+        # each pattern is an alternative of its own: ^ and $ stay with theirs
+        done = self.grep("-E", "-e", "^a|b", "-e", "c$", input_data=b"xb\nab\ncx\nxc\n")
+        self.assertEqual((bytes(done.out), done.code), (b"xb\nab\nxc\n", 0))
+
+    def test_a_double_quote_stays_in_the_pattern(self):
+        # grep '"root"' f: the lines with the quotes, not every line with root
+        data = b'root:x:0:0\n"root" said\n'
+        done = self.grep('"root"', input_data=data)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b'"root" said\n', "", 0))
+        done = self.grep("-c", 'x"', input_data=data)
+        self.assertEqual((bytes(done.out), done.code), (b"0\n", 1))
+
+    def test_grep_patterns_as_recorded(self):
+        """-e, -f, a double quote and a slash in the pattern as GNU grep and BusyBox answer them
+        (fixtures/grep_patterns.json, the files of its setup)."""
+        refs = json.loads((Path(__file__).parent / "fixtures" / "grep_patterns.json").read_text(encoding="utf-8"))
+        files = {"/tmp/f": b'root:x:0:0\ndaemon:x:1:1\n"root" said\na/b c\nnobody:x:65534\n',
+                 "/tmp/p": b"root\ndaemon\n", "/tmp/empty": b"", "/tmp/blank": b"nobody\n\n"}
+        import shlex
+        # the persona's grep has GNU's texts: BusyBox reads a folder given to -f as an empty file
+        gnu_only = {"grep -f d f"}
+        for key, entry in refs["images"].items():
+            for case, expected in entry["cases"].items():
+                if key.startswith("busybox") and case in gnu_only:
+                    continue
+                with self.subTest(image=key, case=case):
+                    done = self.grep(*shlex.split(case)[1:], files=dict(files), cwd="/tmp",
+                                     dirs=("/", "/tmp", "/tmp/d"))
+                    self.assertEqual([bytes(done.out).decode(), done.err, done.code], expected)
+
     def test_grep_rejects_a_pattern_too_big_for_the_automaton(self):
         too_big = ("grep: regular expression too big\n", 2)
         for pattern in ("a" * 5000, "(a{100}){100}", "(" * 5000 + ")" * 5000, "a" * (64 * 1024 + 1)):
             with self.subTest(pattern=pattern[:16], size=len(pattern)):
-                done = self.grep(pattern, "/proc/cpuinfo")
+                done = self.grep("-E", pattern, "/proc/cpuinfo")
                 self.assertEqual((bytes(done.out), done.err, done.code), (b"",) + too_big)
 
     def test_grep_nested_repeats_return_at_once(self):
         line = b"a" * 50000
-        done = self.grep_timed("(a+)+$", input_data=line + b"!\n")
+        done = self.grep_timed("-E", "(a+)+$", input_data=line + b"!\n")
         self.assertEqual((bytes(done.out), done.code), (b"", 1))
-        done = self.grep_timed("-c", "(a+)+$", input_data=line + b"\n" + line + b"!\n")
+        done = self.grep_timed("-c", "-E", "(a+)+$", input_data=line + b"\n" + line + b"!\n")
         self.assertEqual((bytes(done.out), done.code), (b"1\n", 0))
         for pattern in ("(a*)*b", "(a|aa)+$", "(a|a)*b", "a*a*a*a*b", "(\\w+\\s?)+$", ".*.*=.*", "\\w+\\s"):
-            done = self.grep_timed(pattern, input_data=line + b"!\n")
+            done = self.grep_timed("-E", pattern, input_data=line + b"!\n")
             self.assertEqual(done.code, 1, pattern)
 
     def test_grep_reads_at_most_1_mib(self):
@@ -2852,29 +2979,29 @@ class PatchTest(unittest.TestCase):
         rnd = random.Random(7)
         data = b"".join(bytes(rnd.choice(b"ab") for _ in range(64 * 1024 - 1)) + b"\n" for _ in range(16))
         exhausted = "grep: memory exhausted\n"
-        done = self.grep_timed("-c", "a[ab]{20}c", input_data=data, limit=3.0)
+        done = self.grep_timed("-c", "-E", "a[ab]{20}c", input_data=data, limit=3.0)
         self.assertEqual((bytes(done.out), done.err, done.code), (b"", exhausted, 2))
         # GNU grep stops at once: the lines before are printed, no count, exit status 2
         first = b"a" * 21 + b"c"
-        done = self.grep_timed("a[ab]{20}c", input_data=first + b"\n" + data, limit=3.0)
+        done = self.grep_timed("-E", "a[ab]{20}c", input_data=first + b"\n" + data, limit=3.0)
         self.assertEqual((bytes(done.out), done.err, done.code), (first + b"\n", exhausted, 2))
-        done = self.grep_timed("-c", "a[ab]{20}c", "/root/one", "/root/two", "/nope",
+        done = self.grep_timed("-c", "-E", "a[ab]{20}c", "/root/one", "/root/two", "/nope",
                                files={"/root/one": data, "/root/two": first + b"\n"}, limit=3.0)
         self.assertEqual((bytes(done.out), done.err, done.code), (b"", exhausted, 2))
         # -q stops reading at the first selected line
-        done = self.grep_timed("-q", "a[ab]{20}c", input_data=first + b"\n" + data, limit=3.0)
+        done = self.grep_timed("-q", "-E", "a[ab]{20}c", input_data=first + b"\n" + data, limit=3.0)
         self.assertEqual((bytes(done.out), done.err, done.code), (b"", "", 0))
         # interactive stdin: the message once, the status at the end
-        done = self.grep("a[ab]{20}c")
+        done = self.grep("-E", "a[ab]{20}c")
         for line in data.split(b"\n")[:16]:
             done.lineReceived(line.decode())
         done.lineReceived(first.decode())
         done.eofReceived()
         self.assertEqual((bytes(done.out), done.err, done.code), (b"", exhausted, 2))
         fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
-        command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher"],
-                                    {"HoneyPotCommand": FakeCommand})["Command_grep"]
-        self.start(command_grep(["-c", "a[ab]{20}c"], input_data=data), quick=False)
+        command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher", "TpotGrepSyntax"],
+                                    {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig({})})["Command_grep"]
+        self.start(command_grep(["-c", "-E", "a[ab]{20}c"], input_data=data), quick=False)
         self.assertLess(self.peak, 32 * 1024 * 1024)
 
     GNU_SAMPLE = (b"processor\t: 0\nmodel name\t: Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz\ncpu MHz\t\t: 2399.998\n"
@@ -2889,7 +3016,7 @@ class PatchTest(unittest.TestCase):
         lines = self.GNU_SAMPLE.split(b"\n")
         for pattern, numbers in self.GNU_LINES.items():
             with self.subTest(pattern=pattern):
-                done = self.grep(pattern, input_data=self.GNU_SAMPLE)
+                done = self.grep("-E", pattern, input_data=self.GNU_SAMPLE)
                 self.assertEqual(bytes(done.out), b"".join(lines[n - 1] + b"\n" for n in numbers))
                 self.assertEqual(done.code, 0 if numbers else 1)
         done = self.grep("-i", "PROCESSOR", input_data=self.GNU_SAMPLE)
@@ -3019,18 +3146,18 @@ class PatchTest(unittest.TestCase):
     def test_grep_warns_once_about_a_possible_nested_set(self):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            done = self.grep("[[t]pot-warn", "/proc/cpuinfo")
+            done = self.grep("-P", "[[t]pot-warn", "/proc/cpuinfo")
         self.assertEqual(done.code, 1)
         self.assertEqual([str(w.message) for w in caught if w.category is FutureWarning],
                          ["Possible nested set at position 1"])
 
     def test_grep_selects_no_line_for_patterns_beyond_regular_expressions(self):
-        # back references, lookarounds, atomic groups, possessive repeats and conditionals
+        # back references, lookarounds, atomic groups, possessive repeats and conditionals (-P: Python's syntax)
         for pattern in ("(a)\\1", "(?=p)p", "(?!x)p", "(?<=o)c", "(?>p)", "p++", "(a)?(?(1)a|p)"):
             with self.subTest(pattern=pattern):
-                done = self.grep(pattern, "/proc/cpuinfo")
+                done = self.grep("-P", pattern, "/proc/cpuinfo")
                 self.assertEqual((bytes(done.out), done.err, done.code), (b"", "", 1))
-                done = self.grep("-vc", pattern, "/proc/cpuinfo")
+                done = self.grep("-vcP", pattern, "/proc/cpuinfo")
                 self.assertEqual(bytes(done.out), b"12\n")
 
     def prompt(self, cwd, user="root", uid=0, home="/root", style="redhat", hostname="build39.corp.local",
@@ -3064,7 +3191,8 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(shell.protocol.ps, (written[0], b"> "))
         return written[0].decode("utf-8")
 
-    SHELL_ERRORS = {"openwrt": "-ash: x: not found\n", "dlink-dir859": "-sh: x: not found\n",
+    # BusyBox msh of the DIR-859 names no shell (tests/fixtures/msh.json)
+    SHELL_ERRORS = {"openwrt": "-ash: x: not found\n", "dlink-dir859": "x: not found\n",
                     "tplink-archer-c7": "-ash: x: not found\n", "zyxel-nas326": "-sh: x: not found\n",
                     "qnap-qts": "-sh: x: not found\n", "ipcam": "-sh: x: not found\n",
                     "synology-dsm": "-sh: x: command not found\n", "ubiquiti-edgerouter-x": "-vbash: x: command not found\n",
@@ -3224,6 +3352,12 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/fs.py", "            self.grep_application(self.input_data, self.match)\n",
                   "            self.grep_application(self.input_data, match=self.match)\n"),
                  ("src/cowrie/commands/fs.py", "            if opt == \"-h\":", "            if opt in (\"-h\",):"),
+                 ("src/cowrie/commands/fs.py", "            if opt == \"-h\":\n                self.help()\n",
+                  "            if opt == \"-h\":\n                self.help()  # help\n"),
+                 ("src/cowrie/commands/fs.py", "        if not self.args:\n            self.help()\n            self.exit(2)\n",
+                  "        if not self.args:\n            self.help()  # usage\n            self.exit(2)\n"),
+                 ("src/cowrie/commands/fs.py", "                    \"silent\",\n                ],\n",
+                  "                    \"silent\",\n                    \"x\",\n                ],\n"),
                  ("src/cowrie/commands/fs.py", "self.grep_application(line.encode(\"utf8\"), self.match)",
                   "self.grep_application(line.encode(), self.match)"),
                  ("src/cowrie/commands/fs.py", "self.grep_application(f.read(), self.match)\n        self.exit(",
@@ -3364,9 +3498,57 @@ class PatchTest(unittest.TestCase):
                   "                    [stages[index]],\n                    fds=fds,  # stage\n"),
                  ("src/cowrie/shell/honeypot.py", "            self._advance()\n\n        run_from(0)\n",
                   "            self._advance()\n\n        run_from(index=0)\n"),
+                 ("src/cowrie/shell/bashparse.py", '\n_GRAMMAR = r"""', '\n_GRAMMAR = rb"""'),
+                 ("src/cowrie/shell/bashparse.py", "_atom: sq | dq | cmdsub | backtick |",
+                  "_atom: sq | dq | backtick | cmdsub |"),
+                 ("src/cowrie/shell/bashparse.py", "_dq_part: cmdsub | backtick |", "_dq_part: backtick | cmdsub |"),
+                 ("src/cowrie/shell/bashparse.py", 'CMDSUB_OPEN: "$("\n', 'CMDSUB_OPEN: "$(" \n'),
+                 ("src/cowrie/shell/bashparse.py", "\n_parser = Lark(\n    _GRAMMAR,\n",
+                  "\n_parser = Lark(\n    _GRAMMAR,  # grammar\n"),
+                 ("src/cowrie/shell/bashparse.py",
+                  '_UNQUOTED_EXPANSIONS = frozenset({"dollar_var", "dollar_brace", "cmdsub", "backtick"})\n',
+                  '_UNQUOTED_EXPANSIONS = frozenset({"dollar_brace", "dollar_var", "cmdsub", "backtick"})\n'),
+                 ("src/cowrie/shell/bashparse.py", '        if atom.data == "cmdsub":\n',
+                  '        if atom.data in ("cmdsub",):\n'),
+                 ("src/cowrie/shell/bashparse.py", '            elif part.data == "cmdsub":\n',
+                  '            elif part.data in ("cmdsub",):\n'),
+                 ("src/cowrie/shell/honeypot.py",
+                  "        for statement in statements:\n            error = self._find_syntax_error([statement])\n",
+                  "        for statement in statements:\n            error = self._find_syntax_error([statement])  # e\n"),
+                 ("src/cowrie/shell/honeypot.py", "                self.cmdpending.append(error)\n                return False\n",
+                  "                self.cmdpending.append(error)  # e\n                return False\n"),
+                 ("src/cowrie/shell/honeypot.py", "            self.cmdpending.append(statement)\n        return True\n",
+                  "            self.cmdpending.append(statement)  # s\n        return True\n"),
+                 ("src/cowrie/shell/honeypot.py", '        self._log.failure("shell statement failed", failure=failure)\n',
+                  '        self._log.failure("shell statement failed", failure=failure)  # f\n'),
+                 ("src/cowrie/shell/honeypot.py", "        command = self.cmdpending.pop(0)\n",
+                  "        command = self.cmdpending.pop(0)  # c\n"),
+                 ("src/cowrie/shell/honeypot.py", "    def _advance(self) -> None:\n",
+                  "    def _advance(self) -> None:  # a\n"),
+                 ("src/cowrie/shell/honeypot.py", "\nfrom cowrie.core.config import CowrieConfig\n",
+                  "\nfrom cowrie.core import config\n"),
+                 ("src/cowrie/shell/honeypot.py",
+                  "        if self._advancing:\n            self._advance_pending = True\n            return\n",
+                  "        if self._advancing is True:\n            self._advance_pending = True\n            return\n"),
+                 ("src/cowrie/shell/honeypot.py", "                running = self._advance_pending\n        finally:\n",
+                  "                running = self._advance_pending  # r\n        finally:\n"),
+                 ("src/cowrie/shell/honeypot.py",
+                  "        if self.interactive:\n            self.showPrompt()\n        elif self.reads_stdin:\n",
+                  "        if self.interactive:\n            self.showPrompt()\n        elif self.reads_stdin:  # i\n"),
+                 ("src/cowrie/shell/honeypot.py", '        self._log.info("received eof, logging out")\n',
+                  '        self._log.info("received eof, logging out")  # e\n'),
+                 ("src/cowrie/shell/honeypot.py",
+                  '        """Parse a command line with the Lark grammar and run the result."""\n',
+                  '        """Parse a command line with the Lark grammar and run the results."""\n'),
+                 ("src/cowrie/shell/honeypot.py",
+                  "    def handle_CTRL_C(self) -> None:\n        self.protocol.lineBuffer = []\n",
+                  "    def handle_CTRL_C(self) -> None:\n        self.protocol.lineBuffer = [0]\n"),
                  ("src/cowrie/commands/fs.py", "from typing import TYPE_CHECKING\n",
                   "from typing import TYPE_CHECKING, Any\n"),
                  ("src/cowrie/core/auth.py", "\n\nclass AuthRandom:\n", "\n\nclass AuthRandom:  # auth\n"),
+                 ("src/cowrie/ssh/transport.py",
+                  "        Override because OpenSSH pads with 0 on KEXINIT\n        \"\"\"\n        if self.transport is None:\n",
+                  "        Override because OpenSSH pads with 0 on KEXINIT\n        \"\"\"\n        if self.transport is None:  # x\n"),
                  ("src/cowrie/core/auth.py", "        auth: bool = False\n        # Decode once and store/compare",
                   "        auth = False\n        # Decode once and store/compare"),
                  ("src/cowrie/shell/protocol.py", "        if path in self.commands:\n            return self.commands[path]\n",
@@ -3403,7 +3585,16 @@ class PatchTest(unittest.TestCase):
                   ("src/cowrie/commands/fs.py", "from cowrie.shell.command import HoneyPotCommand\n",
                    "from cowrie.shell.command import HoneyPotCommand  # base\n"),
                   ("src/cowrie/commands/fs.py", "import re\nfrom typing import TYPE_CHECKING\n",
-                   "import re\nimport typing\nfrom typing import TYPE_CHECKING\n"))
+                   "import re\nimport typing\nfrom typing import TYPE_CHECKING\n"),
+                  ("src/cowrie/shell/honeypot.py", "        stdin = self.stdin\n        if cmdclass.consumes_stdin:\n",
+                   "        stdin = self.stdin  # s\n        if cmdclass.consumes_stdin:\n"),
+                  ("src/cowrie/commands/base.py", "pts/0    {self.protocol.clientIP[:17]",
+                   "pts/0     {self.protocol.clientIP[:17]"),
+                  ("src/cowrie/commands/base.py", "pts/0        {time.strftime('%Y-%m-%d'",
+                   "pts/0       {time.strftime('%Y-%m-%d'"),
+                  ("src/cowrie/commands/fs.py", "            # Options only, no pattern (e.g. `grep -h`).\n",
+                   "            # Options only, no pattern (e.g. `grep -h`)\n"),
+                  ("src/cowrie/commands/fs.py", "        files = args[1:]\n", "        files = list(args[1:])\n"))
         for rel, old, new in cases:
             with self.subTest(rel=rel, needle=old):
                 root = tmpdir(self) / "cowrie"

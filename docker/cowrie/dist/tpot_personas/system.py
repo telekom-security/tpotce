@@ -5,14 +5,17 @@ libraries, Python 3.11, OpenSSH, a few systemd units, runit. A persona keeps
 only what its own system has (foreign_paths, the multiarch and Python renames
 of render.apply_to_tree) and the versions its interpreters print (tools,
 shell_keys for the patched perl.py / python.py / git.py of Cowrie)."""
+import functools
 import gzip
 import hashlib
+import json
 import re
 import time
 from pathlib import Path
 
 from .common import deb_arch
-from .firmware import TPLINK_APPLETS
+from .firmware import BUSYBOX_DIRS, TPLINK_APPLETS
+from .firmware import has_programs as firmware_has_programs
 from .firmware import program_dirs as firmware_program_dirs
 from .firmware import programs as firmware_programs
 
@@ -62,11 +65,13 @@ TRIPLETS = {"x86_64": "x86_64-linux-gnu", "aarch64": "aarch64-linux-gnu", "mips"
 # systemd: servers, Synology DSM 7 and the Debian 9 based EdgeOS 2 boot with it
 SYSTEMD_PATHS = ("etc/systemd", "usr/lib/systemd", "var/lib/systemd")
 SYSTEMD_DEVICES = frozenset({"synology", "ubiquiti"})
-# OpenSSH: not on a dropbear system
+# OpenSSH: not on a dropbear system or one without an SSH server
 OPENSSH_PATHS = ("etc/ssh", "etc/default/ssh", "etc/init.d/ssh", "usr/lib/openssh", "usr/lib/sftp-server",
                  "usr/sbin/sshd", "usr/share/openssh", "usr/bin/ssh-*", "usr/bin/scp", "usr/bin/sftp",
                  "etc/systemd/system/sshd.service", "etc/systemd/system/multi-user.target.wants/ssh.service",
                  "etc/ufw/applications.d/openssh-server", "etc/rc?.d/S01ssh")
+# the ssh client of Cowrie's tree: not on a system without an SSH server (the DIR-859, telnetd only)
+SSH_CLIENT_PATHS = ("usr/bin/ssh", "bin/ssh")
 # Python 3.11 and Perl of Cowrie's tree: renamed to the persona's Python, removed where none is
 PYTHON_PATHS = ("etc/python3", "etc/python3.11", "usr/lib/python3", "usr/lib/python3.11", "usr/share/python3",
                 "usr/bin/py3*", "usr/bin/pydoc3*", "usr/bin/pdb3*", "usr/bin/pygettext3*", "usr/bin/python3*",
@@ -274,7 +279,7 @@ APT_AVAILABLE = {
                "make": "4.4.1-2", "masscan": "2:1.3.2+ds1-2", "net-tools": "2.10-1.3", "nmap": "7.95+dfsg-3",
                "screen": "4.9.1-3", "socat": "1.8.0.3-1", "tmux": "3.5a-3", "tor": "0.4.8.16-1", "unzip": "6.0-29",
                "zip": "3.0-15"},
-    "bookworm": {"bind9-dnsutils": "1:9.18.33-1~deb12u2", "busybox": "1:1.35.0-4+b3", "ethtool": "1:6.1-1", "iptables": "1.8.9-2", "php-cli": "2:8.2+93", "tftp-hpa": "5.2+20150808-1.4", "gcc": "4:12.2.0-3", "git": "1:2.39.5-0+deb12u2", "hydra": "9.4-1",
+    "bookworm": {"bind9-dnsutils": "1:9.18.33-1~deb12u2", "busybox": "1:1.35.0-4+b3", "ethtool": "1:6.1-1", "iptables": "1.8.9-2", "php-cli": "2:8.2+93", "tftp-hpa": "5.2+20150808-1.4", "gcc": "4:12.2.0-3", "git": "1:2.39.5-0+deb12u3", "hydra": "9.4-1",
                  "make": "4.3-4.1", "masscan": "2:1.3.2+ds1-1", "net-tools": "2.10-0.1", "nmap": "7.93+dfsg1-1",
                  "screen": "4.9.0-4", "socat": "1.7.4.4-2", "tmux": "3.3a-3", "tor": "0.4.7.16-1", "unzip": "6.0-28",
                  "zip": "3.0-13"},
@@ -367,7 +372,7 @@ PACKAGE_PROGRAMS = {"bash": "bash", "curl": "curl", "git": "git", "gzip": "gzip"
                     "python3": "python3", "tar": "tar", "wget": "wget", "openssh-client": "ssh",
                     "openssh-server": "sshd", "sudo": "sudo", "vim": "vim", "nmap": "nmap", "masscan": "masscan",
                     "socat": "socat", "gcc": "gcc", "make": "make", "tor": "tor", "hydra": "hydra", "tmux": "tmux",
-                    "screen": "screen", "zip": "zip"}
+                    "screen": "screen", "zip": "zip", "openssl": "openssl"}
 
 # what dnf and rpm know on RHEL 9 (unverified: versions as remembered of the minor releases and their
 #   rebuilds, not read from the repositories; summaries those of the spec files, sizes typical; the versions
@@ -406,6 +411,10 @@ RPM_INSTALLED = {
     "glibc": ("x86_64", "baseos", "The GNU libc libraries",
               {"9.4": "2.34-100.el9_4.4", "9.5": "2.34-125.el9_5.8", "9.6": "2.34-168.el9_6.24"}),
     "gzip": ("x86_64", "baseos", "The GNU data compression program", "1.12-1.el9"),
+    "openssl-libs": ("x86_64", "baseos", "A general purpose cryptography library with TLS implementation",
+                     {"9.4": "1:3.0.7-28.el9_4", "9.5": "1:3.2.2-6.el9_5", "9.6": "1:3.2.2-6.el9_5.1"}),
+    # one build for every minor (the 9.4 vault's; the build of 9.5 and 9.6 is not recorded)
+    "zlib": ("x86_64", "baseos", "Compression and decompression library", "1.2.11-40.el9"),
     "iputils": ("x86_64", "baseos", "Network monitoring tools including ping",
                 {"9.4": "20210202-9.el9", "9.5": "20210202-10.el9_5", "9.6": "20210202-11.el9_6.3"}),
     "kexec-tools": ("x86_64", "baseos", "The kexec/kdump userspace component",
@@ -487,11 +496,14 @@ RPM_PERSONA = {
 RHEL_DNF = {"9.4": "4.14.0-9.el9", "9.5": "4.14.0-17.el9", "9.6": "4.14.0-25.el9"}
 RHEL_RPM = {"9.4": "4.16.1.3-29.el9", "9.5": "4.16.1.3-34.el9", "9.6": "4.16.1.3-37.el9"}
 RHEL_PYTHON_RPM = {"9.4": "3.9.18-3.el9_4.6", "9.5": "3.9.21-1.el9_5", "9.6": "3.9.21-2.el9_6.2"}
-# openssl of 9.4: the last errata the rebuilds published (Rocky / AlmaLinux vault 9.4, 2024-09-18);
-#   unverified: EUS errata after 9.5 (2024-11), which the 2025-02-20 level could have
-RHEL_OPENSSL = {"9.4": "1:3.0.7-28.el9_4", "9.5": "1:3.2.2-6.el9_5.1", "9.6": "1:3.2.2-6.el9_5.1"}
+# openssl of 9.4: the last errata the rebuilds published (Rocky / AlmaLinux vault 9.4, 2024-09-18); Red Hat's
+#   CSAF data has no 9.4 EUS advisory of openssl, openssh, curl, systemd or sudo from 2024-11-12 to 2025-02-20,
+#   so the 2025-02-20 level keeps it (2024-09-18 to 2024-11-12 not checked); 9.5: the build of its installation
+#   image (built 2024-09-05; -6.el9_5.1 of 2025-01-29 came after the 9.5 level)
+RHEL_OPENSSL = {"9.4": "1:3.0.7-28.el9_4", "9.5": "1:3.2.2-6.el9_5", "9.6": "1:3.2.2-6.el9_5.1"}
 RHEL_PERL = {"9.4": "4:5.32.1-481.el9", "9.5": "4:5.32.1-481.el9", "9.6": "4:5.32.1-481.1.el9_6"}
 RHEL_RELEASE_RPM = {"9.4": "9.4-0.5.el9", "9.5": "9.5-0.6.el9", "9.6": "9.6-0.1.el9"}
+# 9.4: unverified: bug fix errata (RHBA) are not in Red Hat's public CSAF data
 RHEL_SUDO = {"9.4": "1.9.5p2-10.el9_3", "9.5": "1.9.5p2-10.el9_3", "9.6": "1.9.5p2-10.el9_6.2"}
 # name: (arch, repository, summary, evr, (download kB, installed kB), dependencies); an evr "=glibc" is
 #   that of the installed package (glibc-devel goes with glibc, kernel-headers with the kernel)
@@ -608,7 +620,7 @@ RPM_OWNED = {
     "NetworkManager": ("nm-online", "NetworkManager"),
     "openssh": ("ssh-keygen", ""),
     "openssh-clients": ("scp sftp slogin ssh ssh-add ssh-agent ssh-copy-id ssh-keyscan", ""),
-    "openssh-server": ("", "sshd"),
+    "openssh-server": ("", "sshd"), "openssl": ("openssl", ""),
     "pam": ("", "faillock mkhomedir_helper pam_namespace_helper pam_timestamp_check pwhistory_helper unix_chkpwd "
                 "unix_update"),
     "passwd": ("passwd", ""), "pciutils": ("lspci", ""), "perl-interpreter": ("perl", ""),
@@ -632,6 +644,47 @@ RPM_OWNED_FILES = {
     # the daemons of ps below /usr/lib and /usr/libexec (refs t12 almalinux-9-t12-owners, centos-7-t12-owners)
     "systemd": ("usr/lib/systemd/systemd", "usr/lib/systemd/systemd-journald", "usr/lib/systemd/systemd-logind"),
     "systemd-udev": ("usr/lib/systemd/systemd-udevd",), "NetworkManager": ("usr/libexec/nm-dhcp-helper",),
+}
+# the base libraries below usr/lib64 as stat and readlink show them: a size (a file, 0755) or the target (a link); the
+#   owners of rpm -qf and the nodes of the tree (refs rpm_libs.json "stat": centos:7, almalinux:9.4 / 9.5 / 9.6; the
+#   builds of those images, the persona's glibc build of a minor can be a later errata with other sizes)
+RPM_LIBRARIES = {
+    "7": {
+        "glibc": {"ld-2.17.so": 163312, "libc-2.17.so": 2156272, "libdl-2.17.so": 19248, "libm-2.17.so": 1136944,
+            "libnss_dns-2.17.so": 31344, "libnss_files-2.17.so": 61560, "libpthread-2.17.so": 142144,
+            "libresolv-2.17.so": 109976, "librt-2.17.so": 43712, "libutil-2.17.so": 14424,
+            "ld-linux-x86-64.so.2": "ld-2.17.so", "libc.so.6": "libc-2.17.so", "libdl.so.2": "libdl-2.17.so",
+            "libm.so.6": "libm-2.17.so", "libnss_dns.so.2": "libnss_dns-2.17.so",
+            "libnss_files.so.2": "libnss_files-2.17.so", "libpthread.so.0": "libpthread-2.17.so",
+            "libresolv.so.2": "libresolv-2.17.so", "librt.so.1": "librt-2.17.so", "libutil.so.1": "libutil-2.17.so"},
+        "openssl-libs": {"libssl.so.1.0.2k": 470376, "libssl.so.10": "libssl.so.1.0.2k",
+            "libcrypto.so.1.0.2k": 2521144, "libcrypto.so.10": "libcrypto.so.1.0.2k"},
+        "zlib": {"libz.so.1.2.7": 90248, "libz.so.1": "libz.so.1.2.7"},
+    },
+    "9.4": {
+        "glibc": {"ld-linux-x86-64.so.2": 861816, "libc.so.6": 2592552, "libm.so.6": 914360, "libdl.so.2": 15632,
+            "libpthread.so.0": 15648, "libresolv.so.2": 70936, "librt.so.1": 15840, "libutil.so.1": 15632,
+            "libnss_files.so.2": 15480, "libnss_dns.so.2": 15480},
+        "openssl-libs": {"libssl.so.3.0.7": 688352, "libssl.so.3": "libssl.so.3.0.7",
+            "libcrypto.so.3.0.7": 4487176, "libcrypto.so.3": "libcrypto.so.3.0.7"},
+        "zlib": {"libz.so.1.2.11": 102552, "libz.so.1": "libz.so.1.2.11"},
+    },
+    "9.5": {
+        "glibc": {"ld-linux-x86-64.so.2": 892632, "libc.so.6": 2539936, "libm.so.6": 912448, "libdl.so.2": 15624,
+            "libpthread.so.0": 15648, "libresolv.so.2": 70880, "librt.so.1": 15840, "libutil.so.1": 15624,
+            "libnss_files.so.2": 15488, "libnss_dns.so.2": 15488},
+        "openssl-libs": {"libssl.so.3.2.2": 957488, "libssl.so.3": "libssl.so.3.2.2",
+            "libcrypto.so.3.2.2": 5436640, "libcrypto.so.3": "libcrypto.so.3.2.2"},
+        "zlib": {"libz.so.1.2.11": 102552, "libz.so.1": "libz.so.1.2.11"},
+    },
+    "9.6": {
+        "glibc": {"ld-linux-x86-64.so.2": 897856, "libc.so.6": 2540248, "libm.so.6": 904752, "libdl.so.2": 15472,
+            "libpthread.so.0": 15480, "libresolv.so.2": 70520, "librt.so.1": 15648, "libutil.so.1": 15464,
+            "libnss_files.so.2": 15344, "libnss_dns.so.2": 15344},
+        "openssl-libs": {"libssl.so.3.2.2": 957488, "libssl.so.3": "libssl.so.3.2.2",
+            "libcrypto.so.3.2.2": 5436640, "libcrypto.so.3": "libcrypto.so.3.2.2"},
+        "zlib": {"libz.so.1.2.11": 102552, "libz.so.1": "libz.so.1.2.11"},
+    },
 }
 # Debian's own programs of Cowrie's tree that Red Hat has not (awk and sh are gawk's and bash's there)
 EL_DEBIAN_PROGRAMS = ("usr/bin/clear_console", "usr/bin/dash", "usr/bin/editor", "usr/bin/pager", "usr/bin/helpztags",
@@ -659,7 +712,7 @@ RPM_TOOLS = {"bind9-dnsutils": "bind-utils", "ethtool": "ethtool", "iproute2": "
 RPM_PROGRAMS = {"bash": "bash", "curl": "curl", "git": "git", "gzip": "gzip", "perl": "perl-interpreter",
                 "python3": "python3", "tar": "tar", "wget": "wget", "ssh": "openssh-clients", "sshd": "openssh-server",
                 "sudo": "sudo", "vim": "vim-enhanced", "nmap": "nmap", "socat": "socat", "gcc": "gcc", "make": "make",
-                "tmux": "tmux", "zip": "zip"}
+                "tmux": "tmux", "zip": "zip", "openssl": "openssl"}
 # the repositories of a registered RHEL 9 (subscription-manager): (part of the id, of the name, enabled); EUS:
 #   a system that keeps its minor release after the next one came out (unverified: the days the minors came out)
 RHEL_NEXT_MINOR = {"9.4": "2024-11-12", "9.5": "2025-05-20", "9.6": "2025-11-11"}
@@ -1049,8 +1102,10 @@ def foreign_paths(persona):
         paths += X86_PATHS
     if not has_systemd(persona):
         paths += SYSTEMD_PATHS
-    if persona.ssh_profile.startswith("dropbear"):
+    if persona.ssh_profile is None or persona.ssh_profile.startswith("dropbear"):
         paths += OPENSSH_PATHS
+    if persona.ssh_profile is None:
+        paths += SSH_CLIENT_PATHS
     if triplet(persona) is None:
         paths += (f"usr/lib/{MULTIARCH}",)
     if persona.kind == "device":
@@ -1125,9 +1180,17 @@ def _upstream(version):
     return version.split(":", 1)[-1].split("-", 1)[0]
 
 
+# the Python of a device's firmware: 2.7.9 of the NAS326 (/usr/bin/python2.7 of its system image, the version
+#   string of its libpython2.7.so.1.0, read as bytes; python -> python2 -> python2.7)
+DEVICE_PYTHON = {"zyxel": "2.7.9"}
+
+
 def tools(persona, ident):
     """{"perl": (version, copyright year), "python": version, "git": version} of a server (git where
-    the release has it installed), {"perl": ...} on EdgeOS, {} on the other devices."""
+    the release has it installed), {"perl": ...} on EdgeOS, {"python": ...} where the firmware has a
+    Python (DEVICE_PYTHON), {} on the other devices."""
+    if persona.kind == "device" and persona.family in DEVICE_PYTHON:
+        return {"python": DEVICE_PYTHON[persona.family]}
     if not has_perl(persona):
         return {}
     code = _codename(persona, ident)
@@ -1221,10 +1284,14 @@ _BB_DLINK = ("[, [[, arp, arping, awk, basename, bunzip2, bzcat, bzip2, cat, chm
              "iproute, iprule, iptunnel, kill, killall, killall5, ln, ls, lsmod, mkdir, mknod, modprobe, mount, msh, "
              "mv, netstat, ping, ping6, poweroff, ps, pwd, reboot, rm, rmmod, route, sed, sh, sleep, sysctl, tar, "
              "test, top, touch, tr, true, tunctl, umount, uname, uptime, vconfig, vi, wc, wget, xargs, yes, zcat")
-# the camera (unverified: no image of it): a typical small build
+# the camera (unverified: no image of it, a stand-in): a typical small build, halt and poweroff next to reboot;
+#   no recorded list fits it: the applet table of the Archer C7 v5 (its 1.19.4 variant) is TP-Link's own
+#   configuration (mac_addr and lock, no telnetd, login or df, while the camera's rcS starts /usr/sbin/telnetd),
+#   the list of the busybox:1.26 image (its 1.26.2 variant) was not recorded
 BB_SHARED = ("[, [[, ash, awk, basename, cat, chmod, chown, cp, cut, date, dd, df, dmesg, echo, egrep, env, "
-             "false, free, grep, gunzip, gzip, head, hostname, ifconfig, kill, killall, ln, login, ls, mkdir, "
-             "mknod, mount, mv, netstat, ping, ps, pwd, reboot, rm, rmdir, route, sed, sh, sleep, sync, tail, tar, "
+             "false, free, grep, gunzip, gzip, halt, head, hostname, ifconfig, kill, killall, ln, login, ls, mkdir, "
+             "mknod, mount, mv, netstat, ping, poweroff, ps, pwd, reboot, rm, rmdir, route, sed, sh, sleep, sync, "
+             "tail, tar, "
              "telnetd, test, top, touch, tr, true, udhcpc, umount, uname, uptime, vi, wc, wget")
 # the file commands of the persona (MKDIR_COMMAND of the patch): on a BusyBox device each is an applet of its
 #   BusyBox, or missing (the DIR-859 has no rmdir)
@@ -1276,6 +1343,55 @@ def missing_fs_tools(persona, ident):
     return tuple(name for name in FS_TOOLS if name not in applets)
 
 
+# the names the commands of Cowrie answer (the last part of each commands["..."] key of
+#   src/cowrie/commands/*.py): those of the modules of __init__.py `command_modules` in cowrie v3.1.3
+#   (read 2026-10-22 from github.com/cowrie/cowrie, tag v3.1.3; gcc-<version> and the programs apt
+#   installs in a session left out) and those patch_cowrie_persona_support.py adds (tests.test_busybox)
+_COWRIE_COMMANDS = (
+    ": > [ adduser alias apt apt-get awk base64 bash break busybox cat cd chattr chgrp chmod chown chpasswd clear "
+    "continue cp crontab curl cut date dd dget dig dir do done du echo egrep env ethtool exit export false fgrep "
+    "find finger free ftpget gcc git grep groups halt head help history hostname id ifconfig iptables jobs kill "
+    "killall killall5 last locate logout ls lspci mkdir mv nc netcat netstat nohup passwd perl php ping pkill "
+    "poweroff printf ps pwd python reboot reset rm rmdir scp sed service set sh shutdown sleep ssh su sudo tail "
+    "tar tee test tftp touch tr true ulimit umask uname uniq unset unzip uptime useradd users w wc wget which who "
+    "whoami yes yum"
+)
+_TPOT_COMMANDS = ("apt-cache chkconfig df dnf dnf-3 dpkg dpkg-query ip journalctl openssl opkg python3 readlink rpm seq sort ss "
+                  "systemctl top type xargs")
+COWRIE_COMMAND_NAMES = frozenset((_COWRIE_COMMANDS + " " + _TPOT_COMMANDS).split())
+# the programs of a firmware besides its BusyBox that Cowrie's command of the name answers: wget of OpenWrt
+#   is uclient-fetch (/usr/bin/wget -> /bin/uclient-fetch), no applet; ip of the NAS326 is iproute2 (/bin/ip of
+#   its initramfs, network.tool_styles)
+FIRMWARE_COMMANDS = {"openwrt": ("wget",), "zyxel": ("ip",)}
+
+
+def missing_applet_commands(persona, ident):
+    """The commands of Cowrie (COWRIE_COMMAND_NAMES) named like a BusyBox applet (firmware.BUSYBOX_DIRS)
+    that a BusyBox device's own BusyBox has not and no other program of its firmware (FIRMWARE_COMMANDS):
+    df, head, tail, env ... of the DIR-859 are not found.
+    Empty on a server, with coreutils (EdgeOS, DSM) or the folders of its image (the Archer C7)."""
+    if applet_links(persona, ident) is None:
+        return ()
+    applets = set(busybox_applets(persona, ident)) | set(python_answers(persona)) \
+        | set(FIRMWARE_COMMANDS.get(persona.family, ()))
+    named = {name for names in BUSYBOX_DIRS.values() for name in names.split()}
+    return tuple(sorted((COWRIE_COMMAND_NAMES & named) - applets))
+
+
+# the texts of the device personas named like a BusyBox applet: they go where the firmware's BusyBox has
+#   no such applet (the DIR-859 has no dmesg)
+APPLET_TXTCMDS = {"dmesg": "bin/dmesg"}
+
+
+def missing_applet_txtcmds(persona, ident):
+    """The names of APPLET_TXTCMDS a BusyBox device's own BusyBox has not (dmesg of the DIR-859); empty
+    where missing_applet_commands is."""
+    if applet_links(persona, ident) is None:
+        return ()
+    applets = set(busybox_applets(persona, ident))
+    return tuple(name for name in APPLET_TXTCMDS if name not in applets)
+
+
 def applet_links(persona, ident):
     """{path: link target} of the applets of a device's BusyBox, as `busybox --install -s` places them
     (/bin/ls -> busybox, /sbin/ifconfig -> ../bin/busybox, /usr/bin/awk -> ../../bin/busybox, in the folders
@@ -1311,13 +1427,26 @@ def text_programs(persona, ident):
     applets = set(busybox_applets(persona, ident))
     banner = ident.release.extra.get("busybox")
     target = "/bin/busybox" if persona.family == "ubiquiti" else "../../bin/busybox"
+    if firmware_has_programs(persona) and banner:
+        # the program folders of its firmware (the NAS326: wc, sort and seq in /bin of its initramfs)
+        dirs = firmware_program_dirs(persona, sorted(applets))
+        if dirs is not None:
+            return {name: (f"{dirs[name][0]}/{name}", APPLET_TARGETS.get(dirs[name][0], "../../bin/busybox"))
+                    for name in TEXT_TOOLS if name in dirs}
     return {name: (APPLET_PATHS[name], target if banner else None) for name in TEXT_TOOLS if name in applets}
 
 
 # the locale of a login (order of sort, quotation marks, help texts): C.UTF-8 of the Ubuntu and
 #   Debian cloud images, en_GB.UTF-8 of Raspberry Pi OS, en_US.UTF-8 of the Red Hat images (glibc
-#   2.17 on CentOS 7 orders ties differently), POSIX on DSM (unverified: the Debian and RHEL images, DSM)
+#   2.17 on CentOS 7 orders ties differently), POSIX on DSM (derived, not recorded: Raspberry Pi OS, DSM)
 TEXT_LOCALES = {"raspios": "en", "rhel": "en", "centos": "en-2.17", "synology": "posix"}
+# the locale of date (default format, %c %x %X %r %p): en_US.UTF-8 of Rocky 9 and CentOS 7 (glibc 2.17 keeps the C
+#   default format), en_GB.UTF-8 of Debian 12 (recorded; Raspberry Pi OS is derived); C elsewhere
+TEXT_DATES = {"raspios": "gb", "rhel": "us", "centos": "us-2.17"}
+# the GNU grep of a release (derived from the distribution's package, not recorded; DSM: unverified, the
+#   patched grep reads 3.11 without the key)
+GREP_VERSIONS = {"rhel": "3.6", "centos": "2.20", "stretch": "2.27", "jammy": "3.7", "noble": "3.11",
+                 "bookworm": "3.8", "trixie": "3.11"}
 
 
 def text_keys(persona, ident):
@@ -1327,7 +1456,10 @@ def text_keys(persona, ident):
     if persona.kind == "server" or persona.family == "synology":
         version = coreutils_version(persona, ident)
         keys = {"text_style": "gnu", "text_version": version, "text_year": COREUTILS_YEARS.get(version, "2022"),
-                "text_collate": TEXT_LOCALES.get(persona.family, "c")}
+                "text_collate": TEXT_LOCALES.get(persona.family, "c"), "text_date": TEXT_DATES.get(persona.family, "c"),
+                "grep_style": "gnu"}
+        if persona.family != "synology":
+            keys["grep_version"] = GREP_VERSIONS[_codename(persona, ident)]
         package = APT_INSTALLED.get(_codename(persona, ident), {}).get("coreutils", "")
         if _codename(persona, ident) == "trixie" and package:
             keys["text_packager"] = f"Debian ({package})"
@@ -1336,8 +1468,11 @@ def text_keys(persona, ident):
         return keys
     banner = ident.release.extra.get("busybox", "")
     found = re.match(r"BusyBox v(\d+\.\d+\.\d+)", banner)
+    # grep_style busybox: the patterns read as the regcomp of text_libc (glibc, uclibc, musl)
+    # text_unicode (wc -m): false recorded for OpenWrt and the Archer C7 v5 (usage "[-clwL]"), unverified for the
+    #   other firmware (CONFIG_UNICODE_SUPPORT of their builds is unknown)
     return {"text_style": "busybox", "text_banner": banner, "text_version": found.group(1) if found else "1.24.1",
-            "text_libc": FIRMWARE_LIBC.get(persona.family, "glibc")}
+            "text_libc": FIRMWARE_LIBC.get(persona.family, "glibc"), "grep_style": "busybox", "text_unicode": "false"}
 
 
 # the texts of rm, cp, mv, touch, rmdir and mkdir (tools/build_fs_texts.py from the recordings of the real tools)
@@ -1347,12 +1482,18 @@ FS_TEXTS = Path(__file__).resolve().parent / "fs_texts.json"
 FS_GNU_VARIANTS = {"8.22": "centos_7", "8.30": "debian_10", "8.32": "ubuntu_22.04", "9.1": "debian_12",
                    "9.4": "ubuntu_24.04", "9.7": "debian_13"}
 # BusyBox: the firmware's own BusyBox where it was recorded (under qemu-user: the Archer C7 v5, EdgeOS, OpenWrt,
-#   the NAS326 and the DIR-859; QNAP's own x86_64 build of its GPL tree of QTS 5.2.3 natively); unverified: the
-#   IP camera, whose firmware is no image, takes the minimal build of the Archer C7 v5 (no CONFIG_DESKTOP, as
-#   busybox_desktop assumes of it; the texts of its option errors follow its own text_libc)
+#   the NAS326 and the DIR-859; QNAP's own x86_64 build of its GPL tree of QTS 5.2.3 natively)
 FS_BUSYBOX_VARIANTS = {"tplink": "fw_tplink_c7v5", "ubiquiti": "fw_edgeos_209hf5", "dlink": "fw_dlink_dir859_105b03",
-                       "zyxel": "fw_zyxel_nas326_aazf18", "ipcam": "fw_tplink_c7v5", "qnap": "src_qnap_1.24.1"}
-# the families whose BusyBox variant stands in for a build of another C library (see FS_BUSYBOX_VARIANTS)
+                       "zyxel": "fw_zyxel_nas326_aazf18", "qnap": "src_qnap_1.24.1"}
+# the families whose variant follows the BusyBox version of the release (the banner, text_version): the IP camera
+#   has no firmware image read here (unverified: its C library and BusyBox configuration are unknown), so both of
+#   its variants are stand-ins. 1.19.4 takes the Archer C7 v5's build (uClibc, no CONFIG_DESKTOP, as busybox_desktop
+#   assumes of the camera). 1.26.2 takes the busybox:1.26.2 build (uClibc, built with CONFIG_DESKTOP: its ls -l
+#   prints a total line, which busybox_desktop does not give the camera; unverified). The texts of its option
+#   errors follow its own text_libc
+FS_BUSYBOX_VERSIONS = {"ipcam": {"1.19.4": "fw_tplink_c7v5", "1.26.2": "busybox_1.26.2"}}
+# the families whose BusyBox variant stands in for a build of another C library or configuration (see
+#   FS_BUSYBOX_VERSIONS)
 FS_STAND_INS = frozenset({"ipcam"})
 
 
@@ -1367,12 +1508,98 @@ def fs_variant(persona, ident):
         return FS_GNU_VARIANTS.get(text["text_version"], "debian_12")
     if persona.family == "openwrt":
         return "fw_openwrt_21.02.7" if ident.release.label.startswith("21.") else "fw_openwrt_22.03.7"
+    if persona.family in FS_BUSYBOX_VERSIONS:
+        # a release without a variant of its version is an error of the tables (tests.test_fs_tools)
+        return FS_BUSYBOX_VERSIONS[persona.family][text["text_version"]]
     return FS_BUSYBOX_VARIANTS.get(persona.family, "fw_tplink_c7v5")
 
 
 def fs_keys(persona, ident):
     """[shell] keys of the patched rm, cp, mv, touch, rmdir and mkdir: the file of their texts and the variant."""
     return {"fs_texts": str(FS_TEXTS), "fs_variant": fs_variant(persona, ident)}
+
+
+# openssl of the persona: what the patched openssl of wc.py reads ([shell] openssl, the runtime file
+#   openssl.json). Servers run the build of their release level's openssl package, devices the program of
+#   their firmware image where it has one (Release.extra["openssl_build"]). openssl_releases.json has every
+#   build (the lines of `version -a`, the size of /usr/bin/openssl) and the texts of its family, recorded
+#   with the real program.
+OPENSSL_DATA = "openssl.json"
+OPENSSL_RELEASES = Path(__file__).resolve().parent / "openssl_releases.json"
+# CPUINFO of OpenSSL 3: the capability words of OPENSSL_ia32cap (unverified: those of a KVM guest on Icelake
+#   / EPYC, for every Intel and AMD CPU of the catalog) and OPENSSL_armcap (NEON and the CPUID bit; the
+#   Pi 5's Cortex-A76 has AES, SHA1, SHA256 and PMULL, the Pi 4's Cortex-A72 none of them)
+OPENSSL_IA32CAP = {"intel": ("0xfffa32034f8bfbff", "0x405f5ef1bf27ab"),
+                   "amd": ("0x7ef83203178bfbff", "0x40069c219c97a9")}
+OPENSSL_ARMCAP = {"Cortex-A72": "0x81", "Cortex-A76": "0xbd"}
+
+
+@functools.cache
+def openssl_releases():
+    return json.loads(OPENSSL_RELEASES.read_text(encoding="utf-8"))
+
+
+def openssl_build(persona, ident):
+    """The build of the persona's openssl program in openssl_releases.json, None where its system has none."""
+    r = ident.release
+    if persona.kind == "device":
+        return r.extra.get("openssl_build")
+    if persona.family == "rhel":
+        return "rhel_" + RHEL_OPENSSL[r.os_version_id].split(":", 1)[-1]
+    if persona.family == "centos":
+        return "centos_" + r.packages["openssl"].split(":", 1)[-1]
+    key = "raspios" if persona.family == "raspios" else r.extra["codename"]
+    return f"{key}_{r.packages['openssl']}"
+
+
+def openssl_size(build):
+    """The size of /usr/bin/openssl of a build."""
+    return openssl_releases()["builds"][build]["size"]
+
+
+def openssl_cpuinfo(kind, cpu_model):
+    """The value of the CPUINFO line of a family's openssl (its kind: ia32, ia32-5 or arm) on a CPU."""
+    if kind == "arm":
+        if cpu_model not in OPENSSL_ARMCAP:
+            raise KeyError(f"OPENSSL_ARMCAP has no capability word of the CPU {cpu_model!r}")
+        return f"OPENSSL_armcap={OPENSSL_ARMCAP[cpu_model]}"
+    first, second = OPENSSL_IA32CAP["amd" if "AMD" in cpu_model else "intel"]
+    if kind == "ia32-5":
+        # OpenSSL 3.5: five words (unverified: their 16 digits)
+        return f"OPENSSL_ia32cap={first}:0x{int(second, 16):016x}" + ":0x0000000000000000" * 3
+    return f"OPENSSL_ia32cap={first}:{second}"
+
+
+def openssl_build_data(build, cpuinfo):
+    """The openssl.json of a build: the style of its option parsing, its package, the lines of `version -a`
+    ([option letter, line]; the CPUINFO line with the value cpuinfo) and the texts of its family."""
+    releases = openssl_releases()
+    entry = releases["builds"][build]
+    family = releases["families"][entry["family"]]
+
+    def text(value):
+        return releases["texts"][value[1:]] if value.startswith("@") else value
+
+    lines = [[letter, line if line is not None else f"CPUINFO: {cpuinfo}"] for letter, line in entry["lines"]]
+    texts = {key: text(value) for key, value in family.items()
+             if key in ("help", "help_usage", "version_usage", "list", "listing")}
+    return {"style": family["style"], "package": build.split("_", 1)[1], "lines": lines, **texts}
+
+
+def openssl_data(persona, ident):
+    """The openssl.json of the persona, None where its system has no openssl program."""
+    build = openssl_build(persona, ident)
+    if build is None:
+        return None
+    releases = openssl_releases()
+    kind = releases["families"][releases["builds"][build]["family"]].get("cpuinfo")
+    data = openssl_build_data(build, openssl_cpuinfo(kind, ident.hardware.cpu_model) if kind else None)
+    # the package as the package manager names it (rpm: with its epoch)
+    if persona.family == "rhel":
+        data["package"] = RHEL_OPENSSL[ident.release.os_version_id]
+    elif persona.kind == "server":
+        data["package"] = ident.release.packages["openssl"]
+    return data
 
 
 def df_table(persona, ident, filesystems):
@@ -1435,7 +1662,7 @@ def python_answers(persona):
     if has_dpkg(persona):
         answers += APT_COMMANDS
     if persona.family == "centos":
-        answers += YUM_COMMANDS
+        answers += YUM_COMMANDS + ("chkconfig",)
     if persona.family == "rhel":
         answers += DNF_COMMANDS
     return answers
@@ -1444,13 +1671,13 @@ def python_answers(persona):
 def command_path(name, persona=None):
     if name == "systemctl" and persona is not None and persona.family == "ubiquiti":
         return "bin/systemctl"  # Debian 9 before the /usr merge
-    return f"usr/sbin/{name}" if name == "service" else f"usr/bin/{name}"
+    return f"usr/sbin/{name}" if name in ("service", "chkconfig") else f"usr/bin/{name}"
 
 
 def programs(persona, ident):
     """The programs of the persona's system Cowrie's tree has not (or elsewhere): perl, git, its Python,
     sudo, service, systemctl and its package manager on a server, perl on EdgeOS; which and the dynamic
-    loader of a system without dpkg."""
+    loader of a system without dpkg; openssl where the system has one (openssl_build)."""
     found = tools(persona, ident)
     paths = ["usr/bin/perl"] if "perl" in found else []
     if "git" in found:
@@ -1472,6 +1699,8 @@ def programs(persona, ident):
         paths += ["usr/libexec/openssh/sftp-server", "usr/bin/gawk"]
     if persona.family == "rhel":
         paths.append("usr/bin/pidof")
+    if openssl_build(persona, ident):
+        paths.append("usr/bin/openssl")
     # the telnet daemon of a server: inetutils' telnetd behind inetd and tcpd (Debian, Ubuntu), in.telnetd
     #   of telnet-server (Red Hat, CentOS)
     if persona.kind == "server" and is_el(persona):
@@ -1479,6 +1708,18 @@ def programs(persona, ident):
         paths.append("usr/sbin/in.telnetd")
         paths += EL_DAEMON_PROGRAMS.get(persona.family, ())
     return tuple(paths)
+
+
+def sysv_levels(persona):
+    """{script: [on at run level 0..6]} of the SysV scripts chkconfig lists on CentOS 7, read from the run level
+    links of CENTOS_RC_LINKS (S links start a script, K links stop it)."""
+    if persona.family != "centos":
+        return {}
+    levels: dict = {}
+    for link, target in CENTOS_RC_LINKS:
+        level, kind = re.fullmatch(r"etc/rc\.d/rc(\d)\.d/([KS])\d+\w+", link).groups()
+        levels.setdefault(target.rsplit("/", 1)[1], [False] * 7)[int(level)] = kind == "S"
+    return dict(sorted(levels.items()))
 
 
 # the dynamic loader of a system without Debian's multiarch directory (glibc 2.34 and later: the file
@@ -1734,12 +1975,35 @@ def program_node(fs, program):
 
 
 def directories(persona):
-    """Empty directories of the persona's system (the run level directories of Red Hat)."""
+    """Empty directories of the persona's system (the run level directories of Red Hat; the package folder of
+    the PATH of the NAS326, firmware.ZYXEL_PATH: not in its image, unverified)."""
+    if persona.kind == "device" and persona.family == "zyxel":
+        return ("usr/local/zy-pkgs/bin",)
     return tuple(f"etc/rc.d/rc{level}.d" for level in range(7)) if is_el(persona) else ()
 
 
 # the devices whose /bin/sh is BusyBox ash (DSM's is bash, EdgeOS logs in to vbash)
-ASH_FAMILIES = frozenset({"dlink", "tplink", "zyxel", "openwrt", "qnap", "ipcam"})
+ASH_FAMILIES = frozenset({"tplink", "zyxel", "openwrt", "qnap", "ipcam"})
+# the devices whose /bin/sh is BusyBox msh: the DIR-859 (busybox --list of its 1.05B03 image has msh, no ash;
+#   its texts in tests/fixtures/msh.json)
+MSH_FAMILIES = frozenset({"dlink"})
+# the devices whose shell and tools are BusyBox's (ls, lsmod, the history of its line editor)
+BUSYBOX_FAMILIES = ASH_FAMILIES | MSH_FAMILIES
+# the builtins of msh of BusyBox 1.14.1 (its help on a terminal, the DIR-859 1.05B03 image)
+MSH_BUILTINS = (".", ":", "break", "cd", "continue", "eval", "exec", "exit", "export", "help", "login", "newgrp",
+                "read", "readonly", "set", "shift", "times", "trap", "umask", "wait")
+# Cowrie's commands of builtins of bash or ash that msh has not: "alias: not found" (127) and the others of the
+#   recording; logout was not recorded, it is left out as it is not in the help list of msh; a builtin of bash
+#   that is an applet of the firmware (kill, echo, test) stays its program
+MSH_MISSING_BUILTINS = ("alias", "history", "jobs", "logout", "type", "ulimit", "unset")
+
+
+def missing_builtin_commands(persona, ident):
+    """The commands of Cowrie named like a builtin of bash or ash that the persona's msh has not and its
+    BusyBox has no applet of (MSH_MISSING_BUILTINS); empty for the other shells."""
+    if persona.family not in MSH_FAMILIES:
+        return ()
+    return tuple(name for name in MSH_MISSING_BUILTINS if name not in busybox_applets(persona, ident))
 
 
 def busybox_desktop(persona):
@@ -1747,15 +2011,18 @@ def busybox_desktop(persona):
     from 1.16 (coreutils/ls.c 1.16.0 to 1.36.1; busybox:1.26.2 and 1.27.2 have it). QNAP's busybox-1.24.1 has
     it (CONFIG_DESKTOP=y in the .config of its GPL tree of QTS 5.2.3); 1.14.1 of the DIR-859 has no total line,
     the Archer C7 v5 (recorded), the NAS326 (no total format in its BusyBox) and OpenWrt 21.02 / 22.03
-    (recorded) are built without; the camera is taken as those (unverified). None without BusyBox ash."""
-    if persona.family not in ASH_FAMILIES:
+    (recorded) are built without; the camera is taken as those (unverified). None without the BusyBox shell."""
+    if persona.family not in BUSYBOX_FAMILIES:
         return None
     return persona.family == "qnap"
 
 
 def shell_style(persona):
     """(the shell's name, how it says a command is missing): BusyBox ash prints "-ash: x: not found",
-    bash and vbash "-bash: x: command not found"; the name is that of the login shell."""
+    BusyBox msh "x: not found" (no name of the shell), bash and vbash "-bash: x: command not found"; the
+    name is that of the login shell."""
+    if persona.family in MSH_FAMILIES:
+        return persona.shell.rsplit("/", 1)[-1], "msh"
     return persona.shell.rsplit("/", 1)[-1], "ash" if persona.family in ASH_FAMILIES else "bash"
 
 
@@ -1767,7 +2034,8 @@ def history_sizes(persona, release):
     (the ER-e50 v2.0.9-hotfix.7 image; the line editor holds at most 1000 of them, tpot_history_size); RHEL and
     CentOS set 1000 in /etc/profile; DSM is taken as bash's 500 (unverified).
     BusyBox ash keeps FEATURE_EDITING_HISTORY lines: 15 up to 1.16, 255 from 1.17 (the defaults of
-    libbb/Config.in / Config.src; the vendors' configs are unverified), OpenWrt's build 256."""
+    libbb/Config.in / Config.src; the vendors' configs are unverified), OpenWrt's build 256; msh of the
+    DIR-859 reads its lines with the same line editor (libbb/lineedit.c), taken as ash's."""
     if persona.family in ("ubuntu", "rhel", "centos"):
         return 1000, 1000
     if persona.family == "ubiquiti":
@@ -1776,7 +2044,7 @@ def history_sizes(persona, release):
         return 500, 1000
     if persona.family == "openwrt":
         return 256, 256
-    if persona.family in ASH_FAMILIES:
+    if persona.family in BUSYBOX_FAMILIES:
         found = re.search(r"BusyBox v(\d+)\.(\d+)", release.extra.get("busybox", ""))
         size = 15 if found and (int(found.group(1)), int(found.group(2))) < (1, 17) else 255
         return size, size
@@ -1790,13 +2058,13 @@ def history_controls(persona):
     none: the .bashrc of root and of its skeleton source /etc/bash_completion.d/vyatta-cfg, which exports
     an empty HISTCONTROL (the ER-e50 v2.0.9-hotfix.7 image); RHEL and CentOS ignoredups of /etc/profile
     (an SSH login runs a login shell); BusyBox ash keeps no line that repeats the one before
-    (ignoredups), but keeps a line with a leading space (busybox 1.27.2, 1.31.1, 1.36.1); DSM none
-    (unverified)."""
+    (ignoredups), but keeps a line with a leading space (busybox 1.27.2, 1.31.1, 1.36.1; msh with the same
+    line editor taken as ash, unverified); DSM none (unverified)."""
     if persona.family == "ubuntu":
         return "ignoredups:ignorespace", "ignoreboth"
     if persona.family in ("debian", "raspios"):
         return "", "ignoreboth"
-    if persona.family in ("rhel", "centos") or persona.family in ASH_FAMILIES:
+    if persona.family in ("rhel", "centos") or persona.family in BUSYBOX_FAMILIES:
         return "ignoredups", "ignoredups"
     return "", ""
 
@@ -1827,6 +2095,12 @@ def history_time_format(persona):
     """HISTTIMEFORMAT of the login: '%FT%T%z ' of vyatta-cfg on EdgeOS (the ER-e50 image; `history` then
     writes the time of each line), none elsewhere."""
     return "%FT%T%z " if persona.family == "ubiquiti" else ""
+
+
+def history_untimed(persona):
+    """"format" where `history` formats a line it holds no time of (bash 4.2 of CentOS 7, recorded with
+    centos:7), else "" ("??": bash 4.4.12 and 5.x, recorded)."""
+    return "format" if persona.family == "centos" else ""
 
 
 def login_program(persona, ident):
@@ -2343,7 +2617,8 @@ def apt_packages(persona, ident):
             "answers": session_answers(path for name in available for path in apt_programs(name)),
             "unavailable": [name for name in APT_UNAVAILABLE.get(code, ()) if name not in installed
                             and name not in available],
-            "meta": meta, "archives": apt_archives(persona, ident), "files": apt_files(persona, ident),
+            "meta": meta, "relations": apt_relations(persona, ident, meta),
+            "archives": apt_archives(persona, ident), "files": apt_files(persona, ident),
             "conffiles": sorted(APT_CONFFILES), "removes": apt_removes(persona, ident, installed),
             "essential": sorted(name for name in installed if name in meta and meta[name][9] == "yes")}
 
@@ -2418,6 +2693,26 @@ def apt_meta(persona, ident):
             row = line.rstrip("\n").split("\t")
             if len(row) == 13 and letter in row[1]:
                 found[row[0]] = [row[2], row[3], row[4], int(row[5] or 0), int(row[6] or 0), *row[7:]]
+    return found
+
+
+# the fields of a row of apt-relations.txt.gz after the version (build_package_names.RELATION_FIELDS)
+APT_RELATION_FIELDS = ("Source", "Multi-Arch", "Original-Maintainer", "Replaces", "Provides", "Depends", "Pre-Depends",
+                       "Recommends", "Suggests", "Conflicts", "Breaks", "Enhances", "Homepage", "Tag", "Task",
+                       "Build-Essential", "Original-Vcs-Browser", "Original-Vcs-Git")
+
+
+def apt_relations(persona, ident, meta):
+    """The relation fields of the candidates of the names of `meta` (apt-relations.txt.gz): {name: {field:
+    value}}, a line break of a value written as \\n in the file; none for a name whose row of `meta` has another version."""
+    letter = _apt_letter(persona, ident)
+    found = {}
+    with gzip.open(NAMES_DIR / "apt-relations.txt.gz", "rt", encoding="utf-8") as f:
+        for line in f:
+            row = line.rstrip("\n").split("\t")
+            if len(row) == 3 + len(APT_RELATION_FIELDS) and letter in row[1] and row[0] in meta and meta[row[0]][0] == row[2]:
+                found[row[0]] = {field: re.sub(r"\\(.)", lambda hit: "\n" if hit.group(1) == "n" else hit.group(1), value)
+                                 for field, value in zip(APT_RELATION_FIELDS, row[3:]) if value}
     return found
 
 
@@ -2507,7 +2802,7 @@ APT_CONFFILES = frozenset({"openssh-server", "openssh-client", "nginx", "nginx-c
 
 
 # the name lists of the releases (built by docker/cowrie/tools/build_package_names.py, sources in the
-#   README there): apt.txt.gz "name releases", yum.txt.gz "name", opkg.txt.gz "name releases feed"
+#   README there): apt.txt.gz "name releases", yum.txt.gz "name" or "name p1,p2", opkg.txt.gz "name releases feed"
 NAMES_DIR = Path(__file__).resolve().parent / "package_names"
 APT_NAME_RELEASES = {"bookworm": "b", "trixie": "t", "jammy": "j", "noble": "n"}
 OPKG_NAME_RELEASES = {"21.02": "a", "22.03": "b"}
@@ -2635,7 +2930,7 @@ CENTOS_CORE = ("acl", "audit", "basesystem", "bash", "ca-certificates", "centos-
                "findutils", "gawk", "glibc", "glibc-common", "grep", "gzip", "hostname", "initscripts", "iptables", "iputils",
                "kmod", "less", "logrotate", "openssh", "openssh-clients", "openssl", "openssl-libs", "pam", "passwd",
                "procps-ng", "python", "sed", "setup", "shadow-utils", "sudo", "systemd", "tar", "tzdata",
-               "util-linux", "vim-minimal", "which", "xz", "yum-plugin-fastestmirror",
+               "util-linux", "vim-minimal", "which", "xz", "yum-plugin-fastestmirror", "zlib",
                # the packages of the daemons of ps (refs t12 centos-7-t12-owners)
                "NetworkManager", "chrony", "polkit", "postfix", "rsyslog")
 # the files of CentOS 7's packages rpm -qf names besides RPM_OWNED (dbus-daemon of dbus, Python 2, polkitd, postfix's
@@ -2675,6 +2970,19 @@ def centos_installed(ident):
     return {**found, **CENTOS_BASE, **ident.release.packages}
 
 
+def rpm_libraries(persona, ident):
+    """{package: {path: size or link target}} of the base libraries below usr/lib64 (RPM_LIBRARIES of the release): the
+    owners of rpm -qf and the nodes of the tree."""
+    if persona.family == "centos":
+        installed, release = centos_installed(ident), "7"
+    elif persona.family == "rhel":
+        installed, release = None, ident.release.os_version_id
+    else:
+        return {}
+    return {package: {f"usr/lib64/{name}": value for name, value in files.items()}
+            for package, files in RPM_LIBRARIES[release].items() if installed is None or package in installed}
+
+
 def package_meta_files(persona, ident):
     """{runtime file: lines} of the package data of the release the patched commands read: the builds of
     CentOS 7 (yum-meta) and the owners of its programs for rpm -qf, the feeds of OpenWrt (opkg-meta)."""
@@ -2692,6 +3000,8 @@ def package_meta_files(persona, ident):
         for package, files in CENTOS_OWNED_FILES.items():
             if package in installed:
                 owners += [f"/{rel} {package}" for rel in files]
+        for package, files in rpm_libraries(persona, ident).items():
+            owners += [f"/{rel} {package}" for rel in files]
         for tool in installed_tools(persona, ident):
             package = CENTOS_TOOLS.get(tool, RPM_TOOLS[tool])
             if package in installed:
@@ -2874,6 +3184,9 @@ def shell_keys(persona, ident, files, runtime_dir):
         return {"systemctl_units": f"{runtime_dir}/{SYSTEMD_UNITS}"}
     if not found:
         return {}
+    if "perl" not in found:
+        # the Python of a firmware (DEVICE_PYTHON) without perl
+        return {"python_version": found["python"]}
     perl, year = found["perl"]
     keys = {"perl_version": perl, "perl_archname": perl_archname(persona), "perl_copyright": year}
     if persona.family == "ubiquiti":
@@ -3046,7 +3359,7 @@ def lsmod_text(persona, modules):
     Wi-Fi drivers (P; unverified)."""
     if persona.family == "openwrt":
         return kmodloader_lsmod(modules)
-    busybox = persona.family in ASH_FAMILIES
+    busybox = persona.family in BUSYBOX_FAMILIES
     if busybox:
         taint = "    Tainted: P  " if persona.family in ("tplink", "dlink") else "    Not tainted"
         out = f"{'Module':<24}Size  Used by{taint}\n"

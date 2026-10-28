@@ -1,0 +1,909 @@
+{
+ "_source": {
+  "recorded": "2026-10-21",
+  "how": "the option cases of section C (wave w2/systemd, journalctl.json, point 26) as root and as uid 1000 (*_user): [stdout, stderr, exit status] of `sh -c` in `docker exec` in containers that boot systemd as PID 1 (helper images w2sd-<key>, docker run --privileged, linux/arm64 Docker Desktop VM, cgroup v2, /run/log/journal a volume; no polkit). Normalised: hostname HOST, 32-hex ids HEX32, weekday/date/time of the list-boots columns Day YYYY-MM-DD HH:MM:SS, journal sizes N + unit; the order of the directories vacuum names is the order the container's readdir gave; a stdout of 400 characters or more (the whole journal) is cut to its first line.",
+  "from": "w2/systemd/journalctl.json"
+ },
+ "images": {
+  "debian_12": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-debian_12 from debian:12, boot --cgroupns=private, state running",
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "locale": "C.UTF-8",
+   "uid": 0,
+   "systemctl_version": "systemd 252 (252.39-1~deb12u2)",
+   "cases": {
+    "journalctl -b1": [
+     "Mon DD HH:MM:SS HOST systemd-journald[PID]: Missed N kernel messages\n",
+     "",
+     0
+    ],
+    "journalctl -b-1": [
+     "",
+     "Data from the specified boot (-1) is not available: No such boot ID in journal\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --list-boots": [
+     "IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY\n  0 HEX32 Day YYYY-MM-DD HH:MM:SS UTC Day YYYY-MM-DD HH:MM:SS UTC\n",
+     "",
+     0
+    ],
+    "journalctl --disk-usage": [
+     "Archived and active journals take up NM in the file system.\n",
+     "",
+     0
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /var/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /run/log/journal.\n",
+     0
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal.\n",
+     0
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\n",
+     0
+    ],
+    "journalctl -n 2 --no-pager": [
+     "Mon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started ssh.service - OpenBSD Secure Shell server.\n",
+     "",
+     0
+    ],
+    "journalctl -u nosuch": [
+     "-- No entries --\n",
+     "",
+     0
+    ],
+    "journalctl --rotate": [
+     "",
+     "",
+     0
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "debian_12_user": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-debian_12 from debian:12, boot --cgroupns=private, state running",
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "locale": "C.UTF-8",
+   "uid": 1000,
+   "systemctl_version": "systemd 252 (252.39-1~deb12u2)",
+   "cases": {
+    "journalctl -b1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b-1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --list-boots": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --disk-usage": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -n 2 --no-pager": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -u nosuch": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --rotate": [
+     "",
+     "Failed to connect to /run/systemd/journal/io.systemd.journal: Permission denied\n",
+     1
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "No journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "debian_13": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-debian_13 from debian:13, boot --cgroupns=private, state degraded",
+   "image": "debian:13",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "locale": "C.UTF-8",
+   "uid": 0,
+   "systemctl_version": "systemd 257 (257.13-1~deb13u1)",
+   "cases": {
+    "journalctl -b1": [
+     "Mon DD HH:MM:SS HOST systemd-journald[PID]: Journal started\n",
+     "",
+     0
+    ],
+    "journalctl -b-1": [
+     "",
+     "No journal boot entry found for the specified boot (-1).\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --list-boots": [
+     "IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY\n  0 HEX32 Day YYYY-MM-DD HH:MM:SS UTC Day YYYY-MM-DD HH:MM:SS UTC\n",
+     "",
+     0
+    ],
+    "journalctl --disk-usage": [
+     "Archived and active journals take up NM in the file system.\n",
+     "",
+     0
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /run/log/journal.\n",
+     0
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nDeleted archived journal /run/log/journal/HEX32/system@HEX32-SEQNUM-HEADTIME.journal (NM).\nVacuuming done, freed NM of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal.\n",
+     0
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /var/log/journal.\nVacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\n",
+     0
+    ],
+    "journalctl -n 2 --no-pager": [
+     "Mon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started ssh.service - OpenBSD Secure Shell server.\n",
+     "",
+     0
+    ],
+    "journalctl -u nosuch": [
+     "-- No entries --\n",
+     "",
+     0
+    ],
+    "journalctl --rotate": [
+     "",
+     "",
+     0
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "debian_13_user": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-debian_13 from debian:13, boot --cgroupns=private, state degraded",
+   "image": "debian:13",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "locale": "C.UTF-8",
+   "uid": 1000,
+   "systemctl_version": "systemd 257 (257.13-1~deb13u1)",
+   "cases": {
+    "journalctl -b1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b-1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --list-boots": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --disk-usage": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -n 2 --no-pager": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -u nosuch": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --rotate": [
+     "",
+     "Failed to connect to Varlink socket: Permission denied\n",
+     1
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "No journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "ubuntu_22.04": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-ubuntu_22.04 from ubuntu:22.04, boot --cgroupns=private, state running",
+   "image": "ubuntu:22.04",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "locale": "C.UTF-8",
+   "uid": 0,
+   "systemctl_version": "systemd 249 (249.11-0ubuntu3.23)",
+   "cases": {
+    "journalctl -b1": [
+     "Mon DD HH:MM:SS HOST systemd-journald[PID]: Missed N kernel messages\n",
+     "",
+     0
+    ],
+    "journalctl -b-1": [
+     "",
+     "Data from the specified boot (-1) is not available: No such boot ID in journal\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --list-boots": [
+     " 0 HEX32 Day YYYY-MM-DD HH:MM:SS UTC—Day YYYY-MM-DD HH:MM:SS UTC\n",
+     "",
+     0
+    ],
+    "journalctl --disk-usage": [
+     "Archived and active journals take up NM in the file system.\n",
+     "",
+     0
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal.\nVacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\n",
+     0
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal.\n",
+     0
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /var/log/journal.\n",
+     0
+    ],
+    "journalctl -n 2 --no-pager": [
+     "Mon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenBSD Secure Shell server.\n",
+     "",
+     0
+    ],
+    "journalctl -u nosuch": [
+     "-- No entries --\n",
+     "",
+     0
+    ],
+    "journalctl --rotate": [
+     "",
+     "",
+     0
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "ubuntu_22.04_user": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-ubuntu_22.04 from ubuntu:22.04, boot --cgroupns=private, state running",
+   "image": "ubuntu:22.04",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "locale": "C.UTF-8",
+   "uid": 1000,
+   "systemctl_version": "systemd 249 (249.11-0ubuntu3.23)",
+   "cases": {
+    "journalctl -b1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b-1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --list-boots": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --disk-usage": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -n 2 --no-pager": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -u nosuch": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --rotate": [
+     "",
+     "Failed to connect to /run/systemd/journal/io.systemd.journal: Permission denied\n",
+     1
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "No journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "ubuntu_24.04": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-ubuntu_24.04 from ubuntu:24.04, boot --cgroupns=private, state running",
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "locale": "C.UTF-8",
+   "uid": 0,
+   "systemctl_version": "systemd 255 (255.4-1ubuntu8.18)",
+   "cases": {
+    "journalctl -b1": [
+     "Mon DD HH:MM:SS HOST systemd-journald[PID]: Journal started\n",
+     "",
+     0
+    ],
+    "journalctl -b-1": [
+     "",
+     "No journal boot entry found from the specified boot offset (-1).\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --list-boots": [
+     "IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY\n  0 HEX32 Day YYYY-MM-DD HH:MM:SS UTC Day YYYY-MM-DD HH:MM:SS UTC\n",
+     "",
+     0
+    ],
+    "journalctl --disk-usage": [
+     "Archived and active journals take up NM in the file system.\n",
+     "",
+     0
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\n",
+     0
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /var/log/journal.\n",
+     0
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /var/log/journal.\n",
+     0
+    ],
+    "journalctl -n 2 --no-pager": [
+     "Mon DD HH:MM:SS HOST systemd[PID]: Reached target Remote File Systems.\nMon DD HH:MM:SS HOST systemd-journald[PID]: Received request to flush runtime journal from PID PID\n",
+     "",
+     0
+    ],
+    "journalctl -u nosuch": [
+     "-- No entries --\n",
+     "",
+     0
+    ],
+    "journalctl --rotate": [
+     "",
+     "",
+     0
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "ubuntu_24.04_user": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-ubuntu_24.04 from ubuntu:24.04, boot --cgroupns=private, state running",
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "locale": "C.UTF-8",
+   "uid": 1000,
+   "systemctl_version": "systemd 255 (255.4-1ubuntu8.18)",
+   "cases": {
+    "journalctl -b1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b-1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --list-boots": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --disk-usage": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -n 2 --no-pager": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -u nosuch": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --rotate": [
+     "",
+     "Failed to connect to /run/systemd/journal/io.systemd.journal: Permission denied\n",
+     1
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "No journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "rockylinux_9": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-rockylinux_9 from rockylinux:9, boot --cgroupns=private, state running",
+   "image": "rockylinux:9",
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "locale": "en_US.UTF-8",
+   "uid": 0,
+   "systemctl_version": "systemd 252 (252-67.el9_8.6.rocky.0.1)",
+   "cases": {
+    "journalctl -b1": [
+     "",
+     "Specifying boot ID or boot offset has no effect, no persistent journal was found.\n",
+     0
+    ],
+    "journalctl -b-1": [
+     "",
+     "Specifying boot ID or boot offset has no effect, no persistent journal was found.\n",
+     0
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --list-boots": [
+     "IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY\n  0 HEX32 Day YYYY-MM-DD HH:MM:SS UTC Day YYYY-MM-DD HH:MM:SS UTC\n",
+     "",
+     0
+    ],
+    "journalctl --disk-usage": [
+     "Archived and active journals take up NM in the file system.\n",
+     "",
+     0
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\n",
+     0
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\nVacuuming done, freed NB of archived journals from /run/log/journal.\n",
+     0
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Vacuuming done, freed NB of archived journals from /run/log/journal.\nVacuuming done, freed NB of archived journals from /run/log/journal/HEX32.\n",
+     0
+    ],
+    "journalctl -n 2 --no-pager": [
+     "Mon DD HH:MM:SS HOST systemd[PID]: Started Getty on tty1.\nMon DD HH:MM:SS HOST chronyd[PID]: Selected source IPV4 (2.rocky.pool.ntp.org)\n",
+     "",
+     0
+    ],
+    "journalctl -u nosuch": [
+     "-- No entries --\n",
+     "",
+     0
+    ],
+    "journalctl --rotate": [
+     "",
+     "",
+     0
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "rockylinux_9_user": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-rockylinux_9 from rockylinux:9, boot --cgroupns=private, state running",
+   "image": "rockylinux:9",
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "locale": "en_US.UTF-8",
+   "uid": 1000,
+   "systemctl_version": "systemd 252 (252-67.el9_8.6.rocky.0.1)",
+   "cases": {
+    "journalctl -b1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b-1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --list-boots": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --disk-usage": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -n 2 --no-pager": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -u nosuch": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal', 'wheel' can see all messages.\n      Pass -q to turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --rotate": [
+     "",
+     "Failed to connect to /run/systemd/journal/io.systemd.journal: Permission denied\n",
+     1
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "No journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "centos_7": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-centos_7 from centos:7, boot --cgroupns=private, state running",
+   "image": "centos:7",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "locale": "en_US.UTF-8",
+   "uid": 0,
+   "systemctl_version": "systemd 219",
+   "cases": {
+    "journalctl -b1": [
+     "",
+     "Specifying boot ID has no effect, no persistent journal was found\n",
+     0
+    ],
+    "journalctl -b-1": [
+     "",
+     "Specifying boot ID has no effect, no persistent journal was found\n",
+     0
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --list-boots": [
+     " 0 HEX32 Day YYYY-MM-DD HH:MM:SS UTC—Day YYYY-MM-DD HH:MM:SS UTC\n",
+     "",
+     0
+    ],
+    "journalctl --disk-usage": [
+     "Archived and active journals take up NM on disk.\n",
+     "",
+     0
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Vacuuming done, freed NB of archived journals on disk.\n",
+     0
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Vacuuming done, freed NB of archived journals on disk.\n",
+     0
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "journalctl: unrecognized option '--vacuum-files=1'\n",
+     1
+    ],
+    "journalctl -n 2 --no-pager": [
+     "-- Logs begin at Day YYYY-MM-DD HH:MM:SS UTC, end at Day YYYY-MM-DD HH:MM:SS UTC. --\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\n",
+     "",
+     0
+    ],
+    "journalctl -u nosuch": [
+     "-- No entries --\n",
+     "",
+     0
+    ],
+    "journalctl --rotate": [
+     "",
+     "journalctl: unrecognized option '--rotate'\n",
+     1
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  },
+  "centos_7_user": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-centos_7 from centos:7, boot --cgroupns=private, state running",
+   "image": "centos:7",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "locale": "en_US.UTF-8",
+   "uid": 1000,
+   "systemctl_version": "systemd 219",
+   "cases": {
+    "journalctl -b1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in the 'systemd-journal' group can see all messages. Pass -q to\n      turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b-1": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in the 'systemd-journal' group can see all messages. Pass -q to\n      turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -b 0 >/dev/null": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in the 'systemd-journal' group can see all messages. Pass -q to\n      turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --list-boots": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in the 'systemd-journal' group can see all messages. Pass -q to\n      turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --disk-usage": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in the 'systemd-journal' group can see all messages. Pass -q to\n      turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-time=1d": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in the 'systemd-journal' group can see all messages. Pass -q to\n      turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-size=1M": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in the 'systemd-journal' group can see all messages. Pass -q to\n      turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --vacuum-files=1": [
+     "",
+     "journalctl: unrecognized option '--vacuum-files=1'\n",
+     1
+    ],
+    "journalctl -n 2 --no-pager": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in the 'systemd-journal' group can see all messages. Pass -q to\n      turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl -u nosuch": [
+     "",
+     "Hint: You are currently not seeing messages from other users and the system.\n      Users in the 'systemd-journal' group can see all messages. Pass -q to\n      turn off this notice.\nNo journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --rotate": [
+     "",
+     "journalctl: unrecognized option '--rotate'\n",
+     1
+    ],
+    "journalctl -o json -n 1 >/dev/null": [
+     "",
+     "No journal files were opened due to insufficient permissions.\n",
+     1
+    ],
+    "journalctl --no-such-option": [
+     "",
+     "journalctl: unrecognized option '--no-such-option'\n",
+     1
+    ]
+   }
+  }
+ }
+}

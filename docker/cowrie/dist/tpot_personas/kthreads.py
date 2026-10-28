@@ -6,7 +6,8 @@ The names follow the kernel of the release (workqueue rescuers as kworker/R-<nam
 names cut at 15 characters before 5.17, the idle state I from 4.14, rcu_preempt for a PREEMPT kernel),
 the per-CPU threads its CPUs and the threads of its root file system (jbd2 for ext4, xfs-* for XFS).
 The list is plausible, not recorded on each system: the recorded format is that of the Docker VM
-kernel (refs/procs.json kthreads:*), the sets per release are unverified."""
+kernel (refs/procs.json kthreads:*); the per-release thread sets are derived (a VM per kernel would be
+needed to record them)."""
 import re
 
 from .common import is_login_shell, ps_start, rng_for

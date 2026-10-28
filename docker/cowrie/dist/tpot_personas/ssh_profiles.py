@@ -174,6 +174,23 @@ _SIGS_OPENSSH = (
 )
 
 
+def ext_info_s(profile, release):
+    """Whether the server names ext-info-s in the key exchange list of its KEXINIT (RFC 8308 section 2.1).
+    OpenSSH does from 7.2 (the release that added EXT_INFO, server_sig_algs() has the same cut). Dropbear
+    never does: its server only answers the ext-info-c of a client with an EXT_INFO from 2020.79 (the
+    server algorithm list of common-algo.c has an ext-info entry for the client only, svr-kex.c sends the
+    message when the client allowed it; read in the sources of 2019.78, 2020.79, 2020.81, 2022.82 and
+    2022.83, the profiles imitate 2012.55 to 2022.82; older ones had no EXT_INFO at all). Twisted adds
+    ext-info-s to every list, the patched transport (patch_ssh_sig_algs, [ssh] ext_info_s) takes it out
+    where this says false."""
+    product, version = server_version(release)
+    if product == "openssh":
+        return version >= (7, 2)
+    if product == "dropbear":
+        return False
+    raise ValueError(f"no SSH server product: {product!r}")
+
+
 def server_sig_algs(profile, release):
     """The value of server-sig-algs in the server's EXT_INFO (RFC 8308), "" for a server that sends
     none: OpenSSH before 7.2, dropbear before 2020.79. Verbatim from the real servers (ssh -vv, round 4

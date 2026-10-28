@@ -1,0 +1,149 @@
+{
+ "_source": {
+  "recorded": "2026-10-21",
+  "how": "section E (wave w2/systemd, centos7_systemd.json, point 10) as root: [stdout, stderr, exit status] of `sh -c` in `docker exec` in a container that boots systemd 219 as PID 1 (helper image w2sd-centos_7 from centos:7, docker run --privileged, linux/arm64 Docker Desktop VM, cgroup v2, no polkit). Normalised: hostname HOST, 32-hex ids HEX32, weekday/date/time Day YYYY-MM-DD HH:MM:SS, syslog Mon DD, PIDs PID, figures of Tasks/CPU/'; ... ago' spans N. Container artefacts (state degraded, failed getty@tty1, tentative device units) are in the recording and not reproduced by the persona.",
+  "from": "w2/systemd/centos7_systemd.json"
+ },
+ "images": {
+  "centos_7": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-centos_7 from centos:7, boot --cgroupns=private, state running",
+   "image": "centos:7",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "locale": "en_US.UTF-8",
+   "uid": 0,
+   "systemctl_version": "systemd 219",
+   "cases": {
+    "systemctl status sshd": [
+     "● sshd.service - OpenSSH server daemon\n   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)\n   Active: active (running) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n     Docs: man:sshd(8)\n           man:sshd_config(5)\n Main PID: PID (sshd)\n   CGroup: /system.slice/sshd.service\n           └─PID /usr/sbin/sshd -D\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\n",
+     "",
+     0
+    ],
+    "systemctl status | head -12": [
+     "● HOST\n    State: degraded\n     Jobs: 0 queued\n   Failed: 1 units\n    Since: Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n   CGroup: /\n           ├─   1 /sbin/init\n           ├─PID sh -c systemctl status | head -12\n           ├─PID systemctl status\n           ├─PID head -12\n           └─system.slice\n             ├─systemd-udevd.service\n",
+     "",
+     0
+    ],
+    "systemctl status >/dev/null": [
+     "",
+     "",
+     0
+    ],
+    "systemctl list-units --no-pager | head -5": [
+     "  UNIT                                   LOAD   ACTIVE     SUB       \n  proc-sys-fs-binfmt_misc.automount      loaded active     waiting   Arbitrary Executable File Formats File System Automount Point\n  dev-vda1.device                        loaded activating tentative /dev/vda1\n  -.mount                                loaded active     mounted   /\n  dev-hugepages.mount                    loaded active     mounted   Huge Pages File System\n",
+     "",
+     0
+    ],
+    "systemctl list-unit-files --no-pager | head -5": [
+     "UNIT FILE                              STATE   \nproc-sys-fs-binfmt_misc.automount      static  \ndev-hugepages.mount                    static  \ndev-mqueue.mount                       static  \nproc-sys-fs-binfmt_misc.mount          static  \n",
+     "",
+     0
+    ],
+    "systemctl is-active sshd crond nosuch": [
+     "active\nactive\nunknown\n",
+     "",
+     0
+    ],
+    "systemctl is-enabled sshd nosuch": [
+     "enabled\n",
+     "Failed to get unit file state for nosuch.service: No such file or directory\n",
+     1
+    ],
+    "systemctl stop nosuch": [
+     "",
+     "Failed to stop nosuch.service: Unit nosuch.service not loaded.\n",
+     5
+    ],
+    "systemctl start nosuch": [
+     "",
+     "Failed to start nosuch.service: Unit not found.\n",
+     5
+    ],
+    "systemctl enable nosuch": [
+     "",
+     "Failed to execute operation: No such file or directory\n",
+     1
+    ],
+    "systemctl cat sshd": [
+     "# /usr/lib/systemd/system/sshd.service\n[Unit]\nDescription=OpenSSH server daemon\nDocumentation=man:sshd(8) man:sshd_config(5)\nAfter=network.target sshd-keygen.service\nWants=sshd-keygen.service\n\n[Service]\nType=notify\nEnvironmentFile=/etc/sysconfig/sshd\nExecStart=/usr/sbin/sshd -D $OPTIONS\nExecReload=/bin/kill -HUP $MAINPID\nKillMode=process\nRestart=on-failure\nRestartSec=42s\n\n[Install]\nWantedBy=multi-user.target\n",
+     "",
+     0
+    ],
+    "systemctl show sshd -p MainPID,ActiveState": [
+     "MainPID=PID\nActiveState=active\n",
+     "",
+     0
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "",
+     0
+    ],
+    "service sshd status": [
+     "● sshd.service - OpenSSH server daemon\n   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)\n   Active: active (running) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n     Docs: man:sshd(8)\n           man:sshd_config(5)\n Main PID: PID (sshd)\n   CGroup: /system.slice/sshd.service\n           └─PID /usr/sbin/sshd -D\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\n",
+     "Redirecting to /bin/systemctl status sshd.service\n",
+     0
+    ],
+    "chkconfig --list 2>&1 | head -3": [
+     "\nNote: This output shows SysV services only and does not include native\n      systemd services. SysV configuration data might be overridden by native\n",
+     "",
+     0
+    ],
+    "systemctl --failed": [
+     "  UNIT               LOAD   ACTIVE SUB    DESCRIPTION\n● getty@tty1.service loaded failed failed Getty on tty1\n\nLOAD   = Reflects whether the unit definition was properly loaded.\nACTIVE = The high-level unit activation state, i.e. generalization of SUB.\nSUB    = The low-level unit activation state, values depend on unit type.\n\n1 loaded units listed. Pass --all to see loaded but inactive units, too.\nTo show all installed unit files use 'systemctl list-unit-files'.\n",
+     "",
+     0
+    ],
+    "journalctl -u sshd -n 2 --no-pager": [
+     "-- Logs begin at Day YYYY-MM-DD HH:MM:SS UTC, end at Day YYYY-MM-DD HH:MM:SS UTC. --\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\n",
+     "",
+     0
+    ],
+    "journalctl --list-boots": [
+     " 0 HEX32 Day YYYY-MM-DD HH:MM:SS UTC—Day YYYY-MM-DD HH:MM:SS UTC\n",
+     "",
+     0
+    ],
+    "journalctl --disk-usage": [
+     "Archived and active journals take up NM on disk.\n",
+     "",
+     0
+    ],
+    "systemctl stop sshd; systemctl status sshd": [
+     "● sshd.service - OpenSSH server daemon\n   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:sshd(8)\n           man:sshd_config(5)\n  Process: PID ExecStart=/usr/sbin/sshd -D $OPTIONS (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/sshd.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped OpenSSH server daemon.\n",
+     "",
+     3
+    ],
+    "systemctl kill sshd; sleep 1; systemctl status sshd": [
+     "● sshd.service - OpenSSH server daemon\n   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n     Docs: man:sshd(8)\n           man:sshd_config(5)\n  Process: PID ExecStart=/usr/sbin/sshd -D $OPTIONS (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/sshd.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\n",
+     "",
+     3
+    ],
+    "service sshd stop": [
+     "",
+     "Redirecting to /bin/systemctl stop sshd.service\n",
+     0
+    ],
+    "service nosuch stop": [
+     "",
+     "Redirecting to /bin/systemctl stop nosuch.service\nFailed to stop nosuch.service: Unit nosuch.service not loaded.\n",
+     5
+    ],
+    "service sshd stop; service sshd status": [
+     "● sshd.service - OpenSSH server daemon\n   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:sshd(8)\n           man:sshd_config(5)\n  Process: PID ExecStart=/usr/sbin/sshd -D $OPTIONS (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/sshd.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped OpenSSH server daemon.\n",
+     "Redirecting to /bin/systemctl stop sshd.service\nRedirecting to /bin/systemctl status sshd.service\n",
+     3
+    ],
+    "service sshd restart; service sshd status": [
+     "● sshd.service - OpenSSH server daemon\n   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)\n   Active: active (running) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:sshd(8)\n           man:sshd_config(5)\n Main PID: PID (sshd)\n   CGroup: /system.slice/sshd.service\n           └─PID /usr/sbin/sshd -D\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\n",
+     "Redirecting to /bin/systemctl restart sshd.service\nRedirecting to /bin/systemctl status sshd.service\n",
+     0
+    ],
+    "service sshd start": [
+     "",
+     "Redirecting to /bin/systemctl start sshd.service\n",
+     0
+    ]
+   }
+  }
+ }
+}

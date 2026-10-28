@@ -1,0 +1,3053 @@
+{
+ "_source": {
+  "how": "docker run -d --network none <image> sleep, then docker exec (no terminal) of each command; the repository is one package, zzhello 1.0, in /repo (sources.list `deb [trusted=yes] file:/repo ./`), every installed package marked manual; each case is [stdout, stderr, status]; `cases`: list, show, search, policy, upgrade, full-upgrade, dist-upgrade, autoremove, autopurge, check, reinstall (apt, apt-get, apt-cache) with none, -q, -qq, -qqq; `offline`: update with the sources pointing at 127.0.0.1:9 (refused) or an unresolvable name",
+  "recorded": "2026-10-28",
+  "images": {
+   "debian_9": "debian:9 debian@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be linux/arm64 apt 1.4.11 (arm64)",
+   "debian_10": "debian:10 debian@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225 linux/arm64 apt 1.8.2.3 (arm64)",
+   "debian_12": "debian:12 debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61 linux/arm64 apt 2.6.1 (arm64)",
+   "debian_13": "debian:13 debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308 linux/arm64 apt 3.0.3 (arm64)",
+   "ubuntu_22.04": "ubuntu:22.04 ubuntu@sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b linux/arm64 apt 2.4.14 (arm64)",
+   "ubuntu_24.04": "ubuntu:24.04 ubuntu@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c linux/arm64 apt 2.8.3 (arm64)"
+  },
+  "normalised": "dpkg's `(Reading database ... N%)` progress runs are removed from stdout"
+ },
+ "images": {
+  "debian_9": {
+   "cases": {
+    "apt list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 588 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 588\nSHA256: 2ada95232cc7b383b53b461f0b8869b3fb5ec8dbadedcceca5144d620d94aa49\n\n",
+     "",
+     0
+    ],
+    "apt-cache search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -y reinstall zzhello": [
+     "",
+     "E: Invalid operation reinstall\n",
+     100
+    ],
+    "apt-get -y autopurge": [
+     "",
+     "E: Invalid operation autopurge\n",
+     100
+    ],
+    "apt-get -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6495 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -y reinstall zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nE: Invalid operation reinstall\n",
+     100
+    ],
+    "apt -y autopurge": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nE: Invalid operation autopurge\n",
+     100
+    ],
+    "apt -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6495 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 588 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 588\nSHA256: 2ada95232cc7b383b53b461f0b8869b3fb5ec8dbadedcceca5144d620d94aa49\n\n",
+     "",
+     0
+    ],
+    "apt-cache -q search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -q -y reinstall zzhello": [
+     "",
+     "E: Invalid operation reinstall\n",
+     100
+    ],
+    "apt-get -q -y autopurge": [
+     "",
+     "E: Invalid operation autopurge\n",
+     100
+    ],
+    "apt-get -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6495 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -q -y reinstall zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nE: Invalid operation reinstall\n",
+     100
+    ],
+    "apt -q -y autopurge": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nE: Invalid operation autopurge\n",
+     100
+    ],
+    "apt -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6495 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 588 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y full-upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 588\nSHA256: 2ada95232cc7b383b53b461f0b8869b3fb5ec8dbadedcceca5144d620d94aa49\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qq -y reinstall zzhello": [
+     "",
+     "E: Invalid operation reinstall\n",
+     100
+    ],
+    "apt-get -qq -y autopurge": [
+     "",
+     "E: Invalid operation autopurge\n",
+     100
+    ],
+    "apt-get -qq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 6495 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qq -y reinstall zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nE: Invalid operation reinstall\n",
+     100
+    ],
+    "apt -qq -y autopurge": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nE: Invalid operation autopurge\n",
+     100
+    ],
+    "apt -qq -y autoremove (zzhello automatic)": [
+     "The following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6495 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 588 B\nAPT-Sources: file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y full-upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qqq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 588\nSHA256: 2ada95232cc7b383b53b461f0b8869b3fb5ec8dbadedcceca5144d620d94aa49\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qqq -y reinstall zzhello": [
+     "",
+     "E: Invalid operation reinstall\n",
+     100
+    ],
+    "apt-get -qqq -y autopurge": [
+     "",
+     "E: Invalid operation autopurge\n",
+     100
+    ],
+    "apt-get -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 6495 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qqq -y reinstall zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nE: Invalid operation reinstall\n",
+     100
+    ],
+    "apt -qqq -y autopurge": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nE: Invalid operation autopurge\n",
+     100
+    ],
+    "apt -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 6495 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ]
+   },
+   "offline": {
+    "refused: apt-get update": [
+     "Err:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -q update": [
+     "Err:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt update": [
+     "Err:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -q update": [
+     "Err:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get update": [
+     "Err:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -q update": [
+     "Err:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt update": [
+     "Err:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -q update": [
+     "Err:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ]
+   }
+  },
+  "debian_10": {
+   "cases": {
+    "apt list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: 6e7539d86f060fb7570cc81e552c6b923e8fa7f071763679f233c1fee55c67bc\n\n",
+     "",
+     0
+    ],
+    "apt-cache search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 6643 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6643 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 6643 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6643 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: 6e7539d86f060fb7570cc81e552c6b923e8fa7f071763679f233c1fee55c67bc\n\n",
+     "",
+     0
+    ],
+    "apt-cache -q search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 6643 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6643 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 6643 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6643 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y full-upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: 6e7539d86f060fb7570cc81e552c6b923e8fa7f071763679f233c1fee55c67bc\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qq -y reinstall zzhello": [
+     "(Reading database ... 6643 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -qq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 6643 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qq -y reinstall zzhello": [
+     "0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6643 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -qq -y autopurge": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove (zzhello automatic)": [
+     "The following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6643 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y full-upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qqq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: 6e7539d86f060fb7570cc81e552c6b923e8fa7f071763679f233c1fee55c67bc\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qqq -y reinstall zzhello": [
+     "(Reading database ... 6643 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -qqq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 6643 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qqq -y reinstall zzhello": [
+     "(Reading database ... 6643 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -qqq -y autopurge": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 6643 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ]
+   },
+   "offline": {
+    "refused: apt-get update": [
+     "Err:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -q update": [
+     "Err:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt update": [
+     "Err:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -q update": [
+     "Err:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get update": [
+     "Err:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -q update": [
+     "Err:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt update": [
+     "Err:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -q update": [
+     "Err:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ]
+   }
+  },
+  "debian_12": {
+   "cases": {
+    "apt list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: cd905b2d5ed5fef3bff598175341c4a6fecc150c63d3d841a72f2e6092d7c3b5\n\n",
+     "",
+     0
+    ],
+    "apt-cache search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 6090 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6090 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 6090 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6090 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: cd905b2d5ed5fef3bff598175341c4a6fecc150c63d3d841a72f2e6092d7c3b5\n\n",
+     "",
+     0
+    ],
+    "apt-cache -q search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 6090 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6090 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 6090 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6090 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y full-upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: cd905b2d5ed5fef3bff598175341c4a6fecc150c63d3d841a72f2e6092d7c3b5\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qq -y reinstall zzhello": [
+     "(Reading database ... 6090 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -qq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 6090 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qq -y reinstall zzhello": [
+     "0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6090 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -qq -y autopurge": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove (zzhello automatic)": [
+     "The following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 6090 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y full-upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qqq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: cd905b2d5ed5fef3bff598175341c4a6fecc150c63d3d841a72f2e6092d7c3b5\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qqq -y reinstall zzhello": [
+     "(Reading database ... 6090 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -qqq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 6090 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qqq -y reinstall zzhello": [
+     "(Reading database ... 6090 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -qqq -y autopurge": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 6090 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ]
+   },
+   "offline": {
+    "refused: apt-get update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -q update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -q update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -q update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -q update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ]
+   }
+  },
+  "debian_13": {
+   "cases": {
+    "apt list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: \nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: 425e3f0770b506e9a0b584e9b1e4745d82cbfec7ef1967e7741c00e30fbfde4a\n\n",
+     "",
+     0
+    ],
+    "apt-cache search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 4948 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt-get -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4948 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nSummary:\n  Upgrading: 0, Installing: 0, Reinstalling: 1, Removing: 0, Not Upgrading: 0\n  Download size: 0 B / 656 B\n  Space needed: 0 B / 212 GB available\n\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 4948 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nREMOVING:\n  zzhello\n\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 1, Not Upgrading: 0\n  Space needed: 0 B / 212 GB available\n\n(Reading database ... 4948 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: \nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: 425e3f0770b506e9a0b584e9b1e4745d82cbfec7ef1967e7741c00e30fbfde4a\n\n",
+     "",
+     0
+    ],
+    "apt-cache -q search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/656 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 4948 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4948 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nSummary:\n  Upgrading: 0, Installing: 0, Reinstalling: 1, Removing: 0, Not Upgrading: 0\n  Download size: 0 B / 656 B\n  Space needed: 0 B / 212 GB available\n\nGet:1 file:/repo ./ zzhello 1.0 [656 B]\n(Reading database ... 4948 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nREMOVING:\n  zzhello\n\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 1, Not Upgrading: 0\n  Space needed: 0 B / 212 GB available\n\n(Reading database ... 4948 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y upgrade": [
+     "Summary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y full-upgrade": [
+     "Summary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove": [
+     "Summary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: \nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: 425e3f0770b506e9a0b584e9b1e4745d82cbfec7ef1967e7741c00e30fbfde4a\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qq -y reinstall zzhello": [
+     "(Reading database ... 4948 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt-get -qq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 4948 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qq -y reinstall zzhello": [
+     "Summary:\n  Upgrading: 0, Installing: 0, Reinstalling: 1, Removing: 0, Not Upgrading: 0\n  Download size: 0 B / 656 B\n  Space needed: 0 B / 212 GB available\n\n(Reading database ... 4948 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autopurge": [
+     "Summary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 0\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove (zzhello automatic)": [
+     "REMOVING:\n  zzhello\n\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 1, Not Upgrading: 0\n  Space needed: 0 B / 212 GB available\n\n(Reading database ... 4948 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 656 B\nAPT-Sources: file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y full-upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qqq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: \nFilename: ./zzhello_1.0_all.deb\nSize: 656\nSHA256: 425e3f0770b506e9a0b584e9b1e4745d82cbfec7ef1967e7741c00e30fbfde4a\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qqq -y reinstall zzhello": [
+     "(Reading database ... 4948 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 4948 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qqq -y reinstall zzhello": [
+     "(Reading database ... 4948 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autopurge": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 4948 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ]
+   },
+   "offline": {
+    "refused: apt-get update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\n  Unable to connect to 127.0.0.1:9:\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Unable to connect to 127.0.0.1:9:\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -q update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\n  Unable to connect to 127.0.0.1:9:\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Unable to connect to 127.0.0.1:9:\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Unable to connect to 127.0.0.1:9:\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Unable to connect to 127.0.0.1:9:\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\n  Unable to connect to 127.0.0.1:9:\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nWarning: Failed to fetch http://127.0.0.1:9/./InRelease  Unable to connect to 127.0.0.1:9:\nWarning: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -q update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\n  Unable to connect to 127.0.0.1:9:\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nWarning: Failed to fetch http://127.0.0.1:9/./InRelease  Unable to connect to 127.0.0.1:9:\nWarning: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nWarning: Failed to fetch http://127.0.0.1:9/./InRelease  Unable to connect to 127.0.0.1:9:\nWarning: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nWarning: Failed to fetch http://127.0.0.1:9/./InRelease  Unable to connect to 127.0.0.1:9:\nWarning: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -q update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nWarning: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nWarning: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -q update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nWarning: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nWarning: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nWarning: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nWarning: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nWarning: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nWarning: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ]
+   }
+  },
+  "ubuntu_22.04": {
+   "cases": {
+    "apt list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 464 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 464\nSHA256: 09f393964b0c2c06f0d97f05caba48df3c3d3a97756fea028e0b8dee8e04a7c2\n\n",
+     "",
+     0
+    ],
+    "apt-cache search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/464 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [464 B]\n(Reading database ... 4387 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4387 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/464 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [464 B]\n(Reading database ... 4387 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4387 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 464 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 464\nSHA256: 09f393964b0c2c06f0d97f05caba48df3c3d3a97756fea028e0b8dee8e04a7c2\n\n",
+     "",
+     0
+    ],
+    "apt-cache -q search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/464 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [464 B]\n(Reading database ... 4387 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4387 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/464 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [464 B]\n(Reading database ... 4387 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4387 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 464 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y full-upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 464\nSHA256: 09f393964b0c2c06f0d97f05caba48df3c3d3a97756fea028e0b8dee8e04a7c2\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qq -y reinstall zzhello": [
+     "(Reading database ... 4387 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -qq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 4387 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qq -y reinstall zzhello": [
+     "0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/464 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4387 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -qq -y autopurge": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove (zzhello automatic)": [
+     "The following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4387 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 464 B\nAPT-Sources: file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y full-upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qqq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: 4a5dac7bfe21c4e5a37d14def7973424\nFilename: ./zzhello_1.0_all.deb\nSize: 464\nSHA256: 09f393964b0c2c06f0d97f05caba48df3c3d3a97756fea028e0b8dee8e04a7c2\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qqq -y reinstall zzhello": [
+     "(Reading database ... 4387 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -qqq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 4387 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qqq -y reinstall zzhello": [
+     "(Reading database ... 4387 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -qqq -y autopurge": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 4387 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ]
+   },
+   "offline": {
+    "refused: apt-get update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -q update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -q update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -q update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -q update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ]
+   }
+  },
+  "ubuntu_24.04": {
+   "cases": {
+    "apt list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 466 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: \nFilename: ./zzhello_1.0_all.deb\nSize: 466\nSHA256: 042e9e87c5a38c3ff556781b6801b2049cdd77150525a3f2eb0b50d84c1367cb\n\n",
+     "",
+     0
+    ],
+    "apt-cache search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/466 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [466 B]\n(Reading database ... 4376 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4376 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/466 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [466 B]\n(Reading database ... 4376 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4376 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list zzhello": [
+     "Listing...\nzzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q list --installed zzhello": [
+     "Listing...\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 466 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q search zzhello": [
+     "Sorting...\nFull Text Search...\nzzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y full-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -q -y upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y dist-upgrade": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q check": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n",
+     "",
+     0
+    ],
+    "apt-cache -q show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: \nFilename: ./zzhello_1.0_all.deb\nSize: 466\nSHA256: 042e9e87c5a38c3ff556781b6801b2049cdd77150525a3f2eb0b50d84c1367cb\n\n",
+     "",
+     0
+    ],
+    "apt-cache -q search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -q policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/466 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [466 B]\n(Reading database ... 4376 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "",
+     0
+    ],
+    "apt-get -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4376 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -q -y reinstall zzhello": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/466 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\nGet:1 file:/repo ./ zzhello 1.0 [466 B]\n(Reading database ... 4376 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -q -y autopurge": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -q -y autoremove (zzhello automatic)": [
+     "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4376 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 466 B\nAPT-Sources: file:/repo ./ Packages\nDescription: test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y full-upgrade": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: \nFilename: ./zzhello_1.0_all.deb\nSize: 466\nSHA256: 042e9e87c5a38c3ff556781b6801b2049cdd77150525a3f2eb0b50d84c1367cb\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qq -y reinstall zzhello": [
+     "(Reading database ... 4376 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -qq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 4376 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qq -y reinstall zzhello": [
+     "0 upgraded, 0 newly installed, 1 reinstalled, 0 to remove and 0 not upgraded.\nNeed to get 0 B/466 B of archives.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4376 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -qq -y autopurge": [
+     "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qq -y autoremove (zzhello automatic)": [
+     "The following packages will be REMOVED:\n  zzhello\n0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.\nAfter this operation, 0 B of additional disk space will be used.\n(Reading database ... 4376 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list zzhello": [
+     "zzhello/stable 1.0 all\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq list --installed zzhello": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nMaintainer: Test <test@example.org>\nInstalled-Size: unknown\nDownload-Size: 466 B\nAPT-Sources: file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq search zzhello": [
+     "zzhello/stable 1.0 all\n  test package\n\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y full-upgrade": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt-get -qqq -y upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y dist-upgrade": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq check": [
+     "",
+     "",
+     0
+    ],
+    "apt-cache -qqq show zzhello": [
+     "Package: zzhello\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.org>\nDescription: test package\nDescription-md5: \nFilename: ./zzhello_1.0_all.deb\nSize: 466\nSHA256: 042e9e87c5a38c3ff556781b6801b2049cdd77150525a3f2eb0b50d84c1367cb\n\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq search zzhello": [
+     "zzhello - test package\n",
+     "",
+     0
+    ],
+    "apt-cache -qqq policy zzhello": [
+     "zzhello:\n  Installed: (none)\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 file:/repo ./ Packages\n",
+     "",
+     0
+    ],
+    "apt-get -qqq -y reinstall zzhello": [
+     "(Reading database ... 4376 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "debconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt-get -qqq -y autopurge": [
+     "",
+     "",
+     0
+    ],
+    "apt-get -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 4376 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "",
+     0
+    ],
+    "apt -qqq -y reinstall zzhello": [
+     "(Reading database ... 4376 files and directories currently installed.)\r\nPreparing to unpack /repo/./zzhello_1.0_all.deb ...\r\nUnpacking zzhello (1.0) over (1.0) ...\r\nSetting up zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\ndebconf: delaying package configuration, since apt-utils is not installed\n",
+     0
+    ],
+    "apt -qqq -y autopurge": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ],
+    "apt -qqq -y autoremove (zzhello automatic)": [
+     "(Reading database ... 4376 files and directories currently installed.)\r\nRemoving zzhello (1.0) ...\r\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n",
+     0
+    ]
+   },
+   "offline": {
+    "refused: apt-get update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -q update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\n",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -q update": [
+     "Ign:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nIgn:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "refused: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://127.0.0.1:9/./InRelease  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -q update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\n",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt-get -qqq update": [
+     "",
+     "W: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -q update": [
+     "Ign:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nIgn:1 http://deb.example.invalid/debian ./ InRelease\nErr:1 http://deb.example.invalid/debian ./ InRelease\n  Temporary failure resolving 'deb.example.invalid'\nReading package lists...\nBuilding dependency tree...\nReading state information...\nAll packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qq update": [
+     "All packages are up to date.\n",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ],
+    "unresolvable: apt -qqq update": [
+     "",
+     "\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\nW: Failed to fetch http://deb.example.invalid/debian/./InRelease  Temporary failure resolving 'deb.example.invalid'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\n",
+     0
+    ]
+   }
+  }
+ }
+}

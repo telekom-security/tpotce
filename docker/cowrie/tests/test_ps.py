@@ -93,6 +93,14 @@ class ProcpsTest(PsTest):
                          "  PID TTY          TIME CMD")
         self.assertEqual(self.ps("-e", target="capture")[0], "    PID TTY          TIME CMD")
 
+    def test_pid_width_clamps_pid_max_as_the_pid_claim_does(self):
+        for value in ("99999999999", "x"):
+            with self.subTest(pid_max=value):
+                self.assertEqual(self.ps("-e", config={("shell", "pid_max"): value}, target="capture")[0],
+                                 "    PID TTY          TIME CMD")
+        self.assertEqual(self.ps("-e", config={("shell", "pid_max"): "5"}, target="capture")[0],
+                         "  PID TTY          TIME CMD")
+
     def test_formats(self):
         self.assertEqual(self.ps("-ef", target="capture")[0], "UID          PID    PPID  C STIME TTY          TIME CMD")
         self.assertEqual(self.ps("x", target="capture")[0], "    PID TTY      STAT   TIME COMMAND")
@@ -691,6 +699,261 @@ class PipelineWordsTest(PsTest):
             with self.subTest(text=text):
                 stage = Command(f"grep {text}", [(0, 4), (5, 5 + len(text))])
                 self.assertEqual(namespace["tpot_stage_words"]([stage]), [["grep", word]])
+
+
+def ps_pids(text):
+    """{PID: COMMAND} of the lines of ps aux."""
+    rows = [line.split(None, 10) for line in text.splitlines()[1:]]
+    return {int(row[1]): row[10] for row in rows}
+
+
+class TreeFs:
+    """Cowrie's HoneyPotFilesystem of a session as tpot_proc_session sees it: the tree of the persona (shared by the
+    sessions until one changes it), the files generated when read, and the emulated /proc/meminfo and cpuinfo."""
+
+    def __init__(self, root):
+        from tests.helpers import tree
+        self.tree = tree
+        self.fs = root
+        self.generated_files = {}
+        # the nodes the connection made (Cowrie's limit of new files counts them)
+        self.newcount = 0
+
+    def exists(self, path):
+        return self.tree.resolve(self.fs, path.lstrip("/")) is not None
+
+    def file_contents(self, path):
+        if path in self.generated_files:
+            return self.generated_files[path]()
+        if path == "/proc/meminfo":
+            return MEMINFO
+        if path == "/proc/cpuinfo":
+            return CPUINFO
+        node = self.tree.resolve(self.fs, path.lstrip("/"))
+        if node is None or not isinstance(node[self.tree.A_CONTENTS], bytes):
+            raise FileNotFoundError(path)
+        return node[self.tree.A_CONTENTS]
+
+
+class SessionPidTest(PsTest):
+    """One PID counter for all sessions of a Cowrie process (TPOT_PIDS of the protocol class): the first takes the
+    PIDs of the persona's list, a later one PIDs after the newest any session took; ps, top, $$ and /proc agree."""
+
+    def test_two_sessions_never_share_a_pid(self):
+        first = Session(self, target="capture")
+        one = ps_pids(first.run("Command_tpot_ps", "aux").out)
+        self.assertEqual([pid for pid, command in one.items() if command == "-bash"], [3089])
+        first.clock.now += 300
+        second = first.another()
+        two = ps_pids(second.run("Command_tpot_ps", "aux").out)
+        shell = [pid for pid, command in two.items() if command == "-bash"]
+        self.assertEqual(len(shell), 1)
+        own = [pid for pid, command in two.items() if command.startswith("sshd: ubuntu")] + shell
+        # the second session's sshd, shell and ps come after every PID the first session showed
+        self.assertGreater(min(own), max(one))
+        self.assertEqual(second.protocol.tpot_login_pid, shell[0])
+        self.assertNotEqual(second.protocol.tpot_session_pid, first.protocol.tpot_session_pid)
+        # the processes of the persona's list keep their PIDs
+        self.assertEqual({p: c for p, c in two.items() if p < 3000}, {p: c for p, c in one.items() if p < 3000})
+        # top of the second session shows its shell too
+        top = second.run("Command_top", "-b", "-n1", "-p", str(shell[0])).out
+        self.assertRegex(top, rf"\n +{shell[0]} ubuntu .* bash\n")
+        # a third session again after the second
+        third = second.another()
+        three = ps_pids(third.run("Command_tpot_ps", "aux").out)
+        self.assertGreater(min(p for p, c in three.items() if c == "-bash"), max(two))
+
+    def test_dollar_dollar_of_a_later_session(self):
+        source = (self.root / "src/cowrie/shell/bashparse.py").read_text()
+        import os
+        namespace = {"os": os}
+        exec(compile(source.split("# >>> tpot shell pid")[1].split("# <<< tpot shell pid")[0], "<pid>", "exec"),
+             namespace)
+        first = Session(self, target="capture")
+        first.run("Command_tpot_ps", "aux")
+        second = first.another()
+        two = ps_pids(second.run("Command_tpot_ps", "aux").out)
+
+        class Shell:
+            protocol = second.protocol
+        self.assertEqual(namespace["tpot_shell_pid"](Shell()), str(next(p for p, c in two.items() if c == "-bash")))
+
+    def test_an_exec_channel_without_a_pty_has_no_terminal(self):
+        """ssh host 'ps aux': sshd names the session user@notty, the shell runs the command (bash -c), nothing is on
+        a terminal; with a pty (ssh -t) the session has pts/0."""
+        session = Session(self, target="capture", exec_mode=True, window=None)
+        lines = session.run("Command_tpot_ps", "aux").out.splitlines()
+        self.assertTrue(any(line.endswith(" sshd: ubuntu@notty") for line in lines), lines)
+        self.assertFalse(any(" pts/0 " in line for line in lines), lines)
+        shell = next(line for line in lines if line.endswith(" bash -c top"))
+        self.assertRegex(shell, r"^ubuntu +\d+ .* \? +Ss ")
+        self.assertRegex(lines[-1], r"^ubuntu +\d+ .* \? +R +\S+ +\S+ ps aux$")
+        self.assertNotIn("-bash", " ".join(lines))
+        # no utmp entry: w and who name no user
+        w = session.run("Command_w").out.splitlines()
+        self.assertRegex(w[0], r" up .*,  0 users,  load average: ")
+        self.assertEqual(w[1:], ["USER     TTY      FROM              LOGIN@   IDLE   JCPU   PCPU WHAT"])
+        self.assertEqual(session.run("Command_who").out, "")
+        pty = Session(self, target="capture", exec_mode=True)
+        self.assertIn(",  1 user,  ", pty.run("Command_w").out)
+        self.assertRegex(pty.run("Command_who").out, r"^ubuntu   pts/0 ")
+        lines = Session(self, target="capture", exec_mode=True).run("Command_tpot_ps", "aux").out.splitlines()
+        self.assertTrue(any(line.endswith(" sshd: ubuntu@pts/0") for line in lines), lines)
+        self.assertTrue(any(line.endswith(" -bash") and " pts/0 " in line for line in lines), lines)
+
+
+class ProcSessionTest(PsTest):
+    """/proc of a session (tpot_proc_session): the persona's tree has a folder per process of its list and kernel
+    thread; the session adds those of its sshd and moves its shell's to the PID of its own."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import json as json_module
+        import tempfile as tempfile_module
+        from tests.helpers import base_tree, tree
+        from tpot_personas import catalog
+        from tpot_personas.identity import draw
+        from tpot_personas.render import render
+        cls.tree = tree
+        out = Path(tempfile_module.mkdtemp()) / "debian"
+        persona = catalog.by_id("debian-bookworm")
+        ident = draw(persona, 1, 1_790_000_000)
+        render(persona, ident, base_tree(), out, runtime_dir=out, keys_dir=out / "keys")
+        cls.out = out
+        cls.base_tree = tree.load_pickle(out / "fs.pickle")
+        cls.processes = json_module.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
+        cls.config = {("shell", "kernel_thread_list"): str(out / "kernel_threads.json"),
+                      ("shell", "kernel_threads"): str(len(json_module.loads((out / "kernel_threads.json").read_text()))),
+                      ("shell", "ssh_version"): ident.release.ssh_version}
+
+    def session(self, **kwargs):
+        made = Session(self, processes=self.processes, config=self.config, target="capture", username="root",
+                       **kwargs)
+        made.protocol.fs = TreeFs(self.base_tree)
+        made.protocol.user.uid = 0
+        return made
+
+    def listed_shell(self):
+        return [p["PID"] for p in self.processes if str(p.get("TTY") or "").startswith("pts/")][-1]
+
+    def proc_pids(self, fs):
+        proc = self.tree.find_dir(fs.fs, "proc")
+        return {int(c[0]) for c in proc[self.tree.A_CONTENTS] if str(c[0]).isdigit()}
+
+    def test_ls_proc_counts_the_pids_of_ps(self):
+        first = self.session()
+        first.base["tpot_proc_session"](first.protocol)
+        listed = ps_pids(first.run("Command_tpot_ps", "aux").out)
+        # every process ps shows but ps itself, which is gone when ls lists /proc
+        self.assertEqual(self.proc_pids(first.protocol.fs), set(listed) - {max(listed)})
+        second = first.another()
+        second.protocol.fs = TreeFs(self.base_tree)
+        second.base["tpot_proc_session"](second.protocol)
+        listed = ps_pids(second.run("Command_tpot_ps", "aux").out)
+        self.assertEqual(self.proc_pids(second.protocol.fs), set(listed) - {max(listed)})
+        # the tree of the persona stays as it is for the next session
+        self.assertEqual(self.proc_pids(TreeFs(self.base_tree)),
+                         {p["PID"] for p in self.processes} | {p["PID"] for p in json.loads(
+                             (self.out / "kernel_threads.json").read_text())})
+
+    def test_the_shell_and_the_session_in_proc(self):
+        first = self.session()
+        first.run("Command_tpot_ps", "aux")
+        second = first.another()
+        second.protocol.fs = TreeFs(self.base_tree)
+        second.base["tpot_proc_session"](second.protocol)
+        fs, tree = second.protocol.fs, self.tree
+        shell, pid = second.protocol.tpot_login_pid, second.protocol.tpot_session_pid
+        self.assertEqual(tree.node_get(tree.find_node(fs.fs, "proc/self"), tree.A_TARGET), str(shell))
+        self.assertEqual(tree.node_get(tree.find_node(fs.fs, "proc/thread-self"), tree.A_TARGET),
+                         f"{shell}/task/{shell}")
+        self.assertEqual(tree.node_get(tree.find_node(fs.fs, f"proc/{shell}/exe"), tree.A_TARGET), "/usr/bin/bash")
+        status = fs.file_contents(f"/proc/{shell}/status").decode()
+        self.assertIn(f"\nPid:\t{shell}\n", status)
+        self.assertIn(f"\nPPid:\t{pid}\n", status)
+        stat = fs.file_contents(f"/proc/{shell}/stat").decode().split()
+        self.assertEqual(stat[:6], [str(shell), "(bash)", "S", str(pid), str(shell), str(shell)])
+        # sshd of the session (OpenSSH 9.2 of bookworm: sshd: root@pts/0, root's own, no monitor)
+        self.assertEqual(fs.file_contents(f"/proc/{pid}/cmdline"), b"sshd: root@pts/0\0")
+        self.assertEqual(fs.file_contents(f"/proc/{pid}/comm"), b"sshd\n")
+        self.assertEqual(tree.node_get(tree.find_node(fs.fs, f"proc/{pid}/exe"), tree.A_TARGET), "/usr/sbin/sshd")
+        # the CPU time of a daemon's stat is the one ps counts (utime + stime in clock ticks)
+        listed = self.processes[1]
+        ticks = fs.file_contents(f"/proc/{listed['PID']}/stat").decode().split()
+        self.assertGreater(int(ticks[13]) + int(ticks[14]), 0)
+
+    def test_an_exec_channel_has_pipes(self):
+        session = self.session(exec_mode=True, window=None)
+        session.base["tpot_proc_session"](session.protocol)
+        fs, tree = session.protocol.fs, self.tree
+        shell = session.protocol.tpot_login_pid
+        for number in range(3):
+            target = tree.node_get(tree.find_node(fs.fs, f"proc/{shell}/fd/{number}"), tree.A_TARGET)
+            self.assertRegex(target, r"^pipe:\[\d+\]$")
+        self.assertEqual(fs.file_contents(f"/proc/{shell}/cmdline"), b"bash\0-c\0top\0")
+        self.assertEqual(fs.file_contents(f"/proc/{session.protocol.tpot_session_pid}/cmdline"),
+                         b"sshd: root@notty\0")
+        self.assertEqual(fs.file_contents(f"/proc/{shell}/stat").decode().split()[6:8], ["0", "-1"])
+
+    def test_the_channels_of_one_connection(self):
+        """The channels of one SSH connection share its file system (avatar.server.fs): each gets a view of its own
+        whose /proc has its processes; none takes the folder of another channel's shell or a template away."""
+        first = self.session()
+        shared = first.protocol.fs
+        second = first.another()
+        second.protocol.fs = shared
+        second.protocol.user.uid = 0
+        for made in (first, second):
+            made.base["tpot_proc_session"](made.protocol)
+        for made in (first, second):
+            fs, tree = made.protocol.fs, self.tree
+            self.assertIsNot(fs, shared)
+            shell = made.protocol.tpot_login_pid
+            self.assertEqual(tree.node_get(tree.find_node(fs.fs, "proc/self"), tree.A_TARGET), str(shell))
+            self.assertEqual(tree.node_get(tree.resolve(fs.fs, "proc/self"), tree.A_TYPE), tree.T_DIR)
+            self.assertEqual(tree.node_get(tree.resolve(fs.fs, "proc/thread-self"), tree.A_TYPE), tree.T_DIR)
+            listed = ps_pids(made.run("Command_tpot_ps", "aux").out)
+            self.assertEqual(self.proc_pids(fs), set(listed) - {max(listed)})
+        self.assertNotEqual(first.protocol.tpot_login_pid, second.protocol.tpot_login_pid)
+        # the connection's own tree keeps the folders of the persona
+        self.assertEqual(self.proc_pids(shared), self.proc_pids(TreeFs(self.base_tree)))
+        # the new nodes of every channel count against the one limit of the connection
+        first.protocol.fs.newcount += 5
+        second.protocol.fs.newcount += 2
+        self.assertEqual((shared.newcount, first.protocol.fs.newcount, second.protocol.fs.newcount), (7, 7, 7))
+        self.assertIsInstance(first.protocol.fs, TreeFs)
+        # a later channel takes the shell's folder of the persona's tree as before
+        third = second.another()
+        third.protocol.fs = shared
+        third.base["tpot_proc_session"](third.protocol)
+        self.assertIn(third.protocol.tpot_login_pid, self.proc_pids(third.protocol.fs))
+
+    def test_the_shell_belongs_to_the_session_user(self):
+        """The shell's folder and its status are those of the session's user (root, or another one than the
+        persona's): ps and /proc/$$ agree."""
+        for username, uid, groups in (("root", 0, "0 "), ("admin", 1001, "1001 "), ("debian", 1000, None)):
+            with self.subTest(user=username):
+                made = Session(self, processes=self.processes, config=self.config, target="capture",
+                               username=username)
+                made.protocol.fs = TreeFs(self.base_tree)
+                made.protocol.user.uid = made.protocol.user.gid = uid
+                made.protocol.user.username = username
+                made.base["tpot_proc_session"](made.protocol)
+                fs, tree, shell = made.protocol.fs, self.tree, made.protocol.tpot_login_pid
+                folder = tree.find_dir(fs.fs, f"proc/{shell}")
+                self.assertEqual((folder[tree.A_UID], folder[tree.A_GID]), (uid, uid))
+                self.assertEqual({(n[tree.A_UID], n[tree.A_GID]) for _, n in tree.iter_nodes(folder)}, {(uid, uid)})
+                status = fs.file_contents(f"/proc/{shell}/status").decode()
+                self.assertIn(f"\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n", status)
+                self.assertIn(f"\nGid:\t{uid}\t{uid}\t{uid}\t{uid}\n", status)
+                if groups is None:
+                    # the persona's own user keeps the groups of its account (render: initgroups)
+                    groups = next(line for line in TreeFs(self.base_tree).file_contents(
+                        f"/proc/{self.listed_shell()}/status").decode().splitlines()
+                        if line.startswith("Groups:\t")).split("\t", 1)[1]
+                    self.assertNotEqual(groups.strip(), "1000")
+                self.assertIn(f"\nGroups:\t{groups}\n", status)
 
 
 if __name__ == "__main__":

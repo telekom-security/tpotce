@@ -187,11 +187,11 @@ class LsTest(unittest.TestCase):
                 cfg = configparser.ConfigParser(interpolation=None)
                 cfg.read_string(render.render_cfg(persona, draw(persona, 0), Path("/tmp/r"), Path("/tmp/k")))
                 self.assertEqual(cfg.get("shell", "ls_style", fallback="gnu"),
-                                 "busybox" if persona.family in system.ASH_FAMILIES else "gnu")
+                                 "busybox" if persona.family in system.BUSYBOX_FAMILIES else "gnu")
                 # QNAP's busybox-1.24.1 is built with CONFIG_DESKTOP (its .config), the other BusyBox builds are not
                 #   (1.14.1 of the DIR-859 has no total line)
                 self.assertEqual(cfg.get("shell", "ls_total", fallback="no"), "yes" if persona.family == "qnap" else "no")
-                self.assertIs(system.busybox_desktop(persona), (persona.family == "qnap") if persona.family in system.ASH_FAMILIES else None)
+                self.assertIs(system.busybox_desktop(persona), (persona.family == "qnap") if persona.family in system.BUSYBOX_FAMILIES else None)
 
     def test_upstream_followed_the_link(self):
         out, _ = self.ls(["-l", "/bin/sh"], source=self.upstream)

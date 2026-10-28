@@ -1,0 +1,1211 @@
+{
+ "_source": "point 29 cases (group point29) of w2/gnu/shell_tools.json: w2/gnu shell_tools, recorded 2026-10-21 with scripts/rec.py: xargs, date, uniq, shell arithmetic, point 29 shell details (brief D). One container per image, a fresh /tmp/w per case (not recorded), `docker exec ... sh -c CMD` as uid 0, stdout and stderr apart, locale as in `locale`. Normalised only: date output of the clock (EPOCH, DATE, TIME, DATE_TIME, WEEKDAY MONTH, YEAR, NANOS9, EPOCHNANOS19, YYYYMMDDHHMMSS, DATETTIME+00:00 (the offset kept), DDD, DD Mon YYYY HH:MM:SS +0000) and `date --help` / `uniq --help` cut to their first 3 lines per stream; the PID of bash -i's `cannot set terminal process group (PID)`; times in `history` output (EPOCH, DATE TIME). Docker host linux/arm64, Docker 29.8.2. Fix round 1 of task 3.9 (2026-10-28): image debian_9 (bash 4.4.12, the version of the EdgeOS persona's Debian base) with the two history cases of HISTTIMEFORMAT, same docker exec sh -c form, docker run --rm --network none.",
+ "images": {
+  "busybox_1.25.1": {
+   "image": "busybox:1.25",
+   "digest": "busybox@sha256:29f5d56d12684887bdfa50dcd29fc31eea4aaf4ad3bec43daf19026a7ce69912",
+   "platform": "linux/amd64",
+   "cases": {
+    "sh -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "sh: ./nx: Permission denied\n",
+     0
+    ],
+    "sh -c './nosuch; echo $?'": [
+     "127\n",
+     "sh: ./nosuch: not found\n",
+     0
+    ],
+    "sh -c 'nosuch; echo $?'": [
+     "127\n",
+     "sh: nosuch: not found\n",
+     0
+    ],
+    "sh -c '/etc; echo $?'": [
+     "126\n",
+     "sh: /etc: Permission denied\n",
+     0
+    ],
+    "sh -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.33.1": {
+   "image": "busybox:1.33",
+   "digest": "busybox@sha256:f7ca5a32c10d51aeda3b4d01c61c6061f497893d7f6628b92f822f7117182a57",
+   "platform": "linux/arm64",
+   "cases": {
+    "sh -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "sh: ./nx: Permission denied\n",
+     0
+    ],
+    "sh -c './nosuch; echo $?'": [
+     "127\n",
+     "sh: ./nosuch: not found\n",
+     0
+    ],
+    "sh -c 'nosuch; echo $?'": [
+     "127\n",
+     "sh: nosuch: not found\n",
+     0
+    ],
+    "sh -c '/etc; echo $?'": [
+     "126\n",
+     "sh: /etc: Permission denied\n",
+     0
+    ],
+    "sh -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.36.1-musl": {
+   "image": "busybox:1.36.1-musl",
+   "digest": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "platform": "linux/arm64",
+   "cases": {
+    "sh -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "sh: ./nx: Permission denied\n",
+     0
+    ],
+    "sh -c './nosuch; echo $?'": [
+     "127\n",
+     "sh: ./nosuch: not found\n",
+     0
+    ],
+    "sh -c 'nosuch; echo $?'": [
+     "127\n",
+     "sh: nosuch: not found\n",
+     0
+    ],
+    "sh -c '/etc; echo $?'": [
+     "126\n",
+     "sh: /etc: Permission denied\n",
+     0
+    ],
+    "sh -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ]
+   }
+  },
+  "centos_7": {
+   "image": "centos:7",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "platform": "linux/arm64",
+   "cases": {
+    "sh -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "sh: ./nx: Permission denied\n",
+     0
+    ],
+    "sh -c './nosuch; echo $?'": [
+     "127\n",
+     "sh: ./nosuch: No such file or directory\n",
+     0
+    ],
+    "sh -c 'nosuch; echo $?'": [
+     "127\n",
+     "sh: nosuch: command not found\n",
+     0
+    ],
+    "sh -c '/etc; echo $?'": [
+     "126\n",
+     "sh: /etc: Is a directory\n",
+     0
+    ],
+    "sh -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "bash: ./nx: Permission denied\n",
+     0
+    ],
+    "bash -c './nosuch; echo $?'": [
+     "127\n",
+     "bash: ./nosuch: No such file or directory\n",
+     0
+    ],
+    "bash -c 'nosuch; echo $?'": [
+     "127\n",
+     "bash: nosuch: command not found\n",
+     0
+    ],
+    "bash -c '/etc; echo $?'": [
+     "126\n",
+     "bash: /etc: Is a directory\n",
+     0
+    ],
+    "bash -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c 'echo ${#HISTTIMEFORMAT}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "bash -ic 'echo $HISTFILE'": [
+     "/root/.bash_history\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "0\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "    1  %Q foo\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%F %T \"; history -s foo; history 1'": [
+     "    1  DATE TIME foo\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%s \"; history -s foo; history 1'": [
+     "    1  EPOCH foo\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history -s foo; history 1'": [
+     "    1  %Q foo\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 1)) \"; history -s foo; history 1 | wc -c'": [
+     "22\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 5)) \"; history -s foo; history 1 | wc -c'": [
+     "62\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 11)) \"; history -s foo; history 1 | wc -c'": [
+     "122\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 100)) \"; history -s foo; history 1 | wc -c'": [
+     "112\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 120)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 127)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 128)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 130)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 300)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ]
+   }
+  },
+  "debian_12": {
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "platform": "linux/arm64",
+   "cases": {
+    "sh -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "sh: 1: ./nx: Permission denied\n",
+     0
+    ],
+    "sh -c './nosuch; echo $?'": [
+     "127\n",
+     "sh: 1: ./nosuch: not found\n",
+     0
+    ],
+    "sh -c 'nosuch; echo $?'": [
+     "127\n",
+     "sh: 1: nosuch: not found\n",
+     0
+    ],
+    "sh -c '/etc; echo $?'": [
+     "126\n",
+     "sh: 1: /etc: Permission denied\n",
+     0
+    ],
+    "sh -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "bash: line 1: ./nx: Permission denied\n",
+     0
+    ],
+    "bash -c './nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: ./nosuch: No such file or directory\n",
+     0
+    ],
+    "bash -c 'nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: nosuch: command not found\n",
+     0
+    ],
+    "bash -c '/etc; echo $?'": [
+     "126\n",
+     "bash: line 1: /etc: Is a directory\n",
+     0
+    ],
+    "bash -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c 'echo ${#HISTTIMEFORMAT}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "bash -ic 'echo $HISTFILE'": [
+     "/root/.bash_history\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "0\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "    1  ??foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%F %T \"; history -s foo; history 1'": [
+     "    1  DATE TIME foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%s \"; history -s foo; history 1'": [
+     "    1  EPOCH foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history -s foo; history 1'": [
+     "    1  %Q foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 1)) \"; history -s foo; history 1 | wc -c'": [
+     "22\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 5)) \"; history -s foo; history 1 | wc -c'": [
+     "62\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 11)) \"; history -s foo; history 1 | wc -c'": [
+     "122\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 100)) \"; history -s foo; history 1 | wc -c'": [
+     "112\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 120)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 127)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 128)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 130)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 300)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ]
+   }
+  },
+  "debian_13": {
+   "image": "debian:13",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "platform": "linux/arm64",
+   "cases": {
+    "sh -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "sh: 1: ./nx: Permission denied\n",
+     0
+    ],
+    "sh -c './nosuch; echo $?'": [
+     "127\n",
+     "sh: 1: ./nosuch: not found\n",
+     0
+    ],
+    "sh -c 'nosuch; echo $?'": [
+     "127\n",
+     "sh: 1: nosuch: not found\n",
+     0
+    ],
+    "sh -c '/etc; echo $?'": [
+     "126\n",
+     "sh: 1: /etc: Permission denied\n",
+     0
+    ],
+    "sh -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "bash: line 1: ./nx: Permission denied\n",
+     0
+    ],
+    "bash -c './nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: ./nosuch: No such file or directory\n",
+     0
+    ],
+    "bash -c 'nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: nosuch: command not found\n",
+     0
+    ],
+    "bash -c '/etc; echo $?'": [
+     "126\n",
+     "bash: line 1: /etc: Is a directory\n",
+     0
+    ],
+    "bash -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c 'echo ${#HISTTIMEFORMAT}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "bash -ic 'echo $HISTFILE'": [
+     "/root/.bash_history\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "0\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "    1  ??foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%F %T \"; history -s foo; history 1'": [
+     "    1  DATE TIME foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%s \"; history -s foo; history 1'": [
+     "    1  EPOCH foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history -s foo; history 1'": [
+     "    1  %Q foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 1)) \"; history -s foo; history 1 | wc -c'": [
+     "22\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 5)) \"; history -s foo; history 1 | wc -c'": [
+     "62\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 11)) \"; history -s foo; history 1 | wc -c'": [
+     "122\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 100)) \"; history -s foo; history 1 | wc -c'": [
+     "112\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 120)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 127)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 128)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 130)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 300)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ]
+   }
+  },
+  "rockylinux_9": {
+   "image": "rockylinux:9",
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "platform": "linux/arm64",
+   "cases": {
+    "sh -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "sh: line 1: ./nx: Permission denied\n",
+     0
+    ],
+    "sh -c './nosuch; echo $?'": [
+     "127\n",
+     "sh: line 1: ./nosuch: No such file or directory\n",
+     0
+    ],
+    "sh -c 'nosuch; echo $?'": [
+     "127\n",
+     "sh: line 1: nosuch: command not found\n",
+     0
+    ],
+    "sh -c '/etc; echo $?'": [
+     "126\n",
+     "sh: line 1: /etc: Is a directory\n",
+     0
+    ],
+    "sh -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "bash: line 1: ./nx: Permission denied\n",
+     0
+    ],
+    "bash -c './nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: ./nosuch: No such file or directory\n",
+     0
+    ],
+    "bash -c 'nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: nosuch: command not found\n",
+     0
+    ],
+    "bash -c '/etc; echo $?'": [
+     "126\n",
+     "bash: line 1: /etc: Is a directory\n",
+     0
+    ],
+    "bash -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c 'echo ${#HISTTIMEFORMAT}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "bash -ic 'echo $HISTFILE'": [
+     "/root/.bash_history\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "0\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "    1  ??foo\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%F %T \"; history -s foo; history 1'": [
+     "    1  DATE TIME foo\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%s \"; history -s foo; history 1'": [
+     "    1  EPOCH foo\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history -s foo; history 1'": [
+     "    1  %Q foo\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 1)) \"; history -s foo; history 1 | wc -c'": [
+     "22\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 5)) \"; history -s foo; history 1 | wc -c'": [
+     "62\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 11)) \"; history -s foo; history 1 | wc -c'": [
+     "122\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 100)) \"; history -s foo; history 1 | wc -c'": [
+     "112\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 120)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 127)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 128)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 130)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 300)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ]
+   }
+  },
+  "ubuntu_22.04": {
+   "image": "ubuntu:22.04",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "platform": "linux/arm64",
+   "cases": {
+    "sh -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "sh: 1: ./nx: Permission denied\n",
+     0
+    ],
+    "sh -c './nosuch; echo $?'": [
+     "127\n",
+     "sh: 1: ./nosuch: not found\n",
+     0
+    ],
+    "sh -c 'nosuch; echo $?'": [
+     "127\n",
+     "sh: 1: nosuch: not found\n",
+     0
+    ],
+    "sh -c '/etc; echo $?'": [
+     "126\n",
+     "sh: 1: /etc: Permission denied\n",
+     0
+    ],
+    "sh -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "bash: line 1: ./nx: Permission denied\n",
+     0
+    ],
+    "bash -c './nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: ./nosuch: No such file or directory\n",
+     0
+    ],
+    "bash -c 'nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: nosuch: command not found\n",
+     0
+    ],
+    "bash -c '/etc; echo $?'": [
+     "126\n",
+     "bash: line 1: /etc: Is a directory\n",
+     0
+    ],
+    "bash -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c 'echo ${#HISTTIMEFORMAT}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "bash -ic 'echo $HISTFILE'": [
+     "/root/.bash_history\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "0\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "    1  ??foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%F %T \"; history -s foo; history 1'": [
+     "    1  DATE TIME foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%s \"; history -s foo; history 1'": [
+     "    1  EPOCH foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history -s foo; history 1'": [
+     "    1  %Q foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 1)) \"; history -s foo; history 1 | wc -c'": [
+     "22\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 5)) \"; history -s foo; history 1 | wc -c'": [
+     "62\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 11)) \"; history -s foo; history 1 | wc -c'": [
+     "122\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 100)) \"; history -s foo; history 1 | wc -c'": [
+     "112\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 120)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 127)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 128)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 130)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 300)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ]
+   }
+  },
+  "ubuntu_24.04": {
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "platform": "linux/arm64",
+   "cases": {
+    "sh -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "sh: 1: ./nx: Permission denied\n",
+     0
+    ],
+    "sh -c './nosuch; echo $?'": [
+     "127\n",
+     "sh: 1: ./nosuch: not found\n",
+     0
+    ],
+    "sh -c 'nosuch; echo $?'": [
+     "127\n",
+     "sh: 1: nosuch: not found\n",
+     0
+    ],
+    "sh -c '/etc; echo $?'": [
+     "126\n",
+     "sh: 1: /etc: Permission denied\n",
+     0
+    ],
+    "sh -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c ': > nx; chmod 644 nx; ./nx; echo $?'": [
+     "126\n",
+     "bash: line 1: ./nx: Permission denied\n",
+     0
+    ],
+    "bash -c './nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: ./nosuch: No such file or directory\n",
+     0
+    ],
+    "bash -c 'nosuch; echo $?'": [
+     "127\n",
+     "bash: line 1: nosuch: command not found\n",
+     0
+    ],
+    "bash -c '/etc; echo $?'": [
+     "126\n",
+     "bash: line 1: /etc: Is a directory\n",
+     0
+    ],
+    "bash -c 'echo \"$HISTFILE\"'": [
+     "\n",
+     "",
+     0
+    ],
+    "bash -c 'echo ${#HISTTIMEFORMAT}'": [
+     "0\n",
+     "",
+     0
+    ],
+    "bash -ic 'echo $HISTFILE'": [
+     "/root/.bash_history\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "0\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "    1  ??foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history 1 | wc -c'": [
+     "13\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%F %T \"; history -s foo; history 1'": [
+     "    1  DATE TIME foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%s \"; history -s foo; history 1'": [
+     "    1  EPOCH foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history -s foo; history 1'": [
+     "    1  %Q foo\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 1)) \"; history -s foo; history 1 | wc -c'": [
+     "22\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 5)) \"; history -s foo; history 1 | wc -c'": [
+     "62\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 11)) \"; history -s foo; history 1 | wc -c'": [
+     "122\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 12)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 13)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 14)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"%%s%.0s\" $(seq 70)) \"; history -s foo; history 1 | wc -c'": [
+     "131\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 100)) \"; history -s foo; history 1 | wc -c'": [
+     "112\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 120)) \"; history -s foo; history 1 | wc -c'": [
+     "132\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 127)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 128)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 130)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"$(printf \"x%.0s\" $(seq 300)) \"; history -s foo; history 1 | wc -c'": [
+     "138\n",
+     "bash: cannot set terminal process group (PID): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ]
+   }
+  },
+  "debian_9": {
+   "image": "debian:9",
+   "digest": "debian@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+   "platform": "linux/arm64",
+   "bash": "GNU bash, version 4.4.12(1)-release (aarch64-unknown-linux-gnu)",
+   "cases": {
+    "bash -ic 'history -s foo; HISTTIMEFORMAT=\"%Q \"; history 1'": [
+     "    1  ??foo\n",
+     "bash: cannot set terminal process group (1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ],
+    "bash -ic 'HISTTIMEFORMAT=\"%Q \"; history -s foo; history 1'": [
+     "    1  %Q foo\n",
+     "bash: cannot set terminal process group (1): Inappropriate ioctl for device\nbash: no job control in this shell\n",
+     0
+    ]
+   }
+  }
+ }
+}

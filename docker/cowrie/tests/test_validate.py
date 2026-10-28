@@ -5,10 +5,11 @@ import json
 import re
 import time
 import unittest
+from unittest import mock
 
 from tests.helpers import base_tree
 from tests.test_render import NOW, render_ident, render_one
-from tpot_personas import PersonaError, catalog, tree, validate
+from tpot_personas import PersonaError, catalog, system, tree, validate
 from tpot_personas.common import ps_start
 from tpot_personas.identity import DAY, draw, restore, stale_at, to_state
 from tpot_personas.render import render
@@ -121,6 +122,16 @@ class ValidateNegativeTest(unittest.TestCase):
         self.edit("cowrie.cfg", "\nload_base = ", "\nload_base = x")
         self.assertIn("load_base is no number", self.problems())
 
+    def test_pid_max_and_history_keys_of_the_persona(self):
+        self.edit("cowrie.cfg", "\npid_max = 4194304\n", "\npid_max = 32768\n")
+        self.assertIn("top: pid_max is not 4194304", self.problems())
+        self.edit("cowrie.cfg", "\nhistory_file_size = 2000\n", "\nhistory_file_size = 7\n")
+        self.assertIn("cfg history_file_size: '7', expected '2000'", self.problems())
+        self.edit("cowrie.cfg", "\noperating_system = ", "\noperating_system = X")
+        self.assertIn("cfg operating_system: 'X", self.problems())
+        self.edit("cowrie.cfg", "\nhistory_export = ", "\nhistory_time_format = \"%F \"\nhistory_export = ")
+        self.assertIn("cfg history_time_format: ", self.problems())
+
     def test_hostname_mismatch(self):
         (self.out / "honeyfs/etc/hostname").write_text("other\n")
         self.assertIn("hostname", self.problems())
@@ -162,6 +173,11 @@ class ValidateNegativeTest(unittest.TestCase):
             cfg.write(handle)
         self.assertIn("ssh_version", self.problems())
 
+    def test_ext_info_s_of_another_server(self):
+        self.assertIn("ext_info_s = true", (self.out / "cowrie.cfg").read_text())
+        self.edit("cowrie.cfg", "ext_info_s = true", "ext_info_s = false")
+        self.assertIn("ext_info_s false differs from", self.problems())
+
     def test_unsupported_cipher(self):
         self.edit("cowrie.cfg", "aes128-ctr", "blowfish-cbc")
         self.assertIn("cipher", self.problems())
@@ -180,6 +196,24 @@ class ValidateNegativeTest(unittest.TestCase):
         data["command"]["ps"][1]["PID"] = 1
         path.write_text(json.dumps(data))
         self.assertIn("PID", self.problems())
+
+    def test_proc_lists_what_ps_lists(self):
+        """Every process of ps has its folder in /proc, and /proc names no other process."""
+        ps = json.loads((self.out / "cmdoutput.json").read_text())["command"]["ps"]
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.remove_node(fs, f"proc/{ps[1]['PID']}")
+        tree.ensure_dir(fs, "proc/31337", mode=0o555, ctime=self.ident.booted_at)
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        found = self.problems()
+        self.assertIn(f"proc: no /proc/{ps[1]['PID']} for {ps[1]['COMMAND']!r}", found)
+        self.assertIn("proc: /proc/31337 is no process of ps", found)
+
+    def test_proc_comm_of_another_process(self):
+        ps = json.loads((self.out / "cmdoutput.json").read_text())["command"]["ps"]
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.node_set(tree.find_node(fs, f"proc/{ps[1]['PID']}/comm"), tree.A_CONTENTS, b"python3\n")
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn(f"proc: /proc/{ps[1]['PID']}/comm is not the name ps shows", self.problems())
 
     def test_log_date_outside_lifetime(self):
         self.edit("honeyfs/var/log/apt/history.log", "Start-Date: ", "Start-Date: 2001-01-01  00:00:00\n#")
@@ -375,6 +409,38 @@ class ValidateDeviceTest(unittest.TestCase):
         self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [])
         (out / "cowrie.cfg").write_text(cfg.replace("\ntop_style = busybox\n", "\ntop_style = procps\n"))
         self.assertIn("procps_version '' is no procps-ng version",
+                      " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
+    def test_msh_needs_the_banner_of_its_busybox(self):
+        # the DIR-859's msh prints the BusyBox banner of [shell] text_banner after the login
+        persona = catalog.by_id("dlink-dir859")
+        ident, out, keys = render_one(self, persona, 2)
+        cfg = (out / "cowrie.cfg").read_text()
+        self.assertIn("\nnot_found_style = msh\n", cfg)
+        self.assertIn("\nprompt_style = msh\n", cfg)
+        banner = f"\ntext_banner = {ident.release.extra['busybox']}\n"
+        self.assertIn(banner, cfg)
+        (out / "cowrie.cfg").write_text(cfg.replace(banner, "\ntext_banner = \n"))
+        self.assertIn("cfg text_banner: '' is no BusyBox banner for the login of msh",
+                      " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
+    def test_bash_version_of_qnap(self):
+        # bash --version of QNAP's bash (its GPL build); a persona without bash has none
+        persona = catalog.by_id("qnap-qts")
+        ident, out, keys = render_one(self, persona, 1)
+        cfg = (out / "cowrie.cfg").read_text()
+        line = '\nbash_version = "GNU bash, version 3.2.57(1)-release (x86_64-QNAP-linux-gnu)\\n'
+        self.assertIn(line, cfg)
+        self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [])
+        (out / "cowrie.cfg").write_text(cfg.replace(line, '\nbash_version = "GNU bosh\\n'))
+        self.assertIn("is not the bash --version of the persona",
+                      " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+        persona = catalog.by_id("dlink-dir859")
+        ident, out, keys = render_one(self, persona, 1)
+        cfg = (out / "cowrie.cfg").read_text()
+        self.assertNotIn("bash_version", cfg)
+        (out / "cowrie.cfg").write_text(cfg.replace("\nssh_version = ", '\nbash_version = "GNU bash"\nssh_version = '))
+        self.assertIn("is not the bash --version of the persona",
                       " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
 
     def test_dropbear_version_mismatch(self):
@@ -688,6 +754,20 @@ class ValidateBusyboxTest(unittest.TestCase):
         self.assertIn("forbidden svr04 in busybox-help.txt", self.problems())
 
 
+class ValidateCameraTest(unittest.TestCase):
+    def test_both_releases_of_the_camera_validate(self):
+        # V5.5.82 (BusyBox 1.19.4) and V5.7.3 (1.26.2) each with the file commands of their BusyBox version
+        persona = catalog.by_id("ipcam")
+        variants = {}
+        for seed in (0, 1):
+            ident, out, keys = render_one(self, persona, seed)
+            with self.subTest(ident.release.label):
+                self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [])
+                cfg = (out / "cowrie.cfg").read_text()
+                variants[ident.release.label] = re.search(r"\nfs_variant = (\S+)\n", cfg).group(1)
+        self.assertEqual(variants, {"V5.5.82_190909": "fw_tplink_c7v5", "V5.7.3_220112": "busybox_1.26.2"})
+
+
 class ValidateRpmTest(unittest.TestCase):
     def test_dnf_openssh_upgrade_after_boot(self):
         persona = catalog.by_id("rhel-9")
@@ -818,6 +898,21 @@ class ValidateBootTest(unittest.TestCase):
         path.write_text(re.sub(r"root=PARTUUID=\S+", "root=LABEL=cloudimg-rootfs", path.read_text()))
         self.assertIn("/dev/root (no initramfs)", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
 
+    def test_the_units_file_names_its_family_and_the_scripts_chkconfig_lists(self):
+        persona = catalog.by_id("centos-7")
+        ident, out, keys = render_one(self, persona, 1)
+        self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [])
+        path = out / "systemd-units.json"
+        data = json.loads(path.read_text())
+        path.write_text(json.dumps({**data, "family": "rhel"}))
+        self.assertIn("runtime: systemd-units.json is not the persona's",
+                      validate.problems(persona, ident, out, out, keys, min_pickle=0))
+        path.write_text(json.dumps(data))
+        # a script of the list that the tree has no init script of
+        with mock.patch.object(system, "sysv_levels", lambda _: {**data["sysv"], "nosuch": [False] * 7}):
+            self.assertIn("chkconfig: nosuch is listed, /etc/rc.d/init.d/nosuch is missing",
+                          validate.problems(persona, ident, out, out, keys, min_pickle=0))
+
 
 def _problems(persona, ident, out, keys):
     return " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
@@ -883,10 +978,11 @@ class ValidateDeviceBootTest(unittest.TestCase):
         self.assertIn("boot:", _problems(persona, ident, out, keys))
 
     def test_mtd_root_on_another_device(self):
-        persona = catalog.by_id("dlink-dir859")
+        # OpenWrt mounts its squashfs from 31:9 (the DIR-859, whose dmesg named root=/dev/mtdblock0, has none)
+        persona = catalog.by_id("openwrt")
         ident, out, keys = render_one(self, persona, 1)
-        _edit(self, out / "txtcmds/bin/dmesg", "root=/dev/mtdblock0", "root=/dev/mtdblock3")
-        self.assertIn("boot:", _problems(persona, ident, out, keys))
+        _edit(self, out / "txtcmds/bin/dmesg", "rootfstype=squashfs", "root=/dev/mtdblock3 rootfstype=squashfs")
+        self.assertIn("boot: root=/dev/mtdblock3, but dmesg mounted device 31:", _problems(persona, ident, out, keys))
 
     def test_initramfs_with_a_root_device(self):
         persona = catalog.by_id("qnap-qts")
@@ -944,7 +1040,7 @@ class ValidateDeviceBootTest(unittest.TestCase):
         self.assertIn("df: df.json is not the persona's", _problems(persona, ident, out, keys))
 
     def test_dmesg_bogomips_differs_from_cpuinfo(self):
-        persona = catalog.by_id("dlink-dir859")
+        persona = catalog.by_id("openwrt")
         ident, out, keys = render_one(self, persona, 1)
         path = out / "txtcmds/bin/dmesg"
         path.write_text(re.sub(r"\d+\.\d+ BogoMIPS", "1.00 BogoMIPS", path.read_text()))

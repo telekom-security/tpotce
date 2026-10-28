@@ -17,10 +17,10 @@ from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import (DAY, drawn_at, host_patterns, hostname_regex, is_fresh, kernel_time, max_uptime, stale_at,
                        updated_at)
 from .model import PROMPT_STYLES
-from .render import (BUSYBOX_HELP, DF_TABLE, DIR_MODES, PACKAGE_MANAGER_PATHS, PROGRAM_DIRS, refused_logins_value,
-                     runtime_json)
+from .render import (BUSYBOX_HELP, DF_TABLE, DIR_MODES, PACKAGE_MANAGER_PATHS, PROGRAM_DIRS, SSH_CLIENT_COMMANDS,
+                     proc_comm, refused_logins_value, runtime_json)
 from .ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_KEX,
-                           TWISTED_MACS, host_key_algorithms, kex_algorithms, key_type, server_sig_algs,
+                           TWISTED_MACS, ext_info_s, host_key_algorithms, kex_algorithms, key_type, server_sig_algs,
                            server_version)
 
 # a rendered device tree is about 1 MB (a server's more); far below it the render broke
@@ -74,7 +74,13 @@ def _check_cfg(persona, ident, cfg, runtime_dir, keys_dir, out):
         ("shell", "not_found_style"): system.shell_style(persona)[1],
         ("shell", "history_size"): str(system.history_sizes(persona, r)[1]),
         ("shell", "history_size_root"): str(system.history_sizes(persona, r)[0]),
-        ("ssh", "version"): r.ssh_banner,
+        ("shell", "history_file_size"): str(system.history_file_sizes(persona, r)[1]),
+        ("shell", "history_file_size_root"): str(system.history_file_sizes(persona, r)[0]),
+        ("shell", "history_time_format"): (json.dumps(system.history_time_format(persona))
+                                           if system.history_time_format(persona) else None),
+        ("shell", "operating_system"): persona.operating_system,
+        # no SSH server: no banner
+        ("ssh", "version"): r.ssh_banner if persona.ssh_profile is not None else None,
     }
     if persona.prompt_style not in PROMPT_STYLES:
         out.append(f"prompt_style {persona.prompt_style!r} is not one of {', '.join(PROMPT_STYLES)}")
@@ -91,7 +97,36 @@ def _check_cfg(persona, ident, cfg, runtime_dir, keys_dir, out):
                     out.append(f"host key not supported: {key}")
 
 
+# the options of [ssh] that describe the SSH server of a persona and its sessions
+#   (render.ssh_server_options, render.SSH_SESSION_OPTIONS)
+SSH_SERVER_KEYS = ("version", "host_key_algorithms", "kex_algorithms", "server_sig_algs", "ext_info_s", "ciphers", "macs",
+                   "compression", "sftp_enabled", "forwarding", "forward_redirect", "forward_tunnel",
+                   "auth_none_enabled", "auth_keyboard_interactive_enabled", "auth_publickey_allow_any")
+
+
 def _check_ssh(persona, ident, cfg, out):
+    # read as Cowrie reads it (getboolean: true, yes, on, 1)
+    try:
+        drop = cfg.getboolean("ssh", "drop_connections", fallback=False)
+    except ValueError:
+        out.append(f"ssh: drop_connections {cfg.get('ssh', 'drop_connections')!r} is no boolean")
+        drop = False
+    if persona.ssh_profile is None:
+        # no SSH server: Cowrie closes the connection before its banner, nothing names a server
+        if not drop:
+            out.append("ssh: the persona has no SSH server, drop_connections is not true")
+        out += [f"ssh: the persona has no SSH server, {key} is set" for key in SSH_SERVER_KEYS
+                if cfg.has_option("ssh", key)]
+        if ident.release.ssh_banner or cfg.get("shell", "ssh_version", fallback=""):
+            out.append("ssh_version: the persona has no SSH server, banner or ssh_version is set")
+        # nor an ssh client: Cowrie's ssh must not answer
+        skipped = {e.strip() for e in cfg.get("shell", "skip_python_commands", fallback="").split(",")}
+        answers = sorted(set(SSH_CLIENT_COMMANDS) - skipped)
+        if answers:
+            out.append(f"ssh: the persona has no ssh client, Cowrie's ssh answers {', '.join(answers)}")
+        return
+    if drop:
+        out.append(f"ssh: drop_connections is true, the persona has the SSH server {persona.ssh_profile}")
     profile = PROFILES[persona.ssh_profile]
     lists = (("cipher", "ciphers", TWISTED_CIPHERS, profile.ciphers),
              ("mac", "macs", TWISTED_MACS, profile.macs),
@@ -131,7 +166,8 @@ def _check_ssh(persona, ident, cfg, out):
 def _check_kex(profile, release, cfg, out):
     """[ssh] kex_algorithms: Twisted's, with a curve25519 exchange (the clients of today offer no
     DH with SHA-1), those of the server of the banner in its order; [ssh] server_sig_algs as that
-    server names them (ssh_profiles.kex_algorithms / server_sig_algs)."""
+    server names them and [ssh] ext_info_s as it lists ext-info-s (ssh_profiles.kex_algorithms /
+    server_sig_algs / ext_info_s)."""
     names = tuple(e.strip() for e in cfg.get("ssh", "kex_algorithms", fallback="").split(",") if e.strip())
     out += [f"key exchange not supported: {name}" for name in names if name not in TWISTED_KEX]
     if not {"curve25519-sha256", "curve25519-sha256@libssh.org"} & set(names):
@@ -141,6 +177,9 @@ def _check_kex(profile, release, cfg, out):
     sigs = cfg.get("ssh", "server_sig_algs", fallback=None)
     if sigs is None or sigs.strip() != server_sig_algs(profile, release):
         out.append(f"server-sig-algs {sigs} differ from {profile.name} of {release.ssh_banner}")
+    ext = cfg.get("ssh", "ext_info_s", fallback=None)
+    if ext is None or ext.strip() != ("true" if ext_info_s(profile, release) else "false"):
+        out.append(f"ext_info_s {ext} differs from {profile.name} of {release.ssh_banner}")
 
 
 def _check_host_key_algorithms(profile, release, cfg, out):
@@ -192,12 +231,16 @@ def _check_top(persona, cfg, txtcmds, out, out_dir=None, runtime_dir=None):
     version = cfg.get("shell", "procps_version", fallback="")
     if style == "procps" and not re.fullmatch(r"\d+\.\d+\.\d+", version):
         out.append(f"procps_version {version!r} is no procps-ng version")
+    if style == "procps" and cfg.get("shell", "pidof_style", fallback="") not in ("debian", "procps-ng", "sysvinit"):
+        out.append(f"pidof_style {cfg.get('shell', 'pidof_style', fallback='')!r} is no pidof of a system")
     try:
         threads = int(cfg.get("shell", "kernel_threads", fallback=""))
         base = float(cfg.get("shell", "load_base", fallback=""))
     except ValueError:
         out.append("top: kernel_threads or load_base is no number")
         return
+    if cfg.get("shell", "pid_max", fallback="") != str(kthreads.pid_max(persona)):
+        out.append(f"top: pid_max is not {kthreads.pid_max(persona)}")
     if not 10 <= threads <= 1500:
         out.append(f"top: {threads} kernel threads")
     if out_dir is None:
@@ -302,6 +345,32 @@ def _check_accounts(persona, out_dir, out):
             out.append(f"accounts: {name} of {entry.get('COMMAND')!r} has no line in /etc/passwd")
 
 
+def _check_proc(ident, out_dir, fs, out):
+    """/proc of the tree has a folder for every process of ps (its list and its kernel threads) whose comm is the
+    name ps shows, and no folder of another PID (the session's own come at its start: tpot_proc_session)."""
+    try:
+        processes = json.loads(_text(Path(out_dir) / "cmdoutput.json"))["command"]["ps"]
+        threads = json.loads(_text(Path(out_dir) / kthreads.KERNEL_THREADS) or "[]")
+    except (ValueError, KeyError, TypeError):
+        return
+    proc = tree.find_dir(fs, "proc")
+    names = {tree.node_get(c, tree.A_NAME) for c in tree.node_children(proc)} if proc is not None else set()
+    wanted = {}
+    for entry in list(processes) + list(threads):
+        if isinstance(entry, dict) and isinstance(entry.get("PID"), int):
+            wanted[str(entry["PID"])] = entry
+    for pid, entry in wanted.items():
+        command = str(entry.get("COMMAND") or "")
+        if pid not in names:
+            out.append(f"proc: no /proc/{pid} for {command!r}")
+            continue
+        comm = tree.node_get(tree.find_node(fs, f"proc/{pid}/comm"), tree.A_CONTENTS)
+        if comm != (proc_comm(command, command.startswith("["), ident) + "\n").encode("utf-8", "surrogateescape"):
+            out.append(f"proc: /proc/{pid}/comm is not the name ps shows")
+    for name in sorted(n for n in names if str(n).isdigit() and n not in wanted):
+        out.append(f"proc: /proc/{name} is no process of ps")
+
+
 def _check_program_owners(persona, ident, out_dir, fs, out):
     """Every program of the ps list of a server with a package manager is in the tree, and an installed package
     owns it as dpkg -S / rpm -qf name it (one below /usr/local, /opt or /home is nobody's); every program of a
@@ -327,6 +396,20 @@ def _check_program_owners(persona, ident, out_dir, fs, out):
                 out.append(f"owners: no package owns {path} of {command!r}")
 
 
+def _check_firmware_etc(persona, honeyfs, fs, out):
+    """A router's /etc has only the names of Cowrie's tree its firmware has too (firmware.etc_names) and the
+    persona's own files (its honeyfs)."""
+    keep = firmware.etc_names(persona)
+    etc = tree.find_dir(fs, "etc") if keep is not None else None
+    if etc is None:
+        return
+    own = {path.name for path in (Path(honeyfs) / "etc").iterdir()} if (Path(honeyfs) / "etc").is_dir() else set()
+    for node in tree.node_children(etc):
+        name = tree.node_get(node, tree.A_NAME)
+        if name not in keep and name not in own:
+            out.append(f"etc: /etc/{name} is not of the firmware of {persona.id}")
+
+
 def _check_device_programs(persona, ident, out_dir, fs, out):
     """The programs of a device's ps list (a bare name as its PATH finds it) and the telnetd of its telnet sessions
     ([shell] telnet_daemon) are in its tree."""
@@ -340,6 +423,15 @@ def _check_device_programs(persona, ident, out_dir, fs, out):
     def present(path):
         return tree.resolve(fs, path.lstrip("/")) is not None
 
+    # a link to busybox only for an applet of its BusyBox (init, which the kernel starts, and busybox itself too)
+    busybox = tree.resolve(fs, "bin/busybox")
+    applets = set(system.busybox_applets(persona, ident) or ()) | {"busybox", "init"}
+
+    def applet_problem(path):
+        name = path.rsplit("/", 1)[-1]
+        if busybox is not None and tree.resolve(fs, path.lstrip("/")) is busybox and name not in applets:
+            out.append(f"programs: {path} is a link to busybox, which has no {name} applet")
+
     folders = ("/sbin/", "/bin/", "/usr/sbin/", "/usr/bin/")
     for entry in processes:
         command = str(entry.get("COMMAND") or "")
@@ -347,8 +439,11 @@ def _check_device_programs(persona, ident, out_dir, fs, out):
         if program is None:
             continue
         spellings = [program] if program.startswith("/") else [folder + program for folder in folders]
-        if not any(present(path) for path in spellings):
+        path = next((path for path in spellings if present(path)), None)
+        if path is None:
             out.append(f"programs: {program} of {command!r} is not in the tree")
+        else:
+            applet_problem(path)
     cfg = configparser.ConfigParser(interpolation=None)
     cfg.read(Path(out_dir) / "cowrie.cfg", encoding="utf-8")
     daemon = cfg.get("shell", "telnet_daemon", fallback="")
@@ -356,6 +451,8 @@ def _check_device_programs(persona, ident, out_dir, fs, out):
         out.append(f"cfg telnet_daemon: {daemon!r} is not the telnetd of {persona.id}")
     elif daemon and not present(daemon):
         out.append(f"cfg telnet_daemon: {daemon} is not in the tree")
+    elif daemon:
+        applet_problem(daemon)
 
 
 # the values the patched commands take for the [shell] keys of round 4 (absent: the upstream behaviour)
@@ -401,7 +498,18 @@ def _check_shell_keys(persona, ident, cfg, out_dir, runtime_dir, fs, out):
             bad(key, "is not no")
     if value("wget_timeout") == "no" and value("wget_style") != "busybox":
         bad("wget_timeout", "without BusyBox's wget")
-    ash = persona.family in system.ASH_FAMILIES
+    # bash --version of the persona's bash (QNAP's GPL build), none where Cowrie's bash answers
+    want = devices.bash_version(persona, ident) or None
+    try:
+        have = json.loads(value("bash_version")) if value("bash_version") is not None else None
+    except ValueError:
+        have = value("bash_version")
+    if have != want:
+        bad("bash_version", "is not the bash --version of the persona")
+    # msh prints the banner of its BusyBox after the login (the patched displayMOTD)
+    if value("not_found_style") == "msh" and not (value("text_banner") or "").startswith("BusyBox v"):
+        bad("text_banner", "is no BusyBox banner for the login of msh")
+    ash = persona.family in system.BUSYBOX_FAMILIES
     if value("ls_style") not in (None, "busybox") or (value("ls_style") == "busybox") != ash:
         bad("ls_style", "does not fit the shell of the persona" if ash or value("ls_style") else "is not busybox")
     if value("ls_total") not in (None, "yes") or (value("ls_total") == "yes") != bool(system.busybox_desktop(persona)):
@@ -422,7 +530,7 @@ def _check_shell_keys(persona, ident, cfg, out_dir, runtime_dir, fs, out):
         if dirs != f"{runtime_dir}/{PROGRAM_DIRS}" or not (out_dir / PROGRAM_DIRS).is_file():
             bad("which_dirs", f"is not {runtime_dir}/{PROGRAM_DIRS}")
         else:
-            table = firmware.program_dirs(persona, applets) or {}
+            table = firmware.which_table(persona, applets) or {}
             rows = dict(line.partition(" ")[::2] for line in _text(out_dir / PROGRAM_DIRS).splitlines() if line)
             if rows != {name: ",".join(folders) for name, folders in table.items()}:
                 bad("which_dirs", "is not the table of the persona's program folders")
@@ -442,6 +550,8 @@ def _check_shell_keys(persona, ident, cfg, out_dir, runtime_dir, fs, out):
         names = [name for name in exports.split(",") if name]
         if set(names) - HISTORY_EXPORTS or tuple(names) != tuple(system.history_exports(persona)):
             bad("history_export", f"is not what the login exports ({','.join(system.history_exports(persona))!r})")
+    if (value("history_untimed") or "") != system.history_untimed(persona):
+        bad("history_untimed", "is not what `history` does with a line without a time in the persona's bash")
     found = value("command_not_found")
     lines = system.command_not_found_lines(persona, ident)
     if (found is None) != (lines is None):
@@ -979,14 +1089,13 @@ def _on_path(fs, name):
 def _check_links(fs, out):
     """Every link of the tree names a node (the links of its directories followed) and has the length
     of its target as its size: ls -l and cd find what a link points to."""
-    dangling, sized = [], []
+    dangling = [f"{path} -> {tree.node_get(tree.find_node(fs, path), tree.A_TARGET) or ''}"
+                for path in tree.dangling_links(fs)]
+    sized = []
     for path, node in tree.iter_nodes(fs):
         if tree.node_get(node, tree.A_TYPE) != tree.T_LINK:
             continue
         target = tree.node_get(node, tree.A_TARGET) or ""
-        resolved = tree.target_path(fs, path) if target else None
-        if resolved is None or tree.find_node(fs, resolved) is None:
-            dangling.append(f"{path} -> {target}")
         # ls -l shows the length of the target as the size of a link
         if tree.node_get(node, tree.A_SIZE) != len(target):
             sized.append(f"{path} -> {target} ({tree.node_get(node, tree.A_SIZE)})")
@@ -1142,8 +1251,9 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
     them, with their versions."""
     honeyfs, txtcmds = out_dir / "honeyfs", out_dir / "txtcmds"
     own = {"/" + rel for rel, _ in system.links(persona)}
-    # the programs of a firmware image are its own (the adduser applet of the Archer C7's BusyBox), and the applet
-    #   links of a device's BusyBox (adduser, start-stop-daemon of the NAS326: system.applet_links)
+    # the programs of a firmware image are its own (the adduser applet of the Archer C7's BusyBox, the
+    #   start-stop-daemon of the NAS326's initramfs), and the applet links of a device's BusyBox (adduser of the
+    #   NAS326: system.applet_links)
     own |= {"/" + rel for rel in firmware.programs(persona, ident) or {}}
     own |= {"/" + (tree.real_path(fs, rel) or rel) for rel in system.applet_links(persona, ident) or {}}
     found = [hit for rel in system.CONTAINER_PATHS + system.foreign_paths(persona) for hit in _matches(fs, rel)
@@ -1225,6 +1335,9 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
                 if name in system.COWRIE_TOOL_NAMES and _answered(cfg, name) != _on_path(fs, name):
                     out.append(f"which: {name} is {'not ' if _answered(cfg, name) else ''}on PATH, "
                                f"{'Cowrie answers it' if _answered(cfg, name) else 'nothing answers it'}")
+        for script in sorted(expected.get(system.SYSTEMD_UNITS, {}).get("sysv", {})):
+            if not _is_file(tree.find_node(fs, f"etc/rc.d/init.d/{script}")):
+                out.append(f"chkconfig: {script} is listed, /etc/rc.d/init.d/{script} is missing")
         units = {u["name"]: u for u in expected.get(system.SYSTEMD_UNITS, {}).get("units", [])}
         for name, unit in sorted(units.items()):
             if not unit.get("path"):
@@ -1298,7 +1411,8 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         banner = re.search(r"\bLinux version (\S+)", _text(txtcmds / "bin/dmesg"))
         if not banner or banner.group(1) != r.kernel_version:
             out.append(f"kernel: dmesg does not name {r.kernel_version}")
-    elif own is None or "bin/dmesg" in own:
+    elif (own is None or "bin/dmesg" in own) and "dmesg" not in system.missing_applet_txtcmds(persona, ident):
+        # (a BusyBox without the applet has none: the DIR-859)
         out.append("kernel: no dmesg")
     built = kernel_time(r)
     if built is not None and built > ident.booted_at:
@@ -1314,6 +1428,8 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         out.append(f"hostname: etc/hosts does not name {ident.hostname}")
 
     _check_hardware(persona, ident, honeyfs, txtcmds, out)
+    if fs is not None:
+        _check_firmware_etc(persona, honeyfs, fs, out)
     _check_top(persona, cfg, txtcmds, out, out_dir, runtime_dir)
     _check_boot(honeyfs, txtcmds, out)
     if persona.kind == "device":
@@ -1345,6 +1461,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out)
         _check_shell_keys(persona, ident, cfg, out_dir, runtime_dir, fs, out)
         _check_program_owners(persona, ident, out_dir, fs, out)
+        _check_proc(ident, out_dir, fs, out)
         _check_links(fs, out)
         _check_init_links(persona, fs, out)
     return out

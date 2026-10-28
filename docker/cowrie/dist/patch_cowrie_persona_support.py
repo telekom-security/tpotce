@@ -207,7 +207,7 @@ def patch_fs_links(cowrie_root):
 def patch_busybox(cowrie_root):
     """busybox prints the help of the persona's BusyBox ([shell] busybox_help, a
     file of the runtime folder) on stdout, as busybox does, for no arguments and
-    --help; applets run and `busybox ECCHI` says "ECCHI: applet not found" as
+    --help and its applet names, one per line, for --list; applets run and `busybox ECCHI` says "ECCHI: applet not found" as
     upstream (on stderr, exit status 127). Without the key upstream's help stays."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "busybox.py"
     replace_once(
@@ -233,6 +233,19 @@ def patch_busybox(cowrie_root):
                 pass
         for ln in busybox_help:
             self.errorWrite(f"{ln}\\n")
+
+    def tpot_list(self) -> bool:
+        # busybox --list: the applet table of its help, one name per line (derived: both come from the same table)
+        help_path = CowrieConfig.get("shell", "busybox_help", fallback="")
+        try:
+            text = Path(help_path).read_text(encoding="utf-8") if help_path else ""
+        except OSError:
+            return False
+        _, found, body = text.partition("Currently defined functions:\\n")
+        if not found:
+            return False
+        self.write("".join(f"{name.strip()}\\n" for name in body.replace("\\n", " ").split(",") if name.strip()))
+        return True
 """,
     )
     replace_once(
@@ -240,7 +253,10 @@ def patch_busybox(cowrie_root):
         """        if len(self.args) == 0:
             self.help()
 """,
-        """        if len(self.args) == 0 or self.args == ["--help"]:
+        """        if self.args == ["--list"] and self.tpot_list():
+            self.exit()
+            return
+        if len(self.args) == 0 or self.args == ["--help"]:
             self.help()
 """,
     )
@@ -288,7 +304,25 @@ TPOT_PERL_LIST = re.compile(
 )
 TPOT_PERL_ITEMS = re.compile(TPOT_PERL_ITEM, re.S | re.ASCII)
 TPOT_PERL_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "a": "\a", "e": "\x1b", "f": "\f", "0": "\0"}
+TPOT_PERL_NUMBER = re.compile(r"\s*+[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", re.ASCII)
 TPOT_PERL_INTERPOLATION = re.compile(r"\\x([0-9a-fA-F]{1,2})|\\(.)|\$(\w+|\{\w+\})(\[|\{|->)?|@\w", re.S)
+
+
+# calls a statement may make without a declared sub: perl builtins and keywords (a missing one only falls back)
+TPOT_PERL_BUILTINS = frozenset(
+    """abs accept alarm atan2 binmode bless caller chdir chmod chomp chop chown chr chroot close closedir cos
+    crypt defined delete die do each else elsif eof eval exec exists exit exp fc fcntl fileno flock for foreach fork
+    getc getlogin getppid getpwnam getpwuid glob gmtime goto grep hex if index int ioctl join keys kill last lc lcfirst
+    length link listen local localtime log lstat map mkdir my next not oct open opendir or ord our pack pipe pop pos
+    print printf prototype push quotemeta rand read readdir readline readlink readpipe recv redo ref rename require
+    reset return reverse rewinddir rindex rmdir say scalar seek seekdir select send shift sin sleep socket socketpair
+    sort splice split sprintf sqrt srand stat state study sub substr symlink syscall sysopen sysread sysseek system
+    syswrite tell telldir tie tied time times truncate uc ucfirst umask undef unless unlink unpack unshift untie until
+    utime values vec wait waitpid wantarray warn while write and xor""".split()
+)
+TPOT_PERL_CALL = re.compile(r"(?<![$@%>\w:])((?:\w+::)*\w+)\s*+\(", re.ASCII)
+TPOT_PERL_METHOD = re.compile(r"->\s*+((?:\w+::)*\w+)", re.ASCII)
+TPOT_PERL_TOPIC = re.compile(r"\b(?:chop|chomp)\b", re.ASCII)
 
 
 class TpotPerlUnknown(Exception):
@@ -368,6 +402,7 @@ def tpot_perl_split(code: str):
             pos = end + 1
             continue
         if TPOT_PERL_STOP.match(code, pos):
+            statements.append((start, code[start:]))  # not read further, but checked like an unread statement
             return statements, None
         if char in "([{":
             depth += 1
@@ -400,36 +435,49 @@ def tpot_perl_code(code: str, flags) -> tuple[bytes, str, int]:
     if "n" in flags or "p" in flags:
         return b"", "", 0
     names: dict[str, bytes] = {}
+    opaque: set[str] = set()  # scalars an unread statement may have changed
     stored = 0
     out: list[bytes] = []
     err: list[str] = []
     budget = TPOT_OUTPUT_LIMIT
+    subs = set(re.findall(r"\bsub\s+(\w+)", code))
     for offset, text in statements:
         match = re.fullmatch(r"\s*+(print|say|exit|die)\b(?:\s*+(STDOUT|STDERR)\b(?!\s*+[,(]))?(.*)", text, re.S)
         if not match:
             assign = re.fullmatch(r"\s*+(?:(?:my|our|local)\s++)?\$(\w+)\s*+=(?![=~])(.*)", text, re.S)
-            if assign:
-                name = assign.group(1)
-                stored -= len(names.pop(name, b""))
-                try:
-                    (value,) = tpot_perl_list(assign.group(2), names)
-                except (TpotPerlUnknown, ValueError):
-                    continue
-                # all scalars together stay within the output limit
-                if stored + len(value) <= TPOT_OUTPUT_LIMIT:
-                    names[name] = value
-                    stored += len(value)
+            if not assign:
+                tpot_perl_unread(text, subs)
+                stored -= tpot_perl_forget(text, names, opaque, subs)
+                continue
+            name = assign.group(1)
+            stored -= len(names.pop(name, b""))
+            try:
+                (value,) = tpot_perl_list(assign.group(2), names)
+            except (TpotPerlUnknown, ValueError):
+                tpot_perl_unread(assign.group(2), subs)
+                opaque.add(name)
+                stored -= tpot_perl_forget(assign.group(2), names, opaque, subs)
+                continue
+            # all scalars together stay within the output limit
+            if stored + len(value) <= TPOT_OUTPUT_LIMIT:
+                names[name] = value
+                stored += len(value)
+                opaque.discard(name)
+            else:
+                opaque.add(name)
             continue
         word, stream, rest = match.groups()
         if word == "exit":
-            status = re.fullmatch(r"\s*+\(?\s*+(\d{1,9})?\s*+\)?\s*+", rest)
-            return b"".join(out), "".join(err), int(status.group(1) or 0) & 0xFF if status else 0
+            status = tpot_perl_exit(rest, names, opaque)  # TpotPerlUnknown: the code falls back
+            return b"".join(out), "".join(err), status
         try:
             items = tpot_perl_list(rest, names) if rest.strip() else [names.get("_", b"")]
         except TpotPerlUnknown:
-            if word != "die":
-                continue
-            items = []
+            tpot_perl_unread(rest, subs)
+            if word == "die":
+                return b"".join(out), "".join(err), 255  # the status of die is 255, its message is not known
+            stored -= tpot_perl_forget(rest, names, opaque, subs)
+            continue
         if word == "die":
             message = b"".join(items).decode("utf-8", "replace") or "Died"
             if not message.endswith("\n"):
@@ -447,6 +495,82 @@ def tpot_perl_code(code: str, flags) -> tuple[bytes, str, int]:
         else:
             out.append(data)
     return b"".join(out), "".join(err), 0
+
+
+# a statement that may change a scalar it does not name: an assignment, an increment, a writing builtin
+TPOT_PERL_EFFECT = re.compile(
+    r"(?<![=!<>])=(?![=~>])|=~|\+\+|--|<<=|[-+*/%x|&^.>]=|\b(?:chop|chomp|read|sysread|recv|undef|splice|substr|"
+    r"open|opendir|sysopen|pipe|accept|socketpair)\b", re.ASCII)
+# a dereference, a glob, code or a call through & or ->: any scalar may change
+TPOT_PERL_INDIRECT = re.compile(
+    r"(?<!&)&(?=[\w${])|->|\$\$|\$\{\s*[^\w\s}]|(?:^|[\s{(,])\*[\w{$]"
+    r"|\b(?:eval|do|sub|local|require|use|goto)\b", re.ASCII)
+
+
+def tpot_perl_forget(text: str, names, opaque, subs=()) -> int:
+    """Scalars a statement that is not read may change are no longer known: the bytes they held."""
+    called = any(re.search(rf"\b{re.escape(sub)}\b", text) for sub in subs)
+    topic = TPOT_PERL_TOPIC.search(text) is not None  # chop and chomp without an argument change $_
+    if called or TPOT_PERL_INDIRECT.search(text):
+        targets = set(names) | set(re.findall(r"\$\{?(\w+)", text))
+    elif topic or TPOT_PERL_EFFECT.search(text):
+        targets = set(re.findall(r"\$\{?(\w+)", text))
+    else:
+        return 0
+    if topic:
+        targets.add("_")
+    freed = 0
+    for name in targets:
+        freed += len(names.pop(name, b""))
+        opaque.add(name)
+    return freed
+
+
+def tpot_perl_unread(text: str, subs) -> None:
+    """A statement that is not read may exit, die or call a name perl would not find: its status is not known."""
+    if re.search(r"\b(?:exit|die)\b", text, re.ASCII):
+        raise TpotPerlUnknown
+    for call in TPOT_PERL_CALL.finditer(text):
+        if call.group(1) not in subs and call.group(1) not in TPOT_PERL_BUILTINS:
+            raise TpotPerlUnknown
+    for method in TPOT_PERL_METHOD.finditer(text):
+        if method.group(1) not in subs:
+            raise TpotPerlUnknown
+
+
+def tpot_perl_exit(text: str, names, opaque) -> int:
+    """Exit status: a number or a numified scalar (its leading number, 0 when there is none)."""
+    match = re.fullmatch(r"\s*+\(?\s*+([+-]?(?:0|[1-9][0-9]*)|\$(?:\w+|\{\w+\}))?\s*+\)?\s*+", text, re.ASCII)
+    if not match:
+        raise TpotPerlUnknown
+    arg = match.group(1)
+    if arg is None:
+        return 0
+    if arg[0] != "$":
+        return tpot_perl_status(int(arg))
+    name = arg.strip("${}")
+    if name in opaque:
+        raise TpotPerlUnknown
+    value = names[name].decode("latin-1") if name in names else ""
+    if re.match(r"\s*+[+-]?(?:inf|nan)", value, re.I):
+        raise TpotPerlUnknown  # perl numifies Inf and NaN, not modelled
+    number = TPOT_PERL_NUMBER.match(value)
+    if number is None:
+        return 0
+    digits = number.group(0)
+    if re.search(r"[.eE]", digits):
+        fraction = float(digits)
+        if abs(fraction) >= 1 << 63:
+            raise TpotPerlUnknown
+        return int(fraction) & 0xFF
+    return tpot_perl_status(int(digits))
+
+
+def tpot_perl_status(integer: int) -> int:
+    """The low byte of an integer exit status, for the integers perl keeps as IV."""
+    if abs(integer) >= 1 << 63:
+        raise TpotPerlUnknown
+    return integer & 0xFF
 
 
 def tpot_perl_list(text: str, names) -> list[bytes]:
@@ -559,20 +683,627 @@ PYTHON_INLINE = r'''
 # and never run: print() / sys.stdout.write() of literals (ast.literal_eval) and of
 # names bound to literals print them, sys.exit() / exit() set the status, everything
 # else is silent; a syntax error prints CPython's message of the persona's version.
-from cowrie.shell.command import tpot_metered
+from cowrie.shell.command import tpot_deadline, tpot_metered
 
 TPOT_PY_FLAGS = "bBdEiIOPqRsStuvx3"
 TPOT_PY_VALUE_FLAGS = "WXQ"
 TPOT_CODE_LIMIT = 65536
 TPOT_OUTPUT_LIMIT = 1 << 20
+# what the evaluator computes: ints up to this many bits, texts up to this many characters, else the value is unknown
+TPOT_INT_BITS = 1 << 18
+TPOT_STR_CHARS = 1 << 20
+# no int of at most 2124 bits has more than 640 digits, the smallest limit CPython takes (but 0)
+TPOT_SAFE_BITS = 2124
+# the whole run: units of about a nanosecond of big-number work (a division costs (n - m + 1) m limb steps, a
+# conversion to decimal 2 n^2), the bytes the names of the code hold together, the price of one statement or name
+TPOT_WORK_LIMIT = 1 << 26
+TPOT_HELD_LIMIT = 1 << 23
+TPOT_STEP_COST = 200
+TPOT_STEP_FLOOR = 256  # steps of a run that go on whatever the session has left
+TPOT_NODE_COST = 50
+# expressions whose unknown value is no sign of an error CPython would raise (the parts of a call, a name, a literal
+# container or a string are looked at on their own)
+TPOT_CANNOT_FAIL = (ast.Constant, ast.Name, ast.Call, ast.Tuple, ast.List, ast.Starred, ast.JoinedStr,
+                    ast.FormattedValue, ast.NamedExpr, ast.Lambda)
+# attributes that exist on the stdlib module of that name (a stdlib name is bound to the module by an import)
+TPOT_SAFE_ATTRS = frozenset(("sys.stdout", "sys.stderr", "sys.argv", "sys.version", "sys.platform", "sys.path",
+                             "sys.modules", "sys.version_info", "sys.executable", "os.name", "os.environ",
+                             "os.sep", "os.linesep", "os.path"))
+# calls without arguments that write nothing and cannot fail
+TPOT_QUIET_CALLS = frozenset(("sys.stdout.flush", "sys.stderr.flush"))
+# modules of the standard library that distributions ship apart from the interpreter
+TPOT_SPLIT_MODULES = frozenset(("tkinter", "turtle", "turtledemo", "idlelib", "lib2to3", "ensurepip", "venv", "test"))
 TPOT_UNKNOWN = object()
+TPOT_COMPARE = {
+    ast.Eq: lambda a, b: a == b, ast.NotEq: lambda a, b: a != b, ast.Lt: lambda a, b: a < b,
+    ast.LtE: lambda a, b: a <= b, ast.Gt: lambda a, b: a > b, ast.GtE: lambda a, b: a >= b,
+}
 TPOT_PY2_PRINT = re.compile(r"(^|[;\n])([ \t]*+)print[ \t]++(?![(=])([^;\n]*)")
 # the name a Python 2 print statement is rewritten to (print(a, b) there prints the tuple)
 TPOT_PY2_STATEMENT = "tpot_print_statement"
+TPOT_NAME_MAX = 40
+TPOT_NAME_CANDIDATES = 750
+# names that can bind other names: the code is then not checked for names nothing binds
+TPOT_DYNAMIC = frozenset(("exec", "eval", "globals", "locals", "vars", "setattr"))
+TPOT_MATCH = tuple(getattr(ast, name) for name in ("MatchAs", "MatchStar", "MatchMapping") if hasattr(ast, name))
+# recorded in tests/fixtures/python_reference.json
+# names of builtins per Python: dict order from 3.10 (the order of the suggestions), sorted before
+TPOT_PY_BUILTINS = {
+    "2.7": (
+        "ArithmeticError AssertionError AttributeError BaseException BufferError BytesWarning DeprecationWarning "
+        "EOFError Ellipsis EnvironmentError Exception False FloatingPointError FutureWarning GeneratorExit IOError "
+        "ImportError ImportWarning IndentationError IndexError KeyError KeyboardInterrupt LookupError MemoryError "
+        "NameError None NotImplemented NotImplementedError OSError OverflowError PendingDeprecationWarning "
+        "ReferenceError RuntimeError RuntimeWarning StandardError StopIteration SyntaxError SyntaxWarning SystemError "
+        "SystemExit TabError True TypeError UnboundLocalError UnicodeDecodeError UnicodeEncodeError UnicodeError "
+        "UnicodeTranslateError UnicodeWarning UserWarning ValueError Warning ZeroDivisionError __debug__ __doc__ "
+        "__import__ __name__ __package__ abs all any apply basestring bin bool buffer bytearray bytes callable chr "
+        "classmethod cmp coerce compile complex copyright credits delattr dict dir divmod enumerate eval execfile "
+        "exit file filter float format frozenset getattr globals hasattr hash help hex id input int intern isinstance "
+        "issubclass iter len license list locals long map max memoryview min next object oct open ord pow print "
+        "property quit range raw_input reduce reload repr reversed round set setattr slice sorted staticmethod str "
+        "sum super tuple type unichr unicode vars xrange zip"
+    ),
+    "3.9": (
+        "ArithmeticError AssertionError AttributeError BaseException BlockingIOError BrokenPipeError BufferError "
+        "BytesWarning ChildProcessError ConnectionAbortedError ConnectionError ConnectionRefusedError "
+        "ConnectionResetError DeprecationWarning EOFError Ellipsis EnvironmentError Exception False FileExistsError "
+        "FileNotFoundError FloatingPointError FutureWarning GeneratorExit IOError ImportError ImportWarning "
+        "IndentationError IndexError InterruptedError IsADirectoryError KeyError KeyboardInterrupt LookupError "
+        "MemoryError ModuleNotFoundError NameError None NotADirectoryError NotImplemented NotImplementedError OSError "
+        "OverflowError PendingDeprecationWarning PermissionError ProcessLookupError RecursionError ReferenceError "
+        "ResourceWarning RuntimeError RuntimeWarning StopAsyncIteration StopIteration SyntaxError SyntaxWarning "
+        "SystemError SystemExit TabError TimeoutError True TypeError UnboundLocalError UnicodeDecodeError "
+        "UnicodeEncodeError UnicodeError UnicodeTranslateError UnicodeWarning UserWarning ValueError Warning "
+        "ZeroDivisionError __build_class__ __debug__ __doc__ __import__ __loader__ __name__ __package__ __spec__ abs "
+        "all any ascii bin bool breakpoint bytearray bytes callable chr classmethod compile complex copyright credits "
+        "delattr dict dir divmod enumerate eval exec exit filter float format frozenset getattr globals hasattr hash "
+        "help hex id input int isinstance issubclass iter len license list locals map max memoryview min next object "
+        "oct open ord pow print property quit range repr reversed round set setattr slice sorted staticmethod str sum "
+        "super tuple type vars zip"
+    ),
+    "3.10": (
+        "__name__ __doc__ __package__ __loader__ __spec__ __build_class__ __import__ abs all any ascii bin breakpoint "
+        "callable chr compile delattr dir divmod eval exec format getattr globals hasattr hash hex id input "
+        "isinstance issubclass iter aiter len locals max min next anext oct ord pow print repr round setattr sorted "
+        "sum vars None Ellipsis NotImplemented False True bool memoryview bytearray bytes classmethod complex dict "
+        "enumerate filter float frozenset property int list map object range reversed set slice staticmethod str "
+        "super tuple type zip __debug__ BaseException Exception TypeError StopAsyncIteration StopIteration "
+        "GeneratorExit SystemExit KeyboardInterrupt ImportError ModuleNotFoundError OSError EnvironmentError IOError "
+        "EOFError RuntimeError RecursionError NotImplementedError NameError UnboundLocalError AttributeError "
+        "SyntaxError IndentationError TabError LookupError IndexError KeyError ValueError UnicodeError "
+        "UnicodeEncodeError UnicodeDecodeError UnicodeTranslateError AssertionError ArithmeticError "
+        "FloatingPointError OverflowError ZeroDivisionError SystemError ReferenceError MemoryError BufferError "
+        "Warning UserWarning EncodingWarning DeprecationWarning PendingDeprecationWarning SyntaxWarning "
+        "RuntimeWarning FutureWarning ImportWarning UnicodeWarning BytesWarning ResourceWarning ConnectionError "
+        "BlockingIOError BrokenPipeError ChildProcessError ConnectionAbortedError ConnectionRefusedError "
+        "ConnectionResetError FileExistsError FileNotFoundError IsADirectoryError NotADirectoryError InterruptedError "
+        "PermissionError ProcessLookupError TimeoutError open quit exit copyright credits license help"
+    ),
+    "3.11": (
+        "__name__ __doc__ __package__ __loader__ __spec__ __build_class__ __import__ abs all any ascii bin breakpoint "
+        "callable chr compile delattr dir divmod eval exec format getattr globals hasattr hash hex id input "
+        "isinstance issubclass iter aiter len locals max min next anext oct ord pow print repr round setattr sorted "
+        "sum vars None Ellipsis NotImplemented False True bool memoryview bytearray bytes classmethod complex dict "
+        "enumerate filter float frozenset property int list map object range reversed set slice staticmethod str "
+        "super tuple type zip __debug__ BaseException BaseExceptionGroup Exception GeneratorExit KeyboardInterrupt "
+        "SystemExit ArithmeticError AssertionError AttributeError BufferError EOFError ImportError LookupError "
+        "MemoryError NameError OSError ReferenceError RuntimeError StopAsyncIteration StopIteration SyntaxError "
+        "SystemError TypeError ValueError Warning FloatingPointError OverflowError ZeroDivisionError BytesWarning "
+        "DeprecationWarning EncodingWarning FutureWarning ImportWarning PendingDeprecationWarning ResourceWarning "
+        "RuntimeWarning SyntaxWarning UnicodeWarning UserWarning BlockingIOError ChildProcessError ConnectionError "
+        "FileExistsError FileNotFoundError InterruptedError IsADirectoryError NotADirectoryError PermissionError "
+        "ProcessLookupError TimeoutError IndentationError IndexError KeyError ModuleNotFoundError NotImplementedError "
+        "RecursionError UnboundLocalError UnicodeError BrokenPipeError ConnectionAbortedError ConnectionRefusedError "
+        "ConnectionResetError TabError UnicodeDecodeError UnicodeEncodeError UnicodeTranslateError ExceptionGroup "
+        "EnvironmentError IOError open quit exit copyright credits license help"
+    ),
+    "3.12": (
+        "__name__ __doc__ __package__ __loader__ __spec__ __build_class__ __import__ abs all any ascii bin breakpoint "
+        "callable chr compile delattr dir divmod eval exec format getattr globals hasattr hash hex id input "
+        "isinstance issubclass iter aiter len locals max min next anext oct ord pow print repr round setattr sorted "
+        "sum vars None Ellipsis NotImplemented False True bool memoryview bytearray bytes classmethod complex dict "
+        "enumerate filter float frozenset property int list map object range reversed set slice staticmethod str "
+        "super tuple type zip __debug__ BaseException BaseExceptionGroup Exception GeneratorExit KeyboardInterrupt "
+        "SystemExit ArithmeticError AssertionError AttributeError BufferError EOFError ImportError LookupError "
+        "MemoryError NameError OSError ReferenceError RuntimeError StopAsyncIteration StopIteration SyntaxError "
+        "SystemError TypeError ValueError Warning FloatingPointError OverflowError ZeroDivisionError BytesWarning "
+        "DeprecationWarning EncodingWarning FutureWarning ImportWarning PendingDeprecationWarning ResourceWarning "
+        "RuntimeWarning SyntaxWarning UnicodeWarning UserWarning BlockingIOError ChildProcessError ConnectionError "
+        "FileExistsError FileNotFoundError InterruptedError IsADirectoryError NotADirectoryError PermissionError "
+        "ProcessLookupError TimeoutError IndentationError IndexError KeyError ModuleNotFoundError NotImplementedError "
+        "RecursionError UnboundLocalError UnicodeError BrokenPipeError ConnectionAbortedError ConnectionRefusedError "
+        "ConnectionResetError TabError UnicodeDecodeError UnicodeEncodeError UnicodeTranslateError ExceptionGroup "
+        "EnvironmentError IOError open quit exit copyright credits license help"
+    ),
+    "3.13": (
+        "__name__ __doc__ __package__ __loader__ __spec__ __build_class__ __import__ abs all any ascii bin breakpoint "
+        "callable chr compile delattr dir divmod eval exec format getattr globals hasattr hash hex id input "
+        "isinstance issubclass iter aiter len locals max min next anext oct ord pow print repr round setattr sorted "
+        "sum vars None Ellipsis NotImplemented False True bool memoryview bytearray bytes classmethod complex dict "
+        "enumerate filter float frozenset property int list map object range reversed set slice staticmethod str "
+        "super tuple type zip __debug__ BaseException BaseExceptionGroup Exception GeneratorExit KeyboardInterrupt "
+        "SystemExit ArithmeticError AssertionError AttributeError BufferError EOFError ImportError LookupError "
+        "MemoryError NameError OSError ReferenceError RuntimeError StopAsyncIteration StopIteration SyntaxError "
+        "SystemError TypeError ValueError Warning FloatingPointError OverflowError ZeroDivisionError BytesWarning "
+        "DeprecationWarning EncodingWarning FutureWarning ImportWarning PendingDeprecationWarning ResourceWarning "
+        "RuntimeWarning SyntaxWarning UnicodeWarning UserWarning BlockingIOError ChildProcessError ConnectionError "
+        "FileExistsError FileNotFoundError InterruptedError IsADirectoryError NotADirectoryError PermissionError "
+        "ProcessLookupError TimeoutError IndentationError _IncompleteInputError IndexError KeyError "
+        "ModuleNotFoundError NotImplementedError PythonFinalizationError RecursionError UnboundLocalError "
+        "UnicodeError BrokenPipeError ConnectionAbortedError ConnectionRefusedError ConnectionResetError TabError "
+        "UnicodeDecodeError UnicodeEncodeError UnicodeTranslateError ExceptionGroup EnvironmentError IOError open "
+        "quit exit copyright credits license help"
+    ),
+}
+# sys.stdlib_module_names (the import hint of 3.12 and later)
+TPOT_PY_STDLIB = {
+    "3.12": (
+        "__future__ _abc _aix_support _ast _asyncio _bisect _blake2 _bz2 _codecs _codecs_cn _codecs_hk "
+        "_codecs_iso2022 _codecs_jp _codecs_kr _codecs_tw _collections _collections_abc _compat_pickle _compression "
+        "_contextvars _crypt _csv _ctypes _curses _curses_panel _datetime _dbm _decimal _elementtree "
+        "_frozen_importlib _frozen_importlib_external _functools _gdbm _hashlib _heapq _imp _io _json _locale _lsprof "
+        "_lzma _markupbase _md5 _msi _multibytecodec _multiprocessing _opcode _operator _osx_support _overlapped "
+        "_pickle _posixshmem _posixsubprocess _py_abc _pydatetime _pydecimal _pyio _pylong _queue _random _scproxy "
+        "_sha1 _sha2 _sha3 _signal _sitebuiltins _socket _sqlite3 _sre _ssl _stat _statistics _string _strptime "
+        "_struct _symtable _thread _threading_local _tkinter _tokenize _tracemalloc _typing _uuid _warnings _weakref "
+        "_weakrefset _winapi _zoneinfo abc aifc antigravity argparse array ast asyncio atexit audioop base64 bdb "
+        "binascii bisect builtins bz2 cProfile calendar cgi cgitb chunk cmath cmd code codecs codeop collections "
+        "colorsys compileall concurrent configparser contextlib contextvars copy copyreg crypt csv ctypes curses "
+        "dataclasses datetime dbm decimal difflib dis doctest email encodings ensurepip enum errno faulthandler fcntl "
+        "filecmp fileinput fnmatch fractions ftplib functools gc genericpath getopt getpass gettext glob graphlib grp "
+        "gzip hashlib heapq hmac html http idlelib imaplib imghdr importlib inspect io ipaddress itertools json "
+        "keyword lib2to3 linecache locale logging lzma mailbox mailcap marshal math mimetypes mmap modulefinder "
+        "msilib msvcrt multiprocessing netrc nis nntplib nt ntpath nturl2path numbers opcode operator optparse os "
+        "ossaudiodev pathlib pdb pickle pickletools pipes pkgutil platform plistlib poplib posix posixpath pprint "
+        "profile pstats pty pwd py_compile pyclbr pydoc pydoc_data pyexpat queue quopri random re readline reprlib "
+        "resource rlcompleter runpy sched secrets select selectors shelve shlex shutil signal site smtplib sndhdr "
+        "socket socketserver spwd sqlite3 sre_compile sre_constants sre_parse ssl stat statistics string stringprep "
+        "struct subprocess sunau symtable sys sysconfig syslog tabnanny tarfile telnetlib tempfile termios textwrap "
+        "this threading time timeit tkinter token tokenize tomllib trace traceback tracemalloc tty turtle turtledemo "
+        "types typing unicodedata unittest urllib uu uuid venv warnings wave weakref webbrowser winreg winsound "
+        "wsgiref xdrlib xml xmlrpc zipapp zipfile zipimport zlib zoneinfo"
+    ),
+    "3.13": (
+        "__future__ _abc _aix_support _android_support _apple_support _ast _asyncio _bisect _blake2 _bz2 _codecs "
+        "_codecs_cn _codecs_hk _codecs_iso2022 _codecs_jp _codecs_kr _codecs_tw _collections _collections_abc "
+        "_colorize _compat_pickle _compression _contextvars _csv _ctypes _curses _curses_panel _datetime _dbm "
+        "_decimal _elementtree _frozen_importlib _frozen_importlib_external _functools _gdbm _hashlib _heapq _imp "
+        "_interpchannels _interpqueues _interpreters _io _ios_support _json _locale _lsprof _lzma _markupbase _md5 "
+        "_multibytecodec _multiprocessing _opcode _opcode_metadata _operator _osx_support _overlapped _pickle "
+        "_posixshmem _posixsubprocess _py_abc _pydatetime _pydecimal _pyio _pylong _pyrepl _queue _random _scproxy "
+        "_sha1 _sha2 _sha3 _signal _sitebuiltins _socket _sqlite3 _sre _ssl _stat _statistics _string _strptime "
+        "_struct _suggestions _symtable _sysconfig _thread _threading_local _tkinter _tokenize _tracemalloc _typing "
+        "_uuid _warnings _weakref _weakrefset _winapi _wmi _zoneinfo abc antigravity argparse array ast asyncio "
+        "atexit base64 bdb binascii bisect builtins bz2 cProfile calendar cmath cmd code codecs codeop collections "
+        "colorsys compileall concurrent configparser contextlib contextvars copy copyreg csv ctypes curses "
+        "dataclasses datetime dbm decimal difflib dis doctest email encodings ensurepip enum errno faulthandler fcntl "
+        "filecmp fileinput fnmatch fractions ftplib functools gc genericpath getopt getpass gettext glob graphlib grp "
+        "gzip hashlib heapq hmac html http idlelib imaplib importlib inspect io ipaddress itertools json keyword "
+        "linecache locale logging lzma mailbox marshal math mimetypes mmap modulefinder msvcrt multiprocessing netrc "
+        "nt ntpath nturl2path numbers opcode operator optparse os pathlib pdb pickle pickletools pkgutil platform "
+        "plistlib poplib posix posixpath pprint profile pstats pty pwd py_compile pyclbr pydoc pydoc_data pyexpat "
+        "queue quopri random re readline reprlib resource rlcompleter runpy sched secrets select selectors shelve "
+        "shlex shutil signal site smtplib socket socketserver sqlite3 sre_compile sre_constants sre_parse ssl stat "
+        "statistics string stringprep struct subprocess symtable sys sysconfig syslog tabnanny tarfile tempfile "
+        "termios textwrap this threading time timeit tkinter token tokenize tomllib trace traceback tracemalloc tty "
+        "turtle turtledemo types typing unicodedata unittest urllib uuid venv warnings wave weakref webbrowser winreg "
+        "winsound wsgiref xml xmlrpc zipapp zipfile zipimport zlib zoneinfo"
+    ),
+}
+# the names in globals() of python -c
+TPOT_PY_GLOBALS = {
+    "2.7": (
+        "__builtins__ __doc__ __name__ __package__"
+    ),
+    "3.9": (
+        "__name__ __doc__ __package__ __loader__ __spec__ __annotations__ __builtins__"
+    ),
+    "3.10": (
+        "__name__ __doc__ __package__ __loader__ __spec__ __annotations__ __builtins__"
+    ),
+    "3.11": (
+        "__name__ __doc__ __package__ __loader__ __spec__ __annotations__ __builtins__"
+    ),
+    "3.12": (
+        "__name__ __doc__ __package__ __loader__ __spec__ __annotations__ __builtins__"
+    ),
+    "3.13": (
+        "__name__ __doc__ __package__ __loader__ __spec__ __annotations__ __builtins__"
+    ),
+}
+
+# python3 -h, recorded (3.9 and 2.7 as their images print it, the path of 2.7 shortened to python)
+TPOT_PY_HELP = {
+    "2.7": (
+        "usage: python [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
+        "Options and arguments (and corresponding environment variables):\n"
+        "-B     : don't write .py[co] files on import; also PYTHONDONTWRITEBYTECODE=x\n"
+        "-c cmd : program passed in as string (terminates option list)\n"
+        "-d     : debug output from parser; also PYTHONDEBUG=x\n"
+        "-E     : ignore PYTHON* environment variables (such as PYTHONPATH)\n"
+        "-h     : print this help message and exit (also --help)\n"
+        "-i     : inspect interactively after running script; forces a prompt even\n"
+        "         if stdin does not appear to be a terminal; also PYTHONINSPECT=x\n"
+        "-m mod : run library module as a script (terminates option list)\n"
+        "-O     : optimize generated bytecode slightly; also PYTHONOPTIMIZE=x\n"
+        "-OO    : remove doc-strings in addition to the -O optimizations\n"
+        "-R     : use a pseudo-random salt to make hash() values of various types be\n"
+        "         unpredictable between separate invocations of the interpreter, as\n"
+        "         a defense against denial-of-service attacks\n"
+        "-Q arg : division options: -Qold (default), -Qwarn, -Qwarnall, -Qnew\n"
+        "-s     : don't add user site directory to sys.path; also PYTHONNOUSERSITE\n"
+        "-S     : don't imply 'import site' on initialization\n"
+        "-t     : issue warnings about inconsistent tab usage (-tt: issue errors)\n"
+        "-u     : unbuffered binary stdout and stderr; also PYTHONUNBUFFERED=x\n"
+        "         see man page for details on internal buffering relating to '-u'\n"
+        "-v     : verbose (trace import statements); also PYTHONVERBOSE=x\n"
+        "         can be supplied multiple times to increase verbosity\n"
+        "-V     : print the Python version number and exit (also --version)\n"
+        "-W arg : warning control; arg is action:message:category:module:lineno\n"
+        "         also PYTHONWARNINGS=arg\n"
+        "-x     : skip first line of source, allowing use of non-Unix forms of #!cmd\n"
+        "-3     : warn about Python 3.x incompatibilities that 2to3 cannot trivially fix\n"
+        "file   : program read from script file\n"
+        "-      : program read from stdin (default; interactive mode if a tty)\n"
+        "arg ...: arguments passed to program in sys.argv[1:]\n"
+        "\n"
+        "Other environment variables:\n"
+        "PYTHONSTARTUP: file executed on interactive startup (no default)\n"
+        "PYTHONPATH   : ':'-separated list of directories prefixed to the\n"
+        "               default module search path.  The result is sys.path.\n"
+        "PYTHONHOME   : alternate <prefix> directory (or <prefix>:<exec_prefix>).\n"
+        "               The default module search path uses <prefix>/pythonX.X.\n"
+        "PYTHONCASEOK : ignore case in 'import' statements (Windows).\n"
+        "PYTHONIOENCODING: Encoding[:errors] used for stdin/stdout/stderr.\n"
+        "PYTHONHASHSEED: if this variable is set to 'random', the effect is the same\n"
+        "   as specifying the -R option: a random value is used to seed the hashes of\n"
+        "   str, bytes and datetime objects.  It can also be set to an integer\n"
+        "   in the range [0,4294967295] to get hash values with a predictable seed.\n"
+    ),
+    "3.9": (
+        "usage: python3 [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
+        "Options and arguments (and corresponding environment variables):\n"
+        "-b     : issue warnings about str(bytes_instance), str(bytearray_instance)\n"
+        "         and comparing bytes/bytearray with str. (-bb: issue errors)\n"
+        "-B     : don't write .pyc files on import; also PYTHONDONTWRITEBYTECODE=x\n"
+        "-c cmd : program passed in as string (terminates option list)\n"
+        "-d     : turn on parser debugging output (for experts only, only works on\n"
+        "         debug builds); also PYTHONDEBUG=x\n"
+        "-E     : ignore PYTHON* environment variables (such as PYTHONPATH)\n"
+        "-h     : print this help message and exit (also --help)\n"
+        "-i     : inspect interactively after running script; forces a prompt even\n"
+        "         if stdin does not appear to be a terminal; also PYTHONINSPECT=x\n"
+        "-I     : isolate Python from the user's environment (implies -E and -s)\n"
+        "-m mod : run library module as a script (terminates option list)\n"
+        "-O     : remove assert and __debug__-dependent statements; add .opt-1 before\n"
+        "         .pyc extension; also PYTHONOPTIMIZE=x\n"
+        "-OO    : do -O changes and also discard docstrings; add .opt-2 before\n"
+        "         .pyc extension\n"
+        "-q     : don't print version and copyright messages on interactive startup\n"
+        "-s     : don't add user site directory to sys.path; also PYTHONNOUSERSITE\n"
+        "-S     : don't imply 'import site' on initialization\n"
+        "-u     : force the stdout and stderr streams to be unbuffered;\n"
+        "         this option has no effect on stdin; also PYTHONUNBUFFERED=x\n"
+        "-v     : verbose (trace import statements); also PYTHONVERBOSE=x\n"
+        "         can be supplied multiple times to increase verbosity\n"
+        "-V     : print the Python version number and exit (also --version)\n"
+        "         when given twice, print more information about the build\n"
+        "-W arg : warning control; arg is action:message:category:module:lineno\n"
+        "         also PYTHONWARNINGS=arg\n"
+        "-x     : skip first line of source, allowing use of non-Unix forms of #!cmd\n"
+        "-X opt : set implementation-specific option. The following options are available:\n"
+        "\n"
+        "         -X faulthandler: enable faulthandler\n"
+        "         -X oldparser: enable the traditional LL(1) parser; also PYTHONOLDPARSER\n"
+        "         -X showrefcount: output the total reference count and number of used\n"
+        "             memory blocks when the program finishes or after each statement in the\n"
+        "             interactive interpreter. This only works on debug builds\n"
+        "         -X tracemalloc: start tracing Python memory allocations using the\n"
+        "             tracemalloc module. By default, only the most recent frame is stored in a\n"
+        "             traceback of a trace. Use -X tracemalloc=NFRAME to start tracing with a\n"
+        "             traceback limit of NFRAME frames\n"
+        "         -X importtime: show how long each import takes. It shows module name,\n"
+        "             cumulative time (including nested imports) and self time (excluding\n"
+        "             nested imports). Note that its output may be broken in multi-threaded\n"
+        "             application. Typical usage is python3 -X importtime -c 'import asyncio'\n"
+        "         -X dev: enable CPython's \"development mode\", introducing additional runtime\n"
+        "             checks which are too expensive to be enabled by default. Effect of the\n"
+        "             developer mode:\n"
+        "                * Add default warning filter, as -W default\n"
+        "                * Install debug hooks on memory allocators: see the PyMem_SetupDebugHooks() C function\n"
+        "                * Enable the faulthandler module to dump the Python traceback on a crash\n"
+        "                * Enable asyncio debug mode\n"
+        "                * Set the dev_mode attribute of sys.flags to True\n"
+        "                * io.IOBase destructor logs close() exceptions\n"
+        "         -X utf8: enable UTF-8 mode for operating system interfaces, overriding the default\n"
+        "             locale-aware mode. -X utf8=0 explicitly disables UTF-8 mode (even when it would\n"
+        "             otherwise activate automatically)\n"
+        "         -X pycache_prefix=PATH: enable writing .pyc files to a parallel tree rooted at the\n"
+        "             given directory instead of to the code tree\n"
+        "         -X int_max_str_digits=number: limit the size of int<->str conversions.\n"
+        "             This helps avoid denial of service attacks when parsing untrusted data.\n"
+        "             The default is sys.int_info.default_max_str_digits.  0 disables.\n"
+        "\n"
+        "--check-hash-based-pycs always|default|never:\n"
+        "    control how Python invalidates hash-based .pyc files\n"
+        "file   : program read from script file\n"
+        "-      : program read from stdin (default; interactive mode if a tty)\n"
+        "arg ...: arguments passed to program in sys.argv[1:]\n"
+        "\n"
+        "Other environment variables:\n"
+        "PYTHONSTARTUP: file executed on interactive startup (no default)\n"
+        "PYTHONPATH   : ':'-separated list of directories prefixed to the\n"
+        "               default module search path.  The result is sys.path.\n"
+        "PYTHONHOME   : alternate <prefix> directory (or <prefix>:<exec_prefix>).\n"
+        "               The default module search path uses <prefix>/lib/pythonX.X.\n"
+        "PYTHONPLATLIBDIR : override sys.platlibdir.\n"
+        "PYTHONCASEOK : ignore case in 'import' statements (Windows).\n"
+        "PYTHONUTF8: if set to 1, enable the UTF-8 mode.\n"
+        "PYTHONIOENCODING: Encoding[:errors] used for stdin/stdout/stderr.\n"
+        "PYTHONFAULTHANDLER: dump the Python traceback on fatal errors.\n"
+        "PYTHONHASHSEED: if this variable is set to 'random', a random value is used\n"
+        "   to seed the hashes of str and bytes objects.  It can also be set to an\n"
+        "   integer in the range [0,4294967295] to get hash values with a\n"
+        "   predictable seed.\n"
+        "PYTHONINTMAXSTRDIGITS: limits the maximum digit characters in an int value\n"
+        "   when converting from a string and when converting an int back to a str.\n"
+        "   A value of 0 disables the limit.  Conversions to or from bases 2, 4, 8,\n"
+        "   16, and 32 are never limited.\n"
+        "PYTHONMALLOC: set the Python memory allocators and/or install debug hooks\n"
+        "   on Python memory allocators. Use PYTHONMALLOC=debug to install debug\n"
+        "   hooks.\n"
+        "PYTHONCOERCECLOCALE: if this variable is set to 0, it disables the locale\n"
+        "   coercion behavior. Use PYTHONCOERCECLOCALE=warn to request display of\n"
+        "   locale coercion and locale compatibility warnings on stderr.\n"
+        "PYTHONBREAKPOINT: if this variable is set to 0, it disables the default\n"
+        "   debugger. It can be set to the callable of your debugger of choice.\n"
+        "PYTHONDEVMODE: enable the development mode.\n"
+        "PYTHONPYCACHEPREFIX: root directory for bytecode cache (pyc) files.\n"
+    ),
+    "3.10": (
+        "usage: python3 [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
+        "Options and arguments (and corresponding environment variables):\n"
+        "-b     : issue warnings about str(bytes_instance), str(bytearray_instance)\n"
+        "         and comparing bytes/bytearray with str. (-bb: issue errors)\n"
+        "-B     : don't write .pyc files on import; also PYTHONDONTWRITEBYTECODE=x\n"
+        "-c cmd : program passed in as string (terminates option list)\n"
+        "-d     : turn on parser debugging output (for experts only, only works on\n"
+        "         debug builds); also PYTHONDEBUG=x\n"
+        "-E     : ignore PYTHON* environment variables (such as PYTHONPATH)\n"
+        "-h     : print this help message and exit (also -? or --help)\n"
+        "-i     : inspect interactively after running script; forces a prompt even\n"
+        "         if stdin does not appear to be a terminal; also PYTHONINSPECT=x\n"
+        "-I     : isolate Python from the user's environment (implies -E and -s)\n"
+        "-m mod : run library module as a script (terminates option list)\n"
+        "-O     : remove assert and __debug__-dependent statements; add .opt-1 before\n"
+        "         .pyc extension; also PYTHONOPTIMIZE=x\n"
+        "-OO    : do -O changes and also discard docstrings; add .opt-2 before\n"
+        "         .pyc extension\n"
+        "-q     : don't print version and copyright messages on interactive startup\n"
+        "-s     : don't add user site directory to sys.path; also PYTHONNOUSERSITE\n"
+        "-S     : don't imply 'import site' on initialization\n"
+        "-u     : force the stdout and stderr streams to be unbuffered;\n"
+        "         this option has no effect on stdin; also PYTHONUNBUFFERED=x\n"
+        "-v     : verbose (trace import statements); also PYTHONVERBOSE=x\n"
+        "         can be supplied multiple times to increase verbosity\n"
+        "-V     : print the Python version number and exit (also --version)\n"
+        "         when given twice, print more information about the build\n"
+        "-W arg : warning control; arg is action:message:category:module:lineno\n"
+        "         also PYTHONWARNINGS=arg\n"
+        "-x     : skip first line of source, allowing use of non-Unix forms of #!cmd\n"
+        "-X opt : set implementation-specific option. The following options are available:\n"
+        "         -X faulthandler: enable faulthandler\n"
+        "         -X showrefcount: output the total reference count and number of used\n"
+        "             memory blocks when the program finishes or after each statement in the\n"
+        "             interactive interpreter. This only works on debug builds\n"
+        "         -X tracemalloc: start tracing Python memory allocations using the\n"
+        "             tracemalloc module. By default, only the most recent frame is stored in a\n"
+        "             traceback of a trace. Use -X tracemalloc=NFRAME to start tracing with a\n"
+        "             traceback limit of NFRAME frames\n"
+        "         -X importtime: show how long each import takes. It shows module name,\n"
+        "             cumulative time (including nested imports) and self time (excluding\n"
+        "             nested imports). Note that its output may be broken in multi-threaded\n"
+        "             application. Typical usage is python3 -X importtime -c 'import asyncio'\n"
+        "         -X dev: enable CPython's \"development mode\", introducing additional runtime\n"
+        "             checks which are too expensive to be enabled by default. Effect of the\n"
+        "             developer mode:\n"
+        "                * Add default warning filter, as -W default\n"
+        "                * Install debug hooks on memory allocators: see the PyMem_SetupDebugHooks()\n"
+        "                  C function\n"
+        "                * Enable the faulthandler module to dump the Python traceback on a crash\n"
+        "                * Enable asyncio debug mode\n"
+        "                * Set the dev_mode attribute of sys.flags to True\n"
+        "                * io.IOBase destructor logs close() exceptions\n"
+        "         -X utf8: enable UTF-8 mode for operating system interfaces, overriding the default\n"
+        "             locale-aware mode. -X utf8=0 explicitly disables UTF-8 mode (even when it would\n"
+        "             otherwise activate automatically)\n"
+        "         -X pycache_prefix=PATH: enable writing .pyc files to a parallel tree rooted at the\n"
+        "             given directory instead of to the code tree\n"
+        "         -X warn_default_encoding: enable opt-in EncodingWarning for 'encoding=None'\n"
+        "         -X int_max_str_digits=number: limit the size of int<->str conversions.\n"
+        "             This helps avoid denial of service attacks when parsing untrusted data.\n"
+        "             The default is sys.int_info.default_max_str_digits.  0 disables.\n"
+        "\n"
+        "--check-hash-based-pycs always|default|never:\n"
+        "    control how Python invalidates hash-based .pyc files\n"
+        "file   : program read from script file\n"
+        "-      : program read from stdin (default; interactive mode if a tty)\n"
+        "arg ...: arguments passed to program in sys.argv[1:]\n"
+        "\n"
+        "Other environment variables:\n"
+        "PYTHONSTARTUP: file executed on interactive startup (no default)\n"
+        "PYTHONPATH   : ':'-separated list of directories prefixed to the\n"
+        "               default module search path.  The result is sys.path.\n"
+        "PYTHONHOME   : alternate <prefix> directory (or <prefix>:<exec_prefix>).\n"
+        "               The default module search path uses <prefix>/lib/pythonX.X.\n"
+        "PYTHONPLATLIBDIR : override sys.platlibdir.\n"
+        "PYTHONCASEOK : ignore case in 'import' statements (Windows).\n"
+        "PYTHONUTF8: if set to 1, enable the UTF-8 mode.\n"
+        "PYTHONIOENCODING: Encoding[:errors] used for stdin/stdout/stderr.\n"
+        "PYTHONFAULTHANDLER: dump the Python traceback on fatal errors.\n"
+        "PYTHONHASHSEED: if this variable is set to 'random', a random value is used\n"
+        "   to seed the hashes of str and bytes objects.  It can also be set to an\n"
+        "   integer in the range [0,4294967295] to get hash values with a\n"
+        "   predictable seed.\n"
+        "PYTHONINTMAXSTRDIGITS: limits the maximum digit characters in an int value\n"
+        "   when converting from a string and when converting an int back to a str.\n"
+        "   A value of 0 disables the limit.  Conversions to or from bases 2, 4, 8,\n"
+        "   16, and 32 are never limited.\n"
+        "PYTHONMALLOC: set the Python memory allocators and/or install debug hooks\n"
+        "   on Python memory allocators. Use PYTHONMALLOC=debug to install debug\n"
+        "   hooks.\n"
+        "PYTHONCOERCECLOCALE: if this variable is set to 0, it disables the locale\n"
+        "   coercion behavior. Use PYTHONCOERCECLOCALE=warn to request display of\n"
+        "   locale coercion and locale compatibility warnings on stderr.\n"
+        "PYTHONBREAKPOINT: if this variable is set to 0, it disables the default\n"
+        "   debugger. It can be set to the callable of your debugger of choice.\n"
+        "PYTHONDEVMODE: enable the development mode.\n"
+        "PYTHONPYCACHEPREFIX: root directory for bytecode cache (pyc) files.\n"
+        "PYTHONWARNDEFAULTENCODING: enable opt-in EncodingWarning for 'encoding=None'.\n"
+    ),
+    "3.11": (
+        "usage: python3 [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
+        "Options (and corresponding environment variables):\n"
+        "-b     : issue warnings about str(bytes_instance), str(bytearray_instance)\n"
+        "         and comparing bytes/bytearray with str. (-bb: issue errors)\n"
+        "-B     : don't write .pyc files on import; also PYTHONDONTWRITEBYTECODE=x\n"
+        "-c cmd : program passed in as string (terminates option list)\n"
+        "-d     : turn on parser debugging output (for experts only, only works on\n"
+        "         debug builds); also PYTHONDEBUG=x\n"
+        "-E     : ignore PYTHON* environment variables (such as PYTHONPATH)\n"
+        "-h     : print this help message and exit (also -? or --help)\n"
+        "-i     : inspect interactively after running script; forces a prompt even\n"
+        "         if stdin does not appear to be a terminal; also PYTHONINSPECT=x\n"
+        "-I     : isolate Python from the user's environment (implies -E and -s)\n"
+        "-m mod : run library module as a script (terminates option list)\n"
+        "-O     : remove assert and __debug__-dependent statements; add .opt-1 before\n"
+        "         .pyc extension; also PYTHONOPTIMIZE=x\n"
+        "-OO    : do -O changes and also discard docstrings; add .opt-2 before\n"
+        "         .pyc extension\n"
+        "-P     : don't prepend a potentially unsafe path to sys.path\n"
+        "-q     : don't print version and copyright messages on interactive startup\n"
+        "-s     : don't add user site directory to sys.path; also PYTHONNOUSERSITE\n"
+        "-S     : don't imply 'import site' on initialization\n"
+        "-u     : force the stdout and stderr streams to be unbuffered;\n"
+        "         this option has no effect on stdin; also PYTHONUNBUFFERED=x\n"
+        "-v     : verbose (trace import statements); also PYTHONVERBOSE=x\n"
+        "         can be supplied multiple times to increase verbosity\n"
+        "-V     : print the Python version number and exit (also --version)\n"
+        "         when given twice, print more information about the build\n"
+        "-W arg : warning control; arg is action:message:category:module:lineno\n"
+        "         also PYTHONWARNINGS=arg\n"
+        "-x     : skip first line of source, allowing use of non-Unix forms of #!cmd\n"
+        "-X opt : set implementation-specific option\n"
+        "--check-hash-based-pycs always|default|never:\n"
+        "         control how Python invalidates hash-based .pyc files\n"
+        "--help-env      : print help about Python environment variables and exit\n"
+        "--help-xoptions : print help about implementation-specific -X options and exit\n"
+        "--help-all      : print complete help information and exit\n"
+        "Arguments:\n"
+        "file   : program read from script file\n"
+        "-      : program read from stdin (default; interactive mode if a tty)\n"
+        "arg ...: arguments passed to program in sys.argv[1:]\n"
+    ),
+    "3.12": (
+        "usage: python3 [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
+        "Options (and corresponding environment variables):\n"
+        "-b     : issue warnings about converting bytes/bytearray to str and comparing\n"
+        "         bytes/bytearray with str or bytes with int. (-bb: issue errors)\n"
+        "-B     : don't write .pyc files on import; also PYTHONDONTWRITEBYTECODE=x\n"
+        "-c cmd : program passed in as string (terminates option list)\n"
+        "-d     : turn on parser debugging output (for experts only, only works on\n"
+        "         debug builds); also PYTHONDEBUG=x\n"
+        "-E     : ignore PYTHON* environment variables (such as PYTHONPATH)\n"
+        "-h     : print this help message and exit (also -? or --help)\n"
+        "-i     : inspect interactively after running script; forces a prompt even\n"
+        "         if stdin does not appear to be a terminal; also PYTHONINSPECT=x\n"
+        "-I     : isolate Python from the user's environment (implies -E and -s)\n"
+        "-m mod : run library module as a script (terminates option list)\n"
+        "-O     : remove assert and __debug__-dependent statements; add .opt-1 before\n"
+        "         .pyc extension; also PYTHONOPTIMIZE=x\n"
+        "-OO    : do -O changes and also discard docstrings; add .opt-2 before\n"
+        "         .pyc extension\n"
+        "-P     : don't prepend a potentially unsafe path to sys.path; also\n"
+        "         PYTHONSAFEPATH\n"
+        "-q     : don't print version and copyright messages on interactive startup\n"
+        "-s     : don't add user site directory to sys.path; also PYTHONNOUSERSITE=x\n"
+        "-S     : don't imply 'import site' on initialization\n"
+        "-u     : force the stdout and stderr streams to be unbuffered;\n"
+        "         this option has no effect on stdin; also PYTHONUNBUFFERED=x\n"
+        "-v     : verbose (trace import statements); also PYTHONVERBOSE=x\n"
+        "         can be supplied multiple times to increase verbosity\n"
+        "-V     : print the Python version number and exit (also --version)\n"
+        "         when given twice, print more information about the build\n"
+        "-W arg : warning control; arg is action:message:category:module:lineno\n"
+        "         also PYTHONWARNINGS=arg\n"
+        "-x     : skip first line of source, allowing use of non-Unix forms of #!cmd\n"
+        "-X opt : set implementation-specific option\n"
+        "--check-hash-based-pycs always|default|never:\n"
+        "         control how Python invalidates hash-based .pyc files\n"
+        "--help-env: print help about Python environment variables and exit\n"
+        "--help-xoptions: print help about implementation-specific -X options and exit\n"
+        "--help-all: print complete help information and exit\n"
+        "\n"
+        "Arguments:\n"
+        "file   : program read from script file\n"
+        "-      : program read from stdin (default; interactive mode if a tty)\n"
+        "arg ...: arguments passed to program in sys.argv[1:]\n"
+    ),
+    "3.13": (
+        "usage: python3 [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
+        "Options (and corresponding environment variables):\n"
+        "-b     : issue warnings about converting bytes/bytearray to str and comparing\n"
+        "         bytes/bytearray with str or bytes with int. (-bb: issue errors)\n"
+        "-B     : don't write .pyc files on import; also PYTHONDONTWRITEBYTECODE=x\n"
+        "-c cmd : program passed in as string (terminates option list)\n"
+        "-d     : turn on parser debugging output (for experts only, only works on\n"
+        "         debug builds); also PYTHONDEBUG=x\n"
+        "-E     : ignore PYTHON* environment variables (such as PYTHONPATH)\n"
+        "-h     : print this help message and exit (also -? or --help)\n"
+        "-i     : inspect interactively after running script; forces a prompt even\n"
+        "         if stdin does not appear to be a terminal; also PYTHONINSPECT=x\n"
+        "-I     : isolate Python from the user's environment (implies -E, -P and -s)\n"
+        "-m mod : run library module as a script (terminates option list)\n"
+        "-O     : remove assert and __debug__-dependent statements; add .opt-1 before\n"
+        "         .pyc extension; also PYTHONOPTIMIZE=x\n"
+        "-OO    : do -O changes and also discard docstrings; add .opt-2 before\n"
+        "         .pyc extension\n"
+        "-P     : don't prepend a potentially unsafe path to sys.path; also\n"
+        "         PYTHONSAFEPATH\n"
+        "-q     : don't print version and copyright messages on interactive startup\n"
+        "-s     : don't add user site directory to sys.path; also PYTHONNOUSERSITE=x\n"
+        "-S     : don't imply 'import site' on initialization\n"
+        "-u     : force the stdout and stderr streams to be unbuffered;\n"
+        "         this option has no effect on stdin; also PYTHONUNBUFFERED=x\n"
+        "-v     : verbose (trace import statements); also PYTHONVERBOSE=x\n"
+        "         can be supplied multiple times to increase verbosity\n"
+        "-V     : print the Python version number and exit (also --version)\n"
+        "         when given twice, print more information about the build\n"
+        "-W arg : warning control; arg is action:message:category:module:lineno\n"
+        "         also PYTHONWARNINGS=arg\n"
+        "-x     : skip first line of source, allowing use of non-Unix forms of #!cmd\n"
+        "-X opt : set implementation-specific option\n"
+        "--check-hash-based-pycs always|default|never:\n"
+        "         control how Python invalidates hash-based .pyc files\n"
+        "--help-env: print help about Python environment variables and exit\n"
+        "--help-xoptions: print help about implementation-specific -X options and exit\n"
+        "--help-all: print complete help information and exit\n"
+        "\n"
+        "Arguments:\n"
+        "file   : program read from script file\n"
+        "-      : program read from stdin (default; interactive mode if a tty)\n"
+        "arg ...: arguments passed to program in sys.argv[1:]\n"
+    ),
+}
 
 
 class TpotOutputFull(Exception):
     pass
+
+
+class TpotWorkFull(Exception):
+    """The work, the memory or the session's time of the run is used up."""
 
 
 def tpot_python_version() -> str:
@@ -590,12 +1321,32 @@ def tpot_python_inline(cmd) -> bool:
     a script file, - and unknown options to upstream."""
     args = cmd.args
     index = 0
+    version_asked = False
+    ignore_env = False  # -E and -I: CPython leaves PYTHON_COLORS alone
+    environ = getattr(cmd, "environ", None) or {}
+    max_digits = tpot_digit_limit(environ["PYTHONINTMAXSTRDIGITS"]) if "PYTHONINTMAXSTRDIGITS" in environ else 4300
     while index < len(args):
         arg = args[index]
+        # -h ends the scan at once (recorded on 3.10, 3.11 and 3.13, derived for the others), -V is only noted
+        if arg == "--help":
+            tpot_python_help(cmd)
+            return True
+        if arg == "--version":
+            version_asked = True
+            index += 1
+            continue
         if arg in ("-", "--") or not arg.startswith("-") or arg.startswith("--"):
             return False
         for pos in range(1, len(arg)):
             flag = arg[pos]
+            if flag in "h?":
+                tpot_python_help(cmd)
+                return True
+            if flag == "V":
+                version_asked = True
+                continue
+            if flag in "EI":
+                ignore_env = True
             if flag in "cm" or flag in TPOT_PY_VALUE_FLAGS:
                 value = arg[pos + 1:]
                 if not value:
@@ -606,17 +1357,34 @@ def tpot_python_inline(cmd) -> bool:
                             return True
                         return False
                     value = args[index]
+                if flag in "cm" and version_asked:
+                    return False
                 if flag == "c":
-                    tpot_python_run(cmd, value)
+                    tpot_python_run(cmd, value, max_digits, ignore_env)
                     return True
                 if flag == "m":
                     cmd.exit(0)
                     return True
+                if flag == "X" and value.startswith("int_max_str_digits"):
+                    max_digits = tpot_digit_limit(value.partition("=")[2])
                 break
             if flag not in TPOT_PY_FLAGS:
                 return False
         index += 1
     return False
+
+
+def tpot_digit_limit(text: str):
+    """The limit of int <-> str conversions that -X int_max_str_digits=N or PYTHONINTMAXSTRDIGITS names (0: none),
+    None for a value this does not take as valid (derived from the Python docs, not recorded)."""
+    if text.isascii() and text.isdigit() and len(text) < 10 and (int(text) == 0 or int(text) >= 640):
+        return int(text)
+    return None
+
+
+def tpot_python_help(cmd) -> None:
+    cmd.write(tpot_table(TPOT_PY_HELP, tpot_python_version()))
+    cmd.exit(0)
 
 
 def tpot_python_usage(cmd, flag: str) -> None:
@@ -629,19 +1397,28 @@ def tpot_python_usage(cmd, flag: str) -> None:
     cmd.exit(2)
 
 
-def tpot_python_run(cmd, code: str) -> None:
+def tpot_python_run(cmd, code: str, max_digits=4300, ignore_env: bool = False) -> None:
     try:
-        out, err, status = tpot_python_code(code, tpot_python_version())
+        # CPython colours its report where stderr is a terminal (recorded: stdout may be anything)
+        colors = tpot_colors(getattr(cmd, "environ", None) or {}, tpot_terminal(cmd, 2), ignore_env)
+        deadline = tpot_deadline(getattr(cmd, "protocol", None))
+        events, status = tpot_python_events(code, tpot_python_version(), colors, max_digits, deadline)
     except Exception:  # noqa: BLE001 - code this does not follow is silent, the command always exits
-        out, err, status = "", "", 0
+        events, status = [], 0
     try:
         # stdout of a terminal is line buffered: its last line without newline comes at the exit, after
-        # stderr; what UTF-8 cannot carry is an escape (stderr's backslashreplace, a Python 2 byte string)
-        head, tail = out[:out.rfind("\n") + 1], out[out.rfind("\n") + 1:]
-        if head:
-            cmd.writeBytes(head.encode("utf-8", "backslashreplace"))
-        if err:
-            cmd.errorWrite(err.encode("utf-8", "backslashreplace").decode("utf-8"))
+        # stderr, which is written at once; what UTF-8 cannot carry is an escape (stderr's backslashreplace,
+        # a Python 2 byte string)
+        tail = ""
+        for stream, text in events:
+            if stream == "err":
+                cmd.errorWrite(text.encode("utf-8", "backslashreplace").decode("utf-8"))
+                continue
+            text = tail + text
+            cut = text.rfind("\n") + 1
+            tail = text[cut:]
+            if cut:
+                cmd.writeBytes(text[:cut].encode("utf-8", "backslashreplace"))
         if tail:
             cmd.writeBytes(tail.encode("utf-8", "backslashreplace"))
     except Exception:  # noqa: BLE001 - the command always exits
@@ -650,10 +1427,20 @@ def tpot_python_run(cmd, code: str) -> None:
         cmd.exit(status)
 
 
-def tpot_python_code(code: str, version: str) -> tuple[str, str, int]:
+def tpot_python_code(code: str, version: str, colors: bool = False) -> tuple[str, str, int]:
     """(stdout, stderr, exit status) of python -c code, from its syntax tree alone."""
+    events, status = tpot_python_events(code, version, colors)
+    return ("".join(text for stream, text in events if stream == "out"),
+            "".join(text for stream, text in events if stream == "err"), status)
+
+
+def tpot_python_events(code: str, version: str, colors: bool = False, max_digits=4300,
+                       deadline: float | None = None) -> tuple[list, int]:
+    """([("out" | "err", text) in the order of the writes], exit status) of python -c code. max_digits is the
+    limit of int <-> str conversions (0: none, None: not known), deadline the time.monotonic() the run ends at."""
     if len(code) > TPOT_CODE_LIMIT:
-        return "", "", 0
+        return [], 0
+    colors = colors and tpot_version_tuple(version) >= (3, 13)
     python2 = tpot_version_tuple(version)[0] < 3
     try:
         with warnings.catch_warnings():
@@ -668,14 +1455,14 @@ def tpot_python_code(code: str, version: str) -> tuple[str, str, int]:
                         module = ast.parse(TPOT_PY2_PRINT.sub(tpot_py2_print, code), "<string>")
                     except SyntaxError:
                         if not tpot_incomplete(error):
-                            return "", "", 0
+                            return [], 0
                 if module is None:
-                    return "", tpot_syntax_error(error, version), 1
+                    return [("err", tpot_syntax_error(error, version, colors))], 1
     except Exception:  # noqa: BLE001 - nesting or memory limits of the parser: silent
-        return "", "", 0
+        return [], 0
     future = any(isinstance(node, ast.ImportFrom) and node.module == "__future__"
                  and any(alias.name == "print_function" for alias in node.names) for node in module.body)
-    return tpot_python_statements(module.body, python2 and not future, version, code)
+    return tpot_python_statements(module, python2 and not future, version, code, colors, max_digits, deadline)
 
 
 def tpot_py2_print(match) -> str:
@@ -686,7 +1473,7 @@ def tpot_incomplete(error) -> bool:
     return any(text in (error.msg or "") for text in ("never closed", "unterminated", "EOF", "EOL", "indented block"))
 
 
-def tpot_syntax_error(error, version: str) -> str:
+def tpot_syntax_error(error, version: str, colors: bool = False) -> str:
     """CPython's report of a syntax error in -c code; Python < 3.10 (and 2.7) with
     their messages and one caret."""
     line = (error.text or "").split("\n")[0].rstrip("\r")
@@ -718,11 +1505,25 @@ def tpot_syntax_error(error, version: str) -> str:
         width = max(1, min(error.end_offset - error.offset, len(stripped) - max(start, 0)))
     start = max(0, min(start, len(stripped)))
     return (
-        f'  File "<string>", line {error.lineno or 1}\n'
-        f"    {stripped}\n"
-        f"    {' ' * start}{'^' * width}\n"
-        f"{type(error).__name__}: {msg}\n"
+        f'  File {tpot_paint("35", chr(34) + "<string>" + chr(34), colors)}, line {tpot_paint("35", error.lineno or 1, colors)}\n'
+        f"    {stripped[:start]}{tpot_paint('1;31', stripped[start:start + width], colors)}{stripped[start + width:]}\n"
+        f"    {' ' * start}{tpot_paint('1;31', '^' * width, colors)}\n"
+        f"{tpot_paint('1;35', type(error).__name__, colors)}: {tpot_paint('35', msg, colors)}\n"
     )
+
+
+class TpotPyError(Exception):
+    """An exception CPython raises for the code: its class, its text and the node that raised it."""
+
+    def __init__(self, kind: str, text: str, node):
+        super().__init__(text)
+        self.kind, self.text, self.node = kind, text, node
+
+
+class TpotExit(Exception):
+    def __init__(self, status: int):
+        super().__init__(status)
+        self.status = status
 
 
 def tpot_dotted(node) -> str | None:
@@ -736,111 +1537,982 @@ def tpot_dotted(node) -> str | None:
     return ".".join(reversed(parts))
 
 
-def tpot_literal(node, names):
-    if isinstance(node, ast.Name) and node.id in names:
-        return names[node.id]
+def tpot_table(table: dict, version: str) -> str:
+    """The recorded entry for this Python: the newest one not above it, else the oldest of its major
+    (derived for a version that is none of the recorded)."""
+    wanted = tpot_version_tuple(version)
+    below = [key for key in table if tpot_version_tuple(key) <= wanted]
+    if below:
+        return table[max(below, key=tpot_version_tuple)]
+    same = [key for key in table if tpot_version_tuple(key)[0] == wanted[0]]
+    return table[min(same or table, key=tpot_version_tuple)]
+
+
+def tpot_edit_distance(a: str, b: str, limit: int) -> int:
+    """levenshtein_distance of Python/suggestions.c: a move costs 2, a change of case 1; limit + 1 past the limit."""
+    if a == b:
+        return 0
+    start = 0
+    while start < len(a) and start < len(b) and a[start] == b[start]:
+        start += 1
+    a, b = a[start:], b[start:]
+    while a and b and a[-1] == b[-1]:
+        a, b = a[:-1], b[:-1]
+    if not a or not b:
+        return 2 * (len(a) + len(b))
+    if len(a) > TPOT_NAME_MAX or len(b) > TPOT_NAME_MAX:
+        return limit + 1
+    if len(b) < len(a):
+        a, b = b, a
+    if (len(b) - len(a)) * 2 > limit:
+        return limit + 1
+    row = [2 * (index + 1) for index in range(len(a))]
+    result = 0
+    for position, bchar in enumerate(b):
+        distance = result = position * 2
+        smallest = None
+        for index, achar in enumerate(a):
+            change = 0 if achar == bchar else 1 if achar.lower() == bchar.lower() else 2
+            substitute = distance + change
+            distance = row[index]
+            result = min(min(result, distance) + 2, substitute)
+            row[index] = result
+            if smallest is None or result < smallest:
+                smallest = result
+        if smallest > limit:
+            return limit + 1
+    return result
+
+
+def tpot_nearest(name: str, candidates: list, scope=None, strict: bool = False) -> str | None:
+    """The name CPython offers for a mistyped one: at most a third of the characters changed, the first of the best.
+    From 3.13 (strict) 750 candidates are still looked through, before it they are too many (derived from
+    suggestions.c and traceback.py, not recorded)."""
+    if len(candidates) > TPOT_NAME_CANDIDATES if strict else len(candidates) >= TPOT_NAME_CANDIDATES:
+        return None
+    best, found = None, None
+    for candidate in candidates:
+        if scope is not None:
+            scope.step()
+            scope.charge(min(len(name), TPOT_NAME_MAX) * min(len(candidate), TPOT_NAME_MAX))
+        if candidate == name:
+            continue
+        limit = (len(candidate) + len(name) + 3) * 2 // 6
+        if best is not None:
+            limit = min(limit, best - 1)
+        distance = tpot_edit_distance(name, candidate, limit)
+        if distance > limit:
+            continue
+        if found is None or distance < best:
+            found, best = candidate, distance
+    return found
+
+
+def tpot_name_hint(name: str, scope) -> str:
+    """The text CPython adds to "name 'x' is not defined": 3.10 a near name, 3.12 a standard module to import."""
+    version = tpot_version_tuple(scope.version)
+    if version < (3, 10):
+        return ""
+    names = list(scope.order)
+    builtins = tpot_table(TPOT_PY_BUILTINS, scope.version).split()
+    if version >= (3, 13):
+        found = tpot_nearest(name, names + names + builtins, scope, True)
+    else:
+        # up to 3.12 the names of the module are looked through first, the builtins only when they offer none
+        found = tpot_nearest(name, names, scope) or tpot_nearest(name, builtins, scope)
+    hint = f". Did you mean: '{found}'?" if found else ""
+    if version >= (3, 12) and name in tpot_table(TPOT_PY_STDLIB, scope.version).split():
+        hint += f" Or did you forget to import '{name}'?" if found else f". Did you forget to import '{name}'?"
+    return hint
+
+
+def tpot_stores(node):
+    """The names a node binds in the module scope, in source order (function and class bodies, lambdas and
+    comprehensions have scopes of their own)."""
+    kind = type(node)
+    if kind is ast.Name:
+        if not isinstance(node.ctx, ast.Load):
+            yield node.id
+        return
+    if kind in (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef):
+        yield node.name
+        return
+    if kind in (ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp):
+        return
+    if kind in (ast.Import, ast.ImportFrom):
+        for alias in node.names:
+            if alias.name != "*":
+                yield (alias.asname or alias.name).split(".")[0]
+        return
+    if kind in TPOT_MATCH:
+        name = getattr(node, "name", None) or getattr(node, "rest", None)
+        if name:
+            yield name
+    for child in ast.iter_child_nodes(node):
+        yield from tpot_stores(child)
+
+
+def tpot_known_names(module, version: str):
+    """The names a load in the module can never fail on (bound anywhere in the code, builtins, the
+    globals of -c); None where a name may come from anywhere (import *, exec, eval, globals())."""
+    known = set(tpot_table(TPOT_PY_BUILTINS, version).split()) | set(tpot_table(TPOT_PY_GLOBALS, version).split())
+    known.add(TPOT_PY2_STATEMENT)
+    for node in ast.walk(module):
+        kind = type(node)
+        if kind is ast.Name:
+            if not isinstance(node.ctx, ast.Load):
+                known.add(node.id)
+        elif kind in (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef):
+            known.add(node.name)
+        elif kind is ast.arg:
+            known.add(node.arg)
+        elif kind in (ast.Import, ast.ImportFrom):
+            for alias in node.names:
+                if alias.name == "*":
+                    return None
+                known.add((alias.asname or alias.name).split(".")[0])
+        elif kind is ast.ExceptHandler and node.name:
+            known.add(node.name)
+        elif kind in (ast.Global, ast.Nonlocal):
+            known.update(node.names)
+        elif kind in TPOT_MATCH:
+            known.update(name for name in (getattr(node, "name", None), getattr(node, "rest", None)) if name)
+        elif kind is ast.Call and isinstance(node.func, ast.Name) and node.func.id in TPOT_DYNAMIC:
+            return None
+    return frozenset(known)
+
+
+class TpotScope:
+    """What the run of the code has done so far: the names bound to literals, the names of the module in the
+    order they were bound (for the suggestions), the output."""
+
+    def __init__(self, module, version: str, print_tuple: bool, code: str, max_digits=4300,
+                 deadline: float | None = None):
+        self.version = version
+        self.print_tuple = print_tuple
+        self.code = code
+        self.py3 = tpot_version_tuple(version)[0] >= 3
+        # the limit of int <-> str conversions (0: none, None: not known); Python 2 has none
+        self.max_digits = max_digits if self.py3 else 0
+        self.names: dict = {}
+        self.order: dict = dict.fromkeys(tpot_table(TPOT_PY_GLOBALS, version).split())
+        self.known = tpot_known_names(module, version)
+        # a limit that code outside the top-level calls of sys.set_int_max_str_digits may have changed is not known
+        direct = {id(stmt.value.func) for stmt in module.body if isinstance(stmt, ast.Expr)
+                  and isinstance(stmt.value, ast.Call) and tpot_dotted(stmt.value.func) == "sys.set_int_max_str_digits"}
+        self.limit_sure = self.known is not None and not any(
+            (isinstance(item, ast.Attribute) and item.attr == "set_int_max_str_digits" and id(item) not in direct)
+            or (isinstance(item, ast.Name) and item.id == "set_int_max_str_digits")
+            or (isinstance(item, ast.alias) and item.name == "set_int_max_str_digits")
+            or (isinstance(item, ast.Constant) and isinstance(item.value, str) and "int_max_str" in item.value)
+            for item in ast.walk(module))
+        self.events: list[tuple[str, str]] = []
+        self.budget = [TPOT_OUTPUT_LIMIT]
+        # the work left, the bytes the names hold (by name), the time the run ends at
+        self.work = TPOT_WORK_LIMIT
+        self.steps = 0
+        self.sizes: dict = {}
+        self.held = 0
+        self.deadline = deadline
+        # every statement before the current one was followed to its end: an error of CPython is then certain
+        self.sure = True
+        self.builtins = frozenset(tpot_table(TPOT_PY_BUILTINS, version).split())
+        self.stdlib = frozenset(tpot_table(TPOT_PY_STDLIB, version).split())
+
+    def charge(self, units: int) -> None:
+        self.work -= units
+        if self.work < 0:
+            raise TpotWorkFull
+
+    def step(self) -> None:
+        self.charge(TPOT_STEP_COST)
+        self.steps += 1
+        if self.steps > TPOT_STEP_FLOOR and self.deadline is not None and time.monotonic() >= self.deadline:
+            raise TpotWorkFull
+
+    def size(self, value, limit: int = TPOT_STR_CHARS):
+        """The bytes of a value, a container counting what it holds once for every use of it (what str() of it
+        takes at most); None past limit."""
+        total, pending = 0, [value]
+        while pending:
+            item = pending.pop()
+            self.charge(1)
+            kind = type(item)
+            if kind is int:
+                total += item.bit_length() // 8 + 1
+            elif kind is str:
+                total += len(item)
+            elif kind in (tuple, list, set):
+                total += 8 * len(item) + 8
+                pending.extend(item)
+            elif kind is dict:
+                total += 16 * len(item) + 8
+                pending.extend(item)
+                pending.extend(item.values())
+            else:
+                total += 8
+            if total > limit:
+                return None
+        return total
+
+    def hold(self, name: str, value) -> None:
+        """The name is bound to the value: the names of the code may hold TPOT_HELD_LIMIT bytes together."""
+        size = self.size(value)
+        if size is None or self.held - self.sizes.get(name, 0) + size > TPOT_HELD_LIMIT:
+            raise TpotWorkFull
+        self.held += size - self.sizes.get(name, 0)
+        self.sizes[name] = size
+
+    def drop(self, name: str) -> None:
+        self.held -= self.sizes.pop(name, 0)
+        self.names.pop(name, None)
+
+    def bind(self, node) -> None:
+        for name in tpot_stores(node):
+            self.order.setdefault(name)
+
+    def limit(self):
+        """The limit of int <-> str conversions now (0: none), None when it is not known."""
+        return self.max_digits if self.limit_sure or not self.py3 else None
+
+    def forget(self, node) -> None:
+        for name in tpot_stores(node):
+            self.drop(name)
+
+    def stdout(self, text: str) -> None:
+        self.events.append(("out", text))
+
+    def stderr(self, text: str) -> None:
+        self.events.append(("err", text))
+
+    def write(self, pieces, node) -> None:
+        # each piece is one write of CPython (print writes every value, sep and end on their own)
+        for piece in pieces:
+            if self.py3:
+                try:
+                    piece.encode("utf-8")
+                except UnicodeEncodeError as error:
+                    raise TpotPyError("UnicodeEncodeError", str(error), node) from None
+            self.stdout(piece)
+
+
+def tpot_truth(value):
+    if isinstance(value, (bool, int, float, str, tuple, list, dict, type(None))):
+        return bool(value)
+    return TPOT_UNKNOWN
+
+
+def tpot_eval(node, scope):
+    """The value of an expression, TPOT_UNKNOWN where this does not follow it; an expression that is left unknown
+    may have raised an error CPython reports, so the statements after it are no longer sure."""
+    scope.charge(TPOT_NODE_COST)
+    value = tpot_value(node, scope)
+    if value is TPOT_UNKNOWN and not isinstance(node, TPOT_CANNOT_FAIL) and not tpot_safe_attribute(node, scope):
+        scope.sure = False
+    return value
+
+
+def tpot_safe_attribute(node, scope) -> bool:
+    """sys.argv and the like: attributes of a stdlib module the code imported (no other name binds it)."""
+    dotted = tpot_dotted(node) if isinstance(node, ast.Attribute) else None
+    return dotted in TPOT_SAFE_ATTRS and dotted.split(".")[0] not in scope.names
+
+
+def tpot_value(node, scope):
+    """The value of an expression as CPython computes it, TPOT_UNKNOWN where this does not follow it. What
+    CPython evaluates for sure is walked in its order: the first name nothing binds raises its NameError."""
+    kind = type(node)
+    if kind is ast.Constant:
+        return node.value
+    if kind is ast.Name:
+        return tpot_name(node, scope)
+    if kind in (ast.Tuple, ast.List):
+        values = [tpot_eval(item.value if isinstance(item, ast.Starred) else item, scope) for item in node.elts]
+        if any(value is TPOT_UNKNOWN for value in values) or any(isinstance(item, ast.Starred) for item in node.elts):
+            return TPOT_UNKNOWN
+        result = tuple(values) if kind is ast.Tuple else values
+        # a name used twice makes a container that str() would write out twice: it is held only below a size
+        return result if scope.size(result) is not None else TPOT_UNKNOWN
+    if kind is ast.Call:
+        return tpot_call(node, scope)
+    if kind is ast.Attribute:
+        tpot_eval(node.value, scope)
+        return TPOT_UNKNOWN
+    if kind is ast.Subscript:
+        tpot_eval(node.value, scope)
+        tpot_eval(node.slice, scope)
+        return TPOT_UNKNOWN
+    if kind is ast.Slice:
+        for part in (node.lower, node.upper, node.step):
+            if part is not None:
+                tpot_eval(part, scope)
+        return TPOT_UNKNOWN
+    if kind is ast.Starred:
+        tpot_eval(node.value, scope)
+        return TPOT_UNKNOWN
+    if kind is ast.UnaryOp:
+        operand = tpot_eval(node.operand, scope)
+        if operand is TPOT_UNKNOWN:
+            return TPOT_UNKNOWN
+        if type(operand) in (int, float) and isinstance(node.op, (ast.USub, ast.UAdd)):
+            scope.charge(tpot_limbs(operand) if type(operand) is int else 1)
+            return -operand if isinstance(node.op, ast.USub) else operand
+        if isinstance(node.op, ast.Not):
+            truth = tpot_truth(operand)
+            return TPOT_UNKNOWN if truth is TPOT_UNKNOWN else not truth
+        return tpot_literal_value(node)
+    if kind is ast.BinOp:
+        left = tpot_eval(node.left, scope)
+        right = tpot_eval(node.right, scope)
+        if left is TPOT_UNKNOWN or right is TPOT_UNKNOWN:
+            return TPOT_UNKNOWN
+        value = tpot_binop(node, left, right, scope)
+        if value is not TPOT_UNKNOWN:
+            return value
+        # only a complex literal (1+2j) is a literal binary operation
+        return tpot_literal_value(node) if isinstance(node.right, ast.Constant) else TPOT_UNKNOWN
+    if kind is ast.Dict:
+        for key, value in zip(node.keys, node.values):
+            if key is not None:
+                tpot_eval(key, scope)
+            tpot_eval(value, scope)
+        return tpot_literal_value(node)
+    if kind is ast.Set:
+        for item in node.elts:
+            tpot_eval(item, scope)
+        return tpot_literal_value(node)
+    if kind is ast.BoolOp:
+        value = TPOT_UNKNOWN
+        for operand in node.values:
+            value = tpot_eval(operand, scope)
+            truth = tpot_truth(value)
+            if truth is TPOT_UNKNOWN:
+                return TPOT_UNKNOWN
+            if truth is isinstance(node.op, ast.Or):
+                return value
+        return value
+    if kind is ast.IfExp:
+        truth = tpot_truth(tpot_eval(node.test, scope))
+        if truth is TPOT_UNKNOWN:
+            return TPOT_UNKNOWN
+        return tpot_eval(node.body if truth else node.orelse, scope)
+    if kind is ast.Compare:
+        left = tpot_eval(node.left, scope)
+        right = tpot_eval(node.comparators[0], scope)
+        compare = TPOT_COMPARE.get(type(node.ops[0]))
+        if (len(node.ops) == 1 and compare and type(left) is type(right) and type(left) in (int, str)
+                and (type(left) is int or (left.isascii() and right.isascii()))):
+            scope.charge(tpot_limbs(left) + tpot_limbs(right) if type(left) is int else min(len(left), len(right)))
+            return compare(left, right)
+        return TPOT_UNKNOWN
+    if kind is ast.JoinedStr:
+        parts = [tpot_eval(item, scope) for item in node.values]
+        if any(type(part) is not str for part in parts) or sum(map(len, parts)) > TPOT_STR_CHARS:
+            return TPOT_UNKNOWN
+        scope.charge(sum(map(len, parts)))
+        return "".join(parts)
+    if kind is ast.FormattedValue:
+        value = tpot_eval(node.value, scope)
+        if node.format_spec is not None:
+            tpot_eval(node.format_spec, scope)
+            return TPOT_UNKNOWN
+        if node.conversion not in (-1, 115, 114):
+            return TPOT_UNKNOWN
+        if type(value) is int:
+            return tpot_int_text(value, scope, node)
+        if type(value) is str:
+            return repr(value) if node.conversion == 114 else value
+        return TPOT_UNKNOWN
+    if kind in (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp):
+        tpot_eval(node.generators[0].iter, scope)
+        return TPOT_UNKNOWN
+    if kind is ast.NamedExpr:
+        value = tpot_eval(node.value, scope)
+        tpot_assign(node.target, value, scope)
+        return value
+    return TPOT_UNKNOWN
+
+
+def tpot_literal_value(node):
     try:
         return ast.literal_eval(node)
     except Exception:  # noqa: BLE001 - anything that is no literal
         return TPOT_UNKNOWN
 
 
-def tpot_encode_error(error, call, version: str, code: str) -> str:
-    """CPython's traceback of a write to stdout that UTF-8 cannot carry; 3.13 and later show the
-    lines of the call, ~ under the function and ^ under its arguments."""
-    lines = ["Traceback (most recent call last):\n", f'  File "<string>", line {call.lineno}, in <module>\n']
-    source = re.split(r"\r\n|\r|\n", code)
-    if tpot_version_tuple(version) >= (3, 13) and call.end_lineno <= len(source):
-        rows = source[call.lineno - 1:call.end_lineno]
-
-        def column(row, offset):
-            # ast counts columns in UTF-8 bytes
-            return len(row.encode("utf-8", "surrogatepass")[:offset].decode("utf-8", "surrogatepass"))
-
-        start = (call.lineno, column(rows[0], call.col_offset))
-        func_end = (call.func.end_lineno, column(source[call.func.end_lineno - 1], call.func.end_col_offset))
-        end = (call.end_lineno, column(rows[-1], call.end_col_offset))
-        indent = min(len(row) - len(row.lstrip()) for row in rows if row.strip())
-        for number, row in enumerate(rows, call.lineno):
-            first = start[1] if number == start[0] else len(row) - len(row.lstrip())
-            last = end[1] if number == end[0] else len(row.rstrip())
-            marks = "".join("~" if (number, pos) < func_end else "^" for pos in range(first, last))
-            lines.append(f"    {row[indent:].rstrip()}\n    {' ' * (first - indent)}{marks}\n")
-    return "".join(lines) + f"UnicodeEncodeError: {error}\n"
+def tpot_limbs(value: int) -> int:
+    """The number of 30-bit digits CPython holds the int in."""
+    return abs(value).bit_length() // 30 + 1
 
 
-def tpot_python_statements(body, print_tuple=False, version="3.12.3", code="") -> tuple[str, str, int]:
-    """print_tuple: print(a, b) prints the tuple (a, b), as a Python 2 print statement. Python 3
-    ends at a write to stdout that UTF-8 cannot carry, as CPython's strict stdout does."""
-    names: dict = {}
-    out: list[str] = []
-    err: list[str] = []
-    budget = [TPOT_OUTPUT_LIMIT]
-    strict = tpot_version_tuple(version)[0] >= 3
+def tpot_digits_error(scope, node, count=None):
+    """The ValueError of an int <-> str conversion past the limit (recorded: 3.9 / 3.10 name the number of
+    digits without the word, 3.11 and later with it)."""
+    limit = scope.limit()
+    size = f"{limit} digits" if tpot_version_tuple(scope.version) >= (3, 11) else str(limit)
+    found = f": value has {count} digits;" if count else ";"
+    return TpotPyError("ValueError", f"Exceeds the limit ({size}) for integer string conversion{found} "
+                                     "use sys.set_int_max_str_digits() to increase the limit", node)
 
-    def stdout(pieces, call):
-        # each piece is one write of CPython (print writes every value, sep and end on their own)
-        for piece in pieces:
-            if strict:
-                try:
-                    piece.encode("utf-8")
-                except UnicodeEncodeError as error:
-                    err.append(tpot_encode_error(error, call, version, code))
-                    return False
-            out.append(piece)
-        return True
 
+def tpot_int_text(value: int, scope, node):
+    """str(value) as the Python of the persona does it: past the limit of digits it raises ValueError, a number
+    this does not compute with (or a limit it does not know) is TPOT_UNKNOWN."""
+    bits = abs(value).bit_length()
+    if bits <= TPOT_SAFE_BITS:
+        scope.charge(bits // 8 + 1)
+        return str(value)
+    limit = scope.limit()
+    if limit is None or bits > TPOT_INT_BITS:
+        return TPOT_UNKNOWN
+    # 2**(bits - 1) <= abs(value): at least that many digits, which is a test that needs no conversion
+    if limit and (bits - 1) * 0.30102999566398 >= limit:
+        raise tpot_digits_error(scope, node)
+    # the host's own limit would stop str() of this, Decimal prints every digit (a quadratic conversion)
+    scope.charge(2 * (bits // 30 + 1) ** 2)
+    text = str(decimal.Decimal(value))
+    if limit and len(text.lstrip("-")) > limit:
+        raise tpot_digits_error(scope, node)
+    return text
+
+
+def tpot_parse_int(text: str, base: int, scope, node):
+    """int(text, base) of a text of plain digits; the digit limit applies to bases that are no power of two."""
+    if len(text) > TPOT_STR_CHARS or not text.isascii() or (not scope.py3 and "_" in text):
+        return TPOT_UNKNOWN
+    scope.charge(len(text))
+    if base in (2, 8, 16, 32):
+        try:
+            value = int(text, base)
+        except ValueError:
+            return TPOT_UNKNOWN
+        return value if value.bit_length() <= TPOT_INT_BITS else TPOT_UNKNOWN
+    text = text.strip()
+    if base != 10 or not re.fullmatch(r"[+-]?[0-9]+(?:_[0-9]+)*", text):
+        return TPOT_UNKNOWN
+    digits = sum(char.isdigit() for char in text)
+    if digits <= 640:
+        return int(text)
+    limit = scope.limit()
+    if limit is None or re.match(r"[+-]?0", text):
+        return TPOT_UNKNOWN
+    if limit and digits > limit:
+        raise tpot_digits_error(scope, node, digits)
+    if digits > TPOT_INT_BITS * 0.30102999566398:
+        return TPOT_UNKNOWN
+    scope.charge(2 * (digits // 9 + 1) ** 2)
+    return int(decimal.Decimal(text.replace("_", "")))
+
+
+def tpot_str(value, scope, node):
+    """str(value) of a value the evaluator holds, TPOT_UNKNOWN where this cannot tell."""
+    if type(value) is int:
+        return tpot_int_text(value, scope, node)
     try:
-        for node in body:
-            if isinstance(node, ast.Assign):
-                value = tpot_literal(node.value, names)
-                for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        if value is TPOT_UNKNOWN:
-                            names.pop(target.id, None)
-                        else:
-                            names[target.id] = value
-                continue
-            if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)):
-                continue
-            call = node.value
-            func = tpot_dotted(call.func)
-            if func in ("exit", "quit", "sys.exit", "os._exit"):
-                status = tpot_literal(call.args[0], names) if call.args else None
-                if status is None or status is TPOT_UNKNOWN:
-                    return "".join(out), "".join(err), 0
-                if isinstance(status, int):
-                    return "".join(out), "".join(err), status & 0xFF
-                err.append(tpot_text(status, budget) + "\n")
-                return "".join(out), "".join(err), 1
-            if func == "print" and print_tuple and (call.keywords or len(call.args) != 1):
-                printed = None if call.keywords else tpot_print_tuple(call, names, budget)
-                if printed is not None:
-                    out.append(printed)
-            elif func in ("print", TPOT_PY2_STATEMENT):
-                printed = tpot_print(call, names, budget)
-                if printed is not None:
-                    if printed[1]:
-                        err.append("".join(printed[0]))
-                    elif not stdout(printed[0], call):
-                        return "".join(out), "".join(err), 1
-            elif func in ("sys.stdout.write", "sys.stderr.write") and len(call.args) == 1 and not call.keywords:
-                value = tpot_literal(call.args[0], names)
-                if isinstance(value, str):
-                    if func == "sys.stderr.write":
-                        err.append(tpot_text(value, budget))
-                    elif not stdout([tpot_text(value, budget)], call):
-                        return "".join(out), "".join(err), 1
-    except TpotOutputFull:
+        text = str(value)
+    except Exception:  # noqa: BLE001 - a container with a number the host does not print
+        return TPOT_UNKNOWN
+    scope.charge(len(text))
+    return text
+
+
+def tpot_binop(node, left, right, scope):
+    """left <op> right of ints and texts, TPOT_UNKNOWN for what is not computed (huge results, other types)."""
+    op = type(node.op)
+    if type(left) is int and type(right) is int:
+        big, small = sorted((tpot_limbs(left), tpot_limbs(right)), reverse=True)
+        if op in (ast.Add, ast.Sub):
+            scope.charge(big)
+            return left + right if op is ast.Add else left - right
+        if op is ast.Mult:
+            if left.bit_length() + right.bit_length() > TPOT_INT_BITS:
+                return TPOT_UNKNOWN
+            # Karatsuba: about big * small ** 0.585 steps
+            scope.charge(3 * int(big * small ** 0.585) + 1)
+            return left * right
+        if op is ast.Pow:
+            if right < 0 or (abs(left) > 1 and abs(left).bit_length() * right > TPOT_INT_BITS):
+                return TPOT_UNKNOWN
+            if abs(left) > 1:
+                scope.charge(2 * int((abs(left).bit_length() * right // 30 + 1) ** 1.585) + 1)
+            return left ** right
+        if op is ast.LShift:
+            if not 0 <= right or left.bit_length() + right > TPOT_INT_BITS:
+                return TPOT_UNKNOWN
+            scope.charge(big + right // 30 + 1)
+            return left << right
+        if op is ast.RShift:
+            scope.charge(big)
+            return left >> right if right >= 0 else TPOT_UNKNOWN
+        if op in (ast.FloorDiv, ast.Mod) and right:
+            # (n - m + 1) * m steps of the long division
+            scope.charge(max(tpot_limbs(left) - tpot_limbs(right) + 1, 1) * tpot_limbs(right) + big)
+            return left // right if op is ast.FloorDiv else left % right
+        return TPOT_UNKNOWN
+    if op is ast.Mult and {type(left), type(right)} == {str, int}:
+        text, count = (left, right) if type(left) is str else (right, left)
+        if count <= 0:
+            return ""
+        if len(text) * count > TPOT_STR_CHARS:
+            return TPOT_UNKNOWN
+        scope.charge(len(text) * count)
+        return text * count
+    if op is ast.Add and type(left) is str and type(right) is str:
+        if len(left) + len(right) > TPOT_STR_CHARS:
+            return TPOT_UNKNOWN
+        scope.charge(len(left) + len(right))
+        return left + right
+    if op is ast.Mod and type(left) is str and type(right) in (int, str):
+        found = re.fullmatch(r"((?:[^%]|%%)*)%([dis])((?:[^%]|%%)*)", left)
+        if not found or (type(right) is str and found.group(2) != "s"):
+            return TPOT_UNKNOWN
+        text = tpot_int_text(right, scope, node) if type(right) is int else right
+        if text is TPOT_UNKNOWN:
+            return TPOT_UNKNOWN
+        scope.charge(len(left) + len(text))
+        return found.group(1).replace("%%", "%") + text + found.group(3).replace("%%", "%")
+    return TPOT_UNKNOWN
+
+
+def tpot_format(text: str, values: list, scope, node):
+    """text.format(*values) for plain {} fields of ints and texts, TPOT_UNKNOWN for anything else."""
+    pieces, used, last = [], 0, 0
+    for found in re.finditer(r"\{\{|\}\}|\{\}|[{}]", text):
+        pieces.append(text[last:found.start()])
+        last = found.end()
+        token = found.group()
+        if token in ("{{", "}}"):
+            pieces.append(token[0])
+        elif token == "{}" and used < len(values):
+            value = values[used]
+            used += 1
+            if type(value) is int:
+                piece = tpot_int_text(value, scope, node)
+            else:
+                piece = value if type(value) is str else TPOT_UNKNOWN
+            if piece is TPOT_UNKNOWN:
+                return TPOT_UNKNOWN
+            pieces.append(piece)
+        else:
+            return TPOT_UNKNOWN
+    pieces.append(text[last:])
+    result = "".join(pieces)
+    scope.charge(len(result))
+    return result if len(result) <= TPOT_STR_CHARS else TPOT_UNKNOWN
+
+
+def tpot_builtin(node, func, receiver, args, scope):
+    """The value of a call of int(), str(), repr(), len(), abs(), float(), text.format() or the digit-limit calls
+    of sys, TPOT_UNKNOWN for any other call."""
+    if node.keywords or any(arg is TPOT_UNKNOWN for arg in args):
+        return TPOT_UNKNOWN
+    if isinstance(node.func, ast.Attribute):
+        if node.func.attr == "format" and type(receiver) is str:
+            return tpot_format(receiver, args, scope, node)
+    if func == "sys.set_int_max_str_digits" and scope.py3 and len(args) == 1 and type(args[0]) is int:
+        if args[0] != 0 and not 640 <= args[0] < 2**31:
+            raise TpotPyError("ValueError", "maxdigits must be 0 or larger than 640", node)
+        scope.max_digits = args[0]
+        return None
+    if func == "sys.get_int_max_str_digits" and scope.py3 and not args:
+        return scope.limit() if scope.limit() is not None else TPOT_UNKNOWN
+    if not isinstance(node.func, ast.Name) or func in scope.order:
+        return TPOT_UNKNOWN  # a name the code binds is not the builtin
+    value = args[0] if len(args) == 1 else None
+    if func == "int" and len(args) in (1, 2):
+        base = args[1] if len(args) == 2 else 10
+        if type(base) is not int:
+            return TPOT_UNKNOWN
+        if type(args[0]) is int:
+            return args[0] if len(args) == 1 else TPOT_UNKNOWN
+        return tpot_parse_int(args[0], base, scope, node) if type(args[0]) is str else TPOT_UNKNOWN
+    if func in ("str", "repr") and len(args) == 1:
+        if type(value) is int:
+            # Python 2 writes the L of a long in repr()
+            if func == "repr" and not scope.py3 and not -2**63 <= value < 2**63:
+                return TPOT_UNKNOWN
+            return tpot_int_text(value, scope, node)
+        return value if type(value) is str and func == "str" else TPOT_UNKNOWN
+    if func == "len" and type(value) in (str, tuple, list, dict, set):
+        return TPOT_UNKNOWN if type(value) is str and not (scope.py3 or value.isascii()) else len(value)
+    if func == "abs" and type(value) in (int, float):
+        return abs(value)
+    if func == "float" and scope.py3 and len(args) == 1:
+        if type(value) is str and len(value) <= TPOT_STR_CHARS:
+            scope.charge(len(value))
+            # the digits before the point are one run, so a failing match is linear
+            if re.fullmatch(r"\s*[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\s*", value):
+                return float(value)
+        if type(value) is int and value.bit_length() <= 1000:
+            return float(value)
+    return TPOT_UNKNOWN
+
+
+def tpot_name(node, scope):
+    if not isinstance(node.ctx, ast.Load):
+        return TPOT_UNKNOWN
+    if node.id in scope.names:
+        return scope.names[node.id]
+    if scope.known is not None and node.id not in scope.known:
+        raise TpotPyError("NameError", f"name '{node.id}' is not defined" + tpot_name_hint(node.id, scope), node)
+    return TPOT_UNKNOWN
+
+
+def tpot_assign(target, value, scope) -> None:
+    if isinstance(target, ast.Name):
+        if value is TPOT_UNKNOWN:
+            scope.drop(target.id)
+        else:
+            scope.hold(target.id, value)
+            scope.names[target.id] = value
+    elif isinstance(target, ast.Attribute):
+        tpot_eval(target.value, scope)
+        scope.sure = False
+    elif isinstance(target, ast.Subscript):
+        tpot_eval(target.value, scope)
+        tpot_eval(target.slice, scope)
+        scope.sure = False
+    else:
+        # unpacking may fail on the number of values
+        scope.forget(target)
+        scope.sure = False
+
+
+def tpot_call(node, scope):
+    func = tpot_dotted(node.func)
+    receiver = TPOT_UNKNOWN
+    if isinstance(node.func, ast.Attribute):
+        receiver = tpot_eval(node.func.value, scope)
+    else:
+        tpot_eval(node.func, scope)
+    args = []
+    for arg in node.args:
+        if isinstance(arg, ast.Starred):
+            tpot_eval(arg.value, scope)
+            args.append(TPOT_UNKNOWN)
+        else:
+            args.append(tpot_eval(arg, scope))
+    keywords = [tpot_eval(keyword.value, scope) for keyword in node.keywords]
+    if func in ("exit", "quit", "sys.exit", "os._exit"):
+        status = args[0] if args else None
+        if status is None or status is TPOT_UNKNOWN:
+            raise TpotExit(0)
+        if isinstance(status, int):
+            raise TpotExit(status & 0xFF)
+        scope.stderr(tpot_text(status, scope.budget) + "\n")
+        raise TpotExit(1)
+    if func == "print" and scope.print_tuple and (node.keywords or len(node.args) != 1):
+        printed = None if node.keywords else tpot_print_tuple(node, args, scope.budget)
+        if printed is not None:
+            scope.stdout(printed)
+        return None
+    if func in ("print", TPOT_PY2_STATEMENT):
+        printed = tpot_print(node, args, keywords, scope)
+        if printed is not None:
+            if printed[1]:
+                scope.stderr("".join(printed[0]))
+            else:
+                scope.write(printed[0], node)
+        return None
+    followed = func in TPOT_QUIET_CALLS and func.split(".")[0] not in scope.names and not (node.args or node.keywords)
+    if func in ("sys.stdout.write", "sys.stderr.write") and len(args) == 1 and not node.keywords:
+        if isinstance(args[0], str):
+            followed = True
+            if func == "sys.stderr.write":
+                scope.stderr(tpot_text(args[0], scope.budget))
+            else:
+                scope.write([tpot_text(args[0], scope.budget)], node)
+    value = tpot_builtin(node, func, receiver, args, scope)
+    if value is TPOT_UNKNOWN and not followed:
+        # a call this does not follow may have ended the run or failed
+        scope.sure = False
+    return value
+
+
+def tpot_exec(node, scope) -> None:
+    """One statement of the module: what CPython does for sure is done, loops, handlers and the like are not
+    followed (the names they bind are forgotten, and no error of CPython is reported after them)."""
+    scope.step()
+    kind = type(node)
+    if kind is ast.Expr:
+        tpot_eval(node.value, scope)
+    elif kind is ast.Assign:
+        value = tpot_eval(node.value, scope)
+        for target in node.targets:
+            tpot_assign(target, value, scope)
+    elif kind is ast.AnnAssign:
+        value = tpot_eval(node.value, scope) if node.value is not None else TPOT_UNKNOWN
+        if node.value is not None:
+            tpot_assign(node.target, value, scope)
+        scope.sure = False  # the annotation is evaluated, or not (from __future__ import annotations)
+    elif kind is ast.AugAssign:
+        tpot_augment(node, scope)
+    elif kind is ast.If:
+        truth = tpot_truth(tpot_eval(node.test, scope))
+        if truth is TPOT_UNKNOWN:
+            scope.forget(node)
+            scope.sure = False
+        else:
+            for inner in node.body if truth else node.orelse:
+                tpot_exec(inner, scope)
+    elif kind is not ast.Pass:
+        if tpot_skip(node, scope):
+            return  # a loop over nothing binds nothing
+        scope.forget(node)
+    scope.bind(node)
+
+
+def tpot_augment(node, scope) -> None:
+    """x op= y: CPython loads the target first, so its NameError comes before one of the value."""
+    target = node.target
+    if not isinstance(target, ast.Name):
+        tpot_assign(target, TPOT_UNKNOWN, scope)
+        tpot_eval(node.value, scope)
+        scope.sure = False
+        return
+    load = ast.copy_location(ast.Name(id=target.id, ctx=ast.Load()), target)
+    if scope.known is not None and target.id not in scope.order and target.id not in scope.builtins:
+        # the statement itself is no binding yet (recorded: x += 1 is a NameError)
+        raise TpotPyError("NameError", f"name '{target.id}' is not defined" + tpot_name_hint(target.id, scope), load)
+    left = tpot_eval(load, scope)
+    right = tpot_eval(node.value, scope)
+    value = TPOT_UNKNOWN
+    if left is not TPOT_UNKNOWN and right is not TPOT_UNKNOWN:
+        value = tpot_binop(ast.copy_location(ast.BinOp(left=load, op=node.op, right=node.value), node),
+                           left, right, scope)
+    if value is TPOT_UNKNOWN:
+        scope.sure = False  # the operands may not take the operator
+    tpot_assign(target, value, scope)
+
+
+def tpot_skip(node, scope) -> bool:
+    """The statements this does not run: what CPython evaluates for sure is still evaluated, and unless the
+    statement is known to do nothing else the run is no longer sure. True for a loop over nothing."""
+    kind = type(node)
+    if kind is ast.Import:
+        for alias in node.names:
+            top = alias.name.split(".")[0]
+            if "." in alias.name or top not in scope.stdlib or top in TPOT_SPLIT_MODULES:
+                scope.sure = False
+    elif kind is ast.ImportFrom:
+        if node.module != "__future__" or node.level:
+            scope.sure = False
+    elif kind is ast.While:
+        tpot_eval(node.test, scope)
+        scope.sure = False
+    elif kind in (ast.For, ast.AsyncFor):
+        empty = tpot_truth(tpot_eval(node.iter, scope)) is False and not node.orelse
+        scope.sure = scope.sure and empty
+        return empty
+    elif kind in (ast.With, ast.AsyncWith):
+        for item in node.items:
+            tpot_eval(item.context_expr, scope)
+        scope.sure = False
+    elif kind in (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef):
+        for decorator in node.decorator_list:
+            tpot_eval(decorator, scope)
+        if kind is ast.ClassDef:
+            for base in node.bases:
+                tpot_eval(base, scope)
+            scope.sure = False
+        else:
+            for default in node.args.defaults + [item for item in node.args.kw_defaults if item is not None]:
+                tpot_eval(default, scope)
+            # annotations are evaluated, or not (from __future__ import annotations)
+            if node.returns is not None or any(
+                    isinstance(item, ast.arg) and item.annotation is not None for item in ast.walk(node.args)):
+                scope.sure = False
+    else:
+        scope.sure = False
+    return False
+
+
+def tpot_paint(code: str, text, colors: bool) -> str:
+    return f"\x1b[{code}m{text}\x1b[0m" if colors else str(text)
+
+
+def tpot_column(row: str, offset: int) -> int:
+    # ast counts columns in UTF-8 bytes
+    return len(row.encode("utf-8", "surrogatepass")[:offset].decode("utf-8", "surrogatepass"))
+
+
+def tpot_anchors(node, source: list, lines: list, indent: int):
+    """(line, column, line, column) of the part of a call or a binary operation that gets ^ where the rest gets ~
+    (_extract_caret_anchors_from_line_segment), None for other nodes."""
+    first = node.lineno
+    if isinstance(node, ast.Call):
+        part = node.func
+    elif isinstance(node, ast.BinOp):
+        part = node.left
+    else:
+        return None
+    line = part.end_lineno - first
+    col = tpot_column(source[part.end_lineno - 1], part.end_col_offset) - indent
+    stop = "(" if isinstance(node, ast.Call) else None
+    while line < len(lines):
+        if col >= len(lines[line]):
+            line, col = line + 1, 0
+        elif (lines[line][col] != stop) if stop else (lines[line][col].isspace() or lines[line][col] == ")"):
+            col += 1
+        else:
+            break
+    else:
+        return None
+    if stop:
+        return line, col, len(lines) - 1, tpot_column(source[node.end_lineno - 1], node.end_col_offset) - indent
+    right = col + 1
+    if (right < len(lines[line]) and not lines[line][right].isspace() and lines[line][right] not in "\\#"
+            and (node.right.lineno - first > line
+                 or right < tpot_column(source[node.right.lineno - 1], node.right.col_offset) - indent)):
+        right += 1
+    return line, col, line, right
+
+
+def tpot_show_carets(lines: list, start: int, end: int, anchors) -> bool:
+    """StackSummary._should_show_carets: no markers under a whole line, nor under the call of `x = f()`."""
+    try:
+        tree = ast.parse("\n".join(lines))
+    except Exception:  # noqa: BLE001 - CPython ignores a syntax error here
+        tree = None
+    if tree is not None:
+        if not tree.body:
+            return False
+        statement = tree.body[0]
+        value = None
+        if (isinstance(statement, ast.Assign) and isinstance(statement.value, ast.Call)
+                and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name)):
+            value = statement.value
+        elif (isinstance(statement, ast.Return) and isinstance(statement.value, ast.Call)
+                and isinstance(statement.value.func, ast.Name)):
+            value = statement.value
+        if (value is not None and value.lineno == 1 and value.end_lineno == len(lines)
+                and value.col_offset == start and value.end_col_offset == end):
+            return False
+    if anchors:
+        return True
+    return bool(lines[0][:start].lstrip() or lines[-1][end:].rstrip())
+
+
+def tpot_source_block(node, code: str, colors: bool) -> str:
+    """The lines of the node and the markers under it as Python 3.13 prints them (coloured on a terminal)."""
+    source = re.split(r"\r\n|\r|\n", code)
+    first, last = node.lineno, node.end_lineno
+    if last > len(source) or not any(row.strip() for row in source[first - 1:last]):
+        return ""
+    rows = source[first - 1:last]
+    indent = min(len(row) - len(row.lstrip()) for row in rows if row.strip())
+    lines = [row[indent:] if row.strip() else "" for row in rows]
+    start = max(0, tpot_column(rows[0], node.col_offset) - indent)
+    end = max(0, tpot_column(rows[-1], node.end_col_offset) - indent)
+    anchors = tpot_anchors(node, source, lines, indent)
+    show = tpot_show_carets(lines, start, end, anchors)
+    primary, secondary = ("~", "^") if anchors else ("^", "^")
+    shown = {0, len(lines) - 1}
+    if anchors:
+        shown.update(range(anchors[0] - 1, anchors[0] + 2))
+        shown.update(range(anchors[2] - 1, anchors[2] + 2))
+    shown.discard(-1)
+    shown.discard(len(lines))
+    result: list[str] = []
+
+    def output(number: int) -> None:
+        line = lines[number]
+        result.append(line + "\n")
+        if not show:
+            return
+        spaces = len(line) - len(line.lstrip())
+        carets = []
+        for col in range(end if number == len(lines) - 1 else len(line)):
+            if col < spaces or (number == 0 and col < start):
+                carets.append(" ")
+            elif anchors and (number > anchors[0] or (number == anchors[0] and col >= anchors[1])) and (
+                    number < anchors[2] or (number == anchors[2] and col < anchors[3])):
+                carets.append(secondary)
+            else:
+                carets.append(primary)
+        if not colors:
+            result.append("".join(carets) + "\n")
+            return
+        marked, under = [], []
+        for char, group in itertools.groupby(itertools.zip_longest(result[-1], carets, fillvalue=""),
+                                             key=lambda pair: pair[1]):
+            pairs = list(group)
+            text, marks = "".join(a for a, _ in pairs), "".join(b for _, b in pairs)
+            if char in ("^", "~"):
+                paint = "1;31" if char == "^" else "31"
+                text, marks = tpot_paint(paint, text, True), tpot_paint(paint, marks, True)
+            marked.append(text)
+            under.append(marks)
+        result[-1] = "".join(marked)
+        result.append("".join(under) + "\n")
+
+    ordered = sorted(shown)
+    for index, number in enumerate(ordered):
+        if index:
+            gap = number - ordered[index - 1]
+            if gap == 2:
+                output(number - 1)
+            elif gap > 2:
+                result.append(f"...<{gap - 1} lines>...\n")
+        output(number)
+    return "".join("    " + row for row in "".join(result).splitlines(True))
+
+
+def tpot_traceback(error, scope, colors: bool) -> str:
+    """CPython's report of an exception of the code; from 3.13 on with the line and its markers."""
+    node = error.node
+    text = ["Traceback (most recent call last):\n",
+            f'  File {tpot_paint("35", chr(34) + "<string>" + chr(34), colors)}, line '
+            f'{tpot_paint("35", node.lineno, colors)}, in {tpot_paint("35", "<module>", colors)}\n']
+    if tpot_version_tuple(scope.version) >= (3, 13):
+        text.append(tpot_source_block(node, scope.code, colors))
+    text.append(f'{tpot_paint("1;35", error.kind, colors)}: {tpot_paint("35", error.text, colors)}\n')
+    return "".join(text)
+
+
+def tpot_colors(environ, terminal: bool, ignore_env: bool = False) -> bool:
+    """Whether Python 3.13 colours its traceback (_colorize.can_colorize, as recorded); -E and -I drop only
+    PYTHON_COLORS."""
+    def value(name: str) -> str:
+        return str(environ.get(name, "") or "")
+
+    if value("PYTHON_COLORS") in ("0", "1") and not ignore_env:
+        return value("PYTHON_COLORS") == "1"
+    if value("NO_COLOR"):
+        return False
+    if value("FORCE_COLOR"):
+        return True
+    return terminal and value("TERM") != "dumb"
+
+
+def tpot_python_statements(module, print_tuple=False, version="3.12.3", code="", colors=False,
+                           max_digits=4300, deadline=None) -> tuple[list, int]:
+    """print_tuple: print(a, b) prints the tuple (a, b), as a Python 2 print statement. Python 3
+    ends at a write to stdout that UTF-8 cannot carry, as CPython's strict stdout does. A run that is out of
+    work, memory or time ends with the output it has; so does one at an error after a statement this did not
+    follow (scope.sure)."""
+    scope = TpotScope(module, version, print_tuple, code, max_digits, deadline)
+    status = 0
+    try:
+        for node in module.body:
+            tpot_exec(node, scope)
+    except (TpotOutputFull, TpotWorkFull):
         pass
-    return "".join(out), "".join(err), 0
+    except TpotExit as stop:
+        status = stop.status
+    except TpotPyError as error:
+        if scope.sure:
+            scope.stderr(tpot_traceback(error, scope, colors))
+            status = 1
+    return scope.events, status
 
 
-def tpot_print_tuple(call, names, budget):
+def tpot_print_tuple(call, values, budget):
     """The line of a Python 2 print statement of the tuple in print(a, b), None if it is no literal."""
-    values = [tpot_literal(arg, names) for arg in call.args]
     if any(value is TPOT_UNKNOWN for value in values) or any(isinstance(arg, ast.Starred) for arg in call.args):
         return None
+    if any(type(value) is int and not -2**63 <= value < 2**63 for value in values):
+        return None  # Python 2 writes the L of a long in repr()
     try:
         # each value charged on its own, so the output limit stops before the whole text is built
         parts = [tpot_text(repr(value), budget) for value in values]
@@ -860,16 +2532,12 @@ def tpot_text(value, budget) -> str:
     return text
 
 
-def tpot_print(call, names, budget):
+def tpot_print(call, values, keywords, scope):
     """(the writes of the text, to stderr) of a print() call with literal arguments, None otherwise."""
-    values = []
-    for arg in call.args:
-        value = tpot_literal(arg, names)
-        if value is TPOT_UNKNOWN or isinstance(arg, ast.Starred):
-            return None
-        values.append(value)
+    if any(value is TPOT_UNKNOWN for value in values) or any(isinstance(arg, ast.Starred) for arg in call.args):
+        return None
     sep, end, stderr = " ", "\n", False
-    for keyword in call.keywords:
+    for keyword, value in zip(call.keywords, keywords):
         if keyword.arg == "file":
             stream = tpot_dotted(keyword.value)
             if stream not in ("sys.stdout", "sys.stderr"):
@@ -878,7 +2546,6 @@ def tpot_print(call, names, budget):
             continue
         if keyword.arg == "flush":
             continue
-        value = tpot_literal(keyword.value, names)
         if keyword.arg not in ("sep", "end") or not (value is None or isinstance(value, str)):
             return None
         if value is not None:
@@ -887,11 +2554,17 @@ def tpot_print(call, names, budget):
             else:
                 end = value
     try:
-        parts = [tpot_text(value, budget) for value in values]
-    except TpotOutputFull:
+        parts = []
+        for value in values:
+            text = tpot_str(value, scope, call)
+            if text is TPOT_UNKNOWN:
+                return None
+            parts.append(tpot_text(text, scope.budget))
+    except (TpotOutputFull, TpotPyError):
         raise
-    except Exception:  # noqa: BLE001 - str() of a literal CPython would print (digits limit)
+    except Exception:  # noqa: BLE001 - what CPython would print and this cannot
         return None
+    budget = scope.budget
     budget[0] -= len(sep) * max(0, len(parts) - 1) + len(end)
     if budget[0] < 0:
         raise TpotOutputFull
@@ -907,8 +2580,10 @@ def patch_python(cowrie_root):
     their literal print() calls or the syntax error of that Python (PYTHON_INLINE)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "python.py"
     replace_once(path, *CONFIG_IMPORT)
-    replace_once(path, "import getopt\n", "import ast\nimport getopt\nimport re\nimport warnings\n")
-    replace_once(path, "commands = {}\n", "commands = {}\n\n" + PYTHON_INLINE)
+    replace_once(path, "import getopt\n",
+                 "import ast\nimport decimal\nimport getopt\nimport itertools\n"
+                 "import re\nimport time\nimport warnings\n")
+    replace_once(path, "commands = {}\n", "commands = {}\n" + TPOT_TERMINAL + "\n" + PYTHON_INLINE)
     replace_once(
         path,
         """    def start(self) -> None:
@@ -1180,7 +2855,11 @@ def patch_ssh_sig_algs(cowrie_root):
     """The EXT_INFO of the server names the server-sig-algs of the emulated server ([ssh]
     server_sig_algs: its PubkeyAcceptedAlgorithms), not Twisted's host key algorithms; "" sends no
     EXT_INFO, as OpenSSH before 7.2 and dropbear before 2020.79. Unset: Twisted's value (upstream).
-    The value only names algorithms; the user authentication stays Twisted's."""
+    The value only names algorithms; the user authentication stays Twisted's. [ssh] ext_info_s = false
+    takes ext-info-s out of the key exchange list of the KEXINIT (Twisted appends it to every list in
+    sendKexInit, a server that does not list it, as dropbear, would not): Cowrie's own sendPacket (the
+    override that pads a KEXINIT with 0) cuts it from the KEXINIT before it pads, and keeps ourKexInitPayload,
+    which the exchange hash uses, the same. Unset or true: Twisted's list (upstream)."""
     path = cowrie_root / "src" / "cowrie" / "ssh" / "transport.py"
     replace_once(
         path,
@@ -1200,6 +2879,62 @@ def patch_ssh_sig_algs(cowrie_root):
         transport.SSHServerTransport.sendExtInfo(self, extensions)
 
     def _unsupportedVersionReceived(self, remoteVersion: bytes) -> None:
+""",
+    )
+
+    # Cowrie's own sendPacket (it pads a KEXINIT with 0, as OpenSSH) is the one the class has: the cut of
+    # ext-info-s starts it, after its guard for a closed connection and before it pads
+    replace_once(
+        path,
+        """        Override because OpenSSH pads with 0 on KEXINIT
+        \"\"\"
+        if self.transport is None:
+            return
+""",
+        """        Override because OpenSSH pads with 0 on KEXINIT
+        \"\"\"
+        if self.transport is None:
+            return
+        if messageType == transport.MSG_KEXINIT:
+            # T-Pot: a server that does not list ext-info-s ([ssh] ext_info_s = false) has none in its
+            # KEXINIT: cut it from the first name-list (after the 16 bytes of the cookie), ourKexInitPayload
+            # (the I_S of the exchange hash) is what is sent; a packet of another layout goes out as it is
+            if not CowrieConfig.getboolean("ssh", "ext_info_s", fallback=True):
+                size = int.from_bytes(payload[16:20], "big")
+                names = payload[20 : 20 + size].split(b",")
+                if len(payload) >= 20 + size and b"ext-info-s" in names:
+                    kept = b",".join(name for name in names if name != b"ext-info-s")
+                    payload = (
+                        payload[:16]
+                        + len(kept).to_bytes(4, "big")
+                        + kept
+                        + payload[20 + size :]
+                    )
+                    self.ourKexInitPayload = bytes((messageType,)) + payload
+""",
+    )
+
+
+def patch_ssh_drop(cowrie_root):
+    """A persona without an SSH server ([ssh] drop_connections = true): Cowrie still listens on the SSH
+    port, takes each connection, logs its connect and closes it before the version string, as a port
+    forwarded to a device without an sshd. Unset or false: upstream."""
+    path = cowrie_root / "src" / "cowrie" / "ssh" / "transport.py"
+    replace_once(
+        path,
+        """            self._emit_connect()
+
+        self.transport.write(self.ourVersionString + b"\\r\\n")
+""",
+        """            self._emit_connect()
+
+        if CowrieConfig.getboolean("ssh", "drop_connections", fallback=False):
+            # T-Pot: the persona has no SSH server, the connection closes before a banner
+            self.startTime = time.time()
+            self.transport.loseConnection()
+            return
+
+        self.transport.write(self.ourVersionString + b"\\r\\n")
 """,
     )
 
@@ -1228,12 +2963,12 @@ def tpot_privileged(cmd) -> bool:
 # module code of the patched apt.py and yum.py (apt, yum, dnf): stdout of a command is the terminal
 TPOT_TERMINAL = r'''
 
-def tpot_terminal(cmd) -> bool:
-    """T-Pot: stdout of the command is the terminal of the session: of an interactive one, or of a
+def tpot_terminal(cmd, fd: int = 1) -> bool:
+    """T-Pot: stdout (fd 2: stderr) of the command is the terminal of the session: of an interactive one, or of a
     command run with a pty (ssh -t)."""
     targets = getattr(cmd.pp, "targets", None) or {}
     pty = not hasattr(cmd.protocol, "execcmd") or bool(getattr(getattr(cmd.protocol, "user", None), "windowSize", None))
-    return (targets.get(1) or ("",))[0] == "terminal" and pty
+    return (targets.get(fd) or ("",))[0] == "terminal" and pty
 '''
 
 
@@ -1247,11 +2982,29 @@ def tpot_login_entry(entry) -> bool:
             and "getty" not in str(entry.get("COMMAND") or ""))
 
 
+def tpot_pty(protocol) -> bool:
+    """T-Pot: the session has a terminal: an interactive one, or an exec channel with a pty (ssh -t); an exec channel
+    without one (ssh host cmd) has none: sshd names it user@notty, its processes have no TTY (?)."""
+    return not hasattr(protocol, "execcmd") or bool(getattr(getattr(protocol, "user", None), "windowSize", None))
+
+
+def tpot_exec_shell(protocol, login: str) -> str:
+    """T-Pot: the command line of the shell an exec channel runs: the user's shell (the login shell of the ps list,
+    without its dash) with -c and the command, cut at 4096 characters (unverified: bash runs a single simple command
+    in its own place, which this leaves out)."""
+    words = str(login or "sh").split()
+    name = (words[0] if words else "sh").lstrip("-").rsplit("/", 1)[-1] or "sh"
+    return f"{name} -c {str(getattr(protocol, 'execcmd', '') or '')}"[:4096]
+
+
 def tpot_session(protocol, user: str = "root") -> dict:
     """T-Pot: the server process of the session, the same in ps, top, ss and netstat: its PID (once
-    per session: just below the login shell of the ps list, else drawn), its name, its title and the
-    processes from the daemon to the shell (chain, each with its pid and stat). SSH: the session's sshd
-    ("sshd: user@pts/0", sshd-session from OpenSSH 9.8), before it its privileged monitor ("sshd: user
+    per session: just below its login shell, which the first session of a Cowrie process has at the PID of
+    the ps list and a later one after the newest PID any session took, tpot_claim_pids of the protocol;
+    drawn where the list has no shell), the PID of that shell ("shell"), whether the session has a
+    terminal ("pty"), its name, its title and the processes from the daemon to the shell (chain, each with
+    its pid and stat). SSH: the session's sshd ("sshd: user@pts/0", user@notty for an exec channel without
+    a pty, sshd-session from OpenSSH 9.8), before it its privileged monitor ("sshd: user
     [priv]", root) for a user other than root and from OpenSSH 9.8 for root too; or a child of dropbear
     with the daemon's command line. Telnet: BusyBox telnetd serves its connections itself, so the
     telnetd of the ps list owns the session (a telnetd of its own on a BusyBox system whose list has
@@ -1316,7 +3069,8 @@ def tpot_session(protocol, user: str = "root") -> dict:
             else:
                 sizes, gap = ((17972, 9848), (18232, 8764), (18232, 10312)), (11 if "Ubuntu" in ssh else
                                                                                8 if "Debian" in ssh else 4)
-            session = {"user": user, "command": f"{program}: {user}@pts/0", "offset": 0, "stat": "S",
+            session = {"user": user, "command": f"{program}: {user}@{'pts/0' if tpot_pty(protocol) else 'notty'}",
+                       "offset": 0, "stat": "S",
                        "virt": sizes[1][0], "res": sizes[1][1]}
             if user != "root" or version >= (9, 8):
                 chain = [{"user": "root", "command": f"{program}: {user} [priv]", "offset": -gap, "stat": "Ss",
@@ -1325,20 +3079,33 @@ def tpot_session(protocol, user: str = "root") -> dict:
             else:
                 chain = [dict(session, stat="Ss", virt=sizes[2][0], res=sizes[2][1])]
     pid = getattr(protocol, "tpot_session_pid", None)
+    offsets = [entry.get("offset", index) for index, entry in enumerate(chain)]
+    # the login shell after the last of the chain (the PIDs of the chain: pid + offset)
+    high = max(offsets, default=-1) + 1
+    shell = getattr(protocol, "tpot_login_pid", None)
     if not isinstance(pid, int):
+        shells = [p["PID"] for p in listed if tpot_login_entry(p)]
+        taken = {p["PID"] for p in listed if not tpot_login_entry(p)}
+        # the PIDs of a new session: the first session of this Cowrie process takes those of the ps list, a later
+        #   one PIDs after the newest any session took (tpot_claim_pids of the protocol: one counter for them all)
+        claim = getattr(protocol, "tpot_claim_pids", None)
         if daemon is not None:
             pid = daemon["PID"]
+            wanted = shells[-1] if shells else random.randint(4000, 8000)
+            shell = claim(wanted, 0, taken) if callable(claim) else wanted
         else:
-            shells = [p["PID"] for p in listed if tpot_login_entry(p)]
-            taken = {p["PID"] for p in listed}
-            offsets = [entry.get("offset", index) for index, entry in enumerate(chain)]
-            pid = shells[-1] - 1 - max(offsets, default=0) if shells else random.randint(4000, 8000)
+            wanted = shells[-1] if shells else random.randint(4000, 8000) + high
+            shell = claim(wanted, high - min(offsets, default=0), taken) if callable(claim) else wanted
+            pid = shell - high
             while pid > 300 and any(pid + offset in taken for offset in offsets):
                 pid -= 1
         try:
             protocol.tpot_session_pid = pid
+            protocol.tpot_login_pid = shell
         except Exception:  # noqa: BLE001 - a protocol that takes no attribute keeps no PID
             pass
+    if not isinstance(shell, int):
+        shell = pid + high
     chain = [dict(entry, pid=pid + entry.get("offset", index), stat=entry.get("stat") or ("Ss" if not index else "S"))
              for index, entry in enumerate(chain)]
     try:
@@ -1348,7 +3115,292 @@ def tpot_session(protocol, user: str = "root") -> dict:
         pass
     head = chain[owner] if chain else {"user": str(daemon.get("USER") or "root"), "command": str(daemon["COMMAND"])}
     return {"pid": pid, "name": name(head["command"])[:15], "title": head["command"], "user": head["user"],
-            "chain": chain, "telnet": telnet}
+            "chain": chain, "telnet": telnet, "shell": shell, "pty": tpot_pty(protocol)}
+'''
+
+
+# module code of the patched base.py after tpot_session: the session's processes in /proc (tpot_proc_session, run by
+# the protocol at the start of the session: PROTOCOL_PROC)
+TPOT_PROC = r'''
+
+# T-Pot: the fields of a node of cowrie.shell.fs (A_NAME ... A_REALFILE) and its kinds T_LINK, T_DIR, T_FILE (a test
+#   of the patch compares them with fs.py)
+(TPOT_NODE_NAME, TPOT_NODE_TYPE, TPOT_NODE_UID, TPOT_NODE_GID, TPOT_NODE_SIZE, TPOT_NODE_MODE, TPOT_NODE_CTIME,
+ TPOT_NODE_CONTENTS, TPOT_NODE_TARGET, TPOT_NODE_REALFILE) = range(10)
+TPOT_NODE_LINK, TPOT_NODE_DIR, TPOT_NODE_FILE = 0, 1, 2
+TPOT_CLOCK_TICKS = 100
+# the programs of the session's processes, the first one the tree has (/proc/<PID>/exe)
+TPOT_PROC_PROGRAMS = {"sshd": ("/usr/sbin/sshd",),
+                      "sshd-session": ("/usr/lib/openssh/sshd-session", "/usr/libexec/openssh/sshd-session"),
+                      "in.telnetd": ("/usr/sbin/in.telnetd",), "telnetd": ("/usr/sbin/telnetd",),
+                      "login": ("/usr/bin/login", "/bin/login")}
+TPOT_PROC_STATES = {"R": "R (running)", "S": "S (sleeping)", "D": "D (disk sleep)", "T": "T (stopped)",
+                    "I": "I (idle)", "Z": "Z (zombie)"}
+# the folders tpot_proc_session makes the stat of when it is read
+TPOT_PROC_STATS = 8192
+
+
+def tpot_proc_child(folder, name: str):
+    return next((child for child in folder[TPOT_NODE_CONTENTS] if child[TPOT_NODE_NAME] == name), None)
+
+
+def tpot_proc_copy(node) -> list:
+    """T-Pot: a node and what is under it, copied (a folder of /proc: a few nodes)."""
+    copied = list(node)
+    if node[TPOT_NODE_TYPE] == TPOT_NODE_DIR and isinstance(node[TPOT_NODE_CONTENTS], list):
+        copied[TPOT_NODE_CONTENTS] = [tpot_proc_copy(child) for child in node[TPOT_NODE_CONTENTS]]
+    return copied
+
+
+def tpot_proc_text(folder, name: str) -> bytes:
+    node = tpot_proc_child(folder, name)
+    data = node[TPOT_NODE_CONTENTS] if node is not None else b""
+    return bytes(data) if isinstance(data, (bytes, bytearray)) else b""
+
+
+def tpot_proc_write(folder, name: str, data: bytes) -> None:
+    node = tpot_proc_child(folder, name)
+    if node is not None and node[TPOT_NODE_TYPE] == TPOT_NODE_FILE:
+        node[TPOT_NODE_CONTENTS] = data
+
+
+def tpot_proc_link(folder, name: str, target: str, ctime: float) -> None:
+    folder[TPOT_NODE_CONTENTS] = [c for c in folder[TPOT_NODE_CONTENTS] if c[TPOT_NODE_NAME] != name] + [
+        [name, TPOT_NODE_LINK, folder[TPOT_NODE_UID], folder[TPOT_NODE_GID], len(target), 0o120777, ctime, [],
+         target, None]]
+
+
+def tpot_proc_status(text: bytes, values: dict) -> bytes:
+    """T-Pot: a /proc/<PID>/status with the values of the keys given in place of its own."""
+    lines = []
+    for line in text.decode("utf-8", "surrogateescape").split("\n"):
+        key = line.split(":", 1)[0]
+        lines.append(f"{key}:\t{values[key]}" if ":" in line and key in values else line)
+    return "\n".join(lines).encode("utf-8", "surrogateescape")
+
+
+def tpot_proc_stat(text: bytes, values: dict) -> bytes:
+    """T-Pot: a /proc/<PID>/stat with the fields given (by their index from 0) in place of its own; the name in
+    parentheses is one field."""
+    raw = text.decode("utf-8", "surrogateescape").rstrip("\n")
+    head, _, rest = raw.partition(" (")
+    name, _, tail = rest.rpartition(") ")
+    fields = [head, f"({name})"] + tail.split(" ")
+    for index, value in values.items():
+        if index < len(fields):
+            fields[index] = str(value)
+    return (" ".join(fields) + "\n").encode("utf-8", "surrogateescape")
+
+
+def tpot_proc_cmdline(command: str) -> bytes:
+    """T-Pot: /proc/<PID>/cmdline of a command line: its words, each ending in a NUL; a title a daemon set for
+    itself ("sshd: root@pts/0") is one string (tpot_personas.render.proc_cmdline)."""
+    words = command.split()
+    if words and (words[0].endswith(":") or words[0].startswith("@")):
+        return command.encode("utf-8", "surrogateescape")[:4096] + b"\0"
+    return b"".join(word.encode("utf-8", "surrogateescape") + b"\0" for word in words)[:4096]
+
+
+def tpot_proc_ticks(seconds: float) -> tuple[int, int]:
+    """T-Pot: utime and stime of a CPU time in clock ticks (unverified: two thirds of it in user space)."""
+    total = max(0, int(seconds * TPOT_CLOCK_TICKS))
+    return total * 2 // 3, total - total * 2 // 3
+
+
+TPOT_PROC_VIEWS: dict = {}
+
+
+def tpot_proc_view(kind: type) -> type:
+    """T-Pot: the class of a channel's view of its connection's file system (tpot_proc_session): the file system's
+    own, with the count of new nodes (newcount, Cowrie's limit of new files) that of the connection, so its channels
+    share the one limit."""
+    view = TPOT_PROC_VIEWS.get(kind)
+    if view is None:
+        def get(self) -> int:
+            return self.tpot_connection.newcount
+
+        def put(self, value: int) -> None:
+            self.tpot_connection.newcount = value
+
+        view = type(kind.__name__, (kind,), {"newcount": property(get, put), "__module__": kind.__module__,
+                                             "__doc__": kind.__doc__})
+        TPOT_PROC_VIEWS[kind] = view
+    return view
+
+
+def tpot_proc_session(protocol) -> None:
+    """T-Pot: /proc of the session at its start. The folder of its login shell moves to the PID of tpot_session
+    (the persona's tree has it under the PID of the ps list, which the first session of a Cowrie process keeps);
+    its stat and status name the shell's parent and terminal, an exec channel without a pty has pipes on fd 0-2
+    (unverified: pipes, not sockets) and the command of its shell. Each process of the session's chain (sshd and
+    its monitor, in.telnetd and login) gets a folder of its own, /proc/self and /proc/thread-self name the shell,
+    the stat of every process gives the CPU time of ps when it is read. The channels of one connection share its
+    file system (avatar.server.fs): each gets a view of its own (protocol.fs), in which only / and /proc are
+    copied (flat); the rest of the tree stays shared with the other channels and sessions, the connection's own
+    tree keeps the persona's /proc, the template of every channel, and the count of new nodes is the connection's
+    (tpot_proc_view). Known limitation: a node a channel makes right under / is not seen by the other channels of
+    the connection (deeper writes are shared). The shell's folder and its status are the session user's."""
+    if getattr(protocol, "tpot_proc_done", False):
+        return
+    user = getattr(protocol, "user", None)
+    session = tpot_session(protocol, str(getattr(user, "username", "root")))
+    fs = getattr(protocol, "fs", None)
+    root = getattr(fs, "fs", None)
+    if not isinstance(root, list) or len(root) < 10 or not isinstance(root[TPOT_NODE_CONTENTS], list):
+        return
+    shared = tpot_proc_child(root, "proc")
+    if shared is None or shared[TPOT_NODE_TYPE] != TPOT_NODE_DIR:
+        return
+    protocol.tpot_proc_done = True
+    proc = list(shared)
+    proc[TPOT_NODE_CONTENTS] = list(shared[TPOT_NODE_CONTENTS])
+    top = list(root)
+    top[TPOT_NODE_CONTENTS] = [proc if child is shared else child for child in root[TPOT_NODE_CONTENTS]]
+    view = object.__new__(tpot_proc_view(type(fs)))
+    view.__dict__.update(vars(fs))
+    view.__dict__.pop("newcount", None)
+    view.tpot_connection = fs
+    view.fs = top
+    view.generated_files = dict(getattr(fs, "generated_files", None) or {})
+    protocol.fs = fs = view
+    server = getattr(user, "server", None)
+    listed = [p for p in (getattr(server, "process", None) or []) if isinstance(p, dict) and isinstance(p.get("PID"), int)]
+    logins = [p for p in listed if tpot_login_entry(p)]
+    now = time.time()
+    boot = protocol.boot_time() if hasattr(protocol, "boot_time") else now
+    login_at = min(now, float(getattr(protocol, "logintime", now) or now))
+    start = max(0, int((login_at - boot) * TPOT_CLOCK_TICKS))
+    shell, chain, pty = session["shell"], session["chain"], session["pty"]
+    uid = int(getattr(user, "uid", 0) or 0)
+    gid = int(getattr(user, "gid", uid) or 0)
+    folder = None
+    if logins:
+        before = str(logins[-1]["PID"])
+        source = tpot_proc_child(proc, before)
+        if source is not None:
+            folder = tpot_proc_copy(source)
+            folder[TPOT_NODE_NAME] = str(shell)
+            proc[TPOT_NODE_CONTENTS] = [c for c in proc[TPOT_NODE_CONTENTS]
+                                        if c[TPOT_NODE_NAME] not in (before, str(shell))] + [folder]
+            task = tpot_proc_child(folder, "task")
+            for thread in (task[TPOT_NODE_CONTENTS] if task is not None and task[TPOT_NODE_TYPE] == TPOT_NODE_DIR
+                           else []):
+                if thread[TPOT_NODE_NAME] == before:
+                    thread[TPOT_NODE_NAME] = str(shell)
+            # the session's user owns its shell (the tree has the persona's user there)
+            stack = [folder]
+            while stack:
+                node = stack.pop()
+                node[TPOT_NODE_UID], node[TPOT_NODE_GID] = uid, gid
+                if node[TPOT_NODE_TYPE] == TPOT_NODE_DIR and isinstance(node[TPOT_NODE_CONTENTS], list):
+                    stack += node[TPOT_NODE_CONTENTS]
+            ids = {"Uid": "\t".join([str(uid)] * 4), "Gid": "\t".join([str(gid)] * 4)}
+            if str(logins[-1].get("USERNAME") or logins[-1].get("USER") or "") != str(getattr(user, "username", "")):
+                # another user than the persona's: the groups of its login (unverified: only its own group)
+                ids["Groups"] = f"{gid} "
+            tpot_proc_write(folder, "status", tpot_proc_status(tpot_proc_text(folder, "status"), ids))
+    # the parent of the session: the daemon of the ps list that serves it (sshd, dropbear, inetd, telnetd), else init
+    keys = (("inetd", "xinetd", "telnetd", "utelnetd") if session["telnet"]
+            else (session["name"], session["name"].split("-", 1)[0], "sshd", "dropbear"))
+    own = {entry["pid"] for entry in chain}
+    daemons = {tpot_top_comm(str(p.get("COMMAND") or "")): p["PID"] for p in listed
+               if str(p.get("TTY") or "?") == "?" and p["PID"] not in own}
+    parent = next((daemons[key] for key in keys if key in daemons), 1)
+    if not chain and any(p["PID"] == session["pid"] for p in listed):
+        parent = session["pid"]
+    group = session_id = parent
+    if folder is not None:
+        for index, entry in enumerate(chain):
+            node = tpot_proc_copy(folder)
+            pid, command = entry["pid"], str(entry["command"])
+            owner = 0 if entry["user"] == "root" else uid
+            owner_gid = 0 if entry["user"] == "root" else gid
+            node[TPOT_NODE_NAME], node[TPOT_NODE_UID], node[TPOT_NODE_GID] = str(pid), owner, owner_gid
+            node[TPOT_NODE_CONTENTS] = [c for c in node[TPOT_NODE_CONTENTS]
+                                        if c[TPOT_NODE_NAME] in ("cmdline", "comm", "stat", "status", "cwd", "root")]
+            for child in node[TPOT_NODE_CONTENTS]:
+                child[TPOT_NODE_UID], child[TPOT_NODE_GID], child[TPOT_NODE_CTIME] = owner, owner_gid, login_at
+            node[TPOT_NODE_CONTENTS].append(["fd", TPOT_NODE_DIR, owner, owner_gid, 0, 0o40500, login_at, [], None,
+                                             None])
+            stat = str(entry.get("stat") or "S")
+            if "s" in stat:
+                group = session_id = pid
+            name = tpot_top_comm(command)
+            words = command.split()
+            programs = (words[0],) if words and words[0].startswith("/") else TPOT_PROC_PROGRAMS.get(name, ())
+            exists = getattr(fs, "exists", None)
+            program = next((path for path in programs if not callable(exists) or exists(path)), None)
+            if program:
+                tpot_proc_link(node, "exe", program, login_at)
+            terminal = str(entry.get("tty") or "?").startswith("pts/") and pty
+            tpot_proc_write(node, "cmdline", tpot_proc_cmdline(command))
+            tpot_proc_write(node, "comm", (name + "\n").encode("utf-8", "surrogateescape"))
+            virt, res = int(entry.get("virt") or 0), int(entry.get("res") or 0)
+            values = {"Name": name, "State": TPOT_PROC_STATES.get(stat[:1], "S (sleeping)"), "Tgid": pid, "Pid": pid,
+                      "PPid": parent, "NStgid": pid, "NSpid": pid, "NSpgid": group, "NSsid": session_id,
+                      "Uid": "\t".join([str(owner)] * 4), "Gid": "\t".join([str(owner_gid)] * 4),
+                      "VmPeak": f"{virt:8d} kB", "VmSize": f"{virt:8d} kB", "VmHWM": f"{res:8d} kB",
+                      "VmRSS": f"{res:8d} kB"}
+            if owner == 0:
+                values["Groups"] = ""
+            tpot_proc_write(node, "status", tpot_proc_status(tpot_proc_text(node, "status"), values))
+            tpot_proc_write(node, "stat", tpot_proc_stat(tpot_proc_text(node, "stat"), {
+                0: pid, 1: f"({name})", 2: stat[:1], 3: parent, 4: group, 5: session_id,
+                6: 136 << 8 if terminal else 0, 7: pid if terminal else -1, 21: start, 22: virt * 1024,
+                23: res // 4}))
+            proc[TPOT_NODE_CONTENTS] = [c for c in proc[TPOT_NODE_CONTENTS] if c[TPOT_NODE_NAME] != str(pid)] + [node]
+            parent = pid
+        # the shell: its parent, its terminal (none in an exec channel without a pty: its command, pipes)
+        group = session_id = shell
+        values = {"Tgid": shell, "Pid": shell, "PPid": parent, "NStgid": shell, "NSpid": shell, "NSpgid": shell,
+                  "NSsid": shell}
+        tpot_proc_write(folder, "status", tpot_proc_status(tpot_proc_text(folder, "status"), values))
+        tpot_proc_write(folder, "stat", tpot_proc_stat(tpot_proc_text(folder, "stat"), {
+            0: shell, 3: parent, 4: shell, 5: shell, 6: 136 << 8 if pty else 0, 7: shell if pty else -1, 21: start}))
+        if not pty:
+            command = tpot_exec_shell(protocol, str(logins[-1].get("COMMAND") or ""))
+            name, _, rest = command.partition(" -c ")
+            tpot_proc_write(folder, "cmdline", b"".join(word.encode("utf-8", "surrogateescape") + b"\0"
+                                                        for word in (name, "-c", rest))[:4096])
+            fd = tpot_proc_child(folder, "fd")
+            if fd is not None and fd[TPOT_NODE_TYPE] == TPOT_NODE_DIR:
+                first = random.randint(20000, 900000)
+                for number in range(3):
+                    tpot_proc_link(fd, str(number), f"pipe:[{first + number * 2}]", login_at)
+    # /proc/self, /proc/thread-self: the shell (the links of the tree name the PID of the ps list)
+    for name, target in (("self", str(shell)), ("thread-self", f"{shell}/task/{shell}")):
+        link = tpot_proc_child(proc, name)
+        if link is not None and link[TPOT_NODE_TYPE] == TPOT_NODE_LINK:
+            link = list(link)
+            link[TPOT_NODE_TARGET], link[TPOT_NODE_SIZE] = target, len(target)
+            proc[TPOT_NODE_CONTENTS] = [link if c[TPOT_NODE_NAME] == name else c for c in proc[TPOT_NODE_CONTENTS]]
+    generated = getattr(fs, "generated_files", None)
+    if not isinstance(generated, dict):
+        return
+    host = str(getattr(protocol, "hostname", "") or "")
+    seconds = {}
+    for entry in (protocol.tpot_processes() if hasattr(protocol, "tpot_processes") else listed)[:TPOT_PROC_STATS]:
+        if isinstance(entry.get("PID"), int):
+            seconds[entry["PID"]] = (lambda e=entry: tpot_listed_seconds(host, e, boot, time.time()))
+    for entry in tpot_kernel_threads()[:TPOT_PROC_STATS]:
+        seconds[entry["PID"]] = (lambda pid=entry["PID"]: tpot_process_seconds(host, pid, 0, max(1.0, time.time() - boot),
+                                                                              False) / 50)
+    for entry in chain:
+        seconds[entry["pid"]] = (lambda: 0.02)
+
+    def stat_of(pid: int, cpu):
+        def read() -> bytes:
+            node = tpot_proc_child(proc, str(pid))
+            text = tpot_proc_text(node, "stat") if node is not None else b""
+            utime, stime = tpot_proc_ticks(cpu())
+            return tpot_proc_stat(text, {13: utime, 14: stime}) if text else b""
+        return read
+
+    for pid, cpu in seconds.items():
+        if tpot_proc_child(proc, str(pid)) is not None:
+            generated[f"/proc/{pid}/stat"] = stat_of(pid, cpu)
+    if str(shell) in {c[TPOT_NODE_NAME] for c in proc[TPOT_NODE_CONTENTS]} and shell in seconds:
+        generated["/proc/self/stat"] = stat_of(shell, seconds[shell])
 '''
 
 
@@ -1697,8 +3749,10 @@ def tpot_net_data(path: str) -> dict:
 
 
 def tpot_net_version(text: str) -> tuple:
-    """(major, minor) of an iproute2 version: 6.1.0 -> (6, 1), ss170501 -> (4, 11), ss110629 -> (3, 0)."""
-    snapshots = {"ss110629": (3, 0), "ss130716": (3, 10), "ss170501": (4, 11), "ss171113": (4, 14)}
+    """(major, minor) of an iproute2 version: 6.1.0 -> (6, 1), ss170501 -> (4, 11), ss110629 -> (3, 0);
+    ss141224 (the NAS326) is 3.18 by the date of its snapshot (unverified: no tag of iproute2 read)."""
+    snapshots = {"ss110629": (3, 0), "ss130716": (3, 10), "ss141224": (3, 18), "ss170501": (4, 11),
+                 "ss171113": (4, 14)}
     if text in snapshots:
         return snapshots[text]
     found = re.findall(r"\d+", text)
@@ -2544,11 +4598,11 @@ class Command_tpot_ss(TpotNetTool):
                         return 255
                     items = [(letter, value)]
             elif arg.startswith("-") and len(arg) > 1:
-                items, rest = [], arg[1:]
-                while rest:
-                    letter, rest = rest[0], rest[1:]
+                items, at = [], 1
+                while at < len(arg):
+                    letter, at = arg[at], at + 1
                     if letter in TPOT_SS_VALUES:
-                        value = rest or next(words, None)
+                        value = arg[at:] or next(words, None)
                         if value is None:
                             self.warn(f"ss: option requires an argument -- '{letter}'\n" + self.help_text())
                             return 255
@@ -2710,6 +4764,9 @@ class Command_tpot_ss(TpotNetTool):
                 if old is not None:
                     writable = (int(old[2]) == uid and int(old[5]) & 0o200) or int(old[5]) & 0o002
                 if not writable:
+                    # recorded for new files in /root and /etc; an existing file the user may not write is derived
+                    if not self.style.get("dump_error"):
+                        return 0  # recorded: the other releases end silent, without a file
                     self.warn("fopen dump file: Permission denied\n")
                     return 255
             self.fs.mkfile(path, uid, gid, len(data), 0o100644)
@@ -3164,7 +5221,8 @@ def patch_ps_session(cowrie_root):
     persona: sshd, sshd-session, dropbear, telnetd or in.telnetd) before Command_ps in base.py; ps itself
     is Command_tpot_ps (PS_COMMAND)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "base.py"
-    replace_once(path, "\n\nclass Command_ps(HoneyPotCommand):\n", TPOT_SESSION + "\n\nclass Command_ps(HoneyPotCommand):\n")
+    replace_once(path, "\n\nclass Command_ps(HoneyPotCommand):\n",
+                 TPOT_SESSION + TPOT_PROC + "\n\nclass Command_ps(HoneyPotCommand):\n")
 
 
 # module code of the patched bashparse.py: the PID $$ expands to
@@ -3172,9 +5230,20 @@ SHELL_PID = r'''
 
 # >>> tpot shell pid
 def tpot_shell_pid(context) -> str:
-    """T-Pot: the PID of the login shell of the session, the one ps, top and /proc/self show: the shell
-    of the ps list, else the one after the session's server process."""
+    """T-Pot: the PID of the login shell of the session, the one ps, top and /proc/self show: the one tpot_session of
+    the patched base.py drew for the session (tpot_login_pid), else the shell of the ps list, else the one after the
+    session's server process."""
     protocol = getattr(context, "protocol", None)
+    shell = getattr(protocol, "tpot_login_pid", None)
+    if not isinstance(shell, int):
+        try:
+            from cowrie.commands.base import tpot_session
+
+            shell = tpot_session(protocol, str(getattr(getattr(protocol, "user", None), "username", "root")))["shell"]
+        except Exception:  # noqa: BLE001 - without base.py the PID of the ps list
+            shell = None
+    if isinstance(shell, int):
+        return str(shell)
     server = getattr(getattr(protocol, "user", None), "server", None)
     shells = [p["PID"] for p in (getattr(server, "process", None) or [])
               if isinstance(p, dict) and isinstance(p.get("PID"), int)
@@ -3207,6 +5276,671 @@ def patch_shell_pid(cowrie_root):
             return tpot_shell_pid(self.context)
 ''')
     replace_once(path, "\nimport gc\nimport re\n", "\nimport gc\nimport os\nimport re\n")
+
+
+# module code of the patched bashparse.py: the arithmetic of $(( ))
+SHELL_ARITH = r'''
+
+# >>> tpot shell arithmetic
+TPOT_ARITH_MAX_LENGTH = 4096
+TPOT_ARITH_MAX_TOKENS = 20000
+TPOT_ARITH_MAX_LEVELS = 9
+TPOT_ARITH_MAX_DEPTH = 80  # four calls per paren level: the 14 levels of the grammar fit
+_ARITH_ALPHA = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
+_ARITH_DIGIT = frozenset("0123456789")
+_ARITH_ALNUM = _ARITH_ALPHA | _ARITH_DIGIT
+_ARITH_SINGLE = frozenset("=><+-*/%!()&|^~?:,")
+_ARITH_NUM, _ARITH_STR, _ARITH_EOS = "num", "str", "eos"
+_ARITH_ASSIGN = "op="
+TPOT_ASH_ERRORS = {"division by 0": "divide by zero", "exponent less than 0": "exponent less than 0",
+                   "expression recursion level exceeded": "expression recursion loop detected",
+                   "`:' expected for conditional expression": "malformed ?: operator"}
+_ARITH_BINARY = (("|",), ("^",), ("&",), ("==", "!="), ("<", ">", "<=", ">="), ("<<", ">>"), ("+", "-"))
+
+
+def tpot_arith_wrap(value: int) -> int:
+    """T-Pot: a value as 64 bit two's complement, the intmax_t of the shell."""
+    return ((value + (1 << 63)) & ((1 << 64) - 1)) - (1 << 63)
+
+
+def tpot_arith_divide(left: int, right: int, remainder: bool) -> int:
+    """T-Pot: C division and remainder (towards zero); right is not 0."""
+    quotient = abs(left) // abs(right)
+    if (left < 0) != (right < 0):
+        quotient = -quotient
+    return tpot_arith_wrap(left - quotient * right if remainder else quotient)
+
+
+class TpotArithError(Exception):
+    """T-Pot: an error of $(( )): the shell's text, the status it ends the list with, and whether ash made it."""
+
+    tpot_arith = True
+
+    def __init__(self, message: str, status: int = 1, ash: bool = False) -> None:
+        super().__init__(message)
+        self.message = message
+        self.status = status
+        self.ash = ash
+
+
+class TpotArith:
+    """T-Pot: $(( )) as a port of evalexp of bash 5 expr.c (tests/fixtures/shell_arith.json) with the ash dialects."""
+
+    def __init__(self, env: dict, style: str = "bash", level: int = 0, budget: list | None = None) -> None:
+        self.env = env
+        self.style = style
+        self.ash = style.startswith("ash")
+        self.level = level
+        self.budget = budget if budget is not None else [0]
+        self.expr = ""
+        self.tp = 0
+        self.lasttp: int | None = None
+        self.curtok = self.lasttok = _ARITH_EOS
+        self.tokstr = ""
+        self.tokval = 0
+        self.assigntok = ""
+        self.noeval = 0
+        self.depth = 0
+
+    def error(self, message: str) -> None:
+        if self.ash:
+            raise TpotArithError(TPOT_ASH_ERRORS.get(message, "arithmetic syntax error"), 2, True)
+        shown = self.expr.lstrip(" \t")
+        token = self.expr[self.lasttp:] if self.lasttp is not None else ""
+        raise TpotArithError(f'{shown}: {message} (error token is "{token}")', 1)
+
+    def evaluate(self, expr: str) -> int:
+        if len(expr) > TPOT_ARITH_MAX_LENGTH:
+            self.expr = expr[:TPOT_ARITH_MAX_LENGTH]
+            self.error("expression recursion level exceeded")  # derived: bash has no such limit, a longer one is cut
+        self.expr = expr
+        if not expr.strip(" \t\n\r"):
+            return 0
+        self.readtok()
+        value = self.expcomma()
+        if self.curtok != _ARITH_EOS:
+            self.error("`:' expected for conditional expression" if self.ash and self.curtok == ":"
+                       else "syntax error in expression")
+        return value
+
+    # -- tokens -------------------------------------------------------------
+
+    def streval(self, name: str) -> int:
+        value = self.env.get(name)
+        if not value:
+            return 0
+        if self.level >= TPOT_ARITH_MAX_LEVELS:
+            self.error("expression recursion level exceeded")
+        return TpotArith(self.env, self.style, self.level + 1, self.budget).evaluate(value)
+
+    def strlong(self, text: str) -> int:
+        base, index, value, foundbase = 10, 0, 0, False
+        if text[0] == "0":
+            if len(text) > 1 and text[1] in "xX":
+                if self.ash and len(text) == 2:
+                    self.error("syntax error")
+                base, index = 16, 2
+            else:
+                base, index = 8, 1
+        while index < len(text):
+            char = text[index]
+            index += 1
+            if char == "#":
+                if foundbase or self.style == "ash1":
+                    self.error("invalid number")
+                if value < 2 or value > 64:
+                    self.error("invalid arithmetic base")
+                base, value, foundbase = value, 0, True
+                if index >= len(text) or not (text[index] in _ARITH_ALNUM or text[index] == "@"):
+                    self.error("invalid integer constant")
+                continue
+            if char in _ARITH_DIGIT:
+                digit = ord(char) - 48
+            elif "a" <= char <= "z":
+                digit = ord(char) - 87
+            elif "A" <= char <= "Z":
+                digit = ord(char) - (55 if base <= 36 else 29)
+            elif char == "@":
+                digit = 62
+            elif char == "_":
+                digit = 63
+            else:
+                break
+            if digit >= base:
+                self.error("value too great for base")
+            value = tpot_arith_wrap(value * base + digit)
+        return value
+
+    def readtok(self) -> None:
+        expr, size = self.expr, len(self.expr)
+        cp = self.tp
+        while cp < size and expr[cp] in " \t\n\r":
+            cp += 1
+        if cp >= size:
+            self.lasttok, self.curtok = self.curtok, _ARITH_EOS
+            self.tp = size + 1
+            return
+        char = expr[cp]
+        self.lasttp = start = cp
+        cp += 1
+        self.budget[0] += 1
+        if self.budget[0] > TPOT_ARITH_MAX_TOKENS:
+            self.error("expression recursion level exceeded")  # derived, not recorded: bounds the work of one call
+        if char in _ARITH_ALPHA:
+            while cp < size and expr[cp] in _ARITH_ALNUM:
+                cp += 1
+            if cp < size and expr[cp] == "[" and not self.ash:
+                # an element of an array: arrays are not kept, so it reads 0 (an unset one)
+                end = tpot_arith_close(expr, cp + 1, "[", "]")
+                if end < 0:
+                    self.error("bad array subscript")
+                cp = end + 1
+            self.tokstr = expr[start:cp]
+            self.tokval = self.streval(self.tokstr) if self.noeval == 0 else 0
+            self.lasttok, self.curtok = self.curtok, _ARITH_STR
+            self.tp = cp
+            return
+        if char in _ARITH_DIGIT:
+            while cp < size and (expr[cp] in _ARITH_ALNUM or expr[cp] in "#@"):
+                cp += 1
+            self.tokstr = expr[start:cp]
+            self.tokval = self.strlong(self.tokstr)
+            self.lasttok, self.curtok = self.curtok, _ARITH_NUM
+            self.tp = cp
+            return
+        token = char
+        follow = expr[cp] if cp < size else ""
+        if char in "=!<>" and follow == "=":
+            token, cp = char + "=", cp + 1
+        elif char in "<>" and follow == char:
+            cp += 1
+            if cp < size and expr[cp] == "=":
+                self.assigntok, token, cp = char + char, _ARITH_ASSIGN, cp + 1
+            else:
+                token = char + char
+        elif char in "&|" and follow == char:
+            token, cp = char + char, cp + 1
+        elif char == "*" and follow == "*":
+            token, cp = "**", cp + 1
+        elif char in "+-" and follow == char and self.curtok == _ARITH_STR:
+            token, cp = char + char + "post", cp + 1
+        elif char in "+-" and follow == char and self.incdec_pre(cp + 1):
+            token, cp = char + char + "pre", cp + 1
+        elif follow == "=" and char in "*/%+-&^|":
+            self.assigntok, token, cp = char, _ARITH_ASSIGN, cp + 1
+        elif char not in _ARITH_SINGLE:
+            if self.curtok == _ARITH_EOS or self.curtok in _ARITH_SINGLE:
+                self.error("syntax error: operand expected")
+            self.error("syntax error: invalid arithmetic operator")
+        self.lasttok, self.curtok = self.curtok, token
+        self.tp = cp
+
+    def incdec_pre(self, after: int) -> bool:
+        """Whether ++ or -- here is a pre-increment: BusyBox before 1.33 reads every one as such, 1.33 where an
+        operand does not end, bash and later BusyBox where a name follows."""
+        if self.style == "ash1":
+            return True
+        if self.style == "ash2":
+            return self.curtok not in (_ARITH_NUM, ")")
+        return after < len(self.expr) and self.expr[after] in _ARITH_ALPHA
+
+    # -- grammar, lowest precedence first -----------------------------------
+
+    def enter(self) -> None:
+        self.depth += 1
+        if self.depth > TPOT_ARITH_MAX_DEPTH:
+            self.error("expression recursion level exceeded")
+
+    def expcomma(self) -> int:
+        value = self.expassign()
+        while self.curtok == ",":
+            self.readtok()
+            value = self.expassign()
+        return value
+
+    def operate(self, operator: str, left: int, right: int) -> int:
+        if operator == "+":
+            return tpot_arith_wrap(left + right)
+        if operator == "-":
+            return tpot_arith_wrap(left - right)
+        if operator == "*":
+            return tpot_arith_wrap(left * right)
+        if operator in "/%":
+            return tpot_arith_divide(left, right, operator == "%")
+        if operator == "<<":
+            return tpot_arith_wrap(left << (right & 63))
+        if operator == ">>":
+            return left >> (right & 63)
+        if operator == "&":
+            return left & right
+        if operator == "^":
+            return left ^ right
+        return left | right
+
+    def expassign(self) -> int:
+        self.enter()
+        value = self.expcond()
+        if self.curtok in ("=", _ARITH_ASSIGN):
+            special = self.curtok == _ARITH_ASSIGN
+            if self.lasttok != _ARITH_STR:
+                self.error("attempted assignment to non-variable")
+            operator, lvalue, name = self.assigntok, value, self.tokstr
+            if not name:
+                self.error("syntax error in variable assignment")
+            self.readtok()
+            value = self.expassign()
+            if special:
+                if operator in ("/", "%") and value == 0:
+                    if self.noeval == 0:
+                        self.error("division by 0")
+                    value = 1
+                value = self.operate(operator, lvalue, value)
+            if self.noeval == 0:
+                self.env[name] = str(value)
+        self.depth -= 1
+        return value
+
+    def expcond(self) -> int:
+        cval = value = self.explor()
+        if self.curtok == "?":
+            self.readtok()
+            if self.curtok in (_ARITH_EOS, ":"):
+                self.error("expression expected")
+            skip = cval == 0
+            self.noeval += skip
+            first = self.expcond() if self.ash else self.expcomma()
+            self.noeval -= skip
+            if self.curtok != ":":
+                self.error("`:' expected for conditional expression")
+            self.readtok()
+            if self.curtok == _ARITH_EOS:
+                self.error("expression expected")
+            skip = bool(cval)
+            self.noeval += skip
+            second = self.expcond()
+            self.noeval -= skip
+            value = first if cval else second
+            self.lasttok = "?"
+        return value
+
+    def explor(self) -> int:
+        value = self.expland()
+        while self.curtok == "||":
+            self.readtok()
+            skip = value != 0 and not self.ash
+            self.noeval += skip
+            right = self.expland()
+            self.noeval -= skip
+            value = int(bool(value or right))
+            self.lasttok = _ARITH_NUM
+        return value
+
+    def expland(self) -> int:
+        value = self.expbin(0)
+        while self.curtok == "&&":
+            self.readtok()
+            skip = value == 0 and not self.ash
+            self.noeval += skip
+            right = self.expbin(0)
+            self.noeval -= skip
+            value = int(bool(value and right))
+            self.lasttok = _ARITH_NUM
+        return value
+
+    def expbin(self, index: int) -> int:
+        if index == len(_ARITH_BINARY):
+            return self.expmuldiv()
+        value = self.expbin(index + 1)
+        while self.curtok in _ARITH_BINARY[index]:
+            operator = self.curtok
+            self.readtok()
+            right = self.expbin(index + 1)
+            if operator == "==":
+                value = int(value == right)
+            elif operator == "!=":
+                value = int(value != right)
+            elif operator == "<":
+                value = int(value < right)
+            elif operator == ">":
+                value = int(value > right)
+            elif operator == "<=":
+                value = int(value <= right)
+            elif operator == ">=":
+                value = int(value >= right)
+            else:
+                value = self.operate(operator, value, right)
+            self.lasttok = _ARITH_NUM
+        return value
+
+    def expmuldiv(self) -> int:
+        value = self.exppower()
+        while self.curtok in ("*", "/", "%"):
+            operator = self.curtok
+            after = self.tp
+            self.readtok()
+            right = self.exppower()
+            if operator != "*" and right == 0:
+                if self.noeval:
+                    right = 1
+                else:
+                    while after < len(self.expr) and self.expr[after] in " \t":
+                        after += 1
+                    self.lasttp = after
+                    self.error("division by 0")
+            value = self.operate(operator, value, right)
+            self.lasttok = _ARITH_NUM
+        return value
+
+    def exppower(self) -> int:
+        self.enter()
+        value = self.exp1()
+        while self.curtok == "**":
+            self.readtok()
+            exponent = self.exppower()
+            self.lasttok = _ARITH_NUM
+            if exponent == 0:
+                self.depth -= 1
+                return 1
+            if exponent < 0:
+                self.error("exponent less than 0")
+            result, base = 1, value
+            while exponent:
+                if exponent & 1:
+                    result = tpot_arith_wrap(result * base)
+                base = tpot_arith_wrap(base * base)
+                exponent >>= 1
+            value = result
+        self.depth -= 1
+        return value
+
+    def exp1(self) -> int:
+        self.enter()
+        token = self.curtok
+        if token in ("!", "~", "-", "+"):
+            self.readtok()
+            operand = self.exp1()
+            value = {"!": int(operand == 0), "~": ~operand, "-": tpot_arith_wrap(-operand), "+": operand}[token]
+            self.lasttok = _ARITH_NUM
+        else:
+            value = self.exp0()
+        self.depth -= 1
+        return value
+
+    def bind(self, name: str, value: int) -> None:
+        if self.noeval == 0:
+            self.env[name] = str(value)
+
+    def exp0(self) -> int:
+        token = self.curtok
+        if token in ("++pre", "--pre"):
+            self.lasttok = token
+            self.readtok()
+            if self.curtok != _ARITH_STR:
+                self.error("identifier expected after pre-increment or pre-decrement")
+            value = tpot_arith_wrap(self.tokval + (1 if token == "++pre" else -1))
+            self.bind(self.tokstr, value)
+            self.curtok = _ARITH_NUM
+            self.readtok()
+        elif token == "(":
+            self.enter()
+            self.readtok()
+            value = self.expcomma()
+            if self.curtok != ")":
+                self.error("missing `)'")
+            self.depth -= 1
+            self.readtok()
+        elif token in (_ARITH_NUM, _ARITH_STR):
+            value = self.tokval
+            if token == _ARITH_STR:
+                saved = (self.curtok, self.lasttok, self.tp, self.lasttp, self.tokval, self.tokstr, self.noeval)
+                self.noeval = 1
+                self.readtok()
+                follow = self.curtok
+                if follow in ("++post", "--post"):
+                    self.tokstr, self.noeval, self.lasttok = saved[5], saved[6], _ARITH_STR
+                    self.bind(self.tokstr, tpot_arith_wrap(value + (1 if follow == "++post" else -1)))
+                    self.curtok = _ARITH_NUM
+                else:
+                    (self.curtok, self.lasttok, self.tp, self.lasttp, self.tokval, self.tokstr, self.noeval) = saved
+            self.readtok()
+        else:
+            self.error("syntax error: operand expected")
+        return value
+
+
+def tpot_arith(expr: str, env: dict, style: str = "bash") -> str:
+    """T-Pot: the value of an expression as text; env holds the variables and takes the assignments."""
+    evaluator = TpotArith(env, style)
+    try:
+        return str(evaluator.evaluate(expr))
+    except RecursionError:
+        evaluator.error("expression recursion level exceeded")
+    return ""
+
+
+def tpot_arith_style() -> str:
+    """T-Pot: bash, ash1 (BusyBox before 1.33), ash2 (before 1.36), ash3 or msh; the ash thresholds lie between
+    the recorded releases (1.25, 1.33, 1.36), derived, not recorded."""
+    style = CowrieConfig.get("shell", "not_found_style", fallback="bash")
+    if style == "ash":
+        found = re.search(r"BusyBox v1\.(\d+)", CowrieConfig.get("shell", "text_banner", fallback=""))
+        minor = int(found.group(1)) if found else 36
+        return "ash1" if minor < 33 else "ash2" if minor < 36 else "ash3"
+    return style
+
+
+def tpot_arith_close(text: str, start: int, opener: str, closer: str) -> int:
+    """T-Pot: the index of the closer that ends the group opened before start, -1 when there is none."""
+    depth = 1
+    for index in range(start, len(text)):
+        if text[index] == opener:
+            depth += 1
+        elif text[index] == closer:
+            depth -= 1
+            if depth == 0:
+                return index
+    return -1
+
+
+async def tpot_arith_expand(context, text: str, level: int = 0) -> str:
+    """T-Pot: $name, ${name}, $?, $$, $( ), backticks and $(( )) inside; ${x:-d}, $# and $@ are not expanded."""
+    out, index = [], 0
+    while index < len(text):
+        char = text[index]
+        if char == "`":
+            end = text.find("`", index + 1)
+            if end < 0:
+                out.append(text[index:])
+                break
+            out.append(await context.command_substitution(text[index + 1:end]))
+            index = end + 1
+            continue
+        if char != "$":
+            out.append(char)
+            index += 1
+            continue
+        if text.startswith("$((", index):
+            end = tpot_arith_close(text, index + 2, "(", ")")
+            if end > 0 and text[end - 1] == ")" and level < TPOT_ARITH_MAX_LEVELS:
+                out.append(await tpot_arith_value(context, text[index + 3:end - 1], level + 1))
+                index = end + 1
+                continue
+        if text.startswith("$(", index):
+            end = tpot_arith_close(text, index + 2, "(", ")")
+            if end > 0:
+                out.append(await context.command_substitution(text[index + 2:end]))
+                index = end + 1
+                continue
+        if text.startswith("${", index):
+            end = text.find("}", index + 2)
+            if end > 0:
+                value = context.get_variable(text[index + 2:end])
+                out.append(value if value is not None else "")
+                index = end + 1
+                continue
+        found = re.compile(r"\$[_a-zA-Z0-9]+").match(text, index)
+        if found:
+            value = context.get_variable(found.group(0)[1:])
+            out.append(value if value is not None else "")
+            index = found.end()
+        elif text.startswith("$?", index):
+            out.append(context.get_status())
+            index += 2
+        elif text.startswith("$$", index):
+            out.append(tpot_shell_pid(context))
+            index += 2
+        else:
+            out.append(char)
+            index += 1
+    return "".join(out)
+
+
+async def tpot_arith_value(context, body: str, level: int = 0) -> str:
+    """T-Pot: the value of $((body)); raises TpotArithError (msh has no arithmetic: a syntax error, status 255)."""
+    style = tpot_arith_style()
+    if style == "msh":
+        raise TpotArithError("syntax error", 255)
+    text = await tpot_arith_expand(context, body, level)
+    if style == "bash":
+        text = text.replace('"', "")
+    return tpot_arith(text, context.environ, style)
+
+
+def tpot_arith_grammar(nesting: int = 14) -> tuple:
+    """T-Pot: the regexes of the $(( )) terminal and of the $( that is no $(( ), groups inside up to `nesting` deep."""
+    body = r"[^()]*"
+    for _ in range(nesting):
+        body = r"(?:[^()]|\(" + body + r"\))*"
+    return r"\$\(\(" + body + r"\)\)", r"\$\((?!\(" + body + r"\)\))"
+# <<< tpot shell arithmetic
+'''
+
+
+# module code of the patched honeypot.py before HoneyPotShell: what an error of $(( )) ends
+ARITH_HOOKS = r'''
+
+# >>> tpot shell arithmetic hooks
+def tpot_first_line(statement, depth: int = 0) -> int:
+    """T-Pot: the line of its source a statement starts on (0 when none of its parts says)."""
+    line = getattr(statement, "lineno", 0)
+    if isinstance(line, int) and line:
+        return line
+    if depth > 8:
+        return 0
+    for name in ("items", "word"):
+        inner = getattr(statement, name, None)
+        if inner is not None and hasattr(inner, "lineno"):
+            return tpot_first_line(inner, depth + 1)
+    for name in ("stages", "statements", "body", "condition"):
+        inner = getattr(statement, name, None)
+        if isinstance(inner, list) and inner:
+            return tpot_first_line(inner[0], depth + 1)
+    branches = getattr(statement, "branches", None)
+    if isinstance(branches, list) and branches and branches[0] and branches[0][0]:
+        return tpot_first_line(branches[0][0][0], depth + 1)
+    return 0
+
+
+def tpot_arith_batch(shell) -> None:
+    """T-Pot: a new input is queued: its statements are numbered so a failed one knows which ones follow its line."""
+    if not shell.cmdpending or not isinstance(getattr(shell, "tpot_tops", None), dict):
+        shell.tpot_tops = {}
+    shell.tpot_batch = getattr(shell, "tpot_batch", 0) + 1
+    shell.tpot_line = 0
+
+
+def tpot_mark_top(shell, statement) -> None:
+    """T-Pot: a statement of the queue of the input (not a part spliced in by a loop, group or function)."""
+    shell.tpot_line = tpot_first_line(statement) or shell.tpot_line
+    shell.tpot_tops[id(statement)] = (shell.tpot_batch, shell.tpot_line, statement)
+
+
+def tpot_note_top(shell, command) -> None:
+    """T-Pot: the statement the shell takes from the queue now is the one an error belongs to, when it is a top one."""
+    top = getattr(shell, "tpot_tops", {}).get(id(command))
+    if top is not None and top[2] is command:
+        shell.tpot_top_now = top[:2]
+
+
+def tpot_arith_cleanup(item) -> bool:
+    """T-Pot: an entry of the queue that gives back a function's or redirected group's changes; derived, not recorded."""
+    function = getattr(item, "fn", None)
+    code = getattr(function, "__code__", None)
+    return (not getattr(item, "is_loop_cont", False) and code is not None
+            and (code.co_name == "restore" or "_restore_fds" in code.co_names))
+
+
+def tpot_arith_failed(shell, error) -> None:
+    """T-Pot: the shell says the error, sets the status and cuts the queue: bash drops the rest of the line, ash
+    a non-interactive shell's everything, a substitution, subshell or pipeline stage ends alone (shell_arith.json)."""
+    shell._write_shell_error(f"{shell.error_prefix()}{error.message}\n".encode("utf-8", "replace"))
+    shell.last_exit_code = error.status
+    shell._loop_signal = None
+    shell._loop_depth = 0
+    current = getattr(shell, "tpot_top_now", None)
+    everything = (shell.done is not None or current is None or (error.ash and not shell.interactive))
+    batch, line = current if current is not None else (0, 0)
+    kept = []
+    while shell.cmdpending:
+        item = shell.cmdpending[0]
+        top = getattr(shell, "tpot_tops", {}).get(id(item))
+        if (not everything and top is not None and top[2] is item
+                # derived, not recorded: a compound that spans lines counts as its first line
+                and (top[0] != batch or (not error.ash and top[1] > line))):
+            break
+        shell.cmdpending.pop(0)
+        if tpot_arith_cleanup(item):
+            kept.append(item)
+    shell.cmdpending[0:0] = kept
+    shell._advance()
+# <<< tpot shell arithmetic hooks
+'''
+
+
+def patch_shell_arith(cowrie_root):
+    """$(( )) of the persona's shell: a grammar term next to $( ), the evaluator, and the hooks that end a list."""
+    path = cowrie_root / "src" / "cowrie" / "shell" / "bashparse.py"
+    replace_once(path, '\n_GRAMMAR = r"""', SHELL_ARITH + '\n_GRAMMAR = r"""')
+    replace_once(path, "_atom: sq | dq | cmdsub | backtick |", "_atom: sq | dq | arith | cmdsub | backtick |")
+    replace_once(path, '_dq_part: cmdsub | backtick |', '_dq_part: arith | cmdsub | backtick |')
+    replace_once(path, 'cmdsub: CMDSUB_OPEN start ")"\nCMDSUB_OPEN: "$("\n',
+                 'cmdsub: CMDSUB_OPEN start ")"\nCMDSUB_OPEN: /@CMDSUB@/\n'
+                 '// T-Pot: $((...)) is a term of its own; a $( that starts a group of its own is a substitution\n'
+                 'arith: ARITH\nARITH: /@ARITH@/\n')
+    replace_once(path, "\n_parser = Lark(\n    _GRAMMAR,\n",
+                 '\n_ARITH_TERMINAL, _CMDSUB_TERMINAL = tpot_arith_grammar()\n'
+                 '_GRAMMAR = _GRAMMAR.replace("@ARITH@", _ARITH_TERMINAL).replace("@CMDSUB@", _CMDSUB_TERMINAL)\n'
+                 '_parser = Lark(\n    _GRAMMAR,\n')
+    replace_once(path, '_UNQUOTED_EXPANSIONS = frozenset({"dollar_var", "dollar_brace", "cmdsub", "backtick"})\n',
+                 '_UNQUOTED_EXPANSIONS = frozenset({"dollar_var", "dollar_brace", "cmdsub", "backtick", "arith"})\n')
+    replace_once(path, '        if atom.data == "cmdsub":\n',
+                 '        if atom.data == "arith":\n'
+                 '            # T-Pot: $(( )) of the persona\'s shell\n'
+                 '            return await tpot_arith_value(self.context, str(atom.children[0])[3:-2])\n'
+                 '        if atom.data == "cmdsub":\n')
+    replace_once(path, '            elif part.data == "cmdsub":\n',
+                 '            elif part.data == "arith":\n'
+                 '                parts.append(await tpot_arith_value(self.context, str(part.children[0])[3:-2]))\n'
+                 '            elif part.data == "cmdsub":\n')
+    path = cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py"
+    replace_once(path, "\n\nclass HoneyPotShell:\n", ARITH_HOOKS + "\n\nclass HoneyPotShell:\n")
+    replace_once(path, "        for statement in statements:\n            error = self._find_syntax_error([statement])\n",
+                 "        tpot_arith_batch(self)\n"
+                 "        for statement in statements:\n            error = self._find_syntax_error([statement])\n")
+    replace_once(path, "                self.cmdpending.append(error)\n                return False\n",
+                 "                self.cmdpending.append(error)\n                tpot_mark_top(self, error)\n"
+                 "                return False\n")
+    replace_once(path, "            self.cmdpending.append(statement)\n        return True\n",
+                 "            self.cmdpending.append(statement)\n            tpot_mark_top(self, statement)\n"
+                 "        return True\n")
+    replace_once(path, '        self._log.failure("shell statement failed", failure=failure)\n',
+                 '        if getattr(failure.value, "tpot_arith", False):\n'
+                 "            # T-Pot: an error of $(( )) ends the command list as the shell of the persona does\n"
+                 "            tpot_arith_failed(self, failure.value)\n"
+                 "            return\n"
+                 '        self._log.failure("shell statement failed", failure=failure)\n')
+    replace_once(path, "        command = self.cmdpending.pop(0)\n",
+                 "        command = self.cmdpending.pop(0)\n        tpot_note_top(self, command)\n")
 
 
 # module code of the patched honeypot.py before HoneyPotShell: the words of a pipeline's stages for ps
@@ -3258,6 +5992,87 @@ def tpot_unquoted(text: str) -> str:
             out.append(char)
     return "".join(out)
 '''
+
+
+def patch_shell_yield(cowrie_root):
+    """The top-level shell gives the reactor a turn between the commands of a line."""
+    path = cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py"
+    replace_once(path, "\nfrom cowrie.core.config import CowrieConfig\n",
+                 "\nfrom twisted.internet import reactor\n\nfrom cowrie.core.config import CowrieConfig\n")
+    replace_once(path, "    def _advance(self) -> None:\n",
+                 "    _tpot_advance_later = None\n"
+                 "    _tpot_yield_commands = 64  # a short line runs in one go; a longer one gives the reactor a turn\n"
+                 "    _tpot_yield_in_loop = 5000  # a loop is bounded by upstream's cap of 1000 rounds\n\n"
+                 "    @property\n"
+                 "    def _tpot_typeahead(self) -> list:\n"
+                 "        # input that came during a turn: lines as text, None for EOF\n"
+                 "        return self.__dict__.setdefault(\"_tpot_typeahead_list\", [])\n\n"
+                 "    def _tpot_advance_again(self) -> None:\n"
+                 "        self._tpot_advance_later = None\n"
+                 "        # a shell that left the cmdstack meanwhile (lost connection, exit) has nothing more to run\n"
+                 "        if self in self.protocol.cmdstack:\n"
+                 "            self._advance()\n"
+                 "            self._tpot_hand_on()\n"
+                 "        else:\n"
+                 "            self._tpot_typeahead.clear()\n\n"
+                 "    def _tpot_hand_on(self) -> None:\n"
+                 "        # input that came during the turn goes to whoever reads now, as it would have without the turn\n"
+                 "        stack = self.protocol.cmdstack\n"
+                 "        while self._tpot_typeahead and self._tpot_advance_later is None and self in stack:\n"
+                 "            item = self._tpot_typeahead.pop(0)\n"
+                 "            if item is None:\n"
+                 "                stack[-1].eofReceived()\n"
+                 "            else:\n"
+                 "                stack[-1].lineReceived(item)\n\n"
+                 "    def _advance(self) -> None:\n")
+    replace_once(path, "        if self._advancing:\n            self._advance_pending = True\n            return\n",
+                 "        if self._advancing or self._tpot_advance_later is not None:\n"
+                 "            self._advance_pending = True\n            return\n")
+    replace_once(path, "            running = True\n            while running:\n",
+                 "            running, ran = True, 0\n            while running:\n")
+    replace_once(path, "                running = self._advance_pending\n        finally:\n",
+                 "                running = self._advance_pending\n"
+                 "                ran += 1\n"
+                 "                limit = self._tpot_yield_in_loop if self._loop_depth else self._tpot_yield_commands\n"
+                 "                if (running and self.cmdpending and ran >= limit\n"
+                 "                        and self.protocol.cmdstack[:1] == [self]):\n"
+                 "                    # T-Pot: only the top-level shell yields, and only on a long drive\n"
+                 "                    self._tpot_advance_later = reactor.callLater(0, self._tpot_advance_again)\n"
+                 "                    return\n        finally:\n")
+    replace_once(path, "        if self.interactive:\n            self.showPrompt()\n        elif self.reads_stdin:\n",
+                 "        if self._tpot_typeahead[:1] == [None]:\n"
+                 "            self._tpot_typeahead.clear()\n"
+                 "            self.protocol.end_process(self.last_exit_code)\n"
+                 "        elif self.interactive:\n            self.showPrompt()\n        elif self.reads_stdin:\n")
+    replace_once(path, '        """Parse a command line with the Lark grammar and run the result."""\n',
+                 '        """Parse a command line with the Lark grammar and run the result."""\n'
+                 "        if self._tpot_advance_later is not None:\n"
+                 "            self._tpot_typeahead.append(line)  # read after the turn, by whoever waits for input\n"
+                 "            return\n")
+    replace_once(path, '        self._log.info("received eof, logging out")\n',
+                 "        if self._tpot_advance_later is not None:\n"
+                 "            self._tpot_typeahead.append(None)  # None is EOF\n"
+                 "            return\n"
+                 '        self._log.info("received eof, logging out")\n')
+    replace_once(path, "    def handle_CTRL_C(self) -> None:\n        self.protocol.lineBuffer = []\n",
+                 "    def handle_CTRL_C(self) -> None:\n"
+                 "        if self._tpot_advance_later is not None:\n"
+                 "            self._tpot_advance_later.cancel()\n"
+                 "            self._tpot_advance_later = None\n"
+                 "            self._tpot_typeahead.clear()\n"
+                 "            # what a function call or a redirected group put back is still given back\n"
+                 "            kept = [item for item in self.cmdpending if tpot_arith_cleanup(item)]\n"
+                 "            self.cmdpending.clear()\n"
+                 "            self._advancing = True\n"
+                 "            try:\n"
+                 "                for item in kept:\n"
+                 "                    item.fn()\n"
+                 "            finally:\n"
+                 "                self._advancing = False\n"
+                 "                self._advance_pending = False\n"
+                 "            self.cmdpending.clear()\n"
+                 "            self._loop_depth, self._loop_signal, self.last_exit_code = 0, None, 130\n"
+                 "        self.protocol.lineBuffer = []\n")
 
 
 def patch_pipeline_words(cowrie_root):
@@ -3352,6 +6167,26 @@ TPOT_SYSTEMCTL_LONG_VALUES = frozenset({"--lines", "--output", "--property", "--
 # the unit file states is-enabled answers 0 for (systemctl(1))
 TPOT_SYSTEMCTL_ENABLED = frozenset({"enabled", "enabled-runtime", "static", "alias", "indirect", "generated",
                                     "transient"})
+# a user without root: the verbs systemd refuses (refs w2 systemd: noroot.json without polkit, noroot_polkit.json
+#   with it, centos7_systemd.json for 219; 232 reads as 219, halt as reboot, reset-failed and unmask as their
+#   neighbours: derived from systemctl.c, not recorded)
+TPOT_SYSTEMCTL_REFUSED = ("isolate", "reboot", "poweroff", "halt")
+TPOT_REFUSED_JOBS = ("start", "stop", "restart", "reload", "try-restart", "reload-or-restart", "force-reload")
+# (the call of the bus method, the words of the logind call) of reboot, poweroff, halt
+TPOT_REFUSED_POWER = {"reboot": ("Reboot", "reboot system"), "poweroff": ("PowerOff", "power off system"),
+                      "halt": ("Halt", "halt system")}
+TPOT_PK1_MISSING = "The name org.freedesktop.PolicyKit1 was not provided by any .service files"
+TPOT_AUTH_REQUIRED = "Interactive authentication required."
+# (age of the texts, polkit) -> (the reason, the status of a refused job); ages: old 219, mid 249 to 251, new 252 on
+#   (recorded at 219, 249, 252, 255, 257; 232 reads as old and 250, 251 as mid: derived, not recorded)
+TPOT_REFUSAL = {("old", True): (TPOT_AUTH_REQUIRED, 1), ("old", False): (TPOT_PK1_MISSING, 1),
+                ("mid", True): (TPOT_AUTH_REQUIRED, 1), ("mid", False): ("Access denied", 4),
+                ("new", True): (TPOT_AUTH_REQUIRED, 1), ("new", False): ("Access denied", 4)}
+# (version, polkit, verb) -> the reason of a verb the release answers apart (recorded: Rocky 9 with polkit)
+TPOT_REFUSAL_VERBS = {(252, True, "disable"): "Access denied"}
+# systemd wraps its error lines in ESC[0;1;31m ... ESC[0m on a terminal from this version on (recorded with polkit:
+#   none at 219 and 249, all at 252, 255, 257; without polkit derived, not recorded)
+TPOT_REFUSED_COLOUR = 252
 
 
 @functools.cache
@@ -3732,6 +6567,8 @@ def tpot_status_unit(cmd, data: dict, unit: dict, boot: float, now: float, host:
         if version >= 252 and unit.get("duration"):
             # the time of the last run (systemd keeps it through the failed start)
             out.append(key("Duration") + tpot_timespan(int(unit["duration"])))
+    elif unit.get("dropped"):
+        out.append(key("Active") + "inactive (dead)")
     elif unit.get("stopped") or unit.get("condition"):
         out.append(key("Active") + f"inactive (dead) since {stamp}; {tpot_ago(now - since, version)}")
         if version >= 252 and (unit.get("duration") or unit.get("stopped")):
@@ -3739,7 +6576,7 @@ def tpot_status_unit(cmd, data: dict, unit: dict, boot: float, now: float, host:
                 1, int((since - float(unit.get("started", since))) * 1000)))))
     else:
         out.append(key("Active") + "inactive (dead)")
-    if version >= 257 and (active or unit.get("stopped")):
+    if version >= 257 and (active or (unit.get("stopped") and not unit.get("dropped"))):
         out.append(key("Invocation") + tpot_invocation(host, unit))
     if unit.get("condition") and not active:
         at = float(unit.get("condition_at", since))
@@ -3748,7 +6585,7 @@ def tpot_status_unit(cmd, data: dict, unit: dict, boot: float, now: float, host:
         out.append(pad + f"\u2514\u2500 {unit['condition']} was not met")
     if unit.get("triggered_by"):
         out.append(key("TriggeredBy") + f"● {unit['triggered_by']}")
-    if kind == "socket" and active:
+    if kind == "socket" and (active or (unit.get("stopped") and not unit.get("dropped"))):
         triggers = unit.get("connection") or unit.get("triggers")
         if triggers:
             out.append(key("Triggers") + f"● {triggers}")
@@ -3758,30 +6595,39 @@ def tpot_status_unit(cmd, data: dict, unit: dict, boot: float, now: float, host:
         for index, entry in enumerate(unit.get("listen", [])):
             out.append((key("Listen") if index == 0 else pad) + entry)
         if unit.get("accept"):
-            out.append(key("Accepted") + f"{unit.get('accepted', 0)}; Connected: {unit.get('connected', 0)};")
+            out.append(key("Accepted") + f"{unit.get('accepted', 0)}; Connected: {unit.get('connected', 0)}"
+                       + (";" if version >= 235 else ""))
     if not active:
         if sub == "failed" and unit.get("process"):
             pid, exec_key, words, code = (list(unit["process"]) + [0, "ExecStart", "", ""])[:4]
             out.append(key("Process") + f"{pid} {exec_key}={words} ({code})")
             if version >= 240:
                 out.append(key("CPU") + tpot_cpu(unit))
-        elif unit.get("stopped"):
+        elif unit.get("stopped") and not unit.get("dropped"):
             pid, code = unit.get("stop_pid", 0), unit.get("code", "code=exited, status=0/SUCCESS")
             runs = [run for run in unit.get("runs", []) if isinstance(run, list) and len(run) >= 3]
             if not runs and unit.get("exec"):
                 runs = [[pid, "ExecStart", tpot_exec_words(str(unit["exec"]))]]
             forking = unit.get("kind") == "forking"
-            # systemd 255 on names every process of the run; older ones the stop and a main ExecStart=
-            #   (refs t12 *-t12r2-start-without-binary, debian-12-t12-after-remove-nginx, almalinux-9-t12-after-remove-tuned)
+            # systemd 255 on names every process of the run; older ones the stop and a main ExecStart=, and
+            #   ExecStartPre= and the ExecStart= of a forking unit only of a run the session started (refs t12
+            #   *-t12r2-start-without-binary, debian-12-t12-after-remove-nginx (boot run), almalinux-9-t12-after-remove-tuned;
+            #   systemd_stops.json: debian_12 nginx start + stop lists all three, stop of a boot run, kill after a start)
             for run_pid, exec_key, words in [run[:3] for run in runs][:16]:
-                if version < 255 and (exec_key == "ExecStartPre" or (exec_key == "ExecStart" and forking)):
+                if version < 255 and (
+                        (exec_key == "ExecStartPre" and not unit.get("fresh")) or
+                        (exec_key == "ExecStart" and forking and not (unit.get("show_start") or unit.get("fresh")))):
                     continue
                 own = code if exec_key == "ExecStart" and not forking else "code=exited, status=0/SUCCESS"
                 out.append(key("Process") + f"{run_pid} {exec_key}={words} ({own})")
-            out.append(key("Main PID") + f"{pid} ({code})")
+            if kind != "socket":
+                out.append(key("Main PID") + f"{pid} ({code})")
+            if unit.get("fd_store"):
+                out.append(key("FD Store") + f"0 (limit: {unit['fd_store']})")
             if version >= 257:
                 out.append(key("Mem peak") + tpot_bytes(int(unit.get("peak", 0)), version))
-            out.append(key("CPU") + tpot_cpu(unit))
+            if version >= 240:
+                out.append(key("CPU") + tpot_cpu(unit))
         if not unit.get("stopped") and not unit.get("journal"):
             return out
     elif kind in ("socket", "slice"):
@@ -3798,6 +6644,9 @@ def tpot_status_unit(cmd, data: dict, unit: dict, boot: float, now: float, host:
     elif sub == "running":
         pid = unit.get("pid", 0)
         out.append(key("Main PID") + f"{pid} ({unit.get('comm', '')})")
+        if unit.get("fd_store"):
+            # derived from the stopped unit's order (Main PID, FD Store), not recorded
+            out.append(key("FD Store") + f"0 (limit: {unit['fd_store']})")
         if version >= 227:
             out.append(key("Tasks") + f"{unit.get('tasks', 1)} (limit: {data.get('tasks_max', 4096)})")
         out += tpot_memory_cpu(data, unit, key)
@@ -3899,7 +6748,9 @@ def tpot_list_units(cmd, data: dict, every: bool, legend: bool, kinds: set, stat
     active_width = max([len("ACTIVE")] + [len(r[1]) for r in rows])
     sub_width = max([len("SUB")] + [len(r[2]) for r in rows])
     if legend:
-        cmd.write(f"  {'UNIT':<{name_width}} LOAD   {'ACTIVE':<{active_width}} {'SUB':<{sub_width}} DESCRIPTION\n"
+        # the header of 219 has no label over the description column (recorded: systemd_219.json centos_7)
+        label = "DESCRIPTION" if version >= 220 else ""
+        cmd.write(f"  {'UNIT':<{name_width}} LOAD   {'ACTIVE':<{active_width}} {'SUB':<{sub_width}} {label}\n"
                   if rows else "  UNIT LOAD ACTIVE SUB DESCRIPTION\n")
     for name, active, sub, description in rows:
         cmd.write(f"  {name:<{name_width}} loaded {active:<{active_width}} {sub:<{sub_width}} {description}\n")
@@ -3971,16 +6822,97 @@ def tpot_quote(path: str, version: int, removed: bool = False) -> str:
     return path
 
 
-def tpot_sysv(cmd, data: dict, name: str, verb: str) -> None:
+def tpot_sysv(cmd, data: dict, name: str, verb: str) -> bool:
     # Debian's systemd hands a unit with an init script of the same name to its SysV helper too
     script = name.rsplit(".", 1)[0]
     if not data.get("sysv_install") or not name.endswith(".service"):
-        return
+        return False
     if tpot_fs_text(cmd, f"/etc/init.d/{script}") is None:
-        return
+        return False
     helper = data["sysv_install"]
     cmd.errorWrite(f"Synchronizing state of {name} with SysV service script with {helper}.\n"
                    f"Executing: {helper} {verb} {script}\n")
+    return True
+
+
+def tpot_refusal(data: dict) -> tuple:
+    '''(the reason, the status of a refused job, the age of the texts) of a user the manager refuses.'''
+    version = int(data.get("version", 252))
+    age = "old" if version < 249 else "mid" if version < 252 else "new"
+    return (*TPOT_REFUSAL[(age, bool(data.get("polkit")))], age)
+
+
+def tpot_refused_write(cmd, data: dict, text: str) -> None:
+    if tpot_terminal(cmd) and int(data.get("version", 252)) >= TPOT_REFUSED_COLOUR:
+        text = "".join(f"\x1b[0;1;31m{line}\x1b[0m\n" for line in text.splitlines())
+    cmd.errorWrite(text)
+
+
+def tpot_reload_failed(data: dict, reason: str) -> str:
+    # the daemon reload of a refused enable, disable and daemon-reload: Debian words it "Reload daemon failed" from 252
+    if int(data.get("version", 252)) < 249:
+        return f"Failed to execute operation: {reason}\n"
+    if data.get("sysv_install") and int(data.get("version", 252)) >= 252:
+        return f"Reload daemon failed: {reason}\n"
+    return f"Failed to reload daemon: {reason}\n"
+
+
+def tpot_refused(cmd, data: dict, verb: str, names: list) -> int:
+    '''A change a user without root asks for: the lines and the status of the manager's refusal (refs w2 systemd).'''
+    reason, job_status, age = tpot_refusal(data)
+    version = int(data.get("version", 252))
+
+    def put(text):
+        tpot_refused_write(cmd, data, text)
+
+    start = ""
+    if verb in TPOT_SYSTEMCTL_REFUSED and verb != "isolate":
+        call, logind = TPOT_REFUSED_POWER[verb]
+        target = f"{verb}.target"
+        start = (f"Failed to start {target}: {reason}\nSee system logs and 'systemctl status {target}' "
+                 "for details.\n")
+        if age == "new":
+            put(f"Call to {call} failed: {reason}\n")
+            return 1
+        put((f"Failed to set wall message, ignoring: {reason}\nFailed to {logind} via logind: {reason}\n"
+             if age == "mid" else f"Failed to execute operation: {reason}\n") + start)
+        return job_status
+    if verb == "daemon-reload":
+        put(tpot_reload_failed(data, reason))
+        return 1
+    if verb == "reset-failed":
+        # derived from systemctl.c, not recorded
+        for raw in names or [None]:
+            what = "unit " + tpot_unit(data, raw)[0] if raw else "all units"
+            put(f"Failed to reset failed state of {what}: {reason}\n")
+        return 1
+    if not names:
+        put("Too few arguments.\n")
+        return 1
+    if verb in TPOT_REFUSED_JOBS or verb == "isolate":
+        for raw in names[:1] if verb == "isolate" else names:
+            name = (raw if "." in raw else raw + ".target") if verb == "isolate" else tpot_unit(data, raw)[0]
+            label = "start" if verb == "isolate" else tpot_job(verb)
+            put(f"Failed to {label} {name}: {reason}\nSee system logs and 'systemctl status {name}' for details.\n")
+        return job_status
+    if verb == "kill":
+        for raw in names:
+            put(f"Failed to kill unit {tpot_unit(data, raw)[0]}: {reason}\n")
+        return 1
+    synced = False
+    if verb in ("enable", "disable"):
+        for raw in names:
+            synced = tpot_sysv(cmd, data, tpot_unit(data, raw)[0], verb) or synced
+    if synced:
+        put(tpot_reload_failed(data, reason) * (2 if verb == "enable" else 1))
+        if verb == "disable":
+            # the SysV helper fails before the manager is asked
+            cmd.errorWrite("update-rc.d: error: Permission denied\n")
+            return 1
+    if not data.get("sysv_install"):
+        reason = TPOT_REFUSAL_VERBS.get((version, bool(data.get("polkit")), verb), reason)
+    put(f"Failed to execute operation: {reason}\n" if age == "old" else f"Failed to {verb} unit: {reason}\n")
+    return 1
 
 
 def tpot_links(data: dict, name: str, unit: dict) -> list:
@@ -4002,6 +6934,10 @@ def tpot_enable(cmd, data: dict, verb: str, names: list) -> int:
         name, unit, alias = tpot_lookup(cmd, data, raw)
         if unit is None or (verb == "enable" and alias):
             target = name if unit is None else raw if raw.endswith(tuple(TPOT_UNIT_TYPES)) else raw + ".service"
+            if version < 220 and unit is None:
+                # systemd 219 reports the failed lookup, not the unit (recorded: centos_7 enable nosuch)
+                cmd.errorWrite("Failed to execute operation: No such file or directory\n")
+                return 1
             cmd.errorWrite(f"Failed to {verb} unit: Unit {target} does not exist\n" if version >= 257 else
                            f"Failed to {verb} unit: Unit file {target} does not exist.\n")
             return 1
@@ -4209,7 +7145,7 @@ def tpot_start(cmd, data: dict, name: str, unit: dict, now: float):
         if text:
             cmd.errorWrite(text)
         return code
-    change.update({"since": now, "started": now, "stopped": False})
+    change.update({"since": now, "started": now, "stopped": False, "dropped": False})
     change.pop("condition", None)
     change.pop("process", None)
     if kind == "socket":
@@ -4230,6 +7166,7 @@ def tpot_start(cmd, data: dict, name: str, unit: dict, now: float):
         runs = [[pid, "ExecStartPre", tpot_exec_words(value)] for pid, value in zip(helpers, pres)]
         runs += [[helpers[-1] if forking else row["PID"], "ExecStart", tpot_exec_words(value)] for value in starts]
         change["runs"] = runs
+        change["fresh"] = True
         children = row.pop("TPOT_CHILDREN", [])
         old = unit.get("boot_pid", unit.get("pid"))
         if not unit.get("session") and isinstance(old, int):
@@ -4249,10 +7186,60 @@ def tpot_start(cmd, data: dict, name: str, unit: dict, now: float):
 
 # the daemons of the personas that end on SIGTERM with status 0 (refs final-wave *-ffw-stop-status-*: sshd, crond of
 #   cronie, rsyslogd, chronyd, systemd-journald; t12 *-after-remove-*: nginx, tuned); the others are killed by it
-TPOT_TERM_EXITS = frozenset({"sshd", "crond", "rsyslogd", "chronyd", "nginx", "tuned"})
+TPOT_TERM_EXITS = frozenset({"sshd", "crond", "rsyslogd", "chronyd", "nginx", "tuned", "inetd", "NetworkManager",
+                             "unattended-upgr", "snapd"})
+# the status a daemon ends with where it is not 0 (refs systemd_stops.json: snapd of 22.04 and 24.04)
+TPOT_STOP_STATUS = {"snapd": 42}
+# the forking daemons whose ExecStart= process status names after the stop before systemd 255 (refs systemd_stops.json)
+TPOT_STOP_STARTS = frozenset({"rhsmcertd"})
 
 
-def tpot_stop(cmd, data: dict, name: str, unit: dict, now: float) -> None:
+def tpot_stop_logs(data: dict, unit: dict, comm: str, pid: int, now: float) -> tuple:
+    '''What a daemon logs on SIGTERM around systemd's "Stopping" line (recorded for six images, derived for others).'''
+    version = int(data.get("version", 252))
+    family = data.get("family")
+    rpm = family in ("rhel", "centos")
+    before, after = [], []
+
+    def line(text, tag=comm):
+        return now, f"{tag}[{pid}]: {text}"
+
+    if comm == "sshd":
+        # before "Stopping" on Rocky 9 and Ubuntu 24.04, after it on the other recorded images (a race)
+        early = (rpm and version >= 235) or (family == "ubuntu" and version >= 255)
+        (before if early else after).append(line("Received signal 15; terminating."))
+    elif comm == "crond" and rpm and version >= 235:
+        after.append(line("(CRON) INFO (Shutting down)"))
+    elif comm == "chronyd" and rpm:
+        before.append(line("chronyd exiting"))
+    elif comm == "master" and rpm and version >= 235:
+        after.append(line("terminating on signal 15", "postfix/master"))
+    elif comm == "rsyslogd" and rpm:
+        found = unit.get("sw_version")
+        if found:
+            site = "https://www.rsyslog.com" if version >= 235 else "http://www.rsyslog.com"
+            after.append(line(f'{"" if version >= 235 else " "}[origin software="rsyslogd" swVersion="{found}" '
+                              f'x-pid="{pid}" x-info="{site}"] exiting on signal 15.'))
+    elif comm == "NetworkManager" and rpm:
+        stamp = f"{now:.4f}"
+        state = "manager: startup complete" if version >= 235 else "manager: NetworkManager state is now CONNECTED_LOCAL"
+        after += [line(f"<info>  [{stamp}] caught SIGTERM, shutting down normally."),
+                  line(f"<info>  [{stamp}] {state}"), line(f"<info>  [{stamp}] exiting (success)")]
+    elif comm == "snapd":
+        # the line numbers of the snapd of 22.04 (2.6x) and 24.04
+        standby = ["standby.go:101: standby conditions met, initiating standby...",
+                   "standby.go:121: standby monitoring stop requested"]
+        lines = (["main.go:197: Exiting on terminated signal."] + standby
+                 + ["overlord.go:568: Released state lock file"]
+                 if version < 255 else
+                 ["main.go:201: Exiting on terminated signal.", "hookmgr.go:219: gracefully waiting for running hooks",
+                  "hookmgr.go:221: done waiting for running hooks"] + standby
+                 + ["overlord.go:577: Released state lock file", "seclog.go:122: security logger disabled"])
+        after += [line(text) for text in lines] + [line("daemon stop requested to wait for socket activation")]
+    return before, after
+
+
+def tpot_stop(cmd, data: dict, name: str, unit: dict, now: float, kill: bool = False) -> None:
     if unit.get("sub", "running") in ("dead", "failed"):
         return
     change = tpot_change(cmd, name)
@@ -4287,24 +7274,56 @@ def tpot_stop(cmd, data: dict, name: str, unit: dict, now: float) -> None:
     #   cron, the program of a unit the session wrote) are killed by it
     comm = str(unit.get("comm") or tpot_unit_comm(str(unit.get("command") or unit.get("exec") or "")))
     killed = not unit.get("packaged") and (unit.get("session") or not (
-        comm in TPOT_TERM_EXITS or comm.startswith("systemd-")))
+        comm in TPOT_TERM_EXITS or comm.startswith("systemd-"))) and unit.get("kind") != "oneshot"
+    status = TPOT_STOP_STATUS.get(comm)
+    # systemd drops a disabled unit nothing triggers when it stops: status keeps no run of it (refs systemd_stops.json)
+    #   (a unit the session wrote keeps its run, as the round-4 recordings of SessionUnitTest show)
+    dropped = unit.get("state") == "disabled" and not unit.get("triggered_by") and not unit.get("session")
+    before, after = ([], []) if name.endswith(".socket") else tpot_stop_logs(data, unit, comm, pid, now)
     stops = [] if name.endswith(".socket") else tpot_exec_values(cmd, unit, "ExecStop")
     runs = [list(run) for run in unit.get("runs", []) if isinstance(run, list) and len(run) >= 3][:16]
     runs += [[stop_pid, "ExecStop", tpot_exec_words(value)]
              for stop_pid, value in zip(tpot_helper_pids(cmd, len(stops), now), stops)]
     change.update({"sub": "dead", "since": now, "started": started, "stopped": True, "stop_pid": pid,
-                   "duration": max(1, int((now - started) * 1000)), "runs": runs,
-                   "code": "code=killed, signal=TERM" if killed else "code=exited, status=0/SUCCESS"})
+                   "duration": max(1, int((now - started) * 1000)), "runs": runs, "dropped": dropped,
+                   "show_start": comm in TPOT_STOP_STARTS,
+                   "code": "code=killed, signal=TERM" if killed else f"code=exited, status={status}" if status
+                   else "code=exited, status=0/SUCCESS"})
     if name.endswith(".socket"):
-        journal += [(now, f"systemd[1]: {name}: Deactivated successfully."), (now, f"systemd[1]: Closed {label}.")]
+        journal += [(now, f"systemd[1]: {name}: Deactivated successfully.")] if version >= 248 else []
+        journal.append((now, f"systemd[1]: Closed {label}."))
         # the ports systemd stops listening on (ss and netstat drop its rows of them)
         change["ports"] = sorted({int(m) for m in re.findall(r":(\d+) \(", " ".join(unit.get("listen", [])))})
+    elif kill:
+        # recorded 249 to 257: the signal is logged, then the daemon's lines; no Stopping / Stopped (219: no signal line)
+        if version >= 249:
+            journal.append((now, f"systemd[1]: {name}: Sent signal SIGTERM to main process {pid} ({comm}) "
+                                 "on client request."))
+        journal += before + after
+        if version >= 248:
+            journal.append((now, f"systemd[1]: {name}: Deactivated successfully."))
     else:
+        journal += before
         journal.append((now, f"systemd[1]: Stopping {label}..."))
+        journal += after
         if version >= 248:
             journal.append((now, f"systemd[1]: {name}: Deactivated successfully."))
         journal.append((now, f"systemd[1]: Stopped {label}."))
     change["journal"] = journal[-50:]
+
+
+def tpot_auditd_refusal(cmd, data: dict, verb: str, name: str) -> int:
+    '''0, or the exit status after the text of a job auditd.service of Red Hat's family does not take
+    (recorded rockylinux_9, centos_7: restart, reload; stop's text: systemd_stops.json, its status derived).'''
+    if verb == "reload":
+        text = f"Failed to reload {name}: Job type reload is not applicable for unit {name}.\n"
+        cmd.errorWrite(text + (f"See system logs and 'systemctl status {name}' for details.\n"
+                               if int(data.get("version", 252)) < 220 else ""))
+        return 3
+    cmd.errorWrite(f"Failed to {tpot_job(verb)} {name}: Operation refused, unit {name} may be requested by dependency "
+                   "only (it is configured to refuse manual start/stop).\n"
+                   f"See system logs and 'systemctl status {name}' for details.\n")
+    return 4
 
 
 def tpot_lifecycle(cmd, data: dict, verb: str, names: list, now: float) -> int:
@@ -4316,16 +7335,34 @@ def tpot_lifecycle(cmd, data: dict, verb: str, names: list, now: float) -> int:
                 cmd.errorWrite(f"Failed to kill unit {name}: Unit {name} not loaded.\n")
                 return 1
             reason = "not loaded" if verb == "stop" else "not found"
+            if reason == "not found" and int(data.get("version", 252)) < 220:
+                # systemd 219 does not name the unit again (recorded for start; restart and reload derived)
+                cmd.errorWrite(f"Failed to {tpot_job(verb)} {name}: Unit not found.\n")
+                return 5
             cmd.errorWrite(f"Failed to {tpot_job(verb)} {name}: Unit {name} {reason}.\n")
             return 5
         status = 0
+        if (name == "auditd.service" and data.get("family") in ("rhel", "centos") and verb in (
+                "stop", "restart", "try-restart", "reload-or-restart", "force-reload", "reload")
+                and unit.get("sub", "running") not in ("dead", "failed")):
+            return tpot_auditd_refusal(cmd, data, verb, name)
         if verb in ("start", "reload-or-restart"):
             status = tpot_start(cmd, data, name, unit, now)
+        elif verb == "kill":
+            # the default signal ends the main process of a running service like a stop (recorded, no --signal)
+            options = [str(arg) for arg in getattr(cmd, "args", [])]
+            if name.endswith(".service") and unit.get("sub", "running") == "running" and not any(
+                    arg.startswith(("-s", "--signal")) for arg in options):
+                tpot_stop(cmd, data, name, unit, now, kill=True)
         elif verb == "stop":
             # a unit a socket starts: systemd says the socket stays (ref final-wave ubuntu-24-04 service ssh stop)
             trigger = str(unit.get("triggered_by") or "")
             if trigger and (tpot_lookup(cmd, data, trigger)[1] or {}).get("sub", "dead") not in ("dead", "failed"):
-                cmd.errorWrite(f"Stopping '{name}', but its triggering units are still active:\n{trigger}\n")
+                # recorded 249, 252 (old text), 255, 257 (new); the switch at 255 is derived from systemd's sources
+                if int(data.get("version", 252)) >= 255:
+                    cmd.errorWrite(f"Stopping '{name}', but its triggering units are still active:\n{trigger}\n")
+                else:
+                    cmd.errorWrite(f"Warning: Stopping {name}, but it can still be activated by:\n  {trigger}\n")
             tpot_stop(cmd, data, name, unit, now)
         elif verb in ("restart", "try-restart"):
             if verb == "try-restart" and unit.get("sub", "running") in ("dead", "failed"):
@@ -4564,7 +7601,10 @@ def tpot_systemctl_run(cmd, args: list[str]) -> int:
             running = unit is not None and unit.get("sub", "running") not in ("dead", "failed")
             failed = unit is not None and unit.get("sub") == "failed"
             if verb == "is-active":
-                answer, ok = ("active", True) if running else ("failed" if failed else "inactive", False)
+                # systemd 219 names a unit it does not know "unknown" (recorded; later versions: inactive)
+                missing_219 = unit is None and version < 220
+                answer, ok = (("active", True) if running
+                              else ("failed" if failed else "unknown" if missing_219 else "inactive", False))
             elif verb == "is-failed":
                 answer, ok = ("active", False) if running else ("failed", True) if failed else ("inactive", False)
             elif unit is None:
@@ -4586,24 +7626,14 @@ def tpot_systemctl_run(cmd, args: list[str]) -> int:
         if missing:
             return 4 if version >= 255 else 1
         return 0 if found else (3 if verb == "is-active" else 1)
+    if not tpot_privileged(cmd) and (verb in TPOT_SYSTEMCTL_CHANGES or verb in TPOT_SYSTEMCTL_REFUSED):
+        return tpot_refused(cmd, data, verb, names)
     if verb in TPOT_SYSTEMCTL_CHANGES:
         if verb == "daemon-reload":
-            if tpot_privileged(cmd):
-                return 0
-            cmd.errorWrite("Failed to reload daemon: Interactive authentication required.\n")
-            return 1
+            return 0
         if not names:
             cmd.errorWrite("Too few arguments.\n")
             return 1
-        if not tpot_privileged(cmd):
-            name = tpot_unit(data, names[0])[0]
-            if verb in ("enable", "disable", "mask", "unmask", "reenable"):
-                cmd.errorWrite(f"Failed to {verb} unit: Interactive authentication required.\n")
-                return 1
-            # a job the user may not start: EXIT_NOPERMISSION (refs final-wave *-tester-systemctl-restart-dbus)
-            cmd.errorWrite(f"Failed to {tpot_job(verb)} {name}: Interactive authentication required.\n"
-                           f"See system logs and 'systemctl status {name}' for details.\n")
-            return 4 if verb != "kill" else 1
         if verb in ("enable", "disable"):
             status = tpot_enable(cmd, data, verb, names)
             if status == 0 and now_flag:
@@ -4692,7 +7722,7 @@ class Command_systemctl(HoneyPotCommand):
 
 
 # journalctl of the persona: the journal lines systemctl status shows, of one or more units or of all
-TPOT_JOURNAL_FLAGS = frozenset({"--no-pager", "-e", "--pager-end", "-x", "--catalog", "-b", "--boot", "-a", "--all",
+TPOT_JOURNAL_FLAGS = frozenset({"--no-pager", "-e", "--pager-end", "-x", "--catalog", "-a", "--all",
                                 "-l", "--full", "-m", "--merge", "--no-tail", "-f", "--follow", "--system",
                                 "--utc", "--no-hostname", "-k", "--dmesg"})
 TPOT_JOURNAL_LIMIT = 2000
@@ -4702,6 +7732,103 @@ TPOT_JOURNAL_HINT = ("Hint: You are currently not seeing messages from other use
                      "      Users in the 'systemd-journal' group can see all messages. Pass -q to\n"
                      "      turn off this notice.\n")
 TPOT_JOURNAL_GROUPS = frozenset({"adm", "systemd-journal", "wheel"})
+TPOT_JOURNAL_BOOT = re.compile(r"(?:[0-9a-f]{32})?(?:[+-]?\d+)?")
+# one way to split a run of digits: the next number follows a unit or white space
+TPOT_JOURNAL_SPAN_ITEM = (r"\d+(?:\.\d+)?(?:\s*(?:usec|us|msec|ms|seconds?|sec|s|minutes?|min|m|hours?|hr|h|days?|d"
+                          r"|weeks?|w|months?|M|years?|y))?")
+TPOT_JOURNAL_SPAN = re.compile(rf"\s*{TPOT_JOURNAL_SPAN_ITEM}(?:(?:\s+|(?<=[A-Za-z])){TPOT_JOURNAL_SPAN_ITEM})*\s*")
+TPOT_JOURNAL_SIZE = re.compile(r"\d+(?:\.\d+)?[KMGTPE]?B?")
+
+
+def tpot_journal_hint(data: dict) -> str:
+    '''The hint of a user outside the reading groups: 219 names one group, later ones the ACL's (refs systemd_journal.json).'''
+    groups = (data.get("journal") or {}).get("groups")
+    if not groups:
+        return TPOT_JOURNAL_HINT
+    names = ", ".join(f"'{name}'" for name in groups)
+    return ("Hint: You are currently not seeing messages from other users and the system.\n"
+            f"      Users in groups {names} can see all messages.\n"
+            "      Pass -q to turn off this notice.\n")
+
+
+def tpot_journal_peek(items: list) -> str:
+    '''The argument of -b / --boot given as the next word (a boot ID or an offset), else none; items has the next
+    word last.'''
+    if items and items[-1] and TPOT_JOURNAL_BOOT.fullmatch(items[-1]):
+        return items.pop()
+    return ""
+
+
+def tpot_journal_ids(cmd):
+    '''(machine id, boot id): /etc/machine-id, else made from the host name; the boot id follows the boot time.'''
+    machine = (tpot_fs_text(cmd, "/etc/machine-id") or b"").decode("utf-8", "replace").strip()
+    if not re.fullmatch(r"[0-9a-f]{32}", machine):
+        machine = hashlib.sha256(str(cmd.protocol.hostname).encode()).hexdigest()[:32]
+    return machine, hashlib.sha256(f"{machine}{int(cmd.protocol.boot_time())}".encode()).hexdigest()[:32]
+
+
+def tpot_journal_boot(cmd, data: dict, value: str) -> int:
+    '''-b VALUE: -1 when the journal shows that boot, else the exit status after the text of a journal without it.'''
+    # the cut-offs of the texts by version (254, 256) are derived from the recorded 249 / 252 / 255 / 257
+    version = int(data.get("version", 252))
+    if not TPOT_JOURNAL_BOOT.fullmatch(value):
+        cmd.errorWrite(f"Failed to parse boot descriptor '{value}'\n")  # derived from journalctl.c
+        return 1
+    if (data.get("journal") or {}).get("persistent", True) is False:
+        if value in ("", "0", "-0", "+0"):
+            return -1
+        cmd.errorWrite("Specifying boot ID has no effect, no persistent journal was found\n" if version < 240 else
+                       "Specifying boot ID or boot offset has no effect, no persistent journal was found.\n")
+        return 0
+    ident, offset = (value[:32], value[32:]) if re.match(r"[0-9a-f]{32}", value) else ("", value)
+    number = int(offset) if offset else 0
+    if ident:
+        shown = ident == tpot_journal_ids(cmd)[1] and number == 0
+    else:
+        shown = number == 0 or (number == 1 and not offset.startswith("-"))
+    if shown:
+        return -1
+    if version >= 256:
+        cmd.errorWrite(f"No journal boot entry found for the specified boot ({value}).\n")
+    elif version >= 254:
+        cmd.errorWrite(f"No journal boot entry found from the specified boot {'ID' if ident else 'offset'} ({value}).\n")
+    else:
+        cmd.errorWrite(f"Data from the specified boot ({value}) is not available: No such boot ID in journal\n")
+    return 1
+
+
+def tpot_journal_action(cmd, data: dict, action) -> int:
+    '''--list-boots, --disk-usage and --vacuum-* as recorded (refs systemd_journal.json); the sizes are derived, not recorded.'''
+    version = int(data.get("version", 252))
+    persistent = (data.get("journal") or {}).get("persistent", True)
+    machine, boot_id = tpot_journal_ids(cmd)
+    if action == "--list-boots":
+        stamp = "%a %Y-%m-%d %H:%M:%S UTC"
+        first = time.strftime(stamp, time.gmtime(cmd.protocol.boot_time()))
+        last = time.strftime(stamp, time.gmtime(time.time()))
+        if version >= 250:
+            cmd.write("IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY\n"
+                      f"{0:>3} {boot_id} {first} {last}\n")
+        else:
+            cmd.write(f" 0 {boot_id} {first}\u2014{last}\n")
+        return 0
+    if action == "--disk-usage":
+        where = "on disk" if version < 240 else "in the file system"
+        cmd.write(f"Archived and active journals take up {'16.0M' if persistent else '8.0M'} {where}.\n")
+        return 0
+    key, value = action
+    pattern = TPOT_JOURNAL_SPAN if key == "--vacuum-time" else TPOT_JOURNAL_SIZE if key == "--vacuum-size" \
+        else re.compile(r"\d+")
+    if len(value) > 128 or not pattern.fullmatch(value.strip()):  # a number that long overflows systemd's usec_t too
+        cmd.errorWrite(f"Failed to parse vacuum {key.rsplit('-', 1)[-1]}: {value}\n")  # derived from journalctl.c
+        return 1
+    if version < 240:
+        cmd.errorWrite("Vacuuming done, freed 0B of archived journals on disk.\n")
+        return 0
+    places = ([f"/var/log/journal/{machine}", "/var/log/journal", f"/run/log/journal/{machine}", "/run/log/journal"]
+              if persistent else ["/run/log/journal", f"/run/log/journal/{machine}"])
+    cmd.errorWrite("".join(f"Vacuuming done, freed 0B of archived journals from {place}.\n" for place in places))
+    return 0
 
 
 def tpot_journal_reader(cmd) -> bool:
@@ -4728,9 +7855,10 @@ def tpot_journalctl_run(cmd, args: list[str]) -> int:
     data = tpot_units()
     version = int(data.get("version", 252))
     names, lines, quiet, reverse = [], None, False, False
-    items = list(args)
+    boot_arg, output, action, rotate = None, "", None, False
+    items = list(reversed(args))  # the next word last: pop() takes it in O(1)
     while items:
-        arg = items.pop(0)
+        arg = items.pop()
         if arg.startswith("--"):
             key, eq, value = arg.partition("=")
             if key in ("--unit", "--lines"):
@@ -4738,7 +7866,7 @@ def tpot_journalctl_run(cmd, args: list[str]) -> int:
                     if not items:
                         cmd.errorWrite(f"journalctl: option '{key}' requires an argument\n")
                         return 1
-                    value = items.pop(0)
+                    value = items.pop()
                 if key == "--unit":
                     names.append(value)
                 else:
@@ -4747,9 +7875,25 @@ def tpot_journalctl_run(cmd, args: list[str]) -> int:
                 quiet = True
             elif key in ("--reverse",):
                 reverse = True
+            elif key == "--boot":
+                boot_arg = value if eq else tpot_journal_peek(items)
+            elif key in ("--list-boots", "--disk-usage"):
+                action = key
+            elif key == "--rotate" and version >= 240:
+                rotate = True
+            elif key in ("--vacuum-time", "--vacuum-size") or (key == "--vacuum-files" and version >= 240):
+                # 219 has no --vacuum-files and no --rotate (recorded); the cut at 240 is derived
+                if not eq:
+                    if not items:
+                        cmd.errorWrite(f"journalctl: option '{key}' requires an argument\n")
+                        return 1
+                    value = items.pop()
+                action = (key, value)
             elif key in ("--since", "--until", "--priority", "--output", "--identifier", "--grep"):
+                if key == "--output":
+                    output = value if eq else (items[-1] if items else "")
                 if not eq and items:
-                    items.pop(0)
+                    items.pop()
             elif key not in TPOT_JOURNAL_FLAGS:
                 cmd.errorWrite(f"journalctl: unrecognized option '{arg}'\n")
                 return 1
@@ -4757,11 +7901,11 @@ def tpot_journalctl_run(cmd, args: list[str]) -> int:
         if not arg.startswith("-") or arg == "-":
             continue  # a match (FIELD=value) or a path: shown as without it
         # a cluster of short options (-xe, -xeu ssh, -fu ssh, -n5): the one of a value takes the rest or the next word
-        rest = arg[1:]
-        while rest:
-            letter, rest = rest[0], rest[1:]
+        at = 1
+        while at < len(arg):
+            letter, at = arg[at], at + 1
             if letter in "unSUptog":
-                value = rest or (items.pop(0) if items else None)
+                value = arg[at:] or (items.pop() if items else None)
                 if value is None:
                     cmd.errorWrite(f"journalctl: option requires an argument -- '{letter}'\n")
                     return 1
@@ -4769,12 +7913,17 @@ def tpot_journalctl_run(cmd, args: list[str]) -> int:
                     names.append(value)
                 elif letter == "n":
                     lines = value
-                rest = ""
+                elif letter == "o":
+                    output = value
+                at = len(arg)
+            elif letter == "b":
+                boot_arg = arg[at:] or tpot_journal_peek(items)
+                at = len(arg)
             elif letter == "q":
                 quiet = True
             elif letter == "r":
                 reverse = True
-            elif letter in "xefbalmk":
+            elif letter in "xefalmk":
                 continue
             else:
                 cmd.errorWrite(f"journalctl: invalid option -- '{letter}'\n")
@@ -4788,11 +7937,24 @@ def tpot_journalctl_run(cmd, args: list[str]) -> int:
             if count is None:
                 cmd.errorWrite(f"Failed to parse lines '{lines}'\n")
                 return 1
+    if rotate:
+        if not tpot_privileged(cmd):
+            # 257 names a Varlink socket (recorded 249 / 252 / 255 against 257; the cut at 256 is derived)
+            cmd.errorWrite("Failed to connect to Varlink socket: Permission denied\n" if version >= 256 else
+                           "Failed to connect to /run/systemd/journal/io.systemd.journal: Permission denied\n")
+            return 1
+        return 0
     if not tpot_journal_reader(cmd):
-        if not quiet:
-            cmd.errorWrite(TPOT_JOURNAL_HINT)
+        if not quiet and not output.startswith("json"):
+            cmd.errorWrite(tpot_journal_hint(data))
         cmd.errorWrite("No journal files were opened due to insufficient permissions.\n")
         return 1
+    if boot_arg is not None:
+        code = tpot_journal_boot(cmd, data, boot_arg)
+        if code >= 0:
+            return code
+    if action is not None:
+        return tpot_journal_action(cmd, data, action)
     boot = cmd.protocol.boot_time()
     host = cmd.protocol.hostname.split(".")[0]
     if names:
@@ -4818,7 +7980,7 @@ def tpot_journalctl_run(cmd, args: list[str]) -> int:
     if reverse:
         entries.reverse()
     out = []
-    if version < 240 and not quiet:
+    if version < 240 and not quiet and entries:
         # systemd 219 names the span of its journal first
         first = time.strftime("%a %Y-%m-%d %H:%M:%S UTC", time.gmtime(boot))
         last = time.strftime("%a %Y-%m-%d %H:%M:%S UTC", time.gmtime(time.time()))
@@ -4838,6 +8000,81 @@ class Command_journalctl(HoneyPotCommand):
 commands["/usr/bin/journalctl"] = Command_journalctl
 commands["/bin/journalctl"] = Command_journalctl
 commands["journalctl"] = Command_journalctl
+
+
+# chkconfig of CentOS 7 (refs chkconfig_219.json: centos:7 in Docker, which has no initscripts: the note, the errors and the
+# usage are recorded); the scripts are those of [shell] systemctl_units "sysv", their lines follow chkconfig.c (derived, not recorded)
+# --add / --del / --override (rc 0, nothing changes, the missing-script error before the privilege check) and a query with
+#   --level N name (the state at run level 3, the level is read and dropped) are derived from chkconfig.c, not recorded
+TPOT_CHKCONFIG_NOTE = ("\nNote: This output shows SysV services only and does not include native\n"
+                       "      systemd services. SysV configuration data might be overridden by native\n"
+                       "      systemd configuration.\n\n"
+                       "      If you want to list systemd services use 'systemctl list-unit-files'.\n"
+                       "      To see services enabled on particular target use\n"
+                       "      'systemctl list-dependencies [target]'.\n\n")
+TPOT_CHKCONFIG_USAGE = ("chkconfig version 1.7.6 - Copyright (C) 1997-2000 Red Hat, Inc.\n"
+                        "This may be freely redistributed under the terms of the GNU Public License.\n\n"
+                        "usage:   chkconfig [--list] [--type <type>] [name]\n"
+                        "         chkconfig --add <name>\n"
+                        "         chkconfig --del <name>\n"
+                        "         chkconfig --override <name>\n"
+                        "         chkconfig [--level <levels>] [--type <type>] <name> <on|off|reset|resetpriorities>\n")
+
+
+def tpot_chkconfig(cmd, args: list[str]) -> int:
+    sysv = tpot_units().get("sysv") or {}
+    listing, changing, names, items = not args, False, [], [str(arg) for arg in reversed(args)]  # next word last
+    while items:
+        arg = items.pop()
+        if arg == "--list":
+            listing = True
+        elif arg in ("--level", "--type"):
+            if items:
+                items.pop()
+        elif arg.startswith(("--level=", "--type=")):
+            continue
+        elif arg in ("--add", "--del", "--override"):
+            changing = True
+        elif arg.startswith("-"):
+            cmd.errorWrite(f"{arg}: unknown option\n")
+            return 1
+        else:
+            names.append(arg)
+    missing = "error reading information on service {}: No such file or directory\n"
+    if listing and len(names) < 2:
+        cmd.errorWrite(TPOT_CHKCONFIG_NOTE)
+        for name in names or sorted(sysv):
+            if name not in sysv:
+                cmd.errorWrite(missing.format(name))
+                return 1
+            cmd.write(f"{name:<15}" + "".join(f"\t{level}:{'on' if on else 'off'}" for level, on in enumerate(sysv[name]))
+                      + "\n")
+        return 0
+    if listing or not names or len(names) > 2:
+        cmd.errorWrite(TPOT_CHKCONFIG_USAGE)
+        return 1
+    query = len(names) == 1 and not changing
+    if names[0] not in sysv:
+        if not query:
+            cmd.errorWrite(missing.format(names[0]))
+        return 1
+    if query:
+        # on at run level 3 (derived)
+        return 0 if sysv[names[0]][3] else 1
+    if isinstance(cmd.user, dict) and int(cmd.user.get("uid", 0) or 0) != 0:
+        cmd.errorWrite("You do not have enough privileges to perform this operation.\n")
+        return 1
+    return 0
+
+
+class Command_chkconfig(HoneyPotCommand):
+    def call(self) -> None:
+        self.exit_code = tpot_chkconfig(self, self.args)
+
+
+commands["/usr/sbin/chkconfig"] = Command_chkconfig
+commands["/sbin/chkconfig"] = Command_chkconfig
+commands["chkconfig"] = Command_chkconfig
 
 
 commands["/usr/bin/systemctl"] = Command_systemctl
@@ -4885,8 +8122,9 @@ def patch_systemctl(cowrie_root):
 """,
     )
     replace_once(path, 'commands["service"] = Command_service\n',
-                 'commands["service"] = Command_service\n' + SYSTEMCTL_COMMAND + TPOT_PRIVILEGED + TPOT_SESSION + TPOT_CPU
-                 + TPOT_PACKAGE_UNITS + tpot_metering("Command_service", "Command_systemctl", "Command_journalctl"))
+                 'commands["service"] = Command_service\n' + SYSTEMCTL_COMMAND + TPOT_PRIVILEGED + TPOT_SESSION + TPOT_TERMINAL
+                 + TPOT_CPU
+                 + TPOT_PACKAGE_UNITS + tpot_metering("Command_service", "Command_systemctl", "Command_journalctl", "Command_chkconfig"))
 
 
 def patch_sudo(cowrie_root):
@@ -5106,6 +8344,9 @@ def tpot_apt_data() -> dict[str, dict[str, str]]:
     # their conffiles and the programs of the installed ones (tpot_apt_db, APT_SESSION_COMMAND)
     meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
     found["meta"] = {str(k): v for k, v in meta.items() if isinstance(v, list) and len(v) == 11}
+    relations = data.get("relations") if isinstance(data.get("relations"), dict) else {}
+    found["relations"] = {str(k): {str(f): str(x) for f, x in v.items()} for k, v in relations.items()
+                          if isinstance(v, dict)}
     archives = data.get("archives") if isinstance(data.get("archives"), dict) else {}
     found["archives"] = {str(k): str(v) for k, v in archives.items()}
     found["files"] = data.get("files") if isinstance(data.get("files"), int) else 30000
@@ -5137,6 +8378,20 @@ def tpot_apt_lists() -> tuple[frozenset[str], tuple[str, ...], dict[str, list[st
     names = frozenset(row[0] for row in rows if len(row) == 1)
     virtuals = {row[0]: row[1].split(",") for row in rows if len(row) == 2}
     return names, tuple(sorted(names)), virtuals
+
+
+def tpot_apt_relations(name: str) -> dict[str, str]:
+    \"\"\"T-Pot: the relation fields of the candidate of `name` (Depends, Homepage, Tag, ...; empty without them).\"\"\"
+    return tpot_apt_data()["relations"].get(name, {})
+
+
+# the relation fields in the order apt show, dpkg -s and the raw record of apt-cache show print them
+TPOT_APT_SHOW_RELATIONS = ("Provides", "Pre-Depends", "Depends", "Recommends", "Suggests", "Conflicts", "Breaks",
+                           "Replaces", "Enhances")
+TPOT_DPKG_RELATIONS = ("Replaces", "Provides", "Depends", "Pre-Depends", "Recommends", "Suggests", "Breaks", "Conflicts",
+                       "Enhances")
+# the fields of the control file dpkg does not know, after the description
+TPOT_DPKG_TAIL = ("Homepage", "Original-Maintainer", "Original-Vcs-Browser", "Original-Vcs-Git", "Build-Essential")
 
 
 def tpot_apt_names() -> frozenset[str] | None:
@@ -5245,7 +8500,7 @@ def tpot_apt_head(cmd) -> str:
     later clears them), without "Done" elsewhere.\"\"\"
     if not tpot_apt("apt_version", ""):
         return "Reading package lists... Done\\nBuilding dependency tree\\nReading state information... Done\\n"
-    if tpot_apt_tty(cmd):
+    if tpot_apt_tty(cmd) and tpot_apt_quiet(cmd) == 0:
         if getattr(cmd, "tpot_prog", "apt-get") == "apt" and tpot_apt_three():
             return ""
         if tpot_apt_release() < (2, 2):
@@ -5254,6 +8509,67 @@ def tpot_apt_head(cmd) -> str:
             return "Reading package lists... Done\\nBuilding dependency tree       \\nReading state information... Done\\n"
         return "Reading package lists... Done\\nBuilding dependency tree... Done\\nReading state information... Done\\n"
     return "Reading package lists...\\nBuilding dependency tree...\\nReading state information...\\n"
+
+
+# what dpkg writes, what apt writes at every quiet level, and its progress lines (recorded in apt_quiet.json)
+TPOT_APT_DPKG = ("Selecting ", "(Reading database", "Preparing to unpack", "Unpacking ", "Setting up ", "Removing ",
+                 "Purging ", "Processing triggers")
+TPOT_APT_ALWAYS = ("E: ", "Error: ", "\\x1b[1;31m", "W: ", "Warning: ", "WARNING: ", "debconf: ")
+TPOT_APT_PROGRESS = ("Reading package lists", "Building dependency tree", "Reading state information", "Get:", "Hit:",
+                     "Ign:", "Err:", "Fetched ", "Calculating upgrade")
+# the headings of apt list and apt search go at level 2 (recorded in apt_quiet_more.json)
+TPOT_APT_HEADINGS = ("Listing...", "Sorting...", "Full Text Search...")
+
+
+def tpot_apt_quiet(cmd) -> int:
+    \"\"\"T-Pot: the quiet level of the options: -q, -qq, -q=2, --quiet, --quiet=2 (the last = N wins).\"\"\"
+    level, items = 0, list(reversed(cmd.args))  # the next word last
+    while items:
+        arg = items.pop()
+        if arg == "--":
+            break
+        if arg in ("-o", "-c", "-t", "-a", "--option", "--config-file", "--target-release", "--default-release",
+                   "--host-architecture"):
+            if items:
+                items.pop()
+            continue
+        number = re.fullmatch(r"(?:-q|--quiet)=(\\d+)", arg)
+        if number:
+            level = int(number.group(1))
+        elif arg == "--quiet":
+            level += 1
+        elif re.fullmatch(r"-[a-z]+", arg):
+            level += arg.count("q")
+    return level
+
+
+def tpot_apt_quieter(cmd, text: str, level: int, answer: bool = True) -> str:
+    \"\"\"T-Pot: what apt leaves of the text at a quiet level: the progress lines go from 2 on, the answer (lists,
+    sizes, summary) from 2 with apt-get and from 3 with apt (answer=False: list, search and show keep it);
+    errors and dpkg's lines stay, an Err: line takes its indented lines with it.\"\"\"
+    limit = 3 if getattr(cmd, "tpot_prog", "apt-get") == "apt" else 2
+    kept, after_err = [], False
+    for line in text.splitlines(keepends=True):
+        bare = line.lstrip("\\r")
+        dpkg = getattr(cmd, "tpot_dpkg", False) or bare.startswith(TPOT_APT_DPKG)
+        cmd.tpot_dpkg = dpkg  # from its first line on dpkg's text goes on over later writes
+        if dpkg or bare.startswith(TPOT_APT_ALWAYS):
+            kept.append(line)
+            after_err = False
+        elif bare.startswith(TPOT_APT_PROGRESS + (TPOT_APT_HEADINGS if not answer else ())):
+            after_err = bare.startswith("Err:")
+        elif after_err and bare.startswith(" "):
+            continue
+        else:
+            after_err = False
+            if not answer or level < limit:
+                kept.append(line)
+    return "".join(kept)
+
+
+def tpot_apt_show_short(text: str) -> str:
+    \"\"\"T-Pot: apt show -qqq leaves out the description and the blank line after it.\"\"\"
+    return re.sub(r"^Description: .*\\n(?: .*\\n)*\\n?", "", text, flags=re.M)
 
 
 def tpot_apt_bytes(size: float) -> str:
@@ -5543,9 +8859,10 @@ import pathlib as tpot_pathlib  # noqa: E402
 
 
 @tpot_functools.cache
-def tpot_yum_lists() -> tuple[frozenset[str], dict[str, str]] | None:
-    \"\"\"T-Pot: the names of the release's packages ([shell] package_names, one per line) and the
-    names they provide ("name package"); None without the key (every name is found then).\"\"\"
+def tpot_yum_lists() -> tuple[frozenset[str], dict[str, str], dict[str, tuple[str, ...]]] | None:
+    \"\"\"T-Pot: the names of the release's packages ([shell] package_names, one per line), the names they
+    provide ("name package,...") as {name: the package that installs it} and {name: every package};
+    None without the key (every name is found then).\"\"\"
     path = CowrieConfig.get("shell", "package_names", fallback="")
     if not path:
         return None
@@ -5553,7 +8870,9 @@ def tpot_yum_lists() -> tuple[frozenset[str], dict[str, str]] | None:
         rows = [line.split(" ") for line in tpot_pathlib.Path(path).read_text(encoding="utf-8").splitlines() if line]
     except (OSError, ValueError):
         return None
-    return frozenset(row[0] for row in rows if len(row) == 1), {row[0]: row[1] for row in rows if len(row) == 2}
+    return (frozenset(row[0] for row in rows if len(row) == 1),
+            {row[0]: row[1].split(",")[0] for row in rows if len(row) == 2},
+            {row[0]: tuple(row[1].split(",")) for row in rows if len(row) == 2})
 
 
 def tpot_yum_bold(cmd, text: str) -> str:
@@ -5890,8 +9209,8 @@ def tpot_apt_regex(word: str, deadline: float | None = None) -> list[str]:
 
 
 def _tpot_apt_show(self):
-    """T-Pot: apt show of the release's candidates: the fields the persona keeps of the index (no Depends,
-    Homepage, Tag), APT-Manual-Installed for an installed one, APT-Sources."""
+    """T-Pot: apt show of the release's candidates: the fields the persona keeps of the index (no long
+    description), APT-Manual-Installed for an installed one, APT-Sources."""
     if not tpot_apt_tty(self):
         self.errorWrite(TPOT_APT_WARNING)
     names, release = self.tpot_words[1:], tpot_apt_names()
@@ -5907,15 +9226,28 @@ def _tpot_apt_show(self):
         section = meta[6] if meta else "misc"
         component = meta[1] if meta else "main"
         url, suite = tpot_apt_source(meta[2] if meta else "-")
-        lines = [f"Package: {name}", f"Version: {version}", f"Priority: {meta[8] if meta else 'optional'}",
-                 f"Section: {section if component == 'main' or not ubuntu else component + '/' + section}"]
+        rel = tpot_apt_relations(name)
+        lines = [f"Package: {name}", f"Version: {version}", f"Priority: {meta[8] if meta else 'optional'}"]
+        if meta and meta[9] == "yes":
+            lines.append("Essential: yes")
+        if rel.get("Build-Essential"):
+            lines.append(f"Build-Essential: {rel['Build-Essential']}")
+        lines.append(f"Section: {section if component == 'main' or not ubuntu else component + '/' + section}")
+        if rel.get("Source"):
+            lines.append(f"Source: {rel['Source']}")
         if ubuntu:
             lines.append("Origin: Ubuntu")
         if meta and meta[7]:
             lines.append(f"Maintainer: {meta[7]}")
+        if rel.get("Original-Maintainer"):
+            lines.append(f"Original-Maintainer: {rel['Original-Maintainer']}")
         if ubuntu:
             lines.append("Bugs: https://bugs.launchpad.net/ubuntu/+filebug")
-        lines += [f"Installed-Size: {tpot_apt_bytes(installed)}", f"Download-Size: {tpot_apt_bytes(download)}"]
+        lines.append(f"Installed-Size: {tpot_apt_bytes(installed)}")
+        lines += [f"{field}: {rel[field]}" for field in TPOT_APT_SHOW_RELATIONS + ("Homepage", "Tag", "Task",
+                                                                                 "Original-Vcs-Browser", "Original-Vcs-Git")
+                  if rel.get(field)]
+        lines.append(f"Download-Size: {tpot_apt_bytes(download)}")
         if (db["packages"].get(name) or {}).get("status") == "ii":
             lines.append("APT-Manual-Installed: yes")
         lines += [f"APT-Sources: {url} {suite}/{component} {tpot_apt('deb_arch', 'amd64')} Packages",
@@ -6485,6 +9817,7 @@ def _tpot_apt_remove(self, purge: bool = False):
         self.exit(100)
         return
     gone = {}
+    # no dependency resolution: only the named packages go, so apt purge nginx leaves nginx.service while nginx-common stays
     for name in names:
         entry = db["packages"].get(name)
         if entry is None or (entry["status"] == "rc" and not purge):
@@ -6738,6 +10071,28 @@ Command_aptget.tpot_show = _tpot_apt_show
 Command_aptget.tpot_search = _tpot_apt_search
 
 
+def _tpot_apt_write(self, data):
+    # recorded in apt_quiet.json / apt_quiet_more.json: policy and apt-cache print the same at every level; list, search
+    # and show lose their headings from -qq (apt show its description from -qqq) and keep the answer
+    words = getattr(self, "tpot_words", [])
+    level = tpot_apt_quiet(self)
+    if words[:1] and level >= 2:
+        if words[0] in TPOT_APT_QUIETED:
+            data = tpot_apt_quieter(self, data, level)
+        elif words[0] in TPOT_APT_READING:
+            data = tpot_apt_quieter(self, data, level, answer=False)
+            if words[0] == "show" and level >= 3:
+                data = tpot_apt_show_short(data)
+    if data:
+        HoneyPotCommand.write(self, data)
+
+
+TPOT_APT_READING = frozenset({"list", "search", "show"})
+
+TPOT_APT_QUIETED = frozenset({"install", "reinstall", "remove", "purge", "autoremove", "autopurge", "upgrade",
+                              "dist-upgrade", "full-upgrade", "update"})
+Command_aptget.write = _tpot_apt_write
+
 # T-Pot: dpkg, dpkg-query and apt-cache of the persona, on the package state of the session
 TPOT_DPKG_HEAD = ("Desired=Unknown/Install/Remove/Purge/Hold\n"
                   "| Status=Not/Inst/Conf-files/Unpacked/halF-conf/Half-inst/trig-aWait/Trig-pend\n"
@@ -6795,6 +10150,7 @@ def tpot_dpkg_list(cmd, patterns: list) -> int:
 
 def tpot_dpkg_status(cmd, names: list) -> int:
     packages = tpot_apt_db(cmd.protocol)["packages"]
+    ubuntu = tpot_apt("apt_fallback", "debian") == "ubuntu"
     failed, blocks = 0, []
     for name in names:
         entry = packages.get(name)
@@ -6806,12 +10162,20 @@ def tpot_dpkg_status(cmd, names: list) -> int:
                                       "misc", "", "optional", "-", name]
         state = "install ok installed" if entry["status"] == "ii" else "deinstall ok config-files"
         essential = "Essential: yes\n" if meta[9] == "yes" else ""
-        block = (f"Package: {name}\n{essential}Status: {state}\nPriority: {meta[8]}\nSection: {meta[6]}\n"
-                 f"Installed-Size: {meta[3]}\n" + (f"Maintainer: {meta[7]}\n" if meta[7] else "")
-                 + f"Architecture: {tpot_apt_arch(name)}\nVersion: {entry['version']}\n")
+        rel = tpot_apt_relations(name)
+        section = meta[6] if meta[1] == "main" or not ubuntu else f"{meta[1]}/{meta[6]}"
+        block = (f"Package: {name}\n{essential}Status: {state}\nPriority: {meta[8]}\nSection: {section}\n"
+                 f"Installed-Size: {meta[3]}\n" + ("Origin: Ubuntu\n" if ubuntu else "")
+                 + (f"Maintainer: {meta[7]}\n" if meta[7] else "")
+                 + ("Bugs: https://bugs.launchpad.net/ubuntu/+filebug\n" if ubuntu else "")
+                 + f"Architecture: {tpot_apt_arch(name)}\n"
+                 + "".join(f"{field}: {rel[field]}\n" for field in ("Multi-Arch", "Source") if rel.get(field))
+                 + f"Version: {entry['version']}\n")
         if entry["status"] == "rc":
             block += "Config-Version: " + entry["version"] + "\n"
-        blocks.append(block + f"Description: {meta[-1]}\n")
+        block += "".join(f"{field}: {rel[field]}\n" for field in TPOT_DPKG_RELATIONS if rel.get(field))
+        block += f"Description: {meta[-1]}\n"
+        blocks.append(block + "".join(f"{field}: {rel[field]}\n" for field in TPOT_DPKG_TAIL if rel.get(field)))
     cmd.write("\n".join(blocks))
     if failed:
         cmd.errorWrite("Use dpkg --info (= dpkg-deb --info) to examine archive files.\n")
@@ -7014,13 +10378,20 @@ class Command_dpkg_query(Command_dpkg):
     tpot_prog = "dpkg-query"
 
 
+# Debian's order is recorded (debian:12); where the Ubuntu indexes put Source, Essential and the relations is derived, not recorded
 TPOT_APT_CACHE_FIELDS = {
-    "debian": ("Package", "Version", "Installed-Size", "Maintainer", "Architecture", "Description", "Section",
-               "Priority", "Filename", "Size", "MD5sum", "SHA256"),
-    "jammy": ("Package", "Architecture", "Version", "Priority", "Section", "Origin", "Maintainer", "Bugs",
-              "Installed-Size", "Filename", "Size", "MD5sum", "SHA1", "SHA256", "SHA512", "Description"),
-    "noble": ("Package", "Priority", "Section", "Installed-Size", "Maintainer", "Architecture", "Version",
-              "Filename", "Size", "MD5sum", "SHA1", "SHA256", "SHA512", "Description", "Origin", "Bugs"),
+    "debian": ("Package", "Source", "Version", "Essential", "Installed-Size", "Maintainer", "Architecture")
+    + ("Replaces", "Provides", "Depends", "Pre-Depends", "Recommends", "Suggests", "Conflicts", "Breaks", "Enhances",
+       "Description", "Multi-Arch", "Homepage", "Tag", "Build-Essential", "Original-Vcs-Browser", "Original-Vcs-Git",
+       "Section", "Priority", "Filename", "Size", "MD5sum", "SHA256"),
+    "jammy": ("Package", "Architecture", "Version", "Essential", "Priority", "Section", "Source", "Origin", "Maintainer",
+              "Original-Maintainer", "Bugs", "Installed-Size") + TPOT_DPKG_RELATIONS
+    + ("Filename", "Size", "MD5sum", "SHA1", "SHA256", "SHA512", "Homepage", "Description", "Multi-Arch", "Original-Vcs-Browser", "Original-Vcs-Git",
+       "Build-Essential", "Task"),
+    "noble": ("Package", "Priority", "Section", "Installed-Size", "Maintainer", "Architecture", "Source", "Version",
+              "Essential") + TPOT_DPKG_RELATIONS
+    + ("Filename", "Size", "MD5sum", "SHA1", "SHA256", "SHA512", "Homepage", "Description", "Multi-Arch",
+       "Original-Maintainer", "Original-Vcs-Browser", "Original-Vcs-Git", "Build-Essential", "Origin", "Bugs", "Task"),
 }
 
 
@@ -7051,7 +10422,10 @@ def tpot_apt_cache_show(cmd, names: list) -> int:
                   "Filename": f"pool/{meta[1]}/{prefix}/{name}/{name}_{version.split(':', 1)[-1]}_{arch}.deb",
                   "Size": str(meta[4]), "MD5sum": hashlib.md5(seed).hexdigest(), "SHA1": hashlib.sha1(seed).hexdigest(),
                   "SHA256": hashlib.sha256(seed).hexdigest(), "SHA512": hashlib.sha512(seed).hexdigest()}
-        blocks.append("".join(f"{field}: {fields[field]}\n" for field in order if fields[field]) + "\n")
+        fields.update(tpot_apt_relations(name))
+        if meta[9] == "yes":
+            fields["Essential"] = "yes"
+        blocks.append("".join(f"{field}: {fields[field]}\n" for field in order if fields.get(field)) + "\n")
     cmd.write("".join(blocks))
     if missing or not names:
         cmd.errorWrite("".join(f"N: Unable to locate package {name}\n" for name in missing)
@@ -7712,6 +11086,7 @@ def _tpot_yum_line(self, line: str):
 
 def _tpot_yum_remove(self):
     """T-Pot: yum 3 remove / erase of the session."""
+    # only the named packages go: the packages that require them stay (yum would remove those too)
     db = tpot_yum_db(self.protocol)
     tpot_yum_head(self, mirrors=False)
     rows, missing = [], []
@@ -7902,12 +11277,12 @@ def tpot_yum_providers(cmd, term: str) -> list:
     """T-Pot: [(package, what matched or None)] of a term: a package of that name, the package that lists the
     program or provides the name, the session's own programs; globs over names and programs."""
     lists = tpot_yum_lists()
-    names, provided = (lists[0], lists[1]) if lists is not None else (frozenset(tpot_yum_meta()), {})
+    names, provided = (lists[0], lists[2]) if lists is not None else (frozenset(tpot_yum_meta()), {})
     session = {program: package for package, entry in tpot_yum_db(cmd.protocol).items()
                for program in entry.get("programs") or [] if program not in provided}
 
-    def owner(key):
-        return provided.get(key) or session.get(key)
+    def owners(key):
+        return sorted(provided[key]) if key in provided else [session[key]] if key in session else []
 
     found = []
     if set(term) & set("*?["):
@@ -7916,13 +11291,13 @@ def tpot_yum_providers(cmd, term: str) -> list:
         pool = heapq.merge(tpot_yum_pools()[1], sorted(session)) if "/" in term else tpot_yum_pools()[0]
         for key in tpot_scanned(cmd.protocol, pool):
             if fnmatch.fnmatchcase(key, term):
-                found.append((key if key in names else owner(key), None if key in names else key))
+                found += [(key, None)] if key in names else [(owner, key) for owner in owners(key)]
             if len(found) >= TPOT_YUM_GLOB_MATCHES:
                 break
     elif term in names:
         found.append((term, None))
-    elif owner(term):
-        found.append((owner(term), term))
+    else:
+        found += [(owner, term) for owner in owners(term)]
     seen, result = set(), []
     for item in found:
         if item not in seen and item[0]:
@@ -7975,6 +11350,7 @@ def tpot_yum_history(cmd) -> list:
 def _tpot_yum_history(self):
     """T-Pot: yum 3 history [list] (history_list_view single-user-commands of CentOS 7): the command lines
     while one user made every transaction, else the users; newest first."""
+    # every history command lists: info and undo are not emulated
     tpot_yum_head(self, mirrors=False)
     if not tpot_privileged(self):
         if "ovl" in tpot_yum_plugins():
@@ -8022,6 +11398,7 @@ def tpot_rpm_unplace(cmd, name: str, entry: dict) -> None:
 
 def tpot_yum_faked(name: str):
     """T-Pot: the program of a package yum 3 installed in the session (the faked program of Cowrie's apt)."""
+    # every faked program ends in this segmentation fault; what CentOS 7's tree --version prints is not reproduced
     class Command_faked_installation(HoneyPotCommand):
         def call(self) -> None:
             self.write(f"{name}: Segmentation fault\n")
@@ -8051,6 +11428,7 @@ DNF_COMMAND = r'''
 # installed: a package the session installs is a name of the session, its programs answer as
 # those of Cowrie's apt do. Without the key yum stays yum 3 (the persona skips dnf and rpm).
 TPOT_DNF_WIDTH = 80
+TPOT_DNF_GLOBS = 16
 TPOT_DNF_VALUE_OPTIONS = frozenset({
     "-c", "--config", "-d", "--debuglevel", "-e", "--errorlevel", "--installroot", "--releasever", "--setopt",
     "-x", "--exclude", "--enablerepo", "--disablerepo", "--repo", "--repoid", "--rpmverbosity", "--color",
@@ -8061,7 +11439,8 @@ TPOT_DNF_ALIASES = {"in": "install", "rei": "reinstall", "rm": "remove", "erase"
                     "update": "upgrade", "check-upgrade": "check-update", "ls": "list", "se": "search",
                     "mc": "makecache", "repoinfo": "repolist", "upgrade-minimal": "upgrade",
                     "update-minimal": "upgrade", "up-min": "upgrade", "dsync": "distro-sync",
-                    "distribution-synchronization": "distro-sync", "dg": "downgrade", "autoremove": "autoremove"}
+                    "distribution-synchronization": "distro-sync", "dg": "downgrade", "autoremove": "autoremove",
+                    "whatprovides": "provides", "prov": "provides"}
 # commands of dnf 4 and its plugins this emulation answers with the metadata only (and root ones: nothing to do)
 TPOT_DNF_ROOT_ONLY = frozenset({"autoremove", "distro-sync", "downgrade", "swap"})
 TPOT_DNF_ROOT = frozenset({"install", "reinstall", "remove", "upgrade"}) | TPOT_DNF_ROOT_ONLY
@@ -8193,7 +11572,8 @@ def tpot_dnf_data() -> dict:
 @functools.cache
 def tpot_dnf_names() -> tuple[dict, dict]:
     """({name: repository} of the names of the RHEL 9 repositories, {name or program: package} of what
-    packages provide) ([shell] package_names: "name repo" and "provided > package")."""
+    packages provide) ([shell] package_names: "name repo" and "provided > package,...": the package that
+    installs it comes first)."""
     path = CowrieConfig.get("shell", "package_names", fallback="")
     names, provides = {}, {}
     try:
@@ -8205,8 +11585,26 @@ def tpot_dnf_names() -> tuple[dict, dict]:
         if len(row) == 2:
             names[row[0]] = row[1]
         elif len(row) == 3 and row[1] == ">":
-            provides[row[0]] = row[2]
+            provides[row[0]] = row[2].split(",")[0]
     return names, provides
+
+
+@functools.cache
+def tpot_dnf_providers() -> dict:
+    """{name or program: [every package that provides it]} ([shell] package_names "provided > package,...")."""
+    path = CowrieConfig.get("shell", "package_names", fallback="")
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines() if path else []
+    except (OSError, ValueError):
+        lines = []
+    rows = [line.split(" ") for line in lines]
+    return {row[0]: row[2].split(",") for row in rows if len(row) == 3 and row[1] == ">"}
+
+
+@functools.cache
+def tpot_dnf_glob_keys() -> tuple:
+    """The names and provided names of the repositories, sorted, for the globs of provides."""
+    return tuple(sorted(set(tpot_dnf_names()[0]) | set(tpot_dnf_providers())))
 
 
 @functools.cache
@@ -8569,7 +11967,7 @@ class Command_dnf(HoneyPotCommand):
             self.exit(1)
             return
         required = {"install": "PACKAGE", "reinstall": "PACKAGE", "remove": "PACKAGE", "search": "KEYWORD",
-                    "clean": "type"}
+                    "clean": "type", "provides": "PROVIDE"}
         if command in required and not names:
             self.errorWrite(f"usage: {self.tpot_prog} {command} [-c [config file]] [-q] [-v] [--version] ... "
                             f"{required[command]} [{required[command]} ...]\n"
@@ -8599,6 +11997,8 @@ class Command_dnf(HoneyPotCommand):
             self.tpot_search(names)
         elif command == "info":
             self.tpot_info(names)
+        elif command == "provides":
+            self.tpot_provides(names)
         elif command == "repolist":
             self.tpot_repolist(names)
         elif command == "clean":
@@ -9163,6 +12563,55 @@ class Command_dnf(HoneyPotCommand):
         self.tpot_out("".join(out))
         self.exit(0)
 
+    def tpot_provides(self, terms: list) -> None:
+        """dnf provides: a block per package that has the name, provides it or lists the program (the repositories'
+        build, then the installed one); "Matched from:" names the provide with its version for the package's own
+        name. Layout recorded in almalinux:9 (fixtures/provides.json); the installed block is derived, not recorded."""
+        self.tpot_metadata()
+        names, providers = tpot_dnf_names()[0], tpot_dnf_providers()
+        installed, available = tpot_dnf_installed(self.protocol), tpot_dnf_available(self.protocol)
+
+        def owners(key):
+            return sorted(set(providers.get(key, ())) | ({key} if key in names else set()))
+
+        def block(name, entry, repo, key):
+            head = f"{tpot_dnf_nevra(name, entry)} : "
+            text = textwrap.fill(entry.get("summary") or name, width=TPOT_DNF_WIDTH, initial_indent=head,
+                                 subsequent_indent=" " * (len(head) - 2) + ": ")
+            if key.startswith("/"):
+                matched = f"Filename    : {key}"
+            else:
+                matched = f"Provide    : {key} = {entry['evr']}" if key == name else f"Provide    : {key}"
+            return f"{text}\nRepo        : {repo}\nMatched from:\n{matched}\n\n"
+
+        hits, seen, globs = [], set(), 0
+        for term in terms:
+            if set(term) & set("*?["):
+                globs += 1
+                if len(term) > 128 or globs > TPOT_DNF_GLOBS:
+                    continue
+                keys = [key for key in tpot_scanned(self.protocol, tpot_dnf_glob_keys())
+                        if fnmatch.fnmatchcase(key, term)][:64]
+            else:
+                keys = [term]
+            for key in keys:
+                for name in owners(key):
+                    if (name, key) not in seen and (name in names or name in installed or name in available):
+                        seen.add((name, key))
+                        hits.append((name, key))
+        out = []
+        for name, key in hits:
+            entry = available.get(name) or tpot_dnf_listed(name)
+            out.append(block(name, entry, entry["repo"], key))
+        out += [block(name, installed[name], "@System", key) for name, key in hits if name in installed]
+        if not out:
+            self.errorWrite("Error: No matches found. If searching for a file, try specifying the full path or using "
+                            "a wildcard prefix (\"*/\") at the beginning.\n")
+            self.exit(1)
+            return
+        self.tpot_out("".join(out))
+        self.exit(0)
+
     def tpot_repolist(self, names: list) -> None:
         which = names[0] if names and names[0] in ("all", "enabled", "disabled") else "enabled"
         for opt in ("all", "enabled", "disabled"):
@@ -9282,6 +12731,7 @@ def tpot_rpm_owner(owners: dict, given: str, path: str):
 def tpot_rpm_info(cmd, name: str, entry: dict) -> str:
     """rpm -qi of the fields the persona knows (no signature, build date and host): the install date of the
     session's install (else a week before the boot), group, license, URL and description of the repositories."""
+    # from the metadata of the repositories, not from an installed package
     epoch, _, plain = entry["evr"].rpartition(":")
     version, _, release = plain.rpartition("-")
     when = entry.get("installtime") or cmd.protocol.boot_time() - 7 * 86400
@@ -9372,19 +12822,20 @@ class Command_rpm(HoneyPotCommand):
             for word in words:
                 if "f" in flags:
                     given = path = self.fs.resolve_path(word, self.cwd)
-                    for top in ("/bin/", "/sbin/"):
+                    for top in ("/bin/", "/sbin/", "/lib/", "/lib64/"):
                         if path.startswith(top):
                             path = "/usr" + path
                     short = re.sub(r"^/usr/(bin|sbin|lib|lib64)/", r"/\1/", path)
-                    if not (self.fs.exists(path) or self.fs.exists(given) or self.fs.exists(short)):
+                    owner = tpot_rpm_owner(owners, given, path)
+                    in_tree = self.fs.exists(path) or self.fs.exists(given) or self.fs.exists(short)
+                    if owner in installed and in_tree:
+                        # a program the package lists in /bin (CentOS 7: /bin/mail) or below /usr: /bin, /sbin and
+                        # /lib are links to /usr, rpm 4.11 answers both forms (centos:7)
+                        self.write(tpot_rpm_nvra(owner, installed[owner]) + "\n")
+                    elif not in_tree:
                         # rpm names the file as it was given (centos:7: /bin/rbash)
                         self.errorWrite(f"error: file {given}: No such file or directory\n")
                         failed += 1
-                    elif tpot_rpm_owner(owners, given, path) in installed:
-                        # a program the package lists in /bin (CentOS 7: /bin/mail) or below /usr: /bin, /sbin and
-                        # /lib are links to /usr, rpm 4.11 answers both forms (centos:7)
-                        owner = tpot_rpm_owner(owners, given, path)
-                        self.write(tpot_rpm_nvra(owner, installed[owner]) + "\n")
                     else:
                         self.write(f"file {path} is not owned by any package\n")
                         failed += 1
@@ -9499,6 +12950,11 @@ def patch_free(cowrie_root):
 PROTOCOL_LOAD = r'''
     # T-Pot: the load of the emulated system, shared by top, uptime, w and /proc/loadavg
     TPOT_LOAD_WAVES = ((0.5, 1740.0), (0.3, 410.0), (0.15, 97.0))
+    # T-Pot: the PIDs of every session of this Cowrie process, one counter on the class (it outlives a session, not
+    #   a restart): the newest PID any session took and when (tpot_claim_pids, tpot_new_pid)
+    TPOT_PIDS: ClassVar[dict] = {"last": 0, "at": 0.0}
+    # where the kernel starts again past pid_max ([shell] pid_max; RESERVED_PIDS of kernel/pid.c)
+    TPOT_PID_WRAP = 300
 
     def tpot_load_average(self, now: float | None = None) -> tuple[float, float, float]:
         """T-Pot: the 1, 5 and 15 minute load average. A base load ([shell] load_base) drifts in
@@ -9523,9 +12979,44 @@ PROTOCOL_LOAD = r'''
         return values[0], values[1], values[2]
 
     def tpot_processes(self) -> list:
-        """T-Pot: the ps list of the persona ([shell] processes)."""
+        """T-Pot: the ps list of the persona ([shell] processes); its login shell has the PID of this session's
+        (tpot_login_pid, from tpot_session), the list itself stays as it is."""
         server = getattr(self.user, "server", None)
-        return [p for p in (getattr(server, "process", None) or []) if isinstance(p, dict)]
+        listed = [p for p in (getattr(server, "process", None) or []) if isinstance(p, dict)]
+        shell = getattr(self, "tpot_login_pid", None)
+        logins = [p for p in listed if str(p.get("TTY") or "").startswith(("pts/", "tty"))
+                  and "getty" not in str(p.get("COMMAND") or "")]
+        if not isinstance(shell, int) or not logins or logins[-1].get("PID") == shell:
+            return listed
+        return [dict(p, PID=shell) if p is logins[-1] else p for p in listed]
+
+    def tpot_pid_max(self) -> int:
+        try:
+            return max(1000, min(1 << 22, int(CowrieConfig.get("shell", "pid_max", fallback="4194304"))))
+        except (TypeError, ValueError):
+            return 1 << 22
+
+    def tpot_claim_pids(self, wanted: int, span: int, taken=frozenset(), now: float | None = None) -> int:
+        """T-Pot: the PID of the login shell of a new session, with span PIDs before it for the session's processes
+        (its sshd and monitor, in.telnetd and login). The first session of this Cowrie process takes wanted (the shell
+        of the ps list); a later one the PIDs after the newest any session took (TPOT_PIDS: no two sessions show one
+        PID), a few more for what the system started meanwhile (one per 7 seconds, as tpot_last_pid), none of the
+        list's (taken); past pid_max the count starts again above TPOT_PID_WRAP, as the kernel's."""
+        now = time.time() if now is None else now
+        state, span, limit = self.TPOT_PIDS, max(0, int(span)), self.tpot_pid_max()
+        if not state["last"]:
+            shell = int(wanted)
+        else:
+            gap = 2 + random.randint(0, 24) + int(max(0.0, now - state["at"]) // 7)
+            shell = max(int(wanted), state["last"] + 1 + span + gap)
+        for _ in range(4096):
+            if shell >= limit:
+                shell = self.TPOT_PID_WRAP + span + 1
+            if not any(p in taken for p in range(shell - span, shell + 1)):
+                break
+            shell += 1
+        state["last"], state["at"] = shell, now
+        return shell
 
     def tpot_tasks(self, session: int | None = None) -> int:
         """T-Pot: the tasks of the system: the ps list, the session's processes up to the shell
@@ -9547,9 +13038,10 @@ PROTOCOL_LOAD = r'''
 
     def tpot_new_pid(self, count: int = 1, now: float | None = None) -> int:
         """T-Pot: the first of count new PIDs (ps, top and the commands of their pipeline): after the
-        newest process, never one of an earlier command again."""
-        first = max(self.tpot_last_pid(now), getattr(self, "tpot_pid_used", 0) + 1)
+        newest process, never one of an earlier command or of another session again (TPOT_PIDS)."""
+        first = max(self.tpot_last_pid(now), getattr(self, "tpot_pid_used", 0) + 1, self.TPOT_PIDS["last"] + 1)
         self.tpot_pid_used = first + max(1, count) - 1
+        self.TPOT_PIDS["last"] = max(self.TPOT_PIDS["last"], self.tpot_pid_used)
         return first
 
     def tpot_last_pid(self, now: float | None = None) -> int:
@@ -9560,7 +13052,7 @@ PROTOCOL_LOAD = r'''
         since = max(0.0, now - getattr(self, "logintime", now))
         session = getattr(self, "tpot_session_pid", None)
         newest = max(pids + ([session + 1] if isinstance(session, int) else []) or [1000])
-        return max(newest + 9 + int(since // 7), getattr(self, "tpot_pid_used", 0))
+        return max(newest + 9 + int(since // 7), getattr(self, "tpot_pid_used", 0), self.TPOT_PIDS["last"])
 
     def tpot_uptime_line(self, now: float | None = None) -> str:
         """T-Pot: the line of uptime and w, and of top after "top -": procps sprint_uptime
@@ -9576,7 +13068,9 @@ PROTOCOL_LOAD = r'''
         clock = time.strftime("%H:%M:%S", time.localtime(now))
         if CowrieConfig.get("shell", "top_style", fallback="procps") == "busybox":
             return f" {clock} up {text},  load average: {load}"
-        return f" {clock} up {text},  1 user,  load average: {load}"
+        # an exec channel without a pty has no utmp entry: no user (procps: "%2d user%s")
+        users = 0 if hasattr(self, "execcmd") and not getattr(getattr(self, "user", None), "windowSize", None) else 1
+        return f" {clock} up {text},  {users} user{'' if users == 1 else 's'},  load average: {load}"
 
     def proc_loadavg(self) -> bytes:
         """T-Pot: /proc/loadavg: the load average of top and uptime, runnable / all tasks and the
@@ -9585,6 +13079,17 @@ PROTOCOL_LOAD = r'''
         load = " ".join(f"{value:.2f}" for value in self.tpot_load_average(now))
         return f"{load} 1/{self.tpot_tasks()} {self.tpot_last_pid(now)}\n".encode()
 '''
+
+
+# the session's PIDs and its folders in /proc at its start (tpot_proc_session of the patched base.py)
+PROTOCOL_PROC = """        # T-Pot: the PIDs of the session (one counter for all sessions) and its processes in /proc
+        try:
+            from cowrie.commands.base import tpot_proc_session
+
+            tpot_proc_session(self)
+        except Exception:  # noqa: BLE001 - the session goes on with the /proc of the persona's tree
+            self._log.failure("T-Pot: /proc of the session")
+"""
 
 
 def patch_protocol_load(cowrie_root):
@@ -9612,7 +13117,7 @@ def patch_protocol_load(cowrie_root):
         path,
         '        self.fs.generated_files["/proc/uptime"] = self.proc_uptime\n',
         '        self.fs.generated_files["/proc/uptime"] = self.proc_uptime\n'
-        '        self.fs.generated_files["/proc/loadavg"] = self.proc_loadavg\n',
+        '        self.fs.generated_files["/proc/loadavg"] = self.proc_loadavg\n' + PROTOCOL_PROC,
     )
     replace_once(
         path,
@@ -9895,6 +13400,8 @@ class Command_top(HoneyPotCommand):
         # the PID of this top, a new one
         # the commands after top in its pipeline run with it (top -bn1 | head: a head row)
         self.stages = tpot_pipeline_words(self)
+        # the session's PIDs before top's own (tpot_session: the login shell of the list has the session's)
+        tpot_session(self.protocol, str(self.user.get("username", "root")))
         self.pid = self.protocol.tpot_new_pid(1 + len(self.stages), self.began)
         self.interactive = False
         self.restored = False
@@ -9981,9 +13488,9 @@ class Command_top(HoneyPotCommand):
                 continue
             if not arg.startswith("-") or arg == "-":
                 return fail(f"unknown option '{arg}'")
-            letters = arg[1:]
-            while letters:
-                letter, letters = letters[0], letters[1:]
+            at = 1
+            while at < len(arg):
+                letter, at = arg[at], at + 1
                 if letter == "h":
                     self.write(TPOT_TOP_USAGE4)
                     self.exit(0)
@@ -9999,7 +13506,7 @@ class Command_top(HoneyPotCommand):
                     continue
                 if letter not in ("d", "n") and letter not in TPOT_TOP_ARGUMENT:
                     return fail(f"invalid option -- '{letter}'", refused)
-                value, letters = letters, ""
+                value, at = arg[at:], len(arg)
                 if not value:
                     if letter == "w" and (not args or tpot_top_number(args[0], 0x7FFFFFFF) is None):
                         continue
@@ -10022,9 +13529,9 @@ class Command_top(HoneyPotCommand):
                 self.tpot_usage(f"unknown option '{arg[:1] or '-'}'" if self.style != "busybox"
                                 else f"invalid option -- '{arg[:1]}'")
                 return False
-            letters = arg[1:]
-            while letters:
-                letter, letters = letters[0], letters[1:]
+            at = 1
+            while at < len(arg):
+                letter, at = arg[at], at + 1
                 if letter in ("h", "v") and self.style != "busybox":
                     # "version" up to 3.3.10 (CentOS 7), not in 3.3.12 (Debian 9) to 3.3.17
                     self.write(f"  procps-ng {'version ' if self.version < (3, 3, 11) else ''}{self.version_text}\n"
@@ -10044,7 +13551,7 @@ class Command_top(HoneyPotCommand):
                     self.tpot_usage(f"unknown option '{letter}'" if self.style != "busybox"
                                     else f"invalid option -- '{letter}'")
                     return False
-                value, letters = letters, ""
+                value, at = arg[at:], len(arg)
                 if not value:
                     if letter == "w" and (not args or tpot_top_number(args[0], 0x7FFFFFFF) is None):
                         continue
@@ -10597,6 +14104,8 @@ def tpot_pipeline_words(cmd) -> list[list[str]]:
 class Command_tpot_ps(HoneyPotCommand):
     """T-Pot: ps of the persona (see TPOT_PS_HELP)."""
 
+    tpot_applet = "ps"
+
     def call(self) -> None:
         try:
             code = self.tpot_main()
@@ -10663,6 +14172,8 @@ class Command_tpot_ps(HoneyPotCommand):
             return data
 
         rows = []
+        # the session's PIDs first: the login shell of the list has the PID of this session's (tpot_processes)
+        session = tpot_session(protocol, self.username)
         listed = protocol.tpot_processes() if hasattr(protocol, "tpot_processes") else []
         shell = None
         for entry in listed[:TPOT_PS_ROWS]:
@@ -10684,8 +14195,11 @@ class Command_tpot_ps(HoneyPotCommand):
                 # process of the session's chain on the terminal leads it (login -p of inetutils before 2.6)
                 shell = pid
                 led = any(entry.get("tty") and "s" in str(entry.get("stat") or "")
-                          for entry in tpot_session(protocol, self.username)["chain"])
+                          for entry in session["chain"])
                 stat = stat.replace("s", "") if led else stat if "s" in stat else stat[:1] + "s" + stat[1:]
+                if not session.get("pty", True):
+                    # an exec channel without a pty: the user's shell runs the command (sshd: shell -c command)
+                    tty, command = "?", tpot_exec_shell(protocol, command)
                 rows.append(row(pid, 1, self.username, tty, stat, login_at, int(entry.get("VSZ") or 0),
                                 int(entry.get("RSS") or 0), float(entry.get("MEM") or 0.0), seconds, command,
                                 login=True))
@@ -10702,7 +14216,6 @@ class Command_tpot_ps(HoneyPotCommand):
                             str(entry.get("STAT") or "S"), tpot_ps_stamp(text, boot, self.now, host, pid), 0, 0, 0.0,
                             tpot_process_seconds(host, pid, 0, uptime, False) / 50, command, kernel=True,
                             start=text or None))
-        session = tpot_session(protocol, self.username)
         # the parent of the session: the inetd (xinetd, telnetd) of a telnet session, the sshd or
         # dropbear of an SSH session, else init
         own = {entry["pid"] for entry in session["chain"]}
@@ -10724,15 +14237,15 @@ class Command_tpot_ps(HoneyPotCommand):
         stages = tpot_pipeline_words(self)
         first = protocol.tpot_new_pid(1 + len(stages), self.now) if hasattr(protocol, "tpot_new_pid") \
             else max(known | {1000}) + 9
-        argv0 = str(getattr(self.pp, "argv0", None) or "ps")
+        argv0 = str(getattr(self.pp, "argv0", None) or self.tpot_applet)
         commands = [[argv0, *self.args]] + stages
-        tty = "pts/0" if shell is not None else "?"
+        tty = "pts/0" if shell is not None and session.get("pty", True) else "?"
         # BusyBox: every applet is the one binary, of the size of the shell
         size = next(((r["vsz"], r["rss"]) for r in rows if r["pid"] == shell), (1260, 480)) if self.busybox else None
         for offset, words in enumerate(commands):
             words = [str(w) for w in words] or ["sh"]
             rows.append(row(first + offset, shell or parent, self.username, tty,
-                            ("R" if not offset else "S") + ("+" if shell is not None else ""), self.now,
+                            ("R" if not offset else "S") + ("+" if tty != "?" else ""), self.now,
                             size[0] if size else 7640 if not offset else 3136,
                             size[1] if size else 3652 if not offset else 1524, 0.0, 0.0, " ".join(words),
                             self=not offset))
@@ -10952,11 +14465,12 @@ class Command_tpot_ps(HoneyPotCommand):
         return [str(int(item)) for item in items]
 
     def tpot_pid_width(self) -> int:
+        # the same clamp as tpot_pid_max of the session's PID claim
         try:
-            pid_max = CowrieConfig.getint("shell", "pid_max", fallback=4194304)
-        except ValueError:
-            pid_max = 4194304
-        return max(5, len(str(max(1, pid_max))))
+            pid_max = max(1000, min(1 << 22, int(CowrieConfig.get("shell", "pid_max", fallback="4194304"))))
+        except (TypeError, ValueError):
+            pid_max = 1 << 22
+        return max(5, len(str(pid_max)))
 
     def tpot_select(self, rows: list[dict], sel: dict, bsd) -> list[dict]:
         listed = bool(sel["pids"] or sel["users"] or sel["cmds"] or sel["ttys"])
@@ -11112,8 +14626,382 @@ class Command_tpot_ps(HoneyPotCommand):
         return f"{head}\n{body}"
 
 
+# BusyBox: -a of pgrep from 1.27, the usage line of pidof from 1.33 (recorded 1.25 to 1.36.1; 1.19.4 and 1.24.1 derived from source)
+TPOT_BB_PGREP_USAGE = ("Usage: pgrep [-{flags}] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n"
+                       "\t-l\tShow command name too\n{show}\t-f\tMatch against entire command line\n"
+                       "\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n"
+                       "\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n"
+                       "\t-P\tMatch parent process ID\n")
+TPOT_BB_PIDOF_USAGE = ("Usage: pidof {synopsis}\n\nList PIDs of all processes with names that match NAMEs\n\n"
+                       "\t-s\tShow only one PID\n\t-o PID\tOmit given pid\n\t\tUse %PPID to omit pid of pidof's parent\n")
+# pidof of sysvinit on Debian 12 / 13 and Ubuntu 22.04 / 24.04 (recorded)
+TPOT_PIDOF_USAGE = ("pidof usage: [options] <program-name>\n\n -c           Return PIDs with the same root directory\n"
+                    " -d <sep>     Use the provided character as output separator\n -h           Display this help text\n"
+                    " -n           Avoid using stat system function on network shares\n"
+                    " -o <pid>     Omit results with a given PID\n -q           Quiet mode. Do not display output\n"
+                    " -s           Only return one PID\n"
+                    " -x           Return PIDs of shells running scripts with a matching name\n"
+                    " -z           List zombie and I/O waiting processes. May cause pidof to hang.\n\n")
+# pidof of procps-ng 3.3.17 on RHEL 9 (recorded)
+TPOT_PIDOF_PROCPS_USAGE = (
+    "\nUsage:\n pidof [options] [program [...]]\n\nOptions:\n -s, --single-shot         return one PID only\n"
+    " -c, --check-root          omit processes with different root\n"
+    " -q,                       quiet mode, only set the exit code\n"
+    " -w, --with-workers        show kernel workers too\n"
+    " -x                        also find shells running the named scripts\n"
+    " -o, --omit-pid <PID,...>  omit processes with PID\n"
+    " -S, --separator SEP       use SEP as separator put between PIDs\n"
+    " -h, --help     display this help and exit\n -V, --version  output version information and exit\n"
+    "\nFor more details see pidof(1).\n")
+# the options of the pidof of sysvinit on Debian (recorded) and of its 2.88 on CentOS 7 (recorded; EdgeOS, DSM derived)
+TPOT_PIDOF_STYLES = {"debian": ("cnzxsq", "od", TPOT_PIDOF_USAGE), "sysvinit": ("cnxs", "o", "")}
+
+
+class TpotProcessApplet(Command_tpot_ps):
+    """T-Pot: what pgrep and pidof share: ps's rows, BusyBox's process names and getopt."""
+
+    tpot_flags = ""
+    tpot_values = ""
+    tpot_usage = ""
+
+    def tpot_bb_version(self) -> tuple:
+        numbers = re.findall(r"\d+", CowrieConfig.get("shell", "text_version", fallback="1.36.1"))
+        return tuple(int(x) for x in numbers[:3]) or (1, 36, 1)
+
+    def tpot_has_applet(self) -> bool:
+        """Whether the applet table of the persona's BusyBox (its help) names this applet; true without a table."""
+        path = CowrieConfig.get("shell", "busybox_help", fallback="")
+        try:
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read() if path else ""
+        except OSError:
+            return True
+        _, found, body = text.partition("Currently defined functions:\n")
+        return not found or self.tpot_applet in {name.strip() for name in body.replace("\n", " ").split(",")}
+
+    def tpot_main(self) -> int:
+        if CowrieConfig.get("shell", "top_style", fallback="procps") == "busybox" and not self.tpot_has_applet():
+            raise TpotPsStop(f"{self.tpot_applet}: applet not found\n", 127)
+        return super().tpot_main()
+
+    def tpot_bb_stop(self, text: str) -> TpotPsStop:
+        """The usage of the applet after a line of its own (none for a call without arguments), status 1."""
+        version = self.tpot_bb_version()
+        banner = CowrieConfig.get("shell", "text_banner", fallback="BusyBox v1.36.1")
+        head = f"{banner} multi-call binary.\n" if version >= (1, 15) else f"{banner} multi-call binary\n"
+        return TpotPsStop(f"{text}{head}\n{self.tpot_usage}", 1)
+
+    def tpot_bb_options(self) -> tuple[set, dict, list]:
+        """(flags, {option: values}, words) as getopt32 reads them, -- ends the options."""
+        libc = CowrieConfig.get("shell", "text_libc", fallback="glibc")
+        name = self.tpot_applet
+        args = list(self.args)
+        flags, values, words = set(), {}, []
+        options = True
+        index = 0
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if not options or arg == "-" or not arg.startswith("-"):
+                words.append(arg)
+                continue
+            if arg == "--":
+                options = False
+                continue
+            letters = arg[1:]
+            while letters:
+                letter, letters = letters[0], letters[1:]
+                if letter in self.tpot_flags:
+                    flags.add(letter)
+                elif letter in self.tpot_values:
+                    if letters:
+                        given, letters = letters, ""
+                    elif index < len(args):
+                        given = args[index]
+                        index += 1
+                    else:
+                        text = {"musl": f"{name}: option requires an argument: {letter}\n",
+                                "uclibc": f"{name}: option requires an argument -- {letter}\n"}.get(
+                                    libc, f"{name}: option requires an argument -- '{letter}'\n")
+                        raise self.tpot_bb_stop(text)
+                    values.setdefault(letter, []).append(given)
+                else:
+                    text = {"musl": f"{name}: unrecognized option: {letter}\n",
+                            "uclibc": f"{name}: invalid option -- {letter}\n"}.get(
+                                libc, f"{name}: invalid option -- '{letter}'\n")
+                    raise self.tpot_bb_stop(text)
+        return flags, values, words
+
+    @staticmethod
+    def tpot_argv0(row: dict) -> str:
+        words = row["args"].split()
+        return "" if row["kernel"] or not words else words[0]
+
+    def tpot_bb_name(self, row: dict) -> str:
+        argv0 = self.tpot_argv0(row)
+        return argv0 if argv0 and argv0.rsplit("/", 1)[-1] == row["comm"] else row["comm"]
+
+    def tpot_applet_rows(self) -> tuple[list[dict], dict]:
+        rows = self.tpot_rows()
+        return rows, next(row for row in rows if row.get("self"))
+
+    def tpot_procps(self) -> int:
+        return self.tpot_busybox()
+
+
+class Command_tpot_pgrep(TpotProcessApplet):
+    """T-Pot: pgrep of BusyBox (no persona has a procps pgrep): matching PIDs ascending, one per line."""
+
+    tpot_applet = "pgrep"
+    tpot_values = "sP"
+
+    @property
+    def tpot_flags(self) -> str:
+        return "flanovx" if self.tpot_bb_version() >= (1, 27) else "flnovx"
+
+    @property
+    def tpot_usage(self) -> str:
+        show = "\t-a\tShow command line too\n" if "a" in self.tpot_flags else ""
+        return TPOT_BB_PGREP_USAGE.format(flags=self.tpot_flags, show=show)
+
+    def tpot_bb_number(self, values: dict, letter: str) -> int | None:
+        if letter not in values:
+            return None
+        given = values[letter][-1]
+        if not (given.isascii() and given.isdigit() and len(given) < 11):
+            raise TpotPsStop(f"pgrep: invalid number '{given}'\n", 1)
+        return int(given)
+
+    def tpot_matcher(self, pattern: str, whole: bool):
+        """The matcher of grep's regex parser for the persona's C library; a TpotPsStop for a bad pattern."""
+        from cowrie.commands.fs import TpotGrepMatcher, TpotGrepSyntax
+        libc = CowrieConfig.get("shell", "text_libc", fallback="glibc")
+        try:
+            if len(pattern) > TpotGrepMatcher.MAX_PATTERN:
+                raise TpotGrepMatcher.TooBig()
+            regex = TpotGrepSyntax.regex([pattern], "E", (3, 11), lambda text: None, None, libc)
+            if whole:
+                regex = f"^(?:{regex})$"
+            bmatch = regex.encode("utf8", "surrogateescape")
+            if len(bmatch) > TpotGrepMatcher.MAX_PATTERN:
+                raise TpotGrepMatcher.TooBig()
+            re.compile(bmatch)
+            return TpotGrepMatcher(bmatch)
+        except TpotGrepSyntax.Error as err:
+            raise TpotPsStop(f"pgrep: bad regex '{pattern}': {err}\n", 1) from None
+        except (TpotGrepMatcher.TooBig, RecursionError, re.error, OverflowError):
+            raise TpotPsStop(f"pgrep: bad regex '{pattern}': "
+                             f"{TpotGrepSyntax.text('big', 'Regular expression too big', libc)}\n", 1) from None
+
+    def tpot_busybox(self) -> int:
+        flags, values, words = self.tpot_bb_options()
+        if len(words) > 1 or (not words and not ("s" in values or "P" in values)):
+            raise self.tpot_bb_stop("")
+        sid = self.tpot_bb_number(values, "s")
+        parent = self.tpot_bb_number(values, "P")
+        rows, own = self.tpot_applet_rows()
+        # the session of a row: the login shell's for what runs on its terminal, else the process itself
+        shell = next((row["pid"] for row in rows if row["login"]), None)
+        session = {row["pid"]: shell if shell is not None and own["tty"] != "?" and row["tty"] == own["tty"] else row["pid"]
+                   for row in rows}
+        pattern = words[0] if words else ""
+        matcher = self.tpot_matcher(pattern, "x" in flags) if pattern else None
+        found = []
+        for row in rows:
+            if row is own or (sid is not None and session[row["pid"]] != (session[own["pid"]] if sid == 0 else sid)) \
+                    or (parent is not None and row["ppid"] != parent):
+                continue
+            hit = True
+            if matcher is not None:
+                text = row["args"] if "f" in flags and not row["kernel"] else self.tpot_bb_name(row)
+                # a pattern the automaton cannot take (a back reference) selects nothing
+                hit = matcher.search(text.encode("utf8", "surrogateescape")) is not None and not matcher.spent
+            if hit != ("v" in flags):
+                found.append(row)
+        found.sort(key=lambda row: row["pid"])
+        if "n" in flags:
+            found = found[-1:]
+        elif "o" in flags:
+            found = found[:1]
+        show = bool(flags & {"l", "a"})
+        self.write("".join(f"{row['pid']} {self.tpot_bb_name(row)}\n" if show else f"{row['pid']}\n" for row in found))
+        return 0 if found else 1
+
+
+class Command_tpot_pidof(TpotProcessApplet):
+    """T-Pot: pidof of BusyBox (a firmware) or of the server's package; each NAME's PIDs, highest first, pidof included."""
+
+    tpot_applet = "pidof"
+    tpot_flags = "s"
+    tpot_values = "o"
+
+    @property
+    def tpot_usage(self) -> str:
+        synopsis = "[-s] [-o PID] [NAME]..." if self.tpot_bb_version() >= (1, 33) else "[OPTIONS] [NAME]..."
+        return TPOT_BB_PIDOF_USAGE.format(synopsis=synopsis)
+
+    def tpot_listed(self, names: list, one: bool, omit: set, rows: list) -> list[int]:
+        found = []
+        for name in names:
+            base = name.rsplit("/", 1)[-1]
+            pids = sorted((row["pid"] for row in rows if row["pid"] not in omit
+                           and base in (row["comm"], self.tpot_argv0(row).rsplit("/", 1)[-1])), reverse=True)
+            found += pids[:1] if one else pids
+        return found
+
+    def tpot_busybox(self) -> int:
+        flags, values, words = self.tpot_bb_options()
+        rows, own = self.tpot_applet_rows()
+        omit = set()
+        for given in values.get("o", []):
+            if given == "%PPID":
+                omit.add(own["ppid"])
+            elif given.isascii() and given.isdigit() and len(given) < 11:
+                omit.add(int(given))
+            else:
+                raise TpotPsStop(f"pidof: invalid number '{given}'\n", 1)
+        found = self.tpot_listed(words, "s" in flags, omit, rows)
+        if found:
+            self.write(" ".join(str(pid) for pid in found) + "\n")
+        return 0 if found else 1
+
+    def tpot_procps(self) -> int:
+        style = CowrieConfig.get("shell", "pidof_style", fallback="debian")
+        if style == "procps-ng":
+            return self.tpot_procps_ng()
+        return self.tpot_sysvinit(*TPOT_PIDOF_STYLES.get(style, TPOT_PIDOF_STYLES["debian"]))
+
+    def tpot_sysvinit(self, known: str, valued: str, usage: str) -> int:
+        """Options in getopt order: -h prints the usage where there is one, anything unknown stops silently (recorded)."""
+        one = quiet = False
+        omit, names, separator = set(), [], " "
+        rows, own = self.tpot_applet_rows()
+        args = list(self.args)
+        index = 0
+        options = True
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if not options or arg == "-" or not arg.startswith("-"):
+                names.append(arg)
+                continue
+            if arg == "--":
+                options = False
+                continue
+            letters = arg[1:]
+            while letters:
+                letter, letters = letters[0], letters[1:]
+                if letter == "h" and usage:
+                    self.write(usage)
+                    return 0
+                if letter in known:
+                    one = one or letter == "s"
+                    quiet = quiet or letter == "q"
+                elif letter in valued:
+                    if letters:
+                        given, letters = letters, ""
+                    elif index < len(args):
+                        given = args[index]
+                        index += 1
+                    else:
+                        return 1
+                    if letter == "d":
+                        separator = given
+                        continue
+                    for item in given.split(","):
+                        if item == "%PPID":
+                            omit.add(own["ppid"])
+                        elif item.isascii() and item.isdigit() and len(item) < 11:
+                            omit.add(int(item))
+                else:
+                    return 1
+        found = self.tpot_listed(names, one, omit, rows)
+        if found and not quiet:
+            self.write(separator.join(str(pid) for pid in found) + "\n")
+        return 0 if found else 1
+
+    def tpot_procps_ng(self) -> int:
+        """pidof of procps-ng (RHEL 9): getopt_long, usage and messages recorded; matching as the other pidofs."""
+        longs = {"single-shot": "s", "check-root": "c", "with-workers": "w", "omit-pid": "o", "separator": "S",
+                 "help": "h", "version": "V"}
+        one = quiet = workers = False
+        omit, names, separator = set(), [], " "
+        rows, own = self.tpot_applet_rows()
+        args = list(self.args)
+        index = 0
+        options = True
+
+        def stop(text: str) -> TpotPsStop:
+            return TpotPsStop(f"pidof: {text}\n{TPOT_PIDOF_PROCPS_USAGE}", 1)
+
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if not options or arg == "-" or not arg.startswith("-"):
+                names.append(arg)
+                continue
+            if arg == "--":
+                options = False
+                continue
+            if arg.startswith("--"):
+                word, equals, given = arg[2:].partition("=")
+                matches = [key for key in longs if key.startswith(word)] if word else []
+                if word in longs:
+                    matches = [word]
+                if len(matches) != 1:
+                    # derived from getopt_long, not recorded
+                    raise stop(f"unrecognized option '--{word}'" if not matches else f"option '--{word}' is ambiguous")
+                tokens = [(longs[matches[0]], given if equals else None)]
+            else:
+                tokens = []
+                letters = arg[1:]
+                while letters:
+                    letter, letters = letters[0], letters[1:]
+                    if letter in "oS" and letters:
+                        tokens.append((letter, letters))
+                        break
+                    tokens.append((letter, None))
+            for letter, given in tokens:
+                if letter == "h":
+                    self.write(TPOT_PIDOF_PROCPS_USAGE)
+                    return 0
+                if letter == "V":
+                    self.write(f"pidof from procps-ng {self.version_text}\n")
+                    return 0
+                if letter in "oS":
+                    if given is None:
+                        if index >= len(args):
+                            raise stop(f"option requires an argument -- '{letter}'")
+                        given = args[index]
+                        index += 1
+                    if letter == "S":
+                        separator = given
+                        continue
+                    for item in given.split(","):
+                        if item == "%PPID":
+                            omit.add(own["ppid"])
+                        elif item.isascii() and item.isdigit() and len(item) < 11:
+                            omit.add(int(item))
+                        else:
+                            raise TpotPsStop(f"pidof: illegal omit pid value ({item})!\n\n", 1)
+                elif letter in "scqwx":
+                    one = one or letter == "s"
+                    quiet = quiet or letter == "q"
+                    workers = workers or letter == "w"
+                else:
+                    raise stop(f"invalid option -- '{letter}'")
+        found = self.tpot_listed(names, one, omit, [row for row in rows if workers or not row["kernel"]])
+        if found and not quiet:
+            self.write(separator.join(str(pid) for pid in found) + "\n")
+        return 0 if found else 1
+
+
 for _name in ("ps", "/bin/ps", "/usr/bin/ps"):
     commands[_name] = Command_tpot_ps
+# pgrep and pidof by path only: a persona answers them where its tree has the node, a bare name would give them to all
+for _dir in ("/bin", "/sbin", "/usr/bin", "/usr/sbin"):
+    commands[f"{_dir}/pgrep"] = Command_tpot_pgrep
+    commands[f"{_dir}/pidof"] = Command_tpot_pidof
 '''
 
 
@@ -11127,7 +15015,8 @@ def patch_ps_top(cowrie_root):
     replace_once(path, "\n\nclass Command_ps(HoneyPotCommand):\n", PS_WINDOW + TPOT_CPU + "\n\nclass Command_ps(HoneyPotCommand):\n")
     replace_once(path, 'commands["/bin/ps"] = Command_ps\ncommands["ps"] = Command_ps\n',
                  'commands["/bin/ps"] = Command_ps\ncommands["ps"] = Command_ps\n' + TOP_COMMAND + PS_COMMAND
-                 + tpot_metering("Command_top", "Command_tpot_ps") + 'tpot_meter_class(Command_top, "tpot_tick")\n')
+                 + tpot_metering("Command_top", "Command_tpot_ps", "Command_tpot_pgrep", "Command_tpot_pidof")
+                 + 'tpot_meter_class(Command_top, "tpot_tick")\n')
     replace_once(
         path,
         '''        self.write(
@@ -11138,6 +15027,31 @@ def patch_ps_top(cowrie_root):
         self.write(self.protocol.tpot_uptime_line() + "\\n")
 ''',
     )
+    # an exec channel without a pty has no terminal and no utmp entry: w and who list no user for it
+    replace_once(
+        path,
+        '''        self.write(
+            f"{self.user['username']:8s} pts/0    {self.protocol.clientIP[:17].ljust(17)} {time.strftime('%H:%M', time.localtime(self.protocol.logintime))}    0.00s  0.00s  0.00s w\\n"
+        )
+''',
+        '''        if tpot_pty(self.protocol):
+            self.write(
+                f"{self.user['username']:8s} pts/0    {self.protocol.clientIP[:17].ljust(17)} {time.strftime('%H:%M', time.localtime(self.protocol.logintime))}    0.00s  0.00s  0.00s w\\n"
+            )
+''',
+    )
+    replace_once(
+        path,
+        '''        self.write(
+            f"{self.user['username']:8s} pts/0        {time.strftime('%Y-%m-%d', time.localtime(self.protocol.logintime))} {time.strftime('%H:%M', time.localtime(self.protocol.logintime))} ({self.protocol.clientIP})\\n"
+        )
+''',
+        '''        if tpot_pty(self.protocol):
+            self.write(
+                f"{self.user['username']:8s} pts/0        {time.strftime('%Y-%m-%d', time.localtime(self.protocol.logintime))} {time.strftime('%H:%M', time.localtime(self.protocol.logintime))} ({self.protocol.clientIP})\\n"
+            )
+''',
+    )
 
 
 # module code of the patched fs.py, before Command_grep
@@ -11146,14 +15060,17 @@ class TpotGrepMatcher:
     """T-Pot: whether a line has a match of a grep pattern in Python's re syntax (the
     lines re.search selects). The parsed pattern becomes an automaton that reads each
     byte of a line once, so the time grows with the input and not with the ways a
-    pattern can repeat. Back references, lookarounds, conditionals, atomic groups and
-    possessive repeats select no line. The budget limits the work of building automaton
-    states for one grep; when it is used up, `spent` is set and grep stops as GNU grep does
-    when its memory runs out."""
+    pattern can repeat. Back references, lookarounds of more than one set,
+    conditionals, atomic groups and possessive repeats select no line. The budget
+    limits the work of building automaton states for one grep; when it is used up,
+    `spent` is set and grep stops as GNU grep does when its memory runs out."""
 
     MAX_PATTERN = 64 * 1024  # characters, a cap before parsing; the automaton limit comes first
     MAX_INPUT = 1024 * 1024  # bytes one grep reads
+    MAX_CONTEXT = 8 * 1024 * 1024  # bytes the -B buffer holds, rows counted with TpotGrepMatcher.ROW
+    ROW = 64  # bytes counted for each buffered row besides its text
     MAX_STATES = 4096  # states of the automaton of a pattern
+    SPAN_FLOOR = 256  # positions of a line that spans() reads whatever the session has left
     MAX_CACHE = 16384  # cached automaton states and transitions
     BUDGET = 4_000_000
     # 1: a word byte of a bytes pattern, 2: any other byte, 0: no byte (start or end of the line)
@@ -11269,6 +15186,25 @@ class TpotGrepMatcher:
             while starts:
                 start = self.new(1, None, starts.pop(), start)
             return start
+        if op is sre.ASSERT or op is sre.ASSERT_NOT:
+            # (?=\w), (?<!\w) and the like: the one byte beside the position is of a class (word, other) the set holds
+            direction, body = av
+            if len(body) != 1 or body[0][0] not in (sre.LITERAL, sre.NOT_LITERAL, sre.ANY, sre.IN):
+                raise LookupError(op)
+            here = len(self.kind)
+            self.item(body[0][0], body[0][1], -1, ignore_case)
+            table = self.arg[here]
+            for items in (self.kind, self.arg, self.out1, self.out2):
+                del items[here:]
+            taken = []
+            for cls in (1, 2):
+                seen = {table[b] for b in range(256) if self.CLASS[b] == cls}
+                if len(seen) > 1:
+                    raise LookupError(op)  # the set splits a class of bytes
+                if seen == {1}:
+                    taken.append(cls)
+            self.context = True
+            return self.new(2, (direction, taken, op is sre.ASSERT_NOT), nxt)
         if op is sre.AT:
             test = {sre.AT_BEGINNING: 0, sre.AT_BEGINNING_STRING: 0, sre.AT_END: 1, sre.AT_END_STRING: 1,
                     sre.AT_BOUNDARY: 2, sre.AT_NON_BOUNDARY: 3}[av]
@@ -11282,9 +15218,15 @@ class TpotGrepMatcher:
         self.accepting: list[bool] = []
         self.initial: dict = {}
         self.trans: dict = {}
+        self.ainitial: dict = {}
+        self.atrans: dict = {}
         self.stored = 0
 
-    def holds(self, test: int, prev: int, nxt: int) -> bool:
+    def holds(self, test, prev: int, nxt: int) -> bool:
+        if isinstance(test, tuple):
+            # a lookaround of one set of bytes: (direction, the classes of bytes it takes, negated)
+            direction, taken, negate = test
+            return ((nxt if direction > 0 else prev) in taken) != negate
         if test == 0:
             return prev == 0
         if test == 1:
@@ -11369,7 +15311,813 @@ class TpotGrepMatcher:
                 return True
         return None
 
+    def longest(self, line: bytes, i: int, until: float | None = None) -> int | None:
+        """The end of the longest match that starts at i (-1: none); None when the budget or the time is used up."""
+        n, context, cls = len(line), self.context, self.CLASS
+        nc = cls[line[i]] if context and i < n else 0
+        prev = cls[line[i - 1]] if context and i else 0
+        d = self.ainitial.get((prev, nc))
+        if d is None:
+            d = self.state((self.start,), prev, nc)
+            if d is None:
+                return None
+            self.ainitial[(prev, nc)] = d
+        end = i if self.accepting[d] else -1
+        for j in range(i, n):
+            if until is not None and j & 4095 == 4095 and time.monotonic() >= until:
+                self.spent = True
+                return None
+            b = line[j]
+            if context:
+                nc = cls[line[j + 1]] if j + 1 < n else 0
+            key = (d << 10) | (b << 2) | nc
+            nd = self.atrans.get(key)
+            if nd is None:
+                kernel = [self.out1[s] for s in self.consume[d] if self.arg[s][b]]
+                if not kernel:
+                    nd = -1
+                else:
+                    ids = self.ids
+                    nd = self.state(kernel, cls[b] if context else 0, nc)
+                    if nd is None:
+                        return None
+                    if self.ids is not ids:
+                        d = nd  # the cache was emptied, the state ids before are gone
+                        if self.accepting[d]:
+                            end = j + 1
+                        continue
+                if len(self.atrans) >= self.MAX_CACHE:
+                    self.atrans.clear()
+                self.atrans[key] = nd
+            if nd < 0:
+                break
+            d = nd
+            if self.accepting[d]:
+                end = j + 1
+        return end
 
+    def spans(self, line: bytes, until: float | None = None) -> list | None:
+        """(start, end) of the successive leftmost-longest matches of the line, the empty ones left out;
+        None when the budget or the time (until) is used up, `spent` is set then."""
+        if not self.regular or self.spent:
+            return None
+        found, pos, n = [], 0, len(line)
+        for i in range(n + 1):
+            if i < pos:
+                continue
+            if until is not None and i >= self.SPAN_FLOOR and i & 15 == 15 and time.monotonic() >= until:
+                self.spent = True
+                return None
+            end = self.longest(line, i, until)
+            if end is None:
+                return None
+            if end > i:
+                found.append((i, end))
+                pos = end
+        return found
+
+
+'''
+
+# the patterns of grep as a regular expression of Python's re (GREP_MATCHER reads it); GNU grep 3.x in the C locale
+GREP_SYNTAX = r'''
+class TpotGrepSyntax:
+    """T-Pot: the patterns of grep as the regular expression of Python's re that TpotGrepMatcher reads: basic
+    (BRE, the default and -G), extended (-E) or fixed strings (-F) as GNU grep reads them in the C locale (a byte
+    is a character); -P keeps Python's own syntax. libc (glibc, uclibc or musl) reads them as the regcomp of a
+    BusyBox persona does instead of GNU grep. A back reference stays in the expression, which the matcher
+    cannot run: it selects no line. An error is TpotGrepSyntax.Error, its text what follows "grep: "."""
+
+    class Error(Exception):
+        pass
+
+    class Timeout(Exception):
+        pass
+
+    DEPTH = 64  # nested repeats of one atom that do not fold into one (a{2}{2}...); past it too big
+    NEVER = r"[^\x00-\xff]"
+    CLASSES = {
+        "alpha": ((65, 90), (97, 122)), "digit": ((48, 57),), "alnum": ((48, 57), (65, 90), (97, 122)),
+        "upper": ((65, 90),), "lower": ((97, 122),), "space": ((9, 13), (32, 32)), "blank": ((9, 9), (32, 32)),
+        "punct": ((33, 47), (58, 64), (91, 96), (123, 126)), "print": ((32, 126),), "graph": ((33, 126),),
+        "cntrl": ((0, 31), (127, 127)), "xdigit": ((48, 57), (65, 70), (97, 102)),
+    }
+
+    # the errors of the regcomp of BusyBox (glibc and uClibc, musl) by name; GNU's own texts are in the code
+    BB_TEXTS = {
+        "paren": ("Unmatched ( or \\(", "Missing ')'"),
+        "brace": ("Unmatched \\{", "Invalid contents of {}"),
+        "bracket": ("Invalid regular expression", "Missing ']'"),
+        "preceding": ("Invalid preceding regular expression", "Repetition not preceded by valid expression"),
+        "class": ("Invalid character class name", "Unknown character class name"),
+        "range": ("Invalid range end", "Invalid character range"),
+        "content": ("Invalid content of \\{\\}", "Invalid contents of {}"),
+        "big": ("Regular expression too big", "Invalid contents of {}"),
+    }
+
+    @classmethod
+    def text(cls, key: str, gnu: str, libc: str | None) -> str:
+        """The text of an error: GNU's, or that of the C library of a BusyBox persona."""
+        if libc is None or key not in cls.BB_TEXTS:
+            return gnu
+        if libc == "uclibc" and key == "big":
+            key = "content"  # derived from the recorded 1.27.2 (uClibc), not recorded for 1.36.1
+        return cls.BB_TEXTS[key][libc == "musl"]
+
+    @staticmethod
+    def byte(value: int, inside: bool = False) -> str:
+        if not inside and (48 <= value <= 57 or 65 <= value <= 90 or 97 <= value <= 122 or value == 95):
+            return chr(value)
+        return "\\x%02x" % value
+
+    @classmethod
+    def regex(cls, patterns: list, mode: str, version: tuple, warn, until: float | None = None,
+              libc: str | None = None) -> str:
+        """The expression for a line with any of the patterns, in mode G, E, F or P; warn(text) is given the
+        warnings of GNU grep 3.8 and later; Timeout once time.monotonic() passes until; an Error names the
+        pattern it came from in .pattern."""
+        if not patterns:
+            return cls.NEVER  # an empty -f FILE selects no line
+        if mode == "P":
+            parts = list(patterns)
+        else:
+            parts = []
+            for pattern in patterns:
+                data = pattern.encode("utf-8", "surrogateescape")
+                if mode == "F":
+                    parts.append("".join(cls.byte(b) for b in data))
+                else:
+                    try:
+                        parts.append(cls.one(data, mode == "E", version, warn, until, libc))
+                    except cls.Error as err:
+                        err.pattern = pattern
+                        raise
+        return parts[0] if len(parts) == 1 else "|".join(f"(?:{part})" for part in parts)
+
+    @classmethod
+    def one(cls, p: bytes, ere: bool, version: tuple, warn, until: float | None = None,
+            libc: str | None = None) -> str:
+        n = len(p)
+        steps = 0
+        frames = [[[], []]]  # per open group: its finished alternatives and the atoms of the one being read
+        numbers: list = []  # the capture numbers of the open groups
+        done: set = set()  # of the groups that are closed
+        groups = 0
+        i = 0
+
+        def add(text, kind="atom"):
+            frames[-1][1].append([text, kind])
+
+        def lead():
+            seq = frames[-1][1]
+            return not seq or (len(seq) == 1 and seq[0][1] == "start")
+
+        def repeat(quant, shown):
+            """Applies a repetition to the atom before it; False where it is a plain character (BRE)."""
+            seq = frames[-1][1]
+            if lead():
+                if not ere:
+                    if libc == "musl" and quant != "*":
+                        raise cls.Error(cls.text("preceding", "", libc))
+                    return False
+                if libc:
+                    if seq and libc == "musl":
+                        return True  # recorded for ^*a: musl reads it as ^a
+                    raise cls.Error(cls.text("preceding", "", libc))
+                if version >= (3, 8):
+                    warn(f"{shown} at start of expression")
+                if not seq:
+                    return True  # an ERE drops it
+            text, kind = seq[-1]
+            if isinstance(kind, tuple):
+                # a repeat of a repeat: kind is ("rep", nested repeats, the atom with its wrapping, the quantifier)
+                _, depth, base, inner = kind
+                if libc in ("glibc", "uclibc") and not ere and inner == "*" and quant == "*":
+                    raise cls.Error(cls.text("preceding", "", libc))  # recorded: a** of a BRE
+                if inner in "*+?" and quant in "*+?" and len(quant) == 1 == len(inner):
+                    # (a*)*, (a+)+, (a+)? and the like fold into one quantifier: the text does not grow
+                    quant = "*" if "*" in inner + quant or inner != quant else inner
+                    seq[-1] = [base + quant, ("rep", depth, base, quant)]
+                    return True
+                if depth >= cls.DEPTH:
+                    raise TpotGrepMatcher.TooBig()
+                base, depth = f"(?:{text})", depth + 1
+            else:
+                base, depth = (text if kind == "atom" else f"(?:{text})"), 0
+            seq[-1] = [base + quant, ("rep", depth, base, quant)]
+            return True
+
+        while i < n:
+            steps += 1
+            if until is not None and not steps & 255 and time.monotonic() >= until:
+                raise cls.Timeout()
+            c = p[i:i + 1]
+            i += 1
+            escaped = c == b"\\"
+            if escaped:
+                if i >= n:
+                    raise cls.Error("Trailing backslash")
+                c = p[i:i + 1]
+                i += 1
+            if c in b"(){|+?" and escaped != ere:  # an operator: with a backslash in a BRE, plain in an ERE
+                if c == b"(":
+                    groups += 1
+                    numbers.append(groups)
+                    frames.append([[], []])
+                    if len(frames) > 1000:
+                        raise TpotGrepMatcher.TooBig()
+                elif c == b")":
+                    if len(frames) > 1:
+                        alternatives, seq = frames.pop()
+                        alternatives.append(seq)
+                        done.add(numbers.pop())
+                        add("(" + "|".join("".join(text for text, _ in s) for s in alternatives) + ")")
+                    elif ere and version >= (2, 27):
+                        # recorded: 2.20 refuses it, 2.27 takes it plain; the cut between them is derived
+                        add(cls.byte(41))
+                    else:
+                        raise cls.Error(cls.text("paren", "Unmatched ) or \\)", libc))
+                elif c == b"|":
+                    frames[-1][0].append(frames[-1][1])
+                    frames[-1][1] = []
+                elif c == b"{":
+                    if libc and lead():
+                        raise cls.Error(cls.text("preceding", "", libc))
+                    if not ere and lead():
+                        add(cls.byte(123))
+                        continue
+                    found = cls.interval(p, i, ere, version, libc)
+                    if found is None:
+                        add(cls.byte(123))
+                    else:
+                        repeat(found[0], "{...}")
+                        i = found[1]
+                elif not repeat(c.decode(), c.decode()):
+                    add(cls.byte(c[0]))
+            elif escaped and libc == "musl" and c in b"dDtnrfaexbB`'":
+                # TRE macros and escapes, recorded: \d \D \t \e \a \x41 \b \B \` \'; the others derived from tre-parse.c
+                if c in b"dD":
+                    add("[0-9]" if c == b"d" else "[^0-9]")
+                elif c in b"tnrfae":
+                    add(cls.byte({b"t": 9, b"n": 10, b"r": 13, b"f": 12, b"a": 7, b"e": 27}[c]))
+                elif c == b"x":
+                    hexed = re.match(rb"\{([0-9A-Fa-f]*)\}|([0-9A-Fa-f]{0,2})", p[i:])
+                    i += hexed.end()
+                    add(cls.byte(int(hexed.group(1) or hexed.group(2) or b"0", 16) & 255))
+                elif c == b"b":
+                    add("(?:^|$|\\b)", "anchor")  # TRE: true at both ends of the line (recorded: all 50 lines)
+                elif c == b"B":
+                    add("(?:(?<=\\w)(?=\\w)|(?<=\\W)(?=\\W))", "anchor")
+                else:
+                    add(cls.byte(c[0]))  # \` and \' are the characters
+            elif escaped:
+                if c in b"wWsS":
+                    add("\\" + c.decode())
+                elif c == b"b":
+                    add("\\b", "anchor")
+                elif c == b"B":
+                    # GNU grep matches \B on an empty line; Python's re only from 3.14 on
+                    add("(?:\\B|^$)", "anchor")
+                elif c == b"<":
+                    add("\\b(?=\\w)", "anchor")
+                elif c == b">":
+                    add("\\b(?<=\\w)", "anchor")
+                elif c == b"`":
+                    add("\\A", "anchor")
+                elif c == b"'":
+                    add("\\Z", "anchor")
+                elif b"1" <= c <= b"9":
+                    if libc == "musl" and ere:
+                        add(cls.NEVER)  # recorded: (a)\1 and \(a\)\1 of an ERE select no line
+                    elif int(c) not in done:
+                        raise cls.Error("Invalid back reference")
+                    else:
+                        add("(?:\\" + c.decode() + ")")
+                else:
+                    add(cls.byte(c[0]))
+            elif c == b"*":
+                if not repeat("*", "*"):
+                    add(cls.byte(42))
+            elif c == b".":
+                add(".")
+            elif c == b"[":
+                text, i = cls.bracket(p, i, libc)
+                add(text)
+            elif c == b"^" and (ere or not frames[-1][1]):
+                add("^", "anchor" if frames[-1][1] else "start")
+            elif c == b"$" and (ere or i >= n or p[i:i + 2] in (b"\\)", b"\\|")):
+                add("$", "anchor")
+            else:
+                add(cls.byte(c[0]))
+        if len(frames) > 1:
+            raise cls.Error(cls.text("paren", "Unmatched ( or \\(", libc))
+        alternatives, seq = frames[0]
+        alternatives.append(seq)
+        return "|".join("".join(text for text, _ in s) for s in alternatives)
+
+    @classmethod
+    def interval(cls, p: bytes, i: int, ere: bool, version: tuple, libc: str | None = None):
+        """The repetition after a { (ERE) or a backslash and { (BRE) that is followed by p[i]: ("{n,m}", the
+        index after its closing brace); None for an ERE { that starts no interval, a plain character."""
+        end = p.find(b"}" if ere else b"\\}", i)
+        found = None if end < 0 else re.fullmatch(rb"(\d*)(?:(,)(\d*))?", p[i:end])
+        if found is None or end == i:
+            if ere and not libc:
+                return None
+            # the second text is derived from glibc, not recorded; BusyBox reads an ERE { like a BRE \{ (recorded)
+            raise cls.Error(cls.text("brace" if end < 0 else "content",
+                                     "Unmatched \\{" if end < 0 else "Invalid content of \\{\\}", libc))
+        # a count past RE_DUP_MAX (32767): recorded for \{40000\} (2.x: Invalid content, 3.x: Regular expression
+        #   too big; the cut between 2.27 and 3.6 is derived, and ERE is derived: the same regcomp error)
+        beyond = cls.Error(cls.text("big", "Regular expression too big" if version >= (3, 0)
+                                    else "Invalid content of \\{\\}", libc))
+        if end - i > 12:
+            raise beyond
+        if libc == "musl" and not found[1]:
+            raise cls.Error(cls.text("content", "", libc))  # recorded: a\{,2\}b and a{,2}b
+        low = int(found[1]) if found[1] else 0
+        high = (int(found[3]) if found[3] else None) if found[2] else low
+        if high is not None and low > high:
+            raise cls.Error(cls.text("content", "Invalid content of \\{\\}", libc))  # recorded: a{2,1}
+        if max(low, high or 0) > 32767:
+            raise beyond
+        quant = "{%d}" % low if high == low else "{%d,%s}" % (low, "" if high is None else high)
+        return quant, end + (1 if ere else 2)
+
+    @classmethod
+    def bracket(cls, p: bytes, i: int, libc: str | None = None):
+        """The set of the [ before p[i] as Python's re reads it, and the index after its ]."""
+        n = len(p)
+        negate = p[i:i + 1] == b"^"
+        i += negate
+        items = []
+        first = True
+        while True:
+            if i >= n:
+                raise cls.Error(cls.text("bracket", "Invalid regular expression", libc))
+            c = p[i]
+            if c == 93 and not first:
+                i += 1
+                break
+            first = False
+            if c == 91 and p[i + 1:i + 2] in (b":", b".", b"="):
+                kind = p[i + 1:i + 2]
+                end = p.find(kind + b"]", i + 2)
+                if end >= 0:
+                    name = p[i + 2:end]
+                    i = end + 2
+                    if kind == b":":
+                        if name.decode("latin-1") not in cls.CLASSES:
+                            raise cls.Error(cls.text("class", "Invalid character class name", libc))
+                        items.extend(cls.CLASSES[name.decode("latin-1")])
+                    elif libc == "musl":
+                        raise cls.Error("Unknown collating element")  # recorded: [[.a.]] and [[=a=]]
+                    elif len(name) == 1:
+                        items.append((name[0], name[0]))  # [[.a.]] and [[=a=]]: the character
+                    else:
+                        raise cls.Error("Invalid collation character")  # derived from glibc, not recorded
+                    continue
+            i += 1
+            if p[i:i + 1] == b"-" and i + 1 < n and p[i + 1] != 93:
+                if p[i + 1] < c:
+                    raise cls.Error(cls.text("range", "Invalid range end", libc))
+                items.append((c, p[i + 1]))
+                i += 2
+            else:
+                items.append((c, c))
+        return "[" + "^" * negate + "".join(
+            cls.byte(low, True) + ("" if low == high else "-" + cls.byte(high, True)) for low, high in items) + "]", i
+
+
+'''
+
+
+# the body of Command_grep that T-Pot adds in front of upstream's compile_match: the state, the options of the
+# output (-n -H -h -o -w -x -c -l -L -s, -A -B -C -NUM), the usage and option errors of GNU grep and BusyBox
+GREP_BODY = r'''    count_only: bool = False
+    invert: bool = False
+    tpot_matcher: TpotGrepMatcher | None = None
+    tpot_input_left: int = TpotGrepMatcher.MAX_INPUT
+    tpot_exhausted: bool = False
+    tpot_until: float | None = None
+    ignore_case: bool = False
+    tpot_mode: str = "G"
+    tpot_patterns: list | None = None
+    line_numbers: bool = False
+    with_names: bool | None = None  # -H True, -h False, None: a name for several files
+    only_matching: bool = False
+    whole_word: bool = False
+    whole_line: bool = False
+    list_files: str = ""  # -l or -L
+    no_messages: bool = False
+    context_after: int = 0
+    context_before: int = 0
+    tpot_names: bool = False
+    tpot_label: bytes = b""
+    tpot_number: int = 0
+    tpot_after_left: int = 0
+    tpot_before: collections.deque | None = None
+    tpot_held: int = 0
+    tpot_last: int | None = None
+    tpot_printed: bool = False
+    tpot_listed: bool = False
+    tpot_context_given: bool = False
+
+    @staticmethod
+    def tpot_clamp(digits: str) -> int:
+        # a context length or count beyond an int stays at the largest (recorded for GNU grep)
+        digits = digits.lstrip("0") or "0"
+        return 2**31 - 1 if len(digits) > 10 else min(int(digits), 2**31 - 1)
+
+    def tpot_number_error(self, arg: str) -> str:
+        # the text of a context length or count that is no number, "" for a good one; BusyBox also refuses
+        #   what an int cannot hold (recorded)
+        if not re.fullmatch(r"[0-9]+", arg):
+            return (f"grep: {arg}: invalid context length argument\n" if self.tpot_gnu()
+                    else f"grep: invalid number '{arg}'\n")
+        if self.tpot_gnu():
+            return ""
+        value = arg.lstrip("0")
+        if len(value) > 10 or int(value or 0) > 2**32 - 1:
+            return f"grep: invalid number '{arg}'\n"
+        if int(value or 0) > 2**31 - 1:
+            return f"grep: number {arg} is not in 0..2147483647 range\n"
+        return ""
+
+    def tpot_gnu(self) -> bool:
+        # [shell] grep_style: gnu reads BRE, ERE and -F as GNU grep; busybox reads them as the regcomp of its C library
+        return CowrieConfig.get("shell", "grep_style", fallback="gnu") == "gnu"
+
+    @staticmethod
+    def tpot_python_pattern(patterns: list) -> str:
+        # the patterns as one Python pattern (-P): any of several; none selects no line
+        if not patterns:
+            return "\n"
+        if len(patterns) == 1:
+            return patterns[0]
+        return "|".join(f"(?:{pattern})" for pattern in patterns)
+
+    def tpot_busybox_version(self) -> tuple:
+        found = re.search(r"v(\d+)\.(\d+)", CowrieConfig.get("shell", "text_banner", fallback=""))
+        return (int(found[1]), int(found[2])) if found else (1, 36)
+
+    def tpot_usage(self) -> str:
+        if self.tpot_gnu():
+            config = CowrieConfig.get("shell", "grep_version", fallback="3.11")
+            version = tuple(int(x) for x in re.findall(r"\d+", config))
+            # recorded: 2.20 and 2.27 say PATTERN, 3.6 and later PATTERNS; the cut between is derived
+            names = "PATTERNS" if version >= (3, 2) else "PATTERN"
+            return f"Usage: grep [OPTION]... {names} [FILE]...\nTry 'grep --help' for more information.\n"
+        # recorded with the images busybox:1.25 to 1.35: -R from 1.32, the braces form of the pattern from 1.34
+        version = self.tpot_busybox_version()
+        banner = CowrieConfig.get("shell", "text_banner", fallback="BusyBox")
+        recurse = "R" if version >= (1, 32) else ""
+        if version >= (1, 34):
+            head = f"[-HhnlLoqvsr{recurse}iwFE] [-m N] [-A|B|C N] {{ PATTERN | -e PATTERN... | -f FILE... }} [FILE]..."
+        else:
+            head = f"[-HhnlLoqvsr{recurse}iwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]..."
+        lines = [
+            "-H\tAdd 'filename:' prefix", "-h\tDo not add 'filename:' prefix", "-n\tAdd 'line_no:' prefix",
+            "-l\tShow only names of files that match", "-L\tShow only names of files that don't match",
+            "-c\tShow only count of matching lines", "-o\tShow only the matching part of line",
+            "-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise", "-v\tSelect non-matching lines",
+            "-s\tSuppress open and read errors", "-r\tRecurse",
+            *(["-R\tRecurse and dereference symlinks"] if recurse else []),
+            "-i\tIgnore case", "-w\tMatch whole words only", "-x\tMatch whole lines only",
+            "-F\tPATTERN is a literal (not regexp)", "-E\tPATTERN is an extended regexp",
+            "-m N\tMatch up to N times per file", "-A N\tPrint N lines of trailing context",
+            "-B N\tPrint N lines of leading context", "-C N\tSame as '-A N -B N'", "-e PTRN\tPattern to match",
+            "-f FILE\tRead pattern from file",
+        ]
+        return (f"{banner} multi-call binary.\n\nUsage: grep {head}\n\nSearch for PATTERN in FILEs (or stdin)\n\n"
+                + "".join(f"\t{line}\n" for line in lines))
+
+    def tpot_option_error(self, err: getopt.GetoptError) -> None:
+        # the getopt message of GNU grep, or of the C library of a BusyBox persona (recorded), then the usage
+        missing = err.msg.endswith("requires argument")
+        long = err.msg.startswith("option --")
+        word = next((a for a in self.args if a.startswith("--") and a[2:].partition("=")[0] == err.opt), "--" + err.opt)
+        if self.tpot_gnu():
+            if long:
+                text = f"option '--{err.opt}' requires an argument" if missing else f"unrecognized option '{word}'"
+            else:
+                text = f"option requires an argument -- '{err.opt}'" if missing else f"invalid option -- '{err.opt}'"
+        else:
+            libc = CowrieConfig.get("shell", "text_libc", fallback="glibc")
+            if long:
+                text = {"musl": f"unrecognized option: {word[2:]}", "uclibc": f"unrecognized option `{word}'"}.get(
+                    libc, f"unrecognized option '{word}'")
+            elif missing:
+                text = {"musl": f"option requires an argument: {err.opt}",
+                        "uclibc": f"option requires an argument -- {err.opt}"}.get(
+                    libc, f"option requires an argument -- '{err.opt}'")
+            else:
+                text = {"musl": f"unrecognized option: {err.opt}", "uclibc": f"invalid option -- {err.opt}"}.get(
+                    libc, f"invalid option -- '{err.opt}'")
+        self.errorWrite(f"grep: {text}\n" + self.tpot_usage())
+        self.exit(2)
+
+    def tpot_parse(self):
+        """(options, operands) of the command line, the context options taken out; None after the usage."""
+        gnu = self.tpot_gnu()
+        args = list(self.args)
+        default = None
+        if gnu:
+            # -NUM is -C NUM, also in a bundle (-2n, -n2: recorded); the value of an option stays; more than 21
+            #   digits are an error naming the first 21 (recorded for 30, the cut at 21 derived from the GNU source)
+            kept, i = [], 0
+            while i < len(args):
+                arg = args[i]
+                if arg == "--":
+                    kept += args[i:]
+                    break
+                if arg[:1] != "-" or arg[1:2] in ("", "-"):
+                    kept.append(arg)
+                    i += 1
+                    continue
+                letters, run, last_digit, takes_next = "", None, False, False
+                for j, char in enumerate(arg[1:], 1):
+                    if char in "ABCefm":
+                        letters += arg[j:]
+                        takes_next = j == len(arg) - 1
+                        break
+                    if char in "0123456789":
+                        run = run + char if last_digit else char
+                        last_digit = True
+                    else:
+                        letters += char
+                        last_digit = False
+                if run is not None:
+                    run = run.lstrip("0") or "0"
+                    if len(run) > 21:
+                        self.errorWrite(f"grep: {run[:21]}...: invalid context length argument\n")
+                        self.exit(2)
+                        return None
+                    default = self.tpot_clamp(run)
+                    self.tpot_context_given = True
+                if letters:
+                    kept.append("-" + letters)
+                if takes_next and i + 1 < len(args):
+                    kept.append(args[i + 1])
+                    i += 1
+                i += 1
+            args = kept
+            shorts = "abcDEFGHhIiJLlnOoPqRrSsUVvwxZA:B:C:e:f:m:"
+            longs = ["binary-files=", "color=", "color", "context=", "directories=", "label", "line-buffered",
+                     "quiet", "silent", "regexp="]
+        else:
+            shorts = "HhnlLoqvsriwxFEcm:A:B:C:e:f:" if self.tpot_busybox_version() < (1, 32) else \
+                "HhnlLoqvsrRiwxFEcm:A:B:C:e:f:"
+            longs = []
+        if not args:
+            self.errorWrite(self.tpot_usage())
+            self.exit(2)
+            return None
+        try:
+            optlist, operands = getopt.gnu_getopt(args, shorts, longs)
+        except getopt.GetoptError as err:
+            self.tpot_option_error(err)
+            return None
+        after = before = None
+        rest = []
+        for opt, arg in optlist:
+            if opt in ("-A", "-B", "-C", "--context") or (not gnu and opt == "-m"):
+                problem = self.tpot_number_error(arg)
+                if problem:
+                    # GNU: x: invalid context length argument; BusyBox: invalid number 'x' (the same for -m, derived)
+                    self.errorWrite(problem)
+                    self.exit(2)
+                    return None
+                if opt != "-m":
+                    self.tpot_context_given = gnu
+                if opt == "-A":
+                    after = self.tpot_clamp(arg)
+                elif opt == "-B":
+                    before = self.tpot_clamp(arg)
+                elif opt != "-m":
+                    default = self.tpot_clamp(arg)
+                else:
+                    rest.append((opt, arg))
+            elif gnu and opt == "-m" and re.fullmatch(r"[0-9]+", arg):
+                rest.append((opt, str(self.tpot_clamp(arg))))
+            elif opt == "--regexp":
+                rest.append(("-e", arg))
+            else:
+                rest.append((opt, arg))
+        # an explicit -A or -B wins over -C and -NUM, in any order (GNU manual)
+        self.context_after = default if after is None and default is not None else (after or 0)
+        self.context_before = default if before is None and default is not None else (before or 0)
+        return rest, operands
+
+    def tpot_read_patterns(self, given: list) -> list | None:
+        # the pattern of -e PATTERN and -f FILE (a pattern per line of a file of the emulated file system),
+        #   in their order: the one, or any of several (a newline in -e PATTERN parts two, as in GNU grep and
+        #   BusyBox); None after the error of a file it cannot read: GNU's texts (BusyBox reads a folder as
+        #   an empty file, not emulated). Not handled: -f - (the patterns on stdin)
+        patterns = []
+        for opt, arg in given:
+            if opt == "-e":
+                patterns += arg.split("\n")
+                continue
+            path = self.fs.resolve_path(arg, self.cwd)
+            if self.fs.isdir(path):
+                self.errorWrite(f"grep: {arg}: Is a directory\n")
+                return None
+            try:
+                data = self.fs.file_contents(path)
+            except Exception:
+                self.errorWrite(f"grep: {arg}: No such file or directory\n")
+                return None
+            # bytes as they are (surrogateescape, as a typed line); past MAX_PATTERN bytes it is too big
+            lines = data[: TpotGrepMatcher.MAX_PATTERN + 1].decode("utf-8", "surrogateescape").split("\n")
+            if lines[-1] == "":
+                lines.pop()
+            patterns += lines
+        return patterns
+
+    def exit_status(self) -> int:
+        # upstream's status (_status: errored, -q), and 2 once the work budget is used up; -L is a success where
+        # it lists a file in BusyBox 1.33 and later, in GNU grep and older BusyBox it follows the selected lines
+        # (recorded: debian:9 to 13, almalinux, centos:7, busybox 1.27 to 1.34)
+        if self.tpot_exhausted:
+            return 2
+        if self.list_files == "L" and not self.quiet and not self.tpot_gnu() and self.tpot_busybox_version() >= (1, 33):
+            if self.errored:
+                return 2
+            return 0 if self.tpot_listed else 1
+        return self._status()
+
+    def tpot_begin(self, label: str) -> None:
+        # a new source of lines (a file, the standard input): its counters and the context buffer
+        self.tpot_label = label.encode("utf8", "surrogateescape")
+        self.tpot_number = 0
+        self.match_count = 0
+        self.tpot_after_left = 0
+        self.tpot_last = None
+        self.tpot_before = collections.deque(maxlen=self.context_before)
+        self.tpot_held = 0
+
+    def tpot_finish(self, label: str) -> None:
+        # the end of a source: -l and -L name it, -c counts it (a name in front for several files)
+        if self.tpot_exhausted or self.quiet:
+            return
+        if self.list_files:
+            if (self.match_count > 0) == (self.list_files == "l"):
+                self.write(label + "\n")
+                self.tpot_listed = True
+        elif self.count_only:
+            self.write((f"{label}:" if self.tpot_names else "") + f"{self.match_count}\n")
+
+    def tpot_file(self, arg: str) -> None:
+        path = self.fs.resolve_path(arg, self.cwd)
+        self.tpot_begin(arg)
+        if self.fs.isdir(path):
+            if self.tpot_gnu():
+                # recorded: grep: /w: Is a directory, status 2; BusyBox reads a folder as an empty file (status 1)
+                if not self.no_messages:
+                    self.errorWrite(f"grep: {arg}: Is a directory\n")
+                self.errored = True
+            else:
+                self.tpot_finish(arg)
+            return
+        try:
+            contents = self.fs.file_contents(path)
+        except Exception:
+            if not self.no_messages:
+                self.errorWrite(f"grep: {arg}: No such file or directory\n")
+            self.errored = True
+            return
+        self.grep_application(contents, self.match)
+        self.tpot_finish(arg)
+
+    def tpot_row(self, number: int, text: bytes, mark: bytes) -> None:
+        # a selected line (mark ":") or a context line (mark "-") with the name and the number in front
+        prefix = self.tpot_label + mark if self.tpot_names else b""
+        if self.line_numbers:
+            prefix += b"%d" % number + mark
+        self.writeBytes(prefix + text + b"\n")
+
+    def tpot_gap(self, first: int) -> None:
+        # "--" between two groups that do not touch, also from one file to the next (recorded); GNU grep also
+        #   after an explicit -A 0 (recorded), BusyBox never
+        if (self.context_after or self.context_before or self.tpot_context_given) and self.tpot_printed and (
+                self.tpot_last is None or first > self.tpot_last + 1):
+            self.writeBytes(b"--\n")
+        self.tpot_printed = True
+
+    def tpot_selected(self, line: bytes, matcher: TpotGrepMatcher) -> None:
+        number = self.tpot_number
+        pending = list(self.tpot_before)
+        self.tpot_before.clear()
+        self.tpot_held = 0
+        self.tpot_gap(pending[0][0] if pending else number)
+        for before_number, text in pending:
+            self.tpot_row(before_number, text, b"-")
+        if not self.only_matching:
+            self.tpot_row(number, line, b":")
+        elif not self.invert:
+            spans = matcher.spans(line, self.tpot_until)
+            if matcher.spent:
+                self.errorWrite("grep: memory exhausted\n")
+                self.tpot_exhausted = True
+                return
+            for index, (start, end) in enumerate(spans or ()):
+                if index and not index & 4095 and time.monotonic() >= self.tpot_until:
+                    self.errorWrite("grep: memory exhausted\n")
+                    self.tpot_exhausted = True
+                    return
+                self.tpot_row(number, line[start:end], b":")
+        self.tpot_last = number
+        self.tpot_after_left = self.context_after
+
+    def tpot_context(self, line: bytes) -> None:
+        # a line that is not selected: trailing context of the match before it, or leading context of the next
+        number = self.tpot_number
+        if self.tpot_after_left > 0:
+            self.tpot_after_left -= 1
+            self.tpot_gap(number)
+            self.tpot_row(number, line, b"-")
+            self.tpot_last = number
+        elif self.context_before:
+            # the context buffer stops at MAX_CONTEXT per grep call; real grep would keep it (user decision)
+            before = self.tpot_before
+            if len(before) == before.maxlen:
+                self.tpot_held -= len(before[0][1]) + TpotGrepMatcher.ROW
+            before.append((number, line))
+            self.tpot_held += len(line) + TpotGrepMatcher.ROW
+            while self.tpot_held > TpotGrepMatcher.MAX_CONTEXT:
+                self.tpot_held -= len(before.popleft()[1]) + TpotGrepMatcher.ROW
+'''
+
+# compile_match of the patched grep: the translated patterns of GREP_SYNTAX, -w and -x around them
+GREP_COMPILE = r'''    def compile_match(self, match: str) -> TpotGrepMatcher:
+        if self.tpot_matcher is None:
+            # the pattern as given: one with a slash (/bin/bash, ^tree/) is no path, a double quote stays;
+            #   the bytes of -f FILE as they were (surrogateescape); its size in bytes
+            gnu = self.tpot_gnu()
+            patterns = self.tpot_patterns if self.tpot_patterns is not None else match.split("\n")
+            if sum(len(pattern) for pattern in patterns) > TpotGrepMatcher.MAX_PATTERN:
+                raise TpotGrepMatcher.TooBig()
+            config = CowrieConfig.get("shell", "grep_version", fallback="3.11")
+            version = tuple(int(x) for x in re.findall(r"\d+", config))
+            until = tpot_deadline(getattr(self, "protocol", None))
+            libc = None if gnu else CowrieConfig.get("shell", "text_libc", fallback="glibc")
+            warn = (lambda text: self.errorWrite(f"grep: warning: {text}\n")) if gnu else (lambda text: None)
+            regex = TpotGrepSyntax.regex(patterns, self.tpot_mode, version, warn, until, libc)
+            if self.whole_line:
+                regex = f"^(?:{regex})$"
+            elif self.whole_word:
+                regex = f"(?<!\\w)(?:{regex})(?!\\w)"
+            bmatch = regex.encode("utf8", "surrogateescape")
+            if len(bmatch) > TpotGrepMatcher.MAX_PATTERN:
+                raise TpotGrepMatcher.TooBig()
+            try:
+                re.compile(bmatch, re.IGNORECASE if self.ignore_case else 0)
+                self.tpot_matcher = TpotGrepMatcher(bmatch, self.ignore_case)
+            except RecursionError:
+                raise TpotGrepMatcher.TooBig() from None
+        return self.tpot_matcher
+'''
+
+# the loop over the lines of grep_application
+GREP_LOOP = r'''        if self.tpot_exhausted or (self.quiet and self.matched):
+            return
+        # the session's deadline (TPOT_BUDGET), taken for each part of the input (a file, a typed line): past
+        # it grep stops as when its work budget is used up
+        self.tpot_until = tpot_deadline(getattr(self, "protocol", None))
+        contents = contents[: self.tpot_input_left]
+        self.tpot_input_left -= len(contents)
+        lines = contents.split(b"\n")
+        if lines[-1] == b"":
+            lines.pop()
+        for index, line in enumerate(lines):
+            self.tpot_number += 1
+            done = self.max_count is not None and self.match_count >= self.max_count
+            if done and self.tpot_after_left <= 0:
+                break
+            found = matcher.search(line) is not None
+            if matcher.spent or index & 255 == 255 and time.monotonic() >= self.tpot_until:
+                self.errorWrite("grep: memory exhausted\n")
+                self.tpot_exhausted = True
+                return
+            selected = found != self.invert
+            if done:
+                if selected and not self.tpot_gnu():
+                    break  # BusyBox ends the trailing context at the next selected line, GNU grep (recorded) does not
+                self.tpot_context(line)
+            elif selected:
+                self.matched = True
+                self.match_count += 1
+                if self.quiet:
+                    return
+                if self.list_files:
+                    break
+                if not self.count_only:
+                    self.tpot_selected(line, matcher)
+                    if self.tpot_exhausted:
+                        return
+            elif not self.count_only and not self.list_files:
+                self.tpot_context(line)
 '''
 
 
@@ -11397,9 +16145,30 @@ GREP_SELF_TEST = (
     (rb"a\Bb", False),  # no word boundary
     (rb"(a+)+$", False),  # nested repeats
     (rb"PROCESSOR", True),  # -i
+    (rb"a/b", False),  # a slash, no path
+    (rb'"root"', False),  # a double quote
+    (rb"(?<!\w)(?=\w)f", False),  # lookahead and lookbehind of one set, negated and not
+    (rb"o\b(?<=\w)", False),  # lookbehind
+    (rb"a(?!\W)", False),  # negated lookahead
+)
+# (mode, pattern of grep, the expression of Python's re it stands for): TpotGrepSyntax against re.search
+GREP_SYNTAX_SELF_TEST = (
+    ("G", rb"a\|x+", rb"a|x\+"),  # BRE: \| is the alternation, + a character
+    ("G", rb"\(ab\)\{2\}", rb"(ab){2}"),
+    ("G", rb"a\+b\?", rb"a+b?"),
+    ("G", rb"*a(", rb"\*a\("),  # a * at the start and a ( are characters
+    ("E", rb"(a|b)+c{1,2}", rb"(a|b)+c{1,2}"),
+    ("E", rb"a\|b", rb"a\|b"),  # ERE: \| is the characters
+    ("G", rb"[[:digit:]]\+ kB$", rb"[0-9]+ kB$"),
+    ("G", rb"\<foo\>", rb"\bfoo\b"),
+    ("G", rb"[^]a]b", rb"[^\]a]b"),
+    ("F", rb"a.b", rb"a\.b"),
+    ("E", rb"^*a", rb"a"),  # the * repeats the anchor
 )
 GREP_SELF_TEST_LINES = (b"", b"processor\t: 0", b"model name\t: Intel", b"MemTotal: 8023548 kB", b"aaab",
-                        b"Ab_c", b"foo bar", b"x-y", b" 42 ", b"ab", b"a b", b"amd64")
+                        b"Ab_c", b"foo bar", b"x-y", b" 42 ", b"ab", b"a b", b"amd64", b"a/b c", b'"root" said',
+                        b"root", b"a|x", b"axxx", b"abab", b"a+b", b"a.b", b"axb", b"1 kB", b"]b", b"af", b"foo",
+                        b"a(", b"*a(", b"abcc")
 
 
 def unbound_globals(source: str, name: str) -> list[str]:
@@ -11458,9 +16227,9 @@ def grep_self_test(cowrie_root):
     path = cowrie_root / "src" / "cowrie" / "commands" / "fs.py"
     try:
         nodes = [node for node in ast.parse(path.read_text(encoding="utf-8")).body
-                 if isinstance(node, ast.ClassDef) and node.name == "TpotGrepMatcher"]
-        if len(nodes) != 1:
-            raise LookupError("no TpotGrepMatcher in fs.py")
+                 if isinstance(node, ast.ClassDef) and node.name in ("TpotGrepMatcher", "TpotGrepSyntax")]
+        if len(nodes) != 2:
+            raise LookupError("no TpotGrepMatcher and TpotGrepSyntax in fs.py")
         namespace = {"re": re, "__name__": "tpot_grep_self_test"}
         exec(compile(ast.Module(nodes, []), str(path), "exec"), namespace)  # noqa: S102 (our own patched source)
         matcher = namespace["TpotGrepMatcher"]
@@ -11472,6 +16241,15 @@ def grep_self_test(cowrie_root):
             for line in GREP_SELF_TEST_LINES:
                 if (found.search(line) is not None) != (expected.search(line) is not None):
                     raise ValueError(f"{pattern!r} on {line!r} differs from re.search")
+        for mode, pattern, python in GREP_SYNTAX_SELF_TEST:
+            regex = namespace["TpotGrepSyntax"].regex([pattern.decode()], mode, (3, 11), lambda text: None)
+            found = matcher(regex.encode())
+            expected = re.compile(python)
+            if found.regular is not True:
+                raise ValueError(f"{mode} {pattern!r} not read as a regular expression")
+            for line in GREP_SELF_TEST_LINES:
+                if (found.search(line) is not None) != (expected.search(line) is not None):
+                    raise ValueError(f"{mode} {pattern!r} on {line!r} differs from {python!r}")
         try:
             matcher(rb"(a{100}){100}")
         except matcher.TooBig:
@@ -11489,6 +16267,8 @@ def patch_grep(cowrie_root):
     -v inverts, -i ignores case, -q prints nothing; -m counts per file. The exit
     status is 0 for a selected line, 1 for none and 2 for an error (missing file,
     directory, invalid option), with -q a selected line wins over an error.
+    -e PATTERN (several: any of them) and -f FILE (a pattern per line) give the
+    pattern, every operand is a file then; a double quote stays in the pattern.
     The empty string after the last newline is no line. Lines are matched by
     TpotGrepMatcher (GREP_MATCHER) in time that grows with the input: a pattern whose
     automaton gets too large is too big (exit 2), one grep reads at most 1 MiB, and
@@ -11496,162 +16276,205 @@ def patch_grep(cowrie_root):
     The Dockerfile runs grep_self_test (--self-test) on the patched source."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "fs.py"
     replace_once(path, "class Command_grep(HoneyPotCommand):\n",
-                 GREP_MATCHER.lstrip("\n") + "class Command_grep(HoneyPotCommand):\n")
+                 GREP_MATCHER.lstrip("\n") + GREP_SYNTAX.lstrip("\n") + "class Command_grep(HoneyPotCommand):\n")
     # the session's deadline (TPOT_BUDGET) of grep
     replace_once(path, "from cowrie.shell.command import HoneyPotCommand\n",
                  "from cowrie.shell.command import HoneyPotCommand, tpot_deadline\n")
-    replace_once(path, "import re\nfrom typing import TYPE_CHECKING\n", "import re\nimport time\nfrom typing import TYPE_CHECKING\n")
+    replace_once(path, "import re\nfrom typing import TYPE_CHECKING\n",
+                 "import collections\nimport re\nimport time\nfrom typing import TYPE_CHECKING\n")
     replace_once(
         path,
-        """    def grep_get_contents(self, filename: str, match: str) -> None:
+        r"""    def grep_get_contents(self, filename: str, match: str) -> None:
         try:
             contents = self.fs.file_contents(filename)
             self.grep_application(contents, match)
         except Exception:
-            self.errorWrite(f"grep: {filename}: No such file or directory\\n")
+            self.errorWrite(f"grep: {filename}: No such file or directory\n")
             self.errored = True
 """,
-        """    count_only: bool = False
-    invert: bool = False
-    tpot_matcher: TpotGrepMatcher | None = None
-    tpot_input_left: int = TpotGrepMatcher.MAX_INPUT
-    tpot_exhausted: bool = False
-    tpot_until: float | None = None
-    ignore_case: bool = False
-
-    def write_count(self, label: str | None = None) -> None:
-        if self.quiet or self.tpot_exhausted:
-            return
-        prefix = f"{label}:" if label is not None else ""
-        self.write(f"{prefix}{self.match_count}\\n")
-
-    def exit_status(self) -> int:
-        # upstream's status (_status: errored, -q), and 2 once the work budget is used up
-        if self.tpot_exhausted:
-            return 2
-        return self._status()
-
-    def grep_get_contents(
-        self, filename: str, match: str, label: str | None = None, show_name: bool = False
-    ) -> None:
-        name = filename if label is None else label
-        try:
-            contents = self.fs.file_contents(filename)
-            self.match_count = 0
-            self.grep_application(contents, match)
-        except Exception:
-            self.errorWrite(f"grep: {name}: No such file or directory\\n")
-            self.errored = True
-            return
-        if self.count_only:
-            self.write_count(name if show_name else None)
-""",
+        GREP_BODY,
     )
     replace_once(
         path,
-        """    def compile_match(self, match: str) -> re.Pattern[bytes]:
+        r"""    def compile_match(self, match: str) -> re.Pattern[bytes]:
         bmatch = os.path.basename(match).replace('"', "").encode("utf8")
         return re.compile(bmatch)
 """,
-        """    def compile_match(self, match: str) -> TpotGrepMatcher:
-        if self.tpot_matcher is None:
-            if len(match) > TpotGrepMatcher.MAX_PATTERN:
-                raise TpotGrepMatcher.TooBig()
-            # the pattern as given: one with a slash (/bin/bash, ^tree/) is no path
-            bmatch = match.replace('"', "").encode("utf8")
-            try:
-                re.compile(bmatch, re.IGNORECASE if self.ignore_case else 0)
-                self.tpot_matcher = TpotGrepMatcher(bmatch, self.ignore_case)
-            except RecursionError:
-                raise TpotGrepMatcher.TooBig() from None
-        return self.tpot_matcher
-""",
+        GREP_COMPILE,
     )
     replace_once(
         path,
-        """        for line in contents.split(b"\\n"):
+        r"""        for line in contents.split(b"\n"):
             if self.max_count is not None and self.match_count >= self.max_count:
                 break
             if matcher.search(line):
                 self.matched = True
                 self.match_count += 1
                 if not self.quiet:
-                    self.writeBytes(line + b"\\n")
+                    self.writeBytes(line + b"\n")
 """,
-        """        if self.tpot_exhausted or (self.quiet and self.matched):
+        GREP_LOOP,
+    )
+    # the options and their errors: GNU grep's and BusyBox's own getopt texts and usage
+    replace_once(
+        path,
+        r"""        if not self.args:
+            self.help()
+            self.exit(2)
             return
-        # the session's deadline (TPOT_BUDGET), taken for each part of the input (a file, a typed line): past
-        # it grep stops as when its work budget is used up
-        self.tpot_until = tpot_deadline(getattr(self, "protocol", None))
-        contents = contents[: self.tpot_input_left]
-        self.tpot_input_left -= len(contents)
-        lines = contents.split(b"\\n")
-        if lines[-1] == b"":
-            lines.pop()
-        for number, line in enumerate(lines):
-            if self.max_count is not None and self.match_count >= self.max_count:
-                break
-            found = matcher.search(line) is not None
-            if matcher.spent or not number & 255 and time.monotonic() >= self.tpot_until:
-                self.errorWrite("grep: memory exhausted\\n")
-                self.tpot_exhausted = True
-                return
-            if found != self.invert:
-                self.matched = True
-                self.match_count += 1
-                if self.quiet:
-                    return
-                if not self.count_only:
-                    self.writeBytes(line + b"\\n")
+
+        try:
+            optlist, args = getopt.getopt(
+                self.args,
+                "abcDEFGHhIiJLlnOoPqRSsUVvwxZA:B:C:e:f:m:",
+                [
+                    "binary-files=",
+                    "color=",
+                    "color",
+                    "context=",
+                    "directories=",
+                    "label",
+                    "line-buffered",
+                    "quiet",
+                    "silent",
+                ],
+            )
+        except getopt.GetoptError as err:
+            self.errorWrite(f"grep: invalid option -- {err.opt}\n")
+            self.help()
+            self.exit(2)
+            return
+""",
+        r"""        parsed = self.tpot_parse()
+        if parsed is None:
+            return
+        optlist, args = parsed
 """,
     )
     replace_once(
         path,
-        """        for opt, arg in optlist:
+        r"""        for opt, arg in optlist:
             if opt == "-h":
+                self.help()
 """,
-        """        for opt, arg in optlist:
-            if opt == "-c":
+        r"""        # -e PATTERN and -f FILE, in their order
+        tpot_patterns = []
+        matcher_option = {"E": "-E", "F": "-F"}.get(self.tpot_mode)  # egrep and fgrep are -E and -F
+        for opt, arg in optlist:
+            if opt in ("-e", "-f"):
+                tpot_patterns.append((opt, arg))
+            elif opt == "-c":
                 self.count_only = True
             elif opt == "-v":
                 self.invert = True
             elif opt == "-i":
                 self.ignore_case = True
+            elif opt == "-n":
+                self.line_numbers = True
+            elif opt == "-H":
+                self.with_names = True
+            elif opt == "-o":
+                self.only_matching = True
+            elif opt == "-w":
+                self.whole_word = True
+            elif opt == "-x":
+                self.whole_line = True
+            elif opt in ("-l", "-L"):
+                self.list_files = opt[1]
+            elif opt == "-s":
+                self.no_messages = True
+            elif opt in ("-E", "-F") and not self.tpot_gnu():
+                # BusyBox: -F wins over -E in either order (recorded)
+                self.tpot_mode = "F" if "F" in (opt[1], self.tpot_mode) else "E"
+            elif opt in ("-E", "-F", "-G", "-P"):
+                if matcher_option not in (None, opt):
+                    self.errorWrite("grep: conflicting matchers specified\n")
+                    self.exit(2)
+                    return
+                matcher_option = opt
+                self.tpot_mode = opt[1]
             elif opt == "-h":
+                self.with_names = False
+""",
+    )
+    # -e PATTERN and -f FILE give the pattern, every operand is a file then; no pattern is the usage
+    replace_once(
+        path,
+        r"""        if not args:
+            # Options only, no pattern (e.g. `grep -h`).
+            self.exit()
+            return
+
+        self.match = args[0]
+""",
+        r"""        if self.only_matching:
+            self.context_after = self.context_before = 0
+            self.tpot_context_given = False
+        if tpot_patterns:
+            found = self.tpot_read_patterns(tpot_patterns)
+            if found is None:
+                self.exit(2)
+                return
+            self.tpot_patterns = found
+            self.match = self.tpot_python_pattern(found)
+        elif not args:
+            # options only, no pattern (recorded: the usage, status 2)
+            self.errorWrite(self.tpot_usage())
+            self.exit(2)
+            return
+        else:
+            self.match = args[0]
+            self.tpot_patterns = args[0].split("\n")
 """,
     )
     replace_once(
         path,
-        """        if self.input_data is not None:
+        "        files = args[1:]\n",
+        "        files = args if tpot_patterns else args[1:]\n"
+        "        self.tpot_names = self.with_names if self.with_names is not None else len(files) > 1\n",
+    )
+    replace_once(
+        path,
+        r"""        if self.input_data is not None:
             self.grep_application(self.input_data, self.match)
         elif files:
             for pname in self.check_arguments("grep", files):
                 self.grep_get_contents(pname, self.match)
 """,
-        """        if self.input_data is not None:
+        r"""        if self.input_data is not None and "-" not in files:
+            self.tpot_begin("(standard input)")
             self.grep_application(self.input_data, self.match)
-            if self.count_only:
-                self.write_count()
+            self.tpot_finish("(standard input)")
         elif files:
             for arg in files:
                 if self.tpot_exhausted or (self.quiet and self.matched):
                     # as GNU grep: -q ends at the first selected line, the files after it are not read
                     break
-                pnames = self.check_arguments("grep", [arg])
-                if not pnames:
-                    self.errored = True
-                for pname in pnames:
-                    self.grep_get_contents(pname, self.match, arg, len(files) > 1)
+                if arg == "-" and self.input_data is not None:
+                    self.tpot_begin("(standard input)")
+                    self.grep_application(self.input_data, self.match)
+                    self.tpot_finish("(standard input)")
+                else:
+                    self.tpot_file(arg)
 """,
     )
     replace_once(
         path,
-        """            self.compile_match(self.match)
+        r"""            self.compile_match(self.match)
         except re.error:
 """,
-        """            self.compile_match(self.match)
+        r"""            self.compile_match(self.match)
+        except TpotGrepSyntax.Error as err:
+            # BusyBox names the pattern (recorded: bad regex 'a\{1': Unmatched \{)
+            self.errorWrite(f"grep: {err}\n" if self.tpot_gnu() else f"grep: bad regex '{err.pattern}': {err}\n")
+            self.exit(2)
+            return
+        except TpotGrepSyntax.Timeout:
+            self.errorWrite("grep: memory exhausted\n")
+            self.exit(2)
+            return
         except TpotGrepMatcher.TooBig:
-            self.errorWrite("grep: regular expression too big\\n")
+            self.errorWrite("grep: regular expression too big\n")
             self.exit(2)
             return
         except re.error:
@@ -11659,12 +16482,13 @@ def patch_grep(cowrie_root):
     )
     replace_once(
         path,
-        """            self.interactive = True
+        r"""            self.interactive = True
             return
 
         self.exit(self._status())
 """,
-        """            self.interactive = True
+        r"""            self.interactive = True
+            self.tpot_begin("(standard input)")
             return
 
         self.exit(self.exit_status())
@@ -11672,9 +16496,9 @@ def patch_grep(cowrie_root):
     )
     replace_once(
         path,
-        """            self.grep_application(line.encode("utf8"), self.match)
+        r"""            self.grep_application(line.encode("utf8"), self.match)
 """,
-        """            self.grep_application((line + "\\n").encode("utf8"), self.match)
+        r"""            self.grep_application((line + "\n").encode("utf8"), self.match)
             if self.tpot_exhausted:
                 # as GNU grep: it ends at once, the lines after it are the shell's
                 self.exit(self.exit_status())
@@ -11682,14 +16506,22 @@ def patch_grep(cowrie_root):
     )
     replace_once(
         path,
-        """                    self.grep_application(f.read(), self.match)
+        r"""                    self.grep_application(f.read(), self.match)
         self.exit(self._status())
 """,
-        """                    self.grep_application(f.read(self.tpot_input_left), self.match)
-            if self.count_only:
-                self.write_count()
+        r"""                    self.grep_application(f.read(self.tpot_input_left), self.match)
+            self.tpot_finish("(standard input)")
         self.exit(self.exit_status())
 """,
+    )
+    # egrep and fgrep are grep -E and grep -F
+    replace_once(
+        path,
+        'commands["/bin/fgrep"] = Command_grep\n',
+        'commands["/bin/fgrep"] = Command_grep\n'
+        "\n\nclass Command_egrep(Command_grep):\n    tpot_mode = \"E\"\n\n\n"
+        "class Command_fgrep(Command_grep):\n    tpot_mode = \"F\"\n\n\n"
+        'commands["/bin/egrep"] = Command_egrep\ncommands["/bin/fgrep"] = Command_fgrep\n',
     )
 
 
@@ -12322,13 +17154,14 @@ AWK_COMMAND = r'''
 # interpreter for the awk that scripts run on the output of df, free, uptime, ps or
 # /proc/cpuinfo: BEGIN and END, patterns (expressions, /regex/), print and printf, if, while,
 # for, next, exit, variables, fields and the usual operators, and length, substr, index,
-# tolower, toupper, int, sprintf, sub and gsub. The program becomes a tree of tuples that is
+# tolower, toupper, int, sprintf, sub, gsub, split and match, arrays and the functions of the
+# program. The program becomes a tree of tuples that is
 # walked; nothing of it is executed. Regular expressions run on TpotGrepMatcher, the automaton
 # of grep. Program, input, output, values, steps and nesting have limits; past one, awk ends
-# with status 2. The awk this leaves out (arrays, functions, getline, system, pipes and
-# redirections) ends awk with status 2 and no output; syntax errors read as those of the
-# persona's awk.
+# with status 2. The awk this leaves out (getline, system, pipes and redirections) ends awk
+# with status 2 and no output; syntax errors read as those of the persona's awk.
 import math
+import random
 import time
 
 from twisted.python import log
@@ -12355,13 +17188,34 @@ class TpotAwkSyntax(Exception):
 class TpotAwkJump(Exception):
     """next, exit, break and continue."""
 
-    def __init__(self, kind: str, code: int | None = None) -> None:
+    def __init__(self, kind: str, code: int | None = None, value=None) -> None:
         super().__init__(kind)
-        self.kind, self.code = kind, code
+        self.kind, self.code, self.value = kind, code, value
+
+
+class TpotAwkUnbound:
+    """A parameter of a function call that no use has typed yet: a local of the call (name None) or a name of the
+    caller (frame None: a global) that becomes the caller's array when the function uses it as one."""
+
+    __slots__ = ("frame", "name")
+
+    def __init__(self, frame=None, name=None) -> None:
+        self.frame, self.name = frame, name
 
 
 class TpotAwkStrnum(str):
     """A string of the input (a field, $0, -v): a number in comparisons when it looks like one."""
+
+
+class TpotAwkNumber(float):
+    """A number in a variable of BusyBox's awk, which keeps the text of its first conversion by CONVFMT."""
+
+    __slots__ = ("cache",)
+
+    def __new__(cls, value: float):
+        number = float.__new__(cls, value)
+        number.cache = None
+        return number
 
 
 class TpotAwkUninit(TpotAwkStrnum):
@@ -12370,18 +17224,21 @@ class TpotAwkUninit(TpotAwkStrnum):
 
 TPOT_AWK_UNINIT = TpotAwkUninit("")
 TPOT_AWK_KEYWORDS = frozenset({"BEGIN", "END", "if", "else", "while", "for", "break", "continue", "next", "exit",
-                               "print", "printf", "delete", "in"})
+                               "print", "printf", "delete", "in", "function", "return"})
 # name: (fewest, most arguments)
 TPOT_AWK_FUNCTIONS = {"length": (0, 1), "substr": (2, 3), "index": (2, 2), "tolower": (1, 1), "toupper": (1, 1),
                       "int": (1, 1), "sprintf": (1, 255), "sub": (2, 3), "gsub": (2, 3), "split": (2, 3),
-                      "match": (2, 2)}
+                      "match": (2, 2), "rand": (0, 0), "srand": (0, 1)}
 # the awk left out: words of every awk, then gawk's functions (names of variables elsewhere)
-TPOT_AWK_OTHER = frozenset({"function", "func", "getline", "do", "return", "nextfile", "system", "close", "fflush",
-                            "srand", "rand", "sin", "cos", "atan2", "exp", "log", "sqrt"})
+TPOT_AWK_OTHER = frozenset({"getline", "do", "nextfile", "system", "close", "fflush",
+                            "sin", "cos", "atan2", "exp", "log", "sqrt"})
 # the nodes of every array of one run (keys and values are charged as the variables are, MAX_LIVE)
 TPOT_AWK_ELEMENTS = 500_000
 TPOT_AWK_GAWK = frozenset({"gensub", "strftime", "systime", "mktime", "asort", "asorti", "patsplit", "strtonum",
                            "and", "or", "xor", "lshift", "rshift", "compl", "isarray", "typeof"})
+# the same words as builtins of mawk 1.3.4 and of BusyBox (recorded in fixtures/awk_departures.json), left out as well
+TPOT_AWK_TIME = frozenset({"strftime", "systime", "mktime"})
+TPOT_AWK_BUSYBOX = TPOT_AWK_TIME | {"gensub", "and", "or", "xor", "lshift", "rshift", "compl"}
 TPOT_AWK_PUNCT = ("&&", "||", "==", "!=", "<=", ">=", "!~", "++", "--", "+=", "-=", "*=", "/=", "%=", "^=", ">>",
                   "{", "}", "(", ")", ";", ",", "+", "-", "*", "/", "%", "^", "!", "<", ">", "~", "?", ":", "=",
                   "$", "[", "]", "|")
@@ -12410,17 +17267,25 @@ TPOT_AWK_CLASSES = {"alpha": "a-zA-Z", "digit": "0-9", "alnum": "0-9a-zA-Z", "up
                     "cntrl": "\\x00-\\x1f\\x7f", "print": " -~", "graph": "!-~"}
 
 
-def tpot_awk_unescape(raw: str, gawk: bool) -> str:
+def tpot_awk_unescape(raw: str, gawk: bool, characters: bool = False) -> str:
     """The escape sequences of a string literal or -v value; gawk drops the backslash of an
-    unknown one, mawk and BusyBox keep it."""
+    unknown one, mawk and BusyBox keep it. With characters (gawk in a UTF-8 locale) an octal
+    escape beyond ASCII is still one byte (a lone surrogate, written as that byte), and bytes
+    that together are UTF-8 are one character."""
     def one(found):
         d = found.group(1)
         if d[0] in "01234567":
-            return chr(int(d, 8) & 255)
+            code = int(d, 8) & 255
+            return chr(0xdc00 + code) if characters and code > 127 else chr(code)
         if d == "\n":
             return ""
         return TPOT_AWK_ESCAPES.get(d, d if gawk else "\\" + d)
-    return re.sub(r"\\([0-7]{1,3}+|.)", one, raw, flags=re.S) if "\\" in raw else raw
+    if "\\" not in raw:
+        return raw
+    text = re.sub(r"\\([0-7]{1,3}+|.)", one, raw, flags=re.S)
+    if characters and not text.isascii():
+        text = text.encode("utf-8", "surrogateescape").decode("utf-8", "surrogateescape")
+    return text
 
 
 def tpot_awk_bytes(text: str) -> bytes:
@@ -12632,6 +17497,179 @@ class TpotAwkRegex:
         return (best_start, best_end) if best_start >= 0 else None
 
 
+def tpot_awk_c_div(a: int, b: int) -> int:
+    """a / b of C (towards zero)."""
+    q = abs(a) // abs(b)
+    return q if (a < 0) == (b < 0) else -q
+
+
+class TpotAwkAdditive:
+    """random() of a C library: the additive generator x**deg + x**sep + 1 over 32-bit words, its state made by
+    the Park-Miller generator and run 10 * deg times. BSD's random.c, which gawk brings along (deg 63, sep 1 as
+    initstate(1, state, 256) sets it up; a word 0 takes 123459876), and glibc / uClibc (deg 31, sep 3; a seed 0
+    is 1). With shuffle the values go through a buffer of 512 as in gawk's random.c from 2016 (gawk 5),
+    the 10 * deg rounds of the seed too. With wide the first word is the seed as a long holds it (uClibc on a
+    64-bit platform; glibc takes it as an int32_t; recorded: BusyBox 1.25.1 of busybox:1.25 on amd64)."""
+
+    def __init__(self, deg: int, sep: int, bsd: bool, shuffle: bool = False, wide: bool = False) -> None:
+        self.deg, self.sep, self.bsd, self.shuffle, self.wide = deg, sep, bsd, shuffle, wide
+        self.seed(1)
+
+    def seed(self, x: int) -> None:
+        x &= 0xffffffff
+        if not self.bsd and x == 0:
+            x = 1
+        state = [x]
+        for _ in range(1, self.deg):
+            word = state[-1] - (1 << 32) if state[-1] & 0x80000000 and not (self.wide and len(state) == 1) \
+                else state[-1]
+            if self.bsd and word == 0:
+                word = 123459876
+            hi = tpot_awk_c_div(word, 127773)
+            word = 16807 * (word - hi * 127773) - 2836 * hi
+            state.append((word + 0x7fffffff if word < 0 else word) & 0xffffffff)
+        self.state, self.front, self.rear, self.fresh = state, self.sep, 0, True
+        for _ in range(10 * self.deg):
+            self.next()
+
+    def plain(self) -> int:
+        state, front = self.state, self.front
+        state[front] = (state[front] + state[self.rear]) & 0xffffffff
+        value = state[front] >> 1
+        self.front, self.rear = front + 1, self.rear + 1
+        if self.front >= self.deg:
+            self.front = 0
+        elif self.rear >= self.deg:
+            self.rear = 0
+        return value
+
+    def next(self) -> int:
+        if not self.shuffle:
+            return self.plain()
+        if self.fresh:
+            self.buffer = [self.plain() for _ in range(512)]
+            self.last, self.fresh = self.plain(), False
+        value, index = self.plain(), self.last & 511
+        self.last, self.buffer[index] = self.buffer[index], value
+        return self.last
+
+
+class TpotAwkMuslRand:
+    """rand() and srand() of musl (a 64-bit LCG, srand(1) at the start)."""
+
+    def __init__(self) -> None:
+        self.state = 0
+
+    def seed(self, x: int) -> None:
+        self.state = (x - 1) & 0xffffffff  # s - 1 of an unsigned
+
+    def next(self) -> int:
+        self.state = (6364136223846793005 * self.state + 1) & 0xffffffffffffffff
+        return self.state >> 33
+
+
+class TpotAwkRandom:
+    """rand() and srand() of the persona's awk (recorded in fixtures/awk_lang.json; the generators of their
+    sources): srand returns the seed before. gawk 4: random() of its random.c % (2**31 - 1) / (2**31 - 1), seed
+    1 at the start; gawk 5: two values through the shuffle buffer; BusyBox: rand() of the C library (musl's own,
+    glibc's and uClibc's random()), 1.34 and later three values to 63 bits, before rand() / RAND_MAX, seed 1;
+    mawk 1.3.3: its own Park-Miller generator seeded off the clock; 1.3.4 20200120: srandom / random seeded off
+    the clock; 20240123: arc4random, which takes no seed; 20250131: srandom / random with a seed of the clock in
+    nanoseconds, converted to unsigned as the platform does (x86_64: its low 32 bits; arm64: 2**32 - 1)."""
+
+    M = 0x7fffffff
+
+    def __init__(self, awk) -> None:
+        self.awk = awk
+        style, version = awk.style, awk.version
+        date = (version.split() + ["0"])[1]
+        self.kind = {"gawk": "gawk5" if not version.startswith("4") else "gawk4"}.get(style, style)
+        if style == "mawk":
+            self.kind = "mawk133" if awk.old_mawk else "arc4" if "20230000" <= date < "20250000" else \
+                "mawk2025" if date >= "20250000" else "mawk134"
+        if self.kind in ("gawk4", "gawk5"):
+            self.generator = TpotAwkAdditive(63, 1, True, self.kind == "gawk5")
+            self.previous = 1.0
+        elif self.kind == "busybox":
+            found = re.match(r"BusyBox v(\d+)\.(\d+)", version)
+            self.wide = found is None or (int(found.group(1)), int(found.group(2))) >= (1, 34)
+            self.generator = TpotAwkMuslRand() if awk.libc == "musl" else TpotAwkAdditive(
+                31, 3, False, wide=awk.libc == "uclibc" and awk.wide_long)
+            self.previous = 1.0
+        else:
+            self.generator = TpotAwkAdditive(31, 3, False)
+            now = awk.clock()
+            self.previous = float(int(now)) if self.kind != "mawk2025" else float(int(now * 1e9))
+            self.seed_mawk(self.previous)
+
+    def seed_mawk(self, value) -> None:
+        if self.kind == "mawk133":
+            # (d_to_i(seed) & M) % M + 1, or the hash of a string seed, then one round
+            if isinstance(value, float):
+                seed = (int(max(min(value, self.M), -self.M)) & self.M) % self.M + 1
+            else:
+                h = 0
+                for byte in self.awk.to_bytes(value):
+                    h = (h + h + byte) & 0xffffffff
+                seed = h % self.M + 1
+            self.pm = self.crank(self.M - 1 if seed == self.M else seed)
+        elif self.kind == "mawk134":
+            self.generator.seed(int(max(min(self.awk.num(value), self.M), -self.M)))
+        elif self.kind == "mawk2025":
+            # (unsigned) fmod(seed, Max_UInt): the clock in nanoseconds keeps its low 32 bits on x86_64 and is
+            #   2**32 - 1 on arm64 (both recorded)
+            self.generator.seed(self.awk.c_unsigned(math.fmod(self.awk.num(value), 18446744073709551615.0)))
+
+    def crank(self, seed: int) -> int:
+        """One round of mawk 1.3.3's generator (its form for 64-bit longs)."""
+        t = (16807 * (seed % 127773) - 2836 * (seed // 127773)) & 0xffffffff
+        return (t + self.M) & self.M if t >= self.M else t
+
+    def rand(self) -> float:
+        kind, generator = self.kind, self.generator
+        if kind == "gawk4":
+            return (generator.next() % self.M) / self.M
+        if kind == "gawk5":
+            while True:
+                first = generator.next()
+                value = 0.5 + ((first / 2147483648.0 + generator.next()) / 2147483648.0) - 0.5
+                if value != 1.0:
+                    return value
+        if kind == "busybox":
+            if not self.wide:
+                return generator.next() / self.M
+            low = ((generator.next() << 16) ^ generator.next()) & 0xffffffff
+            return ((generator.next() << 32) | low) / 9223372036854775808.0
+        if kind == "mawk133":
+            self.pm = self.crank(self.pm)
+            return self.pm / self.M
+        if kind == "arc4":
+            return random.random()
+        return generator.next() / self.M
+
+    def srand(self, value):
+        previous = self.previous
+        if self.kind in ("gawk4", "gawk5", "busybox"):
+            now = self.awk.clock()
+            if value is None:
+                seed = int(now)
+            elif self.kind == "busybox":  # (unsigned) of the number, as the platform converts it (recorded)
+                seed = self.awk.c_unsigned(self.awk.num(value))
+            else:  # (long) of the number
+                seed = self.awk.c_long(self.awk.num(value))
+            self.previous = float(seed)
+            self.generator.seed(seed if self.kind != "busybox" else seed & 0xffffffff)
+            return previous
+        if value is None:
+            now = self.awk.clock()
+            value = float(int(now)) if self.kind != "mawk2025" else float(int(now * 1e9))
+        elif self.kind != "mawk133" or isinstance(value, float):
+            value = self.awk.num(value)
+        self.previous = value
+        self.seed_mawk(value)
+        return previous
+
+
 class TpotAwkLexer:
     """The tokens of a program: (kind, value, line, column, text); the kind is the punctuation or
     keyword itself, num, str, ere, name, func (a function here), call (any other f(), nl or eof."""
@@ -12677,7 +17715,8 @@ class TpotAwkLexer:
                     raise TpotAwkSyntax(("str", "", line, col, text[i:j]))
                 raw = text[i + 1:j]
                 if c == '"':
-                    out.append(("str", tpot_awk_unescape(raw, self.awk.style == "gawk"), line, col, text[i:j + 1]))
+                    out.append(("str", tpot_awk_unescape(raw, self.awk.style == "gawk", not self.awk.bytes), line, col,
+                                text[i:j + 1]))
                 else:
                     out.append(("ere", raw, line, col, text[i:j + 1]))
                 i = j + 1
@@ -12692,10 +17731,11 @@ class TpotAwkLexer:
                 while j < n and text[j].isascii() and (text[j].isalnum() or text[j] == "_"):
                     j += 1
                 word, call = text[i:j], text.startswith("(", j)
-                if word in TPOT_AWK_OTHER or (word in TPOT_AWK_GAWK and call):
+                if word in TPOT_AWK_OTHER or (call and word in self.awk.builtins):
                     raise TpotAwkStop(2)
-                kind = word if word in TPOT_AWK_KEYWORDS else "func" if word in TPOT_AWK_FUNCTIONS \
-                    else "call" if call else "name"
+                # func: gawk's and BusyBox's other word for function (a name in mawk)
+                kind = word if word in TPOT_AWK_KEYWORDS else "function" if word == "func" and \
+                    self.awk.style != "mawk" else "func" if word in TPOT_AWK_FUNCTIONS else "call" if call else "name"
                 out.append((kind, word, line, col, word))
                 i = j
                 continue
@@ -12727,6 +17767,9 @@ class TpotAwkParser:
         self.depth = self.braces = 0
         self.no_gt = False  # in the arguments of print, > is a redirection
         self.undefined = None  # the first call of a function no program here defines
+        self.functions = {}  # name: (parameters, body)
+        self.calls = []  # (name, number of arguments, token) of every call of a function of the program
+        self.in_function = False
 
     def peek(self):
         return self.tokens[self.pos]
@@ -12772,12 +17815,15 @@ class TpotAwkParser:
                 if self.kind() != "{":
                     raise self.fail()
                 rules.append((kind, None, self.block()))
+            elif kind == "function":
+                self.function()
             elif kind == "{":
                 rules.append(("main", None, self.block()))
             else:
                 pattern = self.expr()
-                if self.kind() == ",":  # range patterns
-                    raise TpotAwkStop(2)
+                if self.kind() == ",":  # a range: from a record that matches the first to one that matches the second
+                    self.take()
+                    pattern = ("range", pattern, self.expr(), len(rules))
                 if self.kind() == "{":
                     rules.append(("main", pattern, self.block()))
                 elif self.kind() in ("nl", ";", "eof"):
@@ -12785,7 +17831,38 @@ class TpotAwkParser:
                 else:
                     raise self.fail()
             self.terms()
+        for name, count, token in self.calls:
+            if name not in self.functions:
+                self.undefined = self.undefined or token
+            elif count > len(self.functions[name][0]):
+                raise TpotAwkStop(2)  # departs from every awk (fixtures/awk_departures.json: extra_args)
         return rules
+
+    def function(self) -> None:
+        """function name(parameters) { body }"""
+        self.take()
+        token = self.take()
+        if token[0] not in ("name", "call") or token[1] in self.functions:
+            raise TpotAwkSyntax(token, self.braces)
+        self.take("(")
+        params = []
+        while self.kind() != ")":
+            if params:
+                self.take(",")
+                self.newlines()
+            param = self.take("name")
+            if param[1] in params or param[1] == token[1]:
+                raise TpotAwkSyntax(param, self.braces)
+            params.append(param[1])
+        self.take(")")
+        self.newlines()
+        if self.kind() != "{":
+            raise self.fail()
+        self.in_function = True
+        try:
+            self.functions[token[1]] = (params, self.block())
+        finally:
+            self.in_function = False
 
     def block(self):
         self.take("{")
@@ -12828,11 +17905,14 @@ class TpotAwkParser:
         if kind == "for":
             self.take()
             self.take("(")
-            heads = [t[0] for t in self.tokens[self.pos:self.pos + 4]]
-            if heads == ["name", "in", "name", ")"]:
-                # for (key in array)
-                var, _, array, _ = self.tokens[self.pos:self.pos + 4]
-                self.pos += 4
+            # for (key in array); BusyBox also reads the key in parentheses, for ((key) in array)
+            wrap = 0
+            while self.awk.style == "busybox" and self.tokens[self.pos + wrap][0] == "(":
+                wrap += 1
+            heads = [t[0] for t in self.tokens[self.pos:self.pos + 2 * wrap + 4]]
+            if heads == ["("] * wrap + ["name"] + [")"] * wrap + ["in", "name", ")"]:
+                var, array = self.tokens[self.pos + wrap], self.tokens[self.pos + 2 * wrap + 2]
+                self.pos += 2 * wrap + 4
                 self.newlines()
                 return ("forin", var[1], array[1], self.nested(self.statement), var[2])
             init = None if self.kind() == ";" else self.simple_expr()
@@ -12877,6 +17957,11 @@ class TpotAwkParser:
         if kind in ("next", "break", "continue"):
             self.take()
             return (kind,)
+        if kind == "return":
+            if not self.in_function:
+                raise self.fail()
+            self.take()
+            return ("return", None if self.kind() in self.TERMINATORS else self.expr())
         if kind == "exit":
             self.take()
             return ("exit", None if self.kind() in self.TERMINATORS else self.expr())
@@ -12884,6 +17969,15 @@ class TpotAwkParser:
             self.take()
             token = self.take("name")
             items = self.subscripts() if self.kind() == "[" else None
+            if self.kind() == "," and self.awk.style == "busybox":
+                # BusyBox reads `delete a[1], a[2]` as the deletion of a list, which is no array: it stops
+                #   there when it runs (notarray). Not emulated: 1.36.1-musl answers `delete a, b` with status 1
+                #   and no message, and says "Not an array" twice when a statement follows the list
+                while self.kind() == ",":
+                    self.take()
+                    self.newlines()
+                    self.expr()
+                return ("notarray", token[2])
             return ("delete", token[1], items, token[2])
         return ("expr", self.expr())
 
@@ -13073,8 +18167,8 @@ class TpotAwkParser:
             self.take()
             args = self.call_args() if self.kind() == "(" else None
             if kind == "call":
-                self.undefined = self.undefined or token
-                return ("num", 0.0)
+                self.calls.append((token[1], len(args), token))
+                return ("call", token[1], args, token[2])
             if args is None and token[1] != "length":
                 raise TpotAwkSyntax(token, self.braces)
             args = args or []
@@ -13110,28 +18204,25 @@ def tpot_awk_shallow(tree, limit: int) -> bool:
 TPOT_AWK_INTEGER = re.compile(r"-?(?:0|[1-9][0-9]{0,17})")
 
 
-def tpot_awk_hash_elf(data: bytes) -> int:
-    """gst_hash_string of gawk 4.1 and later (the ELF hash), as its str_array uses it."""
-    h = 0
-    for byte in data:
-        h = ((h << 4) + byte) & 0xffffffff
-        g = h & 0xf0000000
-        if g:
-            h ^= g >> 24
-            h ^= g
-    return h
-
-
 def tpot_awk_hash_sdbm(data: bytes) -> int:
-    """gst_hash_string of gawk 4.0 (the sdbm hash)."""
+    """awk_hash of gawk 4.0 to 5.2 (the sdbm hash, h * 65599 + c) where char is unsigned (arm64, recorded)."""
     h = 0
     for byte in data:
         h = (byte + (h << 6) + (h << 16) - h) & 0xffffffff
     return h
 
 
+def tpot_awk_hash_sdbm_signed(data: bytes) -> int:
+    """awk_hash of gawk where char is signed: a byte beyond ASCII counts below 0 (x86_64, recorded in
+    fixtures/awk_platform.json; MIPS derived from its ABI, unverified)."""
+    h = 0
+    for byte in data:
+        h = (byte - (byte & 0x80) * 2 + (h << 6) + (h << 16) - h) & 0xffffffff
+    return h
+
+
 def tpot_awk_hash_fnv1a(data: bytes) -> int:
-    """The hash of mawk 1.3.4's arrays (FNV-1a)."""
+    """hash2() of mawk 1.3.4, the hash of its arrays (FNV-1a)."""
     h = 2166136261
     for byte in data:
         h = ((h ^ byte) * 16777619) & 0xffffffff
@@ -13139,8 +18230,11 @@ def tpot_awk_hash_fnv1a(data: bytes) -> int:
 
 
 def tpot_awk_hash_mawk(data: bytes) -> int:
-    """ahash() of mawk 1.3.3."""
+    """ahash() of mawk 1.3.3: every byte of a key of up to 10, else the first and the last five in turn
+    (bytes unsigned; MIPS, the EdgeRouter X, unverified: char may be signed there)."""
     first = second = len(data)
+    if len(data) > 10:
+        data = bytes(b for pair in zip(data[:5], data[:-6:-1]) for b in pair)
     for byte in data:
         first = (first + first + byte) & 0xffffffff
         second = (second + first) & 0xffffffff
@@ -13148,54 +18242,354 @@ def tpot_awk_hash_mawk(data: bytes) -> int:
 
 
 def tpot_awk_hash_busybox(data: bytes) -> int:
-    """hashidx() of BusyBox awk."""
+    """hashidx() of BusyBox awk (1.14.1 to 1.36.1: h * 63 + c), bytes unsigned on amd64 and arm64 alike (recorded in
+    fixtures/awk_platform.json; MIPS unverified)."""
     h = 0
     for byte in data:
-        h = (byte + (h << 6) + (h >> 26)) & 0xffffffff
+        h = (byte + (h << 6) - h) & 0xffffffff
     return h
 
 
-def tpot_awk_hash_order(keys: list, hash_of, sizes: tuple, grow) -> list:
-    """The keys of an array as a hash table with chains lists them: the keys came in their order, each at the
-    head of its bucket; the table grows to the next size when grow(count, size) says so (the old buckets are
-    walked in order and each key put at the head of its new bucket); the listing walks the buckets in order."""
-    size_at, size = 0, sizes[0]
-    buckets: dict = {}
-    hashes = {key: hash_of(key.encode("utf-8", "surrogateescape")) for key in keys}
-    for count, key in enumerate(keys, 1):
-        if size_at + 1 < len(sizes) and grow(count, size):
-            size_at, size = size_at + 1, sizes[size_at + 1]
+def tpot_awk_key_bytes(key: str) -> bytes:
+    """The bytes of a subscript as the awk holds them."""
+    try:
+        return key.encode("utf-8", "surrogateescape")
+    except UnicodeEncodeError:
+        return key.encode("utf-8", "surrogatepass")
+
+
+class TpotAwkArray(dict):
+    """The elements of an array (subscript: value) and, in table, the hash table of the persona's awk that
+    gives the order of `for (k in a)`; the interpreter tells the table of every reference, insertion and
+    deletion as the awk sees them."""
+
+    __slots__ = ("table",)
+
+
+class TpotAwkChains:
+    """A hash table with chains as gawk's (assoc_lookup and grow_table of array.c in 4.0, str_array.c from 4.1)
+    and BusyBox's (hash_find, hash_rebuild, hash_remove, hash_clear of editors/awk.c):
+    a new key goes to the head of its chain; on the insertion that makes grow(count, size) true the table takes
+    the next size first, walking the old chains in bucket order and putting each key at the head of its new
+    chain; for-in walks the buckets in order. With reset the table starts again at its first size when its last
+    key goes, else a cleared table keeps its size."""
+
+    def __init__(self, awk, hash_of, sizes: tuple, grow, reset: bool) -> None:
+        self.awk, self.hash_of, self.sizes, self.grow, self.reset = awk, hash_of, sizes, grow, reset
+        self.at = 0
+        self.clear()
+
+    def clear(self) -> None:
+        self.count, self.buckets = 0, {}
+        if self.reset:
+            self.at = 0
+
+    def index(self, key: str) -> int:
+        self.awk.charge(len(key) >> 4)
+        return self.hash_of(self.awk.to_bytes(key)) % self.sizes[self.at]
+
+    def add(self, key: str) -> None:
+        self.count += 1
+        if self.at + 1 < len(self.sizes) and self.grow(self.count, self.sizes[self.at]):
+            self.at += 1
             moved: dict = {}
-            for index in sorted(buckets):
-                for old in buckets[index]:
-                    moved.setdefault(hashes[old] % size, []).insert(0, old)
-            buckets = moved
-        buckets.setdefault(hashes[key] % size, []).insert(0, key)
-    return [key for index in sorted(buckets) for key in buckets[index]]
+            self.awk.charge(self.count)
+            for index in sorted(self.buckets):
+                for old in self.buckets[index]:
+                    moved.setdefault(self.index(old), []).insert(0, old)
+            self.buckets = moved
+        chain = self.buckets.setdefault(self.index(key), [])
+        self.awk.charge(len(chain) >> 3)
+        chain.insert(0, key)
+
+    def reference(self, key: str, ival, exists: bool, create: bool) -> None:
+        """One reference to array[key] (ival: the integer of a numeric subscript, or None)."""
+        if create and not exists:
+            self.add(key)
+
+    def delete(self, key: str, ival, exists: bool) -> None:
+        if not exists:
+            return
+        chain = self.buckets.get(self.index(key), [])
+        self.awk.charge(len(chain) >> 3)
+        if key in chain:
+            chain.remove(key)
+            self.count -= 1
+            if not self.count and self.reset:
+                self.clear()
+
+    def load(self, count: int) -> None:
+        """split(): the array cleared, then the keys 1 to count."""
+        self.clear()
+        for index in range(1, count + 1):
+            self.add(str(index))
+
+    def keys(self, array: dict) -> list:
+        return [key for index in sorted(self.buckets) for key in self.buckets[index]]
+
+
+# the sizes of gawk's string tables (grow_table of array.c in 4.0.2 and of str_array.c in 4.1.4 to 5.2.1)
+TPOT_AWK_GAWK_SIZES = (13, 127, 1021, 8191, 16381, 32749, 65497, 131101, 262147, 524309, 1048583, 2097169)
+
+
+class TpotAwkGawkTable:
+    """The array of gawk 4.1 and later (cint_array.c): integer subscripts in a tree of their own, the others in
+    a string table (str_array.c) that for-in lists first; the integers follow in ascending order."""
+
+    def __init__(self, awk) -> None:
+        self.strings = TpotAwkChains(awk, awk.gawk_hash, TPOT_AWK_GAWK_SIZES,
+                                     lambda count, size: count // size > 2, True)
+
+    def clear(self) -> None:
+        self.strings.clear()
+
+    def reference(self, key: str, ival, exists: bool, create: bool) -> None:
+        if not TPOT_AWK_INTEGER.fullmatch(key):
+            self.strings.reference(key, ival, exists, create)
+
+    def delete(self, key: str, ival, exists: bool) -> None:
+        if not TPOT_AWK_INTEGER.fullmatch(key):
+            self.strings.delete(key, ival, exists)
+
+    def load(self, count: int) -> None:
+        self.strings.clear()  # the subscripts of split() are integers
+
+    def keys(self, array: dict) -> list:
+        integers = sorted((int(k) for k in array if TPOT_AWK_INTEGER.fullmatch(k)), key=lambda k: (k < 1, k))
+        return self.strings.keys(array) + [str(k) for k in integers]
+
+
+class TpotAwkMawkNode:
+    """An element of mawk's table: its string (None before it has one), the hash of it and its integer
+    (None for none)."""
+
+    __slots__ = ("sval", "hval", "ival")
+
+    def __init__(self, sval, hval: int, ival) -> None:
+        self.sval, self.hval, self.ival = sval, hval, ival
+
+
+class TpotAwkMawkTable:
+    """The array of mawk (array.w of 1.3.3 and 1.3.4): a split array a[1..n] after split(), else a table of
+    64 buckets, doubled when it holds more than 12 keys per bucket, with two lists in each bucket: the
+    elements by their string (hash & mask) and by their integer (value & mask). A numeric subscript with an
+    integer value is looked up in the integer lists, every other one in the string lists; the string lists are
+    made from the integer ones when a string subscript or for-in first needs them. Every element found moves
+    to the front of its list, a new one goes to the front; for-in walks the string lists in bucket order. A
+    doubling splits each list in order into the old bucket and the new one. As mawk, an integer subscript new
+    to a table with strings goes to the integer list of the mask before a doubling it caused."""
+
+    START = 63  # STARTING_HMASK
+    AVERAGE = 12  # MAX_AVE_LIST_LENGTH
+
+    def __init__(self, awk, hash_of) -> None:
+        self.awk, self.hash_of = awk, hash_of
+        self.clear()
+
+    def clear(self) -> None:
+        self.kind = self.size = self.mask = self.limit = 0  # kind: 1 integers, 2 strings, 4 a split array
+        self.slists, self.ilists, self.by_sval, self.by_ival = [], [], {}, {}
+
+    def lists(self, mask: int) -> None:
+        self.mask, self.limit = mask, (mask + 1) * self.AVERAGE
+        self.slists, self.ilists = [[] for _ in range(mask + 1)], [[] for _ in range(mask + 1)]
+
+    def split_to_table(self) -> None:
+        mask = self.START
+        while self.size > (mask + 1) * self.AVERAGE:
+            mask = mask * 2 + 1
+        self.lists(mask)
+        self.awk.charge(self.size)
+        for ival in range(1, self.size + 1):
+            node = self.by_ival[ival] = TpotAwkMawkNode(None, 0, ival)
+            self.ilists[ival & mask].insert(0, node)
+        self.kind = 1
+
+    def double(self) -> None:
+        old, new = self.mask, self.mask * 2 + 1
+        self.awk.charge(self.size)
+        self.slists += [[] for _ in range(old + 1)]
+        self.ilists += [[] for _ in range(old + 1)]
+        for lists, part in ((self.slists, "hval"), (self.ilists, "ival")):
+            if self.kind & (2 if part == "hval" else 1):
+                for i in range(old + 1):
+                    chain = lists[i]
+                    lists[i] = [node for node in chain if getattr(node, part) & new == i]
+                    lists[i + old + 1] = [node for node in chain if getattr(node, part) & new != i]
+        self.mask, self.limit = new, (new + 1) * self.AVERAGE
+
+    def add_strings(self) -> None:
+        if self.kind == 0:
+            self.lists(self.START)
+            self.kind = 2
+            return
+        if self.kind == 4:
+            self.split_to_table()
+        self.awk.charge(self.size)
+        for chain in self.ilists:
+            for node in chain:
+                node.sval = str(node.ival)
+                node.hval = self.hash_of(node.sval.encode("ascii"))
+                self.by_sval[node.sval] = node
+                self.slists[node.hval & self.mask].insert(0, node)
+        self.kind |= 2
+
+    def front(self, chain: list, node) -> bool:
+        """Whether node is in chain; it moves to the front there."""
+        self.awk.charge(len(chain) >> 3)
+        if node is None or node not in chain:
+            return False
+        at = chain.index(node)
+        if at:
+            del chain[at]
+            chain.insert(0, node)
+        return True
+
+    def by_string(self, key: str, create: bool):
+        """(the node of a string subscript or None, whether the table doubled)"""
+        if not self.kind & 2:
+            self.add_strings()
+        self.awk.charge(len(key) >> 4)
+        hval = self.hash_of(self.awk.to_bytes(key))
+        index = hval & self.mask
+        node = self.by_sval.get(key)
+        if self.front(self.slists[index], node):
+            return node, False
+        if not create:
+            return None, False
+        node = self.by_sval[key] = TpotAwkMawkNode(key, hval, None)
+        self.size += 1
+        doubled = self.size > self.limit
+        if doubled:
+            self.double()
+            index = hval & self.mask
+        self.slists[index].insert(0, node)
+        return node, doubled
+
+    def by_integer(self, ival: int, create: bool):
+        index = ival & self.mask
+        node = self.by_ival.get(ival)
+        if self.front(self.ilists[index], node):
+            return node
+        if self.kind & 2:
+            node = self.by_string(str(ival), create)[0]  # index stays that of the mask before a doubling
+            if node is None:
+                return None
+        elif create:
+            node = TpotAwkMawkNode(None, 0, None)
+            self.size += 1
+            if self.size > self.limit:
+                self.double()
+                index = ival & self.mask
+        else:
+            return None
+        node.ival = ival
+        self.by_ival[ival] = node
+        self.kind |= 1
+        self.ilists[index].insert(0, node)
+        return node
+
+    def reference(self, key: str, ival, exists: bool, create: bool) -> None:
+        if self.size == 0 and not create:
+            return
+        if ival is None:
+            self.by_string(key, create)
+            return
+        if self.kind == 4:
+            if 1 <= ival <= self.size:
+                return
+            if not create:
+                return
+            self.split_to_table()
+        elif self.kind == 0:
+            self.lists(self.START)
+            self.kind = 1
+        self.by_integer(ival, create)
+
+    def delete(self, key: str, ival, exists: bool) -> None:
+        if self.size == 0:
+            return
+        if ival is not None:
+            if self.kind == 4:
+                if not 1 <= ival <= self.size:
+                    return
+                self.split_to_table()
+            node = self.by_integer(ival, False)
+            if node is None:
+                return
+            self.ilists[ival & self.mask].pop(0)  # found: at the front
+            self.by_ival.pop(ival, None)
+            if node.sval is not None:
+                self.slists[node.hval & self.mask].remove(node)
+                self.by_sval.pop(node.sval, None)
+        else:
+            node = self.by_string(key, False)[0]
+            if node is None:
+                return
+            self.slists[node.hval & self.mask].pop(0)
+            self.by_sval.pop(key, None)
+            if node.ival is not None:
+                chain = self.ilists[node.ival & self.mask]
+                if node in chain:
+                    chain.remove(node)
+                else:  # a node put into a list of the mask before a doubling
+                    for chain in self.ilists:
+                        if node in chain:
+                            chain.remove(node)
+                            break
+                self.by_ival.pop(node.ival, None)
+        self.size -= 1
+        if not self.size:
+            self.clear()
+
+    def load(self, count: int) -> None:
+        self.clear()
+        if count:
+            self.kind, self.size = 4, count
+
+    def keys(self, array: dict) -> list:
+        if not self.size:
+            return []
+        if not self.kind & 2:
+            self.add_strings()
+        return [node.sval for chain in self.slists for node in chain]
 
 
 class TpotAwkTypes:
-    """mawk's view of the names while it parses: an array or a scalar by the first use, the other use is
-    "illegal reference to array a" / "illegal reference to variable b" (the first clash, status 2). length(x):
+    """mawk's view of the names while it parses: an array or a scalar by the first use, every other use is
+    "illegal reference to array a" / "illegal reference to variable b" with its line (status 2; mawk stops
+    at the fifth error, MAX_COMPILE_ERRORS, recorded in fixtures/awk_clashes.json). length(x):
     mawk 1.3.3 has no length(array), so x is a scalar there; 1.3.4 of 2020 takes an array but makes an untyped
     x a scalar; from 2023 on it leaves x as it is (recorded with debian:9, debian:12 and debian:13)."""
 
+    MAX_ERRORS = 5  # mawk's MAX_COMPILE_ERRORS
+
     def __init__(self, old_mawk: bool, new_mawk: bool = False) -> None:
         self.kinds: dict = {}
+        self.said: list = []
         self.old_mawk, self.new_mawk = old_mawk, new_mawk
+        self.local = frozenset()
 
-    def check(self, rules) -> str:
+    def check(self, rules, functions: dict | None = None) -> str:
+        """The clashes of the rules and the function bodies (whose parameters are names of their own)."""
         try:
             self.walk(rules)
-        except TpotAwkStop as stop:
-            return stop.text
-        return ""
+            for params, body in (functions or {}).values():
+                self.local = frozenset(params)
+                self.walk(body)
+        except TpotAwkStop:
+            pass  # the fifth clash
+        return "".join(self.said)
 
     def use(self, name: str, kind: str, line) -> None:
+        if name in self.local:
+            return
         before = self.kinds.setdefault(name, kind)
         if before != kind:
             what = "array" if before == "array" else "variable"
-            raise TpotAwkStop(2, f"awk: line {line}: illegal reference to {what} {name}\n")
+            self.said.append(f"awk: line {line}: illegal reference to {what} {name}\n")
+            if len(self.said) >= self.MAX_ERRORS:
+                raise TpotAwkStop(2)
 
     def walk(self, node) -> None:
         stack = [node]
@@ -13206,6 +18600,9 @@ class TpotAwkTypes:
             op = node[0] if node and isinstance(node[0], str) else None
             if op == "var":
                 self.use(node[1], "scalar", node[2])
+                continue
+            if op == "call":  # a name as an argument is typed by the function
+                stack.extend(reversed([arg for arg in node[2] if arg[0] != "var"]))
                 continue
             if op == "index":
                 self.use(node[1], "array", node[3])
@@ -13244,11 +18641,14 @@ class TpotAwk:
     MAX_STRING = 1024 * 1024  # characters of one value
     MAX_SECONDS = 1.0  # of one run on the reactor, checked with every charge of steps
     MAX_STEPS = 2_000_000  # evaluated nodes, records, characters touched and matcher work
+    FLOOR_STEPS = 256  # steps every run takes whatever the session has left
     MAX_LIVE = 32 * 1024 * 1024  # characters in all variables together
     STATE_STEPS = 32  # steps per automaton state built
     MAX_NESTING = 32  # nested blocks, parentheses and operators while parsing
     MAX_DEPTH = 200  # levels of the program tree
     MAX_FIELDS = 32767
+    MAX_CALLS = 100  # nested calls; the Python frames (6 to 15 per call) end deeper programs earlier, with status 2
+    clock = staticmethod(time.time)  # the seconds that seed rand()
     MAX_WIDTH = 4096  # width and precision of a printf conversion
     PRINT = ("print", [])
 
@@ -13258,6 +18658,12 @@ class TpotAwk:
         new_mawk = self.new_mawk = style == "mawk" and (version.split() + ["0"])[1] >= "20230000"
         self.intervals = style != "mawk" or (version.split() + ["0"])[1] >= "20200717"
         self.old_mawk = style == "mawk" and (version.split() + ["0"])[0] < "1.3.4"
+        found = re.match(r"BusyBox v(\d+)\.(\d+)", version) if style == "busybox" else None
+        # mktime: not in awk.c of 1.14.1, in 1.19.4 and 1.24.1 (derived, not recorded; 1.15 to 1.18 unverified)
+        old_busybox = found is not None and (int(found[1]), int(found[2])) < (1, 19)
+        busybox = TPOT_AWK_BUSYBOX - {"mktime"} if old_busybox else TPOT_AWK_BUSYBOX
+        self.builtins = (TPOT_AWK_GAWK if style == "gawk" else busybox if style == "busybox"
+                         else frozenset() if self.old_mawk else TPOT_AWK_TIME)
         self.parse_line = None  # the line of the regex compiled with the program
         self.int_limit = 2.0 ** 31 if style == "mawk" and not new_mawk else 2.0 ** 63
         self.source_name = "cmd. line"
@@ -13268,15 +18674,69 @@ class TpotAwk:
         self.deadline = min(time.monotonic() + self.MAX_SECONDS, self.limit)
         self.sizes, self.live = {}, 0  # characters per variable, in all of them
         self.arrays, self.elements = {}, 0  # the arrays by name (keys in the order they came), nodes in all
+        self.functions, self.frames = {}, []  # the functions of the program; the locals of each call
+        self.ranges = set()  # the range patterns between their first and their last record
+        self.random = None  # the generator of rand(), made with the first rand() or srand()
         self.record, self.fields, self.regexes, self.in_begin = TPOT_AWK_UNINIT, [], {}, True
         self.libc = CowrieConfig.get("shell", "text_libc", fallback="glibc")
         self.fs_option = False  # FS of -F: compiled at the start, as the real awk does
+        # mawk and BusyBox count bytes in every locale, gawk characters in a UTF-8 locale and bytes in the C locale
+        #   (recorded in fixtures/awk_lang.json; DSM's POSIX locale: [shell] text_collate posix); in bytes, a string
+        #   holds one character per byte (latin-1)
+        self.bytes = style != "gawk" or CowrieConfig.get("shell", "text_collate", fallback="c") == "posix"
+        # [shell] arch: C casts of a double (x86_64, arm64 recorded in awk_platform.json; 32-bit ARM, MIPS unverified)
+        arch = CowrieConfig.get("shell", "arch", fallback="linux-x64-lsb")
+        self.x86 = arch == "linux-x64-lsb"
+        self.wide_long = arch in ("linux-x64-lsb", "linux-aarch64-lsb")  # a long of 64 bits
+        self.gawk_hash = tpot_awk_hash_sdbm_signed if arch in ("linux-x64-lsb", "linux-mips-lsb", "linux-mips-msb") \
+            else tpot_awk_hash_sdbm
+
+    # -- bytes and characters
+
+    def from_bytes(self, data: bytes) -> str:
+        return data.decode("latin-1") if self.bytes else data.decode("utf-8", "surrogateescape")
+
+    def from_text(self, text: str) -> str:
+        """A text of the command line (program, -v, -F, operands) as the strings of this awk."""
+        return tpot_awk_key_bytes(text).decode("latin-1") if self.bytes and not text.isascii() else text
+
+    def to_bytes(self, text: str) -> bytes:
+        if self.bytes:
+            try:
+                return text.encode("latin-1")
+            except UnicodeEncodeError:  # a message with a text of the command line
+                pass
+        return tpot_awk_key_bytes(text)
+
+    def c_int(self, x: float) -> int:
+        """(int) of a double: x86_64 gives INT_MIN out of its range, arm64 saturates."""
+        if x != x:
+            return -2 ** 31 if self.x86 else 0
+        if -2.0 ** 31 <= x < 2.0 ** 31:
+            return int(x)
+        return -2 ** 31 if self.x86 else 2 ** 31 - 1 if x > 0 else -2 ** 31
+
+    def c_long(self, x: float) -> int:
+        """(long) of a double on a 64-bit platform (unverified beyond the range: not recorded)."""
+        if x != x:
+            return -2 ** 63 if self.x86 else 0
+        if -2.0 ** 63 <= x < 2.0 ** 63:
+            return int(x)
+        return -2 ** 63 if self.x86 else 2 ** 63 - 1 if x > 0 else -2 ** 63
+
+    def c_unsigned(self, x: float) -> int:
+        """(unsigned) of a double: x86_64 takes the low 32 bits of a 64-bit conversion, arm64 saturates."""
+        if self.x86:
+            return self.c_long(x) & 0xffffffff
+        if not x > 0:
+            return 0
+        return 0xffffffff if x >= 2.0 ** 32 else int(x)
 
     # -- limits and messages
 
     def charge(self, steps: int) -> None:
         self.steps += steps
-        if self.steps > self.MAX_STEPS or time.monotonic() > self.deadline:
+        if self.steps > self.MAX_STEPS or self.steps > self.FLOOR_STEPS and time.monotonic() > self.deadline:
             raise TpotAwkStop(2)
 
     def cap(self, text: str) -> str:
@@ -13333,11 +18793,8 @@ class TpotAwk:
         return 1, f"{where}{source}\n{where}{' ' * col}^ {what}\n"
 
     def undefined_message(self, token, program: str) -> tuple:
-        if self.style == "busybox":
-            return 1, f"awk: cmd. line:{token[2]}: Call to undefined function\n"
-        if self.style == "mawk":
-            return 2, f"awk: line {program.count(chr(10)) + 2}: function {token[1]} never defined\n"
-        return 2, f"awk: {self.source_name}:{token[2]}: fatal: function `{token[1]}' not defined\n"
+        """mawk on a call of a function the program does not define, reached or not (gawk and BusyBox: call)."""
+        return 2, f"awk: line {program.count(chr(10)) + 2}: function {token[1]} never defined\n"
 
     # -- values
 
@@ -13361,16 +18818,50 @@ class TpotAwk:
             return ("-" if math.copysign(1.0, x) < 0 else "+" if self.style == "gawk" else "") + "nan"
         if x in (math.inf, -math.inf):
             return ("-" if x < 0 else "+" if self.style == "gawk" else "") + "inf"
-        if x == int(x) and abs(x) < self.int_limit:
-            return str(int(x))
+        if x == int(x):
+            whole = self.whole_text(x)
+            if whole is not None:
+                return whole
         if not isinstance(fmt, str) or fmt == "%.6g":
             return "%.6g" % x
         return self.format(fmt, [x])
 
+    def whole_text(self, x: float):
+        """The text of a number with an integer value, or None for the format (recorded in fixtures/awk_lang.json):
+        gawk writes every one in full; BusyBox those a long long holds (n == (long long)n: 2**63 is
+        9223372036854775807 on arm64, where the conversion saturates, and 9.22337e+18 on x86_64,
+        fixtures/awk_platform.json); mawk 1.3.3 and 1.3.4 of 2020 those below 2**31; mawk from 2023 from -2**63 up
+        to 2**64 (2**64 itself as 18446744073709551615 in 20240123)."""
+        if self.style == "gawk":
+            return str(int(x))
+        if self.style == "busybox":
+            if -2.0 ** 63 <= x < 2.0 ** 63 or (x == 2.0 ** 63 and not self.x86):
+                return str(min(int(x), 2 ** 63 - 1))
+            return None
+        if abs(x) < self.int_limit:
+            return str(int(x))
+        if self.new_mawk and -2.0 ** 63 <= x <= 2.0 ** 64:
+            date = (self.version.split() + ["0"])[1]
+            return "18446744073709551615" if x == 2.0 ** 64 and date < "20250000" else str(int(x))
+        return None
+
     def text(self, value) -> str:
         if not isinstance(value, float):
             return value
-        return self.num_text(value, "%.6g" if self.style == "busybox" else self.vars["CONVFMT"])
+        if self.style == "busybox" and isinstance(value, TpotAwkNumber):
+            if value.cache is None:
+                value.cache = self.num_text(value, self.vars["CONVFMT"])
+            return value.cache
+        return self.num_text(value, self.vars["CONVFMT"])
+
+    def keep(self, value):
+        """A value as a variable holds it: BusyBox's copy of a number (copyvar) keeps its own text, the one the number
+        had when it was copied (derived from BusyBox awk.c copyvar, not recorded)."""
+        if self.style != "busybox" or not isinstance(value, float):
+            return value
+        number = TpotAwkNumber(value)
+        number.cache = getattr(value, "cache", None)
+        return number
 
     def out_text(self, value) -> str:
         return self.num_text(value, self.vars["OFMT"]) if isinstance(value, float) else value
@@ -13547,8 +19038,44 @@ class TpotAwk:
     # -- variables and arrays: a name is a scalar or an array by its first use (gawk says so when the other
     #    use comes, mawk while it parses: TpotAwkTypes; BusyBox, and mawk at run time, take both without a word)
 
+    def local(self, name: str):
+        """The frame of the call whose parameter name is, or None (a global)."""
+        if self.frames and name in self.frames[-1][0]:
+            return self.frames[-1][0]
+        return None
+
+    def kind_of(self, name: str) -> str:
+        """array, scalar or untyped: what a name is where the program runs now."""
+        frame = self.local(name)
+        if frame is not None:
+            value = frame[name]
+            return "array" if isinstance(value, TpotAwkArray) else "untyped" if isinstance(
+                value, TpotAwkUnbound) else "scalar"
+        return "array" if name in self.arrays else "scalar" if name in self.vars else "untyped"
+
+    def bind(self, unbound: TpotAwkUnbound) -> TpotAwkArray:
+        """The array an untyped parameter becomes: the caller's name becomes the same array."""
+        if unbound.name is None:
+            return self.new_array()
+        if unbound.frame is None:
+            return self.global_array(unbound.name)
+        value = unbound.frame.get(unbound.name)
+        if isinstance(value, TpotAwkArray):
+            return value
+        array = self.bind(value) if isinstance(value, TpotAwkUnbound) else self.new_array()
+        unbound.frame[unbound.name] = array
+        return array
+
     def scalar(self, name: str):
         """The value of a scalar; an untyped name becomes one."""
+        frame = self.local(name)
+        if frame is not None:
+            value = frame[name]
+            if isinstance(value, TpotAwkArray):
+                if self.style == "gawk":
+                    self.fatal(f"attempt to use array `{name}' in a scalar context", "", "")
+                return TPOT_AWK_UNINIT
+            return TPOT_AWK_UNINIT if isinstance(value, TpotAwkUnbound) else value
         if name in self.arrays:
             if self.style != "gawk":
                 return TPOT_AWK_UNINIT
@@ -13559,22 +19086,74 @@ class TpotAwk:
 
     def array(self, name: str) -> dict:
         """The array of a name; an untyped name becomes one."""
+        frame = self.local(name)
+        if frame is not None:
+            value = frame[name]
+            if isinstance(value, TpotAwkArray):
+                return value
+            if not isinstance(value, TpotAwkUnbound) and self.style == "gawk":
+                self.fatal(f"attempt to use scalar parameter `{name}' as an array", "", "")
+            frame[name] = array = self.bind(value) if isinstance(value, TpotAwkUnbound) else self.new_array()
+            return array
+        return self.global_array(name)
+
+    def global_array(self, name: str) -> dict:
         found = self.arrays.get(name)
         if found is None:
             if name in self.vars:
                 if self.style == "gawk":
                     self.fatal(f"attempt to use scalar `{name}' as an array", "", "")
                 self.vars.pop(name, None)
-            found = self.arrays[name] = {}
+            found = self.arrays[name] = self.new_array()
         return found
+
+    def new_array(self) -> TpotAwkArray:
+        array = TpotAwkArray()
+        if self.style == "gawk":
+            # a table that grows when it holds more than two keys per bucket and starts again when emptied; gawk
+            #   4.0 keeps every subscript there (recorded with gawk 4.0.2, 4.1.4, 5.1.0 and 5.2.1,
+            #   fixtures/awk_big.json)
+            array.table = TpotAwkChains(self, self.gawk_hash, TPOT_AWK_GAWK_SIZES,
+                                        lambda count, size: count // size > 2, True) \
+                if self.version.startswith("4.0") else TpotAwkGawkTable(self)
+        elif self.style == "mawk":
+            # recorded with mawk 1.3.3, 1.3.4 20200120, 20240123 and 20250131 (fixtures/awk_big.json)
+            array.table = TpotAwkMawkTable(self, tpot_awk_hash_mawk if self.old_mawk else tpot_awk_hash_fnv1a)
+        else:
+            found = re.match(r"BusyBox v(\d+)\.(\d+)", self.version)
+            # from 1.34 the table grows when it holds more than eight keys per bucket, before at more than ten
+            #   (the sources of 1.14.1 to 1.36.1; recorded with 1.36.1-musl, fixtures/awk_big.json)
+            new = found is None or (int(found.group(1)), int(found.group(2))) >= (1, 34)
+            array.table = TpotAwkChains(self, tpot_awk_hash_busybox, (61, 251, 1021, 4093, 16381, 65521),
+                                        (lambda count, size: count > size * 8) if new else
+                                        (lambda count, size: count // size > 10), False)
+        return array
 
     def key(self, items: list) -> str:
         """The subscript of an element: the texts of its expressions, joined by SUBSEP."""
-        return self.text(self.vars["SUBSEP"]).join(self.text(self.value(item)) for item in items)
+        return self.subscript(items)[0]
+
+    def subscript(self, items: list) -> tuple:
+        """(the subscript, its integer for a single numeric value with an integer value in the awk's int, else
+        None)."""
+        if len(items) == 1:
+            value = self.value(items[0])
+            ival = None
+            if isinstance(value, float) and value == value and abs(value) < self.int_limit and value == int(value):
+                ival = int(value)
+            return self.text(value), ival
+        return self.text(self.vars["SUBSEP"]).join(self.text(self.value(item)) for item in items), None
+
+    def reference(self, array: TpotAwkArray, items: list, create: bool) -> str:
+        """The subscript of a reference to an element, told to the table of the array."""
+        key, ival = self.subscript(items)
+        array.table.reference(key, ival, key in array, create)
+        return key
 
     def element(self, name: str, items: list):
         """The element (made as the uninitialized value where there is none)."""
-        array, key = self.array(name), self.key(items)
+        array = self.array(name)
+        key = self.reference(array, items, True)
         if key not in array:
             self.insert(array, key, TPOT_AWK_UNINIT)
         return array[key]
@@ -13590,15 +19169,18 @@ class TpotAwk:
         self.live += 0 if isinstance(value, float) else len(value)
         if self.live > self.MAX_LIVE:
             raise TpotAwkStop(2)
-        array[key] = value
+        array[key] = self.keep(value)
 
     def remove(self, name: str, items) -> None:
         """delete a[k], or delete a."""
         array = self.array(name)
         if items is None:
             array.clear()
+            array.table.clear()
             return
-        array.pop(self.key(items), None)
+        key, ival = self.subscript(items)
+        array.table.delete(key, ival, key in array)
+        array.pop(key, None)
 
     def get(self, target):
         if target[0] == "var":
@@ -13611,7 +19193,19 @@ class TpotAwk:
         if target[0] == "field":
             self.set_field(self.field_index(self.value(target[1])), value)
         elif target[0] == "index":
-            self.insert(self.array(target[1]), self.key(target[2]), value)
+            array = self.array(target[1])
+            self.insert(array, self.reference(array, target[2], True), value)
+        elif self.local(target[1]) is not None:
+            frame, sizes = self.frames[-1]
+            if isinstance(frame[target[1]], TpotAwkArray):
+                if self.style == "gawk":
+                    self.fatal(f"attempt to use array `{target[1]}' in a scalar context", "", "")
+            size = 0 if isinstance(value, float) else len(value)
+            self.live += size - sizes.get(target[1], 0)
+            if self.live > self.MAX_LIVE:
+                raise TpotAwkStop(2)
+            sizes[target[1]] = size
+            frame[target[1]] = self.keep(value)
         elif target[1] == "NF":
             self.set_nf(value)
         elif target[1] == "RS":  # records end at newlines
@@ -13626,32 +19220,23 @@ class TpotAwk:
             if self.live > self.MAX_LIVE:
                 raise TpotAwkStop(2)
             self.sizes[target[1]] = size
-            self.vars[target[1]] = value
+            self.vars[target[1]] = self.keep(value)
 
     def keys_in_order(self, array: dict) -> list:
         """The keys as `for (k in a)` of the persona's awk lists them: the order of its hash table (recorded
-        with gawk 4.0.2 and 5.1.0, mawk 1.3.3 and 1.3.4, BusyBox 1.25 to 1.36: tpot_awk_hash_order)."""
-        keys = list(array)
-        if self.style == "busybox":
-            return tpot_awk_hash_order(keys, tpot_awk_hash_busybox, (61, 251, 1021, 4093, 16381, 65521),
-                                       lambda count, size: count // size > 10)
-        if self.style == "mawk":
-            hash_of = tpot_awk_hash_mawk if self.old_mawk else tpot_awk_hash_fnv1a
-            return tpot_awk_hash_order(keys, hash_of, (64,), lambda count, size: False)
-        if self.version.startswith("4.0"):
-            return tpot_awk_hash_order(keys, tpot_awk_hash_sdbm, (13, 127, 1021, 8191, 131071, 1048573),
-                                       lambda count, size: count // size > 2)
-        # gawk 4.1 and later: the integers in their order (cint_array), then the strings by their hash
-        integers = sorted((int(k) for k in keys if TPOT_AWK_INTEGER.fullmatch(k)), key=lambda k: (k < 1, k))
-        strings = [k for k in keys if not TPOT_AWK_INTEGER.fullmatch(k)]
-        return [str(k) for k in integers] + tpot_awk_hash_order(
-            strings, tpot_awk_hash_elf, tuple(16 << i for i in range(24)), lambda count, size: count // size > 2)
+        with gawk 4.0.2, 4.1.4, 5.1.0 and 5.2.1, mawk 1.3.3 and 1.3.4, BusyBox 1.25 to 1.36)."""
+        listed = array.table.keys(array)
+        if len(listed) == len(array) and set(listed) == array.keys():
+            return listed
+        log.msg("awk of the persona: the hash table of an array lost track of its keys")
+        return list(array)
 
     # -- expressions
 
     def value(self, node):
         self.steps += 1
-        if self.steps > self.MAX_STEPS or not self.steps & 255 and time.monotonic() > self.deadline:
+        if self.steps > self.MAX_STEPS or self.steps > self.FLOOR_STEPS and not self.steps & 255 and (
+                time.monotonic() > self.deadline):
             raise TpotAwkStop(2)
         op = node[0]
         if op in ("num", "str"):
@@ -13661,7 +19246,8 @@ class TpotAwk:
         if op == "index":
             return self.element(node[1], node[2])
         if op == "in":
-            return 1.0 if self.key(node[1]) in self.array(node[2]) else 0.0
+            array = self.array(node[2])
+            return 1.0 if self.reference(array, node[1], False) in array else 0.0
         if op == "field":
             return self.field(self.field_index(self.value(node[1])))
         if op == "group":
@@ -13704,7 +19290,47 @@ class TpotAwk:
             old = self.num(self.get(target))
             self.set(target, old + delta)
             return old + delta if pre else old
+        if op == "call":
+            return self.call(node[1], node[2])
         return self.builtin(node[1], node[2])
+
+    def call(self, name: str, args: list):
+        """A call of a function of the program: scalars by value, arrays (and names not yet typed) by reference;
+        the parameters past the arguments are its locals."""
+        function = self.functions.get(name)
+        if function is None:
+            # departs: the real line of the call (fixtures/awk_departures.json: undef_l*), the persona says line 1
+            if self.style == "busybox":
+                raise TpotAwkStop(1, "awk: cmd. line:1: Call to undefined function\n")
+            self.fatal(f"function `{name}' not defined", "", "")
+        params, body = function
+        frame = {}
+        for param, arg in zip(params, args):
+            kind = self.kind_of(arg[1]) if arg[0] == "var" else "value"
+            if kind == "array":
+                frame[param] = self.array(arg[1])
+            elif kind == "untyped":
+                frame[param] = TpotAwkUnbound(self.local(arg[1]), arg[1])
+            else:
+                frame[param] = self.keep(self.value(arg))
+        for param in params[len(args):]:
+            frame[param] = TpotAwkUnbound()
+        if len(self.frames) >= self.MAX_CALLS:
+            raise TpotAwkStop(2)
+        sizes = {param: len(value) for param, value in frame.items() if isinstance(value, str)}
+        self.live += sum(sizes.values())
+        self.frames.append((frame, sizes))
+        try:
+            self.execute(body)
+        except TpotAwkJump as jump:
+            if jump.kind == "return":
+                return TPOT_AWK_UNINIT if jump.value is None else jump.value
+            if jump.kind not in ("break", "continue"):
+                raise
+        finally:
+            self.frames.pop()
+            self.live -= sum(sizes.values())
+        return TPOT_AWK_UNINIT
 
     def compare(self, op: str, a, b) -> bool:
         if self.numeric(a) and self.numeric(b):
@@ -13736,8 +19362,8 @@ class TpotAwk:
 
     def builtin(self, name: str, args: list):
         if name == "length":
-            if args and args[0][0] == "var" and args[0][1] in self.arrays:
-                return float(len(self.arrays[args[0][1]]))
+            if args and args[0][0] == "var" and self.kind_of(args[0][1]) == "array":
+                return float(len(self.array(args[0][1])))
             return float(len(self.text(self.value(args[0])) if args else self.record))
         if name in ("sub", "gsub"):
             return self.substitute(name == "gsub", args)
@@ -13750,6 +19376,12 @@ class TpotAwk:
             self.set(("var", "RSTART"), float(start))
             self.set(("var", "RLENGTH"), float(length))
             return float(start)
+        if name in ("rand", "srand"):
+            if self.random is None:
+                self.random = TpotAwkRandom(self)
+            if name == "rand":
+                return self.random.rand()
+            return self.random.srand(self.value(args[0]) if args else None)
         values = [self.value(arg) for arg in args]
         text = self.touch(self.text(values[0]))
         if name == "substr":
@@ -13771,10 +19403,17 @@ class TpotAwk:
             if not needle and self.style == "busybox":
                 return 0.0  # BusyBox finds no empty string, gawk and mawk find it at 1
             return float(text.find(needle) + 1)
-        if name == "tolower":
-            return text.lower() if text.isascii() else text.translate(TPOT_AWK_LOWER)
-        if name == "toupper":
-            return text.upper() if text.isascii() else text.translate(TPOT_AWK_UPPER)
+        if name in ("tolower", "toupper"):
+            if text.isascii():
+                return text.lower() if name == "tolower" else text.upper()
+            if self.bytes:  # the bytes beyond ASCII stay
+                return text.translate(TPOT_AWK_LOWER if name == "tolower" else TPOT_AWK_UPPER)
+            # gawk in a UTF-8 locale: towlower / towupper, one character for one
+            changed = text.lower() if name == "tolower" else text.upper()
+            if len(changed) == len(text):
+                return changed
+            return "".join(c if len(d) != 1 else d for c, d in (
+                (c, c.lower() if name == "tolower" else c.upper()) for c in text))
         if name == "int":
             x = self.num(values[0])
             return float(math.trunc(x)) if math.isfinite(x) else x
@@ -13798,6 +19437,7 @@ class TpotAwk:
         pieces = self.split(text, fs, regex)
         array = self.array(args[1][1])
         array.clear()
+        array.table.load(len(pieces))
         for index, piece in enumerate(pieces, 1):
             self.insert(array, str(index), TpotAwkStrnum(piece))
         return float(len(pieces))
@@ -13942,8 +19582,10 @@ class TpotAwk:
                     n = int(x)
                     if self.style == "mawk" and self.int_limit == 2.0 ** 31:
                         n = max(-2147483647, min(2147483647, n))
+                    if self.style == "busybox":  # (int) of the number, as the persona's platform converts it
+                        n = self.c_int(x)
                     if conv in "ouxX" and n < 0:
-                        n += 2 ** 64
+                        n += 2 ** 32 if self.style == "busybox" else 2 ** 64
                     piece = (spec + ("d" if conv in "iu" else conv)) % n
                     if conv == "o" and "#" in flags:
                         piece = piece.replace("0o", "0", 1)
@@ -14003,8 +19645,12 @@ class TpotAwk:
                         raise
         elif op == "delete":
             self.remove(node[1], node[2])
+        elif op == "notarray":
+            self.fatal("", "", "Not an array")
         elif op == "exit":
             raise TpotAwkJump("exit", None if node[1] is None else self.integer(self.value(node[1])) & 255)
+        elif op == "return":
+            raise TpotAwkJump("return", value=None if node[1] is None else self.value(node[1]))
         else:
             raise TpotAwkJump(op)
 
@@ -14017,8 +19663,8 @@ class TpotAwk:
                 raise
 
     def assign_operand(self, text: str) -> None:
-        name, _, value = text.partition("=")
-        self.set(("var", name), TpotAwkStrnum(tpot_awk_unescape(value, self.style == "gawk")))
+        name, _, value = self.from_text(text).partition("=")
+        self.set(("var", name), TpotAwkStrnum(tpot_awk_unescape(value, self.style == "gawk", not self.bytes)))
 
     def open(self, name: str):
         data = self.read_file(name)
@@ -14056,8 +19702,8 @@ class TpotAwk:
                     continue
             data = data[:max(0, self.MAX_INPUT - read)]
             read += len(data)
-            self.vars["FILENAME"], self.vars["FNR"] = label, 0.0
-            lines = data.decode("utf-8", errors="replace").split("\n")
+            self.vars["FILENAME"], self.vars["FNR"] = self.from_text(label), 0.0
+            lines = self.from_bytes(data).split("\n")
             if lines[-1] == "":
                 lines.pop()
             for line in lines:
@@ -14086,16 +19732,18 @@ class TpotAwk:
                                               if self.style != "gawk" else [])
                 code, text = self.syntax_message(error, program)
                 raise TpotAwkStop(code, said + text) from None
+            self.functions = parser.functions
+            bodies = [body for _, body in self.functions.values()]
             if self.style == "mawk":
-                clash = TpotAwkTypes(self.old_mawk, self.new_mawk).check(rules)
+                clash = TpotAwkTypes(self.old_mawk, self.new_mawk).check(rules, self.functions)
                 if clash:
                     raise TpotAwkStop(2, clash)
-            said = self.compile_constants(self.regex_constants(rules))
+            said = self.compile_constants(self.regex_constants([rules, bodies]))
             if said:
                 raise TpotAwkStop(2 if self.style == "mawk" else 1, said)
-            if parser.undefined:
+            if parser.undefined and self.style == "mawk":
                 raise TpotAwkStop(*self.undefined_message(parser.undefined, program))
-            if not tpot_awk_shallow(rules, self.MAX_DEPTH):
+            if not tpot_awk_shallow([rules, bodies], self.MAX_DEPTH):
                 raise TpotAwkStop(2)
             return self.main(rules, operands)
         except TpotAwkStop as stop:
@@ -14103,6 +19751,19 @@ class TpotAwk:
             return stop.code
         except RecursionError:
             return 2
+
+    def matches(self, pattern) -> bool:
+        """Whether a record matches the pattern of a rule; a range starts at a match of its first pattern and ends
+        with the record that matches its second (the same record too)."""
+        if pattern[0] != "range":
+            return self.truth(self.value(pattern))
+        if pattern[3] not in self.ranges:
+            if not self.truth(self.value(pattern[1])):
+                return False
+            self.ranges.add(pattern[3])
+        if self.truth(self.value(pattern[2])):
+            self.ranges.discard(pattern[3])
+        return True
 
     def main(self, rules: list, operands: list) -> int:
         code = None
@@ -14115,7 +19776,7 @@ class TpotAwk:
             if main or any(kind == "END" for kind, _, _ in rules):
                 for _ in self.records(operands):
                     for pattern, action in main:
-                        if pattern is None or self.truth(self.value(pattern)):
+                        if pattern is None or self.matches(pattern):
                             try:
                                 self.execute(action or self.PRINT)
                             except TpotAwkJump as jump:
@@ -14336,16 +19997,19 @@ class Command_tpot_awk(Command_awk):
         self.style = style if style in ("gawk", "mawk", "busybox") else "gawk"
         self.version = CowrieConfig.get("shell", "awk_version", fallback="") or (
             {"gawk": "5.1.0", "mawk": "1.3.4 20200120"}.get(self.style, ""))
-        self.tpot_out, self.tpot_err = [], []
+        self.tpot_out, self.tpot_err, self.tpot_awk = [], [], None
         try:
             code = self.tpot_run(list(self.args))
         except Exception:  # noqa: BLE001 - awk ends, the session goes on; the error goes to Cowrie's log
             log.err(None, "awk of the persona ended on an internal error")
             code = 2
-        if self.tpot_out:
-            self.write("".join(self.tpot_out))
+        awk = self.tpot_awk
+        if self.tpot_out:  # the bytes the awk wrote
+            out = "".join(self.tpot_out)
+            self.writeBytes(awk.to_bytes(out) if awk is not None else out.encode("utf-8", "replace"))
         if self.tpot_err:
-            self.errorWrite("".join(self.tpot_err))
+            err = "".join(self.tpot_err)
+            self.errorWrite(awk.to_bytes(err).decode("utf-8", "replace") if awk is not None else err)
         self.exit_code = code
         self.exit()
 
@@ -14384,7 +20048,7 @@ class Command_tpot_awk(Command_awk):
     def tpot_run(self, args: list) -> int:
         style, gawk = self.style, self.style == "gawk"
         awk = TpotAwk(style, self.version, self.tpot_read, self.input_data, tpot_deadline(getattr(self, "protocol", None)))
-        self.tpot_out, self.tpot_err = awk.out, awk.err
+        self.tpot_out, self.tpot_err, self.tpot_awk = awk.out, awk.err, awk
         sources, index = [], 0
         new_mawk = style == "mawk" and (self.version.split() + ["0"])[1] >= "20230000"
         while index < len(args):
@@ -14435,7 +20099,7 @@ class Command_tpot_awk(Command_awk):
                         return self.tpot_usage("", f"not an option: -{letter}", tpot_awk_getopt("invalid", letter))
             for letter, value in pairs:
                 if letter == "F":
-                    value = tpot_awk_unescape(value, gawk)
+                    value = tpot_awk_unescape(awk.from_text(value), gawk, not awk.bytes)
                     awk.vars["FS"] = "\t" if gawk and value == "t" else value
                     awk.fs_option = True
                 elif letter == "v":
@@ -14462,7 +20126,7 @@ class Command_tpot_awk(Command_awk):
         texts = []
         for letter, value in sources:
             if letter == "e":
-                texts.append(value)
+                texts.append(awk.from_text(value))
                 continue
             data = self.tpot_read(value)
             if not isinstance(data, bytes):
@@ -14474,12 +20138,12 @@ class Command_tpot_awk(Command_awk):
                                if self.version.startswith("4.0") else
                                f"awk: fatal: cannot open source file `{value}' for reading: No such file or directory\n")
                 return 2
-            texts.append(data.decode("utf-8", errors="replace"))
+            texts.append(awk.from_bytes(data))
             awk.source_name = value
         if texts:
             program = "\n".join(texts)
         elif operands:
-            program = operands.pop(0)
+            program = awk.from_text(operands.pop(0))
         else:
             return self.tpot_usage()
         return awk.run(program, operands)
@@ -14535,8 +20199,11 @@ def tpot_may_write(node, uid: int, gid: int) -> bool:
 
 TPOT_TEXT_INPUT = 4 << 20
 TPOT_TEXT_OUTPUT = 1 << 20
+# what a step returns while a command it started runs (xargs): the command goes on when that one ends
+TPOT_TEXT_PENDING = object()
 # the work of one command: about 0.8 s of wall-clock time, sort's lines times keys
 TPOT_TEXT_SECONDS = 0.8
+TPOT_LATE_FLOOR = 256
 TPOT_SORT_BYTES = 1 << 20
 TPOT_SORT_LINES = 50_000
 TPOT_SORT_WORK = 100_000
@@ -14624,6 +20291,8 @@ class TpotTextTool(HoneyPotCommand):
     shorts = ""          # GNU getopt string ("+" first: options end at the first operand)
     longs: dict = {}     # GNU long option: (short letter or own key, 0 no argument, 1 required, 2 optional)
     busybox_shorts = ""
+    busybox_longs: dict = {}  # BusyBox long option (a prefix of it is enough): its short letter
+    busybox_long_whole = False  # musl names the whole of an unknown long option, "=value" included
 
     def start(self) -> None:
         self.gnu = tpot_text("text_style", "gnu") != "busybox"
@@ -14639,6 +20308,7 @@ class TpotTextTool(HoneyPotCommand):
 
     def tpot_run(self, terminal: bytes | None) -> None:
         self.tpot_out, self.tpot_size, self.tpot_err = [], 0, []
+        self.tpot_floor = 0
         self.tpot_deadline = min(time.monotonic() + TPOT_TEXT_SECONDS, tpot_deadline(getattr(self, "protocol", None)))
         self.tpot_finish(lambda: self.tpot_main(terminal))
 
@@ -14653,6 +20323,8 @@ class TpotTextTool(HoneyPotCommand):
         except Exception:  # noqa: BLE001 - the command ends, the session goes on; the error goes to Cowrie's log
             log.err(None, f"{self.tool} of the persona ended on an internal error")
             code = self.status
+        if code is TPOT_TEXT_PENDING:
+            return
         if code is None:
             # standard input is the terminal: its lines until ctrl-d
             self.tpot_lines, self.tpot_read_size = [], 0
@@ -14692,9 +20364,13 @@ class TpotTextTool(HoneyPotCommand):
             data = bytes(getattr(self.protocol, "input_data", b"") or b"")[:TPOT_TEXT_INPUT]
         self.tpot_run(data)
 
-    def tpot_late(self) -> bool:
-        """The time of the command is used up."""
-        return time.monotonic() > self.tpot_deadline
+    tpot_floor = 0
+
+    def tpot_late(self, steps: int = 1) -> bool:
+        """The time of the command is used up. Its first TPOT_LATE_FLOOR steps (a check stands for the steps
+        since the one before) go on whatever the session has left, so a small input is always answered."""
+        done, self.tpot_floor = self.tpot_floor, self.tpot_floor + steps
+        return done >= TPOT_LATE_FLOOR and time.monotonic() > self.tpot_deadline
 
     def tpot_write_file(self, name: str, data: bytes) -> str:
         """Write data as a file of the emulated file system (sort -o); the error text, "" if written.
@@ -14828,6 +20504,9 @@ class TpotTextTool(HoneyPotCommand):
                 spot = shorts.find(letter)
                 if spot < 0 or letter == ":":
                     raise TpotTextStop(f"{self.tool}: invalid option -- '{letter}'\n" + self.tpot_try(), self.status)
+                if shorts[spot + 1:spot + 3] == "::":
+                    found.append((letter, letters[at + 1:] or None))
+                    break
                 if shorts[spot + 1:spot + 2] == ":":
                     value = letters[at + 1:]
                     if not value:
@@ -14869,8 +20548,13 @@ class TpotTextTool(HoneyPotCommand):
                     break
                 continue
             if arg.startswith("--"):
+                word = arg[2:]
+                letter = next((l for n, l in self.busybox_longs.items() if word and n.startswith(word)), None)
+                if letter is not None:
+                    found.append((letter, None))
+                    continue
                 if self.libc == "musl":
-                    text = f"{self.tool}: unrecognized option: {arg[2:].partition('=')[0]}\n"
+                    text = f"{self.tool}: unrecognized option: {arg[2:] if self.busybox_long_whole else arg[2:].partition('=')[0]}\n"
                 elif self.libc == "uclibc":
                     text = f"{self.tool}: unrecognized option `{arg}'\n"
                 else:
@@ -14886,6 +20570,9 @@ class TpotTextTool(HoneyPotCommand):
                             "uclibc": f"{self.tool}: invalid option -- {letter}\n"}.get(
                         self.libc, f"{self.tool}: invalid option -- '{letter}'\n")
                     raise self.tpot_usage_stop(text)
+                if shorts[spot + 1:spot + 3] == "::":
+                    found.append((letter, letters[at + 1:] or None))
+                    break
                 if shorts[spot + 1:spot + 2] == ":":
                     value = letters[at + 1:]
                     if not value:
@@ -15954,7 +21641,7 @@ class Command_tpot_sort(TpotTextTool):
         for key in keys:
             column = []
             for at, line in enumerate(lines):
-                if not at & 1023 and self.tpot_late():
+                if not at & 1023 and self.tpot_late(1024):
                     raise TpotTextStop("sort: memory exhausted\n", 2)
                 column.append(self.tpot_gnu_value(self.tpot_field_text(line, key) if self.tpot_keys_given else line,
                                                   key.flags, salt))
@@ -16154,7 +21841,7 @@ class Command_tpot_sort(TpotTextTool):
             use = own or flags
             column = []
             for at, line in enumerate(lines):
-                if not at & 1023 and self.tpot_late():
+                if not at & 1023 and self.tpot_late(1024):
                     raise TpotTextStop("sort: out of memory\n", 2)
                 column.append(self.tpot_bb_value(self.tpot_bb_field(line, ranges, use), use))
             values.append((column, "r" in use))
@@ -16200,6 +21887,2276 @@ commands["sort"] = Command_tpot_sort
 commands["/usr/bin/seq"] = Command_tpot_seq
 commands["/bin/seq"] = Command_tpot_seq
 commands["seq"] = Command_tpot_seq
+
+
+class Command_tpot_uniq(TpotTextTool):
+    """uniq of the persona: GNU coreutils by release (8.22 to 9.7) or BusyBox 1.25.1 to 1.36.1 (uclibc, musl):
+    the options and texts of the recording. An output file as second operand is derived, not recorded. The texts
+    of a release between two recorded ones take the entry below it (derived per release)."""
+
+    tool = "uniq"
+    shorts = "cdDf:is:uzw:"
+    longs = {"count": ("c", 0), "repeated": ("d", 0), "all-repeated": ("D", 2), "skip-fields": ("f", 1),
+             "ignore-case": ("i", 0), "skip-chars": ("s", 1), "unique": ("u", 0),
+             "zero-terminated": ("z", 0), "check-chars": ("w", 1), "help": ("help", 0), "version": ("version", 0)}
+    BUSYBOX_ROWS = {
+        "c": "\t-c\tPrefix lines by the number of occurrences\n",
+        "d": "\t-d\tOnly print duplicate lines\n",
+        "u": "\t-u\tOnly print unique lines\n",
+        "i": "\t-i\tIgnore case\n",
+        "z": "\t-z\tNUL terminated output\n",
+        "f": "\t-f N\tSkip first N fields\n",
+        "s": "\t-s N\tSkip first N chars (after any skipped fields)\n",
+        "w": "\t-w N\tCompare N characters in line\n",
+    }
+    GNU_HELP_91 = (
+        "Usage: uniq [OPTION]... [INPUT [OUTPUT]]\n"
+        "Filter adjacent matching lines from INPUT (or standard input),\n"
+        "writing to OUTPUT (or standard output).\n\n"
+        "With no options, matching lines are merged to the first occurrence.\n\n"
+        "Mandatory arguments to long options are mandatory for short options too.\n"
+        "  -c, --count           prefix lines by the number of occurrences\n"
+        "  -d, --repeated        only print duplicate lines, one for each group\n"
+        "  -D                    print all duplicate lines\n"
+        "      --all-repeated[=METHOD]  like -D, but allow separating groups\n"
+        "                                 with an empty line;\n"
+        "                                 METHOD={none(default),prepend,separate}\n"
+        "  -f, --skip-fields=N   avoid comparing the first N fields\n"
+        "      --group[=METHOD]  show all items, separating groups with an empty line;\n"
+        "                          METHOD={separate(default),prepend,append,both}\n"
+        "  -i, --ignore-case     ignore differences in case when comparing\n"
+        "  -s, --skip-chars=N    avoid comparing the first N characters\n"
+        "  -u, --unique          only print unique lines\n"
+        "  -z, --zero-terminated     line delimiter is NUL, not newline\n"
+        "  -w, --check-chars=N   compare no more than N characters in lines\n"
+        "      --help        display this help and exit\n"
+        "      --version     output version information and exit\n\n"
+        "A field is a run of blanks (usually spaces and/or TABs), then non-blank\n"
+        "characters.  Fields are skipped before chars.\n\n"
+        "Note: 'uniq' does not detect repeated lines unless they are adjacent.\n"
+        "You may want to sort the input first, or use 'sort -u' without 'uniq'.\n\n"
+        "GNU coreutils online help: <https://www.gnu.org/software/coreutils/>\n"
+        "Report any translation bugs to <https://translationproject.org/team/>\n"
+        "Full documentation <https://www.gnu.org/software/coreutils/uniq>\n"
+        "or available locally via: info '(coreutils) uniq invocation'\n"
+    )
+    GNU_HELP_822 = (
+        "Usage: uniq [OPTION]... [INPUT [OUTPUT]]\n"
+        "Filter adjacent matching lines from INPUT (or standard input),\n"
+        "writing to OUTPUT (or standard output).\n\n"
+        "With no options, matching lines are merged to the first occurrence.\n\n"
+        "Mandatory arguments to long options are mandatory for short options too.\n"
+        "  -c, --count           prefix lines by the number of occurrences\n"
+        "  -d, --repeated        only print duplicate lines, one for each group\n"
+        "  -D, --all-repeated[=METHOD]  print all duplicate lines\n"
+        "                          groups can be delimited with an empty line\n"
+        "                          METHOD={none(default),prepend,separate}\n"
+        "  -f, --skip-fields=N   avoid comparing the first N fields\n"
+        "      --group[=METHOD]  show all items, separating groups with an empty line\n"
+        "                          METHOD={separate(default),prepend,append,both}\n"
+        "  -i, --ignore-case     ignore differences in case when comparing\n"
+        "  -s, --skip-chars=N    avoid comparing the first N characters\n"
+        "  -u, --unique          only print unique lines\n"
+        "  -z, --zero-terminated  end lines with 0 byte, not newline\n"
+        "  -w, --check-chars=N   compare no more than N characters in lines\n"
+        "      --help     display this help and exit\n"
+        "      --version  output version information and exit\n\n"
+        "A field is a run of blanks (usually spaces and/or TABs), then non-blank\n"
+        "characters.  Fields are skipped before chars.\n\n"
+        "Note: 'uniq' does not detect repeated lines unless they are adjacent.\n"
+        "You may want to sort the input first, or use 'sort -u' without 'uniq'.\n"
+        "Also, comparisons honor the rules specified by 'LC_COLLATE'.\n\n"
+        "GNU coreutils online help: <http://www.gnu.org/software/coreutils/>\n"
+        "For complete documentation, run: info coreutils 'uniq invocation'\n"
+    )
+    # 8.32 names --help and --version with narrower columns; 9.7 drops the "Note: " prefix
+    GNU_HELP_832 = GNU_HELP_91.replace(
+        "      --help        display this help and exit\n      --version     output version information and exit\n",
+        "      --help     display this help and exit\n      --version  output version information and exit\n")
+    GNU_HELP_97 = GNU_HELP_91.replace("Note: 'uniq' does not detect", "'uniq' does not detect")
+    # (from version, year, scheme of the license link, help text): the recorded releases; the help of 9.7 and the
+    #   other releases between them are derived per release, not recorded
+    GNU_RELEASES = (
+        ((8, 22), "2013", "http", GNU_HELP_822),
+        ((8, 32), "2020", "https", GNU_HELP_832),
+        ((9, 1), "2022", "https", GNU_HELP_91),
+        ((9, 4), "2023", "https", GNU_HELP_91),
+        ((9, 7), "2025", "https", GNU_HELP_97),
+    )
+
+    def uniq_release(self):
+        release = self.GNU_RELEASES[0]
+        for entry in self.GNU_RELEASES:
+            if self.version >= entry[0]:
+                release = entry
+        return release
+
+    def uniq_version(self) -> str:
+        _, year, scheme, _ = self.uniq_release()
+        packager = tpot_text("text_packager", "")
+        return (f"uniq (GNU coreutils) {tpot_text('text_version', '9.1')}\n"
+                + (f"Packaged by {packager}\n" if packager else "")
+                + f"Copyright (C) {tpot_text('text_year', year)} Free Software Foundation, Inc.\n"
+                f"License GPLv3+: GNU GPL version 3 or later <{scheme}://gnu.org/licenses/gpl.html>.\n"
+                "This is free software: you are free to change and redistribute it.\n"
+                "There is NO WARRANTY, to the extent permitted by law.\n\n"
+                "Written by Richard M. Stallman and David MacKenzie.\n")
+
+    def uniq_busybox_text(self) -> str:
+        banner = tpot_text("text_banner", "") or "BusyBox v" + ".".join(str(n) for n in self.version)
+        if self.version >= (1, 36):
+            usage, letters = "[-cduiz] [-f,s,w N] [FILE [OUTFILE]]", "cduiz"
+        elif self.version >= (1, 33):
+            usage, letters = "[-cdui] [-f,s,w N] [INPUT [OUTPUT]]", "cdui"
+        else:
+            usage, letters = "[-cdu][-f,s,w N] [INPUT [OUTPUT]]", "cdu"
+        rows = "".join(self.BUSYBOX_ROWS[letter] for letter in letters + "fsw")
+        return f"{banner} multi-call binary.\n\nUsage: uniq {usage}\n\nDiscard duplicate lines\n\n{rows}"
+
+    def uniq_busybox_options(self):
+        """getopt32 of BusyBox: options in any order, -- ends them; the messages of uclibc or musl."""
+        musl = self.libc == "musl"
+        letters = "cdu" + ("i" if self.version >= (1, 33) else "") + ("z" if self.version >= (1, 36) else "")
+        args, opts, operands, index = list(self.args), {}, [], 0
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if arg == "--":
+                operands += args[index:]
+                break
+            if arg == "-" or not arg.startswith("-"):
+                operands.append(arg)
+                continue
+            if arg == "--help":
+                raise TpotTextStop(self.uniq_busybox_text(), 0)
+            if arg.startswith("--"):
+                problem = f"uniq: unrecognized option: {arg[2:]}\n" if musl else f"uniq: unrecognized option `{arg}'\n"
+                raise TpotTextStop(problem + self.uniq_busybox_text(), 1)
+            position = 1
+            while position < len(arg):
+                letter = arg[position]
+                position += 1
+                if letter in "fsw":
+                    if position < len(arg):
+                        value, position = arg[position:], len(arg)
+                    elif index < len(args):
+                        value, index = args[index], index + 1
+                    else:
+                        problem = (f"uniq: option requires an argument: {letter}\n" if musl
+                                   else f"uniq: option requires an argument -- {letter}\n")
+                        raise TpotTextStop(problem + self.uniq_busybox_text(), 1)
+                    if not re.fullmatch(r"[0-9]+", value):
+                        raise TpotTextStop(f"uniq: invalid number '{value}'\n", 1)
+                    opts[letter] = int(value)
+                elif letter in letters:
+                    opts[letter] = True
+                else:
+                    problem = f"uniq: unrecognized option: {letter}\n" if musl else f"uniq: invalid option -- {letter}\n"
+                    raise TpotTextStop(problem + self.uniq_busybox_text(), 1)
+        return opts, operands
+
+    def uniq_quote(self, value: str) -> str:
+        """The quotation marks of a message of this uniq: straight where [shell] text_quote is ascii, else
+        tpot_text_quote(). No persona sets text_quote; it stands for an image with no UTF-8 locale (rockylinux:9)."""
+        if tpot_text("text_quote", "") == "ascii":
+            return f"'{value}'"
+        return tpot_text_quote(value)
+
+    def uniq_gnu_flags(self, found) -> dict:
+        opts = {}
+        for key, value in found:
+            if key in ("c", "d", "i", "u", "z"):
+                opts[key] = True
+            elif key == "D":
+                method = value or "none"
+                if method not in ("none", "prepend", "separate"):
+                    quoted, option = self.uniq_quote(method), self.uniq_quote("--all-repeated")
+                    valid = "".join(f"  - {self.uniq_quote(name)}\n" for name in ("none", "prepend", "separate"))
+                    raise TpotTextStop(f"uniq: invalid argument {quoted} for {option}\nValid arguments are:\n"
+                                       + valid + self.tpot_try(), 1)
+                opts["D"] = method
+            elif key in ("f", "s", "w"):
+                if not re.fullmatch(r"[0-9]+", value or ""):
+                    what = {"f": "fields to skip", "s": "bytes to skip", "w": "bytes to compare"}[key]
+                    raise TpotTextStop(f"uniq: {value}: invalid number of {what}\n", 1)
+                opts[key] = int(value)
+        if "D" in opts and opts.get("c"):
+            raise TpotTextStop("uniq: printing all duplicated lines and repeat counts is meaningless\n"
+                               + self.tpot_try(), 1)
+        return opts
+
+    def uniq_records(self, data: bytes, opts: dict) -> list:
+        delimiter = "\0" if self.gnu and opts.get("z") else "\n"
+        text = data.decode("utf-8", "surrogateescape")
+        if not text:
+            return []
+        records = text.split(delimiter)
+        if text.endswith(delimiter):
+            records.pop()
+        return records
+
+    def uniq_key(self, line: str, opts: dict) -> str:
+        """The part of a line that is compared: the skipped fields (blanks, then a run of non-blanks), the
+        skipped characters, the first characters; case folded with -i."""
+        position = 0
+        for _ in range(opts.get("f", 0)):
+            while position < len(line) and line[position] in " \t":
+                position += 1
+            while position < len(line) and line[position] not in " \t":
+                position += 1
+        key = line[min(len(line), position + opts.get("s", 0)):]
+        if "w" in opts:
+            key = key[:opts["w"]]
+        return key.lower() if opts.get("i") else key
+
+    def uniq_groups(self, records: list, opts: dict) -> list:
+        groups, previous = [], None
+        for line in records:
+            key = self.uniq_key(line, opts)
+            if groups and key == previous:
+                groups[-1].append(line)
+            else:
+                groups.append([line])
+                previous = key
+        return groups
+
+    def uniq_render(self, groups: list, opts: dict, term: str) -> str:
+        out = []
+        if "D" in opts:
+            printed = False
+            for group in groups:
+                if len(group) < 2:
+                    continue
+                if opts["D"] == "prepend" or (opts["D"] == "separate" and printed):
+                    out.append(term)
+                out += [line + term for line in (group[:1] if opts.get("u") else group)]
+                printed = True
+            return "".join(out)
+        if opts.get("d") and opts.get("u"):
+            return ""
+        for group in groups:
+            count = len(group)
+            if (opts.get("d") and count < 2) or (opts.get("u") and count != 1):
+                continue
+            head = f"{count:7d} {group[0]}" if opts.get("c") else group[0]
+            out.append(head + term)
+        return "".join(out)
+
+    def uniq_error(self, name: str, reason: str) -> str:
+        return f"uniq: {name}: {reason}\n" if self.gnu else f"uniq: can't open '{name}': {reason}\n"
+
+    def tpot_main(self, terminal):
+        if self.gnu:
+            found, operands = self.tpot_gnu_options(list(self.args))
+            for key, _ in found:
+                if key in ("help", "version"):
+                    self.tpot_emit(self.uniq_release()[3] if key == "help" else self.uniq_version())
+                    return 0
+            opts = self.uniq_gnu_flags(found)
+            if len(operands) > 2:
+                raise TpotTextStop(f"uniq: extra operand {self.uniq_quote(operands[2])}\n" + self.tpot_try(), 1)
+        else:
+            opts, operands = self.uniq_busybox_options()
+        name = operands[0] if operands else "-"
+        if name == "-":
+            data = self.tpot_stdin(terminal)
+            if data is None:
+                return None
+        else:
+            kind, data, _ = self.tpot_file(name)
+            if kind != "file":
+                raise TpotTextStop(self.uniq_error(name, "Is a directory" if kind == "dir"
+                                                   else "No such file or directory"), 1)
+        term = "\0" if opts.get("z") else "\n"
+        text = self.uniq_render(self.uniq_groups(self.uniq_records(data, opts), opts), opts, term)
+        if len(operands) > 1:
+            problem = self.tpot_write_file(operands[1], text.encode("utf-8", "surrogateescape"))
+            if problem:
+                raise TpotTextStop(self.uniq_error(operands[1], problem), 1)
+            return 0
+        self.tpot_emit(text)
+        return 0
+
+
+commands["/usr/bin/uniq"] = Command_tpot_uniq
+commands["/bin/uniq"] = Command_tpot_uniq
+commands["uniq"] = Command_tpot_uniq
+
+
+# --- date --------------------------------------------------------------------------------------
+# date of the persona: the texts of GNU coreutils 8.22 to 9.7 and BusyBox 1.25.1 to 1.36.1 as recorded
+# (fixtures/shell_date.json); what a release between two recorded ones prints is derived. The zone is UTC
+# (cowrie.cfg timezone = UTC for every persona) and the clock the time of the session (Command_tpot_date.clock,
+# `date -s` of root prints the new date and leaves the clock alone). -d follows gnulib's parse-datetime for GNU and the
+# strptime forms of BusyBox; the conversions follow gnulib's nstrftime (flags, widths, E and O), musl's or uClibc's strftime.
+
+TPOT_DATE_DAYS = ("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+TPOT_DATE_MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September",
+                    "October", "November", "December")
+TPOT_DATE_SPECS = ("date", "hours", "minutes", "seconds", "ns")
+TPOT_DATE_RFC = "%a, %d %b %Y %H:%M:%S %z"
+# the conversions the modifiers E and O go with
+TPOT_DATE_MOD_E = "cCxXyY"
+TPOT_DATE_MOD_O = "deHImMSuUVwWy"
+# the largest second whose year still fits the int of tm_year
+TPOT_DATE_MAX = 67768036191676799
+# the time is looked at every this many conversions, characters or items
+TPOT_DATE_STEP = 256
+# the longest digit run of a number of -d that is read (a longer one is no date)
+TPOT_DATE_DIGITS = 30
+# the locale of date: its default format and %c %x %X %r %p as recorded: C (Debian, Ubuntu, BusyBox), en_US.UTF-8
+#   (Rocky 9; CentOS 7 has glibc 2.17's default format of the C locale) and en_GB.UTF-8 (Debian 12)
+TPOT_DATE_LOCALES = {
+    "c": {"default": "%a %b %e %H:%M:%S %Z %Y", "c": "%a %b %e %H:%M:%S %Y", "x": "%m/%d/%y", "X": "%H:%M:%S",
+          "r": "%I:%M:%S %p", "p": ("AM", "PM")},
+    "us": {"default": "%a %b %e %r %Z %Y", "c": "%a %d %b %Y %r %Z", "x": "%m/%d/%Y", "X": "%r",
+           "r": "%I:%M:%S %p", "p": ("AM", "PM")},
+    "us-2.17": {"default": "%a %b %e %H:%M:%S %Z %Y", "c": "%a %d %b %Y %r %Z", "x": "%m/%d/%Y", "X": "%r",
+                "r": "%I:%M:%S %p", "p": ("AM", "PM")},
+    "gb": {"default": "%a %e %b %H:%M:%S %Z %Y", "c": "%a %d %b %Y %T %Z", "x": "%d/%m/%y", "X": "%T",
+           "r": "%l:%M:%S %p %Z", "p": ("am", "pm")},
+}
+TPOT_DATE_USAGE_OLD = (
+    "[OPTIONS] [+FMT] [TIME]\n\nDisplay time (using +FMT), or set time\n\n"
+    "\t[-s,--set] TIME\tSet time to TIME\n\t-u,--utc\tWork in UTC (don't convert to local time)\n"
+    "\t-R,--rfc-2822\tOutput RFC-2822 compliant date string\n\t-I[SPEC]\tOutput ISO-8601 compliant date string\n"
+    "\t\t\tSPEC='date' (default) for date only,\n\t\t\t'hours', 'minutes', or 'seconds' for date and\n"
+    "\t\t\ttime to the indicated precision\n\t-r,--reference FILE\tDisplay last modification time of FILE\n"
+    "\t-d,--date TIME\tDisplay TIME, not 'now'\n\t-D FMT\t\tUse FMT for -d TIME conversion\n\n"
+    "Recognized TIME formats:\n\thh:mm[:ss]\n\t[YYYY.]MM.DD-hh:mm[:ss]\n\tYYYY-MM-DD hh:mm[:ss]\n"
+    "\t[[[[[YY]YY]MM]DD]hh]mm[.ss]\n\t'date TIME' form accepts MMDDhhmm[[YY]YY][.ss] instead\n")
+TPOT_DATE_USAGE_NEW = (
+    "[OPTIONS] [+FMT] [[-s] TIME]\n\nDisplay time (using +FMT), or set time\n\n"
+    "\t-u\t\tWork in UTC (don't convert to local time)\n\t[-s] TIME\tSet time to TIME\n"
+    "\t-d TIME\t\tDisplay TIME, not 'now'\n\t-D FMT\t\tFMT (strptime format) for -s/-d TIME conversion\n"
+    "\t-r FILE\t\tDisplay last modification time of FILE\n\t-R\t\tOutput RFC-2822 date\n"
+    "\t-I[SPEC]\tOutput ISO-8601 date\n\t\t\tSPEC=date (default), hours, minutes, seconds or ns\n\n"
+    "Recognized TIME formats:\n\t@seconds_since_1970\n\thh:mm[:ss]\n\t[YYYY.]MM.DD-hh:mm[:ss]\n"
+    "\tYYYY-MM-DD hh:mm[:ss]\n\t[[[[[YY]YY]MM]DD]hh]mm[.ss]\n\t'date TIME' form accepts MMDDhhmm[[YY]YY][.ss] instead\n")
+TPOT_DATE_HELP_91 = (
+    "Usage: date [OPTION]... [+FORMAT]\n"
+    "  or:  date [-u|--utc|--universal] [MMDDhhmm[[CC]YY][.ss]]\n"
+    "Display date and time in the given FORMAT.\n"
+    "With -s, or with [MMDDhhmm[[CC]YY][.ss]], set the date and time.\n"
+    "\n"
+    "Mandatory arguments to long options are mandatory for short options too.\n"
+    "  -d, --date=STRING          display time described by STRING, not 'now'\n"
+    "      --debug                annotate the parsed date,\n"
+    "                              and warn about questionable usage to stderr\n"
+    "  -f, --file=DATEFILE        like --date; once for each line of DATEFILE\n"
+    "  -I[FMT], --iso-8601[=FMT]  output date/time in ISO 8601 format.\n"
+    "                               FMT='date' for date only (the default),\n"
+    "                               'hours', 'minutes', 'seconds', or 'ns'\n"
+    "                               for date and time to the indicated precision.\n"
+    "                               Example: 2006-08-14T02:34:56-06:00\n"
+    "  --resolution               output the available resolution of timestamps\n"
+    "                               Example: 0.000000001\n"
+    "  -R, --rfc-email            output date and time in RFC 5322 format.\n"
+    "                               Example: Mon, 14 Aug 2006 02:34:56 -0600\n"
+    "      --rfc-3339=FMT         output date/time in RFC 3339 format.\n"
+    "                               FMT='date', 'seconds', or 'ns'\n"
+    "                               for date and time to the indicated precision.\n"
+    "                               Example: 2006-08-14 02:34:56-06:00\n"
+    "  -r, --reference=FILE       display the last modification time of FILE\n"
+    "  -s, --set=STRING           set time described by STRING\n"
+    "  -u, --utc, --universal     print or set Coordinated Universal Time (UTC)\n"
+    "      --help        display this help and exit\n"
+    "      --version     output version information and exit\n"
+    "\n"
+    "FORMAT controls the output.  Interpreted sequences are:\n"
+    "\n"
+    "  %%   a literal %\n"
+    "  %a   locale's abbreviated weekday name (e.g., Sun)\n"
+    "  %A   locale's full weekday name (e.g., Sunday)\n"
+    "  %b   locale's abbreviated month name (e.g., Jan)\n"
+    "  %B   locale's full month name (e.g., January)\n"
+    "  %c   locale's date and time (e.g., Thu Mar  3 23:05:25 2005)\n"
+    "  %C   century; like %Y, except omit last two digits (e.g., 20)\n"
+    "  %d   day of month (e.g., 01)\n"
+    "  %D   date; same as %m/%d/%y\n"
+    "  %e   day of month, space padded; same as %_d\n"
+    "  %F   full date; like %+4Y-%m-%d\n"
+    "  %g   last two digits of year of ISO week number (see %G)\n"
+    "  %G   year of ISO week number (see %V); normally useful only with %V\n"
+    "  %h   same as %b\n"
+    "  %H   hour (00..23)\n"
+    "  %I   hour (01..12)\n"
+    "  %j   day of year (001..366)\n"
+    "  %k   hour, space padded ( 0..23); same as %_H\n"
+    "  %l   hour, space padded ( 1..12); same as %_I\n"
+    "  %m   month (01..12)\n"
+    "  %M   minute (00..59)\n"
+    "  %n   a newline\n"
+    "  %N   nanoseconds (000000000..999999999)\n"
+    "  %p   locale's equivalent of either AM or PM; blank if not known\n"
+    "  %P   like %p, but lower case\n"
+    "  %q   quarter of year (1..4)\n"
+    "  %r   locale's 12-hour clock time (e.g., 11:11:04 PM)\n"
+    "  %R   24-hour hour and minute; same as %H:%M\n"
+    "  %s   seconds since the Epoch (1970-01-01 00:00 UTC)\n"
+    "  %S   second (00..60)\n"
+    "  %t   a tab\n"
+    "  %T   time; same as %H:%M:%S\n"
+    "  %u   day of week (1..7); 1 is Monday\n"
+    "  %U   week number of year, with Sunday as first day of week (00..53)\n"
+    "  %V   ISO week number, with Monday as first day of week (01..53)\n"
+    "  %w   day of week (0..6); 0 is Sunday\n"
+    "  %W   week number of year, with Monday as first day of week (00..53)\n"
+    "  %x   locale's date representation (e.g., 12/31/99)\n"
+    "  %X   locale's time representation (e.g., 23:13:48)\n"
+    "  %y   last two digits of year (00..99)\n"
+    "  %Y   year\n"
+    "  %z   +hhmm numeric time zone (e.g., -0400)\n"
+    "  %:z  +hh:mm numeric time zone (e.g., -04:00)\n"
+    "  %::z  +hh:mm:ss numeric time zone (e.g., -04:00:00)\n"
+    "  %:::z  numeric time zone with : to necessary precision (e.g., -04, +05:30)\n"
+    "  %Z   alphabetic time zone abbreviation (e.g., EDT)\n"
+    "\n"
+    "By default, date pads numeric fields with zeroes.\n"
+    "The following optional flags may follow '%':\n"
+    "\n"
+    "  -  (hyphen) do not pad the field\n"
+    "  _  (underscore) pad with spaces\n"
+    "  0  (zero) pad with zeros\n"
+    "  +  pad with zeros, and put '+' before future years with >4 digits\n"
+    "  ^  use upper case if possible\n"
+    "  #  use opposite case if possible\n"
+    "\n"
+    "After any flags comes an optional field width, as a decimal number;\n"
+    "then an optional modifier, which is either\n"
+    "E to use the locale's alternate representations if available, or\n"
+    "O to use the locale's alternate numeric symbols if available.\n"
+    "\n"
+    "Examples:\n"
+    "Convert seconds since the Epoch (1970-01-01 UTC) to a date\n"
+    "  $ date --date='@2147483647'\n"
+    "\n"
+    "Show the time on the west coast of the US (use tzselect(1) to find TZ)\n"
+    "  $ TZ='America/Los_Angeles' date\n"
+    "\n"
+    "Show the local time for 9AM next Friday on the west coast of the US\n"
+    "  $ date --date='TZ=\"America/Los_Angeles\" 09:00 next Fri'\n"
+    "\n"
+    "GNU coreutils online help: <https://www.gnu.org/software/coreutils/>\n"
+    "Report any translation bugs to <https://translationproject.org/team/>\n"
+    "Full documentation <https://www.gnu.org/software/coreutils/date>\n"
+    "or available locally via: info '(coreutils) date invocation'\n"
+)
+TPOT_DATE_HELP_822 = TPOT_DATE_HELP_91
+TPOT_DATE_HELP_822 = TPOT_DATE_HELP_822.replace(
+    (
+        "Display date and time in the given FORMAT.\n"
+        "With -s, or with [MMDDhhmm[[CC]YY][.ss]], set the date and time.\n"
+    ),
+    (
+        "Display the current time in the given FORMAT, or set the system date.\n"
+    ))
+TPOT_DATE_HELP_822 = TPOT_DATE_HELP_822.replace(
+    (
+        "  -d, --date=STRING          display time described by STRING, not 'now'\n"
+        "      --debug                annotate the parsed date,\n"
+        "                              and warn about questionable usage to stderr\n"
+        "  -f, --file=DATEFILE        like --date; once for each line of DATEFILE\n"
+        "  -I[FMT], --iso-8601[=FMT]  output date/time in ISO 8601 format.\n"
+        "                               FMT='date' for date only (the default),\n"
+        "                               'hours', 'minutes', 'seconds', or 'ns'\n"
+        "                               for date and time to the indicated precision.\n"
+        "                               Example: 2006-08-14T02:34:56-06:00\n"
+        "  --resolution               output the available resolution of timestamps\n"
+        "                               Example: 0.000000001\n"
+        "  -R, --rfc-email            output date and time in RFC 5322 format.\n"
+        "                               Example: Mon, 14 Aug 2006 02:34:56 -0600\n"
+        "      --rfc-3339=FMT         output date/time in RFC 3339 format.\n"
+        "                               FMT='date', 'seconds', or 'ns'\n"
+        "                               for date and time to the indicated precision.\n"
+        "                               Example: 2006-08-14 02:34:56-06:00\n"
+        "  -r, --reference=FILE       display the last modification time of FILE\n"
+        "  -s, --set=STRING           set time described by STRING\n"
+        "  -u, --utc, --universal     print or set Coordinated Universal Time (UTC)\n"
+        "      --help        display this help and exit\n"
+        "      --version     output version information and exit\n"
+    ),
+    (
+        "  -d, --date=STRING         display time described by STRING, not 'now'\n"
+        "  -f, --file=DATEFILE       like --date once for each line of DATEFILE\n"
+        "  -I[TIMESPEC], --iso-8601[=TIMESPEC]  output date/time in ISO 8601 format.\n"
+        "                            TIMESPEC='date' for date only (the default),\n"
+        "                            'hours', 'minutes', 'seconds', or 'ns' for date\n"
+        "                            and time to the indicated precision.\n"
+        "  -r, --reference=FILE      display the last modification time of FILE\n"
+        "  -R, --rfc-2822            output date and time in RFC 2822 format.\n"
+        "                            Example: Mon, 07 Aug 2006 12:34:56 -0600\n"
+        "      --rfc-3339=TIMESPEC   output date and time in RFC 3339 format.\n"
+        "                            TIMESPEC='date', 'seconds', or 'ns' for\n"
+        "                            date and time to the indicated precision.\n"
+        "                            Date and time components are separated by\n"
+        "                            a single space: 2006-08-07 12:34:56-06:00\n"
+        "  -s, --set=STRING          set time described by STRING\n"
+        "  -u, --utc, --universal    print or set Coordinated Universal Time (UTC)\n"
+        "      --help     display this help and exit\n"
+        "      --version  output version information and exit\n"
+    ))
+TPOT_DATE_HELP_822 = TPOT_DATE_HELP_822.replace(
+    (
+        "  %F   full date; like %+4Y-%m-%d\n"
+    ),
+    (
+        "  %F   full date; same as %Y-%m-%d\n"
+    ))
+TPOT_DATE_HELP_822 = TPOT_DATE_HELP_822.replace(
+    (
+        "  %q   quarter of year (1..4)\n"
+    ),
+    "")
+TPOT_DATE_HELP_822 = TPOT_DATE_HELP_822.replace(
+    (
+        "  %s   seconds since the Epoch (1970-01-01 00:00 UTC)\n"
+    ),
+    (
+        "  %s   seconds since 1970-01-01 00:00:00 UTC\n"
+    ))
+TPOT_DATE_HELP_822 = TPOT_DATE_HELP_822.replace(
+    (
+        "  +  pad with zeros, and put '+' before future years with >4 digits\n"
+    ),
+    "")
+TPOT_DATE_HELP_822 = TPOT_DATE_HELP_822.replace(
+    (
+        "Convert seconds since the Epoch (1970-01-01 UTC) to a date\n"
+    ),
+    (
+        "Convert seconds since the epoch (1970-01-01 UTC) to a date\n"
+    ))
+TPOT_DATE_HELP_822 = TPOT_DATE_HELP_822.replace(
+    (
+        "GNU coreutils online help: <https://www.gnu.org/software/coreutils/>\n"
+        "Report any translation bugs to <https://translationproject.org/team/>\n"
+        "Full documentation <https://www.gnu.org/software/coreutils/date>\n"
+        "or available locally via: info '(coreutils) date invocation'\n"
+    ),
+    (
+        "GNU coreutils online help: <http://www.gnu.org/software/coreutils/>\n"
+        "For complete documentation, run: info coreutils 'date invocation'\n"
+    ))
+TPOT_DATE_HELP_832 = TPOT_DATE_HELP_91
+TPOT_DATE_HELP_832 = TPOT_DATE_HELP_832.replace(
+    (
+        "Display date and time in the given FORMAT.\n"
+        "With -s, or with [MMDDhhmm[[CC]YY][.ss]], set the date and time.\n"
+    ),
+    (
+        "Display the current time in the given FORMAT, or set the system date.\n"
+    ))
+TPOT_DATE_HELP_832 = TPOT_DATE_HELP_832.replace(
+    (
+        "  --resolution               output the available resolution of timestamps\n"
+        "                               Example: 0.000000001\n"
+    ),
+    "")
+TPOT_DATE_HELP_832 = TPOT_DATE_HELP_832.replace(
+    (
+        "      --help        display this help and exit\n"
+        "      --version     output version information and exit\n"
+    ),
+    (
+        "      --help     display this help and exit\n"
+        "      --version  output version information and exit\n"
+    ))
+TPOT_DATE_HELP_832 = TPOT_DATE_HELP_832.replace(
+    (
+        "  %s   seconds since the Epoch (1970-01-01 00:00 UTC)\n"
+    ),
+    (
+        "  %s   seconds since 1970-01-01 00:00:00 UTC\n"
+    ))
+TPOT_DATE_HELP_832 = TPOT_DATE_HELP_832.replace(
+    (
+        "Convert seconds since the Epoch (1970-01-01 UTC) to a date\n"
+    ),
+    (
+        "Convert seconds since the epoch (1970-01-01 UTC) to a date\n"
+    ))
+TPOT_DATE_HELP_94 = TPOT_DATE_HELP_91
+TPOT_DATE_HELP_94 = TPOT_DATE_HELP_94.replace(
+    (
+        "      --version     output version information and exit\n"
+    ),
+    (
+        "      --version     output version information and exit\n"
+        "\n"
+        "All options that specify the date to display are mutually exclusive.\n"
+        "I.e.: --date, --file, --reference, --resolution.\n"
+    ))
+TPOT_DATE_HELP_97 = TPOT_DATE_HELP_91
+TPOT_DATE_HELP_97 = TPOT_DATE_HELP_97.replace(
+    (
+        "      --version     output version information and exit\n"
+        "\n"
+    ),
+    (
+        "      --version     output version information and exit\n"
+        "\n"
+        "All options that specify the date to display are mutually exclusive.\n"
+        "I.e.: --date, --file, --reference, --resolution.\n"
+        "\n"
+    ))
+TPOT_DATE_HELP_97 = TPOT_DATE_HELP_97.replace(
+    (
+        "  %D   date; same as %m/%d/%y\n"
+    ),
+    (
+        "  %D   date (ambiguous); same as %m/%d/%y\n"
+    ))
+TPOT_DATE_HELP_97 = TPOT_DATE_HELP_97.replace(
+    (
+        "  %g   last two digits of year of ISO week number (see %G)\n"
+        "  %G   year of ISO week number (see %V); normally useful only with %V\n"
+    ),
+    (
+        "  %g   last two digits of year of ISO week number (ambiguous; 00-99); see %G\n"
+        "  %G   year of ISO week number; normally useful only with %V\n"
+    ))
+TPOT_DATE_HELP_97 = TPOT_DATE_HELP_97.replace(
+    (
+        "  %x   locale's date representation (e.g., 12/31/99)\n"
+    ),
+    (
+        "  %x   locale's date (can be ambiguous; e.g., 12/31/99)\n"
+    ))
+TPOT_DATE_HELP_97 = TPOT_DATE_HELP_97.replace(
+    (
+        "  %y   last two digits of year (00..99)\n"
+    ),
+    (
+        "  %y   last two digits of year (ambiguous; 00..99)\n"
+    ))
+TPOT_DATE_HELP_832R = TPOT_DATE_HELP_832
+TPOT_DATE_HELP_832R = TPOT_DATE_HELP_832R.replace(
+    (
+        "Report any translation bugs to <https://translationproject.org/team/>\n"
+    ),
+    "")
+# the words of -d TIME (gnulib's tables, the English names only); the zones are the common ones (derived, not recorded)
+TPOT_DATE_WORD_MONTHS = {**{name.lower(): number for number, name in enumerate(TPOT_DATE_MONTHS, 1)},
+                         **{name[:3].lower(): number for number, name in enumerate(TPOT_DATE_MONTHS, 1)},
+                         "sept": 9}
+TPOT_DATE_WORD_DAYS = {**{name.lower(): number for number, name in enumerate(TPOT_DATE_DAYS)},
+                       **{name[:3].lower(): number for number, name in enumerate(TPOT_DATE_DAYS)},
+                       "tues": 2, "wednes": 3, "thur": 4, "thurs": 4}
+# unit: (field of the relative time, how many of it)
+TPOT_DATE_WORD_UNITS = {"second": ("sec", 1), "sec": ("sec", 1), "minute": ("sec", 60), "min": ("sec", 60),
+                        "hour": ("sec", 3600), "day": ("day", 1), "week": ("day", 7), "fortnight": ("day", 14),
+                        "month": ("month", 1), "year": ("year", 1)}
+TPOT_DATE_WORD_ORDINALS = {"last": -1, "this": 0, "next": 1, "first": 1, "third": 3, "fourth": 4, "fifth": 5,
+                           "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10, "eleventh": 11,
+                           "twelfth": 12}
+TPOT_DATE_WORD_SHIFTS = {"yesterday": -1, "today": 0, "now": 0, "tomorrow": 1}
+TPOT_DATE_WORD_ZONES = {"utc": 0, "gmt": 0, "ut": 0, "z": 0, "wet": 0, "west": 3600, "bst": 3600, "cet": 3600,
+                        "cest": 7200, "eet": 7200, "eest": 10800, "est": -18000, "edt": -14400, "cst": -21600,
+                        "cdt": -18000, "mst": -25200, "mdt": -21600, "pst": -28800, "pdt": -25200}
+TPOT_DATE_TOKENS = re.compile(
+    r"(?P<space>[\s,]+)"
+    r"|(?P<time>(?P<h>[0-9]{1,2}):(?P<mi>[0-9]{2})(?::(?P<s>[0-9]{2})(?:[.,](?P<ns>[0-9]{1,9})[0-9]*)?)?"
+    r"(?:\s*(?P<mer>[ap])\.?m\.?(?![a-z]))?)"
+    r"|(?P<hmer>(?P<h2>[0-9]{1,2})\s*(?P<mer2>[ap])\.?m\.?(?![a-z]))"
+    r"|(?P<iso>(?P<iy>[0-9]{4})-(?P<im>[0-9]{1,2})-(?P<id>[0-9]{1,2})(?![0-9]))"
+    r"|(?P<us>(?P<um>[0-9]{1,2})/(?P<ud>[0-9]{1,2})(?:/(?P<uy>[0-9]{1,4}))?(?![0-9]))"
+    r"|(?P<d8>[0-9]{8}(?![0-9]))"
+    r"|(?P<zone>(?P<zs>[+-])(?P<zh>[0-9]{2}):?(?P<zm>[0-9]{2})(?![0-9]))"
+    r"|(?P<num>[+-]?[0-9]+)"
+    r"|(?P<word>[a-z]+)\.?", re.I)
+
+
+def tpot_leap(year: int) -> bool:
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+
+def tpot_month_days(year: int, month: int) -> int:
+    return (31, 29 if tpot_leap(year) else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)[month - 1]
+
+
+def tpot_epoch(year: int, month: int, day: int, hour: int, minute: int, second: int) -> int:
+    """The seconds since 1970 of a UTC time (the days of a civil date; no calendar module)."""
+    if month <= 2:
+        year -= 1
+    era = year // 400
+    year_of_era = year - era * 400
+    day_of_year = (153 * (month + (-3 if month > 2 else 9)) + 2) // 5 + day - 1
+    day_of_era = year_of_era * 365 + year_of_era // 4 - year_of_era // 100 + day_of_year
+    return (era * 146097 + day_of_era - 719468) * 86400 + hour * 3600 + minute * 60 + second
+
+
+def tpot_epoch_loose(year: int, month: int, day: int, hour: int, minute: int, second: int) -> int:
+    """tpot_epoch where month, day, hour, minute and second may lie outside their range (mktime's carry)."""
+    year += (month - 1) // 12
+    month = (month - 1) % 12 + 1
+    return tpot_epoch(year, month, 1, 0, 0, 0) + (day - 1) * 86400 + hour * 3600 + minute * 60 + second
+
+
+class TpotMoment:
+    """The broken-down UTC time of a second: the fields of struct tm (tm_wday: Monday is 0, tm_yday from 1)."""
+
+
+def tpot_gmtime(seconds: int) -> TpotMoment:
+    days, rest = divmod(seconds, 86400)
+    z = days + 719468
+    era = z // 146097
+    day_of_era = z - era * 146097
+    year_of_era = (day_of_era - day_of_era // 1460 + day_of_era // 36524 - day_of_era // 146096) // 365
+    day_of_year = day_of_era - (365 * year_of_era + year_of_era // 4 - year_of_era // 100)
+    shifted = (5 * day_of_year + 2) // 153
+    moment = TpotMoment()
+    moment.tm_mday = day_of_year - (153 * shifted + 2) // 5 + 1
+    moment.tm_mon = shifted + 3 if shifted < 10 else shifted - 9
+    moment.tm_year = year_of_era + era * 400 + (1 if moment.tm_mon <= 2 else 0)
+    moment.tm_hour, rest = divmod(rest, 3600)
+    moment.tm_min, moment.tm_sec = divmod(rest, 60)
+    moment.tm_wday = (days + 3) % 7
+    moment.tm_yday = days - tpot_epoch(moment.tm_year, 1, 1, 0, 0, 0) // 86400 + 1
+    return moment
+
+
+def tpot_iso_week(moment) -> tuple:
+    """(ISO year, ISO week) of a struct_time: %G and %V."""
+    def weeks(year: int) -> int:
+        def p(y: int) -> int:
+            return (y + y // 4 - y // 100 + y // 400) % 7
+        return 53 if p(year) == 4 or p(year - 1) == 3 else 52
+    week = (moment.tm_yday - (moment.tm_wday + 1) + 10) // 7
+    year = moment.tm_year
+    if week < 1:
+        year -= 1
+        week = weeks(year)
+    elif week > weeks(year):
+        year += 1
+        week = 1
+    return year, week
+
+
+def tpot_date_unit(word: str):
+    """(field, count) of a unit word, plural or not; None if the word is no unit."""
+    if word in TPOT_DATE_WORD_UNITS:
+        return TPOT_DATE_WORD_UNITS[word]
+    return TPOT_DATE_WORD_UNITS.get(word[:-1]) if word.endswith("s") else None
+
+
+def tpot_date_width(text: str) -> int:
+    """The width of a conversion: the digits cut to what the output limit allows."""
+    return min(int(text.lstrip("0")[:10] or 0), TPOT_TEXT_OUTPUT)
+
+
+def tpot_date_tokens(text: str, late=None):
+    """The items of a GNU -d TIME: ('time', h, m, s, ns, meridian), ('date', y, m, d), ('zone', seconds), ('num',
+    value, signed, digits), ('month', n), ('wday', n), ('unit', field, count), ('ord', n), ('ago',),
+    ('shift', days), ('skip',); None when a part of the text is none of them or the time is used up (late)."""
+    items, pos, steps = [], 0, 0
+    while pos < len(text):
+        steps += 1
+        if late and not steps % TPOT_DATE_STEP and late(TPOT_DATE_STEP):
+            return None
+        found = TPOT_DATE_TOKENS.match(text, pos)
+        if found is None:
+            return None
+        pos = found.end()
+        if found.group("space"):
+            continue
+        if found.group("time"):
+            nanos = int((found.group("ns") or "").ljust(9, "0"))
+            items.append(("time", int(found.group("h")), int(found.group("mi")), int(found.group("s") or 0), nanos,
+                          (found.group("mer") or "").lower()))
+        elif found.group("hmer"):
+            items.append(("time", int(found.group("h2")), 0, 0, 0, found.group("mer2").lower()))
+        elif found.group("iso"):
+            items.append(("date", int(found.group("iy")), int(found.group("im")), int(found.group("id"))))
+        elif found.group("us"):
+            year = found.group("uy")
+            if year is not None and len(year) <= 2:
+                year = int(year) + (2000 if int(year) < 69 else 1900)
+            items.append(("date", None if year is None else int(year), int(found.group("um")),
+                          int(found.group("ud"))))
+        elif found.group("d8"):
+            digits = found.group("d8")
+            items.append(("date", int(digits[:4]), int(digits[4:6]), int(digits[6:])))
+        elif found.group("zone"):
+            offset = int(found.group("zh")) * 3600 + int(found.group("zm")) * 60
+            items.append(("zone", -offset if found.group("zs") == "-" else offset))
+        elif found.group("num"):
+            digits = found.group("num")
+            if len(digits) > TPOT_DATE_DIGITS:
+                return None
+            items.append(("num", int(digits), digits[0] in "+-", len(digits.lstrip("+-"))))
+        else:
+            word = found.group("word").lower()
+            if word in TPOT_DATE_WORD_MONTHS:
+                items.append(("month", TPOT_DATE_WORD_MONTHS[word]))
+            elif word in TPOT_DATE_WORD_DAYS:
+                items.append(("wday", TPOT_DATE_WORD_DAYS[word]))
+            elif tpot_date_unit(word):
+                items.append(("unit",) + tpot_date_unit(word))
+            elif word in TPOT_DATE_WORD_ORDINALS:
+                items.append(("ord", TPOT_DATE_WORD_ORDINALS[word]))
+            elif word == "ago":
+                items.append(("ago",))
+            elif word in TPOT_DATE_WORD_SHIFTS:
+                items.append(("shift", TPOT_DATE_WORD_SHIFTS[word]))
+            elif word in TPOT_DATE_WORD_ZONES:
+                items.append(("zone", TPOT_DATE_WORD_ZONES[word]))
+            elif word == "t" and items and items[-1][0] == "date":
+                items.append(("skip",))
+            else:
+                return None
+    return items
+
+
+def tpot_date_gnu(text: str, now: int, nanos: int, late=None):
+    """(seconds, nanoseconds) of a GNU -d TIME as gnulib's parse_datetime reads it, None for an invalid date:
+    the date, the time, the zone and the relative parts apart; no time and no date given keeps the time of now
+    for a relative time, a date or a weekday without time is midnight, a weekday counts only without a date."""
+    found = re.fullmatch(r"\s*@(-?[0-9]{1,%d})(?:[.,]([0-9]{1,9})[0-9]*)?\s*" % TPOT_DATE_DIGITS, text)
+    if found:
+        seconds = int(found.group(1))
+        return (seconds, int((found.group(2) or "").ljust(9, "0"))) if abs(seconds) <= TPOT_DATE_MAX else None
+    items = tpot_date_tokens(text, late)
+    if items is None:
+        return None
+    date = clock = zone = weekday = None
+    ordinal = pending = 0
+    rel = {"year": 0, "month": 0, "day": 0, "sec": 0}
+    rels = False
+    at, count = 0, len(items)
+
+    def next_item():
+        return items[at] if at < count else (None,)
+    steps = 0
+    while at < count:
+        steps += 1
+        if late and not steps % TPOT_DATE_STEP and late(TPOT_DATE_STEP):
+            return None
+        item = items[at]
+        at += 1
+        kind = item[0]
+        if kind == "time":
+            if clock is not None:
+                return None
+            clock = item[1:]
+        elif kind == "date":
+            if date is not None:
+                return None
+            date = [item[1], item[2], item[3]]
+        elif kind == "zone":
+            if zone is not None:
+                return None
+            zone = item[1]
+        elif kind == "skip":
+            continue
+        elif kind == "month":
+            if date is not None or next_item()[0] != "num" or next_item()[2] or next_item()[3] > 2:
+                return None
+            day = items[at][1]
+            at += 1
+            year = None
+            if next_item()[0] == "num" and not next_item()[2] and next_item()[3] == 4:
+                year = items[at][1]
+                at += 1
+            date = [year, item[1], day]
+        elif kind == "num":
+            value, signed, digits = item[1], item[2], item[3]
+            following = next_item()
+            if following[0] == "unit":
+                at += 1
+                rel[following[1]] += value * following[2]
+                rels = True
+            elif following[0] == "month" and not signed and digits <= 2 and date is None:
+                at += 1
+                year = None
+                if next_item()[0] == "num" and not next_item()[2] and next_item()[3] == 4:
+                    year = items[at][1]
+                    at += 1
+                date = [year, following[1], value]
+            elif signed and clock is not None and zone is None and digits <= 2:
+                zone = value * 3600
+            elif date is not None and date[0] is None and not signed and digits == 4:
+                date[0] = value
+            elif not signed and clock is None and digits <= 4:
+                # derived from gnulib's digits_to_date_time, not recorded: up to 4 digits are an hour or hhmm
+                clock = (value, 0, 0, 0, "") if digits <= 2 else (value // 100, value % 100, 0, 0, "")
+            else:
+                return None
+        elif kind == "wday":
+            weekday, ordinal, pending = item[1], pending, 0
+        elif kind == "ord":
+            following = next_item()
+            if following[0] == "unit":
+                at += 1
+                rel[following[1]] += item[1] * following[2]
+                rels = True
+            elif following[0] == "wday":
+                pending = item[1]
+            else:
+                return None
+        elif kind == "unit":
+            rel[item[1]] += item[2]
+            rels = True
+        elif kind == "ago":
+            rel = {field: -value for field, value in rel.items()}
+            rels = True
+        elif kind == "shift":
+            rel["day"] += item[1]
+            rels = True
+    moment = tpot_gmtime(now)
+    year, month, day = moment.tm_year, moment.tm_mon, moment.tm_mday
+    hour, minute, second, ns = moment.tm_hour, moment.tm_min, moment.tm_sec, nanos
+    if date is not None:
+        year = year if date[0] is None else date[0]
+        month, day = date[1], date[2]
+        if not 1 <= month <= 12 or not 1 <= day <= tpot_month_days(year, month):
+            return None
+    if clock is not None:
+        hour, minute, second, ns, meridian = clock
+        if meridian:
+            if not 1 <= hour <= 12:
+                return None
+            hour = hour % 12 + (12 if meridian == "p" else 0)
+        if minute > 59 or second > 60 or hour > 24 or (hour == 24 and (minute or second)):
+            return None
+    elif not (rels and date is None and weekday is None):
+        hour = minute = second = ns = 0
+    if weekday is not None and date is None:
+        today = (tpot_epoch(year, month, day, 0, 0, 0) // 86400 + 4) % 7
+        day += (weekday - today + 7) % 7 + 7 * (ordinal - (1 if ordinal > 0 and today != weekday else 0))
+    seconds = tpot_epoch_loose(year + rel["year"], month + rel["month"], day + rel["day"], hour, minute, second)
+    seconds += rel["sec"] - (zone or 0)
+    return (seconds, ns) if abs(seconds) <= TPOT_DATE_MAX else None
+
+
+def tpot_date_posix(text: str, now: int, strict: bool = True):
+    """The set form MMDDhhmm[[CC]YY][.ss] of GNU and BusyBox: the seconds, None where the text is none."""
+    found = re.fullmatch(r"([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2}|[0-9]{4})?(?:\.([0-9]{2}))?", text)
+    if found is None:
+        return None
+    month, day, hour, minute = (int(found.group(n)) for n in (1, 2, 3, 4))
+    year = tpot_gmtime(now).tm_year
+    if found.group(5):
+        year = int(found.group(5))
+        if len(found.group(5)) == 2:
+            year += 2000 if year < 69 else 1900
+    second = int(found.group(6) or 0)
+    if strict and not (1 <= month <= 12 and 1 <= day <= 31 and hour <= 23 and minute <= 59 and second <= 61):
+        return None
+    return tpot_epoch_loose(year, month, day, hour, minute, second)
+
+
+def tpot_date_busybox(text: str, now: int, strict: bool, strict_digits: bool):
+    """The seconds of a BusyBox -d / -s TIME (@SECONDS, hh:mm[:ss], [YYYY.]MM.DD-hh:mm[:ss], YYYY-MM-DD [hh[:mm[:ss]]],
+    [[[[[YY]YY]MM]DD]hh]mm[.ss]), None for an invalid date. strict: the ranges of musl's strptime; uClibc's accept any
+    two digits and carry them over. strict_digits: the digit form checks its ranges (recorded from 1.33)."""
+    found = re.fullmatch(r"@([0-9]{1,%d})" % TPOT_DATE_DIGITS, text)
+    if found:
+        return int(found.group(1)) if int(found.group(1)) <= TPOT_DATE_MAX else None
+    moment = tpot_gmtime(now)
+    year, month, day, hour, minute, second = moment.tm_year, moment.tm_mon, moment.tm_mday, 0, 0, 0
+    limit = strict
+    found = re.fullmatch(r"([0-9]{1,2}):([0-9]{1,2})(?::([0-9]{1,2}))?", text)
+    if found:
+        hour, minute, second = int(found.group(1)), int(found.group(2)), int(found.group(3) or 0)
+    elif re.fullmatch(r"(?:[0-9]{4}\.)?[0-9]{1,2}\.[0-9]{1,2}-[0-9]{1,2}:[0-9]{1,2}(?::[0-9]{1,2})?", text):
+        found = re.fullmatch(r"(?:([0-9]{4})\.)?([0-9]{1,2})\.([0-9]{1,2})-([0-9]{1,2}):([0-9]{1,2})(?::([0-9]{1,2}))?",
+                             text)
+        year = int(found.group(1)) if found.group(1) else year
+        month, day, hour, minute, second = (int(found.group(n) or 0) for n in (2, 3, 4, 5, 6))
+    elif re.fullmatch(r"[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?: [0-9]{1,2}(?::[0-9]{1,2}(?::[0-9]{1,2})?)?)?", text):
+        found = re.fullmatch(r"([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})(?: ([0-9]{1,2})(?::([0-9]{1,2})(?::([0-9]{1,2}))?)?)?",
+                             text)
+        year, month, day, hour, minute, second = (int(found.group(n) or 0) for n in (1, 2, 3, 4, 5, 6))
+    else:
+        found = re.fullmatch(r"((?:[0-9]{2}){1,6})(?:\.([0-9]{2}))?", text)
+        if found is None:
+            return None
+        digits = found.group(1)
+        limit = strict_digits
+        second = int(found.group(2) or 0)
+        minute = int(digits[-2:])
+        if len(digits) >= 4:
+            hour = int(digits[-4:-2])
+        else:
+            hour = moment.tm_hour
+        if len(digits) >= 6:
+            day = int(digits[-6:-4])
+        if len(digits) >= 8:
+            month = int(digits[-8:-6])
+        if len(digits) == 10:
+            year = int(digits[:2]) + (2000 if int(digits[:2]) < 69 else 1900)
+        elif len(digits) == 12:
+            year = int(digits[:4])
+    if limit and not (1 <= month <= 12 and 1 <= day <= 31 and hour <= 23 and minute <= 59 and second <= 61):
+        return None
+    return tpot_epoch_loose(year, month, day, hour, minute, second)
+
+
+class Command_tpot_date(TpotTextTool):
+    """date of the persona: +FORMAT, -u, -d TIME, -f FILE, -s TIME, -r FILE, -R, -I[SPEC], --rfc-3339, --help and
+    --version (GNU) by release, BusyBox 1.25.1 to 1.36.1 (uclibc, musl). The time is the session's clock."""
+
+    tool = "date"
+    consumes_stdin = False
+    status = 1
+    busybox_longs = {"rfc-822": ("R", 0), "rfc-2822": ("R", 0), "set": ("s", 1), "utc": ("u", 0), "date": ("d", 1),
+                     "reference": ("r", 1)}
+
+    @staticmethod
+    def clock() -> float:
+        return time.time()
+
+    def tpot_date_longs(self) -> dict:
+        longs = {"date": ("d", 1), "file": ("f", 1), "iso-8601": ("I", 2), "reference": ("r", 1),
+                 "rfc-2822": ("R", 0), "rfc-3339": ("rfc3339", 1), "set": ("s", 1), "utc": ("u", 0),
+                 "universal": ("u", 0), "help": ("help", 0), "version": ("version", 0)}
+        if self.version >= (8, 28):   # derived: --rfc-email is in the help of 8.32, not in 8.22
+            longs["rfc-email"] = ("R", 0)
+        if self.version >= (8, 23):   # derived: --debug is in the help of 8.32, not in 8.22
+            longs["debug"] = ("debug", 0)
+        if self.version >= (9, 0):    # recorded: the help of 9.1 has it, that of 8.32 has not
+            longs["resolution"] = ("resolution", 0)
+        return longs
+
+    def tpot_date_locale(self) -> dict:
+        return TPOT_DATE_LOCALES.get(tpot_text("text_date", "c") if self.gnu else "c", TPOT_DATE_LOCALES["c"])
+
+    def tpot_date_now(self) -> tuple:
+        moment = self.clock()
+        seconds = int(moment // 1)
+        nanos = int(round((moment - seconds) * 1e9))
+        return (seconds + 1, 0) if nanos >= 1_000_000_000 else (seconds, nanos)
+
+    def tpot_date_root(self) -> bool:
+        sudo = bool(getattr(getattr(self, "pp", None), "tpot_sudo", False))
+        return sudo or self.user.get("uid", 0) == 0
+
+    # --- options ---------------------------------------------------------------------------
+
+    def tpot_date_args(self):
+        """The options of date: GNU's long options (unique prefixes; --iso-8601 takes its SPEC only attached) and
+        short ones, BusyBox's (long ones from --help to --reference, also by unique prefix). Returns
+        ([(key, value)], operands)."""
+        found, operands, index, args = [], [], 0, list(self.args)
+        longs = self.tpot_date_longs() if self.gnu else self.busybox_longs
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if arg == "--":
+                operands += args[index:]
+                break
+            if arg == "-" or not arg.startswith("-"):
+                operands.append(arg)
+                continue
+            if arg.startswith("--"):
+                word, eq, value = arg[2:].partition("=")
+                if not self.gnu and word == "help" and not eq:
+                    found.append(("help", None))
+                    continue
+                names = [name for name in longs if name.startswith(word)]
+                if word in longs:
+                    names = [word]
+                if not names:
+                    self.tpot_date_long_error("unrecognized", arg, word)
+                if len({longs[name] for name in names}) > 1:
+                    raise TpotTextStop(f"date: option '{arg.partition('=')[0]}' is ambiguous; possibilities:"
+                                       + "".join(f" '--{name}'" for name in names) + "\n" + self.tpot_try(), 1)
+                key, takes = longs[names[0]]
+                if eq and not takes:
+                    self.tpot_date_long_error("allow", arg, names[0])
+                if takes == 1 and not eq:
+                    if index >= len(args):
+                        self.tpot_date_long_error("require", arg, names[0])
+                    value, index = args[index], index + 1
+                elif not eq:
+                    value = None
+                found.append((key, value))
+                continue
+            for at, letter in enumerate(arg[1:]):
+                if letter == "I":
+                    found.append(("I", arg[at + 2:] or None))
+                    break
+                if letter in ("dfrs" if self.gnu else "dsrD"):
+                    value = arg[at + 2:]
+                    if not value:
+                        if index >= len(args):
+                            self.tpot_date_bad(letter, missing=True)
+                        value, index = args[index], index + 1
+                    found.append((letter, value))
+                    break
+                if letter not in "uR":
+                    self.tpot_date_bad(letter)
+                found.append((letter, None))
+        return found, operands
+
+    def tpot_date_long_error(self, kind: str, arg: str, name: str) -> None:
+        if self.gnu:
+            text = {"unrecognized": f"unrecognized option '{arg}'", "require": f"option '--{name}' requires an argument",
+                    "allow": f"option '--{name}' doesn't allow an argument"}[kind]
+            raise TpotTextStop(f"date: {text}\n" + self.tpot_try(), 1)
+        if self.libc == "musl":
+            text = {"unrecognized": f"unrecognized option: {arg[2:]}", "require": f"option requires an argument: {name}",
+                    "allow": f"option does not take an argument: {name}"}[kind]
+        elif self.libc == "uclibc":
+            text = {"unrecognized": f"unrecognized option `{arg}'", "require": f"option `--{name}' requires an argument",
+                    "allow": f"option `--{name}' doesn't allow an argument"}[kind]
+        else:
+            text = {"unrecognized": f"unrecognized option '{arg}'", "require": f"option '--{name}' requires an argument",
+                    "allow": f"option '--{name}' doesn't allow an argument"}[kind]
+        raise self.tpot_usage_stop(f"date: {text}\n")
+
+    def tpot_date_bad(self, letter: str, missing: bool = False) -> None:
+        """The error of a short option: GNU's with the try line, BusyBox's usage text with the messages of its C library."""
+        if self.gnu:
+            what = "option requires an argument --" if missing else "invalid option --"
+            raise TpotTextStop(f"date: {what} '{letter}'\n" + self.tpot_try(), 1)
+        if self.libc == "musl":
+            text = f"date: option requires an argument: {letter}\n" if missing else f"date: unrecognized option: {letter}\n"
+        elif self.libc == "uclibc":
+            text = f"date: option requires an argument -- {letter}\n" if missing else f"date: invalid option -- {letter}\n"
+        else:
+            text = f"date: option requires an argument -- '{letter}'\n" if missing else f"date: invalid option -- '{letter}'\n"
+        raise self.tpot_usage_stop(text)
+
+    def tpot_busybox_usage(self) -> str:
+        return TPOT_DATE_USAGE_NEW if self.version >= (1, 33) else TPOT_DATE_USAGE_OLD
+
+    def tpot_date_help(self) -> str:
+        """GNU's --help by release; Red Hat's build of 8.32 has no translation line (the 8.30 of DSM is derived)."""
+        if self.version >= (9, 7):
+            return TPOT_DATE_HELP_97
+        if self.version >= (9, 4):
+            return TPOT_DATE_HELP_94
+        if self.version >= (9, 1):
+            return TPOT_DATE_HELP_91
+        if self.version >= (8, 23):
+            return TPOT_DATE_HELP_832R if tpot_text("text_date", "c").startswith("us") else TPOT_DATE_HELP_832
+        return TPOT_DATE_HELP_822
+
+    # --- conversions -----------------------------------------------------------------------
+
+    tpot_date_cache = None
+
+    def tpot_date_tables(self, moment, when: tuple, locale: dict) -> tuple:
+        """The numbers, words and composite conversions of one time, made once for all the conversions of a format."""
+        if self.tpot_date_cache is not None and self.tpot_date_cache[0] == when:
+            return self.tpot_date_cache[1:]
+        seconds, nanos = when
+        sunday = (moment.tm_wday + 1) % 7
+        hour12 = moment.tm_hour % 12 or 12
+        iso_year, iso_week = tpot_iso_week(moment)
+        names = TPOT_DATE_DAYS[sunday], TPOT_DATE_MONTHS[moment.tm_mon - 1]
+        musl = not self.gnu and self.libc == "musl"
+        numbers = {
+            "d": (moment.tm_mday, 2, "0"), "e": (moment.tm_mday, 2, " "), "H": (moment.tm_hour, 2, "0"),
+            "I": (hour12, 2, "0"), "j": (moment.tm_yday, 3, "0"), "m": (moment.tm_mon, 2, "0"),
+            "M": (moment.tm_min, 2, "0"), "S": (moment.tm_sec, 2, "0"), "y": (moment.tm_year % 100, 2, "0"),
+            "C": (moment.tm_year // 100, 2, "0"), "g": (iso_year % 100, 2, "0"),
+            "G": (iso_year, 4 if musl else 1, "0"), "u": (moment.tm_wday + 1, 1, "0"), "w": (sunday, 1, "0"),
+            "U": ((moment.tm_yday - 1 + 7 - sunday) // 7, 2, "0"),
+            "W": ((moment.tm_yday - 1 + 7 - moment.tm_wday) // 7, 2, "0"), "V": (iso_week, 2, "0"),
+            "Y": (moment.tm_year, 4 if musl else 1, "0"), "s": (seconds, 1, "0"),
+        }
+        if self.gnu or self.libc != "musl":
+            numbers.update({"k": (moment.tm_hour, 2, " "), "l": (hour12, 2, " ")})
+        if self.gnu and self.version >= (8, 32):
+            numbers["q"] = ((moment.tm_mon - 1) // 3 + 1, 1, "0")
+        words = {"a": names[0][:3], "A": names[0], "b": names[1][:3], "h": names[1][:3], "B": names[1],
+                 "p": locale["p"][0 if moment.tm_hour < 12 else 1], "Z": "UTC", "z": "+0000", "n": "\n", "t": "\t",
+                 "%": "%", "F": f"{moment.tm_year:04d}-{moment.tm_mon:02d}-{moment.tm_mday:02d}"}
+        composites = {"c": locale["c"], "x": locale["x"], "X": locale["X"], "r": locale["r"], "D": "%m/%d/%y",
+                      "T": "%H:%M:%S", "R": "%H:%M"}
+        self.tpot_date_cache = (when, numbers, words, composites)
+        return numbers, words, composites
+
+    def tpot_date_term(self, letter: str, moment, when: tuple, locale: dict):
+        """One conversion without flags: ("n", value, digits, pad) for a number, ("s", text) for a word or a
+        sign, ("f", format) for a conversion made of others; None where the style has no such conversion."""
+        numbers, words, composites = self.tpot_date_tables(moment, when, locale)
+        if letter in numbers:
+            return ("n",) + numbers[letter]
+        if letter in words:
+            return ("s", words[letter])
+        if letter == "P" and (self.gnu or self.libc != "musl"):
+            # recorded: uClibc's %P is upper case, glibc's and gnulib's lower case
+            shown = locale["p"][0 if moment.tm_hour < 12 else 1]
+            return ("s", shown if not self.gnu and self.libc == "uclibc" else shown.lower())
+        if letter in composites:
+            return ("f", composites[letter])
+        return None
+
+    def tpot_date_format(self, fmt: str, when: tuple) -> str:
+        """strftime of the time (seconds, nanoseconds) in the persona's style: gnulib's (flags, width, E and O,
+        an unknown conversion stays as it is), musl's (flags, no widths but for C F G Y, the output ends at an
+        unknown conversion) or uClibc's (no flags, an unknown conversion stays as it is)."""
+        moment = tpot_gmtime(when[0])
+        locale = self.tpot_date_locale()
+        if self.gnu or self.libc == "glibc":
+            return self.tpot_date_gnu_format(fmt, when, moment, locale)
+        if self.libc == "musl":
+            return self.tpot_date_musl_format(fmt, when, moment, locale)
+        out, at, size, steps = [], 0, 0, 0
+        while at < len(fmt) and size <= TPOT_TEXT_OUTPUT:
+            steps += 1
+            if not steps % TPOT_DATE_STEP and self.tpot_late(TPOT_DATE_STEP):
+                break
+            char = fmt[at]
+            at += 1
+            if char != "%":
+                out.append(char)
+                size += 1
+                continue
+            letter = fmt[at:at + 1]
+            at += 1
+            if letter in ("E", "O") and fmt[at:at + 1] and fmt[at] in (TPOT_DATE_MOD_E if letter == "E" else TPOT_DATE_MOD_O):
+                letter, at = fmt[at], at + 1
+            term = self.tpot_date_term(letter, moment, when, locale) if letter else None
+            if term is None:
+                out.append("%" + letter)
+            elif term[0] == "n":
+                out.append(str(term[1]).rjust(term[2], term[3]))
+            elif term[0] == "f":
+                out.append(self.tpot_date_format(term[1], when))
+            else:
+                out.append(term[1])
+            size += len(out[-1])
+        return "".join(out)
+
+    def tpot_date_gnu_format(self, fmt: str, when: tuple, moment, locale: dict) -> str:
+        """gnulib's nstrftime. Recorded: the flags - _ 0 ^ #, a width (from 8.32 exactly, before at least the
+        field's own), %:z to %:::z, %N with a width, E and O; a conversion it does not know is copied with its
+        flags and width. Before 9.0 (recorded: 8.22, 8.32 of Rocky and Ubuntu) %5% is padded, the - of %-% is
+        ignored and %-N prints the number."""
+        old = self.version < (9, 0)
+        out, at, size, steps = [], 0, 0, 0
+        while at < len(fmt) and size <= TPOT_TEXT_OUTPUT:
+            steps += 1
+            if not steps % TPOT_DATE_STEP and self.tpot_late(TPOT_DATE_STEP):
+                break
+            char = fmt[at]
+            at += 1
+            if char != "%":
+                out.append(char)
+                size += 1
+                continue
+            start, flags = at - 1, ""
+            while at < len(fmt) and fmt[at] in "_-0^#+":
+                flags += fmt[at]
+                at += 1
+            digits = at
+            while at < len(fmt) and fmt[at] in "0123456789":
+                at += 1
+            width = tpot_date_width(fmt[digits:at]) if at > digits else None
+            modifier = ""
+            if at < len(fmt) and fmt[at] in "EO":
+                modifier, at = fmt[at], at + 1
+            colons = 0
+            while self.gnu and at < len(fmt) and fmt[at] == ":" and not modifier:
+                colons, at = colons + 1, at + 1
+            letter = fmt[at:at + 1]
+            at += 1 if letter else 0
+            text = self.tpot_date_gnu_spec(letter, flags, width, modifier, colons, when, moment, locale, old)
+            if text is None:
+                text = fmt[start:at]
+                if width:
+                    # recorded: %10 is padded to 10, %5% (Debian, Ubuntu) to one more
+                    text = text.rjust(width + (1 if letter == "%" else 0))
+            out.append(text)
+            size += len(text)
+        return "".join(out)
+
+    def tpot_date_gnu_spec(self, letter, flags, width, modifier, colons, when, moment, locale, old):
+        """The text of one conversion of gnulib with its flags, None for a conversion it copies."""
+        if modifier and (not letter or letter not in (TPOT_DATE_MOD_E if modifier == "E" else TPOT_DATE_MOD_O)):
+            return None
+        if colons:
+            if letter != "z" or colons > 3:
+                return None
+            return ("+00:00", "+00:00:00", "+00")[colons - 1]
+        if letter == "%":
+            if (flags or width is not None or modifier) and not old:
+                return None
+            return "%".rjust(width or 0) if old and width else "%"
+        if letter == "N" and self.gnu:
+            ns = f"{when[1]:09d}"
+            if "-" in flags and old:
+                return str(when[1])
+            return ns[:width] if width and width <= 9 else (ns.ljust(width, "0") if width else ns)
+        term = self.tpot_date_term(letter, moment, when, locale)
+        if term is None:
+            return None
+        if term[0] == "n":
+            value, digits, pad = term[1], term[2], term[3]
+            if "-" in flags:
+                return str(value)
+            pad = " " if "_" in flags else ("0" if "0" in flags or "+" in flags else pad)
+            minimum = digits if width is None else (width if self.version >= (8, 32) or not self.gnu else max(width, digits))
+            return str(value).rjust(minimum, pad)
+        text = self.tpot_date_format(term[1], when) if term[0] == "f" else term[1]
+        if "^" in flags or ("#" in flags and letter not in ("p", "Z")):
+            text = text.upper()
+        elif "#" in flags:
+            text = text.lower()
+        if width and "-" not in flags:
+            text = text.rjust(width, "0" if "0" in flags else " ")
+        return text
+
+    def tpot_date_musl_format(self, fmt: str, when: tuple, moment, locale: dict) -> str:
+        """musl's strftime: the flags - _ 0, a width only for C, F, G and Y (zeros), no k l P N q and none of the
+        GNU flags; the output ends at a conversion it does not know."""
+        out, at, size, steps = [], 0, 0, 0
+        while at < len(fmt) and size <= TPOT_TEXT_OUTPUT:
+            steps += 1
+            if not steps % TPOT_DATE_STEP and self.tpot_late(TPOT_DATE_STEP):
+                break
+            char = fmt[at]
+            at += 1
+            if char != "%":
+                out.append(char)
+                size += 1
+                continue
+            pad = ""
+            if fmt[at:at + 1] in ("-", "_", "0"):
+                pad, at = fmt[at], at + 1
+            plus = fmt[at:at + 1] == "+"
+            at += 1 if plus else 0
+            digits = at
+            while at < len(fmt) and fmt[at] in "0123456789":
+                at += 1
+            letter = fmt[at:at + 1]
+            width = tpot_date_width(fmt[digits:at]) if at > digits and letter in ("C", "F", "G", "Y") else 0
+            if letter in ("E", "O"):
+                at += 1
+                letter = fmt[at:at + 1]
+            at += 1
+            term = self.tpot_date_term(letter, moment, when, locale) if letter and letter not in "kPlq" else None
+            if term is None:
+                break
+            if term[0] == "n":
+                chosen = pad or ("_" if term[3] == " " else "0")
+                text = str(term[1]) if chosen == "-" else str(term[1]).rjust(term[2], " " if chosen == "_" else "0")
+            elif term[0] == "f":
+                text = self.tpot_date_format(term[1], when)
+            else:
+                text = term[1]
+            out.append(text.rjust(width, "0") if width else text)
+            size += len(out[-1])
+        return "".join(out)
+
+    def tpot_date_iso(self, spec, when: tuple) -> str:
+        """-I[SPEC]: the ISO-8601 text; the zone is +00:00 from GNU 8.32 and BusyBox 1.33, +0000 before."""
+        if self.gnu:
+            names = TPOT_DATE_SPECS
+        else:
+            names = TPOT_DATE_SPECS if self.version >= (1, 33) else TPOT_DATE_SPECS[:4]
+        spec = spec or "date"
+        matches = [name for name in names if name.startswith(spec)]
+        if len(matches) != 1:
+            if not self.gnu:
+                raise TpotTextStop(f"date: invalid argument '{spec}'\n", 1)
+            valid = "".join(f"  - {tpot_text_quote(name)}\n" for name in names)
+            raise TpotTextStop(f"date: invalid argument {tpot_text_quote(spec)} for {tpot_text_quote('--iso-8601')}\n"
+                               + "Valid arguments are:\n" + valid + self.tpot_try(), 1)
+        name = matches[0]
+        colon = self.version >= ((8, 32) if self.gnu else (1, 33))
+        zone = "+00:00" if colon else "+0000"
+        if name == "ns":
+            return self.tpot_date_format("%Y-%m-%dT%H:%M:%S,", when) + f"{when[1]:09d}" + zone
+        stamp = {"date": "%Y-%m-%d", "hours": "%Y-%m-%dT%H", "minutes": "%Y-%m-%dT%H:%M",
+                 "seconds": "%Y-%m-%dT%H:%M:%S"}[name]
+        return self.tpot_date_format(stamp, when) + ("" if name == "date" else zone)
+
+    def tpot_date_rfc3339(self, spec: str, when: tuple) -> str:
+        """--rfc-3339=SPEC (derived from the help text, not recorded)."""
+        names = ("date", "seconds", "ns")
+        matches = [name for name in names if name.startswith(spec)] if spec else []
+        if len(matches) != 1:
+            valid = "".join(f"  - {tpot_text_quote(name)}\n" for name in names)
+            raise TpotTextStop(f"date: invalid argument {tpot_text_quote(spec)} for {tpot_text_quote('--rfc-3339')}\n"
+                               + "Valid arguments are:\n" + valid + self.tpot_try(), 1)
+        stamp = {"date": "%Y-%m-%d", "seconds": "%Y-%m-%d %H:%M:%S+00:00",
+                 "ns": "%Y-%m-%d %H:%M:%S.%N+00:00"}[matches[0]]
+        return self.tpot_date_format(stamp, when)
+
+    def tpot_date_render(self, opts: dict, fmt, when: tuple) -> str:
+        if fmt is not None:
+            return self.tpot_date_format(fmt, when)
+        if "R" in opts:
+            return self.tpot_date_format(TPOT_DATE_RFC, when)
+        if "I" in opts:
+            return self.tpot_date_iso(opts["I"], when)
+        if "rfc3339" in opts:
+            return self.tpot_date_rfc3339(opts["rfc3339"], when)
+        return self.tpot_date_format(self.tpot_date_locale()["default"], when)
+
+    # --- the command -----------------------------------------------------------------------
+
+    def tpot_date_set(self, when: tuple) -> bool:
+        """date -s of root prints the new date and leaves the clock alone (derived, not recorded); False for the others."""
+        return self.tpot_date_root()
+
+    def tpot_date_reference(self, name: str, now: tuple):
+        kind = self.tpot_file(name)[0]
+        if kind == "missing":
+            reason = "No such file or directory"
+            raise TpotTextStop(f"date: {name}: {reason}\n" if self.gnu else f"date: can't stat '{name}': {reason}\n", 1)
+        node = self.fs.getfile(self.fs.resolve_path(name, self.cwd))
+        return (int(node[tpot_shell_fs.A_CTIME]), 0) if isinstance(node, list) else now
+
+    def tpot_main(self, terminal: bytes | None) -> int | None:
+        found, operands = self.tpot_date_args()
+        opts = {}
+        for key, value in found:
+            if key == "help":
+                if not self.gnu:
+                    raise TpotTextStop(self.tpot_usage_stop().text, 0)
+                self.tpot_emit(self.tpot_date_help())
+                return 0
+            if key == "version":
+                self.tpot_emit(self.tpot_gnu_version("David MacKenzie."))
+                return 0
+            if key == "resolution":
+                self.tpot_emit("0.000000001\n")
+                return 0
+            opts[key] = value
+        return self.tpot_date_gnu_main(opts, operands, terminal) if self.gnu else self.tpot_date_busybox_main(opts, operands)
+
+    def tpot_date_gnu_main(self, opts: dict, operands: list, terminal) -> int:
+        quote = tpot_text_quote
+        if sum(key in opts for key in ("R", "I", "rfc3339")) > 1:
+            raise TpotTextStop("date: multiple output formats specified\n" + self.tpot_try(), 1)
+        given = [key for key in ("d", "f", "r") if key in opts]
+        if len(given) > 1:
+            raise TpotTextStop("date: the options to specify dates for printing are mutually exclusive\n"
+                               + self.tpot_try(), 1)
+        if "s" in opts and given:
+            raise TpotTextStop("date: the options to print and set the time may not be used together\n"
+                               + self.tpot_try(), 1)
+        fmt = setting = None
+        if len(operands) > 1:
+            raise TpotTextStop(f"date: extra operand {quote(operands[1])}\n" + self.tpot_try(), 1)
+        if operands:
+            if operands[0].startswith("+"):
+                fmt = operands[0][1:]
+            elif "s" in opts or given:
+                raise TpotTextStop(f"date: the argument {quote(operands[0])} lacks a leading '+';\n"
+                                   "when using an option to specify date(s), any non-option\n"
+                                   "argument must be a format string beginning with '+'\n" + self.tpot_try(), 1)
+            else:
+                setting = operands[0]
+        if fmt is not None and any(key in opts for key in ("R", "I", "rfc3339")):
+            raise TpotTextStop("date: multiple output formats specified\n" + self.tpot_try(), 1)
+        now = self.tpot_date_now()
+        if "f" in opts:
+            return self.tpot_date_lines(opts, fmt, now, terminal)
+        when = now
+        if "d" in opts:
+            when = tpot_date_gnu(opts["d"], *now, self.tpot_late)
+            if when is None:
+                raise TpotTextStop(f"date: invalid date {quote(opts['d'])}\n", 1)
+        elif "r" in opts:
+            when = self.tpot_date_reference(opts["r"], now)
+        elif "s" in opts or setting is not None:
+            text = opts["s"] if "s" in opts else setting
+            seconds = tpot_date_posix(text, now[0]) if "s" not in opts else None
+            when = (seconds, 0) if seconds is not None else tpot_date_gnu(text, *now, self.tpot_late)
+            if when is None:
+                raise TpotTextStop(f"date: invalid date {quote(text)}\n", 1)
+        self.tpot_emit(self.tpot_date_render(opts, fmt, when) + "\n")
+        if "s" in opts or setting is not None:
+            if self.tpot_date_set(when):
+                return 0
+            raise TpotTextStop("date: cannot set date: Operation not permitted\n", 1)
+        return 0
+
+    def tpot_date_lines(self, opts: dict, fmt, now: tuple, terminal) -> int:
+        """-f DATEFILE: every line as a -d TIME; an invalid one is said and the rest goes on."""
+        name = opts["f"]
+        if name == "-":
+            data = self.tpot_stdin(terminal)
+            if data is None:
+                return None
+        else:
+            kind, data, _ = self.tpot_file(name)
+            if kind != "file":
+                shown = tpot_text_quote(name) if self.version < (8, 30) else name
+                raise TpotTextStop(f"date: {shown}: " + ("Is a directory" if kind == "dir" else "No such file or directory")
+                                   + "\n", 1)
+        lines = data.decode("utf-8", "surrogateescape").split("\n")
+        if lines and lines[-1] == "":
+            lines.pop()
+        status = 0
+        for line in lines:
+            if self.tpot_late():
+                break
+            when = tpot_date_gnu(line, *now, self.tpot_late)
+            if when is None:
+                self.tpot_err.append(f"date: invalid date {tpot_text_quote(line)}\n")
+                status = 1
+                continue
+            self.tpot_emit(self.tpot_date_render(opts, fmt, when) + "\n")
+        return status
+
+    def tpot_date_busybox_main(self, opts: dict, operands: list) -> int:
+        fmt = None
+        if operands and operands[0].startswith("+"):
+            fmt = operands.pop(0)[1:]
+        if len(operands) > 1 or (operands and ("d" in opts or "s" in opts)) or ("s" in opts and "d" in opts):
+            raise self.tpot_usage_stop()
+        now = self.tpot_date_now()
+        strict, strict_digits = self.libc == "musl", self.version >= (1, 33)
+        when = now
+        if "r" in opts:
+            when = self.tpot_date_reference(opts["r"], now)
+        setting = opts["s"] if "s" in opts else (operands[0] if operands else None)
+        text = opts["d"] if "d" in opts else setting
+        if text is not None:
+            seconds = None
+            if "d" not in opts and "s" not in opts:
+                seconds = tpot_date_posix(text, now[0], strict_digits)
+            if seconds is None:
+                seconds = tpot_date_busybox(text, now[0], strict, strict_digits)
+            if seconds is None:
+                raise TpotTextStop(f"date: invalid date '{text}'\n", 1)
+            when = (seconds, 0)
+        self.tpot_emit(self.tpot_date_render(opts, fmt, when) + "\n")
+        if setting is not None and "d" not in opts and not self.tpot_date_set(when):
+            self.tpot_err.append("date: can't set date: Operation not permitted\n")
+        return 0
+
+
+commands["/usr/bin/date"] = Command_tpot_date
+commands["/bin/date"] = Command_tpot_date
+commands["date"] = Command_tpot_date
+
+
+# --- xargs ----------------------------------------------------------------------------------------
+
+# T-Pot: xargs of the persona, GNU findutils (the release that goes with [shell] text_version of coreutils) or
+#   BusyBox. It builds the command lines and runs each as the persona's shell runs a command (the way busybox and
+#   sudo start one); its texts are recorded in fixtures/shell_xargs.json.
+from cowrie.shell.pipe import PipeProtocol  # noqa: E402
+
+TPOT_XARGS_RUNS = 4096
+# names Cowrie runs as the shell's own commands; xargs execs a file, so without one on the PATH it is "No such file"
+#   (recorded: Debian, Ubuntu, BusyBox 1.33 and later; shell_xargs.json); every builtin or keyword name registered as a
+#   command (base.py, bash.py, fs.py, type) is in it, XargsTest checks that against the registrations
+TPOT_XARGS_BUILTINS = frozenset(("exit", "logout", "export", "unset", "cd", "set", "alias", "type", "break", "source",
+                                "continue", "help", ":", "do", "done",
+                                "eval", "umask", "wait", "jobs", "history", "command", "hash", "exec", "readonly",
+                                "local", "shift", "trap", "fg", "bg", "ulimit"))
+# the command buffer of GNU xargs without -s (--show-limits); BusyBox is taken the same (derived, not recorded)
+TPOT_XARGS_BUFFER = 131072
+TPOT_XARGS_TOKENS = re.compile(r"[^ \t\n'\"\\]++|[ \t]++|[\n'\"\\]")
+TPOT_XARGS_BB_TOKENS = re.compile(r"[^ \t\n\v\f\r'\"\\]++|[ \t\n\v\f\r]++|['\"\\]")
+TPOT_XARGS_BLANKS = " \t\n\v\f\r"
+TPOT_XARGS_NUMBER = re.compile(r"[ \t\n\v\f\r]*+[-+]?+[0-9]++")
+TPOT_XARGS_DELIMITER = re.compile(r"\\(?:([abfnrtv\\])|([0-7]{1,3})|x([0-9a-fA-F]{1,2}))")
+TPOT_XARGS_ESCAPES = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v", "\\": "\\"}
+TPOT_XARGS_SAFE = re.compile(r"(?:[\w./+,:@%^={}-]|[^\x00-\x7f])(?:[\w./+,:@%^=#~{}-]|[^\x00-\x7f])*+")
+TPOT_XARGS_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+TPOT_XARGS_CONTROL_NAMES = {7: "\\a", 8: "\\b", 9: "\\t", 10: "\\n", 11: "\\v", 12: "\\f", 13: "\\r"}
+TPOT_XARGS_HELP = (
+    'Usage: xargs [OPTION]... COMMAND [INITIAL-ARGS]...\n'
+    'Run COMMAND with arguments INITIAL-ARGS and more arguments read from input.\n'
+    '\n'
+    'Mandatory and optional arguments to long options are also\n'
+    'mandatory or optional for the corresponding short option.\n'
+    '  -0, --null                   items are separated by a null, not whitespace;\n'
+    '                                 disables quote and backslash processing and\n'
+    '                                 logical EOF processing\n'
+    '  -a, --arg-file=FILE          read arguments from FILE, not standard input\n'
+    '  -d, --delimiter=CHARACTER    items in input stream are separated by CHARACTER,\n'
+    '                                 not by whitespace; disables quote and backslash\n'
+    '                                 processing and logical EOF processing\n'
+    '  -E END                       set logical EOF string; if END occurs as a line\n'
+    '                                 of input, the rest of the input is ignored\n'
+    '                                 (ignored if -0 or -d was specified)\n'
+    '  -e, --eof[=END]              equivalent to -E END if END is specified;\n'
+    '                                 otherwise, there is no end-of-file string\n'
+    '  -I R                         same as --replace=R\n'
+    '  -i, --replace[=R]            replace R in INITIAL-ARGS with names read\n'
+    '                                 from standard input, split at newlines;\n'
+    '                                 if R is unspecified, assume {}\n'
+    '  -L, --max-lines=MAX-LINES    use at most MAX-LINES non-blank input lines per\n'
+    '                                 command line\n'
+    '  -l[MAX-LINES]                similar to -L but defaults to at most one non-\n'
+    '                                 blank input line if MAX-LINES is not specified\n'
+    '  -n, --max-args=MAX-ARGS      use at most MAX-ARGS arguments per command line\n'
+    '  -o, --open-tty               Reopen stdin as /dev/tty in the child process\n'
+    '                                 before executing the command; useful to run an\n'
+    '                                 interactive application.\n'
+    '  -P, --max-procs=MAX-PROCS    run at most MAX-PROCS processes at a time\n'
+    '  -p, --interactive            prompt before running commands\n'
+    '      --process-slot-var=VAR   set environment variable VAR in child processes\n'
+    '  -r, --no-run-if-empty        if there are no arguments, then do not run COMMAND;\n'
+    '                                 if this option is not given, COMMAND will be\n'
+    '                                 run at least once\n'
+    '  -s, --max-chars=MAX-CHARS    limit length of command line to MAX-CHARS\n'
+    '      --show-limits            show limits on command-line length\n'
+    '  -t, --verbose                print commands before executing them\n'
+    '  -x, --exit                   exit if the size (see -s) is exceeded\n'
+    '      --help                   display this help and exit\n'
+    '      --version                output version information and exit\n'
+    '\n'
+)
+TPOT_XARGS_HELP_TAIL = (
+    'Please see also the documentation at @URL@.\n'
+    'You can report (and track progress on fixing) bugs in the "xargs"\n'
+    'program via the GNU findutils bug-reporting page at\n'
+    'https://savannah.gnu.org/bugs/?group=findutils or, if\n'
+    'you have no web access, by sending email to <bug-findutils@gnu.org>.\n'
+)
+TPOT_XARGS_HELP_OLD = (
+    'Usage: xargs [OPTION]... COMMAND INITIAL-ARGS...\n'
+    'Run COMMAND with arguments INITIAL-ARGS and more arguments read from input.\n'
+    '\n'
+    'Mandatory arguments to long options are mandatory for short options too.\n'
+    'Non-mandatory arguments are indicated by [square brackets]\n'
+    '  -0, --null                   Items are separated by a null, not whitespace.\n'
+    '                               Disables quote and backslash processing\n'
+    '  -a, --arg-file=FILE          Read arguments from FILE, not standard input\n'
+    '  -d, --delimiter=CHARACTER    Input items are separated by CHARACTER, not by\n'
+    '                               blank space. Disables quote and backslash\n'
+    '                               processing\n'
+    '  -E END                       If END occurs as a line of input, the rest of\n'
+    '                               the input is ignored.\n'
+    '  -e [END], --eof[=END]        Equivalent to -E END if END is specified.\n'
+    '                               Otherwise, there is no end-of-file string\n'
+    '  --help                       Print a summary of the options to xargs.\n'
+    '  -I R                         same as --replace=R (R must be specified)\n'
+    '  -i,--replace=[R]             Replace R in initial arguments with names\n'
+    '                               read from standard input. If R is\n'
+    '                               unspecified, assume {}\n'
+    '  -L,-l, --max-lines=MAX-LINES Use at most MAX-LINES nonblank input lines per\n'
+    '                               command line\n'
+    '  -l                           Use at most one nonblank input line per\n'
+    '                               command line\n'
+    '  -n, --max-args=MAX-ARGS      Use at most MAX-ARGS arguments per command\n'
+    '                               line\n'
+    '  -P, --max-procs=MAX-PROCS    Run up to max-procs processes at a time\n'
+    '  -p, --interactive            Prompt before running commands\n'
+    '  --process-slot-var=VAR       Set environment variable VAR in child\n'
+    '                               processes\n'
+    '  -r, --no-run-if-empty        If there are no arguments, run no command.\n'
+    '                               If this option is not given, COMMAND will be\n'
+    '                               run at least once.\n'
+    '  -s, --max-chars=MAX-CHARS    Limit commands to MAX-CHARS at most\n'
+    '  --show-limits                Show limits on command-line length.\n'
+    '  -t, --verbose                Print commands before executing them\n'
+    '  --version                    Print the version number\n'
+    '  -x, --exit                   Exit if the size (see -s) is exceeded\n'
+    '\n'
+    'Report bugs to <bug-findutils@gnu.org>.\n'
+)
+TPOT_XARGS_BB_USAGE = {
+    'old': (
+        '[OPTIONS] [PROG ARGS]\n'
+        '\n'
+        'Run PROG on every item given by stdin\n'
+        '\n'
+        '\t-p\tAsk user whether to run each command\n'
+        "\t-r\tDon't run command if input is empty\n"
+        '\t-0\tInput is separated by NUL characters\n'
+        '\t-t\tPrint the command on stderr before execution\n'
+        '\t-e[STR]\tSTR stops input processing\n'
+        '\t-n N\tPass no more than N args to PROG\n'
+        '\t-s N\tPass command line of no more than N bytes\n'
+        '\t-I STR\tReplace STR within PROG ARGS with input line\n'
+        '\t-x\tExit if size is exceeded\n'
+    ),
+    '1.33': (
+        '[OPTIONS] [PROG ARGS]\n'
+        '\n'
+        'Run PROG on every item given by stdin\n'
+        '\n'
+        '\t-0\tInput is separated by NULs\n'
+        '\t-a FILE\tRead from FILE instead of stdin\n'
+        "\t-r\tDon't run command if input is empty\n"
+        '\t-t\tPrint the command on stderr before execution\n'
+        '\t-p\tAsk user whether to run each command\n'
+        '\t-E STR,-e[STR]\tSTR stops input processing\n'
+        '\t-I STR\tReplace STR within PROG ARGS with input line\n'
+        '\t-n N\tPass no more than N args to PROG\n'
+        '\t-s N\tPass command line of no more than N bytes\n'
+        '\t-P N\tRun up to N PROGs in parallel\n'
+        '\t-x\tExit if size is exceeded\n'
+    ),
+    '1.36': (
+        '[OPTIONS] [PROG ARGS]\n'
+        '\n'
+        'Run PROG on every item given by stdin\n'
+        '\n'
+        '\t-0\tNUL terminated input\n'
+        '\t-a FILE\tRead from FILE instead of stdin\n'
+        '\t-o\tReopen stdin as /dev/tty\n'
+        "\t-r\tDon't run command if input is empty\n"
+        '\t-t\tPrint the command on stderr before execution\n'
+        '\t-p\tAsk user whether to run each command\n'
+        '\t-E STR,-e[STR]\tSTR stops input processing\n'
+        '\t-I STR\tReplace STR within PROG ARGS with input line\n'
+        '\t-n N\tPass no more than N args to PROG\n'
+        '\t-s N\tPass command line of no more than N bytes\n'
+        '\t-P N\tRun up to N PROGs in parallel\n'
+        '\t-x\tExit if size is exceeded\n'
+    ),
+}
+
+
+def tpot_xargs_quote(arg: str) -> str:
+    """A word as xargs -t of findutils 4.8 and later shows it (the shell-escape quoting of gnulib)."""
+    if not arg:
+        return "''"
+    if TPOT_XARGS_SAFE.fullmatch(arg) and arg not in ("{", "}"):
+        return arg
+    if not TPOT_XARGS_CONTROL.search(arg):
+        return tpot_text_quotef(arg)
+    parts, plain, escaped = [], "", ""
+    for char in arg:
+        if TPOT_XARGS_CONTROL.fullmatch(char):
+            if plain:
+                parts.append("'" + plain.replace("'", "'\\''") + "'")
+                plain = ""
+            escaped += TPOT_XARGS_CONTROL_NAMES.get(ord(char)) or "\\%03o" % ord(char)
+        else:
+            if escaped:
+                parts.append("$'" + escaped + "'")
+                escaped = ""
+            plain += char
+    if plain:
+        parts.append("'" + plain.replace("'", "'\\''") + "'")
+    if escaped:
+        parts.append("$'" + escaped + "'")
+    return ("''" if TPOT_XARGS_CONTROL.match(arg) else "") + "".join(parts)
+
+
+class TpotXargsOptions:
+    delimiter = None     # the one character that ends an item (-0, -d)
+    arg_file = None
+    eof = None
+    replace = None
+    args = None          # -n
+    lines = None         # -L, -l
+    limit = TPOT_XARGS_BUFFER
+    no_run = False
+    verbose = False
+    prompt = False
+    exit_size = False
+    open_tty = False
+    command = None
+
+
+class Command_tpot_xargs(TpotTextTool):
+    tool = "xargs"
+    consumes_stdin = True
+    busybox_longs = {"no-run-if-empty": "r"}
+    busybox_long_whole = True
+
+    # --- options -------------------------------------------------------------------------------
+
+    def tpot_xargs_setup(self) -> None:
+        if self.gnu:
+            # derived from the release of coreutils: 8.22 of CentOS 7 -> 4.5.11, 8.32 -> 4.8.0, 9.0 to 9.4 -> 4.9.0,
+            #   9.5 and later -> 4.10.0 (the recorded releases, fixtures/shell_xargs.json)
+            self.find = (4, 5, 11) if self.version < (8, 32) else (4, 8, 0) if self.version < (9, 0) else (
+                (4, 9, 0) if self.version < (9, 5) else (4, 10, 0))
+            self.shorts = "+0a:d:E:e::I:i::L:l::n:" + ("o" if self.find >= (4, 8) else "") + "P:prs:tx"
+            names = [("null", ("0", 0)), ("arg-file", ("a", 1)), ("delimiter", ("d", 1)), ("eof", ("e", 2)),
+                     ("replace", ("i", 2)), ("max-lines", ("l", 2))]
+            names += [("max-procs", ("P", 1)), ("max-chars", ("s", 1)), ("max-args", ("n", 1))] if self.find < (4, 6) \
+                else [("max-args", ("n", 1))]
+            names += [("open-tty", ("o", 0))] if self.find >= (4, 8) else []
+            names += [("interactive", ("p", 0)), ("no-run-if-empty", ("r", 0))]
+            names += [] if self.find < (4, 6) else [("max-chars", ("s", 1))]
+            names += [("verbose", ("t", 0)), ("exit", ("x", 0))]
+            names += [] if self.find < (4, 6) else [("max-procs", ("P", 1))]
+            names += [("process-slot-var", ("process-slot-var", 1)), ("show-limits", ("show-limits", 0)),
+                      ("help", ("help", 0)), ("version", ("version", 0))]
+            self.longs = dict(names)
+        else:
+            v = self.version
+            self.busybox_shorts = ("+0" + ("a:" if v >= (1, 33) else "") + "rtpE:e::I:i::n:s:" + ("P:" if v >= (1, 33) else "")
+                                   + "x" + ("o" if v >= (1, 34) else ""))
+        self.xs_env = sum(len(key) + len(str(value)) + 2 for key, value in dict(getattr(self, "environ", {})).items())
+        self.xs_max = 2097152 - 2048 - self.xs_env
+
+    def tpot_try(self) -> str:
+        if self.gnu and self.find < (4, 6):
+            return TPOT_XARGS_HELP_OLD
+        return super().tpot_try()
+
+    def tpot_busybox_usage(self) -> str:
+        return TPOT_XARGS_BB_USAGE["old" if self.version < (1, 33) else "1.33" if self.version < (1, 34) else "1.36"]
+
+    def tpot_xargs_number(self, letter: str, value: str, low: int, fatal: bool = True) -> int:
+        new = self.find >= (4, 6)
+        if TPOT_XARGS_NUMBER.fullmatch(value) is None:
+            raise TpotTextStop("xargs: " + (f'invalid number "{value}" for -{letter} option\n' if new else
+                                            f"invalid number for -{letter} option\n") + self.tpot_try(), 1)
+        number = int(value)
+        if number < low:
+            text = (f"xargs: value {number} for -{letter} option should be >= {low}\n" if new else
+                    f"xargs: value for -{letter} option should be >= {low}\n")
+            if fatal:
+                raise TpotTextStop(text + self.tpot_try(), 1)
+            self.tpot_err.append(text)
+            number = low
+        return number
+
+    def tpot_xargs_delimiter(self, spec: str) -> str:
+        if len(spec) == 1:
+            return spec
+        found = TPOT_XARGS_DELIMITER.fullmatch(spec)
+        if found:
+            if found.group(1):
+                return TPOT_XARGS_ESCAPES[found.group(1)]
+            return chr(int(found.group(2), 8) & 255) if found.group(2) else chr(int(found.group(3), 16))
+        if len(spec) > 1 and spec[0] == "\\" and spec[1] not in "abfnrtv\\01234567x":
+            raise TpotTextStop(f"xargs: Invalid escape sequence \\{spec[1]} in input delimiter specification.\n", 1)
+        raise TpotTextStop(f"xargs: Invalid input delimiter specification {spec}: the delimiter must be either a "
+                           "single character or an escape sequence starting with \\.\n", 1)
+
+    def tpot_xargs_gnu_options(self):
+        found, operands = self.tpot_gnu_options(self.args)
+        o = TpotXargsOptions()
+        o.limit = min(TPOT_XARGS_BUFFER, self.xs_max)
+        new = self.find >= (4, 6)
+        show = False
+
+        def clash(first: str, later: str) -> None:
+            if new:
+                self.tpot_err.append(f"xargs: warning: options {first} and {later} are mutually exclusive, "
+                                     f"ignoring previous {first} value\n")
+
+        for key, value in found:
+            if key == "help":
+                self.tpot_emit(TPOT_XARGS_HELP_OLD if not new else TPOT_XARGS_HELP + TPOT_XARGS_HELP_TAIL.replace(
+                    "@URL@", ("http" if self.collate.startswith("en") else "https") + "://www.gnu.org/software/findutils/"))
+                o.done = 0
+                return o
+            if key == "version":
+                year = {(4, 5, 11): "2012", (4, 8, 0): "2021", (4, 9, 0): "2022"}.get(self.find, "2024")
+                self.tpot_emit(f"xargs (GNU findutils) {'.'.join(map(str, self.find))}\n"
+                               f"Copyright (C) {year} Free Software Foundation, Inc.\n"
+                               f"License GPLv3+: GNU GPL version 3 or later <{'https' if new else 'http'}://gnu.org/licenses/gpl.html>.\n"
+                               "This is free software: you are free to change and redistribute it.\n"
+                               "There is NO WARRANTY, to the extent permitted by law.\n\n"
+                               "Written by Eric B. Decker, James Youngman, and Kevin Dalley.\n")
+                o.done = 0
+                return o
+            if key == "0":
+                o.delimiter = "\0"
+            elif key == "d":
+                o.delimiter = self.tpot_xargs_delimiter(value)
+            elif key == "a":
+                o.arg_file = value
+            elif key == "E":
+                o.eof = value
+            elif key == "e":
+                o.eof = value or None
+            elif key in ("I", "i"):
+                if o.args:
+                    clash("--max-args", "--replace/-I/-i")
+                    o.args = None
+                if o.lines:
+                    clash("--max-lines", "--replace/-I/-i")
+                    o.lines = None
+                o.replace = value if key == "I" else (value or "{}")
+            elif key == "n":
+                number = self.tpot_xargs_number("n", value, 1)
+                if o.replace is not None:
+                    clash("--replace", "--max-args/-n")
+                    o.replace = None
+                if o.lines:
+                    clash("--max-lines", "--max-args/-n")
+                    o.lines = None
+                o.args = number
+            elif key in ("L", "l"):
+                number = self.tpot_xargs_number("L" if key == "L" else "l", value, 1) if value else 1
+                later = "-L" if key == "L" else "--max-lines/-l"
+                if o.replace is not None:
+                    clash("--replace", later)
+                    o.replace = None
+                if o.args:
+                    clash("--max-args", later)
+                    o.args = None
+                o.lines = number
+            elif key == "P":
+                self.tpot_xargs_number("P", value, 0)
+            elif key == "s":
+                number = self.tpot_xargs_number("s", value, 1, fatal=False)
+                if number > self.xs_max:
+                    self.tpot_err.append(f"xargs: value {number} for -s option should be <= {self.xs_max}\n" if new else
+                                         f"xargs: value for -s option should be < {self.xs_max}\n")
+                    number = self.xs_max
+                o.limit = number
+            elif key == "r":
+                o.no_run = True
+            elif key == "t":
+                o.verbose = True
+            elif key == "p":
+                o.prompt = True
+            elif key == "x":
+                o.exit_size = True
+            elif key == "o":
+                o.open_tty = True
+            elif key == "show-limits":
+                show = True
+        if o.eof is not None and o.delimiter is not None and self.find >= (4, 8):
+            self.tpot_err.append("xargs: warning: the -E option has no effect if -0 or -d is used.\n\n")
+        if show:
+            lines = [f"Your environment variables take up {self.xs_env} bytes",
+                     f"POSIX upper limit on argument length (this system): {self.xs_max}",
+                     "POSIX smallest allowable upper limit on argument length (all systems): 4096",
+                     f"Maximum length of command we could actually use: {self.xs_max - self.xs_env}",
+                     f"Size of command buffer we are actually using: {o.limit}"]
+            if new:
+                lines.append("Maximum parallelism (--max-procs must be no greater): 2147483647")
+            self.tpot_err.append("\n".join(lines) + "\n")
+        o.command = operands or ["echo"]
+        return o
+
+    def tpot_xargs_bb_number(self, value: str, low: int) -> int:
+        if re.fullmatch(r"[0-9]+", value) is None or int(value) > 4294967295:
+            raise TpotTextStop(f"xargs: invalid number '{value}'\n", 1)
+        number = int(value)
+        if not low <= number <= 2147483647:
+            raise TpotTextStop(f"xargs: number {number} is not in {low}..2147483647 range\n", 1)
+        return number
+
+    def tpot_xargs_bb_options(self):
+        found, operands = self.tpot_busybox_options(self.args)
+        o = TpotXargsOptions()
+        for key, value in found:
+            if key == "0":
+                o.delimiter = "\0"
+            elif key == "a":
+                o.arg_file = value
+            elif key == "E":
+                o.eof = value
+            elif key == "e":
+                o.eof = value or None
+            elif key == "I":
+                o.replace = value
+            elif key == "i":
+                o.replace = value or "{}"
+            elif key == "n":
+                o.args = self.tpot_xargs_bb_number(value, 1)
+            elif key == "s":
+                o.limit = self.tpot_xargs_bb_number(value, 1)
+            elif key == "P":
+                self.tpot_xargs_bb_number(value, 0)
+            elif key == "r":
+                o.no_run = True
+            elif key == "t":
+                o.verbose = True
+            elif key == "p":
+                o.prompt = True
+            elif key == "x":
+                o.exit_size = True
+            elif key == "o":
+                o.open_tty = True
+        if o.replace is not None:
+            o.args = None
+            if o.replace == "":
+                raise TpotTextStop("Segmentation fault\n", 139)
+        o.command = operands or ["echo"]
+        return o
+
+    # --- input ---------------------------------------------------------------------------------
+
+    def tpot_xargs_unmatched(self, quote: str) -> str:
+        which = "single" if quote == "'" else "double"
+        return (f"xargs: unmatched {which} quote; by default quotes are special to xargs unless you use the -0 option\n"
+                if self.gnu else f"xargs: unmatched {which} quote\n")
+
+    def tpot_xargs_words(self, o, text: str):
+        """The words of the input as ("arg", word, first of its line) and the ends of lines as ("eol",)."""
+        gnu, replace = self.gnu, o.replace is not None
+        arg, have, first, in_line, quote, escape = [], False, True, False, "", False
+        for match in (TPOT_XARGS_TOKENS if gnu else TPOT_XARGS_BB_TOKENS).finditer(text):
+            rest = match.group()
+            if escape:
+                arg.append(rest[0])
+                have, escape, rest = True, False, rest[1:]
+                if not rest:
+                    continue
+            head = rest[0]
+            if quote:
+                if rest == quote:
+                    quote = ""
+                elif gnu and rest == "\n":
+                    yield ("error", self.tpot_xargs_unmatched(quote))
+                    return
+                else:
+                    arg.append(rest)
+            elif head in "'\"":
+                quote, have = head, True
+            elif head == "\\":
+                escape = True
+            elif gnu and head == "\n":
+                if have:
+                    yield ("arg", "".join(arg), first or replace)
+                    yield ("eol",)
+                    arg, have, first, in_line = [], False, True, False
+            elif head in (" \t" if gnu else TPOT_XARGS_BLANKS):
+                if replace:
+                    if have:
+                        arg.append(rest)
+                elif have:
+                    yield ("arg", "".join(arg), first)
+                    arg, have, first, in_line = [], False, False, True
+            else:
+                arg.append(rest)
+                have = True
+        if quote:
+            yield ("error", self.tpot_xargs_unmatched(quote))
+            return
+        if have:
+            yield ("arg", "".join(arg), first or replace)
+            in_line = True
+        if in_line:
+            yield ("eol",)
+
+    def tpot_xargs_bb_lines(self, text: str):
+        """-I of BusyBox: one item per line (before 1.33 the line as it is and an empty line ends the input)."""
+        old = self.version < (1, 33)
+        for line in text.split("\n"):
+            if old:
+                if not line:
+                    return
+            else:
+                line = line.lstrip(TPOT_XARGS_BLANKS)
+                if not line:
+                    continue
+            yield ("arg", line, True)
+            yield ("eol",)
+
+    def tpot_xargs_events(self, o, text: str):
+        if o.delimiter is not None:
+            parts = text.split(o.delimiter) if text else []
+            if parts and not parts[-1]:
+                parts.pop()
+            for part in parts:
+                yield ("arg", part, True)
+                yield ("eol",)
+        elif not self.gnu and o.replace is not None:
+            yield from self.tpot_xargs_bb_lines(text)
+        else:
+            yield from self.tpot_xargs_words(o, text)
+
+    # --- running -------------------------------------------------------------------------------
+
+    def tpot_main(self, terminal):
+        self.tpot_xargs_setup()
+        o = self.tpot_xargs_gnu_options() if self.gnu else self.tpot_xargs_bb_options()
+        if getattr(o, "done", None) is not None:
+            return o.done
+        if o.arg_file is not None:
+            if o.arg_file == "/dev/null":
+                data = b""
+            else:
+                kind, data, _size = self.tpot_file(o.arg_file)
+                if kind != "file":
+                    why = "No such file or directory" if kind == "missing" else "Is a directory"
+                    raise TpotTextStop(f"xargs: Cannot open input file {tpot_text_quote(o.arg_file)}: {why}\n" if self.gnu
+                                       else f"xargs: can't open '{o.arg_file}': {why}\n", 1)
+        else:
+            data = self.tpot_stdin(terminal)
+            if data is None:
+                return None
+        self.xs_state, self.xs_failed, self.xs_runs, self.xs_exit, self.xs_done = "idle", False, 0, None, False
+        self.xs_last = 0
+        self.xs_gen = self.tpot_xargs_plan(o, data.decode("utf-8", "surrogateescape"))
+        return self.tpot_xargs_step(None)
+
+    def tpot_xargs_step(self, reply):
+        """The generator of the plan to its next command line, which starts; PENDING while that one runs."""
+        while True:
+            try:
+                argv = self.xs_gen.send(reply)
+            except StopIteration as done:
+                return done.value
+            reply = self.tpot_xargs_launch(argv)
+            if reply is None:
+                return TPOT_TEXT_PENDING
+
+    def tpot_xargs_launch(self, argv: list):
+        """Start a command line: ("ran", its status) as soon as it has ended, ("noexec", 126 or 127) where it cannot be
+        started, None while it runs (resume() goes on)."""
+        protocol = self.protocol
+        name = argv[0]
+        cmdclass = protocol.getCommand(name, self.environ.get("PATH", "").split(":"), self.cwd)
+        if cmdclass and name in TPOT_XARGS_BUILTINS:
+            dirs = [path for path in self.environ.get("PATH", "").split(":") if path]
+            if any(self.fs.exists(self.fs.resolve_path(f"{path}/{name}", self.cwd)) for path in dirs):
+                return ("ran", 0)  # a script of the system that changes nothing here (derived, not recorded)
+            cmdclass = None
+        if not cmdclass:
+            code = 126 if "/" in name and self.fs.exists(self.fs.resolve_path(name, self.cwd)) else 127
+            if self.gnu or self.version >= (1, 33):
+                self.tpot_err.append(f"xargs: {name}: " + ("Permission denied" if code == 126 else "No such file or directory")
+                                     + "\n")
+                return ("noexec", code)
+            return ("ran", code)
+        protocol.events.dispatch("cowrie.command.success", "Command found: %(input)s", input=" ".join(argv))
+        self.tpot_flush()
+        pp = PipeProtocol(protocol, cmdclass, argv[1:], b"", self.pp.targets, cwd=self.cwd, user=self.user)
+        pp.stdin_from_pipe = True
+        self.xs_state, self.xs_done, self.xs_interrupted = "starting", False, False
+        protocol.call_command(pp, cmdclass, *argv[1:])
+        if self.xs_done:
+            self.xs_state = "idle"
+            return ("ran", getattr(self, "last_exit_code", 0))
+        self.xs_state = "waiting"
+        child = protocol.cmdstack[-1] if protocol.cmdstack else None
+        if child is not None and child is not self:
+            handle = child.handle_CTRL_C
+
+            def interrupted():
+                self.xs_interrupted = True  # the signal goes to the whole foreground group: xargs ends with it
+                handle()
+
+            child.handle_CTRL_C = interrupted
+        return None
+
+    def resume(self) -> None:
+        state = getattr(self, "xs_state", "idle")
+        if state == "starting":
+            self.xs_done = True
+        elif state == "waiting":
+            self.xs_state = "idle"
+            self.tpot_deadline = min(time.monotonic() + TPOT_TEXT_SECONDS, tpot_deadline(getattr(self, "protocol", None)))
+            if self.xs_interrupted:
+                self.xs_gen.close()
+                self.tpot_finish(lambda: 130)
+                return
+            self.tpot_finish(lambda: self.tpot_xargs_step(("ran", getattr(self, "last_exit_code", 0))))
+
+    def eofReceived(self) -> None:  # noqa: N802 - Cowrie's name
+        if getattr(self, "xs_state", "idle") != "idle":
+            return
+        super().eofReceived()
+
+    def tpot_xargs_code(self) -> int:
+        return self.xs_exit if self.xs_exit is not None else 123 if self.xs_failed else 0
+
+    def tpot_xargs_show(self, o, argv: list) -> None:
+        """-t and -p: the command line, in the quoting of the release."""
+        if not (o.verbose or o.prompt):
+            return
+        if self.gnu and self.find >= (4, 6):
+            text = " ".join(tpot_xargs_quote(arg) for arg in argv)
+        elif self.gnu:
+            text = "".join(arg + " " for arg in argv)
+        else:
+            text = " ".join(argv)
+        if o.prompt:
+            self.tpot_err.append(text)
+            raise TpotTextStop("xargs: failed to open /dev/tty for reading: No such device or address\n" if self.gnu
+                               else "xargs: can't open '/dev/tty': No such device or address\n", 1)
+        self.tpot_err.append(text + "\n")
+
+    def tpot_xargs_run(self, o, argv: list):
+        """One command line (a generator): False where xargs ends."""
+        if self.xs_runs >= TPOT_XARGS_RUNS:
+            # a departure: real xargs has no cap; here the call ends with the status of its last run
+            self.xs_exit = self.xs_last
+            return False
+        if o.open_tty:
+            if not self.gnu:
+                raise TpotTextStop("xargs: can't open '/dev/tty': No such device or address\n", 1)
+            where = {(4, 8, 0): "../../xargs/xargs.c:1606" if self.collate.startswith("en") else "xargs.c:1605",
+                     (4, 9, 0): "xargs.c:1605"}.get(self.find, "xargs.c:1648")
+            self.tpot_err.append(f"xargs: {tpot_text_quote('/dev/tty')}: No such device or address\n"
+                                 f"xargs: {where}: wait_for_proc_all: Assertion `getpid () == parent' failed.\n"
+                                 f"xargs: {argv[0]}: terminated by signal 6\n")
+            self.xs_exit = 125
+            return False
+        self.tpot_xargs_show(o, argv)
+        self.xs_runs += 1
+        kind, status = yield argv
+        self.xs_last = status
+        if kind == "noexec":
+            self.xs_exit = status
+            return False
+        if status == 255:
+            self.tpot_err.append(f"xargs: {argv[0]}: exited with status 255; aborting\n")
+            self.xs_exit = 123 if self.xs_failed and self.gnu and self.find < (4, 10) else 124
+            return False
+        if self.gnu or self.version >= (1, 33):
+            self.xs_failed = self.xs_failed or status != 0
+        else:
+            self.xs_failed = status != 0
+        return True
+
+    def tpot_xargs_plan(self, o, text: str):
+        """The command lines of the input (a generator): each is handed out, the status of its run comes back; the
+        result is the exit status of xargs."""
+        gnu, initial = self.gnu, o.command
+        replace = o.replace
+        size_of = lambda words: sum(len(word.encode("utf-8", "surrogateescape")) + 1 for word in words)  # noqa: E731
+        base = size_of(initial)
+        if base > o.limit:
+            raise TpotTextStop("xargs: " + ("cannot" if gnu else "can't") + " fit single argument within argument list size limit\n", 1)
+        batch, size, lines, seen = [], base, 0, 0
+        for event in self.tpot_xargs_events(o, text):
+            seen += 1
+            if not seen & 255 and self.tpot_late(256):
+                break  # the time is used up: the input that is left goes unread, real xargs has no such limit
+            kind = event[0]
+            if kind == "error":
+                if gnu and batch:
+                    yield from self.tpot_xargs_run(o, initial + batch)
+                raise TpotTextStop(event[1], 1)
+            if kind == "eol":
+                lines += 1
+                if o.lines and lines >= o.lines and batch:
+                    if not (yield from self.tpot_xargs_run(o, initial + batch)):
+                        return self.tpot_xargs_code()
+                    batch, size, lines = [], base, 0
+                continue
+            word = event[1]
+            if o.eof is not None and o.delimiter is None and (event[2] if gnu else replace is None) and word == o.eof:
+                break
+            if replace is not None:
+                if replace:
+                    argv = [initial[0]] + [arg.replace(replace, word) for arg in initial[1:]] if gnu else [
+                        arg.replace(replace, word) for arg in initial]
+                else:
+                    argv = list(initial)
+                if size_of(argv) > o.limit:
+                    raise TpotTextStop("xargs: argument line too long\n", 1)
+                if not (yield from self.tpot_xargs_run(o, argv)):
+                    return self.tpot_xargs_code()
+                continue
+            need = len(word.encode("utf-8", "surrogateescape")) + 1
+            if size + need > o.limit:
+                if o.exit_size and (o.args or o.lines):
+                    raise TpotTextStop("xargs: argument list too long\n" if gnu else "xargs: argument line too long\n", 1)
+                if batch:
+                    if not (yield from self.tpot_xargs_run(o, initial + batch)):
+                        return self.tpot_xargs_code()
+                    batch, size, lines = [], base, 0
+                if base + need > o.limit:
+                    raise TpotTextStop("xargs: argument line too long\n", 1)
+            batch.append(word)
+            size += need
+            if o.args and len(batch) >= o.args:
+                if not (yield from self.tpot_xargs_run(o, initial + batch)):
+                    return self.tpot_xargs_code()
+                batch, size, lines = [], base, 0
+        if batch:
+            yield from self.tpot_xargs_run(o, initial + batch)
+        elif self.xs_runs == 0 and not o.no_run and replace is None:
+            yield from self.tpot_xargs_run(o, list(initial))
+        return self.tpot_xargs_code()
+
+
+commands["/usr/bin/xargs"] = Command_tpot_xargs
+commands["/bin/xargs"] = Command_tpot_xargs
+commands["xargs"] = Command_tpot_xargs
 '''
 
 
@@ -16236,11 +24193,14 @@ TPOT_FS_ESCAPES = {"\a": "\\a", "\b": "\\b", "\t": "\\t", "\n": "\\n", "\v": "\\
 #   c_and_shell_quote_compat: letters, digits, space and these; recorded with coreutils 8.30 to 9.7: `it's 1`
 #   and `a'b` in double quotes, `it's (1)`, `it's!`, `it's?` and `it's~` in single quotes)
 TPOT_FS_COMPAT = frozenset(" %+,-./:@_{}")
+# and these at the start of a name only (recorded with 8.26 to 9.7: `#'x` and `#it's` in double quotes, `it's#`
+#   in single quotes; `~` at the start is the same case of gnulib's quotearg.c, not recorded)
+TPOT_FS_COMPAT_FIRST = frozenset("#~")
 TPOT_FS_STRERROR = {"ENOENT": "No such file or directory", "ENOTDIR": "Not a directory", "EISDIR": "Is a directory",
                     "EACCES": "Permission denied", "EPERM": "Operation not permitted",
                     "ENOTEMPTY": "Directory not empty", "EINVAL": "Invalid argument", "EEXIST": "File exists",
                     "EBUSY": "Device or resource busy", "EDQUOT": "Disk quota exceeded",
-                    "ENAMETOOLONG": "File name too long"}
+                    "ENAMETOOLONG": "File name too long", "ELOOP": "Too many levels of symbolic links"}
 # PATH_MAX of Linux with its NUL: the longest name cp reads or writes a node by
 TPOT_FS_PATH_MAX = 4095
 TPOT_FS_CACHE: dict = {}
@@ -16295,10 +24255,13 @@ def tpot_fs_escaped(char: str, posix: bool) -> bool:
 def tpot_fs_quote(name: str, posix: bool = False) -> str:
     """A name as quoteaf of coreutils 8.25 and later quotes it (shell-escape-always; recorded with 8.30 to 9.7):
     in single quotes, a single quote as '\\''; in double quotes when it holds a single quote and nothing but
-    letters, digits, space and TPOT_FS_COMPAT; a run of control characters and bytes of no character leaves the
-    single quotes for $'...' with their escapes ('a'$'\\n\\n''b', ''$'\\033' at the start, 'a'$'\\n' at the end)."""
+    letters, digits, space and TPOT_FS_COMPAT (TPOT_FS_COMPAT_FIRST as its first character); a run of control
+    characters and bytes of no character leaves the single quotes for $'...' with their escapes
+    ('a'$'\\n\\n''b', ''$'\\033' at the start, 'a'$'\\n' at the end)."""
     if not any(tpot_fs_escaped(c, posix) for c in name):
-        if "'" in name and all(c.isascii() and (c.isalnum() or c in TPOT_FS_COMPAT or c == "'") for c in name):
+        if "'" in name and all(c.isascii() and (c.isalnum() or c in TPOT_FS_COMPAT or c == "'"
+                                                or (at == 0 and c in TPOT_FS_COMPAT_FIRST))
+                               for at, c in enumerate(name)):
             return '"' + name + '"'
         return "'" + name.replace("'", "'\\''") + "'"
     out, escaping = "'", False
@@ -16339,12 +24302,20 @@ class TpotFsTool(TpotTextTool):
     """What rm, cp, mv, touch, rmdir and mkdir share: the persona's variant (texts, options, build flags), its
     option parsers, the user (root under sudo) and the checks of the emulated file system."""
 
+    # no stdin of its shell is taken: `printf 'rm -i x\ny\n' | sh` answers the question with y and the
+    #   shell runs y as well (an approximation; the real rm reads the pipe through stdio)
     consumes_stdin = False
+    # the command changes the tree: the session gets its own copy of it first (readlink only reads)
+    tpot_changes = True
+
+    def tpot_variant(self) -> tuple:
+        """(texts, authors) of the persona's variant (tpot_fs_variant)."""
+        return tpot_fs_variant(self.gnu, self.libc)
 
     # --- running ---------------------------------------------------------------------------
 
     def tpot_main(self, terminal: bytes | None) -> int:
-        self.fs_texts, self.fs_authors = tpot_fs_variant(self.gnu, self.libc)
+        self.fs_texts, self.fs_authors = self.tpot_variant()
         if self.tool in self.fs_texts.get("missing", ()):
             # no applet of this name in the firmware's BusyBox (the rmdir of the DIR-859; the shell itself says
             #   "not found", render.skip_python_commands): what `busybox rmdir` answers
@@ -16363,7 +24334,7 @@ class TpotFsTool(TpotTextTool):
                 self.tpot_emit(self.tpot_gnu_version(self.fs_authors.get(self.tool, "")))
                 return 0
         private = getattr(self.fs, "_ensure_private_fs", None)
-        if callable(private):
+        if callable(private) and self.tpot_changes:
             private()  # the session's own copy of the tree before a node is read for a change
         self.tpot_pending, self.tpot_eof = None, False
         return self.tpot_drive(self.tpot_fs_main(options, operands[:TPOT_FS_NAMES]), None)
@@ -16389,6 +24360,7 @@ class TpotFsTool(TpotTextTool):
     def tpot_continue(self, answer: bytes) -> None:
         """A line of the terminal (or its end) at a question: the command goes on, with its time anew."""
         run, self.tpot_pending = self.tpot_pending, None
+        self.tpot_floor = 0
         self.tpot_deadline = min(time.monotonic() + TPOT_TEXT_SECONDS, tpot_deadline(getattr(self, "protocol", None)))
         self.tpot_finish(lambda: self.tpot_drive(run, answer))
 
@@ -16400,13 +24372,54 @@ class TpotFsTool(TpotTextTool):
                                       realm=self.tool, input=line)
         self.tpot_continue(line.encode("utf-8", "surrogateescape"))
 
+    @staticmethod
+    def tpot_exec_raw(protocol) -> bool:
+        """An exec channel that buffers its stdin raw in input_data; in its line mode (stdin_line_mode, set by
+        upstream's commands/bash.py interactive_shell for `ssh host bash`) the protocol delivers the lines
+        itself, by lineReceived (with its \\r\\n, ctrl-d, ctrl-c, backspace and its STDIN_LINE_MAX)."""
+        return hasattr(protocol, "execcmd") and not getattr(protocol, "stdin_line_mode", False)
+
+    def tpot_exec_line(self):
+        """The next whole line an exec channel has sent (ssh host 'rm -i x'), taken out of the channel's
+        buffer: it ends with \\n or \\r (\\r\\n once); None without such a channel or a whole line."""
+        protocol = getattr(self, "protocol", None)
+        if not self.tpot_exec_raw(protocol):
+            return None
+        data = bytes(getattr(protocol, "input_data", b"") or b"")
+        ends = [at for at in (data.find(b"\n"), data.find(b"\r")) if at >= 0]
+        if not ends:
+            return None
+        cut = min(ends)
+        rest = data[cut + 1:]
+        if data[cut:cut + 1] == b"\r" and rest[:1] == b"\n":
+            rest = rest[1:]
+        protocol.input_data = rest
+        return data[:cut]
+
+    def tpot_key(self, ch) -> bool:
+        """A key of an exec channel (the patched keystrokeReceived) while a question waits: it goes into the
+        channel's buffer, and a whole line there is the answer. Without a question, at a terminal (no exec
+        channel) and in the line mode of the channel, False: the key goes where it went before."""
+        protocol = getattr(self, "protocol", None)
+        if getattr(self, "tpot_pending", None) is None or not self.tpot_exec_raw(protocol) \
+                or not isinstance(ch, bytes):
+            return False
+        last_cr, self.tpot_exec_cr = getattr(self, "tpot_exec_cr", False), ch == b"\r"
+        if ch == b"\n" and last_cr:
+            return True  # the \n of a \r\n, its line was the answer
+        protocol.input_data = bytes(getattr(protocol, "input_data", b"") or b"") + ch
+        line = self.tpot_exec_line()
+        if line is not None:
+            self.lineReceived(line.decode("utf-8", "surrogateescape"))
+        return True
+
     def eofReceived(self) -> None:
         if self.tpot_pending is None:
             super().eofReceived()
             return
-        # the end of standard input at a question: what an exec channel sent are the answers; then, and at
-        #   a terminal (ctrl-d), every question is answered no
-        data = bytes(getattr(self.protocol, "input_data", b"") or b"") if hasattr(self.protocol, "execcmd") else b""
+        # the end of standard input at a question: what an exec channel sent after its last whole line is
+        #   the answer; then, and at a terminal (ctrl-d), every question is answered no
+        data = bytes(getattr(self.protocol, "input_data", b"") or b"") if self.tpot_exec_raw(self.protocol) else b""
         self.tpot_answers, self.tpot_eof = (data.split(b"\n") if data else []), True
         self.tpot_continue(self.tpot_answers.pop(0) if self.tpot_answers else b"")
 
@@ -16433,12 +24446,21 @@ class TpotFsTool(TpotTextTool):
         return self.gnu or bool(self.fs_texts.get("verbose", {}).get(self.tool, True))
 
     def tpot_ask(self, prompt: str):
-        """A prompt on stderr and the answer (`yield from`): a line of a pipe, else of the terminal (the
-        command waits for it: tpot_drive); a closed input and the lines after the last one answer no."""
+        """A prompt on stderr and the answer (`yield from`): a line of a pipe, else of the terminal or of an
+        exec channel (the command waits for it: tpot_drive); a closed input and the lines after the last
+        one answer no."""
         self.tpot_err.append(prompt)
         if self.tpot_answers is None:
             if self.input_data is None and not self.tpot_eof:
-                answer = yield prompt
+                # a line an exec channel sent before the question answers it at once, else the command
+                #   waits for one (of the terminal: lineReceived, of an exec channel: tpot_key)
+                line = self.tpot_exec_line()
+                if line is None:
+                    answer = yield prompt
+                else:
+                    self.protocol.events.dispatch("cowrie.command.input", "INPUT (%(realm)s): %(input)s",
+                                                  realm=self.tool, input=line.decode("utf-8", "surrogateescape"))
+                    answer = line
             else:
                 self.tpot_answers = bytes(self.input_data or b"").split(b"\n")
                 answer = self.tpot_answers.pop(0) if self.tpot_answers else b""
@@ -17046,12 +25068,18 @@ class Command_tpot_cp(TpotFsTool):
         if dest is None:
             errno = "ENAMETOOLONG" if len(tpath) > TPOT_FS_PATH_MAX else self.tpot_create_errno(tpath, parent)
         else:
+            # -n only skips here (exit 0); coreutils 9.2 and later exit nonzero (NEWS of 9.2, not recorded for -n)
             if self.no_clobber:
                 return True
             if self.newer and float(dest[tpot_shell_fs.A_CTIME] or 0) >= float(source[tpot_shell_fs.A_CTIME] or 0):
                 return True
             if self.interactive and not (yield from self.tpot_ask(self.tpot_say("cp.overwrite", shown))):
-                return not (self.gnu and self.version >= (9, 4))  # a declined overwrite fails from 9.4 on
+                # a declined overwrite fails from 9.2 on, NEWS of coreutils 9.2: "'cp -n' and 'mv -n' now exit
+                #   with nonzero status if they skip their action because the destination exists, and likewise
+                #   for 'cp -i', 'ln -i', and 'mv -i' when the user declines" (recorded: 0 with 9.1, 1 with 9.4
+                #   and 9.7; the line of -v for a skipped file that 9.3 alone prints is not written, no persona
+                #   runs 9.3)
+                return not (self.gnu and self.version >= (9, 2))
             errno = None if tpot_may_write(dest, self.uid, self.gid) and not self.tpot_special(tpath) else "EACCES"
         if errno:
             self.tpot_fail("cp.create", shown, errno=errno)
@@ -17216,10 +25244,11 @@ class Command_tpot_mv(Command_tpot_cp):
             if not self.tpot_is_dir(source) and self.tpot_is_dir(dest):
                 self.tpot_fail("mv.dir", shown)
                 return False
+            # -n only skips here (exit 0); coreutils 9.2 and later exit nonzero (NEWS of 9.2, not recorded for -n)
             if self.no_clobber:
                 return True
             if self.interactive and not (yield from self.tpot_ask(self.tpot_say("mv.overwrite", shown))):
-                return not self.version >= (9, 4)  # a declined overwrite fails from 9.4 on (recorded 9.4, 9.7)
+                return not self.version >= (9, 2)  # from 9.2 on, as cp -i above (recorded 9.1, 9.4, 9.7)
         errno = self.tpot_rename_errno(spath, tpath, source, dest)
         if errno:
             self.tpot_fail("mv.cannot_move", src, shown, errno=errno)
@@ -17284,6 +25313,7 @@ class Command_tpot_mv(Command_tpot_cp):
         source, errno = self.tpot_node(src, follow=False)
         dest = self.fs.getfile(tpath, follow_symlinks=False)
         if source is not None and dest is not None and dest is not source:
+            # -n only skips here (exit 0); coreutils 9.2 and later exit nonzero (NEWS of 9.2, not recorded for -n)
             if self.no_clobber:
                 return True
             if self.interactive and not (yield from self.tpot_ask(self.tpot_say("mv.overwrite", shown))):
@@ -17349,6 +25379,12 @@ TPOT_TOUCH_ORDINALS = {"last": -1, "this": 0, "next": 1, "first": 1, "third": 3,
                        "twelfth": 12}
 TPOT_TOUCH_SHIFTS = {"now": 0, "today": 0, "yesterday": -1, "tomorrow": 1}
 TPOT_TOUCH_ZONES = {"utc", "gmt", "ut", "z"}
+# the military zones of gnulib's parse-datetime.y, a letter alone (A to I +1 to +9 hours, K to M +10 to +12, N to
+#   Y -1 to -12 with T in its place; Z is UTC above; J and T stay no zone): GNU touch takes `-d $'\nb'` and
+#   `-d $'a\n'` (recorded with 8.22 to 9.7, rc 0 and the file made; the time they set was not recorded, the
+#   offsets are those of the source, unverified)
+TPOT_TOUCH_MILITARY = {letter: sign * hours * 3600 for sign, letters in ((1, "abcdefghiklm"), (-1, "nopqrs.uvwxy"))
+                       for hours, letter in enumerate(letters, 1) if letter != "."}
 
 
 def tpot_touch_unit(word: str):
@@ -17360,10 +25396,10 @@ def tpot_touch_unit(word: str):
 def tpot_touch_gnu_date(text: str, now: float):
     """-d of GNU touch, the items of gnulib's parse_datetime in the persona's UTC: @EPOCH; a date (YYYY-MM-DD,
     YYYYMMDD, MM/DD[/YYYY], a month's name with its day and year, as date(1) prints it), a weekday, a time
-    (HH:MM[:SS] with am / pm), a zone (UTC, GMT, Z, +HHMM, +HH:MM, +HH after the time), relative items
-    (N unit[s] [ago], next / last / this unit or weekday, a unit alone, now, today, yesterday, tomorrow).
-    Without a time a date or a weekday is midnight, relative items alone keep the time of now. None for any
-    other text."""
+    (HH:MM[:SS] with am / pm), a zone (UTC, GMT, Z, a military letter, +HHMM, +HH:MM, +HH after the time),
+    relative items (N unit[s] [ago], next / last / this unit or weekday, a unit alone, now, today, yesterday,
+    tomorrow). Without a time a date or a weekday is midnight, relative items alone keep the time of now; a zone
+    alone is midnight in that zone. None for any other text."""
     text = text.strip()
     found = re.fullmatch(r"@([-+]?\d{1,12})(?:\.\d+)?", text)
     if found:
@@ -17454,6 +25490,8 @@ def tpot_touch_gnu_date(text: str, now: float):
                 rel[1], shifted = rel[1] + TPOT_TOUCH_SHIFTS[name], True
             elif name in TPOT_TOUCH_ZONES and zone is None:
                 zone = 0
+            elif name in TPOT_TOUCH_MILITARY and zone is None:
+                zone = TPOT_TOUCH_MILITARY[name]
             elif tpot_touch_unit(name):
                 last = list(tpot_touch_unit(name))
                 rel = [a + b for a, b in zip(rel, last)]
@@ -17863,28 +25901,563 @@ class Command_tpot_mkdir(TpotFsTool):
         return code
 
 
+class Command_tpot_readlink(TpotFsTool):
+    """readlink of the persona: the target of a link, -f / -e / -m the name with every link resolved (GNU; BusyBox
+    -f), -n, -z, -v, -q / -s, as the variant's coreutils or BusyBox answer (tests/fixtures/readlink.json). /proc/self
+    is readlink's own process (a new PID of the session): its exe the program of readlink, its cwd the shell's; the
+    exe, cwd and root of another user's process are not the user's to read (EACCES)."""
+
+    tool = "readlink"
+    tpot_changes = False
+
+    def tpot_variant(self) -> tuple:
+        """The variant with the texts and options of readlink (its "readlink" part) in the places TpotFsTool reads."""
+        texts, authors = tpot_fs_variant(self.gnu, self.libc)
+        own = texts.get("readlink") or {}
+        merged = dict(texts)
+        merged["options"] = dict(texts.get("options", {}), readlink=own.get("options", {"short": "fnvsq", "long": {}}))
+        merged["templates"] = dict(texts.get("templates", {}), **own.get("templates", {}))
+        if self.gnu:
+            merged["help"] = dict(texts.get("help", {}), readlink=own.get("help", ""))
+        else:
+            merged["usage"] = dict(texts.get("usage", {}), readlink=own.get("usage", "[-fnv] FILE\n"))
+        self.tpot_rules = own
+        return merged, dict(authors, readlink=own.get("authors", "Dmitry V. Levin."))
+
+    # --- the walk of a name -----------------------------------------------------------------
+
+    def tpot_own(self) -> tuple:
+        """(PID, program) of this readlink: a new PID of the session, the program the tree has (a link of BusyBox
+        resolved to it)."""
+        if getattr(self, "tpot_own_pid", None) is None:
+            new_pid = getattr(self.protocol, "tpot_new_pid", None)
+            self.tpot_own_pid = new_pid(1) if callable(new_pid) else 4242
+            program = None
+            for path in ("/usr/bin/readlink", "/bin/readlink"):
+                found, errno = self.tpot_canon(path, "e", own=False)
+                if errno is None:
+                    program = found
+                    break
+            self.tpot_own_exe = program or "/usr/bin/readlink"
+        return self.tpot_own_pid, self.tpot_own_exe
+
+    def tpot_shell(self) -> int | None:
+        shell = getattr(self.protocol, "tpot_login_pid", None)
+        return shell if isinstance(shell, int) else None
+
+    def tpot_lnode(self, path: str, own: bool = True):
+        """(node, errno) of a path as lstat sees it (the last part not followed; path is free of links but the
+        last part). /proc/self and /proc/thread-self are readlink's own process, whose folder stands in for the
+        shell's (its exe the program of readlink, its cwd the shell's)."""
+        parts = path.strip("/").split("/")
+        if own and parts[:1] == ["proc"] and len(parts) >= 2:
+            pid, exe = self.tpot_own()
+            if len(parts) == 2 and parts[1] in ("self", "thread-self"):
+                target = str(pid) if parts[1] == "self" else f"{pid}/task/{pid}"
+                return [parts[1], tpot_shell_fs.T_LINK, 0, 0, len(target), 0o120777, 0, [], target, None], None
+            if parts[1] == str(pid):
+                rest = parts[2:]
+                if rest in (["exe"], ["cwd"], ["root"]):
+                    target = {"exe": exe, "cwd": self.cwd, "root": "/"}[rest[0]]
+                    return [rest[0], tpot_shell_fs.T_LINK, self.uid, self.gid, len(target), 0o120777, 0, [], target,
+                            None], None
+                shell = self.tpot_shell()
+                if rest[:2] == ["task", str(pid)]:
+                    rest = ["task", str(shell)] + rest[2:]
+                parts = ["proc", str(shell)] + rest if shell is not None else parts
+                path = "/" + "/".join(parts)
+            elif parts[1] == str(self.tpot_shell()) and parts[2:] == ["cwd"]:
+                # the shell runs in the folder of the session
+                return ["cwd", tpot_shell_fs.T_LINK, self.uid, self.gid, len(self.cwd), 0o120777, 0, [], self.cwd,
+                        None], None
+        node = self.fs.getfile(path, follow_symlinks=False) if path != "/" else self.fs.getfile("/")
+        if not isinstance(node, list):
+            return None, "ENOENT"
+        if (self.uid != 0 and len(parts) == 3 and parts[0] == "proc" and parts[1].isdigit()
+                and parts[2] in ("exe", "cwd", "root")):
+            folder = self.fs.getfile("/proc/" + parts[1], follow_symlinks=False)
+            if isinstance(folder, list) and folder[tpot_shell_fs.A_UID] != self.uid:
+                return None, "EACCES"
+        return node, None
+
+    def tpot_canon(self, name: str, mode: str, own: bool = True):
+        """(path, None) of a name with every link resolved, else (None, errno): mode "e" every part has to exist,
+        "f" all but the last, "m" none (gnulib's canonicalize_filename_mode; BusyBox's realpath is "e")."""
+        if not name:
+            return None, "ENOENT"
+        if self.tpot_late():
+            return None, "ELOOP"
+        pending = (name if name.startswith("/") else f"{self.cwd.rstrip('/')}/{name}").split("/")
+        pending.reverse()
+        parts, links, lenient = [], 0, self.tpot_rules.get("slash_file", False) if mode == "e" else False
+        left = sum(1 for p in pending if p)  # the parts still pending that are not empty
+        gone, steps = None, 0  # gone: the length of parts when the first part that is missing was added
+        while pending:
+            part = pending.pop()
+            left -= 1 if part else 0
+            steps += 1
+            if steps % 256 == 0 and self.tpot_late(256):
+                return None, "ELOOP"
+            if part in ("", "."):
+                continue
+            if part == "..":
+                if parts:
+                    parts.pop()
+                if gone is not None and len(parts) < gone:
+                    gone = None
+                continue
+            more = left > 0 or (pending and not lenient)
+            if gone is not None:
+                node, errno = None, "ENOENT"  # below a part that is missing nothing exists
+            else:
+                node, errno = self.tpot_lnode("/" + "/".join(parts + [part]), own)
+            if node is None:
+                if errno == "EACCES":
+                    return None, errno
+                # -f: the last part may be missing, also before slashes at its end, not before a dot (gnulib
+                #   canonicalize_filename_mode, CAN_ALL_BUT_LAST; recorded: readlink -f missing/ and missing//, not
+                #   missing/.)
+                if mode == "m" or (mode == "f" and all(p == "" for p in pending)):
+                    parts.append(part)
+                    if gone is None:
+                        gone = len(parts)
+                    continue
+                return None, "ENOENT"
+            if node[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_LINK:
+                links += 1
+                if links > 40:
+                    return None, "ELOOP"
+                target = str(node[tpot_shell_fs.A_TARGET] or "")
+                if not target:
+                    return None, "ENOENT"
+                if target.startswith("/"):
+                    parts = []
+                targets = target.split("/")
+                left += sum(1 for p in targets if p)
+                pending += reversed(targets)
+                continue
+            if more and node[tpot_shell_fs.A_TYPE] != tpot_shell_fs.T_DIR and mode != "m":
+                return None, "ENOTDIR"
+            parts.append(part)
+        return "/" + "/".join(parts), None
+
+    def tpot_readlink(self, name: str):
+        """(target, None) of readlink(2), else (None, errno): EINVAL for a name that is no link."""
+        if not name:
+            return None, "ENOENT"
+        path = name if name.startswith("/") else f"{self.cwd.rstrip('/')}/{name}"
+        head, _, last = path.rstrip("/").rpartition("/") if path.rstrip("/") else ("", "", "")
+        if path.endswith("/") and path.rstrip("/"):
+            # a slash at the end: the name is followed, a folder is no link, anything else no folder
+            found, errno = self.tpot_canon(name, "e")
+            if errno:
+                return None, errno
+            node = self.fs.getfile(found)
+            return None, "EINVAL" if isinstance(node, list) and node[tpot_shell_fs.A_TYPE] == tpot_shell_fs.T_DIR \
+                else "ENOTDIR"
+        if not last:
+            return None, "EINVAL"  # /
+        folder, errno = self.tpot_canon(head or "/", "e")
+        if errno:
+            return None, errno
+        node, errno = self.tpot_lnode(f"{folder.rstrip('/')}/{last}")
+        if node is None:
+            return None, errno
+        if node[tpot_shell_fs.A_TYPE] != tpot_shell_fs.T_LINK:
+            return None, "EINVAL"
+        return str(node[tpot_shell_fs.A_TARGET] or ""), None
+
+    # --- the command ------------------------------------------------------------------------
+
+    def tpot_fs_main(self, options: list, names: list) -> int:
+        mode, newline, verbose, end = None, True, False, "\n"
+        for key, _value in options:
+            if key in ("f", "e", "m"):
+                mode = key
+            elif key == "n":
+                newline = False
+            elif key == "v":
+                verbose = True
+            elif key in ("q", "s"):
+                verbose = False
+            elif key == "z":
+                end = "\0"
+        if not self.gnu:
+            # getopt32 "=1": exactly one name, else the usage
+            if len(names) != 1:
+                raise self.tpot_usage_stop()
+            return self.tpot_busybox_one(names[0], mode == "f", newline, verbose)
+        if not names:
+            raise TpotTextStop(self.tpot_say("readlink.missing_operand"), 1)
+        if not newline and len(names) > 1:
+            self.tpot_err.append(self.tpot_say("readlink.no_newline"))
+            newline = True
+        code = 0
+        for name in names:
+            found, errno = self.tpot_canon(name, mode) if mode else self.tpot_readlink(name)
+            if errno:
+                code = 1
+                if verbose:
+                    shown = tpot_text_quotef(name) if self.version >= (8, 25) else name
+                    self.tpot_err.append(self.tpot_say("readlink.error", shown, TPOT_FS_STRERROR[errno]))
+                continue
+            if not self.tpot_emit(found + (end if newline else "")):
+                break
+        return code
+
+    def tpot_busybox_one(self, name: str, follow: bool, newline: bool, verbose: bool) -> int:
+        """readlink of BusyBox: readlink(2), with -f the realpath of the C library (a link whose target is missing
+        gives the path of its target where the build resolves it; uClibc takes a file with a slash at its end,
+        musl keeps a // at the start)."""
+        if follow:
+            found, errno = self.tpot_canon(name, "e")
+            if errno == "ENOENT" and self.tpot_rules.get("follow_dangling"):
+                target, failed = self.tpot_readlink(name)
+                if not failed:
+                    base = target if target.startswith("/") else posixpath.join(posixpath.dirname(name) or ".", target)
+                    folder, errno = self.tpot_canon(posixpath.dirname(base) or ".", "e")
+                    if errno is None:
+                        found = f"{folder.rstrip('/')}/{posixpath.basename(base)}"
+            if errno == "ENOENT" and self.tpot_rules.get("missing_last"):
+                # xmalloc_realpath_coreutils of 1.36.1: a missing last part (slashes at the end left out) of a name
+                #   with a folder whose folder exists (recorded: readlink -f d/missing/; not: missing, missing/)
+                stripped = name.rstrip("/")
+                head, slash, last = stripped.rpartition("/")
+                if slash and last:
+                    folder, failed = self.tpot_canon(head or "/", "e")
+                    if failed is None:
+                        found, errno = f"{folder.rstrip('/')}/{last}", None
+            if errno is None and self.tpot_rules.get("double_slash") and name.startswith("//") \
+                    and not name.startswith("///"):
+                found = "/" + found
+            if errno:
+                return 1
+        else:
+            found, errno = self.tpot_readlink(name)
+            if errno:
+                if verbose:
+                    key = "readlink.not_link" if errno == "EINVAL" else "readlink.error"
+                    self.tpot_err.append(self.tpot_say(key, name, errno=None if errno == "EINVAL" else errno))
+                return 1
+        self.tpot_emit(found + ("\n" if newline else ""))
+        return 0
+
+
 for tpot_tool, tpot_class in (("rm", Command_tpot_rm), ("cp", Command_tpot_cp), ("mv", Command_tpot_mv),
                               ("touch", Command_tpot_touch), ("rmdir", Command_tpot_rmdir),
-                              ("mkdir", Command_tpot_mkdir)):
+                              ("mkdir", Command_tpot_mkdir), ("readlink", Command_tpot_readlink)):
     commands[f"/bin/{tpot_tool}"] = tpot_class
     commands[f"/usr/bin/{tpot_tool}"] = tpot_class
     commands[tpot_tool] = tpot_class
 '''
 
 
+OPENSSL_COMMAND = r'''
+
+
+# --- openssl --------------------------------------------------------------------------------------------
+
+# T-Pot: openssl of the persona ([shell] openssl names its openssl.json, tpot_personas.system.openssl_data):
+#   version and its options, help, list -commands (OpenSSL 1.0.2: list-standard-commands and the other
+#   lists), the text and exit status of an unknown command and, for OpenSSL 1.x without an argument, the
+#   prompt that reads commands until quit or the end of the input. The texts and the option parsing of each
+#   style are those of the build's real openssl; its other commands answer as unknown ones. The help listing
+#   names more commands than answer here: rand, dgst, enc, passwd, s_client and the digest and cipher names
+#   (sha256, base64, aes-256-cbc, ...) answer "Invalid command" for now. Differs from the real tool (not
+#   recorded): list -help and the options of list but -commands answer as unknown options.
+TPOT_OPENSSL_INVALID = "Invalid command '{}'; type \"help\" for a list.\n"
+TPOT_OPENSSL_ERROR = "openssl:Error: '{}' is an invalid command.\n"
+TPOT_OPENSSL_USAGE_102 = "usage:version -[avbofpd]\n"
+TPOT_OPENSSL_PROMPT = "OpenSSL> "
+# the words that end the prompt of OpenSSL 1.x (do_cmd of apps/openssl.c), the status do_cmd gives them
+TPOT_OPENSSL_QUIT = frozenset({"quit", "q", "exit", "bye"})
+TPOT_OPENSSL_END = -1
+# the lists of OpenSSL 1.0.2: the section of its listing each prints, one name per line
+TPOT_OPENSSL_LISTS = {"list-standard-commands": "Standard commands",
+                      "list-message-digest-commands": "Message Digest commands",
+                      "list-cipher-commands": "Cipher commands"}
+# what the prompt reads: lines and bytes
+TPOT_OPENSSL_LINES = 256
+TPOT_OPENSSL_INPUT = 64 << 10
+
+
+def tpot_openssl_load() -> dict:
+    """The persona's openssl.json ({} without one)."""
+    try:
+        with open(CowrieConfig.get("shell", "openssl", fallback=""), encoding="utf-8") as file:
+            return json.load(file)
+    except (OSError, ValueError):
+        log.msg("openssl of the persona: no openssl.json")
+        return {}
+
+
+class TpotOpenssl(HoneyPotCommand):
+    """openssl of the persona: the build of its release level's package (servers) or of its firmware image."""
+
+    # with an argument openssl reads no stdin, only the prompt of OpenSSL 1.x does (tpot_reads_stdin)
+    consumes_stdin = False
+
+    @classmethod
+    def tpot_reads_stdin(cls, args: list) -> bool:
+        """Whether openssl with these arguments reads its stdin (the patched shell asks, patch_stdin_readers)."""
+        return not args and str(tpot_openssl_load().get("style", "3.0")).startswith("1.")
+
+    def start(self) -> None:
+        self.tpot_prompting, self.tpot_read = False, 0
+        self.tpot_data = tpot_openssl_load()
+        self.tpot_style = str(self.tpot_data.get("style", "3.0"))
+        if not self.args and self.tpot_style.startswith("1."):
+            self.tpot_prompt_start()
+            return
+        # OpenSSL 3 without an argument prints its help
+        self.tpot_end(self.tpot_command(list(self.args) or ["help"]))
+
+    def tpot_end(self, code: int) -> None:
+        self.tpot_prompting = False
+        self.exit_code = 0 if code == TPOT_OPENSSL_END else code
+        self.exit()
+
+    # --- the commands -----------------------------------------------------------------------------
+
+    def tpot_command(self, args: list) -> int:
+        """One command (do_cmd of apps/openssl.c): its exit status, TPOT_OPENSSL_END for quit."""
+        try:
+            return self.tpot_dispatch(args)
+        except Exception:  # noqa: BLE001 - the command ends, the session goes on; the error goes to Cowrie's log
+            log.err(None, "openssl of the persona ended on an internal error")
+            return 1
+
+    def tpot_dispatch(self, args: list) -> int:
+        name, rest = args[0], args[1:]
+        modern = self.tpot_style.startswith("3.")
+        if modern and name in ("-help", "-h", "--help"):
+            return self.tpot_help([])
+        if self.tpot_style == "3.2" and name in ("-v", "-version", "--version"):
+            return self.tpot_version([])
+        if name == "version":
+            return self.tpot_version(rest)
+        if self.tpot_style == "1.0.2":
+            if name in TPOT_OPENSSL_LISTS:
+                self.write("".join(f"{word}\n" for word in self.tpot_section(TPOT_OPENSSL_LISTS[name])))
+                return 0
+        elif name == "help":
+            return self.tpot_help(rest)
+        elif name == "list":
+            return self.tpot_list(rest)
+        if not modern and name in TPOT_OPENSSL_QUIT:
+            return TPOT_OPENSSL_END
+        return self.tpot_invalid(name)
+
+    def tpot_invalid(self, name: str) -> int:
+        """An unknown command: OpenSSL 1.0.2 lists its commands (and ends well), the later ones say so."""
+        if self.tpot_style == "1.0.2":
+            self.errorWrite(TPOT_OPENSSL_ERROR.format(name) + self.tpot_data["listing"])
+            return 0
+        self.errorWrite(TPOT_OPENSSL_INVALID.format(name))
+        return 1
+
+    def tpot_help(self, args: list) -> int:
+        """help (OpenSSL 1.1 and 3): its options (-help), then the listing; with one command (not on 1.1.0)
+        that command's -help."""
+        found = self.tpot_options("help", args, set(), self.tpot_data["help_usage"])
+        if isinstance(found, int):
+            return found
+        rest = found[1]
+        if rest:
+            if self.tpot_style != "1.1.0" and len(rest) == 1:
+                return self.tpot_command([rest[0], "--help"])
+            if self.tpot_style == "3.2":
+                self.errorWrite(f'help: Extra option: "{rest[0]}"\n')
+            self.errorWrite("Usage: help\n")
+            return 1
+        self.errorWrite(self.tpot_data["help"])
+        return 0
+
+    def tpot_summary(self, prog: str) -> int:
+        self.errorWrite(f"{prog}: Use -help for summary.\n")
+        return 1
+
+    def tpot_unknown(self, prog: str, name: str) -> int:
+        self.errorWrite(f"{prog}: Unknown option: -{name}\n" if self.tpot_style.startswith("3.")
+                        else f"{prog}: Option unknown option -{name}\n")
+        return self.tpot_summary(prog)
+
+    def tpot_options(self, prog: str, args: list, known: set, usage: str | None) -> tuple | int:
+        """The options of a command (opt_next of OpenSSL 1.1 and 3): one dash or two, up to the first operand
+        or "--"; (flags, operands), or an int: the exit status after its -help (usage) or an error. Without
+        a usage (list) -help answers as an unknown option."""
+        helps = {"help", "h"} if self.tpot_style.startswith("3.") else {"help"}
+        flags, index = [], 0
+        while index < len(args) and args[index].startswith("-"):
+            word = args[index][1:]
+            index += 1
+            if word.startswith("-"):
+                if word == "-":
+                    break
+                word = word[1:]
+            name = word.partition("=")[0]
+            if name not in known and name not in helps:
+                return self.tpot_unknown(prog, name)
+            if "=" in word:
+                self.errorWrite(f"{prog}: Option -{name} does not take a value\n")
+                return self.tpot_summary(prog)
+            if name in helps:
+                if usage is None:
+                    return self.tpot_unknown(prog, name)
+                self.errorWrite(usage)
+                return 0
+            flags.append(name)
+        return flags, args[index:]
+
+    def tpot_no_operands(self, prog: str, rest: list, extra: str) -> int | None:
+        """The error of a command that takes no operands (extra: the text of OpenSSL 1.1), None without any."""
+        if not rest:
+            return None
+        if self.tpot_style == "3.2":
+            self.errorWrite(f'{prog}: Extra option: "{rest[0]}"\n')
+        elif not self.tpot_style.startswith("3."):
+            self.errorWrite(extra)
+        return self.tpot_summary(prog)
+
+    def tpot_version(self, rest: list) -> int:
+        """version: the lines of `version -a` its options choose (none: -v), in the order openssl prints them."""
+        lines = self.tpot_data["lines"]
+        letters = {letter for letter, _ in lines if letter} | {"a"}
+        if self.tpot_style == "1.0.2":
+            flags = [arg[1:] for arg in rest]
+            if any(len(arg) != 2 or arg[0] != "-" or arg[1] not in letters for arg in rest):
+                self.errorWrite(TPOT_OPENSSL_USAGE_102)
+                return 1
+        else:
+            found = self.tpot_options("version", rest, letters, self.tpot_data["version_usage"])
+            if isinstance(found, int):
+                return found
+            flags, operands = found
+            error = self.tpot_no_operands("version", operands, "Extra parameters given.\n")
+            if error is not None:
+                return error
+        chosen = set(flags) or {"v"}
+        self.write("".join(f"{line}\n" for letter, line in lines
+                           if "a" in chosen or (letter and letter in chosen)))
+        return 0
+
+    def tpot_list(self, rest: list) -> int:
+        """list -commands (OpenSSL 1.1 and 3); its other options answer as unknown ones (unverified: the real
+        list prints its usage, the digests, the ciphers, ...)."""
+        found = self.tpot_options("list", rest, {"commands"}, None)
+        if isinstance(found, int):
+            return found
+        flags, operands = found
+        error = self.tpot_no_operands("list", operands, "Extra arguments given.\n")
+        if error is not None:
+            return error
+        if not flags:
+            return self.tpot_summary("list")
+        self.write(self.tpot_data["list"])
+        return 0
+
+    def tpot_section(self, title: str) -> list:
+        """The names of a section of the listing of OpenSSL 1.0.2 (its columns up to the next blank line)."""
+        names, inside = [], False
+        for line in self.tpot_data["listing"].splitlines():
+            if not line.strip():
+                inside = False
+            elif line.startswith(title):
+                inside = True
+            elif inside:
+                names += line.split()
+        return names
+
+    # --- the prompt of OpenSSL 1.x ----------------------------------------------------------------
+
+    def tpot_prompt_start(self) -> None:
+        self.write(TPOT_OPENSSL_PROMPT)
+        if self.input_data is not None:
+            self.tpot_prompt_input(bytes(self.input_data))
+            return
+        # the lines of the terminal until quit or ctrl-d (an exec channel: its input at the end)
+        self.tpot_prompting = True
+
+    def tpot_prompt_input(self, data: bytes) -> None:
+        """The lines of a pipe at the prompt, then the end of the input."""
+        lines = data[:TPOT_OPENSSL_INPUT].split(b"\n")
+        if lines[-1] == b"":
+            lines.pop()
+        for line in lines[:TPOT_OPENSSL_LINES]:
+            if self.tpot_prompt_line(line.decode("utf-8", "replace")):
+                return
+        self.tpot_end(0)
+
+    def tpot_prompt_line(self, line: str) -> bool:
+        """One line at the prompt (its words); True when it ended the command."""
+        words = line.split()
+        if words:
+            code = self.tpot_command(words)
+            if code == TPOT_OPENSSL_END:
+                self.tpot_end(code)
+                return True
+            if code:
+                self.errorWrite(f"error in {words[0]}\n")
+        self.write(TPOT_OPENSSL_PROMPT)
+        return False
+
+    def lineReceived(self, line: str) -> None:
+        self.protocol.events.dispatch("cowrie.command.input", "INPUT (%(realm)s): %(input)s",
+                                      realm="openssl", input=line)
+        if not self.tpot_prompting:
+            return
+        self.tpot_read += 1
+        if self.tpot_read > TPOT_OPENSSL_LINES:
+            self.tpot_end(0)
+            return
+        self.tpot_prompt_line(line)
+
+    def eofReceived(self) -> None:
+        if not self.tpot_prompting:
+            return
+        self.tpot_prompting = False
+        data = b""
+        if not self.tpot_read and hasattr(self.protocol, "execcmd"):
+            # an exec channel buffers its stdin on the protocol, it does not arrive as lines
+            data = bytes(getattr(self.protocol, "input_data", b"") or b"")
+        if data:
+            self.tpot_prompt_input(data)
+        else:
+            self.tpot_end(0)
+
+
+commands["/usr/bin/openssl"] = TpotOpenssl
+commands["openssl"] = TpotOpenssl
+'''
+
+
+def patch_stdin_readers(cowrie_root):
+    """A command whose class has tpot_reads_stdin(args) says by its arguments whether it reads the stdin of its
+    shell (openssl reads it only for the prompt of OpenSSL 1.x); the others by consumes_stdin, as upstream."""
+    replace_once(cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py",
+                 "        stdin = self.stdin\n        if cmdclass.consumes_stdin:\n            self.stdin = None\n",
+                 "        stdin = self.stdin\n"
+                 "        # T-Pot: a command that reads stdin only with some arguments says so (tpot_reads_stdin)\n"
+                 "        reads = getattr(cmdclass, \"tpot_reads_stdin\", None)\n"
+                 "        if reads(args) if reads is not None else cmdclass.consumes_stdin:\n"
+                 "            self.stdin = None\n")
+
+
 def patch_text_tools(cowrie_root):
     """wc, sort and seq of the persona (TEXT_COMMAND after the commands of wc.py): GNU coreutils or
-    BusyBox, files of the emulated file system, a pipe or the terminal; rm, cp, mv, touch, rmdir and mkdir
+    BusyBox, files of the emulated file system, a pipe or the terminal; rm, cp, mv, touch, rmdir, mkdir and readlink
     (MKDIR_COMMAND) with the texts of fs_texts.json, of which Cowrie's data folder gets a copy (the
-    persona names its own with [shell] fs_texts)."""
+    persona names its own with [shell] fs_texts); openssl of the persona (OPENSSL_COMMAND, [shell] openssl)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "wc.py"
     replace_once(path, 'commands["/usr/bin/wc"] = Command_wc\ncommands["/bin/wc"] = Command_wc\n'
                        'commands["wc"] = Command_wc\n',
                  'commands["/usr/bin/wc"] = Command_wc\ncommands["/bin/wc"] = Command_wc\n'
-                 'commands["wc"] = Command_wc\n' + TEXT_COMMAND + MKDIR_COMMAND
-                 + tpot_metering("TpotTextTool", "Command_tpot_wc", "Command_tpot_seq", "Command_tpot_sort",
+                 'commands["wc"] = Command_wc\n' + TEXT_COMMAND + MKDIR_COMMAND + OPENSSL_COMMAND
+                 + tpot_metering("TpotTextTool", "Command_tpot_wc", "Command_tpot_seq", "Command_tpot_sort", "Command_tpot_uniq", "Command_tpot_date", "Command_tpot_xargs",
                                  "TpotFsTool", "Command_tpot_rm", "Command_tpot_cp", "Command_tpot_mv",
-                                 "Command_tpot_touch", "Command_tpot_rmdir", "Command_tpot_mkdir"))
+                                 "Command_tpot_touch", "Command_tpot_rmdir", "Command_tpot_mkdir",
+                                 "Command_tpot_readlink", "TpotOpenssl")
+                 + 'tpot_meter_class(Command_tpot_xargs, "resume")\n')
     data = cowrie_root / "src" / "cowrie" / "data"
     data.mkdir(parents=True, exist_ok=True)
     texts = Path(__file__).resolve().parent / "tpot_personas" / "fs_texts.json"
@@ -17897,8 +26470,8 @@ def patch_text_tools(cowrie_root):
 
 def patch_prompt(cowrie_root):
     """[shell] prompt_style = redhat gives the bash PS1 of RHEL / CentOS,
-    [\\u@\\h \\W]\\$ (short host name, basename of the cwd, ~ for home); anything
-    else keeps Cowrie's Debian prompt \\u@\\h:\\w\\$."""
+    [\\u@\\h \\W]\\$ (short host name, basename of the cwd, ~ for home), qnap the [\\w] \\$ of QTS,
+    msh the "# " / "$ " of BusyBox msh; anything else keeps Cowrie's Debian prompt \\u@\\h:\\w\\$."""
     path = cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py"
     replace_once(
         path,
@@ -17916,6 +26489,9 @@ def patch_prompt(cowrie_root):
             elif CowrieConfig.get("shell", "prompt_style", fallback="debian") == "qnap":
                 # T-Pot: QTS (/etc/profile): [\\w] \\$ -> "[~] # "
                 prompt = f"[{cwd}] "
+            elif CowrieConfig.get("shell", "prompt_style", fallback="debian") == "msh":
+                # T-Pot: BusyBox msh: PS1 "# " for root, "$ " for the others (PS2 "> ")
+                prompt = ""
             else:
                 prompt = f"{username}@{self.protocol.hostname}:{cwd}"
 """,
@@ -17925,7 +26501,8 @@ def patch_prompt(cowrie_root):
 def patch_shell_errors(cowrie_root):
     """The shell names itself as the persona's login shell ([shell] shell_name: -ash, -sh, -vbash,
     -bash) and says a missing command as it does ([shell] not_found_style: ash "not found",
-    bash "command not found"); BusyBox ash names no line under -c. Without the keys bash stays."""
+    bash "command not found", msh "x: not found" without the name of the shell); BusyBox ash names
+    no line under -c, msh neither itself nor a line. Without the keys bash stays."""
     path = cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py"
     replace_once(
         path,
@@ -17940,7 +26517,11 @@ def patch_shell_errors(cowrie_root):
         """        if self.line_numbers:
             return f"{self.name}: line {self.current_line}: "
 """,
-        """        ash = CowrieConfig.get("shell", "not_found_style", fallback="bash") == "ash"
+        """        style = CowrieConfig.get("shell", "not_found_style", fallback="bash")
+        if style == "msh":
+            # T-Pot: BusyBox msh names neither itself nor a line ("x: not found", "/x: bad directory")
+            return ""
+        ash = style == "ash"
         if self.line_numbers and not (ash and self.syntax_label == "-c"):
             return f"{self.name}: line {self.current_line}: "
 """,
@@ -17950,7 +26531,13 @@ def patch_shell_errors(cowrie_root):
         """        if cmd[:1] in (".", "/"):
             path = self.protocol.fs.resolve_path(cmd, self.cwd)
 """,
-        """        if cmd[:1] in (".", "/") and CowrieConfig.get("shell", "not_found_style", fallback="bash") == "ash":
+        """        if CowrieConfig.get("shell", "not_found_style", fallback="bash") == "msh":
+            # T-Pot: BusyBox msh (1.14.1 of the DIR-859) names a folder "can't execute" (status 126,
+            #   tpot_not_found_status), anything else "not found"
+            if cmd[:1] in (".", "/") and self.protocol.fs.isdir(self.protocol.fs.resolve_path(cmd, self.cwd)):
+                return f"{cmd}: can't execute\\n"
+            return f"{cmd}: not found\\n"
+        if cmd[:1] in (".", "/") and CowrieConfig.get("shell", "not_found_style", fallback="bash") == "ash":
             # T-Pot: BusyBox ash names a folder "Permission denied" and a missing path "not found"
             path = self.protocol.fs.resolve_path(cmd, self.cwd)
             if self.protocol.fs.isdir(path):
@@ -17981,6 +26568,136 @@ def patch_shell_errors(cowrie_root):
             # the handler's own text for a command it does not know: no name of the shell
             return f"{cmd}: command not found\\n"
         return f"{self.error_prefix()}{cmd}: command not found\\n"
+""",
+    )
+
+
+MSH_NOT_FOUND_STATUS = '''
+
+def tpot_not_found_status(message: bytes) -> int:
+    """T-Pot: the status of a command the shell could not run: 126 for a folder (bash "Is a directory", ash
+    "Permission denied", msh "can't execute"), else 127."""
+    style = CowrieConfig.get("shell", "not_found_style", fallback="bash")
+    if style == "msh" and message.endswith(b": can't execute\\n"):
+        return 126
+    if message.endswith(b": Is a directory\\n") or (style == "ash" and message.endswith(b": Permission denied\\n")):
+        return 126
+    return 127
+'''
+
+MSH_EXEC_DENIED = '''def tpot_exec_denied(prefix: str, name: str) -> tuple[str, int]:
+    """T-Pot: the error and status of a file without an x bit: "x: can't execute" of BusyBox msh, else
+    bash's "Permission denied" (both 126)."""
+    if CowrieConfig.get("shell", "not_found_style", fallback="bash") == "msh":
+        return f"{name}: can't execute\\n", 126
+    return f"{prefix}{name}: Permission denied\\n", 126
+
+
+'''
+
+MSH_HELP = (
+    "\nBuilt-in commands:\n------------------\n"
+    "\t. : break cd continue eval exec exit export help login newgrp\n"
+    "\tread readonly set shift times trap umask wait\n\n"
+)
+
+
+def patch_msh(cowrie_root):
+    """BusyBox msh ([shell] not_found_style = msh, the DIR-859; texts of tests/fixtures/msh.json): the status
+    126 of a folder it cannot execute, "x: can't execute" for a file without an x bit, its banner after the
+    login (the BusyBox banner of [shell] text_banner, "built-in shell (msh)") and the builtins of its help
+    on a terminal. Known deviations, as Cowrie's parser and commands answer them for every persona:
+    - msh has no $( ), ${#x} or ~ (Cowrie expands them); its $(( )) is a "syntax error" (status 255, tpot_arith_value)
+    - msh fails a whole line at parse time on $(( )) (not recorded); Cowrie runs the statements before it
+    - msh says "syntax error" alone, "/x: bad directory" for a failed cd and "can't run builtin as part of
+      pipe" for set in a pipe; umask prints 0022 on a terminal (Cowrie's umask prints nothing)
+    - under -c msh stops after a failed cd (status 255, `cd /nosuch; echo $?` prints nothing); Cowrie goes on
+    - PS1='x> ' takes effect at once in msh; Cowrie's prompt is that of [shell] prompt_style
+    - with an empty environment msh has HOME=/ and cd without an argument goes to /; the login of Cowrie gives
+      the account's home (what the DIR-859's login sets is unverified)
+    - msh continues a line on the terminal: an open quote or if with PS2 "> ", a trailing backslash with PS1
+      "# " again (the pty cases of the fixture); Cowrie parses each typed line on its own and has no
+      continuation prompt to give a style"""
+    path = cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py"
+    replace_once(path, "\n\nclass HoneyPotShell:\n", MSH_NOT_FOUND_STATUS + "\n\nclass HoneyPotShell:\n")
+    replace_once(path, "            self.last_exit_code = 127  # command not found\n",
+                 "            self.last_exit_code = tpot_not_found_status(message)  # command not found\n")
+    path = cowrie_root / "src" / "cowrie" / "shell" / "protocol.py"
+    replace_once(path, "class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):\n",
+                 MSH_EXEC_DENIED + "class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):\n")
+    replace_once(
+        path,
+        """                    self.errorWrite(f"{prefix}{name}: Permission denied\\n")
+                    self.exit_code = 126
+""",
+        """                    # T-Pot: BusyBox msh says "can't execute" (tpot_exec_denied)
+                    message, self.exit_code = tpot_exec_denied(prefix, name)
+                    self.errorWrite(message)
+""",
+    )
+    replace_once(
+        path,
+        """            self.terminal.write(self.fs.file_contents("/etc/motd"))
+        except Exception:
+            pass
+""",
+        """            self.terminal.write(self.fs.file_contents("/etc/motd"))
+        except Exception:
+            pass
+        # T-Pot: BusyBox msh on a terminal: two empty lines, its banner, the line about help, an empty line
+        tpot_banner = CowrieConfig.get("shell", "text_banner", fallback="")
+        if CowrieConfig.get("shell", "not_found_style", fallback="bash") == "msh" and tpot_banner:
+            self.terminal.write(
+                f"\\n\\n{tpot_banner} built-in shell (msh)\\n"
+                "Enter 'help' for a list of built-in commands.\\n\\n".encode()
+            )
+""",
+    )
+    path = cowrie_root / "src" / "cowrie" / "commands" / "base.py"
+    replace_once(
+        path,
+        """class Command_help(HoneyPotCommand):
+    def call(self) -> None:
+""",
+        f"""class Command_help(HoneyPotCommand):
+    def call(self) -> None:
+        if CowrieConfig.get("shell", "not_found_style", fallback="bash") == "msh":
+            # T-Pot: the builtins of BusyBox msh, on a terminal only (under -c msh prints nothing)
+            if self.shell.interactive:
+                self.write({MSH_HELP!r})
+            return
+""",
+    )
+
+
+def patch_bash_version(cowrie_root):
+    """bash --version prints the version of the persona's bash ([shell] bash_version, a JSON string: QNAP's
+    bash 3.2.57 of its GPL build) and exits 0; sh, and bash without the key, stay upstream's."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "bash.py"
+    replace_once(path, "from cowrie.shell.command import HoneyPotCommand\n",
+                 "from cowrie.core.config import CowrieConfig\nfrom cowrie.shell.command import HoneyPotCommand\n")
+    replace_once(
+        path,
+        """    def start(self) -> None:
+        if self.args and self.args[0].strip() == "-c":
+""",
+        """    def start(self) -> None:
+        # T-Pot: bash --version of the persona's bash ([shell] bash_version), not of a BusyBox sh
+        tpot_version = CowrieConfig.get("shell", "bash_version", fallback="")
+        if tpot_version and self.args[:1] == ["--version"]:
+            import json as tpot_json
+            import posixpath as tpot_posixpath
+
+            if tpot_posixpath.basename(self.argv0) == "bash":
+                try:
+                    tpot_text = tpot_json.loads(tpot_version)
+                except ValueError:
+                    tpot_text = None
+                if isinstance(tpot_text, str):
+                    self.write(tpot_text)
+                    self.exit()
+                    return
+        if self.args and self.args[0].strip() == "-c":
 """,
     )
 
@@ -18474,11 +27191,37 @@ def patch_history(cowrie_root):
             # HISTTIMEFORMAT of the shell (the login sets the persona's, EdgeOS; `unset HISTTIMEFORMAT` takes
             #   the times away as in bash): each line after the time it was typed, in UTC as /etc/localtime
             environ = getattr(self, "environ", None) or {}
-            stamp = "" if ash else str(environ.get("HISTTIMEFORMAT", "") or "")[:64]
+            stamp = "" if ash else str(environ.get("HISTTIMEFORMAT", "") or "")
             if stamp:
+                import re as tpot_re
                 import time as tpot_time
 
                 stamp = stamp.replace("%F", "%Y-%m-%d").replace("%T", "%H:%M:%S").replace("%z", "+0000")
+                # cut once per call: a piece gives at least one byte, so 128 of them fill the 127 bytes
+                pieces = []
+                for found in tpot_re.finditer(r"%[-_0^#]*[0-9]*[EO]?.|.", stamp, tpot_re.S):
+                    pieces.append(found.group())
+                    if len(pieces) > 127:
+                        break
+                # bash 4.2 formats a line it holds no time of with the time it added it, 4.4 and later write "??"
+                untimed = CowrieConfig.get("shell", "history_untimed", fallback="") == "format"
+
+                def tpot_strftime(typed):
+                    # recorded (bash 4.2, 4.4.12, 5.2 in Docker): the output stops at 127 bytes, a piece that does
+                    #   not fit ends it, an unknown directive (%Q) stays as written, %s is the epoch;
+                    #   derived from glibc strftime, not recorded: a width (%10s) is ignored
+                    out, size = "", 0
+                    for token in pieces:
+                        if token[0] == "%" and len(token) > 1:
+                            if token[-1] == "s":
+                                token = str(int(typed))
+                            elif token[-1] in "aAbBcCdDeFgGhHIjklmMnpPrRStuUVwWxXyYZ%":
+                                token = tpot_time.strftime(token, tpot_time.gmtime(typed))
+                        size += len(token.encode(errors="replace"))
+                        if size > 127:
+                            break
+                        out += token
+                    return out
             times = list(getattr(self.protocol, "tpot_history_times", []))[-len(lines):] if lines else []
             times = [None] * (len(lines) - len(times)) + times
             word = self.args[0] if self.args and not ash else ""
@@ -18502,9 +27245,13 @@ def patch_history(cowrie_root):
                 else:
                     when = ""
                     if stamp:
-                        # a line without its time: "??", as histtime of bash 4.4
+                        # a line without its time: "??" and no format (recorded: bash 4.4.12, 5.1, 5.2; 4.2 formats
+                        #   it, with the time of now, derived: the persona keeps none); bash 4.3 unrecorded
                         try:
-                            when = "??" if typed is None else tpot_time.strftime(stamp, tpot_time.gmtime(typed))
+                            if typed is None:
+                                when = tpot_strftime(tpot_time.time()) if untimed else "??"
+                            else:
+                                when = tpot_strftime(typed)
                         except ValueError:
                             when = "??"
                     self.write(f" {count:4d}  {when}{line.decode(errors='replace')}\\n")
@@ -18633,20 +27380,20 @@ class Command_tpot_type(HoneyPotCommand):
         if "/" in name:
             return [name] if self.fs.exists(name) and not self.fs.isdir(name) else []
         found = []
+        home = self.tpot_home(name)
         for folder in self.environ.get("PATH", "").split(":")[:self.PATH_ENTRIES]:
             if time.monotonic() >= getattr(self, "tpot_until", float("inf")):
                 return []
+            if home is not None and folder.strip("/") not in home:
+                continue
             path = f"{folder.rstrip('/')}/{name}"
             if folder and path not in found and self.fs.exists(path) and not self.fs.isdir(path):
                 found.append(path)
         return found
 
-    def tpot_find(self, name: str) -> str | None:
-        if self.tpot_spent():
-            return None
-        if "/" in name:
-            return name if self.fs.exists(name) and not self.fs.isdir(name) else None
-        # the folders of a device with folders of its own ([shell] which_dirs, as which reads them)
+    def tpot_home(self, name: str) -> tuple | None:
+        """The folders of a device with folders of its own ([shell] which_dirs, as which reads them) that hold
+        name, None for a name the table does not list."""
         home = None
         table = CowrieConfig.get("shell", "which_dirs", fallback="")
         if table:
@@ -18657,6 +27404,14 @@ class Command_tpot_type(HoneyPotCommand):
                             home = tuple(row.split(" ", 1)[1].split(","))
             except OSError:
                 home = None
+        return home
+
+    def tpot_find(self, name: str) -> str | None:
+        if self.tpot_spent():
+            return None
+        if "/" in name:
+            return name if self.fs.exists(name) and not self.fs.isdir(name) else None
+        home = self.tpot_home(name)
         for folder in self.environ.get("PATH", "").split(":")[:self.PATH_ENTRIES]:
             if time.monotonic() >= getattr(self, "tpot_until", float("inf")):
                 return None
@@ -19793,10 +28548,12 @@ LOGIN_PATH_NEEDLE = """        if self.uid == 0:
 
 
 TPOT_HISTORY_ENV = """        # T-Pot: an interactive bash has the HISTSIZE, HISTFILESIZE and HISTCONTROL of the persona
-        #   (BusyBox ash sets none); the shell exports only those of [shell] history_export, which are
+        #   (BusyBox ash and msh set none); the shell exports only those of [shell] history_export, which are
         #   set also when empty (EdgeOS: vyatta-cfg exports HISTCONTROL= and HISTTIMEFORMAT)
-        if CowrieConfig.get("shell", "not_found_style", fallback="bash") != "ash":
+        if CowrieConfig.get("shell", "not_found_style", fallback="bash") not in ("ash", "msh"):
             tpot_root = "_root" if self.uid == 0 else ""
+            # bash's own default, a shell variable (a command line run of bash has none)
+            self.environ["HISTFILE"] = self.environ["HOME"].rstrip("/") + "/.bash_history"
             tpot_exports = {tpot_name.strip() for tpot_name in
                             CowrieConfig.get("shell", "history_export", fallback="").split(",")}
             for tpot_name, tpot_key in (("HISTSIZE", "history_size"), ("HISTFILESIZE", "history_file_size"),
@@ -19841,12 +28598,12 @@ def patch_login_env(cowrie_root):
     # the first shell exports the login's environment, but the history variables bash sets itself
     replace_once(cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py",
                  "            self.exported = set(protocol.environ.keys())\n",
-                 """            # T-Pot: HISTSIZE, HISTFILESIZE and HISTCONTROL are shell variables of bash, exported
+                 """            # T-Pot: HISTFILE, HISTSIZE, HISTFILESIZE and HISTCONTROL are shell variables of bash, exported
             #   where the persona's profile exports them ([shell] history_export: Red Hat)
             tpot_export = {name.strip() for name in
                            CowrieConfig.get("shell", "history_export", fallback="").split(",")}
             self.exported = set(protocol.environ.keys()) - (
-                {"HISTSIZE", "HISTFILESIZE", "HISTCONTROL"} - tpot_export)
+                {"HISTFILE", "HISTSIZE", "HISTFILESIZE", "HISTCONTROL"} - tpot_export)
 """)
 
 
@@ -19854,8 +28611,8 @@ def patch_login_env(cowrie_root):
 TPOT_BUDGET = r'''
 
 # T-Pot: one time budget per session for the commands T-Pot emulates. The commands of a line run back to back on
-# the reactor, so what they use counts for the session in a sliding window: at most TPOT_BUDGET_CPU s of process
-# time and TPOT_BUDGET_WALL s of wall-clock time in any TPOT_BUDGET_WINDOW s (in TPOT_BUDGET_SLOTS steps). A call
+# the reactor, so what they use counts for the session in a sliding window: at most TPOT_BUDGET_CPU s of the thread's
+# CPU time and TPOT_BUDGET_WALL s of wall-clock time in any TPOT_BUDGET_WINDOW s (in TPOT_BUDGET_SLOTS steps). A call
 # is charged TPOT_BUDGET_CALL at its start and the time it runs; a call made inside another (sudo, a command a
 # command runs) counts with it. A command checks the session's deadline where it checks its own bounds and, past
 # it, ends as it does at them.
@@ -19874,10 +28631,10 @@ class TpotBudget:
     """The time the commands of one session used in the last TPOT_BUDGET_WINDOW seconds."""
 
     def __init__(self) -> None:
-        # [step, process time, wall-clock time] of the last TPOT_BUDGET_SLOTS steps
+        # [step, thread time, wall-clock time] of the last TPOT_BUDGET_SLOTS steps
         self.slots = [[-TPOT_BUDGET_SLOTS, 0.0, 0.0] for _ in range(TPOT_BUDGET_SLOTS)]
         self.depth = 0
-        self.opened = (0.0, 0.0)  # process time and time.monotonic of the outermost running call
+        self.opened = (0.0, 0.0)  # thread time and time.monotonic of the outermost running call
 
     @staticmethod
     def step(now: float) -> int:
@@ -19892,17 +28649,17 @@ class TpotBudget:
         slot[2] += wall
 
     def used(self, now: float) -> tuple[float, float]:
-        """Process and wall-clock time of the window, the running call's so far included."""
+        """Thread and wall-clock time of the window, the running call's so far included."""
         step = self.step(now)
         cpu = sum(slot[1] for slot in self.slots if step - slot[0] < TPOT_BUDGET_SLOTS)
         wall = sum(slot[2] for slot in self.slots if step - slot[0] < TPOT_BUDGET_SLOTS)
         if self.depth:
-            cpu += time.process_time() - self.opened[0]
+            cpu += time.thread_time() - self.opened[0]
             wall += now - self.opened[1]
         return cpu, wall
 
     def left(self, now: float) -> float:
-        """Seconds the session has left: of process time and of wall-clock time, the less."""
+        """Seconds the session has left: of thread time and of wall-clock time, the less."""
         cpu, wall = self.used(now)
         return max(0.0, min(TPOT_BUDGET_CPU - cpu, TPOT_BUDGET_WALL - wall))
 
@@ -19910,14 +28667,14 @@ class TpotBudget:
         now = time.monotonic()
         self.charge(now, TPOT_BUDGET_CALL, TPOT_BUDGET_CALL)
         if not self.depth:
-            self.opened = (time.process_time(), now)
+            self.opened = (time.thread_time(), now)
         self.depth += 1
 
     def close(self) -> None:
         self.depth -= 1
         if not self.depth:
             now = time.monotonic()
-            self.charge(now, max(0.0, time.process_time() - self.opened[0]), max(0.0, now - self.opened[1]))
+            self.charge(now, max(0.0, time.thread_time() - self.opened[0]), max(0.0, now - self.opened[1]))
 
 
 def tpot_budget(protocol) -> TpotBudget | None:
@@ -20121,11 +28878,14 @@ def main():
     patch_ssh_factory(cowrie_root)
     patch_ssh_kex(cowrie_root)
     patch_ssh_sig_algs(cowrie_root)
+    patch_ssh_drop(cowrie_root)
     patch_netstat(cowrie_root)
     patch_net_tools(cowrie_root)
     patch_ps_session(cowrie_root)
     patch_shell_pid(cowrie_root)
     patch_pipeline_words(cowrie_root)
+    patch_shell_arith(cowrie_root)
+    patch_shell_yield(cowrie_root)
     patch_service(cowrie_root)
     patch_systemctl(cowrie_root)
     patch_free(cowrie_root)
@@ -20136,8 +28896,11 @@ def main():
     patch_df(cowrie_root)
     patch_awk(cowrie_root)
     patch_text_tools(cowrie_root)
+    patch_stdin_readers(cowrie_root)
     patch_prompt(cowrie_root)
     patch_shell_errors(cowrie_root)
+    patch_msh(cowrie_root)
+    patch_bash_version(cowrie_root)
     patch_telnet_banner(cowrie_root)
     patch_ssh_userauth(cowrie_root)
     patch_auth(cowrie_root)

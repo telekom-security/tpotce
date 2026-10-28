@@ -1,0 +1,141 @@
+{
+ "_source": {
+  "recorded": "2026-10-21",
+  "how": "`ss -D FILE` as uid 1000 (user rec, no polkit) from a fresh /tmp/w, as `sh -c` in `docker exec`, no tty, in containers that boot systemd as PID 1 (wave w2/systemd, misc.json section D; helper images w2sd-<key>, docker run --privileged, linux/arm64 Docker Desktop VM); each case is [stdout, stderr, exit status]; the first case also lists the written file.",
+  "not_recorded": "a directory as the file, a path of a missing directory, ss of the other releases"
+ },
+ "images": {
+  "centos_7": {
+   "image": "centos:7",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "uid": 1000,
+   "cases": {
+    "ss -D /tmp/x; echo $?; ls -l /tmp/x": [
+     "0\n-rw-r--r-- 1 rec rec 40 Mon DD HH:MM /tmp/x\n",
+     "",
+     0
+    ],
+    "ss -D /root/x": [
+     "",
+     "",
+     0
+    ],
+    "ss -D /etc/x": [
+     "",
+     "",
+     0
+    ]
+   }
+  },
+  "debian_12": {
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "uid": 1000,
+   "cases": {
+    "ss -D /tmp/x; echo $?; ls -l /tmp/x": [
+     "0\n-rw-r--r-- 1 rec rec 40 Mon DD HH:MM /tmp/x\n",
+     "",
+     0
+    ],
+    "ss -D /root/x": [
+     "",
+     "",
+     0
+    ],
+    "ss -D /etc/x": [
+     "",
+     "",
+     0
+    ]
+   }
+  },
+  "debian_13": {
+   "image": "debian:13",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "uid": 1000,
+   "cases": {
+    "ss -D /tmp/x; echo $?; ls -l /tmp/x": [
+     "0\n-rw-r--r-- 1 rec rec 40 Mon DD HH:MM /tmp/x\n",
+     "",
+     0
+    ],
+    "ss -D /root/x": [
+     "",
+     "",
+     0
+    ],
+    "ss -D /etc/x": [
+     "",
+     "",
+     0
+    ]
+   }
+  },
+  "rockylinux_9": {
+   "image": "rockylinux:9",
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "uid": 1000,
+   "cases": {
+    "ss -D /tmp/x; echo $?; ls -l /tmp/x": [
+     "0\n-rw-r--r-- 1 rec rec 40 Mon DD HH:MM /tmp/x\n",
+     "",
+     0
+    ],
+    "ss -D /root/x": [
+     "",
+     "fopen dump file: Permission denied\n",
+     255
+    ],
+    "ss -D /etc/x": [
+     "",
+     "fopen dump file: Permission denied\n",
+     255
+    ]
+   }
+  },
+  "ubuntu_22.04": {
+   "image": "ubuntu:22.04",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "uid": 1000,
+   "cases": {
+    "ss -D /tmp/x; echo $?; ls -l /tmp/x": [
+     "0\n-rw-r--r-- 1 rec rec 40 Mon DD HH:MM /tmp/x\n",
+     "",
+     0
+    ],
+    "ss -D /root/x": [
+     "",
+     "",
+     0
+    ],
+    "ss -D /etc/x": [
+     "",
+     "",
+     0
+    ]
+   }
+  },
+  "ubuntu_24.04": {
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "uid": 1000,
+   "cases": {
+    "ss -D /tmp/x; echo $?; ls -l /tmp/x": [
+     "0\n-rw-r--r-- 1 rec rec 40 Mon DD HH:MM /tmp/x\n",
+     "",
+     0
+    ],
+    "ss -D /root/x": [
+     "",
+     "",
+     0
+    ],
+    "ss -D /etc/x": [
+     "",
+     "",
+     0
+    ]
+   }
+  }
+ }
+}

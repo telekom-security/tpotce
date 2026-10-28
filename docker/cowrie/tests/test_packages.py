@@ -1,12 +1,15 @@
 """One package state per session: what the package managers of a persona know (system.py) and how
 apt, dpkg, apt-cache, yum, rpm, dnf and opkg of one session agree on it (the patched commands)."""
 import fnmatch
+import gzip
 import json
 import re
 import shutil
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from tests import test_patch
 from tests.helpers import tmpdir
@@ -55,6 +58,30 @@ class PackageDataTest(unittest.TestCase):
             self.assertEqual(meta["tree"][4], size, pid)
             self.assertEqual(meta["tree"][-1], "displays an indented directory tree, in color", pid)
             self.assertEqual(system.apt_packages(persona, draw(persona, 1))["available"].get("tree"), None, pid)
+
+    def test_service_packages_have_a_candidate_on_each_release(self):
+        # the common service packages (apt show, apt-cache policy) have an apt-meta row on every apt release
+        names = ("nginx apache2 mariadb-server postgresql redis-server docker.io curl wget net-tools python3-pip "
+                 "git unzip screen tmux postfix").split()
+        for pid in ("debian-bookworm", "debian-trixie", "ubuntu-jammy", "ubuntu-noble", "raspios"):
+            persona = catalog.by_id(pid)
+            ident = draw(persona, 1)
+            letter = system._apt_letter(persona, ident)
+            # apt search reads the names of apt.txt.gz; apt show reads the rows of apt-meta.txt.gz
+            listed = {row[0] for row in system._name_rows("apt.txt.gz") if letter in row[1]}
+            meta = system.apt_meta(persona, ident)
+            for name in names:
+                with self.subTest(persona=pid, name=name):
+                    self.assertIn(name, listed)
+                    self.assertIn(name, meta)
+
+    def test_available_git_is_the_candidate_of_apt_meta(self):
+        # apt install (available) and apt policy (meta) name one version; unzip, net-tools and screen still differ
+        for pid in ("debian-bookworm", "debian-trixie", "raspios"):
+            persona = catalog.by_id(pid)
+            data = system.apt_packages(persona, draw(persona, 1))
+            with self.subTest(persona=pid):
+                self.assertEqual(data["available"].get("git", data["meta"]["git"][0]), data["meta"]["git"][0])
 
     def test_every_installed_package_has_a_description(self):
         for persona in catalog.PERSONAS:
@@ -852,8 +879,10 @@ class FixRound4Test(SessionCase):
         # postfix of the image is installed (its master runs): the base package, then the installed one
         postfix = ("2:postfix-2.10.1-9.el7.x86_64 : Postfix Mail Transport Agent\nRepo        : {repo}\n"
                    "Matched from:\nProvides    : smtpdaemon\n\n\n\n")
+        sendmail = ("sendmail-8.14.7-6.el7.x86_64 : A widely used Mail Transport Agent (MTA)\nRepo        : base\n"
+                    "Matched from:\nProvides    : smtpdaemon\n\n\n\n")
         self.assertEqual(run("yum provides smtpdaemon"), (
-            head + postfix.format(repo="base") + postfix.format(repo="@anaconda"), "", 0))
+            head + postfix.format(repo="base") + sendmail + postfix.format(repo="@anaconda"), "", 0))
         self.assertEqual(run("yum provides /bin/mail")[0].splitlines()[2:6], [
             "mailx-12.5-19.el7.x86_64 : Enhanced implementation of the mailx command", "Repo        : base",
             "Matched from:", "Filename    : /bin/mail"])
@@ -1077,6 +1106,519 @@ class FixRound5Test(SessionCase):
         self.assertEqual(run("yum clean dbcache")[0].splitlines()[2], "18 sqlite files removed")
         run = self.session("centos-7", uid=1000)
         self.assertEqual(run("yum repolist")[0], plugins + cached + table)
+
+
+APT_QUIET = json.loads((Path(__file__).parent / "fixtures" / "apt_quiet.json").read_text(encoding="utf-8"))
+APT_QUIET_MORE = json.loads((Path(__file__).parent / "fixtures" / "apt_quiet_more.json").read_text(encoding="utf-8"))
+
+
+class AptRule:
+    """The quiet rule of the patch (tpot_apt_quiet, tpot_apt_quieter), run on recorded texts: what apt leaves of the text
+    of a run at level 1 (as without -q on a pipe); below level 2 nothing changes."""
+
+    # the persona globals of the first session, kept on the class
+    functions = None
+
+    def rule(self, name):
+        if AptRule.functions is None:
+            AptRule.functions = self.session("debian-bookworm").commands["dpkg"].call.__globals__
+        return AptRule.functions[name]
+
+    def level(self, flags: str) -> int:
+        return self.rule("tpot_apt_quiet")(SimpleNamespace(args=flags.split()))
+
+    def quieter(self, prog: str, text: str, level: int, answer: bool = True) -> str:
+        if level < 2:
+            return text
+        return self.rule("tpot_apt_quieter")(SimpleNamespace(tpot_prog=prog), text, level, answer)
+
+
+class AptQuietTest(AptRule, SessionCase):
+    """apt-get and apt with -q, -qq, -q=2, --quiet, --quiet=2, -qqq (fixtures/apt_quiet.json: debian:9, debian:10,
+    debian:12, debian:13, ubuntu:22.04, ubuntu:24.04 in containers)."""
+
+    CASE = re.compile(r"(apt-get|apt) ((?:-\S+ )*)(update|install|remove|purge)\b ?(.*)")
+
+    def recorded(self):
+        """{(image, terminal, prog, verb, rest, -y): {level: (stdout, status)}} of the recorded runs."""
+        found = {}
+        for image, data in APT_QUIET["images"].items():
+            for terminal, table in ((False, data["cases"]), (True, data["cases_tty"])):
+                for case, (out, _, status) in table.items():
+                    prog, flags, verb, rest = self.CASE.fullmatch(case).groups()
+                    yes = rest == "zzhello" and any(re.fullmatch(r"-[a-z]*y[a-z]*", word) for word in flags.split())
+                    found.setdefault((image, terminal, prog, verb, rest, yes), {}).setdefault(
+                        self.level(flags), []).append((out, status, case))
+        return found
+
+    def test_the_rule_is_what_the_recorded_apts_do(self):
+        checked = 0
+        for (image, terminal, prog, verb, rest, yes), levels in self.recorded().items():
+            # on a terminal the run without -q draws percentages: the base is -q there
+            base_level = 1 if terminal else 0
+            base_out, base_status, base_case = levels[base_level][0]
+            for level, results in levels.items():
+                if terminal and level == 0:
+                    continue
+                for out, status, case in results:
+                    with self.subTest(image=image, case=case, terminal=terminal):
+                        self.assertEqual(out, self.quieter(prog, base_out, level), case)
+                        self.assertEqual(status, base_status)
+                        checked += 1
+        self.assertEqual(checked, 1416)
+
+    def test_the_fetch_lines_of_a_repository_that_copies(self):
+        # compares the rule with the recording only, no persona runs here
+        copy = APT_QUIET["copy_repo"]
+        # stderr's warning, its blank lines and debconf's note come at other places in a merged text
+        plain = lambda text: "".join(  # noqa: E731
+            line for line in text.splitlines(keepends=True) if line.strip() and not line.startswith(("WARNING:", "debconf:")))
+        for prog in ("apt-get", "apt"):
+            base = copy[f"{prog} -y install zzhello"]
+            for flags in ("-q", "-qq", "-qqq"):
+                case = f"{prog} {flags} -y install zzhello"
+                if case in copy:
+                    with self.subTest(case=case):
+                        self.assertEqual(plain(copy[case]), plain(self.quieter(prog, base, self.level(flags))))
+
+    def commands(self, prog, flags):
+        return [f"{prog} {flags} -y install curl", f"{prog} {flags} -y install nosuchpkg123",
+                f"{prog} {flags} -y remove nosuchpkg123", f"{prog} {flags} -y remove tree",
+                f"{prog} {flags} -y autoremove", f"{prog} {flags} update"]
+
+    def test_the_persona_leaves_out_what_the_recorded_apts_leave_out(self):
+        for pid in ("debian-bookworm", "debian-trixie", "ubuntu-jammy", "ubuntu-noble"):
+            for prog in ("apt-get", "apt"):
+                base = None
+                for flags in ("", "-q", "-qq", "-q=2", "--quiet", "--quiet=2", "-qqq"):
+                    run = self.session(pid)
+                    got = [run(line) for line in self.commands(prog, flags)]
+                    if flags == "":
+                        base = got
+                        continue
+                    for line, (out, err, code), (base_out, base_err, base_code) in zip(self.commands(prog, flags),
+                                                                                       got, base):
+                        with self.subTest(persona=pid, line=line):
+                            self.assertEqual(out, self.quieter(prog, base_out, self.level(flags)))
+                            self.assertEqual((err, code), (base_err, base_code))
+
+    def test_a_terminal_writes_the_plain_lines_with_a_quiet_option(self):
+        plain = "Reading package lists...\nBuilding dependency tree...\nReading state information...\n"
+        for pid in ("debian-bookworm", "debian-trixie", "ubuntu-jammy", "ubuntu-noble"):
+            for prog in ("apt-get", "apt"):
+                run = self.session(pid)
+                with self.subTest(persona=pid, prog=prog):
+                    one = run(f"{prog} -q -y install curl", tty=True)[0]
+                    self.assertTrue(one.startswith(plain), one)
+                    self.assertEqual(run(f"{prog} --quiet=2 -y install curl", tty=True)[0],
+                                     self.quieter(prog, one, 2))
+                    self.assertEqual(run(f"{prog} -qqq -y install curl", tty=True)[0], self.quieter(prog, one, 3))
+
+    def test_an_install_and_a_remove_keep_the_dpkg_lines_and_drop_the_rest(self):
+        for pid in ("debian-bookworm", "debian-trixie", "ubuntu-noble"):
+            for prog in ("apt-get", "apt"):
+                texts = {}
+                for flags in ("", "-qq", "-qqq"):
+                    run = self.session(pid)
+                    texts[flags] = (run(f"{prog} {flags} -y install tree")[0], run(f"{prog} {flags} -y remove tree")[0])
+                for flags, level in (("-qq", 2), ("-qqq", 3)):
+                    for number in (0, 1):
+                        with self.subTest(persona=pid, prog=prog, flags=flags, step=number):
+                            self.assertEqual(texts[flags][number], self.quieter(prog, texts[""][number], level))
+                self.assertIn("Setting up tree", texts["-qqq"][0])
+                self.assertNotIn("Get:", texts["-qq"][0])
+                self.assertIn("Removing tree", texts["-qqq"][1])
+                self.assertNotIn("After this operation", texts["-qqq"][1])
+                self.assertEqual(self.session(pid)(f"{prog} -qqy install curl")[0], "" if prog == "apt-get" else
+                                 self.quieter(prog, self.session(pid)(f"{prog} -y install curl")[0], 2))
+
+
+    IMAGE_PERSONAS = {"debian_12": "debian-bookworm", "debian_13": "debian-trixie", "ubuntu_22.04": "ubuntu-jammy",
+                      "ubuntu_24.04": "ubuntu-noble"}
+    MORE_CASE = re.compile(r"(?:(refused|unresolvable): )?(apt-get|apt|apt-cache)((?: (?:-q+|--quiet\S*|-q=\d))*) "
+                           r"(.*?)( \(zzhello automatic\))?")
+
+    def test_the_other_verbs_and_the_offline_texts_are_what_the_recorded_apts_do(self):
+        # list, show, search, policy, upgrade, autoremove, autopurge, reinstall, check and update without a network
+        # (fixtures/apt_quiet_more.json): the text at -q, -qq, -qqq against the rule applied to the text without -q
+        checked = 0
+        for image, data in APT_QUIET_MORE["images"].items():
+            for table in ("cases", "offline"):
+                groups = {}
+                for case, (out, _, status) in data[table].items():
+                    label, prog, flags, rest, extra = self.MORE_CASE.fullmatch(case).groups()
+                    groups.setdefault((label, prog, rest, extra), {})[self.level(flags)] = (out, status, case)
+                for (label, prog, rest, extra), levels in groups.items():
+                    verb = next(word for word in rest.split() if not word.startswith("-"))
+                    base = levels[0][0]
+                    for level, (out, status, case) in levels.items():
+                        if prog == "apt-cache" or verb == "policy":
+                            want = base
+                        elif verb in ("list", "search", "show"):
+                            want = self.quieter(prog, base, level, answer=False)
+                            if verb == "show" and level >= 3:
+                                want = self.rule("tpot_apt_show_short")(want)
+                        else:
+                            want = self.quieter(prog, base, level)
+                        with self.subTest(image=image, case=case):
+                            self.assertEqual(out, want)
+                            self.assertEqual(status, levels[0][1])
+                            checked += 1
+        self.assertEqual(checked, 600)
+
+    def test_the_unknown_package_answers_are_the_recorded_ones(self):
+        checked = 0
+        for image, pid in self.IMAGE_PERSONAS.items():
+            run = self.session(pid)
+            for case, recorded in APT_QUIET["images"][image]["cases"].items():
+                if re.fullmatch(r"(?:apt-get|apt) (?:-\S+ )*(?:install|remove) nosuchpkg123", case):
+                    with self.subTest(persona=pid, case=case):
+                        self.assertEqual(list(run(case)), recorded)
+                        checked += 1
+        self.assertEqual(checked, 4 * 32)
+
+    def test_the_other_verbs_follow_the_rule_in_the_persona(self):
+        # derived from the rule (recorded on a repository of one package), not recorded on the persona's own state
+        verbs = ("upgrade", "autoremove", "list --installed curl", "search curl", "show curl")
+        for pid in ("debian-bookworm", "debian-trixie", "ubuntu-jammy", "ubuntu-noble", "raspios", "gpu-ubuntu"):
+            for verb in verbs:
+                prog = "apt-get" if verb in ("upgrade", "autoremove") else "apt"
+                base = self.session(pid)(f"{prog} -y {verb}")
+                for flags, level in (("-qq", 2), ("-qqq", 3)):
+                    with self.subTest(persona=pid, verb=verb, flags=flags):
+                        out, err, code = self.session(pid)(f"{prog} {flags} -y {verb}")
+                        if verb.split()[0] in ("list", "search", "show"):
+                            want = self.quieter(prog, base[0], level, answer=False)
+                            if verb.startswith("show") and level == 3:
+                                want = self.rule("tpot_apt_show_short")(want)
+                        else:
+                            want = self.quieter(prog, base[0], level)
+                        self.assertEqual((out, err, code), (want, base[1], base[2]))
+                        if verb.startswith("list"):
+                            self.assertNotIn("Listing...", out)
+                        if verb.startswith("search"):
+                            self.assertNotIn("Sorting...", out)
+
+    def test_the_personas_with_a_derived_apt_leave_out_the_same(self):
+        # raspios (apt 2.6.1 of Debian 12), gpu-ubuntu (Ubuntu 22.04) and the EdgeRouter (apt 1.4.10, recorded on 1.4.11):
+        # derived from the rule, not recorded on these images
+        for pid, progs in (("raspios", ("apt-get", "apt")), ("gpu-ubuntu", ("apt-get", "apt")),
+                           ("ubiquiti-edgerouter-x", ("apt-get",))):
+            for prog in progs:
+                base = self.session(pid)(f"{prog} -y install curl")
+                for flags, level in (("-q", 1), ("-qq", 2), ("-qqq", 3)):
+                    with self.subTest(persona=pid, prog=prog, flags=flags):
+                        out, err, code = self.session(pid)(f"{prog} {flags} -y install curl")
+                        self.assertEqual((out, err, code), (self.quieter(prog, base[0], level), base[1], base[2]))
+
+    def test_a_failed_fetch_leaves_out_the_error_lines_with_the_indented_text(self):
+        # synthetic text of a refused fetch (derived, not recorded as such)
+        text = ("Ign:1 http://127.0.0.1:9 ./ InRelease\nErr:1 http://127.0.0.1:9 ./ InRelease\n"
+                "  Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)\n"
+                "Reading package lists...\nW: Failed to fetch http://127.0.0.1:9/./InRelease\n")
+        self.assertEqual(self.quieter("apt-get", text, 2), "W: Failed to fetch http://127.0.0.1:9/./InRelease\n")
+        self.assertEqual(self.quieter("apt-get", text, 1), text)
+
+
+PROVIDES = json.loads((Path(__file__).parent / "fixtures" / "provides.json").read_text(encoding="utf-8"))
+RPM_LIBS = json.loads((Path(__file__).parent / "fixtures" / "rpm_libs.json").read_text(encoding="utf-8"))
+APT_RELATIONS = json.loads((Path(__file__).parent / "fixtures" / "apt_relations.json").read_text(encoding="utf-8"))
+
+
+def stanza_fields(text):
+    """[[field, value]] of the first block of a record (continuation lines belong to the value)."""
+    found = []
+    for line in text.splitlines():
+        if not line.strip():
+            break
+        if line[0] in " \t":
+            found[-1][1] += "\n" + line
+        else:
+            field, _, value = line.partition(": ")
+            found.append([field, value])
+    return found
+
+
+class AptRelationsTest(SessionCase):
+    """apt show, apt-cache show and dpkg -s print the relations and Homepage of the candidate as the real tools do
+    (fixtures/apt_relations.json: stanzas of the pinned indexes served as a repository in debian:12, debian:13,
+    ubuntu:22.04, ubuntu:24.04). Left out of the comparison: what a recording of a local repository has of its own
+    (Filename, Size, the sums, Download-Size, APT-*; Description-md5 is in a real index, the persona does not print it)
+    and the long descriptions."""
+
+    PERSONAS = {"debian_12": "debian-bookworm", "debian_13": "debian-trixie", "ubuntu_22.04": "ubuntu-jammy",
+                "ubuntu_24.04": "ubuntu-noble"}
+    OWN = {"Filename", "Size", "MD5sum", "SHA1", "SHA256", "SHA512", "Description-md5", "Download-Size",
+           "APT-Manual-Installed", "APT-Sources"}
+    # the fields of a status entry whose place follows the control file of the package (Ubuntu's differ per package)
+    LOOSE = {"Homepage", "Original-Maintainer", "Original-Vcs-Browser", "Original-Vcs-Git", "Build-Essential"}
+    # apt-meta has no row for it on any release, so there is nothing to take its relations from
+    NO_ROW = {"unattended-upgrades"}
+    # a name of the popcon top that no persona models keeps no relation fields (apt-relations.txt.gz stays small)
+    NOT_KEPT = {("ubuntu", "ifupdown")}
+
+    def skipped(self, pid, name):
+        return name in self.NO_ROW or (pid.split("-")[0], name) in self.NOT_KEPT
+
+    def compare(self, command, drop, in_order=True, loose=False):
+        checked = 0
+        for image, pid in self.PERSONAS.items():
+            run = self.session(pid)
+            for case, (recorded, _, status) in APT_RELATIONS["images"][image]["cases"].items():
+                if not case.startswith(command):
+                    continue
+                name = case.split()[-1]
+                if self.skipped(pid, name):
+                    continue
+                out, err, code = run(case)
+                if code and command.startswith("dpkg"):
+                    run(f"apt-get install -y {name}")
+                    out, err, code = run(case)
+                want = [f for f in stanza_fields(recorded) if f[0] not in self.OWN | drop]
+                got = [f for f in stanza_fields(out) if f[0] not in self.OWN | drop]
+                if loose and pid.startswith("ubuntu"):
+                    want, got = ([f for f in x if f[0] not in self.LOOSE] + sorted(f for f in x if f[0] in self.LOOSE)
+                                 for x in (want, got))
+                with self.subTest(persona=pid, case=case):
+                    self.assertEqual(code, status, err)
+                    self.assertEqual(got if in_order else sorted(got), want if in_order else sorted(want))
+                    checked += 1
+        return checked
+
+    def test_apt_show_as_recorded(self):
+        # the sizes of a recording are those of a stanza that names no file; the service packages' rows of
+        #   package_units.SERVICE_META have sizes of their own
+        self.assertEqual(self.compare("apt show ", {"Installed-Size"}), 42)
+
+    def test_dpkg_status_as_recorded(self):
+        # the installed version of a persona's own package may be older than the candidate the relations name
+        self.assertEqual(self.compare("dpkg -s ", {"Version", "Installed-Size"}, loose=True), 42)
+        self.assertEqual(self.compare("dpkg-query -s ", {"Version", "Installed-Size"}, loose=True), 42)
+
+    def test_apt_cache_show_as_recorded(self):
+        # the order of an Ubuntu index varies per stanza: compared as a set there, derived, not recorded
+        self.assertEqual(self.compare("apt-cache show ", {"Installed-Size"}, in_order=False), 42)
+
+    def test_the_order_of_the_debian_index_is_the_recorded_one(self):
+        run = self.session("debian-bookworm")
+        for case, (recorded, _, _) in APT_RELATIONS["images"]["debian_12"]["cases"].items():
+            if case.startswith("apt-cache show ") and case.split()[-1] not in self.NO_ROW:
+                with self.subTest(case=case):
+                    want = [f[0] for f in stanza_fields(recorded) if f[0] not in self.OWN]
+                    self.assertEqual([f[0] for f in stanza_fields(run(case)[0]) if f[0] not in self.OWN], want)
+
+
+class ProvidesTest(SessionCase):
+    """yum provides and dnf provides name every package that has the name, provides it or lists the program
+    (fixtures/provides.json: centos:7 and almalinux:9, one package once, the newest build the persona knows)."""
+
+    @staticmethod
+    def providers(text):
+        """[(package, what matched)] of the blocks of repositories, once each, in the order printed."""
+        found = []
+        for line in text.splitlines():
+            head = re.match(r"(?:\d+:)?(.+?)-(?:\d+:)?\d\S*\.(?:x86_64|noarch) : ", line)
+            if head:
+                found.append([head.group(1), "", None])
+            elif line.startswith("Repo        : "):
+                found[-1][1] = line[14:]
+            elif line.startswith(("Provides    : ", "Provide    : ", "Filename    : ")):
+                found[-1][2] = re.sub(r" = .*", "", line.split(" : ", 1)[1])
+        seen = []
+        for name, repo, matched in found:
+            if not repo.startswith("@") and (name, matched) not in seen:
+                seen.append((name, matched))
+        return seen
+
+    def test_the_providers_are_the_recorded_ones(self):
+        checked = 0
+        for image, pid, tool in (("centos:7", "centos-7", "yum"), ("almalinux:9", "rhel-9", "dnf")):
+            run = self.session(pid)
+            for term, recorded in PROVIDES["images"][image].items():
+                if term.startswith("nosuch"):
+                    continue
+                with self.subTest(image=image, term=term):
+                    self.assertEqual(self.providers(run(f"{tool} provides {term}")[0]),
+                                     self.providers(recorded["stdout"]))
+                    checked += 1
+        self.assertEqual(checked, 13)
+
+    def test_yum_names_every_provider_and_the_installed_one_after_them(self):
+        run = self.session("centos-7")
+        out = run("yum provides MTA")[0]
+        self.assertEqual(self.providers(out), [("postfix", "MTA"), ("sendmail", "MTA")])
+        self.assertEqual(out.count("Repo        : base\n"), 2)
+        self.assertEqual(out.count("Repo        : @anaconda\n"), 1)
+        self.assertEqual(self.providers(run("yum provides webserver")[0]), [("httpd", "webserver")])
+        self.assertEqual(run("yum provides nosuchterm123")[0].splitlines()[-1], "No matches found")
+
+    def test_dnf_blocks_are_the_recorded_layout(self):
+        run = self.session("rhel-9")
+        out, err, code = run("dnf provides webserver")
+        self.assertEqual((err, code), ("", 0))
+        self.assertEqual(self.providers(out), [("httpd", "webserver"), ("nginx", "webserver")])
+        self.assertNotIn("\n\n\n", out)
+        self.assertTrue(out.endswith("Provide    : webserver\n\n"), out)
+        self.assertEqual(out.count("Matched from:\n"), 2)
+        self.assertRegex(out, r"(?m)^httpd-[^ ]+\.x86_64 : Apache HTTP Server\nRepo        : \S+\n"
+                              r"Matched from:\nProvide    : webserver\n\n")
+        # a package's own name is a provide with its version, as the recording of mysql and httpd
+        self.assertRegex(run("dnf provides mysql")[0], r"(?m)^Provide    : mysql = \S+\n")
+        self.assertEqual(self.providers(run("dnf whatprovides smtpdaemon")[0]),
+                         self.providers(run("dnf prov smtpdaemon")[0]))
+        self.assertEqual(self.providers(run("dnf provides smtpdaemon")[0]),
+                         [("postfix", "smtpdaemon"), ("sendmail", "smtpdaemon")])
+
+    def test_dnf_installed_packages_follow_the_available_ones(self):
+        # derived from the yum layout, not recorded: the installed build with the repository @System
+        run = self.session("rhel-9")
+        run("dnf install -y nginx")
+        out = run("dnf provides webserver")[0]
+        self.assertIn("Repo        : @System\n", out)
+        self.assertEqual(out.count("Repo        : @System\n"), 1)
+        self.assertGreater(out.index("Repo        : @System\n"), out.rindex("httpd-"))
+
+    def test_dnf_without_a_match_and_without_a_term(self):
+        run = self.session("rhel-9")
+        recorded = PROVIDES["images"]["almalinux:9"]["nosuchterm123"]
+        out, err, code = run("dnf provides nosuchterm123")
+        self.assertEqual((err, code), (recorded["stdout"].splitlines()[-1] + "\n", recorded["rc"]))
+        self.assertNotIn("Matched from", out)
+        # derived from the arguments of the other commands, not recorded
+        self.assertEqual(run("dnf provides")[1:], (
+            "usage: dnf provides [-c [config file]] [-q] [-v] [--version] ... PROVIDE [PROVIDE ...]\n"
+            "dnf provides: error: the following arguments are required: PROVIDE\n", 2))
+
+    def test_many_glob_terms_end_in_bounded_time(self):
+        run = self.session("rhel-9")
+        started = time.monotonic()
+        out = run("dnf provides " + "a* " * 16000)[0]
+        self.assertLess(time.monotonic() - started, 1.5)
+        self.assertGreater(len(self.providers(out)), 0)
+        # the first globs are answered, those beyond the sixteenth are not
+        self.assertEqual(self.providers(run("dnf provides " + "nosuch* " * 16 + "webserver*")[0]), [])
+
+    def test_a_program_glob_finds_every_provider(self):
+        self.assertEqual(self.providers(self.session("centos-7")("yum provides /usr/sbin/sendmai?")[0]),
+                         [("postfix", "/usr/sbin/sendmail"), ("sendmail", "/usr/sbin/sendmail")])
+        self.assertEqual(self.providers(self.session("rhel-9")("dnf provides /usr/sbin/sendmai?")[0]),
+                         [("postfix", "/usr/sbin/sendmail"), ("sendmail", "/usr/sbin/sendmail")])
+
+
+class RpmLibrariesTest(SessionCase):
+    """rpm -qf / rpm -ql of the libraries a package brings (the file lists of package_installs.json.gz: the pinned
+    filelists of CentOS 7.9.2009 and AlmaLinux 9.4) and of the loader of the tree."""
+
+    def test_a_library_of_an_installed_package_has_its_owner(self):
+        for pid, package, owner, paths in (
+                ("centos-7", "httpd", "httpd", ("/usr/lib64/httpd/modules/mod_rewrite.so",
+                                                "/usr/lib64/httpd/modules/mod_proxy.so")),
+                ("centos-7", "mariadb-server", "mariadb-server", ("/usr/lib64/mysql/plugin/auth_socket.so",)),
+                ("rhel-9", "httpd", "httpd-core", ("/usr/lib64/httpd/modules/mod_rewrite.so",))):
+            run = self.session(pid)
+            for path in paths:
+                self.assertEqual(run(f"rpm -qf {path}")[1:], (f"error: file {path}: No such file or directory\n", 1))
+            self.assertEqual(run(f"{'yum' if pid == 'centos-7' else 'dnf'} install -y {package}")[2], 0)
+            for path in paths:
+                with self.subTest(persona=pid, path=path):
+                    out, err, code = run(f"rpm -qf {path}")
+                    self.assertRegex(out, rf"^{owner}-\d\S*\.x86_64\n$")
+                    self.assertEqual((err, code), ("", 0))
+                    self.assertIn(path + "\n", run(f"rpm -ql {owner}")[0])
+            if owner == package:
+                self.assertEqual(run(f"rpm -e {package}")[2], 0)
+                self.assertEqual(run(f"rpm -qf {paths[0]}")[2], 1)
+
+    def test_the_loader_of_the_tree_is_glibc(self):
+        for pid, paths in (("centos-7", ("/usr/lib64/ld-2.17.so", "/usr/lib64/ld-linux-x86-64.so.2",
+                                         "/lib64/ld-linux-x86-64.so.2")),
+                           ("rhel-9", ("/usr/lib64/ld-linux-x86-64.so.2", "/lib64/ld-linux-x86-64.so.2"))):
+            run = self.session(pid)
+            for path in paths:
+                with self.subTest(persona=pid, path=path):
+                    out, err, code = run(f"rpm -qf {path}")
+                    self.assertRegex(out, r"^glibc-2\.\d+-\S+\.x86_64\n$")
+                    self.assertEqual((err, code), ("", 0))
+
+    RECORDED = {"centos:7": "centos-7", "almalinux:9": "rhel-9"}
+
+    def test_rpm_qf_of_the_recorded_library_paths_names_the_recorded_owner(self):
+        # the data is the pinned CentOS 7.9.2009 / AlmaLinux 9.4 vault; the recorded almalinux:9 is 9.8 (glibc-2.34-283.el9_8,
+        # openssl-libs-3.5.8-2.el9_8), so the builds differ and only the package name is compared
+        checked = 0
+        for image, pid in self.RECORDED.items():
+            run = self.session(pid)
+            for path, recorded in RPM_LIBS["images"][image]["qf"].items():
+                if path == "/etc/hostname":
+                    continue
+                out, err, code = run(f"rpm -qf {path}")
+                with self.subTest(persona=pid, path=path):
+                    self.assertEqual(code, recorded["rc"])
+                    self.assertEqual(run.protocol.fs.exists(path), code == 0 or "not owned" in out)
+                    if code:
+                        self.assertEqual(err, recorded["out"] + "\n")
+                    else:
+                        self.assertEqual(re.sub(r"-\d.*", "", out), re.sub(r"-\d.*", "", recorded["out"]) + "\n")
+                    checked += 1
+        self.assertEqual(checked, 38)
+
+    RELEASES = {"7": "centos:7", "9.4": "almalinux:9.4", "9.5": "almalinux:9.5", "9.6": "almalinux:9.6"}
+
+    def test_the_library_table_is_the_recorded_stat_of_each_release(self):
+        checked = 0
+        for release, image in self.RELEASES.items():
+            recorded = RPM_LIBS["stat"][image]["files"]
+            for package, files in system.RPM_LIBRARIES[release].items():
+                for name, value in files.items():
+                    with self.subTest(image=image, name=name):
+                        have = recorded[f"/usr/lib64/{name}"]
+                        self.assertEqual(have["package"], package)
+                        if isinstance(value, str):
+                            self.assertEqual((have["type"], have["target"]), ("link", value))
+                        else:
+                            self.assertEqual((have["type"], have["size"], have["mode"]), ("file", value, "755"))
+                        checked += 1
+        self.assertEqual(checked, 26 + 3 * 16)
+
+    def test_the_tree_has_links_and_files_as_recorded(self):
+        for pid, release in (("centos-7", "7"), ("rhel-9", "9.5")):
+            run = self.session(pid)
+            fs = run.protocol.fs
+            self.assertEqual(run.ident.release.os_version_id, {"7": "7", "9.5": "9.5"}[release])
+            for files in system.RPM_LIBRARIES[release].values():
+                for name, value in files.items():
+                    path = f"/usr/lib64/{name}"
+                    node = fs.getfile(path, follow_symlinks=False)
+                    with self.subTest(persona=pid, path=path):
+                        self.assertIsNotNone(node)
+                        if isinstance(value, str):
+                            self.assertEqual((node[5], node[8]), (0o120777, value))
+                            self.assertTrue(fs.exists(path))
+                        else:
+                            self.assertEqual((node[5], node[4], node[8]), (0o100755, value, None))
+            # the size of a link is the length of its target, as stat shows it (refs rpm_libs.json "stat")
+            recorded = RPM_LIBS["stat"]["centos:7" if pid == "centos-7" else "almalinux:9.5"]["files"]
+            for path in ("/usr/lib64/libc.so.6", "/usr/lib64/libz.so.1"):
+                self.assertEqual(fs.getfile(path, follow_symlinks=False)[4], recorded[path]["size"])
+
+    def test_a_file_that_exists_and_no_package_owns_is_not_owned(self):
+        for pid in ("centos-7", "rhel-9"):
+            run = self.session(pid)
+            self.assertEqual(run("rpm -qf /root")[1:], ("", 1))
+            self.assertEqual(run("rpm -qf /root")[0], "file /root is not owned by any package\n")
+
+    def test_the_library_lists_are_the_recorded_ones(self):
+        # centos:7 is the pinned release; almalinux:9 (9.8) is later than the pinned 9.4, so only the packages whose
+        # libraries did not move between the two
+        with gzip.open(system.NAMES_DIR.parent / "package_installs.json.gz", "rt") as f:
+            installs = json.load(f)
+        for image, family, packages in (("centos:7", "centos", ("httpd", "mariadb-server")),
+                                        ("almalinux:9", "rhel", ("httpd", "httpd-core", "postfix"))):
+            for package in packages:
+                with self.subTest(image=image, package=package):
+                    have = sorted(path for path in installs[family]["files"][package]
+                                  if re.fullmatch(r"/(usr/)?lib(64)?/\S+\.so(\.[0-9]+)*", path))
+                    self.assertEqual(have, RPM_LIBS["images"][image]["libs"][package])
 
 
 if __name__ == "__main__":

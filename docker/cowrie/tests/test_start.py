@@ -444,7 +444,9 @@ class GenerateTest(unittest.TestCase):
         root = tmpdir(self) / "cowrie"
         (root / "src/cowrie/data").mkdir(parents=True)
         base = base_tree()
-        tree.ensure_file(base, "usr/lib/padding.bin", os.urandom(1_100_000))  # the real MIN_PICKLE_SIZE holds
+        # fixed bytes of 0x80 and above (no letters): the marker "phil" can never appear in them
+        padding = bytes(b | 0x80 for b in random.Random(7).randbytes(1_100_000))
+        tree.ensure_file(base, "usr/lib/padding.bin", padding)  # the real MIN_PICKLE_SIZE holds
         tree.ensure_file(base, "home/ubuntu/.bashrc", b"upstream\n")
         tree.dump_pickle(base, root / "src/cowrie/data/fs.pickle")
         work = tmpdir(self) / "work"

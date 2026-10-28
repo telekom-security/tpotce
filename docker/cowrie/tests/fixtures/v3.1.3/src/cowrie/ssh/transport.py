@@ -3,8 +3,38 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Excerpt of Cowrie v3.1.3 (c7773f49): the text check_ssh_support.py reads and the methods the
-# server-sig-algs patch (patch_ssh_sig_algs) adds its method before.
+# Excerpt of Cowrie v3.1.3 (c7773f49): the text check_ssh_support.py reads, the methods the
+# server-sig-algs patch (patch_ssh_sig_algs) adds its method before, sendPacket (Cowrie's own, which the
+# ext-info-s cut of the same patch starts) and connectionMade, which the patch for a persona without an
+# SSH server (patch_ssh_drop) changes.
+
+    def connectionMade(self) -> None:
+        """
+        Called when the connection is made from the other side.
+        We send our version, but wait with sending KEXINIT
+        """
+        self.buf = b""
+
+        self.transportId = uuid.uuid4().hex[:12]
+
+        if isinstance(self.transport, ProtocolWrapper):
+            # A protocol wrapper in front of us (the haproxy: endpoint's PROXY
+            # parser) only resolves the real client address once it has read
+            # the header, which happens on the first dataReceived(). Defer
+            # cowrie.session.connect until then so it carries the real IP
+            # rather than the proxy's.
+            self._emit_connect_pending = True
+        else:
+            self._emit_connect()
+
+        self.transport.write(self.ourVersionString + b"\r\n")
+        self.currentEncryptions = transport.SSHCiphers(
+            b"none", b"none", b"none", b"none"
+        )
+        self.currentEncryptions.setKeys(b"", b"", b"", b"", b"", b"")
+
+        self.startTime = time.time()
+        self.setTimeout(self.auth_timeout)
 
     def setService(self, service):
         """
@@ -46,3 +76,38 @@
         """
         self.transport.write(b"Protocol major versions differ.\n")
         self.transport.loseConnection()
+
+    def sendPacket(self, messageType: int, payload: bytes) -> None:
+        """
+        Override because OpenSSH pads with 0 on KEXINIT
+        """
+        if self.transport is None:
+            return
+        if self._keyExchangeState != self._KEY_EXCHANGE_NONE:
+            if not self._allowedKeyExchangeMessageType(messageType):
+                self._blockedByKeyExchange.append((messageType, payload))
+                return
+
+        payload = bytes((messageType,)) + payload
+        if self.outgoingCompression:
+            payload = self.outgoingCompression.compress(
+                payload
+            ) + self.outgoingCompression.flush(2)
+        bs = self.currentEncryptions.encBlockSize
+        # 4 for the packet length and 1 for the padding length
+        totalSize = 5 + len(payload)
+        lenPad = bs - (totalSize % bs)
+        if lenPad < 4:
+            lenPad = lenPad + bs
+        padding: bytes
+        if messageType == transport.MSG_KEXINIT:
+            padding = b"\0" * lenPad
+        else:
+            padding = randbytes.secureRandom(lenPad)
+
+        packet = struct.pack(b"!LB", totalSize + lenPad - 4, lenPad) + payload + padding
+        encPacket = self.currentEncryptions.encrypt(
+            packet
+        ) + self.currentEncryptions.makeMAC(self.outgoingPacketSequence, packet)
+        self.transport.write(encPacket)
+        self.outgoingPacketSequence += 1

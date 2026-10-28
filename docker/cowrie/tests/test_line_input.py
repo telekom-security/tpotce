@@ -163,6 +163,7 @@ class Patched:
 
 
 class LineInputTest(unittest.TestCase):
+    # 8-bit input over Telnet stays as Twisted's RecvLine reads it (not changed by the persona, OPEN-ITEMS point 29)
     def setUp(self):
         handle = tempfile.TemporaryDirectory()
         self.addCleanup(handle.cleanup)
@@ -195,6 +196,21 @@ class LineInputTest(unittest.TestCase):
                 self.assertEqual(bytes(terminal.out), line)
                 self.assertEqual(b"".join(protocol.lineBuffer), line)
                 self.assertEqual(protocol.lineBufferIndex, len(line))
+
+    def test_a_loop_with_an_arithmetic_expansion_reaches_the_shell_as_typed(self):
+        line = b"for i in $(seq 1 3); do echo $((i*2)); done"
+        for packet in (1, len(line)):
+            with self.subTest(packet=packet):
+                ttylog, protocol, terminal, path, _ = self.session(self.patched, f"arith-{packet}.log")
+                type_in(ttylog, protocol, path, line, packet)
+                ttylog.ttylog_close(path, time.time())
+                self.assertEqual(b"".join(protocol.lineBuffer), line)
+                self.assertEqual(bytes(terminal.out), line)
+
+    def test_the_shell_reads_the_loop_of_that_line_with_its_expression(self):
+        text = (self.patched / "src/cowrie/shell/bashparse.py").read_text(encoding="utf-8")
+        self.assertIn("tpot_arith_value", text)
+        self.assertIn("arith", text.split('_GRAMMAR = r"""', 1)[1].split('"""', 1)[0])
 
     def test_the_tty_log_is_opened_once_per_session(self):
         ttylog, protocol, _, path, opens = self.session(self.patched)
@@ -519,9 +535,10 @@ class LineInputTest(unittest.TestCase):
         # tpot_one_write and _deliverBuffer: the line of the history in one write
         self.assertEqual(set(upstream) | {"tpot_one_write", "_deliverBuffer", "handle_UP", "handle_DOWN"}, set(patched))
         # characterReceived: the bound (and top's keys); timeoutConnection: top gives the cursor back;
-        # handle_RETURN: the history keeps HISTSIZE lines; handle_CTRL_U: one write
+        # handle_RETURN: the history keeps HISTSIZE lines; handle_CTRL_U: one write; displayMOTD: the banner of
+        #   BusyBox msh (tests.test_login_env.MshLoginTest)
         for name in sorted(set(upstream) - {"characterReceived", "timeoutConnection", "handle_RETURN",
-                                            "handle_CTRL_U"}):
+                                            "handle_CTRL_U", "displayMOTD"}):
             with self.subTest(name=name):
                 self.assertEqual(patched[name], upstream[name])
 
@@ -648,6 +665,73 @@ class LineInputTest(unittest.TestCase):
         # after `unset HISTTIMEFORMAT` (and without it) as before
         self.assertEqual(history(environ={}), "    2  echo 2\n    3  echo 3\n    4  history\n")
         self.assertEqual(self.history_output(protocol), "    2  echo 2\n    3  echo 3\n    4  history\n")
+
+    def history_time(self, protocol, untimed):
+        """`history 1` with HISTTIMEFORMAT=stamp and the recorded time of the line (None: none kept)."""
+        source = (self.patched / "src/cowrie/commands/base.py").read_text()
+        values = {("shell", "not_found_style"): "bash", ("shell", "history_untimed"): "format" if untimed else ""}
+        call = method(source, "Command_history", "call", {"CowrieConfig": FakeConfig(values)})
+
+        def history(stamp, times, args=("1",)):
+            protocol.tpot_history_times = times
+            out = []
+            call(types.SimpleNamespace(args=list(args), protocol=protocol, write=out.append,
+                                       environ={"HISTTIMEFORMAT": stamp}))
+            return "".join(out)
+
+        return history
+
+    def test_history_time_follows_the_strftime_buffer_of_bash(self):
+        """shell_details.json (bash 5.2 debian_12, 4.4.12 debian_9, 4.2 centos_7): the time of a line is cut
+        at 127 characters, a directive that does not fit ends it, an unknown directive stays as written; a
+        line with no time kept has "??" and no format (4.4.12, 5.x), bash 4.2 formats it ([shell] history_untimed)."""
+        import json
+        import re
+
+        recorded = json.loads((Path(__file__).parent / "fixtures" / "shell_details.json").read_text())["images"]
+        protocol = self.history_protocol(self.patched, {})
+        protocol.enter(b"foo")
+        for image, untimed in (("debian_12", False), ("debian_9", False), ("centos_7", True)):
+            cases = recorded[image]["cases"]
+            history = self.history_time(protocol, untimed)
+            checked = 0
+            for key, (out, _, _) in cases.items():
+                with self.subTest(image=image, key=key[:60]):
+                    match = re.fullmatch(r"""bash -ic 'HISTTIMEFORMAT="\$\(printf "(x|%%s)%\.0s" """
+                                         r"""\$\(seq (\d+)\)\) "; history -s foo; history 1 \| wc -c'""", key)
+                    if match:
+                        piece = "x" if match.group(1) == "x" else "%s"
+                        shown = history(piece * int(match.group(2)) + " ", [1792462282.0])
+                        self.assertEqual(len(shown), int(out), key)
+                        checked += 1
+                    match = re.fullmatch(r"""bash -ic 'history -s foo; HISTTIMEFORMAT="\$\(printf "%%s%\.0s" """
+                                         r"""\$\(seq (\d+)\)\) "; history 1 \| wc -c'""", key)
+                    if match:
+                        self.assertEqual(len(history("%s" * int(match.group(1)) + " ", [])), int(out), key)
+                        checked += 1
+            self.assertEqual(checked, 17 if image != "debian_9" else 0)
+            self.assertEqual(history("%Q ", [1792462282.0]),
+                             cases['bash -ic \'HISTTIMEFORMAT="%Q "; history -s foo; history 1\''][0])
+            self.assertEqual(history("%Q ", []),
+                             cases['bash -ic \'history -s foo; HISTTIMEFORMAT="%Q "; history 1\''][0])
+        self.assertEqual(history("%s ", [1792462282.0]), "    1  1792462282 foo\n")
+
+    def test_history_time_of_a_long_format_is_cut_once_and_counts_bytes(self):
+        # derived from the 128 byte buffer of bash (recorded: the 127 cut of characters): the bytes count
+        protocol = self.history_protocol(self.patched, {})
+        for line in (b"foo", b"bar"):
+            protocol.enter(line)
+        history = self.history_time(protocol, False)
+        self.assertEqual(history("\u00e4" * 100 + " ", [1.0, 2.0], ["2"]),
+                         ("    1  " + "\u00e4" * 63 + "foo\n    2  " + "\u00e4" * 63 + "bar\n"))
+        # a format a million characters long costs one cut per call, not one per line
+        for number in range(1998):
+            protocol.enter(b"x%d" % number)
+        started = time.perf_counter()
+        shown = history("%s" * 500000 + " ", [1792462282.0] * 2000, ["2000"])
+        self.assertLess(time.perf_counter() - started, 3.0)
+        self.assertEqual(len(shown.splitlines()), 2000)
+        self.assertTrue(all(row[7:127] == "1792462282" * 12 for row in shown.splitlines()))
 
     def test_history_n_prints_the_last_n_lines(self):
         # bash 5.2: `history 2` gives the last two lines with their numbers (the history 2 line itself

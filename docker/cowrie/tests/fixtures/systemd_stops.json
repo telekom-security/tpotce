@@ -1,0 +1,659 @@
+{
+ "_source": {
+  "recorded": "2026-10-21",
+  "how": "only the cases of section B (wave w2/systemd, stops.json) whose stderr names the socket that triggers the stopped service: `systemctl start U; sleep 2; systemctl stop U; systemctl status U --no-pager -l` as root in containers that boot systemd as PID 1 (helper images w2sd-<key>, docker run --privileged, linux/arm64 Docker Desktop VM, cgroup v2); each case is [stdout, stderr, exit status of the last command], no tty. Normalised as the wave's stops.json (hostname, ids, times, PIDs, sizes). Extended 2026-10-28 (task 3.10-25): the same case for the daemons the personas run (sshd, cron, inetd, snapd, NetworkManager, chronyd, tuned, rhsmcertd, postfix, auditd, kdump, unattended-upgrades, the sockets and the units a session installs), cases untouched. Fix round 1 of task 3.10-25: the cases `systemctl kill U; sleep 1; systemctl status U --no-pager -l` of ssh, sshd, cron and crond of the same recording (wave w2/systemd, stops.json).",
+  "texts": "systemd 249 and 252 print `Warning: Stopping U, but it can still be activated by:` and the socket indented by two spaces; 255 and 257 print `Stopping 'U', but its triggering units are still active:` and the socket without indent",
+  "not_recorded": "systemd 253 and 254 (255 is the first release with the new text, derived from the systemd sources v254 / v255), systemd 219"
+ },
+ "images": {
+  "debian_12": {
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "uid": 0,
+   "systemctl_version": "systemd 252 (252.39-1~deb12u2)",
+   "cases": {
+    "systemctl start rsyslog.service; sleep 2; systemctl stop rsyslog.service; systemctl status rsyslog.service --no-pager -l": [
+     "● rsyslog.service - System Logging Service\n     Loaded: loaded (/lib/systemd/system/rsyslog.service; enabled; preset: enabled)\n     Active: active (running) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\nTriggeredBy: ● syslog.socket\n       Docs: man:rsyslogd(8)\n             man:rsyslog.conf(5)\n             https://www.rsyslog.com/doc/\n   Main PID: PID (rsyslogd)\n      Tasks: N (limit: N)\n     Memory: N\n        CPU: N\n     CGroup: /system.slice/rsyslog.service\n             └─PID /usr/sbin/rsyslogd -n -iNONE\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting rsyslog.service - System Logging Service...\nMon DD HH:MM:SS HOST rsyslogd[PID]: imuxsock: Acquired UNIX socket '/run/systemd/journal/syslog' (fd 3) from systemd.  [v8.2302.0]\nMon DD HH:MM:SS HOST rsyslogd[PID]: [origin software=\"rsyslogd\" swVersion=\"8.2302.0\" x-pid=\"N\" x-info=\"https://www.rsyslog.com\"] start\nMon DD HH:MM:SS HOST systemd[PID]: Started rsyslog.service - System Logging Service.\n",
+     "Warning: Stopping rsyslog.service, but it can still be activated by:\n  syslog.socket\n",
+     0
+    ],
+    "systemctl start avahi-daemon.service; sleep 2; systemctl stop avahi-daemon.service; systemctl status avahi-daemon.service --no-pager -l": [
+     "○ avahi-daemon.service - Avahi mDNS/DNS-SD Stack\n     Loaded: loaded (/lib/systemd/system/avahi-daemon.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\nTriggeredBy: ● avahi-daemon.socket\n    Process: PID ExecStart=/usr/sbin/avahi-daemon -s (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n     Status: \"avahi-daemon 0.8 starting up.\"\n        CPU: N\n\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Registering new address record for 127.0.0.1 on lo.IPv4.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Server startup complete. Host name is HOST.local. Local service cookie is N.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Got SIGTERM, quitting.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping avahi-daemon.service - Avahi mDNS/DNS-SD Stack...\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface eth0.IPv4 with address 172.17.0.N.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface lo.IPv6 with address ::1.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface lo.IPv4 with address 127.0.0.1.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: avahi-daemon 0.8 exiting.\nMon DD HH:MM:SS HOST systemd[PID]: avahi-daemon.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped avahi-daemon.service - Avahi mDNS/DNS-SD Stack.\n",
+     "Warning: Stopping avahi-daemon.service, but it can still be activated by:\n  avahi-daemon.socket\n",
+     3
+    ],
+    "systemctl start ssh.service; sleep 2; systemctl stop ssh.service; systemctl status ssh.service --no-pager -l": [
+     "○ ssh.service - OpenBSD Secure Shell server\n     Loaded: loaded (/lib/systemd/system/ssh.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStart=/usr/sbin/sshd -D $SSHD_OPTS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started ssh.service - OpenBSD Secure Shell server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped ssh.service - OpenBSD Secure Shell server.\n",
+     "",
+     3
+    ],
+    "systemctl start ssh.socket; sleep 2; systemctl stop ssh.socket; systemctl status ssh.socket --no-pager -l": [
+     "○ ssh.socket - OpenBSD Secure Shell server socket\n     Loaded: loaded (/lib/systemd/system/ssh.socket; disabled; preset: enabled)\n     Active: inactive (dead)\n   Triggers: ● ssh.service\n     Listen: [::]:22 (Stream)\n\nMon DD HH:MM:SS HOST systemd[PID]: Listening on ssh.socket - OpenBSD Secure Shell server socket.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.socket: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Closed ssh.socket - OpenBSD Secure Shell server socket.\n",
+     "",
+     3
+    ],
+    "systemctl start cron.service; sleep 2; systemctl stop cron.service; systemctl status cron.service --no-pager -l": [
+     "○ cron.service - Regular background program processing daemon\n     Loaded: loaded (/lib/systemd/system/cron.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n       Docs: man:cron(8)\n    Process: PID ExecStart=/usr/sbin/cron -f $EXTRA_OPTS (code=killed, signal=TERM)\n   Main PID: PID (code=killed, signal=TERM)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started cron.service - Regular background program processing daemon.\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (pidfile fd = 3)\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (Running @reboot jobs)\nMon DD HH:MM:SS HOST systemd[PID]: Stopping cron.service - Regular background program processing daemon...\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped cron.service - Regular background program processing daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start unattended-upgrades.service; sleep 2; systemctl stop unattended-upgrades.service; systemctl status unattended-upgrades.service --no-pager -l": [
+     "○ unattended-upgrades.service - Unattended Upgrades Shutdown\n     Loaded: loaded (/lib/systemd/system/unattended-upgrades.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:unattended-upgrade(8)\n    Process: PID ExecStart=/usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started unattended-upgrades.service - Unattended Upgrades Shutdown.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping unattended-upgrades.service - Unattended Upgrades Shutdown...\nMon DD HH:MM:SS HOST systemd[PID]: unattended-upgrades.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped unattended-upgrades.service - Unattended Upgrades Shutdown.\n",
+     "",
+     3
+    ],
+    "systemctl start inetd.service; sleep 2; systemctl stop inetd.service; systemctl status inetd.service --no-pager -l": [
+     "○ inetd.service - Internet superserver\n     Loaded: loaded (/lib/systemd/system/inetd.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:inetd(8)\n    Process: PID ExecStart=/usr/sbin/inetd (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting inetd.service - Internet superserver...\nMon DD HH:MM:SS HOST systemd[PID]: Started inetd.service - Internet superserver.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping inetd.service - Internet superserver...\nMon DD HH:MM:SS HOST systemd[PID]: inetd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped inetd.service - Internet superserver.\n",
+     "",
+     3
+    ],
+    "systemctl start NetworkManager.service; sleep 2; systemctl stop NetworkManager.service; systemctl status NetworkManager.service --no-pager -l": [
+     "○ NetworkManager.service - Network Manager\n     Loaded: loaded (/lib/systemd/system/NetworkManager.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n       Docs: man:NetworkManager(8)\n    Process: PID ExecStart=/usr/sbin/NetworkManager --no-daemon (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: (ip_vti0): new IPTunnel device (/org/freedesktop/NetworkManager/Devices/9)\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: (sit0): new IPTunnel device (/org/freedesktop/NetworkManager/Devices/10)\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: (tunl0): new IPTunnel device (/org/freedesktop/NetworkManager/Devices/11)\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] failed to open /run/network/ifstate\nMon DD HH:MM:SS HOST systemd[PID]: Stopping NetworkManager.service - Network Manager...\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] caught SIGTERM, shutting down normally.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: startup complete\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] exiting (success)\nMon DD HH:MM:SS HOST systemd[PID]: NetworkManager.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped NetworkManager.service - Network Manager.\n",
+     "",
+     3
+    ],
+    "systemctl start nginx.service; sleep 2; systemctl stop nginx.service; systemctl status nginx.service --no-pager -l": [
+     "○ nginx.service - A high performance web server and a reverse proxy server\n     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:nginx(8)\n    Process: PID ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)\n    Process: PID ExecStop=/sbin/start-stop-daemon --quiet --stop --retry QUIT/5 --pidfile /run/nginx.pid (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting nginx.service - A high performance web server and a reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: Started nginx.service - A high performance web server and a reverse proxy server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping nginx.service - A high performance web server and a reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: nginx.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped nginx.service - A high performance web server and a reverse proxy server.\n",
+     "",
+     3
+    ],
+    "systemctl kill ssh.service; sleep 1; systemctl status ssh.service --no-pager -l": [
+     "○ ssh.service - OpenBSD Secure Shell server\n     Loaded: loaded (/lib/systemd/system/ssh.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n   Duration: Ns\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStartPre=/usr/sbin/sshd -t (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/sshd -D $SSHD_OPTS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started ssh.service - OpenBSD Secure Shell server.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Sent signal SIGTERM to main process PID (sshd) on client request.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Deactivated successfully.\n",
+     "",
+     3
+    ],
+    "systemctl kill cron.service; sleep 1; systemctl status cron.service --no-pager -l": [
+     "○ cron.service - Regular background program processing daemon\n     Loaded: loaded (/lib/systemd/system/cron.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n   Duration: Ns\n       Docs: man:cron(8)\n    Process: PID ExecStart=/usr/sbin/cron -f $EXTRA_OPTS (code=killed, signal=TERM)\n   Main PID: PID (code=killed, signal=TERM)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started cron.service - Regular background program processing daemon.\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (pidfile fd = 3)\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (Skipping @reboot jobs -- not system startup)\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Sent signal SIGTERM to main process PID (cron) on client request.\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Deactivated successfully.\n",
+     "",
+     3
+    ]
+   }
+  },
+  "debian_13": {
+   "image": "debian:13",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "uid": 0,
+   "systemctl_version": "systemd 257 (257.13-1~deb13u1)",
+   "cases": {
+    "systemctl start rsyslog.service; sleep 2; systemctl stop rsyslog.service; systemctl status rsyslog.service --no-pager -l": [
+     "● rsyslog.service - System Logging Service\n     Loaded: loaded (/usr/lib/systemd/system/rsyslog.service; enabled; preset: enabled)\n     Active: activating (start) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n        Job: 535\n Invocation: HEX32\nTriggeredBy: ● syslog.socket\n       Docs: man:rsyslogd(8)\n             man:rsyslog.conf(5)\n             https://www.rsyslog.com/doc/\n   Main PID: PID ((rsyslogd))\n      Tasks: N (limit: N)\n     Memory: N\n        CPU: N\n     CGroup: /system.slice/rsyslog.service\n             └─PID \"(rsyslogd)\"\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting rsyslog.service - System Logging Service...\n",
+     "Stopping 'rsyslog.service', but its triggering units are still active:\nsyslog.socket\n",
+     3
+    ],
+    "systemctl start avahi-daemon.service; sleep 2; systemctl stop avahi-daemon.service; systemctl status avahi-daemon.service --no-pager -l": [
+     "○ avahi-daemon.service - Avahi mDNS/DNS-SD Stack\n     Loaded: loaded (/usr/lib/systemd/system/avahi-daemon.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n Invocation: HEX32\nTriggeredBy: ● avahi-daemon.socket\n    Process: PID ExecStart=/usr/sbin/avahi-daemon -s (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n     Status: \"avahi-daemon 0.8 starting up.\"\n   Mem peak: N\n        CPU: N\n\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Registering new address record for 127.0.0.1 on lo.IPv4.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Server startup complete. Host name is HOST.local. Local service cookie is N.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Got SIGTERM, quitting.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping avahi-daemon.service - Avahi mDNS/DNS-SD Stack...\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface eth0.IPv4 with address 172.17.0.N.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface lo.IPv6 with address ::1.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface lo.IPv4 with address 127.0.0.1.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: avahi-daemon 0.8 exiting.\nMon DD HH:MM:SS HOST systemd[PID]: avahi-daemon.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped avahi-daemon.service - Avahi mDNS/DNS-SD Stack.\n",
+     "Stopping 'avahi-daemon.service', but its triggering units are still active:\navahi-daemon.socket\n",
+     3
+    ],
+    "systemctl start ssh.service; sleep 2; systemctl stop ssh.service; systemctl status ssh.service --no-pager -l": [
+     "○ ssh.service - OpenBSD Secure Shell server\n     Loaded: loaded (/usr/lib/systemd/system/ssh.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n Invocation: HEX32\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStart=/usr/sbin/sshd -D $SSHD_OPTS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n   Mem peak: N\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started ssh.service - OpenBSD Secure Shell server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped ssh.service - OpenBSD Secure Shell server.\n",
+     "",
+     3
+    ],
+    "systemctl start ssh.socket; sleep 2; systemctl stop ssh.socket; systemctl status ssh.socket --no-pager -l": [
+     "○ ssh.socket - OpenBSD Secure Shell server socket\n     Loaded: loaded (/usr/lib/systemd/system/ssh.socket; disabled; preset: enabled)\n     Active: inactive (dead)\n   Triggers: ● ssh.service\n     Listen: [::]:22 (Stream)\n\nMon DD HH:MM:SS HOST systemd[PID]: Listening on ssh.socket - OpenBSD Secure Shell server socket.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.socket: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Closed ssh.socket - OpenBSD Secure Shell server socket.\n",
+     "",
+     3
+    ],
+    "systemctl start cron.service; sleep 2; systemctl stop cron.service; systemctl status cron.service --no-pager -l": [
+     "○ cron.service - Regular background program processing daemon\n     Loaded: loaded (/usr/lib/systemd/system/cron.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n Invocation: HEX32\n       Docs: man:cron(8)\n    Process: PID ExecStart=/usr/sbin/cron -f $EXTRA_OPTS (code=killed, signal=TERM)\n   Main PID: PID (code=killed, signal=TERM)\n   Mem peak: N\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started cron.service - Regular background program processing daemon.\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (pidfile fd = 3)\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (Running @reboot jobs)\nMon DD HH:MM:SS HOST systemd[PID]: Stopping cron.service - Regular background program processing daemon...\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped cron.service - Regular background program processing daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start unattended-upgrades.service; sleep 2; systemctl stop unattended-upgrades.service; systemctl status unattended-upgrades.service --no-pager -l": [
+     "○ unattended-upgrades.service - Unattended Upgrades Shutdown\n     Loaded: loaded (/usr/lib/systemd/system/unattended-upgrades.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n Invocation: HEX32\n       Docs: man:unattended-upgrade(8)\n    Process: PID ExecStart=/usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n   Mem peak: N\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started unattended-upgrades.service - Unattended Upgrades Shutdown.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping unattended-upgrades.service - Unattended Upgrades Shutdown...\nMon DD HH:MM:SS HOST systemd[PID]: unattended-upgrades.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped unattended-upgrades.service - Unattended Upgrades Shutdown.\n",
+     "",
+     3
+    ],
+    "systemctl start inetd.service; sleep 2; systemctl stop inetd.service; systemctl status inetd.service --no-pager -l": [
+     "○ inetd.service - Internet superserver\n     Loaded: loaded (/usr/lib/systemd/system/inetd.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n Invocation: HEX32\n       Docs: man:inetd(8)\n    Process: PID ExecStart=/usr/sbin/inetd (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n   Mem peak: N\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting inetd.service - Internet superserver...\nMon DD HH:MM:SS HOST systemd[PID]: Started inetd.service - Internet superserver.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping inetd.service - Internet superserver...\nMon DD HH:MM:SS HOST systemd[PID]: inetd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped inetd.service - Internet superserver.\n",
+     "",
+     3
+    ],
+    "systemctl start NetworkManager.service; sleep 2; systemctl stop NetworkManager.service; systemctl status NetworkManager.service --no-pager -l": [
+     "○ NetworkManager.service - Network Manager\n     Loaded: loaded (/usr/lib/systemd/system/NetworkManager.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n Invocation: HEX32\n       Docs: man:NetworkManager(8)\n    Process: PID ExecStart=/usr/sbin/NetworkManager --no-daemon (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n   Mem peak: N\n        CPU: N\n\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] failed to open /run/network/ifstate\nMon DD HH:MM:SS HOST systemd[PID]: Started NetworkManager.service - Network Manager.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] bus-manager: acquired D-Bus service \"org.freedesktop.NetworkManager\"\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] modem-manager: oFono is not available\nMon DD HH:MM:SS HOST systemd[PID]: Stopping NetworkManager.service - Network Manager...\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] caught SIGTERM, shutting down normally.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: startup complete\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] exiting (success)\nMon DD HH:MM:SS HOST systemd[PID]: NetworkManager.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped NetworkManager.service - Network Manager.\n",
+     "",
+     3
+    ],
+    "systemctl start nginx.service; sleep 2; systemctl stop nginx.service; systemctl status nginx.service --no-pager -l": [
+     "○ nginx.service - A high performance web server and a reverse proxy server\n     Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n Invocation: HEX32\n       Docs: man:nginx(8)\n    Process: PID ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)\n    Process: PID ExecStop=/sbin/start-stop-daemon --quiet --stop --retry QUIT/5 --pidfile /run/nginx.pid (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n   Mem peak: N\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting nginx.service - A high performance web server and a reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: Started nginx.service - A high performance web server and a reverse proxy server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping nginx.service - A high performance web server and a reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: nginx.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped nginx.service - A high performance web server and a reverse proxy server.\n",
+     "",
+     3
+    ],
+    "systemctl kill ssh.service; sleep 1; systemctl status ssh.service --no-pager -l": [
+     "○ ssh.service - OpenBSD Secure Shell server\n     Loaded: loaded (/usr/lib/systemd/system/ssh.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n   Duration: Ns\n Invocation: HEX32\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStartPre=/usr/sbin/sshd -t (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/sshd -D $SSHD_OPTS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n   Mem peak: N\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started ssh.service - OpenBSD Secure Shell server.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Sent signal SIGTERM to main process PID (sshd) on client request.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Deactivated successfully.\n",
+     "",
+     3
+    ],
+    "systemctl kill cron.service; sleep 1; systemctl status cron.service --no-pager -l": [
+     "○ cron.service - Regular background program processing daemon\n     Loaded: loaded (/usr/lib/systemd/system/cron.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n   Duration: Ns\n Invocation: HEX32\n       Docs: man:cron(8)\n    Process: PID ExecStart=/usr/sbin/cron -f $EXTRA_OPTS (code=killed, signal=TERM)\n   Main PID: PID (code=killed, signal=TERM)\n   Mem peak: N\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started cron.service - Regular background program processing daemon.\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (pidfile fd = 3)\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (Skipping @reboot jobs -- not system startup)\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Sent signal SIGTERM to main process PID (cron) on client request.\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Deactivated successfully.\n",
+     "",
+     3
+    ]
+   }
+  },
+  "ubuntu_22.04": {
+   "image": "ubuntu:22.04",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "uid": 0,
+   "systemctl_version": "systemd 249 (249.11-0ubuntu3.23)",
+   "cases": {
+    "systemctl start rsyslog.service; sleep 2; systemctl stop rsyslog.service; systemctl status rsyslog.service --no-pager -l": [
+     "● rsyslog.service - System Logging Service\n     Loaded: loaded (/lib/systemd/system/rsyslog.service; enabled; vendor preset: enabled)\n     Active: active (running) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\nTriggeredBy: ● syslog.socket\n       Docs: man:rsyslogd(8)\n             man:rsyslog.conf(5)\n             https://www.rsyslog.com/doc/\n   Main PID: PID (rsyslogd)\n      Tasks: N (limit: N)\n     Memory: N\n        CPU: N\n     CGroup: /system.slice/rsyslog.service\n             └─PID /usr/sbin/rsyslogd -n -iNONE\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting System Logging Service...\nMon DD HH:MM:SS HOST rsyslogd[PID]: imuxsock: Acquired UNIX socket '/run/systemd/journal/syslog' (fd 3) from systemd.  [v8.2112.0]\nMon DD HH:MM:SS HOST rsyslogd[PID]: rsyslogd's groupid changed to 106\nMon DD HH:MM:SS HOST rsyslogd[PID]: rsyslogd's userid changed to 104\nMon DD HH:MM:SS HOST rsyslogd[PID]: [origin software=\"rsyslogd\" swVersion=\"8.2112.0\" x-pid=\"N\" x-info=\"https://www.rsyslog.com\"] start\nMon DD HH:MM:SS HOST systemd[PID]: Started System Logging Service.\n",
+     "Warning: Stopping rsyslog.service, but it can still be activated by:\n  syslog.socket\n",
+     0
+    ],
+    "systemctl start avahi-daemon.service; sleep 2; systemctl stop avahi-daemon.service; systemctl status avahi-daemon.service --no-pager -l": [
+     "○ avahi-daemon.service - Avahi mDNS/DNS-SD Stack\n     Loaded: loaded (/lib/systemd/system/avahi-daemon.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\nTriggeredBy: ● avahi-daemon.socket\n    Process: PID ExecStart=/usr/sbin/avahi-daemon -s (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n     Status: \"avahi-daemon 0.8 starting up.\"\n        CPU: N\n\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Registering new address record for 127.0.0.1 on lo.IPv4.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Server startup complete. Host name is HOST.local. Local service cookie is N.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Got SIGTERM, quitting.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Avahi mDNS/DNS-SD Stack...\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface eth0.IPv4 with address 172.17.0.N.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface lo.IPv6 with address ::1.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface lo.IPv4 with address 127.0.0.1.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: avahi-daemon 0.8 exiting.\nMon DD HH:MM:SS HOST systemd[PID]: avahi-daemon.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Avahi mDNS/DNS-SD Stack.\n",
+     "Warning: Stopping avahi-daemon.service, but it can still be activated by:\n  avahi-daemon.socket\n",
+     3
+    ],
+    "systemctl start snapd.service; sleep 2; systemctl stop snapd.service; systemctl status snapd.service --no-pager -l": [
+     "○ snapd.service - Snap Daemon\n     Loaded: loaded (/lib/systemd/system/snapd.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\nTriggeredBy: ● snapd.socket\n    Process: PID ExecStart=/usr/lib/snapd/snapd (code=exited, status=42)\n   Main PID: PID (code=exited, status=42)\n        CPU: N\n\nMon DD HH:MM:SS HOST snapd[PID]: snapmgr.go:1685: cannot clean store downloads cache: open /var/lib/snapd/cache: no such file or directory\nMon DD HH:MM:SS HOST snapd[PID]: certmgr.go:84: No CA certificate database found, generating it now\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Snap Daemon...\nMon DD HH:MM:SS HOST snapd[PID]: main.go:197: Exiting on terminated signal.\nMon DD HH:MM:SS HOST snapd[PID]: standby.go:101: standby conditions met, initiating standby...\nMon DD HH:MM:SS HOST snapd[PID]: standby.go:121: standby monitoring stop requested\nMon DD HH:MM:SS HOST snapd[PID]: overlord.go:568: Released state lock file\nMon DD HH:MM:SS HOST snapd[PID]: daemon stop requested to wait for socket activation\nMon DD HH:MM:SS HOST systemd[PID]: snapd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Snap Daemon.\n",
+     "Warning: Stopping snapd.service, but it can still be activated by:\n  snapd.socket\n",
+     3
+    ],
+    "systemctl start ssh.service; sleep 2; systemctl stop ssh.service; systemctl status ssh.service --no-pager -l": [
+     "○ ssh.service - OpenBSD Secure Shell server\n     Loaded: loaded (/lib/systemd/system/ssh.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStart=/usr/sbin/sshd -D $SSHD_OPTS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenBSD Secure Shell server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped OpenBSD Secure Shell server.\n",
+     "",
+     3
+    ],
+    "systemctl start ssh.socket; sleep 2; systemctl stop ssh.socket; systemctl status ssh.socket --no-pager -l": [
+     "○ ssh.socket - OpenBSD Secure Shell server socket\n     Loaded: loaded (/lib/systemd/system/ssh.socket; disabled; vendor preset: enabled)\n     Active: inactive (dead)\n     Listen: [::]:22 (Stream)\n   Accepted: 0; Connected: 0;\n\nMon DD HH:MM:SS HOST systemd[PID]: Listening on OpenBSD Secure Shell server socket.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.socket: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Closed OpenBSD Secure Shell server socket.\n",
+     "",
+     3
+    ],
+    "systemctl start cron.service; sleep 2; systemctl stop cron.service; systemctl status cron.service --no-pager -l": [
+     "○ cron.service - Regular background program processing daemon\n     Loaded: loaded (/lib/systemd/system/cron.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:cron(8)\n    Process: PID ExecStart=/usr/sbin/cron -f -P $EXTRA_OPTS (code=killed, signal=TERM)\n   Main PID: PID (code=killed, signal=TERM)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started Regular background program processing daemon.\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (pidfile fd = 3)\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (Running @reboot jobs)\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Regular background program processing daemon...\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Regular background program processing daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start unattended-upgrades.service; sleep 2; systemctl stop unattended-upgrades.service; systemctl status unattended-upgrades.service --no-pager -l": [
+     "○ unattended-upgrades.service - Unattended Upgrades Shutdown\n     Loaded: loaded (/lib/systemd/system/unattended-upgrades.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:unattended-upgrade(8)\n    Process: PID ExecStart=/usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started Unattended Upgrades Shutdown.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Unattended Upgrades Shutdown...\nMon DD HH:MM:SS HOST systemd[PID]: unattended-upgrades.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Unattended Upgrades Shutdown.\n",
+     "",
+     3
+    ],
+    "systemctl start inetd.service; sleep 2; systemctl stop inetd.service; systemctl status inetd.service --no-pager -l": [
+     "○ inetd.service - Internet superserver\n     Loaded: loaded (/lib/systemd/system/inetd.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:inetd(8)\n    Process: PID ExecStart=/usr/sbin/inetd (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Internet superserver...\nMon DD HH:MM:SS HOST systemd[PID]: Started Internet superserver.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Internet superserver...\nMon DD HH:MM:SS HOST systemd[PID]: inetd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Internet superserver.\n",
+     "",
+     3
+    ],
+    "systemctl start NetworkManager.service; sleep 2; systemctl stop NetworkManager.service; systemctl status NetworkManager.service --no-pager -l": [
+     "○ NetworkManager.service - Network Manager\n     Loaded: loaded (/lib/systemd/system/NetworkManager.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:NetworkManager(8)\n    Process: PID ExecStart=/usr/sbin/NetworkManager --no-daemon (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: (ip_vti0): new Generic device (/org/freedesktop/NetworkManager/Devices/8)\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: (sit0): new IPTunnel device (/org/freedesktop/NetworkManager/Devices/9)\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: (tunl0): new IPTunnel device (/org/freedesktop/NetworkManager/Devices/10)\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] failed to open /run/network/ifstate\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Network Manager...\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] caught SIGTERM, shutting down normally.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: startup complete\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] exiting (success)\nMon DD HH:MM:SS HOST systemd[PID]: NetworkManager.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Network Manager.\n",
+     "",
+     3
+    ],
+    "systemctl start nginx.service; sleep 2; systemctl stop nginx.service; systemctl status nginx.service --no-pager -l": [
+     "○ nginx.service - A high performance web server and a reverse proxy server\n     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:nginx(8)\n    Process: PID ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)\n    Process: PID ExecStop=/sbin/start-stop-daemon --quiet --stop --retry QUIT/5 --pidfile /run/nginx.pid (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting A high performance web server and a reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: Started A high performance web server and a reverse proxy server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping A high performance web server and a reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: nginx.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped A high performance web server and a reverse proxy server.\n",
+     "",
+     3
+    ],
+    "systemctl kill ssh.service; sleep 1; systemctl status ssh.service --no-pager -l": [
+     "○ ssh.service - OpenBSD Secure Shell server\n     Loaded: loaded (/lib/systemd/system/ssh.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStartPre=/usr/sbin/sshd -t (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/sshd -D $SSHD_OPTS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenBSD Secure Shell server.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Sent signal SIGTERM to main process PID (sshd) on client request.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Deactivated successfully.\n",
+     "",
+     3
+    ],
+    "systemctl kill cron.service; sleep 1; systemctl status cron.service --no-pager -l": [
+     "○ cron.service - Regular background program processing daemon\n     Loaded: loaded (/lib/systemd/system/cron.service; enabled; vendor preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:cron(8)\n    Process: PID ExecStart=/usr/sbin/cron -f -P $EXTRA_OPTS (code=killed, signal=TERM)\n   Main PID: PID (code=killed, signal=TERM)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started Regular background program processing daemon.\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (pidfile fd = 3)\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (Skipping @reboot jobs -- not system startup)\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Sent signal SIGTERM to main process PID (cron) on client request.\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Deactivated successfully.\n",
+     "",
+     3
+    ]
+   }
+  },
+  "ubuntu_24.04": {
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "uid": 0,
+   "systemctl_version": "systemd 255 (255.4-1ubuntu8.18)",
+   "cases": {
+    "systemctl start ssh.service; sleep 2; systemctl stop ssh.service; systemctl status ssh.service --no-pager -l": [
+     "○ ssh.service - OpenBSD Secure Shell server\n     Loaded: loaded (/usr/lib/systemd/system/ssh.service; disabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\nTriggeredBy: ● ssh.socket\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStartPre=/usr/sbin/sshd -t (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/sshd -D $SSHD_OPTS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started ssh.service - OpenBSD Secure Shell server.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped ssh.service - OpenBSD Secure Shell server.\n",
+     "Stopping 'ssh.service', but its triggering units are still active:\nssh.socket\n",
+     3
+    ],
+    "systemctl start ssh.socket ssh.service; sleep 1; systemctl stop ssh.service; systemctl status ssh.service ssh.socket --no-pager -l": [
+     "○ ssh.service - OpenBSD Secure Shell server\n     Loaded: loaded (/usr/lib/systemd/system/ssh.service; disabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\nTriggeredBy: ● ssh.socket\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStartPre=/usr/sbin/sshd -t (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/sshd -D $SSHD_OPTS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started ssh.service - OpenBSD Secure Shell server.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped ssh.service - OpenBSD Secure Shell server.\n\n● ssh.socket - OpenBSD Secure Shell server socket\n     Loaded: loaded (/usr/lib/systemd/system/ssh.socket; enabled; preset: enabled)\n     Active: active (listening) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n   Triggers: ● ssh.service\n     Listen: 0.0.0.0:22 (Stream)\n             [::]:22 (Stream)\n      Tasks: N (limit: N)\n     Memory: N\n        CPU: N\n     CGroup: /system.slice/ssh.socket\n\nMon DD HH:MM:SS HOST systemd[PID]: Listening on ssh.socket - OpenBSD Secure Shell server socket.\n",
+     "Stopping 'ssh.service', but its triggering units are still active:\nssh.socket\n",
+     3
+    ],
+    "systemctl start rsyslog.service; sleep 2; systemctl stop rsyslog.service; systemctl status rsyslog.service --no-pager -l": [
+     "● rsyslog.service - System Logging Service\n     Loaded: loaded (/usr/lib/systemd/system/rsyslog.service; enabled; preset: enabled)\n     Active: activating (start-pre) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\nTriggeredBy: ● syslog.socket\n       Docs: man:rsyslogd(8)\n             man:rsyslog.conf(5)\n             https://www.rsyslog.com/doc/\n  Cntrl PID: 5969 ((-profile))\n      Tasks: N (limit: N)\n     Memory: N\n        CPU: N\n     CGroup: /system.slice/rsyslog.service\n             └─PID \"(-profile)\"\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting rsyslog.service - System Logging Service...\n",
+     "Stopping 'rsyslog.service', but its triggering units are still active:\nsyslog.socket\n",
+     3
+    ],
+    "systemctl start avahi-daemon.service; sleep 2; systemctl stop avahi-daemon.service; systemctl status avahi-daemon.service --no-pager -l": [
+     "○ avahi-daemon.service - Avahi mDNS/DNS-SD Stack\n     Loaded: loaded (/usr/lib/systemd/system/avahi-daemon.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\nTriggeredBy: ● avahi-daemon.socket\n    Process: PID ExecStart=/usr/sbin/avahi-daemon -s (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n     Status: \"avahi-daemon 0.8 starting up.\"\n        CPU: N\n\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Registering new address record for 127.0.0.1 on lo.IPv4.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Server startup complete. Host name is HOST.local. Local service cookie is N.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Got SIGTERM, quitting.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping avahi-daemon.service - Avahi mDNS/DNS-SD Stack...\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface eth0.IPv4 with address 172.17.0.N.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface lo.IPv6 with address ::1.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: Leaving mDNS multicast group on interface lo.IPv4 with address 127.0.0.1.\nMon DD HH:MM:SS HOST avahi-daemon[PID]: avahi-daemon 0.8 exiting.\nMon DD HH:MM:SS HOST systemd[PID]: avahi-daemon.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped avahi-daemon.service - Avahi mDNS/DNS-SD Stack.\n",
+     "Stopping 'avahi-daemon.service', but its triggering units are still active:\navahi-daemon.socket\n",
+     3
+    ],
+    "systemctl start snapd.service; sleep 2; systemctl stop snapd.service; systemctl status snapd.service --no-pager -l": [
+     "○ snapd.service - Snap Daemon\n     Loaded: loaded (/usr/lib/systemd/system/snapd.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\nTriggeredBy: ● snapd.socket\n    Process: PID ExecStart=/usr/lib/snapd/snapd (code=exited, status=42)\n   Main PID: PID (code=exited, status=42)\n   FD Store: 0 (limit: 1024)\n        CPU: N\n\nMon DD HH:MM:SS HOST snapd[PID]: main.go:201: Exiting on terminated signal.\nMon DD HH:MM:SS HOST snapd[PID]: hookmgr.go:219: gracefully waiting for running hooks\nMon DD HH:MM:SS HOST snapd[PID]: hookmgr.go:221: done waiting for running hooks\nMon DD HH:MM:SS HOST snapd[PID]: standby.go:101: standby conditions met, initiating standby...\nMon DD HH:MM:SS HOST snapd[PID]: standby.go:121: standby monitoring stop requested\nMon DD HH:MM:SS HOST snapd[PID]: overlord.go:577: Released state lock file\nMon DD HH:MM:SS HOST snapd[PID]: seclog.go:122: security logger disabled\nMon DD HH:MM:SS HOST snapd[PID]: daemon stop requested to wait for socket activation\nMon DD HH:MM:SS HOST systemd[PID]: snapd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped snapd.service - Snap Daemon.\n",
+     "Stopping 'snapd.service', but its triggering units are still active:\nsnapd.socket\n",
+     3
+    ],
+    "systemctl start ssh.socket; sleep 2; systemctl stop ssh.socket; systemctl status ssh.socket --no-pager -l": [
+     "○ ssh.socket - OpenBSD Secure Shell server socket\n     Loaded: loaded (/usr/lib/systemd/system/ssh.socket; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n   Triggers: ● ssh.service\n     Listen: 0.0.0.0:22 (Stream)\n             [::]:22 (Stream)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Listening on ssh.socket - OpenBSD Secure Shell server socket.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.socket: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Closed ssh.socket - OpenBSD Secure Shell server socket.\n",
+     "",
+     3
+    ],
+    "systemctl start cron.service; sleep 2; systemctl stop cron.service; systemctl status cron.service --no-pager -l": [
+     "○ cron.service - Regular background program processing daemon\n     Loaded: loaded (/usr/lib/systemd/system/cron.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n       Docs: man:cron(8)\n    Process: PID ExecStart=/usr/sbin/cron -f -P $EXTRA_OPTS (code=killed, signal=TERM)\n   Main PID: PID (code=killed, signal=TERM)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started cron.service - Regular background program processing daemon.\nMon DD HH:MM:SS HOST (cron)[PID]: cron.service: Referenced but unset environment variable evaluates to an empty string: EXTRA_OPTS\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (pidfile fd = 3)\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (Running @reboot jobs)\nMon DD HH:MM:SS HOST CRON[PID]: pam_unix(cron:session): session opened for user root(uid=0) by root(uid=0)\nMon DD HH:MM:SS HOST CRON[PID]: (root) CMD (cd / && run-parts --report /etc/cron.hourly)\nMon DD HH:MM:SS HOST CRON[PID]: pam_unix(cron:session): session closed for user root\nMon DD HH:MM:SS HOST systemd[PID]: Stopping cron.service - Regular background program processing daemon...\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped cron.service - Regular background program processing daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start unattended-upgrades.service; sleep 2; systemctl stop unattended-upgrades.service; systemctl status unattended-upgrades.service --no-pager -l": [
+     "○ unattended-upgrades.service - Unattended Upgrades Shutdown\n     Loaded: loaded (/usr/lib/systemd/system/unattended-upgrades.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:unattended-upgrade(8)\n    Process: PID ExecStart=/usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started unattended-upgrades.service - Unattended Upgrades Shutdown.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping unattended-upgrades.service - Unattended Upgrades Shutdown...\nMon DD HH:MM:SS HOST systemd[PID]: unattended-upgrades.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped unattended-upgrades.service - Unattended Upgrades Shutdown.\n",
+     "",
+     3
+    ],
+    "systemctl start inetd.service; sleep 2; systemctl stop inetd.service; systemctl status inetd.service --no-pager -l": [
+     "○ inetd.service - Internet superserver\n     Loaded: loaded (/usr/lib/systemd/system/inetd.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:inetd(8)\n    Process: PID ExecStart=/usr/sbin/inetd (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting inetd.service - Internet superserver...\nMon DD HH:MM:SS HOST systemd[PID]: Started inetd.service - Internet superserver.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping inetd.service - Internet superserver...\nMon DD HH:MM:SS HOST systemd[PID]: inetd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped inetd.service - Internet superserver.\n",
+     "",
+     3
+    ],
+    "systemctl start NetworkManager.service; sleep 2; systemctl stop NetworkManager.service; systemctl status NetworkManager.service --no-pager -l": [
+     "○ NetworkManager.service - Network Manager\n     Loaded: loaded (/usr/lib/systemd/system/NetworkManager.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n       Docs: man:NetworkManager(8)\n    Process: PID ExecStart=/usr/sbin/NetworkManager --no-daemon (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: (tunl0): new IPTunnel device (/org/freedesktop/NetworkManager/Devices/11)\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] failed to open /run/network/ifstate\nMon DD HH:MM:SS HOST systemd[PID]: Started NetworkManager.service - Network Manager.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] bus-manager: acquired D-Bus service \"org.freedesktop.NetworkManager\"\nMon DD HH:MM:SS HOST systemd[PID]: Stopping NetworkManager.service - Network Manager...\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] caught SIGTERM, shutting down normally.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: startup complete\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] exiting (success)\nMon DD HH:MM:SS HOST systemd[PID]: NetworkManager.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped NetworkManager.service - Network Manager.\n",
+     "",
+     3
+    ],
+    "systemctl start nginx.service; sleep 2; systemctl stop nginx.service; systemctl status nginx.service --no-pager -l": [
+     "○ nginx.service - A high performance web server and a reverse proxy server\n     Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:nginx(8)\n    Process: PID ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)\n    Process: PID ExecStop=/sbin/start-stop-daemon --quiet --stop --retry QUIT/5 --pidfile /run/nginx.pid (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting nginx.service - A high performance web server and a reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: Started nginx.service - A high performance web server and a reverse proxy server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping nginx.service - A high performance web server and a reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: nginx.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped nginx.service - A high performance web server and a reverse proxy server.\n",
+     "",
+     3
+    ],
+    "systemctl kill ssh.service; sleep 1; systemctl status ssh.service --no-pager -l": [
+     "○ ssh.service - OpenBSD Secure Shell server\n     Loaded: loaded (/usr/lib/systemd/system/ssh.service; disabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n   Duration: Ns\nTriggeredBy: ● ssh.socket\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStartPre=/usr/sbin/sshd -t (code=exited, status=0/SUCCESS)\n    Process: PID ExecStart=/usr/sbin/sshd -D $SSHD_OPTS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting ssh.service - OpenBSD Secure Shell server...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started ssh.service - OpenBSD Secure Shell server.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Sent signal SIGTERM to main process PID (sshd) on client request.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: ssh.service: Deactivated successfully.\n",
+     "",
+     3
+    ],
+    "systemctl kill cron.service; sleep 1; systemctl status cron.service --no-pager -l": [
+     "○ cron.service - Regular background program processing daemon\n     Loaded: loaded (/usr/lib/systemd/system/cron.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n   Duration: Ns\n       Docs: man:cron(8)\n    Process: PID ExecStart=/usr/sbin/cron -f -P $EXTRA_OPTS (code=killed, signal=TERM)\n   Main PID: PID (code=killed, signal=TERM)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started cron.service - Regular background program processing daemon.\nMon DD HH:MM:SS HOST (cron)[PID]: cron.service: Referenced but unset environment variable evaluates to an empty string: EXTRA_OPTS\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (pidfile fd = 3)\nMon DD HH:MM:SS HOST cron[PID]: (CRON) INFO (Skipping @reboot jobs -- not system startup)\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Sent signal SIGTERM to main process PID (cron) on client request.\nMon DD HH:MM:SS HOST systemd[PID]: cron.service: Deactivated successfully.\n",
+     "",
+     3
+    ]
+   }
+  },
+  "rockylinux_9": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-rockylinux_9 from rockylinux:9, boot --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw, state running, packages installed in the running container",
+   "image": "rockylinux:9",
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "locale": "en_US.UTF-8",
+   "uid": 0,
+   "installs": {
+    "tuned": {
+     "rc": 0,
+     "tail": [
+      "  which-2.21-30.el9_6.aarch64                                                   ",
+      "",
+      "Complete!"
+     ],
+     "sec": 17
+    },
+    "audit": {
+     "rc": 0,
+     "tail": [
+      "  audit-3.1.5-8.el9.aarch64       initscripts-service-10.11.8-4.el9.noarch      ",
+      "",
+      "Complete!"
+     ],
+     "sec": 1
+    },
+    "kexec-tools": {
+     "rc": 0,
+     "tail": [
+      "  xz-5.2.5-8.el9_0.aarch64                                                      ",
+      "",
+      "Complete!"
+     ],
+     "sec": 5
+    },
+    "NetworkManager": {
+     "rc": 0,
+     "tail": [
+      "Dependencies resolved.",
+      "Nothing to do.",
+      "Complete!"
+     ],
+     "sec": 0
+    },
+    "telnet-server": {
+     "rc": 0,
+     "tail": [
+      "  telnet-server-1:0.17-85.el9.aarch64                                           ",
+      "",
+      "Complete!"
+     ],
+     "sec": 1
+    },
+    "firewalld": {
+     "rc": 0,
+     "tail": [
+      "  python3-nftables-1:1.0.9-9.el9_8.aarch64                                      ",
+      "",
+      "Complete!"
+     ],
+     "sec": 3
+    },
+    "httpd": {
+     "rc": 0,
+     "tail": [
+      "  rocky-logos-httpd-90.17-1.el9.noarch                                          ",
+      "",
+      "Complete!"
+     ],
+     "sec": 2
+    },
+    "nginx": {
+     "rc": 0,
+     "tail": [
+      "  nginx-filesystem-2:1.20.1-28.el9_8.6.rocky.0.1.noarch                         ",
+      "",
+      "Complete!"
+     ],
+     "sec": 2
+    },
+    "mariadb-server": {
+     "rc": 0,
+     "tail": [
+      "  perl-vars-1.05-484.el9_8.noarch                                               ",
+      "",
+      "Complete!"
+     ],
+     "sec": 8
+    },
+    "redis": {
+     "rc": 0,
+     "tail": [
+      "  redis-6.2.24-1.el9_8.aarch64                                                  ",
+      "",
+      "Complete!"
+     ],
+     "sec": 2
+    },
+    "subscription-manager": {
+     "rc": 0,
+     "tail": [
+      "  subscription-manager-rhsm-certificates-20220623-1.el9.noarch                  ",
+      "",
+      "Complete!"
+     ],
+     "sec": 2
+    }
+   },
+   "systemctl_version": "systemd 252 (252-67.el9_8.6.rocky.0.1)",
+   "cases": {
+    "systemctl start sshd.service; sleep 2; systemctl stop sshd.service; systemctl status sshd.service --no-pager -l": [
+     "○ sshd.service - OpenSSH server daemon\n     Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStart=/usr/sbin/sshd -D $OPTIONS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping OpenSSH server daemon...\nMon DD HH:MM:SS HOST systemd[PID]: sshd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped OpenSSH server daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start crond.service; sleep 2; systemctl stop crond.service; systemctl status crond.service --no-pager -l": [
+     "○ crond.service - Command Scheduler\n     Loaded: loaded (/usr/lib/systemd/system/crond.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n    Process: PID ExecStart=/usr/sbin/crond -n $CRONDARGS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started Command Scheduler.\nMon DD HH:MM:SS HOST crond[PID]: (CRON) STARTUP (1.5.7)\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (RANDOM_DELAY will be scaled with factor 19% if used.)\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (running with inotify support)\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Command Scheduler...\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (Shutting down)\nMon DD HH:MM:SS HOST systemd[PID]: crond.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Command Scheduler.\n",
+     "",
+     3
+    ],
+    "systemctl start rsyslog.service; sleep 2; systemctl stop rsyslog.service; systemctl status rsyslog.service --no-pager -l": [
+     "○ rsyslog.service - System Logging Service\n     Loaded: loaded (/usr/lib/systemd/system/rsyslog.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n       Docs: man:rsyslogd(8)\n             https://www.rsyslog.com/doc/\n    Process: PID ExecStart=/usr/sbin/rsyslogd -n $SYSLOGD_OPTIONS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting System Logging Service...\nMon DD HH:MM:SS HOST rsyslogd[PID]: [origin software=\"rsyslogd\" swVersion=\"8.2510.0-2.el9_8.2\" x-pid=\"N\" x-info=\"https://www.rsyslog.com\"] start\nMon DD HH:MM:SS HOST systemd[PID]: Started System Logging Service.\nMon DD HH:MM:SS HOST rsyslogd[PID]: imjournal: No statefile exists, /var/lib/rsyslog/imjournal.state will be created (ignore if this is first run): No such file or directory [v8.2510.0-2.el9_8.2 try https://www.rsyslog.com/e/2040 ]\nMon DD HH:MM:SS HOST rsyslogd[PID]: imjournal: journal files changed, reloading...  [v8.2510.0-2.el9_8.2 try https://www.rsyslog.com/e/0 ]\nMon DD HH:MM:SS HOST systemd[PID]: Stopping System Logging Service...\nMon DD HH:MM:SS HOST rsyslogd[PID]: [origin software=\"rsyslogd\" swVersion=\"8.2510.0-2.el9_8.2\" x-pid=\"N\" x-info=\"https://www.rsyslog.com\"] exiting on signal 15.\nMon DD HH:MM:SS HOST systemd[PID]: rsyslog.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped System Logging Service.\n",
+     "",
+     3
+    ],
+    "systemctl start chronyd.service; sleep 2; systemctl stop chronyd.service; systemctl status chronyd.service --no-pager -l": [
+     "○ chronyd.service - NTP client/server\n     Loaded: loaded (/usr/lib/systemd/system/chronyd.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Nmin Ns\n       Docs: man:chronyd(8)\n             man:chrony.conf(5)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started NTP client/server.\nMon DD HH:MM:SS HOST chronyd[PID]: Selected source IPV4 (2.rocky.pool.ntp.org)\nMon DD HH:MM:SS HOST chronyd[PID]: System clock TAI offset set to 37 seconds\nMon DD HH:MM:SS HOST chronyd[PID]: Selected source IPV4 (2.rocky.pool.ntp.org)\nMon DD HH:MM:SS HOST chronyd[PID]: System clock interference detected (another NTP client?)\nMon DD HH:MM:SS HOST chronyd[PID]: Selected source IPV4 (2.rocky.pool.ntp.org)\nMon DD HH:MM:SS HOST chronyd[PID]: chronyd exiting\nMon DD HH:MM:SS HOST systemd[PID]: Stopping NTP client/server...\nMon DD HH:MM:SS HOST systemd[PID]: chronyd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped NTP client/server.\n",
+     "",
+     3
+    ],
+    "systemctl start postfix.service; sleep 2; systemctl stop postfix.service; systemctl status postfix.service --no-pager -l": [
+     "○ postfix.service - Postfix Mail Transport Agent\n     Loaded: loaded (/usr/lib/systemd/system/postfix.service; disabled; preset: disabled)\n     Active: inactive (dead)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Postfix Mail Transport Agent...\nMon DD HH:MM:SS HOST postfix/postfix-script[PID]: starting the Postfix mail system\nMon DD HH:MM:SS HOST postfix/master[PID]: daemon started -- version 3.5.25, configuration /etc/postfix\nMon DD HH:MM:SS HOST systemd[PID]: Started Postfix Mail Transport Agent.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Postfix Mail Transport Agent...\nMon DD HH:MM:SS HOST postfix/master[PID]: terminating on signal 15\nMon DD HH:MM:SS HOST systemd[PID]: postfix.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Postfix Mail Transport Agent.\n",
+     "",
+     3
+    ],
+    "systemctl start tuned.service; sleep 2; systemctl stop tuned.service; systemctl status tuned.service --no-pager -l": [
+     "○ tuned.service - Dynamic System Tuning Daemon\n     Loaded: loaded (/usr/lib/systemd/system/tuned.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:tuned(8)\n             man:tuned.conf(5)\n             man:tuned-adm(8)\n    Process: PID ExecStart=/usr/sbin/tuned -l -P (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Dynamic System Tuning Daemon...\nMon DD HH:MM:SS HOST systemd[PID]: Started Dynamic System Tuning Daemon.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Dynamic System Tuning Daemon...\nMon DD HH:MM:SS HOST systemd[PID]: tuned.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Dynamic System Tuning Daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start auditd.service; sleep 2; systemctl stop auditd.service; systemctl status auditd.service --no-pager -l": [
+     "× auditd.service - Security Auditing Service\n     Loaded: loaded (/usr/lib/systemd/system/auditd.service; enabled; preset: enabled)\n     Active: failed (Result: exit-code) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:auditd(8)\n             https://github.com/linux-audit/audit-documentation\n    Process: PID ExecStart=/sbin/auditd (code=exited, status=1/FAILURE)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: auditd.service: Scheduled restart job, restart counter is at 5.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Security Auditing Service.\nMon DD HH:MM:SS HOST systemd[PID]: auditd.service: Start request repeated too quickly.\nMon DD HH:MM:SS HOST systemd[PID]: auditd.service: Failed with result 'exit-code'.\nMon DD HH:MM:SS HOST systemd[PID]: Failed to start Security Auditing Service.\n",
+     "Job for auditd.service failed because the control process exited with error code.\nSee \"systemctl status auditd.service\" and \"journalctl -xeu auditd.service\" for details.\nFailed to stop auditd.service: Operation refused, unit auditd.service may be requested by dependency only (it is configured to refuse manual start/stop).\nSee system logs and 'systemctl status auditd.service' for details.\n",
+     3
+    ],
+    "systemctl start kdump.service; sleep 2; systemctl stop kdump.service; systemctl status kdump.service --no-pager -l": [
+     "○ kdump.service - Crash recovery kernel arming\n     Loaded: loaded (/usr/lib/systemd/system/kdump.service; enabled; preset: enabled)\n     Active: inactive (dead) (Result: exec-condition) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n  Condition: start condition failed at Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n    Process: PID ExecCondition=/bin/sh -c grep -q -e \"crashkernel\" -e \"fadump\" /proc/cmdline (code=exited, status=1/FAILURE)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Crash recovery kernel arming...\nMon DD HH:MM:SS HOST systemd[PID]: kdump.service: Skipped due to 'exec-condition'.\nMon DD HH:MM:SS HOST systemd[PID]: Condition check resulted in Crash recovery kernel arming being skipped.\n",
+     "",
+     3
+    ],
+    "systemctl start rhsmcertd.service; sleep 2; systemctl stop rhsmcertd.service; systemctl status rhsmcertd.service --no-pager -l": [
+     "○ rhsmcertd.service - Enable periodic update of entitlement certificates.\n     Loaded: loaded (/usr/lib/systemd/system/rhsmcertd.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n    Process: PID ExecStart=/usr/bin/rhsmcertd (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=killed, signal=TERM)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Enable periodic update of entitlement certificates....\nMon DD HH:MM:SS HOST systemd[PID]: Started Enable periodic update of entitlement certificates..\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Enable periodic update of entitlement certificates....\nMon DD HH:MM:SS HOST systemd[PID]: rhsmcertd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Enable periodic update of entitlement certificates..\n",
+     "",
+     3
+    ],
+    "systemctl start NetworkManager.service; sleep 2; systemctl stop NetworkManager.service; systemctl status NetworkManager.service --no-pager -l": [
+     "○ NetworkManager.service - Network Manager\n     Loaded: loaded (/usr/lib/systemd/system/NetworkManager.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:NetworkManager(8)\n    Process: PID ExecStart=/usr/sbin/NetworkManager --no-daemon (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: (sit0): new IPTunnel device (/org/freedesktop/NetworkManager/Devices/10)\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: (tunl0): new IPTunnel device (/org/freedesktop/NetworkManager/Devices/11)\nMon DD HH:MM:SS HOST systemd[PID]: Started Network Manager.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] bus-manager: acquired D-Bus service \"org.freedesktop.NetworkManager\"\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Network Manager...\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] caught SIGTERM, shutting down normally.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: startup complete\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] exiting (success)\nMon DD HH:MM:SS HOST systemd[PID]: NetworkManager.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Network Manager.\n",
+     "",
+     3
+    ],
+    "systemctl start telnet.socket; sleep 2; systemctl stop telnet.socket; systemctl status telnet.socket --no-pager -l": [
+     "○ telnet.socket - Telnet Server Activation Socket\n     Loaded: loaded (/usr/lib/systemd/system/telnet.socket; disabled; preset: disabled)\n     Active: inactive (dead)\n       Docs: man:telnetd(8)\n     Listen: [::]:23 (Stream)\n   Accepted: 0; Connected: 0;\n\nMon DD HH:MM:SS HOST systemd[PID]: Listening on Telnet Server Activation Socket.\nMon DD HH:MM:SS HOST systemd[PID]: telnet.socket: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Closed Telnet Server Activation Socket.\n",
+     "",
+     3
+    ],
+    "systemctl start firewalld.service; sleep 2; systemctl stop firewalld.service; systemctl status firewalld.service --no-pager -l": [
+     "○ firewalld.service - firewalld - dynamic firewall daemon\n     Loaded: loaded (/usr/lib/systemd/system/firewalld.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:firewalld(1)\n    Process: PID ExecStart=/usr/sbin/firewalld --nofork --nopid $FIREWALLD_ARGS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting firewalld - dynamic firewall daemon...\nMon DD HH:MM:SS HOST systemd[PID]: Started firewalld - dynamic firewall daemon.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping firewalld - dynamic firewall daemon...\nMon DD HH:MM:SS HOST systemd[PID]: firewalld.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped firewalld - dynamic firewall daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start httpd.service; sleep 2; systemctl stop httpd.service; systemctl status httpd.service --no-pager -l": [
+     "○ httpd.service - The Apache HTTP Server\n     Loaded: loaded (/usr/lib/systemd/system/httpd.service; disabled; preset: disabled)\n     Active: inactive (dead)\n       Docs: man:httpd.service(8)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting The Apache HTTP Server...\nMon DD HH:MM:SS HOST httpd[PID]: AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 172.17.0.N. Set the 'ServerName' directive globally to suppress this message\nMon DD HH:MM:SS HOST httpd[PID]: Server configured, listening on: port 80\nMon DD HH:MM:SS HOST systemd[PID]: Started The Apache HTTP Server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping The Apache HTTP Server...\nMon DD HH:MM:SS HOST systemd[PID]: httpd.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped The Apache HTTP Server.\n",
+     "",
+     3
+    ],
+    "systemctl start nginx.service; sleep 2; systemctl stop nginx.service; systemctl status nginx.service --no-pager -l": [
+     "○ nginx.service - The nginx HTTP and reverse proxy server\n     Loaded: loaded (/usr/lib/systemd/system/nginx.service; disabled; preset: disabled)\n     Active: inactive (dead)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting The nginx HTTP and reverse proxy server...\nMon DD HH:MM:SS HOST nginx[PID]: nginx: the configuration file /etc/nginx/nginx.conf syntax is ok\nMon DD HH:MM:SS HOST nginx[PID]: nginx: configuration file /etc/nginx/nginx.conf test is successful\nMon DD HH:MM:SS HOST systemd[PID]: Started The nginx HTTP and reverse proxy server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping The nginx HTTP and reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: nginx.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped The nginx HTTP and reverse proxy server.\n",
+     "",
+     3
+    ],
+    "systemctl kill sshd.service; sleep 1; systemctl status sshd.service --no-pager -l": [
+     "○ sshd.service - OpenSSH server daemon\n     Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n   Duration: Ns\n       Docs: man:sshd(8)\n             man:sshd_config(5)\n    Process: PID ExecStart=/usr/sbin/sshd -D $OPTIONS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\nMon DD HH:MM:SS HOST systemd[PID]: sshd.service: Sent signal SIGTERM to main process PID (sshd) on client request.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: sshd.service: Deactivated successfully.\n",
+     "",
+     3
+    ],
+    "systemctl kill crond.service; sleep 1; systemctl status crond.service --no-pager -l": [
+     "○ crond.service - Command Scheduler\n     Loaded: loaded (/usr/lib/systemd/system/crond.service; enabled; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n   Duration: Ns\n    Process: PID ExecStart=/usr/sbin/crond -n $CRONDARGS (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Started Command Scheduler.\nMon DD HH:MM:SS HOST crond[PID]: (CRON) STARTUP (1.5.7)\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (RANDOM_DELAY will be scaled with factor 24% if used.)\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (running with inotify support)\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (@reboot jobs will be run at computer's startup.)\nMon DD HH:MM:SS HOST systemd[PID]: crond.service: Sent signal SIGTERM to main process PID (crond) on client request.\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (Shutting down)\nMon DD HH:MM:SS HOST systemd[PID]: crond.service: Deactivated successfully.\n",
+     "",
+     3
+    ]
+   }
+  },
+  "centos_7": {
+   "kind": "systemd in a container (PID 1), helper image w2sd-centos_7 from centos:7, boot --cgroupns=host, state running, packages installed in the running container",
+   "image": "centos:7",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "locale": "en_US.UTF-8",
+   "uid": 0,
+   "installs": {
+    "tuned": {
+     "rc": 0,
+     "tail": [
+      "  which.aarch64 0:2.20-7.el7                                                    ",
+      "",
+      "Complete!"
+     ],
+     "sec": 44
+    },
+    "audit": {
+     "rc": 0,
+     "tail": [
+      "  audit.aarch64 0:2.8.5-4.el7                                                   ",
+      "",
+      "Complete!"
+     ],
+     "sec": 7
+    },
+    "kexec-tools": {
+     "rc": 0,
+     "tail": [
+      "  snappy.aarch64 0:1.1.0-3.el7                                                  ",
+      "",
+      "Complete!"
+     ],
+     "sec": 16
+    },
+    "NetworkManager": {
+     "rc": 0,
+     "tail": [
+      "  wpa_supplicant.aarch64 1:2.6-12.el7_9.2                                       ",
+      "",
+      "Complete!"
+     ],
+     "sec": 15
+    },
+    "telnet-server": {
+     "rc": 0,
+     "tail": [
+      "  telnet-server.aarch64 1:0.17-66.el7                                           ",
+      "",
+      "Complete!"
+     ],
+     "sec": 7
+    },
+    "firewalld": {
+     "rc": 0,
+     "tail": [
+      "  python-slip-dbus.noarch 0:0.4.0-4.el7                                         ",
+      "",
+      "Complete!"
+     ],
+     "sec": 14
+    },
+    "httpd": {
+     "rc": 0,
+     "tail": [
+      "  mailcap.noarch 0:2.1.41-2.el7                                                 ",
+      "",
+      "Complete!"
+     ],
+     "sec": 15
+    },
+    "nginx": {
+     "rc": 0,
+     "tail": [
+      " Fingerprint: 91e9 7d7c 4a5e 96f1 7f3e 888f 6a2f aea2 352c 64e5",
+      " Package    : epel-release-7-11.noarch (@extras)",
+      " From       : /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7"
+     ],
+     "sec": 45
+    },
+    "mariadb-server": {
+     "rc": 0,
+     "tail": [
+      "  perl-PlRPC.noarch 0:0.2020-14.el7                                             ",
+      "",
+      "Complete!"
+     ],
+     "sec": 17
+    },
+    "redis": {
+     "rc": 0,
+     "tail": [
+      "  jemalloc.aarch64 0:3.6.0-1.el7                                                ",
+      "",
+      "Complete!"
+     ],
+     "sec": 9
+    },
+    "subscription-manager": {
+     "rc": 0,
+     "tail": [
+      "  usermode.aarch64 0:1.111-6.el7                                                ",
+      "",
+      "Complete!"
+     ],
+     "sec": 24
+    }
+   },
+   "systemctl_version": "systemd 219",
+   "cases": {
+    "systemctl start sshd.service; sleep 2; systemctl stop sshd.service; systemctl status sshd.service --no-pager -l": [
+     "● sshd.service - OpenSSH server daemon\n   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:sshd(8)\n           man:sshd_config(5)\n  Process: PID ExecStart=/usr/sbin/sshd -D $OPTIONS (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped OpenSSH server daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start crond.service; sleep 2; systemctl stop crond.service; systemctl status crond.service --no-pager -l": [
+     "● crond.service - Command Scheduler\n   Loaded: loaded (/usr/lib/systemd/system/crond.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n  Process: PID ExecStart=/usr/sbin/crond -n $CRONDARGS (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Started Command Scheduler.\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (RANDOM_DELAY will be scaled with factor 34% if used.)\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (running with inotify support)\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Command Scheduler...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Command Scheduler.\n",
+     "",
+     3
+    ],
+    "systemctl start rsyslog.service; sleep 2; systemctl stop rsyslog.service; systemctl status rsyslog.service --no-pager -l": [
+     "● rsyslog.service - System Logging Service\n   Loaded: loaded (/usr/lib/systemd/system/rsyslog.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:rsyslogd(8)\n           http://www.rsyslog.com/doc/\n  Process: PID ExecStart=/usr/sbin/rsyslogd -n $SYSLOGD_OPTIONS (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting System Logging Service...\nMon DD HH:MM:SS HOST rsyslogd[PID]:  [origin software=\"rsyslogd\" swVersion=\"8.24.0-57.el7_9.3\" x-pid=\"N\" x-info=\"http://www.rsyslog.com\"] start\nMon DD HH:MM:SS HOST systemd[PID]: Started System Logging Service.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping System Logging Service...\nMon DD HH:MM:SS HOST rsyslogd[PID]:  [origin software=\"rsyslogd\" swVersion=\"8.24.0-57.el7_9.3\" x-pid=\"N\" x-info=\"http://www.rsyslog.com\"] exiting on signal 15.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped System Logging Service.\n",
+     "",
+     3
+    ],
+    "systemctl start chronyd.service; sleep 2; systemctl stop chronyd.service; systemctl status chronyd.service --no-pager -l": [
+     "● chronyd.service - NTP client/server\n   Loaded: loaded (/usr/lib/systemd/system/chronyd.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:chronyd(8)\n           man:chrony.conf(5)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Started NTP client/server.\nMon DD HH:MM:SS HOST chronyd[PID]: Selected source IPV4\nMon DD HH:MM:SS HOST chronyd[PID]: Selected source IPV4\nMon DD HH:MM:SS HOST chronyd[PID]: Source 129.70.132.34 replaced with 94.130.184.193\nMon DD HH:MM:SS HOST chronyd[PID]: Selected source IPV4\nMon DD HH:MM:SS HOST chronyd[PID]: Selected source IPV4\nMon DD HH:MM:SS HOST chronyd[PID]: Selected source IPV4\nMon DD HH:MM:SS HOST chronyd[PID]: chronyd exiting\nMon DD HH:MM:SS HOST systemd[PID]: Stopping NTP client/server...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped NTP client/server.\n",
+     "",
+     3
+    ],
+    "systemctl start postfix.service; sleep 2; systemctl stop postfix.service; systemctl status postfix.service --no-pager -l": [
+     "● postfix.service - Postfix Mail Transport Agent\n   Loaded: loaded (/usr/lib/systemd/system/postfix.service; enabled; vendor preset: disabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n  Process: PID ExecStop=/usr/sbin/postfix stop (code=exited, status=0/SUCCESS)\n Main PID: PID (code=killed, signal=TERM)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Postfix Mail Transport Agent...\nMon DD HH:MM:SS HOST postfix/master[PID]: daemon started -- version 2.10.1, configuration /etc/postfix\nMon DD HH:MM:SS HOST systemd[PID]: Started Postfix Mail Transport Agent.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Postfix Mail Transport Agent...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Postfix Mail Transport Agent.\n",
+     "",
+     3
+    ],
+    "systemctl start tuned.service; sleep 2; systemctl stop tuned.service; systemctl status tuned.service --no-pager -l": [
+     "● tuned.service - Dynamic System Tuning Daemon\n   Loaded: loaded (/usr/lib/systemd/system/tuned.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:tuned(8)\n           man:tuned.conf(5)\n           man:tuned-adm(8)\n  Process: PID ExecStart=/usr/sbin/tuned -l -P (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Dynamic System Tuning Daemon...\nMon DD HH:MM:SS HOST systemd[PID]: Started Dynamic System Tuning Daemon.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Dynamic System Tuning Daemon...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Dynamic System Tuning Daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start auditd.service; sleep 2; systemctl stop auditd.service; systemctl status auditd.service --no-pager -l": [
+     "● auditd.service - Security Auditing Service\n   Loaded: loaded (/usr/lib/systemd/system/auditd.service; enabled; vendor preset: enabled)\n   Active: failed (Result: exit-code) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n     Docs: man:auditd(8)\n           https://github.com/linux-audit/audit-documentation\n  Process: PID ExecStart=/sbin/auditd (code=exited, status=1/FAILURE)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Security Auditing Service...\nMon DD HH:MM:SS HOST auditd[PID]: Started dispatcher: /sbin/audispd pid: 1872\nMon DD HH:MM:SS HOST auditd[PID]: Error sending status request (Operation not permitted)\nMon DD HH:MM:SS HOST auditd[PID]: Error sending enable request (Operation not permitted)\nMon DD HH:MM:SS HOST systemd[PID]: auditd.service: control process exited, code=exited status=1\nMon DD HH:MM:SS HOST systemd[PID]: Failed to start Security Auditing Service.\nMon DD HH:MM:SS HOST systemd[PID]: Unit auditd.service entered failed state.\nMon DD HH:MM:SS HOST systemd[PID]: auditd.service failed.\n",
+     "Job for auditd.service failed because the control process exited with error code. See \"systemctl status auditd.service\" and \"journalctl -xe\" for details.\nFailed to stop auditd.service: Operation refused, unit auditd.service may be requested by dependency only (it is configured to refuse manual start/stop).\nSee system logs and 'systemctl status auditd.service' for details.\n",
+     3
+    ],
+    "systemctl start kdump.service; sleep 2; systemctl stop kdump.service; systemctl status kdump.service --no-pager -l": [
+     "● kdump.service - Crash recovery kernel arming\n   Loaded: loaded (/usr/lib/systemd/system/kdump.service; enabled; vendor preset: enabled)\n   Active: failed (Result: exit-code) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n  Process: PID ExecStart=/usr/bin/kdumpctl start (code=exited, status=1/FAILURE)\n Main PID: PID (code=exited, status=1/FAILURE)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Crash recovery kernel arming...\nMon DD HH:MM:SS HOST kdumpctl[PID]: Kdump is not supported on this kernel\nMon DD HH:MM:SS HOST kdumpctl[PID]: Starting kdump: [FAILED]\nMon DD HH:MM:SS HOST systemd[PID]: kdump.service: main process exited, code=exited, status=1/FAILURE\nMon DD HH:MM:SS HOST systemd[PID]: Failed to start Crash recovery kernel arming.\nMon DD HH:MM:SS HOST systemd[PID]: Unit kdump.service entered failed state.\nMon DD HH:MM:SS HOST systemd[PID]: kdump.service failed.\n",
+     "Job for kdump.service failed because the control process exited with error code. See \"systemctl status kdump.service\" and \"journalctl -xe\" for details.\n",
+     3
+    ],
+    "systemctl start rhsmcertd.service; sleep 2; systemctl stop rhsmcertd.service; systemctl status rhsmcertd.service --no-pager -l": [
+     "● rhsmcertd.service - Enable periodic update of entitlement certificates.\n   Loaded: loaded (/usr/lib/systemd/system/rhsmcertd.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n  Process: PID ExecStart=/usr/bin/rhsmcertd (code=exited, status=0/SUCCESS)\n Main PID: PID (code=killed, signal=TERM)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Enable periodic update of entitlement certificates....\nMon DD HH:MM:SS HOST systemd[PID]: Started Enable periodic update of entitlement certificates..\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Enable periodic update of entitlement certificates....\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Enable periodic update of entitlement certificates..\n",
+     "",
+     3
+    ],
+    "systemctl start NetworkManager.service; sleep 2; systemctl stop NetworkManager.service; systemctl status NetworkManager.service --no-pager -l": [
+     "● NetworkManager.service - Network Manager\n   Loaded: loaded (/usr/lib/systemd/system/NetworkManager.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:NetworkManager(8)\n  Process: PID ExecStart=/usr/sbin/NetworkManager --no-daemon (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] device (eth0): state change: secondaries -> activated (reason 'none', sys-iface-state: 'external')\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: NetworkManager state is now CONNECTED_LOCAL\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] device (eth0): Activation: successful, device activated.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: NetworkManager state is now CONNECTED_GLOBAL\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: startup complete\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Network Manager...\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] caught SIGTERM, shutting down normally.\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] manager: NetworkManager state is now CONNECTED_LOCAL\nMon DD HH:MM:SS HOST NetworkManager[PID]: <info>  [EPOCH] exiting (success)\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Network Manager.\n",
+     "",
+     3
+    ],
+    "systemctl start telnet.socket; sleep 2; systemctl stop telnet.socket; systemctl status telnet.socket --no-pager -l": [
+     "● telnet.socket - Telnet Server Activation Socket\n   Loaded: loaded (/usr/lib/systemd/system/telnet.socket; disabled; vendor preset: disabled)\n   Active: inactive (dead)\n     Docs: man:telnetd(8)\n   Listen: [::]:23 (Stream)\n Accepted: 0; Connected: 0\n\nMon DD HH:MM:SS HOST systemd[PID]: Listening on Telnet Server Activation Socket.\nMon DD HH:MM:SS HOST systemd[PID]: Closed Telnet Server Activation Socket.\n",
+     "",
+     3
+    ],
+    "systemctl start firewalld.service; sleep 2; systemctl stop firewalld.service; systemctl status firewalld.service --no-pager -l": [
+     "● firewalld.service - firewalld - dynamic firewall daemon\n   Loaded: loaded (/usr/lib/systemd/system/firewalld.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:firewalld(1)\n  Process: PID ExecStart=/usr/sbin/firewalld --nofork --nopid $FIREWALLD_ARGS (code=killed, signal=TERM)\n Main PID: PID (code=killed, signal=TERM)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting firewalld - dynamic firewall daemon...\nMon DD HH:MM:SS HOST systemd[PID]: Started firewalld - dynamic firewall daemon.\nMon DD HH:MM:SS HOST firewalld[PID]: WARNING: AllowZoneDrifting is enabled. This is considered an insecure configuration option. It will be removed in a future release. Please consider disabling it now.\nMon DD HH:MM:SS HOST firewalld[PID]: WARNING: Failed to load nf_conntrack module: modprobe: ERROR: could not find module by name='nf_conntrack'\n                                          modprobe: ERROR: could not insert 'nf_conntrack': Function not implemented\n                                          modprobe: ERROR: Error running install command for nf_conntrack\n                                          modprobe: ERROR: could not insert 'nf_conntrack': Operation not permitted\nMon DD HH:MM:SS HOST firewalld[PID]: ERROR: Failed to read file \"/proc/sys/net/netfilter/nf_conntrack_helper\": [Errno 2] No such file or directory: '/proc/sys/net/netfilter/nf_conntrack_helper'\nMon DD HH:MM:SS HOST firewalld[PID]: WARNING: Failed to get and parse nf_conntrack_helper setting\nMon DD HH:MM:SS HOST systemd[PID]: Stopping firewalld - dynamic firewall daemon...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped firewalld - dynamic firewall daemon.\n",
+     "",
+     3
+    ],
+    "systemctl start httpd.service; sleep 2; systemctl stop httpd.service; systemctl status httpd.service --no-pager -l": [
+     "● httpd.service - The Apache HTTP Server\n   Loaded: loaded (/usr/lib/systemd/system/httpd.service; disabled; vendor preset: disabled)\n   Active: inactive (dead)\n     Docs: man:httpd(8)\n           man:apachectl(8)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting The Apache HTTP Server...\nMon DD HH:MM:SS HOST httpd[PID]: AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 172.17.0.N. Set the 'ServerName' directive globally to suppress this message\nMon DD HH:MM:SS HOST systemd[PID]: Started The Apache HTTP Server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping The Apache HTTP Server...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped The Apache HTTP Server.\n",
+     "",
+     3
+    ],
+    "systemctl start nginx.service; sleep 2; systemctl stop nginx.service; systemctl status nginx.service --no-pager -l": [
+     "● nginx.service - The nginx HTTP and reverse proxy server\n   Loaded: loaded (/usr/lib/systemd/system/nginx.service; disabled; vendor preset: disabled)\n   Active: inactive (dead)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting The nginx HTTP and reverse proxy server...\nMon DD HH:MM:SS HOST nginx[PID]: nginx: the configuration file /etc/nginx/nginx.conf syntax is ok\nMon DD HH:MM:SS HOST nginx[PID]: nginx: configuration file /etc/nginx/nginx.conf test is successful\nMon DD HH:MM:SS HOST systemd[PID]: Started The nginx HTTP and reverse proxy server.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping The nginx HTTP and reverse proxy server...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped The nginx HTTP and reverse proxy server.\n",
+     "",
+     3
+    ],
+    "systemctl kill sshd.service; sleep 1; systemctl status sshd.service --no-pager -l": [
+     "● sshd.service - OpenSSH server daemon\n   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n     Docs: man:sshd(8)\n           man:sshd_config(5)\n  Process: PID ExecStart=/usr/sbin/sshd -D $OPTIONS (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting OpenSSH server daemon...\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on 0.0.0.0 port 22.\nMon DD HH:MM:SS HOST sshd[PID]: Server listening on :: port 22.\nMon DD HH:MM:SS HOST systemd[PID]: Started OpenSSH server daemon.\nMon DD HH:MM:SS HOST sshd[PID]: Received signal 15; terminating.\n",
+     "",
+     3
+    ],
+    "systemctl kill crond.service; sleep 1; systemctl status crond.service --no-pager -l": [
+     "● crond.service - Command Scheduler\n   Loaded: loaded (/usr/lib/systemd/system/crond.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n  Process: PID ExecStart=/usr/sbin/crond -n $CRONDARGS (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Started Command Scheduler.\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (RANDOM_DELAY will be scaled with factor 72% if used.)\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (running with inotify support)\nMon DD HH:MM:SS HOST crond[PID]: (CRON) INFO (@reboot jobs will be run at computer's startup.)\n",
+     "",
+     3
+    ]
+   }
+  }
+ }
+}

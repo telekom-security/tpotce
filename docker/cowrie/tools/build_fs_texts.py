@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build the texts of the persona's file commands (docker/cowrie/dist/tpot_personas/fs_texts.json).
 
-rm, cp, mv, touch, rmdir and mkdir of the patched Cowrie (MKDIR_COMMAND of the patch script) answer with the
-texts of the real tool of the persona: GNU coreutils of a release or the BusyBox of a firmware. Their texts
+rm, cp, mv, touch, rmdir, mkdir and readlink of the patched Cowrie (MKDIR_COMMAND of the patch script) answer with
+the texts of the real tool of the persona: GNU coreutils of a release or the BusyBox of a firmware. Their texts
 come from recordings of the real programs (docker/cowrie/tests/fixtures/fs_tools.json, the full --help in
 fs_help.json); this script turns them into one object per variant (the key of the recording):
 
@@ -20,6 +20,8 @@ fs_help.json); this script turns them into one object per variant (the key of th
              variant that prints another text for one errno (BusyBox's "Path does not exist") gets
              "cp.create.ENOENT" for it
   rm_kinds   {kind: the word of rm's prompt} (GNU)
+  readlink   readlink's own: its help or usage, options, authors and templates, and for BusyBox how its -f resolves
+             (from tests/fixtures/readlink.json, see READLINK_CASES)
 
 Templates the recordings do not cover (rm -v of a folder, cp of a file onto itself, ...) come from SOURCE
 below, each with its source; they are marked unverified there. A BusyBox without one of the applets (the
@@ -423,6 +425,85 @@ def build_templates(style: str, version: tuple, cases: dict, quote_keys: set) ->
     return dict(sorted(templates.items()))
 
 
+# readlink (Command_tpot_readlink): the texts and the behaviour of the recorded readlink of each variant
+#   (tests/fixtures/readlink.json: the coreutils of the personas' releases, BusyBox 1.25.1 and 1.33.1 of uClibc and
+#   1.36.1 of musl), in the "readlink" part of the variant. A variant without a recording of its own takes the
+#   nearest one not newer than it and is marked "stand_in" (unverified): debian_12_en that of debian_12, the
+#   coreutils 8.23 / 8.26 of debian_8 / debian_9 that of 8.22, a BusyBox before 1.26 that of 1.25.1, up to 1.33 that of
+#   1.33.1, a later one that of 1.36.1; a BusyBox build whose rmdir usage is the short one has the short usage of
+#   readlink too (the NAS326), one whose usage ends in a blank line (1.19.4 of the Archer C7) that line as well.
+READLINK_CASES = FIXTURES / "readlink.json"
+
+
+def readlink_source(key: str, variant: dict, recordings: dict) -> str:
+    if key in recordings:
+        return key
+    version = tuple(int(x) for x in variant["version"].split("."))
+    if variant["style"] == "gnu":
+        if key.removesuffix("_en") in recordings:
+            return key.removesuffix("_en")
+        older = sorted((gnu_version_of(image), name) for name, image in recordings.items()
+                       if not name.startswith("busybox") and gnu_version_of(image) <= version)
+        return older[-1][1] if older else "centos_7"
+    return "busybox_1.25.1" if version < (1, 26) else "busybox_1.33.1" if version < (1, 34) else "busybox_1.36.1-musl"
+
+
+def gnu_version_of(image: dict) -> tuple:
+    found = re.match(r"readlink \(GNU coreutils\) ([\d.]+)", image["cases"]["readlink --version"][0])
+    return tuple(int(x) for x in found.group(1).split("."))
+
+
+def readlink_texts(key: str, variant: dict, recordings: dict) -> dict:
+    source = readlink_source(key, variant, recordings)
+    cases = recordings[source]["cases"]
+    own = {"recorded": recordings[source]["image"]}
+    if source != key:
+        own["stand_in"] = source
+    if variant["style"] == "gnu":
+        help_text = cases["readlink --help"][0]
+        own["help"] = help_text
+        own["options"] = gnu_options(help_text)
+        own["authors"] = cases["readlink --version"][0].partition("\nWritten by ")[2].rstrip("\n")
+        verbose = cases["readlink -v file"][1]
+        if verbose != "readlink: file: Invalid argument\n":
+            raise ValueError(f"{source}: readlink -v file: {verbose!r}")
+        own["templates"] = {"readlink.missing_operand": cases["readlink"][1],
+                            "readlink.no_newline": cases["readlink -n l1 l2"][1],
+                            "readlink.error": "readlink: {0}: {1}\n"}
+        return own
+    full = usage_of("readlink", cases["readlink"][1])
+    rmdir = variant.get("usage", {}).get("rmdir", "")
+    if rmdir and "\n\n" not in rmdir.rstrip("\n"):
+        usage = full.split("\n", 1)[0] + "\n\n"
+    elif rmdir.endswith("\n\n"):
+        usage = full + "\n"
+    else:
+        usage = full
+    not_link = cases["readlink -v file"][1]
+    missing = cases["readlink -v missing"][1]
+    if not_link != "readlink: file: cannot read link: not a symlink\n" or \
+            missing != "readlink: missing: cannot read link: No such file or directory\n":
+        raise ValueError(f"{source}: readlink -v: {not_link!r} {missing!r}")
+    own.update({
+        "usage": usage,
+        # getopt32 "fnvsq" with exactly one name (coreutils/readlink.c of 1.25.1 to 1.36.1)
+        "options": {"short": "fnvsq", "long": {}},
+        "templates": {"readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+                      "readlink.error": "readlink: {0}: cannot read link: {1}\n"},
+        # -f of a link whose target is missing: the path of the target (from 1.26 on; recorded: 1.25.1 not, 1.33.1
+        #   and 1.36.1 do)
+        "follow_dangling": bool(cases["readlink -f dangling"][0]),
+        # -f of a missing last part after a folder that exists (d/missing/; 1.36.1 does, 1.25.1 and 1.33.1 do not)
+        "missing_last": bool(cases["readlink -f d/missing/"][0]),
+        # the realpath of the C library: uClibc takes a file with a slash at its end, the musl of 1.36.1 keeps a //
+        #   at the start (recorded: uClibc and that musl; unverified: glibc as musl for the slash, as uClibc for the
+        #   //, and an older musl, which takes the recording of 1.33.1, as uClibc for the //)
+        "slash_file": variant["libc"] == "uclibc",
+        "double_slash": variant["libc"] == "musl" and cases["readlink -f //tmp//w//l2"][0].startswith("//"),
+    })
+    return own
+
+
 def quote_keys_of(images: dict) -> set:
     """The keys whose argument GNU quotes with quote() (the quotes of the locale), not quoteaf: those the
     recording of a UTF-8 coreutils from 8.25 on (debian_12, 9.1) writes in curly quotes."""
@@ -437,6 +518,7 @@ def quote_keys_of(images: dict) -> set:
 def build() -> dict:
     tools = json.loads((FIXTURES / "fs_tools.json").read_text(encoding="utf-8"))["images"]
     helps = json.loads((FIXTURES / "fs_help.json").read_text(encoding="utf-8"))["images"]
+    readlinks = json.loads(READLINK_CASES.read_text(encoding="utf-8"))["images"]
     quote_keys = quote_keys_of(tools)
     variants = {}
     for key, image in tools.items():
@@ -500,10 +582,11 @@ def build() -> dict:
             if missing:
                 variant["missing"] = missing
         variant["templates"] = build_templates(style, version, cases, quote_keys)
+        variant["readlink"] = readlink_texts(key, variant, readlinks)
         variants[key] = variant
-    return {"_about": "Texts of the persona's rm, cp, mv, touch, rmdir and mkdir per variant, made by "
-                      "docker/cowrie/tools/build_fs_texts.py from tests/fixtures/fs_tools.json and fs_help.json "
-                      "(recordings of the real programs); do not edit.",
+    return {"_about": "Texts of the persona's rm, cp, mv, touch, rmdir, mkdir and readlink per variant, made by "
+                      "docker/cowrie/tools/build_fs_texts.py from tests/fixtures/fs_tools.json, fs_help.json and "
+                      "readlink.json (recordings of the real programs); do not edit.",
             "authors": AUTHORS, "variants": dict(sorted(variants.items()))}
 
 

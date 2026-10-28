@@ -1,20 +1,21 @@
 """The data a persona is made of. Everything that varies per start is in a pool
 (releases, hardware, hostnames) and is drawn into an Identity."""
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Optional
 
 # how the shell prompt looks ([shell] prompt_style, read by the patched showPrompt of Cowrie):
 #   debian  user@host:~/dir$   Cowrie's own prompt, bash PS1 of Debian / Ubuntu, kept for the devices
 #   redhat  [user@host dir]$   bash PS1 of RHEL / CentOS (/etc/bashrc): short host name, basename of the cwd
 #   qnap    [\w] \$                 QTS (/etc/profile): the cwd with ~ for home, "[~] #" for admin
-PROMPT_STYLES = ("debian", "redhat", "qnap")
+#   msh     # / $                   BusyBox msh (the DIR-859): its PS1 "# " for root, "$ " for the others
+PROMPT_STYLES = ("debian", "redhat", "qnap", "msh")
 
 
 @dataclass(frozen=True)
 class Release:
     label: str
-    ssh_banner: str          # what the SSH server sends, "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5"
-    ssh_version: str         # what `ssh -V` prints, must name the same product and version
+    ssh_banner: str          # what the SSH server sends, "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5"; "" without one
+    ssh_version: str         # what `ssh -V` prints, must name the same product and version; "" without one
     kernel_version: str      # uname -r
     kernel_build: str        # uname -v
     os_version: str          # PRETTY_NAME part, "24.04.3 LTS"
@@ -46,6 +47,7 @@ class Content:
     busybox_help: str = ""   # what `busybox` prints (patched busybox.py, [shell] busybox_help), "" without BusyBox
     top_style: str = "procps"  # the patched top: procps, or busybox
     filesystems: list = field(default_factory=list)  # the mounted file systems (common.fs_row): mount, df
+    bash_version: str = ""   # what `bash --version` prints ([shell] bash_version), "" where Cowrie's bash answers
 
 
 @dataclass(frozen=True)
@@ -61,7 +63,7 @@ class Persona:
     arch: str
     hardware_platform: str
     operating_system: str
-    ssh_profile: str
+    ssh_profile: Optional[str]  # a key of ssh_profiles.PROFILES; None: no SSH server ([ssh] drop_connections)
     package_managers: tuple
     releases: tuple
     hardware: tuple

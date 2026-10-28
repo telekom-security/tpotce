@@ -1,11 +1,104 @@
 {
- "_source": "The quoting of names by rm -v, rm (a missing name), mkdir (an existing name), cp -v, mv -v, touch -d (a name as the date), rm -i (the prompt), rmdir, and for GNU mkdir -v, rm -rv of a folder, cp of a folder without -r, mv -T onto a folder, rmdir -v and cp onto the same file, recorded 2026-10-21 with sh -c in containers as fs_tools.json (the same images and locales): each case key is the JSON of the name (bytes of no UTF-8 character as surrogates), set into $n with printf and passed as -- \"$n\". The GNU tools write names with quoteaf (shell-escape-always) in most messages and with quote() (the locale's quotes, C escapes) in 'invalid date format' and 'cannot create directory'; BusyBox writes the bytes as they are.",
+ "_source": "The quoting of names by rm -v, rm (a missing name), mkdir (an existing name), cp -v, mv -v, touch -d (a name as the date), rm -i (the prompt), rmdir, and for GNU mkdir -v, rm -rv of a folder, cp of a folder without -r, mv -T onto a folder, rmdir -v and cp onto the same file, recorded 2026-10-21 with sh -c in containers as fs_tools.json (the same images and locales): each case key is the JSON of the name (bytes of no UTF-8 character as surrogates), set into $n with printf and passed as -- \"$n\". The GNU tools write names with quoteaf (shell-escape-always) in most messages and with quote() (the locale's quotes, C escapes) in 'invalid date format' and 'cannot create directory'; BusyBox writes the bytes as they are. Wave 2 (2026-10-21, w2/gnu/quote.json, the same images) added the names #'x, '#x, it's# and #it's (each as a double-quoted word, without --: no name starts with -) through rm -v, rm, mkdir twice, cp -v (to b2), mv -v (to b3), rm -i, rmdir of a folder (BusyBox) and GNU mkdir -v / rmdir -v, and the dates of touch -d (to x): '\\nb' and 'a\\n' with a backslash, a newline before b or after a (set by printf, by $'..' in bash or BusyBox ash, and by bash -c), $'..' as dash keeps it ($\\nb, $a\\n), '' and ' '; each touch case also ran with `; ls x`, which listed x exactly where touch ended with 0.",
  "images": {
   "busybox_1.25.1": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -16,6 +109,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -39,9 +137,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -1095,6 +1242,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -2101,6 +2255,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -2407,9 +2598,102 @@
   },
   "busybox_1.26.2": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -2420,6 +2704,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -2443,9 +2732,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -3499,6 +3837,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -4505,6 +4850,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -4811,9 +5193,102 @@
   },
   "busybox_1.27.2": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -4824,6 +5299,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -4847,9 +5327,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -5903,6 +6432,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -6909,6 +7445,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -7215,9 +7788,102 @@
   },
   "busybox_1.28.4": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -7228,6 +7894,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -7251,9 +7922,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -8307,6 +9027,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -9313,6 +10040,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -9619,9 +10383,102 @@
   },
   "busybox_1.29.3": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -9632,6 +10489,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -9655,9 +10517,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -10711,6 +11622,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -11717,6 +12635,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -12023,9 +12978,102 @@
   },
   "busybox_1.30.1": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -12036,6 +13084,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -12059,9 +13112,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -13115,6 +14217,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -14121,6 +15230,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -14427,9 +15573,102 @@
   },
   "busybox_1.31.1": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -14440,6 +15679,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -14463,9 +15707,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -15519,6 +16812,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -16525,6 +17825,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -16831,9 +18168,102 @@
   },
   "busybox_1.32.1": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -16844,6 +18274,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -16867,9 +18302,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -17923,6 +19407,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -18929,6 +20420,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -19235,9 +20763,102 @@
   },
   "busybox_1.33.1": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -19248,6 +20869,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -19271,9 +20897,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -20327,6 +22002,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -21333,6 +23015,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -21639,9 +23358,102 @@
   },
   "busybox_1.33.1-musl": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -21652,6 +23464,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -21675,9 +23492,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -22731,6 +24597,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -23737,6 +25610,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -24043,9 +25953,102 @@
   },
   "busybox_1.34.1": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -24056,6 +26059,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -24079,9 +26087,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -25135,6 +27192,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -26141,6 +28205,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -26447,9 +28548,102 @@
   },
   "busybox_1.35.0": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -26460,6 +28654,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -26483,9 +28682,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -27539,6 +29787,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -28545,6 +30800,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -28851,9 +31143,102 @@
   },
   "busybox_1.36.1-glibc": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -28864,6 +31249,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -28887,9 +31277,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -29943,6 +32382,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -30949,6 +33395,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -31255,9 +33738,102 @@
   },
   "busybox_1.36.1-musl": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -31268,6 +33844,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -31291,9 +33872,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -32347,6 +34977,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -33353,6 +35990,43 @@
       "",
       "touch: invalid date 'it's'\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -33659,9 +36333,102 @@
   },
   "busybox_1.36.1-uclibc": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ' '\n",
+      1
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date ''\n",
+      1
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "'#'x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#'x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#'x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#'x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#'x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "'#it's' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory '#it's': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'#it's' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove '#it's'? ",
+      0
+     ],
+     "rm -v": [
+      "removed '#it's'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove '#it's': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -33672,6 +36439,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -33695,9 +36467,58 @@
       "rmdir: '#x': No such file or directory\n",
       1
      ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ],
      "touch -d": [
       "",
       "touch: invalid date '#x'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory ''#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove ''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove ''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date '\\nb'\n",
       1
      ]
     },
@@ -34751,6 +37572,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date 'a\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a\bb' -> 'c1'\n",
@@ -35759,6 +38587,43 @@
       1
      ]
     },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it's#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: can't create directory 'it's#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it's#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove 'it's#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it's#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: can't remove 'it's#': No such file or directory\n",
+      1
+     ],
+     "rmdir dir": [
+      "",
+      "",
+      0
+     ]
+    },
     "\"it's?\"": {
      "cp -v": [
       "'it's?' -> 'c1'\n",
@@ -36063,9 +38928,112 @@
   },
   "centos_7": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "\u2018#'x\u2019 -> \u2018b2\u2019\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \u2018#'x\u2019\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#'x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\u2018#'x\u2019 -> \u2018b3\u2019\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \u2018#'x\u2019? ",
+      0
+     ],
+     "rm -v": [
+      "removed \u2018#'x\u2019\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \u2018#'x\u2019: No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \u2018#'x\u2019\n",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "\u2018#it's\u2019 -> \u2018b2\u2019\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \u2018#it's\u2019\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#it's\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\u2018#it's\u2019 -> \u2018b3\u2019\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \u2018#it's\u2019? ",
+      0
+     ],
+     "rm -v": [
+      "removed \u2018#it's\u2019\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \u2018#it's\u2019: No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \u2018#it's\u2019\n",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "\u2018#x\u2019 -> \u2018c1\u2019\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "\u2018#x\u2019 -> \u2018b2\u2019\n",
       "",
       0
      ],
@@ -36096,6 +39064,11 @@
      ],
      "mv -v": [
       "\u2018#x\u2019 -> \u2018m1\u2019\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "\u2018#x\u2019 -> \u2018b3\u2019\n",
       "",
       0
      ],
@@ -36132,6 +39105,55 @@
      "touch -d": [
       "",
       "touch: invalid date format \u2018#x\u2019\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "\u2018'#x\u2019 -> \u2018b2\u2019\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \u2018'#x\u2019\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018'#x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\u2018'#x\u2019 -> \u2018b3\u2019\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \u2018'#x\u2019? ",
+      0
+     ],
+     "rm -v": [
+      "removed \u2018'#x\u2019\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \u2018'#x\u2019: No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \u2018'#x\u2019\n",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018\\\\nb\u2019\n",
       1
      ]
     },
@@ -37935,6 +40957,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018a\\\\n\u2019\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "\u2018a\\bb\u2019 -> \u2018c1\u2019\n",
@@ -39663,6 +42692,48 @@
       1
      ]
     },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "\u2018it's#\u2019 -> \u2018b2\u2019\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \u2018it's#\u2019\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018it's#\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\u2018it's#\u2019 -> \u2018b3\u2019\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \u2018it's#\u2019? ",
+      0
+     ],
+     "rm -v": [
+      "removed \u2018it's#\u2019\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \u2018it's#\u2019: No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \u2018it's#\u2019\n",
+      "",
+      0
+     ]
+    },
     "\"it's?\"": {
      "cp -v": [
       "\u2018it's?\u2019 -> \u2018c1\u2019\n",
@@ -40177,9 +43248,112 @@
   },
   "debian_10": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "\"#'x\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#'x\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory '#\\'x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#'x\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#'x\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#'x\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#'x\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#'x\"\n",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "\"#it's\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#it's\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory '#it\\'s': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#it's\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#it's\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#it's\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#it's\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#it's\"\n",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -40210,6 +43384,11 @@
      ],
      "mv -v": [
       "renamed '#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "renamed '#x' -> 'b3'\n",
       "",
       0
      ],
@@ -40246,6 +43425,69 @@
      "touch -d": [
       "",
       "touch: invalid date format '#x'\n",
+      1
+     ]
+    },
+    "\"$\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format '$\\\\nb'\n",
+      1
+     ]
+    },
+    "\"$a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format '$a\\\\n'\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''\\''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory ''\\''#x'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory '\\'#x': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed ''\\''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file ''\\''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''\\''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove ''\\''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, ''\\''#x'\n",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format '\\\\nb'\n",
       1
      ]
     },
@@ -42049,6 +45291,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format 'a\\\\n'\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a'$'\\b''b' -> 'c1'\n",
@@ -43777,6 +47026,48 @@
       1
      ]
     },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it'\\''s#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory 'it\\'s#': File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed 'it'\\''s#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file 'it'\\''s#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove 'it'\\''s#': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, 'it'\\''s#'\n",
+      "",
+      0
+     ]
+    },
     "\"it's?\"": {
      "cp -v": [
       "'it'\\''s?' -> 'c1'\n",
@@ -44291,9 +47582,112 @@
   },
   "debian_12": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "\"#'x\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#'x\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#'x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#'x\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#'x\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#'x\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#'x\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#'x\"\n",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "\"#it's\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#it's\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#it's\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#it's\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#it's\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#it's\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#it's\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#it's\"\n",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -44324,6 +47718,11 @@
      ],
      "mv -v": [
       "renamed '#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "renamed '#x' -> 'b3'\n",
       "",
       0
      ],
@@ -44360,6 +47759,69 @@
      "touch -d": [
       "",
       "touch: invalid date format \u2018#x\u2019\n",
+      1
+     ]
+    },
+    "\"$\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$\\\\nb\u2019\n",
+      1
+     ]
+    },
+    "\"$a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$a\\\\n\u2019\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''\\''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory ''\\''#x'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018'#x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed ''\\''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file ''\\''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''\\''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove ''\\''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, ''\\''#x'\n",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018\\\\nb\u2019\n",
       1
      ]
     },
@@ -46163,6 +49625,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018a\\\\n\u2019\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a'$'\\b''b' -> 'c1'\n",
@@ -47891,6 +51360,48 @@
       1
      ]
     },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it'\\''s#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018it's#\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed 'it'\\''s#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file 'it'\\''s#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove 'it'\\''s#': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, 'it'\\''s#'\n",
+      "",
+      0
+     ]
+    },
     "\"it's?\"": {
      "cp -v": [
       "'it'\\''s?' -> 'c1'\n",
@@ -48405,9 +51916,112 @@
   },
   "debian_13": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "\"#'x\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#'x\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#'x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#'x\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#'x\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#'x\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#'x\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#'x\"\n",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "\"#it's\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#it's\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#it's\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#it's\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#it's\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#it's\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#it's\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#it's\"\n",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -48438,6 +52052,11 @@
      ],
      "mv -v": [
       "renamed '#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "renamed '#x' -> 'b3'\n",
       "",
       0
      ],
@@ -48474,6 +52093,69 @@
      "touch -d": [
       "",
       "touch: invalid date format \u2018#x\u2019\n",
+      1
+     ]
+    },
+    "\"$\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$\\\\nb\u2019\n",
+      1
+     ]
+    },
+    "\"$a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$a\\\\n\u2019\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''\\''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory ''\\''#x'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018'#x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed ''\\''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file ''\\''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''\\''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove ''\\''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, ''\\''#x'\n",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018\\\\nb\u2019\n",
       1
      ]
     },
@@ -50277,6 +53959,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018a\\\\n\u2019\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a'$'\\b''b' -> 'c1'\n",
@@ -52005,6 +55694,48 @@
       1
      ]
     },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it'\\''s#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018it's#\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed 'it'\\''s#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file 'it'\\''s#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove 'it'\\''s#': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, 'it'\\''s#'\n",
+      "",
+      0
+     ]
+    },
     "\"it's?\"": {
      "cp -v": [
       "'it'\\''s?' -> 'c1'\n",
@@ -52519,9 +56250,112 @@
   },
   "debian_8": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "\u2018#'x\u2019 -> \u2018b2\u2019\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \u2018#'x\u2019\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#'x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\u2018#'x\u2019 -> \u2018b3\u2019\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \u2018#'x\u2019? ",
+      0
+     ],
+     "rm -v": [
+      "removed \u2018#'x\u2019\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \u2018#'x\u2019: No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \u2018#'x\u2019\n",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "\u2018#it's\u2019 -> \u2018b2\u2019\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \u2018#it's\u2019\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#it's\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\u2018#it's\u2019 -> \u2018b3\u2019\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \u2018#it's\u2019? ",
+      0
+     ],
+     "rm -v": [
+      "removed \u2018#it's\u2019\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \u2018#it's\u2019: No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \u2018#it's\u2019\n",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "\u2018#x\u2019 -> \u2018c1\u2019\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "\u2018#x\u2019 -> \u2018b2\u2019\n",
       "",
       0
      ],
@@ -52552,6 +56386,11 @@
      ],
      "mv -v": [
       "\u2018#x\u2019 -> \u2018m1\u2019\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "\u2018#x\u2019 -> \u2018b3\u2019\n",
       "",
       0
      ],
@@ -52588,6 +56427,69 @@
      "touch -d": [
       "",
       "touch: invalid date format \u2018#x\u2019\n",
+      1
+     ]
+    },
+    "\"$\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$\\\\nb\u2019\n",
+      1
+     ]
+    },
+    "\"$a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$a\\\\n\u2019\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "\u2018'#x\u2019 -> \u2018b2\u2019\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \u2018'#x\u2019\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018'#x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\u2018'#x\u2019 -> \u2018b3\u2019\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \u2018'#x\u2019? ",
+      0
+     ],
+     "rm -v": [
+      "removed \u2018'#x\u2019\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \u2018'#x\u2019: No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \u2018'#x\u2019\n",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018\\\\nb\u2019\n",
       1
      ]
     },
@@ -54391,6 +58293,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018a\\\\n\u2019\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "\u2018a\\bb\u2019 -> \u2018c1\u2019\n",
@@ -56119,6 +60028,48 @@
       1
      ]
     },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "\u2018it's#\u2019 -> \u2018b2\u2019\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \u2018it's#\u2019\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018it's#\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\u2018it's#\u2019 -> \u2018b3\u2019\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \u2018it's#\u2019? ",
+      0
+     ],
+     "rm -v": [
+      "removed \u2018it's#\u2019\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \u2018it's#\u2019: No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \u2018it's#\u2019\n",
+      "",
+      0
+     ]
+    },
     "\"it's?\"": {
      "cp -v": [
       "\u2018it's?\u2019 -> \u2018c1\u2019\n",
@@ -56633,9 +60584,112 @@
   },
   "debian_9": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "\"#'x\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#'x\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#'x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\"#'x\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#'x\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#'x\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#'x\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#'x\"\n",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "\"#it's\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#it's\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#it's\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "\"#it's\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#it's\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#it's\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#it's\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#it's\"\n",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -56666,6 +60720,11 @@
      ],
      "mv -v": [
       "'#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "'#x' -> 'b3'\n",
       "",
       0
      ],
@@ -56702,6 +60761,69 @@
      "touch -d": [
       "",
       "touch: invalid date format \u2018#x\u2019\n",
+      1
+     ]
+    },
+    "\"$\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$\\\\nb\u2019\n",
+      1
+     ]
+    },
+    "\"$a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$a\\\\n\u2019\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''\\''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory ''\\''#x'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018'#x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "''\\''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file ''\\''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''\\''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove ''\\''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, ''\\''#x'\n",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018\\\\nb\u2019\n",
       1
      ]
     },
@@ -58505,6 +62627,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018a\\\\n\u2019\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a'$'\\b''b' -> 'c1'\n",
@@ -60233,6 +64362,48 @@
       1
      ]
     },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it'\\''s#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018it's#\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "'it'\\''s#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file 'it'\\''s#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove 'it'\\''s#': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, 'it'\\''s#'\n",
+      "",
+      0
+     ]
+    },
     "\"it's?\"": {
      "cp -v": [
       "'it'\\''s?' -> 'c1'\n",
@@ -60747,9 +64918,112 @@
   },
   "rockylinux_9": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "\"#'x\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#'x\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#'x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#'x\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#'x\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#'x\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#'x\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#'x\"\n",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "\"#it's\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#it's\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#it's\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#it's\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#it's\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#it's\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#it's\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#it's\"\n",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -60780,6 +65054,11 @@
      ],
      "mv -v": [
       "renamed '#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "renamed '#x' -> 'b3'\n",
       "",
       0
      ],
@@ -60816,6 +65095,55 @@
      "touch -d": [
       "",
       "touch: invalid date format \u2018#x\u2019\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''\\''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory ''\\''#x'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018'#x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed ''\\''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file ''\\''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''\\''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove ''\\''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, ''\\''#x'\n",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018\\\\nb\u2019\n",
       1
      ]
     },
@@ -62619,6 +66947,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018a\\\\n\u2019\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a'$'\\b''b' -> 'c1'\n",
@@ -64345,6 +68680,48 @@
       "",
       "touch: invalid date format \u2018it's\u2019\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it'\\''s#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018it's#\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed 'it'\\''s#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file 'it'\\''s#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove 'it'\\''s#': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, 'it'\\''s#'\n",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -64861,9 +69238,112 @@
   },
   "ubuntu_22.04": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "\"#'x\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#'x\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#'x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#'x\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#'x\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#'x\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#'x\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#'x\"\n",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "\"#it's\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#it's\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#it's\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#it's\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#it's\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#it's\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#it's\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#it's\"\n",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -64894,6 +69374,11 @@
      ],
      "mv -v": [
       "renamed '#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "renamed '#x' -> 'b3'\n",
       "",
       0
      ],
@@ -64930,6 +69415,69 @@
      "touch -d": [
       "",
       "touch: invalid date format \u2018#x\u2019\n",
+      1
+     ]
+    },
+    "\"$\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$\\\\nb\u2019\n",
+      1
+     ]
+    },
+    "\"$a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$a\\\\n\u2019\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''\\''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory ''\\''#x'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018'#x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed ''\\''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file ''\\''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''\\''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove ''\\''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, ''\\''#x'\n",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018\\\\nb\u2019\n",
       1
      ]
     },
@@ -66733,6 +71281,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018a\\\\n\u2019\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a'$'\\b''b' -> 'c1'\n",
@@ -68459,6 +73014,48 @@
       "",
       "touch: invalid date format \u2018it's\u2019\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it'\\''s#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018it's#\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed 'it'\\''s#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file 'it'\\''s#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove 'it'\\''s#': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, 'it'\\''s#'\n",
+      "",
+      0
      ]
     },
     "\"it's?\"": {
@@ -68975,9 +73572,112 @@
   },
   "ubuntu_24.04": {
    "cases": {
+    "\" \"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"\"": {
+     "touch -d": [
+      "",
+      "",
+      0
+     ]
+    },
+    "\"#'x\"": {
+     "cp -v b2": [
+      "\"#'x\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#'x\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#'x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#'x\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#'x\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#'x\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#'x\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#'x\"\n",
+      "",
+      0
+     ]
+    },
+    "\"#it's\"": {
+     "cp -v b2": [
+      "\"#it's\" -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory \"#it's\"\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018#it's\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed \"#it's\" -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file \"#it's\"? ",
+      0
+     ],
+     "rm -v": [
+      "removed \"#it's\"\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove \"#it's\": No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, \"#it's\"\n",
+      "",
+      0
+     ]
+    },
     "\"#x\"": {
      "cp -v": [
       "'#x' -> 'c1'\n",
+      "",
+      0
+     ],
+     "cp -v b2": [
+      "'#x' -> 'b2'\n",
       "",
       0
      ],
@@ -69008,6 +73708,11 @@
      ],
      "mv -v": [
       "renamed '#x' -> 'm1'\n",
+      "",
+      0
+     ],
+     "mv -v b3": [
+      "renamed '#x' -> 'b3'\n",
       "",
       0
      ],
@@ -69044,6 +73749,69 @@
      "touch -d": [
       "",
       "touch: invalid date format \u2018#x\u2019\n",
+      1
+     ]
+    },
+    "\"$\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$\\\\nb\u2019\n",
+      1
+     ]
+    },
+    "\"$a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018$a\\\\n\u2019\n",
+      1
+     ]
+    },
+    "\"'#x\"": {
+     "cp -v b2": [
+      "''\\''#x' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory ''\\''#x'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018'#x\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed ''\\''#x' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file ''\\''#x'? ",
+      0
+     ],
+     "rm -v": [
+      "removed ''\\''#x'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove ''\\''#x': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, ''\\''#x'\n",
+      "",
+      0
+     ]
+    },
+    "\"\\\\nb\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018\\\\nb\u2019\n",
       1
      ]
     },
@@ -70847,6 +75615,13 @@
       1
      ]
     },
+    "\"a\\\\n\"": {
+     "touch -d": [
+      "",
+      "touch: invalid date format \u2018a\\\\n\u2019\n",
+      1
+     ]
+    },
     "\"a\\bb\"": {
      "cp -v": [
       "'a'$'\\b''b' -> 'c1'\n",
@@ -72573,6 +77348,48 @@
       "",
       "touch: invalid date format \u2018it's\u2019\n",
       1
+     ]
+    },
+    "\"it's#\"": {
+     "cp -v b2": [
+      "'it'\\''s#' -> 'b2'\n",
+      "",
+      0
+     ],
+     "mkdir -v": [
+      "mkdir: created directory 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "mkdir twice": [
+      "",
+      "mkdir: cannot create directory \u2018it's#\u2019: File exists\n",
+      1
+     ],
+     "mv -v b3": [
+      "renamed 'it'\\''s#' -> 'b3'\n",
+      "",
+      0
+     ],
+     "rm -i": [
+      "",
+      "rm: remove regular empty file 'it'\\''s#'? ",
+      0
+     ],
+     "rm -v": [
+      "removed 'it'\\''s#'\n",
+      "",
+      0
+     ],
+     "rm missing": [
+      "",
+      "rm: cannot remove 'it'\\''s#': No such file or directory\n",
+      1
+     ],
+     "rmdir -v": [
+      "rmdir: removing directory, 'it'\\''s#'\n",
+      "",
+      0
      ]
     },
     "\"it's?\"": {

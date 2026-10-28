@@ -1,0 +1,274 @@
+{
+ "_source": {
+  "how": "docker run --rm --network none IMAGE sh -c 'SETUP CASE; echo \"rc=$?\"', one run per case; SETUP writes the files f, p, empty and blank and the folder d in /tmp and changes to it",
+  "setup": "printf 'root:x:0:0\\ndaemon:x:1:1\\n\"root\" said\\na/b c\\nnobody:x:65534\\n' > /tmp/f; printf 'root\\ndaemon\\n' > /tmp/p; : > /tmp/empty; printf 'nobody\\n\\n' > /tmp/blank; mkdir /tmp/d; cd /tmp; ",
+  "date": "2026-10-22",
+  "what": "grep -e and -f take the patterns, a double quote and a slash stay in the pattern; the BusyBox images' case `grep -f d f` (a folder given to -f, rc 1, no text) is recorded but not asserted: test_patch.py skips it (gnu_only), because the persona's grep has GNU's texts and BusyBox reads a folder given to -f as an empty file (inferred from rc 1 and no text, not asserted)"
+ },
+ "images": {
+  "debian_12": {
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "cases": {
+    "grep -e root f": [
+     "root:x:0:0\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -e root -e daemon f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -f p f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -f empty f": [
+     "",
+     "",
+     1
+    ],
+    "grep -f blank f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\na/b c\nnobody:x:65534\n",
+     "",
+     0
+    ],
+    "grep -f nosuch f": [
+     "",
+     "grep: nosuch: No such file or directory\n",
+     2
+    ],
+    "grep -e nobody -f p f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\nnobody:x:65534\n",
+     "",
+     0
+    ],
+    "grep -c -e root f": [
+     "2\n",
+     "",
+     0
+    ],
+    "grep '\"root\"' f": [
+     "\"root\" said\n",
+     "",
+     0
+    ],
+    "grep 'a/b' f": [
+     "a/b c\n",
+     "",
+     0
+    ],
+    "grep -f d f": [
+     "",
+     "grep: d: Is a directory\n",
+     2
+    ],
+    "grep -e 'root\nnobody' f": [
+     "root:x:0:0\n\"root\" said\nnobody:x:65534\n",
+     "",
+     0
+    ]
+   }
+  },
+  "ubuntu_24.04": {
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "cases": {
+    "grep -e root f": [
+     "root:x:0:0\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -e root -e daemon f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -f p f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -f empty f": [
+     "",
+     "",
+     1
+    ],
+    "grep -f blank f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\na/b c\nnobody:x:65534\n",
+     "",
+     0
+    ],
+    "grep -f nosuch f": [
+     "",
+     "grep: nosuch: No such file or directory\n",
+     2
+    ],
+    "grep -e nobody -f p f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\nnobody:x:65534\n",
+     "",
+     0
+    ],
+    "grep -c -e root f": [
+     "2\n",
+     "",
+     0
+    ],
+    "grep '\"root\"' f": [
+     "\"root\" said\n",
+     "",
+     0
+    ],
+    "grep 'a/b' f": [
+     "a/b c\n",
+     "",
+     0
+    ],
+    "grep -f d f": [
+     "",
+     "grep: d: Is a directory\n",
+     2
+    ],
+    "grep -e 'root\nnobody' f": [
+     "root:x:0:0\n\"root\" said\nnobody:x:65534\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.36.1-musl": {
+   "image": "busybox:1.36.1-musl",
+   "digest": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "cases": {
+    "grep -e root f": [
+     "root:x:0:0\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -e root -e daemon f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -f p f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -f empty f": [
+     "",
+     "",
+     1
+    ],
+    "grep -f blank f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\na/b c\nnobody:x:65534\n",
+     "",
+     0
+    ],
+    "grep -f nosuch f": [
+     "",
+     "grep: nosuch: No such file or directory\n",
+     2
+    ],
+    "grep -e nobody -f p f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\nnobody:x:65534\n",
+     "",
+     0
+    ],
+    "grep -c -e root f": [
+     "2\n",
+     "",
+     0
+    ],
+    "grep '\"root\"' f": [
+     "\"root\" said\n",
+     "",
+     0
+    ],
+    "grep 'a/b' f": [
+     "a/b c\n",
+     "",
+     0
+    ],
+    "grep -f d f": [
+     "",
+     "",
+     1
+    ],
+    "grep -e 'root\nnobody' f": [
+     "root:x:0:0\n\"root\" said\nnobody:x:65534\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.36.1-glibc": {
+   "image": "busybox:1.36.1-glibc",
+   "digest": "busybox@sha256:7e567dff0fbaa48cddc5f52ae5201a7f417436aa20e70c8750814692043dfa38",
+   "cases": {
+    "grep -e root f": [
+     "root:x:0:0\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -e root -e daemon f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -f p f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\n",
+     "",
+     0
+    ],
+    "grep -f empty f": [
+     "",
+     "",
+     1
+    ],
+    "grep -f blank f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\na/b c\nnobody:x:65534\n",
+     "",
+     0
+    ],
+    "grep -f nosuch f": [
+     "",
+     "grep: nosuch: No such file or directory\n",
+     2
+    ],
+    "grep -e nobody -f p f": [
+     "root:x:0:0\ndaemon:x:1:1\n\"root\" said\nnobody:x:65534\n",
+     "",
+     0
+    ],
+    "grep -c -e root f": [
+     "2\n",
+     "",
+     0
+    ],
+    "grep '\"root\"' f": [
+     "\"root\" said\n",
+     "",
+     0
+    ],
+    "grep 'a/b' f": [
+     "a/b c\n",
+     "",
+     0
+    ],
+    "grep -f d f": [
+     "",
+     "",
+     1
+    ],
+    "grep -e 'root\nnobody' f": [
+     "root:x:0:0\n\"root\" said\nnobody:x:65534\n",
+     "",
+     0
+    ]
+   }
+  }
+ }
+}

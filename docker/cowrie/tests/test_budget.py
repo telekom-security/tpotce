@@ -1,6 +1,7 @@
 """One time budget per session for the commands T-Pot emulates (TPOT_BUDGET in the patched shell/command.py):
 the commands of a line run back to back on the reactor, so a session that chains many of them gets the time of
 its window and no more; every command ends as at its own bound, and the budget comes back after the window."""
+import re
 import time
 import unittest
 
@@ -20,7 +21,7 @@ def budget_module(clock=None):
 
 
 class Clock:
-    """time.monotonic and time.process_time that move only when told."""
+    """time.monotonic and time.thread_time that move only when told."""
 
     def __init__(self):
         self.now, self.cpu = 1000.0, 50.0
@@ -28,7 +29,7 @@ class Clock:
     def monotonic(self):
         return self.now
 
-    def process_time(self):
+    def thread_time(self):
         return self.cpu
 
     def run(self, seconds, cpu=None):
@@ -239,8 +240,9 @@ class DeferredScanTest(test_packages.SessionCase):
 class GrepSessionTest(unittest.TestCase):
     def grep(self, *args, budget_used=None, **kwargs):
         fs = (test_awk.patched_root() / "src/cowrie/commands/fs.py").read_text()
-        command_grep = test_patch.module_parts(fs, ["Command_grep", "TpotGrepMatcher"],
-                                               {"HoneyPotCommand": test_patch.FakeCommand})["Command_grep"]
+        command_grep = test_patch.module_parts(fs, ["Command_grep", "TpotGrepMatcher", "TpotGrepSyntax"],
+                                               {"HoneyPotCommand": test_patch.FakeCommand,
+                                                "CowrieConfig": test_patch.FakeConfig({})})["Command_grep"]
         command = command_grep(list(args), **kwargs)
         if budget_used is not None:
             budget = test_patch.budget_names()["tpot_budget"](command.protocol)
@@ -261,18 +263,25 @@ class GrepSessionTest(unittest.TestCase):
 
     def test_grep_past_the_session_time_stops_as_at_its_work_limit(self):
         exhausted = "grep: memory exhausted\n"
+        # a small input is answered; past its first 255 lines grep stops as at its work limit
         done = self.grep("-c", "a", input_data=b"a\nb\n", budget_used=1.0)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"1\n", "", 0))
+        done = self.grep("-c", "a", input_data=b"a\nb\n" * 150, budget_used=1.0)
         self.assertEqual((bytes(done.out), done.err, done.code), (b"", exhausted, 2))
-        done = self.grep("a", "/proc/cpuinfo", budget_used=1.0)
-        self.assertEqual((bytes(done.out), done.err, done.code), (b"", exhausted, 2))
-        # typed lines: the message once, and grep ends at once, as GNU grep
+        # typed lines: each one is a small input of its own
         done = self.grep("a", budget_used=1.0)
         self.assertEqual(done.code, "running")
         done.lineReceived("a")
-        self.assertEqual((bytes(done.out), done.err, done.code), (b"", exhausted, 2))
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"a\n", "", "running"))
         # with the session's time it matches
         done = self.grep("-c", "a", input_data=b"a\nb\n")
         self.assertEqual((bytes(done.out), done.err, done.code), (b"1\n", "", 0))
+
+    def test_only_matching_past_the_session_time_reads_a_short_line_and_stops_at_a_long_one(self):
+        done = self.grep("-o", "a", input_data=b"b" * 40 + b"a\n", budget_used=1.0)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"a\n", "", 0))
+        done = self.grep("-o", "a", input_data=b"b" * 3000 + b"a\n", budget_used=1.0)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "grep: memory exhausted\n", 2))
 
 
 class ParseTest(unittest.TestCase):
@@ -318,8 +327,9 @@ class AwkSessionTest(unittest.TestCase):
                 break
         self.assertEqual((len(codes), set(codes)), (3000, {2}))
         self.assertLess(time.perf_counter() - start, LIMIT)
-        # past the session's time awk ends at its bound: status 2, nothing printed
-        self.assertEqual(awk_of(session, ["BEGIN{print 1}"]), ("", "", 2))
+        # past the session's time awk still answers a small program, an endless one ends at its bound: status 2
+        self.assertEqual(awk_of(session, ["BEGIN{print 1}"]), ("1\n", "", 0))
+        self.assertEqual(awk_of(session, ["BEGIN{while(1){}}"]), ("", "", 2))
         # another session is not affected
         self.assertEqual(awk_of(Session(), ["BEGIN{print 1}"]), ("1\n", "", 0))
 
@@ -327,7 +337,7 @@ class AwkSessionTest(unittest.TestCase):
         session = Session()
         for _ in range(10):
             awk_of(session, ["BEGIN{while(1){}}"])
-        self.assertEqual(awk_of(session, ["BEGIN{print 1}"])[2], 2)
+        self.assertEqual(awk_of(session, ["BEGIN{while(1){}}"])[2], 2)
         for slot in session.tpot_budget.slots:
             slot[0] -= len(session.tpot_budget.slots)
         self.assertEqual(awk_of(session, ["BEGIN{print 1}"]), ("1\n", "", 0))
@@ -354,8 +364,249 @@ class MixedLineTest(test_packages.SessionCase):
         # past the session's time: the scans find nothing, awk, sort and seq stop at their bounds
         self.assertEqual(run(["apt-get", "install", "-y", "^tre.$"])[1].splitlines()[0],
                          "E: Unable to locate package ^tre.$")
-        self.assertEqual(run(["sort"], input_data=b"b\na\n")[1:], ("sort: memory exhausted\n", 2))
-        self.assertEqual(run(["seq", "3"])[0], "1")
+        self.assertEqual(run(["sort"], input_data=b"b\na\n" * 200000)[1:], ("sort: memory exhausted\n", 2))
+        self.assertLessEqual(len(run(["seq", "1000000"])[0].split()), 70000)
+
+
+class UsedUpSessionTest(test_packages.SessionCase):
+    """A session whose time is used up still answers a small input: every command takes a floor of work (steps,
+    not time) before the session's deadline applies; past it each ends at its own bound."""
+
+    def used_up(self, run):
+        test_patch.budget_names()["tpot_budget"](run.protocol).charge(time.monotonic(), 1.0, 1.0)
+
+    def test_grep_awk_sort_and_seq_answer_a_small_input(self):
+        run = self.session("debian-bookworm", extra_modules=("fs", "awk", "wc"))
+        self.used_up(run)
+        self.assertEqual(run(["seq", "3"]), ("1\n2\n3\n", "", 0))
+        self.assertEqual(run(["sort"], input_data=b"b\na\n"), ("a\nb\n", "", 0))
+        self.assertEqual(run(["grep", "x"], input_data=b"x\ny\n"), ("x\n", "", 0))
+        self.assertEqual(run(["awk", "{print $1}"], input_data=b"a b\n"), ("a\n", "", 0))
+        self.assertEqual(run(["awk", "BEGIN{print 1}"]), ("1\n", "", 0))
+
+    def test_past_its_floor_each_command_ends_at_its_own_bound(self):
+        run = self.session("debian-bookworm", extra_modules=("fs", "awk", "wc"))
+        self.used_up(run)
+        self.assertEqual(run(["grep", "x"], input_data=b"x\ny\n" * 300)[1:], ("grep: memory exhausted\n", 2))
+        self.assertEqual(run(["awk", "BEGIN{while(1){}}"])[1:], ("", 2))
+        self.assertLess(len(run(["seq", "1000000"])[0].split()), 70000)
+
+    def test_python_c_answers_a_small_program(self):
+        from tests import test_inline
+
+        test_inline.python_run("1", "3.12.3")
+        events = test_inline._PYTHON[0]["tpot_python_events"]
+        past = time.monotonic() - 1.0
+        printed, status = events("print(1)", "3.12.3", False, 4300, past)
+        self.assertEqual(("".join(text for _, text in printed), status), ("1\n", 0))
+        # past the floor of steps a run ends at the deadline with no more output, status 0
+        self.assertEqual(events("x = 1\n" * 600 + "print(1)", "3.12.3", False, 4300, past)[0], [])
+
+
+class ThreadTimeTest(unittest.TestCase):
+    def test_other_threads_do_not_count_for_the_session(self):
+        import threading
+
+        ns = budget_module()
+        session = Session()
+        stop = threading.Event()
+
+        def burn():
+            while not stop.is_set():
+                pass
+
+        worker = threading.Thread(target=burn)
+        worker.start()
+        try:
+            with ns["tpot_metered"](session):
+                time.sleep(0.2)  # this thread waits, the other one has the CPU
+        finally:
+            stop.set()
+            worker.join()
+        cpu, wall = ns["tpot_budget"](session).used(time.monotonic())
+        self.assertLess(cpu, 0.05)
+        self.assertGreaterEqual(wall, 0.2)
+
+
+class Reactor:
+    """reactor.callLater(0, ...) that runs the calls in order when the test runs it."""
+
+    def __init__(self):
+        self.calls = []
+
+    def callLater(self, delay, function, *args):  # noqa: N802 - Twisted's name
+        assert delay == 0
+        self.calls.append((function, args))
+        return object()
+
+    def run(self):
+        while self.calls:
+            function, args = self.calls.pop(0)
+            function(*args)
+
+
+class LineYieldTest(unittest.TestCase):
+    """HoneyPotShell._advance of the patched shell/honeypot.py: the commands of a line run one after the other and
+    the reactor gets its turn between them (a typed line, a lost connection, the other sessions)."""
+
+    @staticmethod
+    def limit(name):
+        """The production value of _tpot_yield_<name> in the patched honeypot.py."""
+        source = (test_awk.patched_root() / "src/cowrie/shell/honeypot.py").read_text()
+        return int(re.search(rf"_tpot_yield_{name} = (\d+)", source).group(1))
+
+    @staticmethod
+    def shell_class(reactor, log, commands=1):
+        from tests.test_patch import method
+
+        source = (test_awk.patched_root() / "src/cowrie/shell/honeypot.py").read_text()
+        names = {"reactor": reactor}
+
+        class Shell:
+            _advancing = False
+            _advance_pending = False
+            _tpot_advance_later = None
+            _tpot_typeahead = []
+            _tpot_yield_commands = commands
+            _tpot_yield_in_loop = LineYieldTest.limit("in_loop")
+            _loop_depth = 0
+            _advance = method(source, "HoneyPotShell", "_advance", names)
+            _tpot_advance_again = method(source, "HoneyPotShell", "_tpot_advance_again", names)
+            _tpot_hand_on = method(source, "HoneyPotShell", "_tpot_hand_on", names)
+
+            def __init__(self, line, paused=()):
+                self.cmdpending = list(line)
+                self.stack = [self]
+                self.protocol = type("Protocol", (), {"cmdstack": self.stack})()
+                self.paused = set(paused)
+                self.finished = 0
+
+            def _busy(self):
+                return len(self.stack) > 1 and self in self.stack and self.stack[-1] is not self
+
+            def _finish(self):
+                self.finished += 1
+                log.append("finish")
+
+            def runCommand(self):
+                command = self.cmdpending.pop(0)
+                log.append(command)
+                if command in self.paused:
+                    return  # an async command (wget): its Deferred resumes the shell later
+                self._advance()  # exit() -> resume() -> _advance()
+
+        return Shell
+
+    def test_a_line_of_3000_commands_lets_the_reactor_run_between_them(self):
+        reactor, log = Reactor(), []
+        ticks = []
+
+        def tick():
+            ticks.append(len(log))
+            reactor.callLater(0, tick)
+
+        commands = self.limit("commands")
+        shell = self.shell_class(reactor, log, commands=commands)(["true"] * 3000)
+        reactor.callLater(0, tick)
+        shell._advance()
+        for _ in range(10000):
+            if shell.finished:
+                break
+            function, args = reactor.calls.pop(0)
+            function(*args)
+        self.assertEqual((log.count("true"), shell.finished), (3000, 1))
+        # a callback of the reactor ran after every `commands` commands
+        self.assertEqual(ticks[:3], [commands, 2 * commands, 3 * commands])
+        self.assertGreaterEqual(len(ticks), 3000 // commands)
+
+    def test_a_short_line_runs_in_one_go_as_upstream_does(self):
+        reactor, log = Reactor(), []
+        commands = self.limit("commands")
+        shell = self.shell_class(reactor, log, commands=commands)(["a"] * (commands - 1))
+        shell._advance()
+        self.assertEqual((log.count("a"), log[-1], reactor.calls), (commands - 1, "finish", []))
+
+    def test_a_long_line_yields_every_commands_limit(self):
+        reactor, log = Reactor(), []
+        commands = self.limit("commands")
+        shell = self.shell_class(reactor, log, commands=commands)(["a"] * (4 * commands))
+        shell._advance()
+        self.assertEqual((len(log), len(reactor.calls)), (commands, 1))
+        function, args = reactor.calls.pop(0)
+        function(*args)
+        self.assertEqual((len(log), len(reactor.calls)), (2 * commands, 1))
+
+    def test_the_steps_of_a_loop_yield_later_than_those_of_a_line(self):
+        reactor, log = Reactor(), []
+        steps = self.limit("in_loop") - 1
+        shell = self.shell_class(reactor, log, commands=self.limit("commands"))(["a"] * steps)
+        shell._loop_depth = 1
+        shell._advance()
+        self.assertEqual((log.count("a"), log[-1], len(reactor.calls)), (steps, "finish", 0))
+
+    def test_the_commands_of_a_line_run_in_order_and_the_prompt_follows_the_last(self):
+        reactor, log = Reactor(), []
+        shell = self.shell_class(reactor, log)(["a", "b", "c"])
+        shell._advance()
+        self.assertEqual(log, ["a"])  # the reactor has its turn before the next one
+        reactor.run()
+        self.assertEqual(log, ["a", "b", "c", "finish"])
+
+    def test_one_command_needs_no_turn_of_the_reactor(self):
+        reactor, log = Reactor(), []
+        shell = self.shell_class(reactor, log)(["a"])
+        shell._advance()
+        self.assertEqual((log, reactor.calls), (["a", "finish"], []))
+
+    def test_a_script_with_an_async_command_runs_as_before(self):
+        # cd /tmp; wget x; chmod +x x; ./x  (wget pauses until its download is done)
+        reactor, log = Reactor(), []
+        shell = self.shell_class(reactor, log)(["cd", "wget", "chmod", "./x"], paused={"wget"})
+        shell._advance()
+        reactor.run()
+        self.assertEqual(log, ["cd", "wget"])
+        shell._advance()  # the download is done: wget exits and resumes the shell
+        reactor.run()
+        self.assertEqual(log, ["cd", "wget", "chmod", "./x", "finish"])
+        self.assertEqual(shell.finished, 1)
+
+    def test_a_line_typed_while_the_line_runs_goes_after_it(self):
+        reactor, log = Reactor(), []
+        shell = self.shell_class(reactor, log)(["a", "b"])
+        shell._advance()
+        shell.cmdpending.append("typed")  # lineReceived: queue the statements, then _advance()
+        shell._advance()
+        self.assertEqual(log, ["a"])  # no second driver while one is waiting for the reactor
+        reactor.run()
+        self.assertEqual(log, ["a", "b", "typed", "finish"])
+
+    def test_a_shell_that_left_the_stack_runs_nothing_more(self):
+        reactor, log = Reactor(), []
+        shell = self.shell_class(reactor, log)(["a", "b", "c"])
+        shell._advance()
+        shell.stack.remove(shell)  # the connection was lost
+        reactor.run()
+        self.assertEqual(log, ["a"])
+
+    def test_a_failed_statement_carries_on_with_the_queue(self):
+        # _statement_failed -> _advance(): the same drive, so the line goes on after its turn of the reactor
+        reactor, log = Reactor(), []
+        cls = self.shell_class(reactor, log)
+
+        class Failing(cls):
+            def runCommand(self):
+                command = self.cmdpending.pop(0)
+                log.append(command)
+                if command == "bad":
+                    self.last_exit_code = 1
+                    self._advance()  # what _statement_failed does
+                    return
+                self._advance()
+
+        shell = Failing(["a", "bad", "b"])
+        shell._advance()
+        reactor.run()
+        self.assertEqual(log, ["a", "bad", "b", "finish"])
 
 
 if __name__ == "__main__":

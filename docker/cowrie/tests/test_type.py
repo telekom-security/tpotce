@@ -93,6 +93,22 @@ class TypeTest(unittest.TestCase):
         self.assertEqual(self.run_type(["sh"], path=debian), ("sh is /usr/bin/sh\n", 0))
         self.assertEqual(self.run_type(["sh"], which_dirs={"sh": ("bin",)}, path=debian), ("sh is /bin/sh\n", 0))
 
+    def test_bash_of_a_device_with_folders_of_its_own_searches_them(self):
+        # EdgeOS (bash, Debian 9 folders in Cowrie's merged tree): [shell] which_dirs names where a program is,
+        #   type reads it as which does; derived from the which_dirs of ash above, not recorded
+        debian = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        dirs = {"sh": ("bin",), "echo": ("bin",)}
+
+        def bash(args):
+            return self.run_type(args, path=debian, bash=True, which_dirs=dirs)
+
+        self.assertEqual(bash(["sh"]), ("sh is /bin/sh\n", 0))
+        self.assertEqual(bash(["-a", "sh"]), ("sh is /bin/sh\n", 0))
+        self.assertEqual(bash(["-p", "sh"]), ("/bin/sh\n", 0))
+        self.assertEqual(bash(["-a", "echo"]), ("echo is a shell builtin\necho is /bin/echo\n", 0))
+        # a name the table does not list is looked for in every folder of PATH
+        self.assertEqual(bash(["-a", "ls"]), ("ls is /usr/bin/ls\nls is /bin/ls\n", 0))
+
     def test_ash_without_the_key_has_history(self):
         # the BusyBox devices without their own builtin table: the 1.19.4 table with history (their ash keeps one)
         self.assertEqual(self.run_type(["history", "cd"]), ("history is a shell builtin\ncd is a shell builtin\n", 0))
@@ -127,12 +143,16 @@ class TypeTest(unittest.TestCase):
         self.assertEqual(bash(["--", "ls"]), ("ls is /usr/bin/ls\n", 0))
 
     def test_type_answers_on_every_persona(self):
+        # but on the DIR-859: its BusyBox msh has no type ("type: not found", tests/fixtures/msh.json)
         for persona in catalog.PERSONAS:
             with self.subTest(persona=persona.id):
                 cfg = configparser.ConfigParser(interpolation=None)
                 cfg.read_string(render.render_cfg(persona, draw(persona, 0), Path("/tmp/r"), Path("/tmp/k")))
                 skipped = cfg.get("shell", "skip_python_commands").split(",")
-                self.assertNotIn("type", skipped)
+                if persona.family == "dlink":
+                    self.assertIn("type", skipped)
+                else:
+                    self.assertNotIn("type", skipped)
 
     def test_fails_loudly_on_unknown_upstream(self):
         with tempfile.TemporaryDirectory() as handle:

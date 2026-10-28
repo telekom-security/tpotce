@@ -8,7 +8,9 @@ The host key algorithms (rsa-sha2-512, rsa-sha2-256 ...) must be Twisted's, sign
 with the key ssh_profiles names (SSHServerTransport._getHostKeys) and be what the
 patched factory advertises ([ssh] host_key_algorithms). The key exchanges of the profiles
 (TWISTED_KEX) are Twisted's, the patched factory offers [ssh] kex_algorithms and the patched transport
-sends [ssh] server_sig_algs; run after the patch."""
+sends [ssh] server_sig_algs, leaves ext-info-s out of the KEXINIT of a server that does not list it
+([ssh] ext_info_s, cut from the packet sendKexInit sends) and closes the connections of a persona
+without an SSH server ([ssh] drop_connections); run after the patch."""
 import argparse
 import sys
 from pathlib import Path
@@ -44,8 +46,28 @@ def twisted_support():
             # the patched transport replaces sendExtInfo: Twisted's server must send EXT_INFO through it
             "ext_info": hasattr(SSHServerTransport, "sendExtInfo")
             and "sendExtInfo" in inspect.getsource(SSHServerTransport._keySetup),
+            # the KEXINIT of Twisted: ext-info-s from _EXT_INFO_S, kept in ourKexInitPayload and sent with sendPacket
+            "kex_init": all(text in inspect.getsource(SSHServerTransport.sendKexInit)
+                            for text in ("self._EXT_INFO_S", "self.ourKexInitPayload = b\"\".join(",
+                                         "self.sendPacket(MSG_KEXINIT, self.ourKexInitPayload[1:])")),
             "key_types": key_types,
             "sign_types": "signatureType" in inspect.signature(Key.sign).parameters}
+
+
+def _cut_in_send_packet(transport):
+    """The ext-info-s cut is in the one sendPacket the class HoneyPotSSHTransport has (Cowrie's own, a later
+    definition would shadow it), before it pads."""
+    import ast
+    try:
+        tree = ast.parse(transport)
+    except SyntaxError:
+        return False
+    methods = [node for cls in ast.walk(tree) if isinstance(cls, ast.ClassDef) and cls.name == "HoneyPotSSHTransport"
+               for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "sendPacket"]
+    if len(methods) != 1:
+        return False
+    body = ast.get_source_segment(transport, methods[0]) or ""
+    return 'CowrieConfig.getboolean("ssh", "ext_info_s"' in body and "randbytes.secureRandom" in body
 
 
 def problems(twisted, cowrie_root):
@@ -76,6 +98,13 @@ def problems(twisted, cowrie_root):
         out.append("server-sig-algs: Twisted's server sends no EXT_INFO through sendExtInfo in _keySetup")
     if 'CowrieConfig.get("ssh", "server_sig_algs"' not in transport or "def sendExtInfo(self" not in transport:
         out.append("server-sig-algs: Cowrie (ssh/transport.py) does not send [ssh] server_sig_algs")
+    if not twisted.get("kex_init", False):
+        out.append("ext-info-s: Twisted's sendKexInit no longer sends ourKexInitPayload with sendPacket "
+                   "and ext-info-s from _EXT_INFO_S")
+    if not _cut_in_send_packet(transport):
+        out.append("ext-info-s: Cowrie (ssh/transport.py) does not read [ssh] ext_info_s in its one sendPacket")
+    if 'CowrieConfig.getboolean("ssh", "drop_connections"' not in transport:
+        out.append("no SSH server: Cowrie (ssh/transport.py) does not read [ssh] drop_connections")
     if 'CowrieConfig.get("ssh", "compression")' not in factory:
         out.append("compression: Cowrie (ssh/factory.py) does not read [ssh] compression")
     out += [f"compression not in Twisted or Cowrie: {name}"

@@ -3,6 +3,9 @@ import unittest
 from tests.helpers import DIST  # noqa: F401
 from tpot_personas import ssh_profiles as sp
 
+# the personas without an SSH server: the firmware of the DIR-859 ships telnetd only (catalog)
+NO_SSH_SERVER = {"dlink-dir859"}
+
 
 class ProfilesTest(unittest.TestCase):
     def test_profiles_only_use_twisted_algorithms(self):
@@ -12,6 +15,13 @@ class ProfilesTest(unittest.TestCase):
             self.assertTrue(set(profile.compression) <= sp.COMPRESSIONS, profile.name)
             self.assertTrue(set(profile.host_keys) <= sp.HOST_KEYS, profile.name)
             self.assertTrue(profile.ciphers and profile.macs and profile.host_keys)
+
+    def test_only_the_personas_without_an_ssh_server_have_no_profile(self):
+        from tpot_personas import catalog
+        self.assertEqual({p.id for p in catalog.PERSONAS if p.ssh_profile is None}, NO_SSH_SERVER)
+        for persona in catalog.PERSONAS:
+            if persona.ssh_profile is not None:
+                self.assertIn(persona.ssh_profile, sp.PROFILES, persona.id)
 
     def test_openssh_offers_nothing_legacy(self):
         self.assertFalse(set(sp.PROFILES["openssh"].ciphers + sp.PROFILES["openssh"].macs) & sp.LEGACY)
@@ -79,10 +89,12 @@ class HostKeyAlgorithmsTest(unittest.TestCase):
             "synology-dsm": ("rsa-sha2-512", "rsa-sha2-256", "ssh-rsa", "ecdsa-sha2-nistp256", "ssh-ed25519"),
             "zyxel-nas326": ("ssh-rsa", "ecdsa-sha2-nistp256", "ssh-ed25519"),
             "openwrt": ("ssh-ed25519", "rsa-sha2-256", "ssh-rsa"),
-            "dlink-dir859": ("ssh-rsa",), "tplink-archer-c7": ("ssh-rsa",), "ipcam": ("ssh-rsa",),
+            "tplink-archer-c7": ("ssh-rsa",), "ipcam": ("ssh-rsa",),
         }
-        self.assertEqual(set(wanted), set(catalog.ids()))
+        self.assertEqual(set(wanted) | NO_SSH_SERVER, set(catalog.ids()))
         for persona in catalog.PERSONAS:
+            if persona.id in NO_SSH_SERVER:
+                continue
             for release in persona.releases:
                 with self.subTest(persona=persona.id, release=release.label):
                     names = sp.host_key_algorithms(sp.PROFILES[persona.ssh_profile], release)
@@ -94,7 +106,8 @@ class HostKeyAlgorithmsTest(unittest.TestCase):
 # The server KEXINIT and the server-sig-algs of the real servers (ssh -vv of an OpenSSH 10.0 client in a
 #   container: refs/ssh-devices.json and ssh-devices-e.json of round 4), less what Twisted 26.4 has not
 #   (sntrup761x25519, mlkem768x25519, diffie-hellman-group14-sha256 / group16 / group18, group1-sha1,
-#   kex-strict, kexguess2); ext-info-s is Twisted's own
+#   kex-strict, kexguess2); ext-info-s is Twisted's own, the patched transport
+#   cuts it where ext_info_s() says false
 _KEX_MODERN = ("curve25519-sha256", "curve25519-sha256@libssh.org", "ecdh-sha2-nistp256", "ecdh-sha2-nistp384",
                "ecdh-sha2-nistp521")
 _KEX_GEX = _KEX_MODERN + ("diffie-hellman-group-exchange-sha256",)
@@ -124,12 +137,11 @@ KEX_WANTED = {
     "zyxel-nas326": (("curve25519-sha256@libssh.org", "ecdh-sha2-nistp256", "ecdh-sha2-nistp384",
                       "ecdh-sha2-nistp521", "diffie-hellman-group-exchange-sha256", "diffie-hellman-group14-sha1"),
                      ""),
-    # dropbear without ECC (no ECDSA host key): curve25519 and group14-sha1, no EXT_INFO before 2020.79;
-    #   2012.55 had DH only, its curve25519-sha256@libssh.org is kept for the clients of today
-    "dlink-dir859": (("curve25519-sha256@libssh.org", "diffie-hellman-group14-sha1"), ""),
     # dropbear 2019.78 of the Archer C7 (group14-sha256, group14-sha1, group1-sha1 in its binary): the
     #   Twisted subset and the kept curve25519-sha256@libssh.org, no EXT_INFO, ssh-rsa only
     "tplink-archer-c7": (("curve25519-sha256@libssh.org", "diffie-hellman-group14-sha1"), ""),
+    # dropbear without ECC (no ECDSA host key): curve25519 and group14-sha1, no EXT_INFO before 2020.79;
+    #   2012.55 had DH only, its curve25519-sha256@libssh.org is kept for the clients of today
     "ipcam": (("curve25519-sha256@libssh.org", "diffie-hellman-group14-sha1"), ""),
 }
 OPENWRT_SIGS = {"21.02.7": "ssh-ed25519,rsa-sha2-256,ssh-rsa",
@@ -139,8 +151,10 @@ OPENWRT_SIGS = {"21.02.7": "ssh-ed25519,rsa-sha2-256,ssh-rsa",
 class KeyExchangeTest(unittest.TestCase):
     def test_every_persona_release(self):
         from tpot_personas import catalog
-        self.assertEqual(set(KEX_WANTED) | {"openwrt"}, set(catalog.ids()))
+        self.assertEqual(set(KEX_WANTED) | {"openwrt"} | NO_SSH_SERVER, set(catalog.ids()))
         for persona in catalog.PERSONAS:
+            if persona.id in NO_SSH_SERVER:
+                continue
             profile = sp.PROFILES[persona.ssh_profile]
             for release in persona.releases:
                 with self.subTest(persona=persona.id, release=release.label):
@@ -154,9 +168,34 @@ class KeyExchangeTest(unittest.TestCase):
                     self.assertEqual(sp.kex_algorithms(profile, release), kex)
                     self.assertEqual(sp.server_sig_algs(profile, release), sigs)
 
+    def test_only_openssh_from_7_2_lists_ext_info_s(self):
+        # RFC 8308: OpenSSH names ext-info-s in its KEXINIT since 7.2; dropbear's server never does (it
+        # answers the ext-info-c of the client with an EXT_INFO from 2020.79, svr-kex.c, but only the client
+        # side algorithm list has an ext-info entry)
+        from tpot_personas import catalog
+        seen = set()
+        for persona in catalog.PERSONAS:
+            if persona.ssh_profile is None:
+                continue
+            profile = sp.PROFILES[persona.ssh_profile]
+            for release in persona.releases:
+                with self.subTest(persona=persona.id, release=release.label):
+                    product, version = sp.server_version(release)
+                    wanted = product == "openssh" and version >= (7, 2)
+                    seen.add((product, wanted))
+                    self.assertIs(sp.ext_info_s(profile, release), wanted)
+        self.assertEqual(seen, {("openssh", True), ("openssh", False), ("dropbear", False)})
+        # dropbear 2020.81 sends server-sig-algs and still lists no ext-info-s
+        openwrt = next(p for p in catalog.PERSONAS if p.id == "openwrt")
+        for release in openwrt.releases:
+            self.assertNotEqual(sp.server_sig_algs(sp.PROFILES[openwrt.ssh_profile], release), "")
+            self.assertFalse(sp.ext_info_s(sp.PROFILES[openwrt.ssh_profile], release))
+
     def test_only_twisted_kex_and_curve25519_always(self):
         from tpot_personas import catalog
         for persona in catalog.PERSONAS:
+            if persona.ssh_profile is None:
+                continue
             for release in persona.releases:
                 with self.subTest(persona=persona.id, release=release.label):
                     names = sp.kex_algorithms(sp.PROFILES[persona.ssh_profile], release)

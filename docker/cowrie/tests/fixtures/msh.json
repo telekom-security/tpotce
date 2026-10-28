@@ -1,0 +1,205 @@
+{
+ "_source": "BusyBox msh (v1.14.1) of the D-Link DIR-859 A1 1.05B03 rootfs (w1 download, rootfs_105b03) executed inside a linux/arm64 debian:12 container with qemu-user-static (qemu-mips-static), rootfs mounted read-only at /fw, every case from a fresh /tmp/w (folders d (with d/f), e, t; files file, a, b) as root, env -i so the shell shows its own defaults; recorded by w2/fw/scripts/msh_record.py + msh_run.py on 2026-10-21; nothing normalised (no PIDs or times in the outputs; `echo $$ $PPID | wc -w` is a word count); a selection of the cases of w2/fw/msh.json of the 2026-10-21 wave (sections _msh_c and _msh_pty, values unchanged). Left out: the cases of programs (kill, which, ls, test, env, head, printf, grep): under qemu-mips-static -L the shell ran the programs of the helper container (the GNU text of ls -d ~, no kill in debian:12), not the applets of the firmware; and of the shell's own cases set, set | head -20, exit 3, echo $PS1 $PS2, PS1='x> ', cat < /nosuch, read, export, the redirections, the 5000-character line and the stdin runs (no test of the persona reads them; the full set is in w2/fw/msh.json)",
+ "images": {
+  "fw_dlink_dir859_105b03_msh_c": {
+   "kind": "busybox uclibc msh",
+   "image": "firmware D-Link DIR-859 A1 1.05B03, BusyBox v1.14.1 (2016-06-28 10:53:08 CST), MIPS32 BE static; qemu-mips-static in w2fw-rec:arm64 (debian:12)",
+   "digest": "busybox sha256 65f6d0e55832a2753db13ccd64787e854f29fcea17b1cbb77cdc780fb7c91f4f",
+   "locale": "",
+   "uid": 0,
+   "note": "qemu-mips-static -L /fw /fw/bin/busybox msh -c CASE; env -i; stdin /dev/null except `read x`; cwd /tmp/w; case ./nx after `: > nx; chmod 644 nx`; argv[0] of the guest = busybox (so $0 = msh)",
+   "cases": {
+    "nosuch": [
+     "",
+     "nosuch: not found\n",
+     127
+    ],
+    "nosuch; echo $?": [
+     "127\n",
+     "nosuch: not found\n",
+     0
+    ],
+    "/nosuch/x": [
+     "",
+     "/nosuch/x: not found\n",
+     127
+    ],
+    "./nx": [
+     "",
+     "./nx: can't execute\n",
+     126
+    ],
+    "/tmp": [
+     "",
+     "/tmp: can't execute\n",
+     126
+    ],
+    "help": [
+     "",
+     "",
+     0
+    ],
+    "umask": [
+     "",
+     "",
+     0
+    ],
+    "alias": [
+     "",
+     "alias: not found\n",
+     127
+    ],
+    "type ls": [
+     "",
+     "type: not found\n",
+     127
+    ],
+    "type nosuch": [
+     "",
+     "type: not found\n",
+     127
+    ],
+    "history": [
+     "",
+     "history: not found\n",
+     127
+    ],
+    "jobs": [
+     "",
+     "jobs: not found\n",
+     127
+    ],
+    "ulimit -a | head -2": [
+     "",
+     "ulimit: not found\n",
+     0
+    ],
+    "unset HOME; echo $HOME": [
+     "/\n",
+     "unset: not found\n",
+     0
+    ],
+    "cd; pwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "x=1; echo $((x+1))": [
+     "",
+     "syntax error\n",
+     255
+    ],
+    "echo \"$(echo hi)\"": [
+     "echo hi)\n",
+     "",
+     0
+    ],
+    "echo ${#x}": [
+     "\n",
+     "",
+     0
+    ],
+    "echo ~": [
+     "~\n",
+     "",
+     0
+    ],
+    "if; then": [
+     "",
+     "syntax error\n",
+     255
+    ],
+    "cd /nosuch; echo $?": [
+     "",
+     "/nosuch: bad directory\n",
+     255
+    ],
+    "echo a \\\nb": [
+     "a b\n",
+     "",
+     0
+    ]
+   }
+  },
+  "fw_dlink_dir859_105b03_msh_pty": {
+   "kind": "busybox uclibc msh",
+   "image": "firmware D-Link DIR-859 A1 1.05B03, BusyBox v1.14.1 (2016-06-28 10:53:08 CST), MIPS32 BE static; qemu-mips-static in w2fw-rec:arm64 (debian:12)",
+   "digest": "busybox sha256 65f6d0e55832a2753db13ccd64787e854f29fcea17b1cbb77cdc780fb7c91f4f",
+   "locale": "",
+   "uid": 0,
+   "note": "interactive msh on a pty (python pty.fork, lines typed with 0.6 s between them, echo of the tty included, \\r\\n line ends); key = typed input, value = [transcript of the pty (stdout and stderr merged), \"\", exit status]",
+   "cases": {
+    "echo a\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# echo a\r\na\r\n# exit\r\n",
+     "",
+     0
+    ],
+    "nosuch\necho $?\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# nosuch\r\nnosuch: not found\r\n# echo $?\r\n127\r\n# exit\r\n",
+     "",
+     0
+    ],
+    "/tmp\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# /tmp\r\n/tmp: can't execute\r\n# exit\r\n",
+     "",
+     126
+    ],
+    "help\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# help\r\n\r\nBuilt-in commands:\r\n------------------\r\n\t. : break cd continue eval exec exit export help login newgrp\r\n\tread readonly set shift times trap umask wait\r\n\r\n# exit\r\n",
+     "",
+     0
+    ],
+    "umask\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# umask\r\n0022\r\n# exit\r\n",
+     "",
+     0
+    ],
+    "history\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# history\r\nhistory: not found\r\n# exit\r\n",
+     "",
+     127
+    ],
+    "type ls\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# type ls\r\ntype: not found\r\n# exit\r\n",
+     "",
+     127
+    ],
+    "alias\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# alias\r\nalias: not found\r\n# exit\r\n",
+     "",
+     127
+    ],
+    "jobs\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# jobs\r\njobs: not found\r\n# exit\r\n",
+     "",
+     127
+    ],
+    "ulimit -a\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# ulimit -a\r\nulimit: not found\r\n# exit\r\n",
+     "",
+     127
+    ],
+    "fi\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# fi\r\nsyntax error\r\n# exit\r\n",
+     "",
+     255
+    ],
+    "if true\nthen\necho y\nfi\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# if true\r\n> then\r\n> echo y\r\n> fi\r\ny\r\n# exit\r\n",
+     "",
+     0
+    ],
+    "cd /nosuch\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# cd /nosuch\r\n/nosuch: bad directory\r\n# exit\r\n",
+     "",
+     1
+    ],
+    "echo a \\\nb\nexit\n": [
+     "\r\n\r\nBusyBox v1.14.1 (2016-06-28 10:53:08 CST) built-in shell (msh)\r\nEnter 'help' for a list of built-in commands.\r\n\r\n# echo a \\\r\n# b\r\na b\r\n# exit\r\n",
+     "",
+     0
+    ]
+   }
+  }
+ }
+}

@@ -130,6 +130,41 @@ def _device(pid, family, os_id, user, shell, arch, ssh_profile, managers, releas
     )
 
 
+# the openssl package of each level: the newest build of the level's OpenSSL published before its update,
+#   as the openssl program of the persona answers (tpot_personas/openssl_releases.json has each build)
+#   Ubuntu: Launchpad getPublishedSources source_name=openssl (pockets -updates / -security, date_published)
+#   Debian: snapshot.debian.org (first seen) and the point releases of bookworm / trixie
+#   Raspberry Pi OS: the +rpt1 builds of archive.raspberrypi.com, Debian's where it is newer (2026-05-15)
+#   CentOS 7: the file dates of https://vault.centos.org/7.9.2009/updates/x86_64/Packages/ (-19.el7 of os)
+OPENSSL_PACKAGES = {
+    ("noble", "2025-10-20"): "3.0.13-0ubuntu3.6", ("noble", "2025-10-25"): "3.0.13-0ubuntu3.6",
+    ("noble", "2026-02-25"): "3.0.13-0ubuntu3.7", ("noble", "2026-05-20"): "3.0.13-0ubuntu3.9",
+    ("noble", "2026-07-20"): "3.0.13-0ubuntu3.11",
+    ("jammy", "2025-05-20"): "3.0.2-0ubuntu1.19", ("jammy", "2025-12-15"): "3.0.2-0ubuntu1.20",
+    ("jammy", "2026-04-20"): "3.0.2-0ubuntu1.23", ("jammy", "2026-08-25"): "3.0.2-0ubuntu1.26",
+    ("trixie", "2025-09-08"): "3.5.1-1", ("trixie", "2025-11-20"): "3.5.4-1~deb13u1",
+    ("trixie", "2026-03-05"): "3.5.4-1~deb13u2", ("trixie", "2026-05-20"): "3.5.6-1~deb13u1",
+    ("trixie", "2026-09-01"): "3.5.7-1~deb13u2",
+    ("bookworm", "2023-10-10"): "3.0.11-1~deb12u1", ("bookworm", "2024-02-12"): "3.0.11-1~deb12u2",
+    ("bookworm", "2025-05-20"): "3.0.16-1~deb12u1", ("bookworm", "2026-05-12"): "3.0.20-1~deb12u1",
+    ("bookworm", "2026-07-06"): "3.0.20-1~deb12u2",
+    ("raspios", "2024-10-25"): "3.0.14-1~deb12u2+rpt1", ("raspios", "2025-01-30"): "3.0.15-1~deb12u1+rpt1",
+    ("raspios", "2025-09-20"): "3.0.17-1~deb12u2+rpt1", ("raspios", "2026-03-15"): "3.0.18-1~deb12u2+rpt1",
+    ("raspios", "2026-05-15"): "3.0.20-1~deb12u1",
+    ("centos", "2020-11-12"): "1:1.0.2k-19.el7", ("centos", "2023-03-15"): "1:1.0.2k-25.el7_9",
+    ("centos", "2023-12-13"): "1:1.0.2k-26.el7_9", ("centos", "2024-06-10"): "1:1.0.2k-26.el7_9",
+}
+# the binary packages of the openssl source a release has installed (one version each)
+OPENSSL_BINARIES = {"noble": ("openssl", "libssl3t64"), "jammy": ("openssl", "libssl3"),
+                    "trixie": ("openssl", "libssl3t64", "openssl-provider-legacy"), "bookworm": ("openssl",),
+                    "raspios": ("openssl",), "centos": ("openssl", "openssl-libs")}
+
+
+def _openssl(key, updated):
+    """{package: version} of the openssl packages of a level (OPENSSL_PACKAGES)."""
+    return dict.fromkeys(OPENSSL_BINARIES[key], OPENSSL_PACKAGES[(key, updated)])
+
+
 def _ubuntu(updated, codename, os_version, openssh, openssh_before, kernel, uts, builder, compiler, openssl, packages,
             flavor="generic", providers=("kvm", "do")):
     """One Ubuntu patch level. openssh is the package version (1:9.6p1-3ubuntu13.14)."""
@@ -145,7 +180,7 @@ def _ubuntu(updated, codename, os_version, openssh, openssh_before, kernel, uts,
         kernel_build=uts,
         os_version=os_version,
         os_version_id=version_id,
-        packages={"openssh-client": openssh, "openssh-server": openssh, **packages},
+        packages={"openssh-client": openssh, "openssh-server": openssh, **_openssl(codename, updated), **packages},
         extra={"codename": codename, "codename_long": long_name, "debian_version": debian_version,
                "kernel_builder": f"buildd@{builder}", "kernel_compiler": compiler, "first_install": first,
                "updated": updated, "providers": providers,
@@ -154,8 +189,9 @@ def _ubuntu(updated, codename, os_version, openssh, openssh_before, kernel, uts,
 
 
 def _debian(updated, codename, point, portable, openssh, openssh_before, kernel, kernel_pkg, kernel_date, compiler,
-            openssl, packages):
-    """One Debian patch level. portable is what sshd names (9.2p1, 10.0p2)."""
+            openssl, packages, openssl_key=None):
+    """One Debian patch level. portable is what sshd names (9.2p1, 10.0p2); openssl_key: the row of its
+    openssl packages in OPENSSL_PACKAGES (the codename)."""
     revision = openssh.split("-", 1)[1]
     major = {"bookworm": "12", "trixie": "13"}[codename]
     extra = {"codename": codename, "debian_version": point, "version_full": codename == "trixie",
@@ -171,7 +207,8 @@ def _debian(updated, codename, point, portable, openssh, openssh_before, kernel,
         kernel_build=f"#1 SMP PREEMPT_DYNAMIC Debian {kernel_pkg} ({kernel_date})",
         os_version=f"{major} ({codename})",
         os_version_id=major,
-        packages={"openssh-client": openssh, "openssh-server": openssh, **packages},
+        packages={"openssh-client": openssh, "openssh-server": openssh, **_openssl(openssl_key or codename, updated),
+                  **packages},
         extra=extra,
     )
 
@@ -191,7 +228,7 @@ def _raspios(updated, image, pi_gen, point, openssh, openssh_before, kernel, ker
              packages):
     """Raspberry Pi OS Bookworm arm64: Debian's userland, the Pi kernel per board."""
     release = _debian(updated, "bookworm", point, "9.2p1", openssh, openssh_before, f"{kernel}+rpt-rpi-{{flavor}}",
-                      kernel_pkg, kernel_date, compiler, openssl, packages)
+                      kernel_pkg, kernel_date, compiler, openssl, packages, openssl_key="raspios")
     return replace(release, label=f"{image} {kernel_pkg}",
                    kernel_build=f"#1 SMP PREEMPT Debian {kernel_pkg} ({kernel_date})",
                    extra={**release.extra, "kernel_builder": "serge@raspberrypi.com", "flavors": PI_FLAVORS,
@@ -234,7 +271,7 @@ def _centos(updated, kernel, uts, openssh, openssh_before, packages):
         os_version="7 (Core)",
         os_version_id="7",
         packages={"yum": "3.4.3-168.el7.centos", "openssh-server": openssh, "wget": "1.14-18.el7_6.1",
-                  "net-tools": "2.0-0.25.20131004git.el7", **packages},
+                  "net-tools": "2.0-0.25.20131004git.el7", **_openssl("centos", updated), **packages},
         extra=extra,
     )
 
@@ -430,6 +467,7 @@ BOOKWORM = _chain(_medium(_BOOKWORM_LEVELS[0]), _medium(_BOOKWORM_LEVELS[1]), *_
 _RHEL_COMPILER_94 = "gcc (GCC) 11.4.1 20231218 (Red Hat 11.4.1-4), GNU ld version 2.35.2-43.el9"
 _RHEL9_LEVELS = (
     # 9.4 EUS; /proc/version verbatim from https://github.com/falcosecurity/falco/issues/3610
+    # kernel 427.55.1 is the last 9.4 EUS kernel up to 2025-02-20 (RHSA-2025:1658 of 2025-02-19, Red Hat CSAF data)
     _rhel("2025-02-20", 4, "5.14.0-427.55.1", "#1 SMP PREEMPT_DYNAMIC Mon Feb 10 12:37:38 EST 2025",
           "mockbuild@x86-64-03.build.eng.rdu2.redhat.com", _RHEL_COMPILER_94, "8.7p1-38.el9_4.4",
           "8.7p1-38.el9_4.1", "OpenSSL 3.0.7 1 Nov 2022",
@@ -574,19 +612,19 @@ DLINK = (
     # source: https://legacyfiles.us.dlink.com/DIR-859/REVA/FIRMWARE/ (DIR-859_REVA_FIRMWARE_1.05B03.zip:
     #   release note "June, 2016", kernel and BusyBox from the image; /etc/config of its squashfs)
     # unverified: the day of the release (the note names the month)
-    # deviation on purpose: the 1.05B03 image ships telnetd only (no dropbear, no sshd), but
-    #   T-Pot serves SSH on every persona, so the persona answers with a dropbear of the same SDK era
-    #   (2012.55, as the TP-Link firmware of that time); D-Link's GPL archive (tsd.dlink.com.tw) gives its
-    #   sources only after a registration, so no DIR-859 release is known to ship one
-    _firmware("1.05B03", "2016-06-30", "2019-12-26", "SSH-2.0-dropbear_2012.55", "Dropbear sshd 2012.55",
+    # the 1.05B03 image ships telnetd only (no dropbear, no sshd): no SSH server and no ssh client (banner
+    #   and ssh -V empty); while the persona runs, the SSH port of T-Pot takes the connection and closes it
+    #   without a banner ([ssh] drop_connections), as a port forwarded to a device without an sshd
+    _firmware("1.05B03", "2016-06-30", "2019-12-26", "", "",
               *_DLINK_KERNEL, "1.05", "1.05", busybox="BusyBox v1.14.1 (2016-06-28 10:53:08 CST)", buildrev="b03",
               image_sign="wrgac37_dlink.2013gui_dir859"),
     # source: https://legacyfiles.us.dlink.com/DIR-859/REVA/FIRMWARE/ (DIR-859_REVA_FIRMWARE_1.07B03_HOTFIX.zip,
     #   release note "December 26, 2019", the last firmware of the DIR-859)
-    # unverified: kernel and BusyBox (the 1.07 images are encrypted): the kernel of 1.05B03, BusyBox
-    #   rebuilt on the image date
-    _firmware("1.07B03", "2019-12-26", None, "SSH-2.0-dropbear_2012.55", "Dropbear sshd 2012.55",
-              *_DLINK_KERNEL, "1.07", "1.07", busybox="BusyBox v1.14.1 (2019-12-16 17:42:08 CST)", buildrev="b03",
+    # unverified: kernel and BusyBox (the 1.07B03 image is encrypted): the kernel of 1.05B03, the BusyBox banner
+    #   of the 1.07b02 beta (same applets; the date is the recorded one of the beta, not derived); telnetd
+    #   only, as 1.05B03
+    _firmware("1.07B03", "2019-12-26", None, "", "",
+              *_DLINK_KERNEL, "1.07", "1.07", busybox="BusyBox v1.14.1 (2019-01-24 09:05:19 CST)", buildrev="b03",
               image_sign="wrgac37_dlink.2013gui_dir859"),
 )
 
@@ -608,6 +646,9 @@ def _tplink(build, version, rel, released, superseded, uts, builder, busybox, ro
 
 # BusyBox, dropbear 2019.78, iproute2 3.3.0 and the kernel 3.3.8 (module vermagic) from the squashfs of each
 #   US image; released / superseded: the dates of the download page; the root squashfs in KiB as df shows it
+# the images have no telnet daemon (their BusyBox has no telnetd applet); the persona keeps Telnet, a deviation
+#   on purpose: T-Pot records Telnet on every persona, served by a /usr/sbin/telnetd of the persona's own
+#   (devices.SESSION_TELNETD)
 TPLINK = (
     # source: https://www.tp-link.com/us/support/download/archer-c7/v5/ (Archer C7(US)_V5_211210, 2022-01-29)
     _tplink("211210", "1.2.0", "51212", "2022-01-29", "2022-11-08", "#5 Thu Nov 25 12:02:36 CST 2021",
@@ -629,7 +670,8 @@ ZYXEL_HARDWARE = (
              board="Marvell Armada 380/385 (Device Tree)"),
 )
 _ZYXEL_GCC = "gcc version 4.8.5 20150209 (prerelease) (crosstool-NG 1.21.0) "
-# OpenSSH 6.7p1 and OpenSSL 1.0.2h from the system image (sysdisk) of V5.21(AAZF.14)C0
+# OpenSSH 6.7p1 and OpenSSL 1.0.2h from the system image (sysdisk) of V5.21(AAZF.14)C0; its /usr/bin/openssl
+#   (openssl_build: tpot_personas/openssl_releases.json) prints the same OpenSSL, that of AAZF.18 is the same file
 _ZYXEL_SSH = ("SSH-2.0-OpenSSH_6.7p1", "OpenSSH_6.7p1, OpenSSL 1.0.2h  3 May 2016")
 ZYXEL = (
     # source: https://www.zyxel.com/global/en/support/download?model=nas326 (521AAZF14C0.pdf, "June 1, 2023";
@@ -637,13 +679,13 @@ ZYXEL = (
     # unverified: superseded by AAZF.16 (2024-01-10, no AAZF.15 release note)
     _firmware("5.21(AAZF.14)C0", "2023-06-01", "2024-01-10", *_ZYXEL_SSH, "3.10.39",
               "#1 Fri May 26 10:10:07 CST 2023", "root@twsvnnt01652-01", _ZYXEL_GCC, "V5.21(AAZF.14)C0", "5.21",
-              busybox="BusyBox v1.19.4 (2023-05-26 10:02:27 CST)"),
+              busybox="BusyBox v1.19.4 (2023-05-26 10:02:27 CST)", openssl_build="zyxel_1.0.2h"),
     # source: https://www.zyxel.com/global/en/support/download?model=nas326 (521AAZF18C0.pdf, "June 17, 2024",
     #   the last firmware listed; kernel and the BusyBox of its initramfs from the image)
     # unverified: OpenSSL as in AAZF.14 (sshd of the system image: OpenSSH_6.7p1)
     _firmware("5.21(AAZF.18)C0", "2024-06-17", None, *_ZYXEL_SSH, "3.10.39",
               "#1 Thu Jun 6 16:47:41 CST 2024", "root@twsvnnt01652-01", _ZYXEL_GCC, "V5.21(AAZF.18)C0", "5.21",
-              busybox="BusyBox v1.19.4 (2024-06-06 16:40:04 CST)"),
+              busybox="BusyBox v1.19.4 (2024-06-06 16:40:04 CST)", openssl_build="zyxel_1.0.2h"),
 )
 
 # MT7621A routers with NOR flash (MIPS 1004Kc, 2 cores x 2 VPEs, 880 MHz, 128 MB); hardware.disk_kb is the
@@ -671,6 +713,8 @@ def _openwrt(version, revision, released, kernel, uts, compiler, dropbear, busyb
 
 # kernel, BusyBox and the dropbear package from the ramips/mt7621 sysupgrade images; dropbear of OpenWrt
 #   sends no version in its banner; df of /rom: the squashfs in 256 KiB blocks, kernel_kb the uImage
+# the images have no telnet daemon (their BusyBox has no telnetd applet); the persona keeps Telnet, a deviation
+#   on purpose as on the Archer C7 (devices.SESSION_TELNETD)
 OPENWRT = (
     # source: https://openwrt.org/releases/21.02/notes-21.02.7 (2023-05-01, r16847-f8282da11e, Linux 5.4.238)
     _openwrt("21.02.7", "r16847-f8282da11e", "2023-05-01", "5.4.238", "#0 SMP Mon Apr 17 13:15:36 2023",
@@ -693,8 +737,14 @@ QNAP_HARDWARE = (
 def _qts(version, number, build, released, superseded, uts, openssh, openssl):
     # kernel 5.10.60 and BusyBox 1.24.1: QNAP's GPL sources of QTS 5.2.3 build 20250218 (SourceForge qosgpl,
     #   QTS_Kernel_5.2.3.20250218.0 linux-5.10/Makefile, QTS_OSS_5.2.3.20250218.0 busybox-1.24.1)
+    # bash 3.2.57 of the same QTS_OSS_5.2.3.20250218 tree (parts .0 to .4, one gzip stream): src/bash-3.2.48 at
+    #   patch level 57, built for x86_64-QNAP-linux-gnu (gcc 4.9.2, glibc 2.21); its bash --version was run
+    #   under qemu (devices.QNAP_BASH_VERSION). The QTS image itself is encrypted and was not read: what a NAS
+    #   prints is derived from QNAP's GPL build, as for its BusyBox; unverified: where QTS installs bash, and
+    #   bash on 5.2.6 / 5.2.8 (taken as 5.2.3's, no GPL tree of them read)
     # unverified: uname -v (built the night of the build date), builder and compiler of the QNAP kernel
-    #   (gcc 8.4.0, binutils assumed), the OpenSSH / OpenSSL of each build; a 5.10 kernel names the
+    #   (gcc 8.4.0, binutils assumed), the OpenSSH / OpenSSL of 5.2.6 and 5.2.8 (no GPL tree of them read; the
+    #   OpenSSH of 5.2.3 is read from its GPL tree, below); a 5.10 kernel names the
     #   compiler as `cc --version` and the linker (the format of Linux 5.8 and later); the build time of
     #   BusyBox (taken as the night of the build like the kernel)
     clock = re.search(r"\d\d:\d\d:\d\d", uts).group()
@@ -702,14 +752,21 @@ def _qts(version, number, build, released, superseded, uts, openssh, openssl):
                      f"OpenSSH_{openssh}, {openssl}", "5.10.60-qnap", uts, "root@U16BuildServer141",
                      "gcc (GCC) 8.4.0, GNU ld (GNU Binutils) 2.32", f"{version}.{number} build {build}", version,
                      build=build, number=number,
-                     busybox=f"BusyBox v1.24.1 ({build[:4]}-{build[4:6]}-{build[6:]} {clock} CST)")
+                     busybox=f"BusyBox v1.24.1 ({build[:4]}-{build[4:6]}-{build[6:]} {clock} CST)",
+                     bash="3.2.57(1)-release")
 
 
 # QTS 5.2 builds of the release notes; superseded by the next build of the notes
 QNAP = (
     # source: https://www.qnap.com/en/release-notes/qts (QTS 5.2.3.3006 build 20250108, 2025-01-10)
+    # OpenSSH 9.8p1 of QNAP's GPL tree of 5.2.3 (20250218): version.h of src/openssh-7.0p1 (the folder name is
+    #   older than its contents) says OpenSSH_9.8 / p1, the strings of its ssh and sshd as well; the banner sends
+    #   SSH_VERSION (kex.c of 9.8p1). The OpenSSL of ssh -V is inferred: the same tree (build 20250218) holds the
+    #   upstream tarball openssl-3.0.9.tar.gz in src/openssl-3.0.9 (a folder name alone can be stale, the
+    #   tarball is the stronger sign) and the binaries link libcrypto.so.3; ssh -V needs QNAP's libraries and
+    #   was not run
     _qts("5.2.3", "3006", "20250108", "2025-01-10", "2025-03-17", "#1 SMP Wed Jan  8 02:31:17 CST 2025", "9.8p1",
-         "OpenSSL 3.0.15 3 Sep 2024"),
+         "OpenSSL 3.0.9 30 May 2023"),
     # source: https://www.qnap.com/en/release-notes/qts (QTS 5.2.6.3229 build 20250818, 2025-08-21)
     _qts("5.2.6", "3229", "20250818", "2025-08-21", "2025-09-25", "#1 SMP Mon Aug 18 02:27:40 CST 2025", "9.9p2",
          "OpenSSL 3.0.16 11 Feb 2025"),
@@ -742,6 +799,7 @@ def _dsm(version, build, smallfix, released, superseded, uts, builddate, openssl
 # DSM updates of the release notes of the DS920+ / DS1618+; superseded: the next DSM a box of that level
 #   is offered (7.2.1 Update 5 -> 7.2.2-72803, 7.2.2 Update 4 -> 7.3)
 SYNOLOGY = (
+    # unverified: not in Synology's GPL archive; the DSM image is not open source and is not read
     # source: https://www.synology.com/en-global/releaseNote/DSM?model=DS920%2B (7.2.1-69057 Update 5, 2024-04-08)
     _dsm("7.2.1", "69057", "5", "2024-04-08", "2024-08-26", "#69057 SMP Wed Mar 27 18:12:44 CST 2024",
          "2024/03/27", "OpenSSL 3.0.13 30 Jan 2024"),
@@ -762,10 +820,18 @@ _EDGEOS_SSH = ("SSH-2.0-OpenSSH_7.4p1 Debian-10+deb9u7", "OpenSSH_7.4p1 Debian-1
 _EDGEOS_GCC = "gcc version 6.3.0 20170516 (Debian 6.3.0-18) "
 
 
+# /usr/bin/openssl of the images (the openssl package of their var/lib/dpkg/status; openssl_build:
+#   tpot_personas/openssl_releases.json): hotfix.2 Debian 9's 1.1.0l-1~deb9u1, hotfix.7 Ubiquiti's build of
+#   bullseye's 1.1.1n; sshd stays linked with OpenSSL 1.0.2u. Derived: their list -commands and help -help
+#   are those of the same OpenSSL in debian:9 and debian:10 (the other texts are the images')
+_EDGEOS_OPENSSL = {2: "1.1.0l-1~deb9u1", 7: "1.1.1n-0+deb11u4.ui1"}
+
+
 def _edgeos(hotfix, image, released, superseded, uts, builder, busybox, squashfs_kb):
     return _firmware(f"2.0.9-hotfix.{hotfix}", released, superseded, *_EDGEOS_SSH, "4.14.54-UBNT", uts, builder,
                      _EDGEOS_GCC, f"v2.0.9-hotfix.{hotfix}", "9", packages={"dpkg": "1.18.25", "apt": "1.4.10"},
-                     image=image, busybox=busybox, squashfs_kb=squashfs_kb, deb_arch="mipsel")
+                     image=image, busybox=busybox, squashfs_kb=squashfs_kb, deb_arch="mipsel",
+                     openssl_build=f"edgeos_{_EDGEOS_OPENSSL[hotfix]}")
 
 
 EDGEOS = (
@@ -783,7 +849,9 @@ EDGEOS = (
 # IP camera in the style of Hikvision's DS-2CD2xxx: one Cortex-A7 (HiSilicon class SoC), 64 or 128 MB for
 #   Linux (mem= of the command line, the rest for the video buffers), a dav partition with the application;
 # unverified: all values of the camera (kernel, toolchain, BusyBox, dropbear and the firmware strings follow
-#   the version pairs of the brief, not one image), the dates of the firmware
+#   the version pairs of the brief, not one image), the dates of the firmware; the firmware image is Hikvision's
+#   own (proprietary) and is not procured: the file commands take a recorded build of the BusyBox version of
+#   each release as a stand-in (system.FS_BUSYBOX_VERSIONS)
 IPCAM_HARDWARE = (
     Hardware(cpus=1, cpu_model="ARMv7 Processor rev 5 (v7l)", mem_kb=60268, disk_kb=12288,
              board="Generic DT based system"),
@@ -848,9 +916,10 @@ PERSONAS = (
             ("dgx:dgx{nn}", "dgx:a100-worker-{nn}", "gpu-node-{nn}", "gpu:ml-{hex6}", "gpu:{gpu}-worker-{nn}"),
             build_gpu_ubuntu, "GPU server with NVIDIA driver, Ollama and Jupyter",
             tokens=(("hf", "hf"), ("openai", "openai"))),
-    _device("dlink-dir859", "dlink", "dlink", "admin", "/bin/sh", MIPS_BE, "dropbear", (), DLINK, DLINK_HARDWARE,
+    _device("dlink-dir859", "dlink", "dlink", "admin", "/bin/sh", MIPS_BE, None, (), DLINK, DLINK_HARDWARE,
             ("dlinkrouter", "DIR-859"), build_dlink, "D-Link DIR-859 router, discontinued, old firmware",
-            remove_paths=VENDOR_ONLY, max_install_days=3650),
+            # its /bin/sh is BusyBox msh (the prompt "# ", tests/fixtures/msh.json)
+            remove_paths=VENDOR_ONLY, max_install_days=3650, prompt_style="msh"),
     _device("tplink-archer-c7", "tplink", "tplink", "root", "/bin/ash", MIPS_BE, "dropbear-tplink", (), TPLINK,
             TPLINK_HARDWARE, ("ArcherC7v5",), build_tplink, "TP-Link Archer C7 v5 router, firmware not updated",
             uid=0, remove_paths=("home/root",) + VENDOR_ONLY, max_install_days=1500),

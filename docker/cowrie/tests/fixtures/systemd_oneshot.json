@@ -1,0 +1,374 @@
+{
+ "_source": {
+  "recorded": "2026-10-28",
+  "how": "`systemctl status U --no-pager -l` before and after `systemctl stop U`, and `systemctl restart|reload|kill auditd` as root, in containers that boot systemd as PID 1 (the helper images w2sd-* of wave w2/systemd: debian:12 --cgroupns=private, rockylinux:9 --cgroupns=private, centos:7 --cgroupns=host; recorder task-3.10-25-rec1.py (needs scripts/lib.py of wave w2/systemd) in the ledger folder of the task); audit installed with dnf / yum in the running container for the auditd cases. Times, pids and sizes are normalised as in the other systemd fixtures.",
+  "not_recorded": "the auditd service of the containers fails to start (a container artefact); only the refusal texts count",
+  "images": {
+   "debian_12": "debian:12",
+   "rockylinux_9": "rockylinux:9",
+   "centos_7": "centos:7"
+  },
+  "digests": {
+   "debian_12": {
+    "base": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+    "helper": "w2sd-debian_12@sha256:612f1e429f7aaf9fd877c974afe199cccc40fd5244d69ef684be75ee0da2dd62"
+   },
+   "rockylinux_9": {
+    "base": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+    "helper": "w2sd-rockylinux_9@sha256:0857fe35346d05b41a1c757b320ea91a3fde2863a1e2ed5b0bd79f3ab73e829b"
+   },
+   "centos_7": {
+    "base": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+    "helper": "w2sd-centos_7@sha256:68649cd9b7d87c33be7cb8d386c6601457555f89eb981f84ae699f7e30eb9345"
+   }
+  },
+  "digests_note": "image ids of the local copies (docker image inspect, 2026-10-28) of the base images and of the helper images the recording ran in; the helpers were built after the bases (2026-10-21)"
+ },
+ "images": {
+  "debian_12": {
+   "image": "debian:12",
+   "cases": {
+    "status systemd-update-utmp.service": [
+     "● systemd-update-utmp.service - Record System Boot/Shutdown in UTMP\n     Loaded: loaded (/lib/systemd/system/systemd-update-utmp.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:systemd-update-utmp.service(8)\n             man:utmp(5)\n    Process: PID ExecStart=/lib/systemd/systemd-update-utmp reboot (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-update-utmp.service - Record System Boot/Shutdown in UTMP...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-update-utmp.service - Record System Boot/Shutdown in UTMP.\n",
+     "",
+     0
+    ],
+    "stop systemd-update-utmp.service; status": [
+     "○ systemd-update-utmp.service - Record System Boot/Shutdown in UTMP\n     Loaded: loaded (/lib/systemd/system/systemd-update-utmp.service; static)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:systemd-update-utmp.service(8)\n             man:utmp(5)\n    Process: PID ExecStart=/lib/systemd/systemd-update-utmp reboot (code=exited, status=0/SUCCESS)\n    Process: PID ExecStop=/lib/systemd/systemd-update-utmp shutdown (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-update-utmp.service - Record System Boot/Shutdown in UTMP...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-update-utmp.service - Record System Boot/Shutdown in UTMP.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping systemd-update-utmp.service - Record System Boot/Shutdown in UTMP...\nMon DD HH:MM:SS HOST systemd[PID]: systemd-update-utmp.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped systemd-update-utmp.service - Record System Boot/Shutdown in UTMP.\n",
+     "",
+     3
+    ],
+    "stop; start; status systemd-update-utmp.service": [
+     "● systemd-update-utmp.service - Record System Boot/Shutdown in UTMP\n     Loaded: loaded (/lib/systemd/system/systemd-update-utmp.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:systemd-update-utmp.service(8)\n             man:utmp(5)\n    Process: PID ExecStart=/lib/systemd/systemd-update-utmp reboot (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-update-utmp.service - Record System Boot/Shutdown in UTMP...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-update-utmp.service - Record System Boot/Shutdown in UTMP.\n",
+     "",
+     0
+    ],
+    "status systemd-sysctl.service": [
+     "● systemd-sysctl.service - Apply Kernel Variables\n     Loaded: loaded (/lib/systemd/system/systemd-sysctl.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:systemd-sysctl.service(8)\n             man:sysctl.d(5)\n    Process: PID ExecStart=/lib/systemd/systemd-sysctl (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nNotice: journal has been rotated since unit was started, output may be incomplete.\n",
+     "",
+     0
+    ],
+    "stop systemd-sysctl.service; status": [
+     "○ systemd-sysctl.service - Apply Kernel Variables\n     Loaded: loaded (/lib/systemd/system/systemd-sysctl.service; static)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:systemd-sysctl.service(8)\n             man:sysctl.d(5)\n    Process: PID ExecStart=/lib/systemd/systemd-sysctl (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: systemd-sysctl.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped systemd-sysctl.service - Apply Kernel Variables.\nNotice: journal has been rotated since unit was started, output may be incomplete.\n",
+     "",
+     3
+    ],
+    "stop; start; status systemd-sysctl.service": [
+     "● systemd-sysctl.service - Apply Kernel Variables\n     Loaded: loaded (/lib/systemd/system/systemd-sysctl.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:systemd-sysctl.service(8)\n             man:sysctl.d(5)\n    Process: PID ExecStart=/lib/systemd/systemd-sysctl (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-sysctl.service - Apply Kernel Variables...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-sysctl.service - Apply Kernel Variables.\n",
+     "",
+     0
+    ],
+    "status systemd-tmpfiles-setup.service": [
+     "● systemd-tmpfiles-setup.service - Create System Files and Directories\n     Loaded: loaded (/lib/systemd/system/systemd-tmpfiles-setup.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:tmpfiles.d(5)\n             man:systemd-tmpfiles(8)\n    Process: PID ExecStart=systemd-tmpfiles --create --remove --boot --exclude-prefix=/dev (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-tmpfiles-setup.service - Create System Files and Directories...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-tmpfiles-setup.service - Create System Files and Directories.\n",
+     "",
+     0
+    ],
+    "stop systemd-tmpfiles-setup.service; status": [
+     "● systemd-tmpfiles-setup.service - Create System Files and Directories\n     Loaded: loaded (/lib/systemd/system/systemd-tmpfiles-setup.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:tmpfiles.d(5)\n             man:systemd-tmpfiles(8)\n    Process: PID ExecStart=systemd-tmpfiles --create --remove --boot --exclude-prefix=/dev (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-tmpfiles-setup.service - Create System Files and Directories...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-tmpfiles-setup.service - Create System Files and Directories.\n",
+     "Failed to stop systemd-tmpfiles-setup.service: Operation refused, unit systemd-tmpfiles-setup.service may be requested by dependency only (it is configured to refuse manual start/stop).\nSee system logs and 'systemctl status systemd-tmpfiles-setup.service' for details.\n",
+     0
+    ],
+    "stop; start; status systemd-tmpfiles-setup.service": [
+     "● systemd-tmpfiles-setup.service - Create System Files and Directories\n     Loaded: loaded (/lib/systemd/system/systemd-tmpfiles-setup.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:tmpfiles.d(5)\n             man:systemd-tmpfiles(8)\n    Process: PID ExecStart=systemd-tmpfiles --create --remove --boot --exclude-prefix=/dev (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-tmpfiles-setup.service - Create System Files and Directories...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-tmpfiles-setup.service - Create System Files and Directories.\n",
+     "",
+     0
+    ],
+    "status systemd-random-seed.service": [
+     "○ systemd-random-seed.service - Load/Save Random Seed\n     Loaded: loaded (/lib/systemd/system/systemd-random-seed.service; static)\n     Active: inactive (dead)\n  Condition: start condition failed at Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n             └─ ConditionVirtualization=!container was not met\n       Docs: man:systemd-random-seed.service(8)\n             man:random(4)\n",
+     "",
+     3
+    ],
+    "stop systemd-random-seed.service; status": [
+     "○ systemd-random-seed.service - Load/Save Random Seed\n     Loaded: loaded (/lib/systemd/system/systemd-random-seed.service; static)\n     Active: inactive (dead)\n  Condition: start condition failed at Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n             └─ ConditionVirtualization=!container was not met\n       Docs: man:systemd-random-seed.service(8)\n             man:random(4)\n",
+     "",
+     3
+    ],
+    "stop; start; status systemd-random-seed.service": [
+     "○ systemd-random-seed.service - Load/Save Random Seed\n     Loaded: loaded (/lib/systemd/system/systemd-random-seed.service; static)\n     Active: inactive (dead)\n  Condition: start condition failed at Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n             └─ ConditionVirtualization=!container was not met\n       Docs: man:systemd-random-seed.service(8)\n             man:random(4)\n\nMon DD HH:MM:SS HOST systemd[PID]: systemd-random-seed.service - Load/Save Random Seed was skipped because of an unmet condition check (ConditionVirtualization=!container).\n",
+     "",
+     3
+    ],
+    "status systemd-remount-fs.service": [
+     "● systemd-remount-fs.service - Remount Root and Kernel File Systems\n     Loaded: loaded (/lib/systemd/system/systemd-remount-fs.service; enabled-runtime; preset: enabled)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:systemd-remount-fs.service(8)\n             https://www.freedesktop.org/wiki/Software/systemd/APIFileSystems\n    Process: PID ExecStart=/lib/systemd/systemd-remount-fs (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nNotice: journal has been rotated since unit was started, output may be incomplete.\n",
+     "",
+     0
+    ],
+    "stop systemd-remount-fs.service; status": [
+     "○ systemd-remount-fs.service - Remount Root and Kernel File Systems\n     Loaded: loaded (/lib/systemd/system/systemd-remount-fs.service; enabled-runtime; preset: enabled)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:systemd-remount-fs.service(8)\n             https://www.freedesktop.org/wiki/Software/systemd/APIFileSystems\n    Process: PID ExecStart=/lib/systemd/systemd-remount-fs (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: systemd-remount-fs.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped systemd-remount-fs.service - Remount Root and Kernel File Systems.\nNotice: journal has been rotated since unit was started, output may be incomplete.\n",
+     "",
+     3
+    ],
+    "stop; start; status systemd-remount-fs.service": [
+     "● systemd-remount-fs.service - Remount Root and Kernel File Systems\n     Loaded: loaded (/lib/systemd/system/systemd-remount-fs.service; enabled-runtime; preset: enabled)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:systemd-remount-fs.service(8)\n             https://www.freedesktop.org/wiki/Software/systemd/APIFileSystems\n    Process: PID ExecStart=/lib/systemd/systemd-remount-fs (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-remount-fs.service - Remount Root and Kernel File Systems...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-remount-fs.service - Remount Root and Kernel File Systems.\n",
+     "",
+     0
+    ],
+    "status systemd-user-sessions.service": [
+     "● systemd-user-sessions.service - Permit User Sessions\n     Loaded: loaded (/lib/systemd/system/systemd-user-sessions.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:systemd-user-sessions.service(8)\n    Process: PID ExecStart=/lib/systemd/systemd-user-sessions start (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-user-sessions.service - Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-user-sessions.service - Permit User Sessions.\n",
+     "",
+     0
+    ],
+    "stop systemd-user-sessions.service; status": [
+     "○ systemd-user-sessions.service - Permit User Sessions\n     Loaded: loaded (/lib/systemd/system/systemd-user-sessions.service; static)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:systemd-user-sessions.service(8)\n    Process: PID ExecStart=/lib/systemd/systemd-user-sessions start (code=exited, status=0/SUCCESS)\n    Process: PID ExecStop=/lib/systemd/systemd-user-sessions stop (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-user-sessions.service - Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-user-sessions.service - Permit User Sessions.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping systemd-user-sessions.service - Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: systemd-user-sessions.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped systemd-user-sessions.service - Permit User Sessions.\n",
+     "",
+     3
+    ],
+    "stop; start; status systemd-user-sessions.service": [
+     "● systemd-user-sessions.service - Permit User Sessions\n     Loaded: loaded (/lib/systemd/system/systemd-user-sessions.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:systemd-user-sessions.service(8)\n    Process: PID ExecStart=/lib/systemd/systemd-user-sessions start (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting systemd-user-sessions.service - Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Finished systemd-user-sessions.service - Permit User Sessions.\n",
+     "",
+     0
+    ],
+    "systemctl restart auditd; echo rc=$?": [
+     "rc=5\n",
+     "Failed to restart auditd.service: Unit auditd.service not found.\n",
+     0
+    ],
+    "systemctl reload auditd; echo rc=$?": [
+     "rc=5\n",
+     "Failed to reload auditd.service: Unit auditd.service not found.\n",
+     0
+    ],
+    "systemctl kill auditd; echo rc=$?": [
+     "rc=0\n",
+     "",
+     0
+    ],
+    "systemctl status auditd --no-pager | head -3": [
+     "",
+     "Unit auditd.service could not be found.\n",
+     0
+    ]
+   }
+  },
+  "rockylinux_9": {
+   "image": "rockylinux:9",
+   "cases": {
+    "status systemd-update-utmp.service": [
+     "● systemd-update-utmp.service - Record System Boot/Shutdown in UTMP\n     Loaded: loaded (/usr/lib/systemd/system/systemd-update-utmp.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:systemd-update-utmp.service(8)\n             man:utmp(5)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Record System Boot/Shutdown in UTMP...\nMon DD HH:MM:SS HOST systemd[PID]: Finished Record System Boot/Shutdown in UTMP.\n",
+     "",
+     0
+    ],
+    "stop systemd-update-utmp.service; status": [
+     "○ systemd-update-utmp.service - Record System Boot/Shutdown in UTMP\n     Loaded: loaded (/usr/lib/systemd/system/systemd-update-utmp.service; static)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:systemd-update-utmp.service(8)\n             man:utmp(5)\n    Process: PID ExecStop=/usr/lib/systemd/systemd-update-utmp shutdown (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Record System Boot/Shutdown in UTMP...\nMon DD HH:MM:SS HOST systemd[PID]: Finished Record System Boot/Shutdown in UTMP.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Record System Boot/Shutdown in UTMP...\nMon DD HH:MM:SS HOST systemd[PID]: systemd-update-utmp.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Record System Boot/Shutdown in UTMP.\n",
+     "",
+     3
+    ],
+    "stop; start; status systemd-update-utmp.service": [
+     "● systemd-update-utmp.service - Record System Boot/Shutdown in UTMP\n     Loaded: loaded (/usr/lib/systemd/system/systemd-update-utmp.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:systemd-update-utmp.service(8)\n             man:utmp(5)\n    Process: PID ExecStart=/usr/lib/systemd/systemd-update-utmp reboot (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Record System Boot/Shutdown in UTMP...\nMon DD HH:MM:SS HOST systemd[PID]: Finished Record System Boot/Shutdown in UTMP.\n",
+     "",
+     0
+    ],
+    "status systemd-tmpfiles-setup.service": [
+     "● systemd-tmpfiles-setup.service - Create Volatile Files and Directories\n     Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-setup.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:tmpfiles.d(5)\n             man:systemd-tmpfiles(8)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Create Volatile Files and Directories...\nMon DD HH:MM:SS HOST systemd[PID]: Finished Create Volatile Files and Directories.\n",
+     "",
+     0
+    ],
+    "stop systemd-tmpfiles-setup.service; status": [
+     "● systemd-tmpfiles-setup.service - Create Volatile Files and Directories\n     Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-setup.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:tmpfiles.d(5)\n             man:systemd-tmpfiles(8)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Create Volatile Files and Directories...\nMon DD HH:MM:SS HOST systemd[PID]: Finished Create Volatile Files and Directories.\n",
+     "Failed to stop systemd-tmpfiles-setup.service: Operation refused, unit systemd-tmpfiles-setup.service may be requested by dependency only (it is configured to refuse manual start/stop).\nSee system logs and 'systemctl status systemd-tmpfiles-setup.service' for details.\n",
+     0
+    ],
+    "stop; start; status systemd-tmpfiles-setup.service": [
+     "● systemd-tmpfiles-setup.service - Create Volatile Files and Directories\n     Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-setup.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:tmpfiles.d(5)\n             man:systemd-tmpfiles(8)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Create Volatile Files and Directories...\nMon DD HH:MM:SS HOST systemd[PID]: Finished Create Volatile Files and Directories.\n",
+     "",
+     0
+    ],
+    "status systemd-user-sessions.service": [
+     "● systemd-user-sessions.service - Permit User Sessions\n     Loaded: loaded (/usr/lib/systemd/system/systemd-user-sessions.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n       Docs: man:systemd-user-sessions.service(8)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Finished Permit User Sessions.\n",
+     "",
+     0
+    ],
+    "stop systemd-user-sessions.service; status": [
+     "○ systemd-user-sessions.service - Permit User Sessions\n     Loaded: loaded (/usr/lib/systemd/system/systemd-user-sessions.service; static)\n     Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n   Duration: Ns\n       Docs: man:systemd-user-sessions.service(8)\n    Process: PID ExecStop=/usr/lib/systemd/systemd-user-sessions stop (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Finished Permit User Sessions.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: systemd-user-sessions.service: Deactivated successfully.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Permit User Sessions.\n",
+     "",
+     3
+    ],
+    "stop; start; status systemd-user-sessions.service": [
+     "● systemd-user-sessions.service - Permit User Sessions\n     Loaded: loaded (/usr/lib/systemd/system/systemd-user-sessions.service; static)\n     Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n       Docs: man:systemd-user-sessions.service(8)\n    Process: PID ExecStart=/usr/lib/systemd/systemd-user-sessions start (code=exited, status=0/SUCCESS)\n   Main PID: PID (code=exited, status=0/SUCCESS)\n        CPU: N\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Finished Permit User Sessions.\n",
+     "",
+     0
+    ],
+    "systemctl restart auditd; echo rc=$?": [
+     "rc=4\n",
+     "Failed to restart auditd.service: Operation refused, unit auditd.service may be requested by dependency only (it is configured to refuse manual start/stop).\nSee system logs and 'systemctl status auditd.service' for details.\n",
+     0
+    ],
+    "systemctl reload auditd; echo rc=$?": [
+     "rc=3\n",
+     "Failed to reload auditd.service: Job type reload is not applicable for unit auditd.service.\n",
+     0
+    ],
+    "systemctl kill auditd; echo rc=$?": [
+     "rc=0\n",
+     "",
+     0
+    ],
+    "systemctl status auditd --no-pager | head -3": [
+     "× auditd.service - Security Auditing Service\n     Loaded: loaded (/usr/lib/systemd/system/auditd.service; enabled; preset: enabled)\n     Active: failed (Result: exit-code) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n",
+     "",
+     0
+    ]
+   }
+  },
+  "centos_7": {
+   "image": "centos:7",
+   "cases": {
+    "status systemd-update-utmp.service": [
+     "● systemd-update-utmp.service - Update UTMP about System Boot/Shutdown\n   Loaded: loaded (/usr/lib/systemd/system/systemd-update-utmp.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:systemd-update-utmp.service(8)\n           man:utmp(5)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/systemd-update-utmp.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Update UTMP about System Boot/Shutdown...\nMon DD HH:MM:SS HOST systemd[PID]: Started Update UTMP about System Boot/Shutdown.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "stop systemd-update-utmp.service; status": [
+     "● systemd-update-utmp.service - Update UTMP about System Boot/Shutdown\n   Loaded: loaded (/usr/lib/systemd/system/systemd-update-utmp.service; static; vendor preset: disabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-update-utmp.service(8)\n           man:utmp(5)\n  Process: PID ExecStop=/usr/lib/systemd/systemd-update-utmp shutdown (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Update UTMP about System Boot/Shutdown...\nMon DD HH:MM:SS HOST systemd[PID]: Started Update UTMP about System Boot/Shutdown.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Update UTMP about System Boot/Shutdown...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Update UTMP about System Boot/Shutdown.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "stop; start; status systemd-update-utmp.service": [
+     "● systemd-update-utmp.service - Update UTMP about System Boot/Shutdown\n   Loaded: loaded (/usr/lib/systemd/system/systemd-update-utmp.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-update-utmp.service(8)\n           man:utmp(5)\n  Process: PID ExecStop=/usr/lib/systemd/systemd-update-utmp shutdown (code=exited, status=0/SUCCESS)\n  Process: PID ExecStart=/usr/lib/systemd/systemd-update-utmp reboot (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Update UTMP about System Boot/Shutdown...\nMon DD HH:MM:SS HOST systemd[PID]: Started Update UTMP about System Boot/Shutdown.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "status systemd-sysctl.service": [
+     "● systemd-sysctl.service - Apply Kernel Variables\n   Loaded: loaded (/usr/lib/systemd/system/systemd-sysctl.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:systemd-sysctl.service(8)\n           man:sysctl.d(5)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/systemd-sysctl.service\n\nWarning: Journal has been rotated since unit was started. Log output is incomplete or unavailable.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "stop systemd-sysctl.service; status": [
+     "● systemd-sysctl.service - Apply Kernel Variables\n   Loaded: loaded (/usr/lib/systemd/system/systemd-sysctl.service; static; vendor preset: disabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-sysctl.service(8)\n           man:sysctl.d(5)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Apply Kernel Variables.\nWarning: Journal has been rotated since unit was started. Log output is incomplete or unavailable.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "stop; start; status systemd-sysctl.service": [
+     "● systemd-sysctl.service - Apply Kernel Variables\n   Loaded: loaded (/usr/lib/systemd/system/systemd-sysctl.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-sysctl.service(8)\n           man:sysctl.d(5)\n  Process: PID ExecStart=/usr/lib/systemd/systemd-sysctl (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Apply Kernel Variables...\nMon DD HH:MM:SS HOST systemd[PID]: Started Apply Kernel Variables.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "status systemd-tmpfiles-setup.service": [
+     "● systemd-tmpfiles-setup.service - Create Volatile Files and Directories\n   Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-setup.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:tmpfiles.d(5)\n           man:systemd-tmpfiles(8)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/systemd-tmpfiles-setup.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Create Volatile Files and Directories...\nMon DD HH:MM:SS HOST systemd[PID]: Started Create Volatile Files and Directories.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "stop systemd-tmpfiles-setup.service; status": [
+     "● systemd-tmpfiles-setup.service - Create Volatile Files and Directories\n   Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-setup.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:tmpfiles.d(5)\n           man:systemd-tmpfiles(8)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/systemd-tmpfiles-setup.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Create Volatile Files and Directories...\nMon DD HH:MM:SS HOST systemd[PID]: Started Create Volatile Files and Directories.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\nFailed to stop systemd-tmpfiles-setup.service: Operation refused, unit systemd-tmpfiles-setup.service may be requested by dependency only (it is configured to refuse manual start/stop).\nSee system logs and 'systemctl status systemd-tmpfiles-setup.service' for details.\n",
+     0
+    ],
+    "stop; start; status systemd-tmpfiles-setup.service": [
+     "● systemd-tmpfiles-setup.service - Create Volatile Files and Directories\n   Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-setup.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:tmpfiles.d(5)\n           man:systemd-tmpfiles(8)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/systemd-tmpfiles-setup.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Create Volatile Files and Directories...\nMon DD HH:MM:SS HOST systemd[PID]: Started Create Volatile Files and Directories.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "status systemd-random-seed.service": [
+     "● systemd-random-seed.service - Load/Save Random Seed\n   Loaded: loaded (/usr/lib/systemd/system/systemd-random-seed.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:systemd-random-seed.service(8)\n           man:random(4)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/systemd-random-seed.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Load/Save Random Seed...\nMon DD HH:MM:SS HOST systemd[PID]: Started Load/Save Random Seed.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "stop systemd-random-seed.service; status": [
+     "● systemd-random-seed.service - Load/Save Random Seed\n   Loaded: loaded (/usr/lib/systemd/system/systemd-random-seed.service; static; vendor preset: disabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-random-seed.service(8)\n           man:random(4)\n  Process: PID ExecStop=/usr/lib/systemd/systemd-random-seed save (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Load/Save Random Seed...\nMon DD HH:MM:SS HOST systemd[PID]: Started Load/Save Random Seed.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Load/Save Random Seed...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Load/Save Random Seed.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "stop; start; status systemd-random-seed.service": [
+     "● systemd-random-seed.service - Load/Save Random Seed\n   Loaded: loaded (/usr/lib/systemd/system/systemd-random-seed.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-random-seed.service(8)\n           man:random(4)\n  Process: PID ExecStop=/usr/lib/systemd/systemd-random-seed save (code=exited, status=0/SUCCESS)\n  Process: PID ExecStart=/usr/lib/systemd/systemd-random-seed load (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Load/Save Random Seed...\nMon DD HH:MM:SS HOST systemd[PID]: Started Load/Save Random Seed.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "status systemd-remount-fs.service": [
+     "● systemd-remount-fs.service - Remount Root and Kernel File Systems\n   Loaded: loaded (/usr/lib/systemd/system/systemd-remount-fs.service; static; vendor preset: disabled)\n   Active: inactive (dead)\nCondition: start condition failed at Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:systemd-remount-fs.service(8)\n           http://www.freedesktop.org/wiki/Software/systemd/APIFileSystems\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "stop systemd-remount-fs.service; status": [
+     "● systemd-remount-fs.service - Remount Root and Kernel File Systems\n   Loaded: loaded (/usr/lib/systemd/system/systemd-remount-fs.service; static; vendor preset: disabled)\n   Active: inactive (dead)\nCondition: start condition failed at Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:systemd-remount-fs.service(8)\n           http://www.freedesktop.org/wiki/Software/systemd/APIFileSystems\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "stop; start; status systemd-remount-fs.service": [
+     "● systemd-remount-fs.service - Remount Root and Kernel File Systems\n   Loaded: loaded (/usr/lib/systemd/system/systemd-remount-fs.service; static; vendor preset: disabled)\n   Active: inactive (dead)\nCondition: start condition failed at Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n           ConditionPathExists=/etc/fstab was not met\n     Docs: man:systemd-remount-fs.service(8)\n           http://www.freedesktop.org/wiki/Software/systemd/APIFileSystems\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "status systemd-user-sessions.service": [
+     "● systemd-user-sessions.service - Permit User Sessions\n   Loaded: loaded (/usr/lib/systemd/system/systemd-user-sessions.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:systemd-user-sessions.service(8)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/systemd-user-sessions.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Started Permit User Sessions.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "stop systemd-user-sessions.service; status": [
+     "● systemd-user-sessions.service - Permit User Sessions\n   Loaded: loaded (/usr/lib/systemd/system/systemd-user-sessions.service; static; vendor preset: disabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-user-sessions.service(8)\n  Process: PID ExecStop=/usr/lib/systemd/systemd-user-sessions stop (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Started Permit User Sessions.\nMon DD HH:MM:SS HOST systemd[PID]: Stopping Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Permit User Sessions.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "stop; start; status systemd-user-sessions.service": [
+     "● systemd-user-sessions.service - Permit User Sessions\n   Loaded: loaded (/usr/lib/systemd/system/systemd-user-sessions.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-user-sessions.service(8)\n  Process: PID ExecStop=/usr/lib/systemd/systemd-user-sessions stop (code=exited, status=0/SUCCESS)\n  Process: PID ExecStart=/usr/lib/systemd/systemd-user-sessions start (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Permit User Sessions...\nMon DD HH:MM:SS HOST systemd[PID]: Started Permit User Sessions.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "status rhel-dmesg.service": [
+     "● rhel-dmesg.service - Dump dmesg to /var/log/dmesg\n   Loaded: loaded (/usr/lib/systemd/system/rhel-dmesg.service; enabled; vendor preset: enabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/rhel-dmesg.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Dump dmesg to /var/log/dmesg...\nMon DD HH:MM:SS HOST systemd[PID]: Started Dump dmesg to /var/log/dmesg.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "stop rhel-dmesg.service; status": [
+     "● rhel-dmesg.service - Dump dmesg to /var/log/dmesg\n   Loaded: loaded (/usr/lib/systemd/system/rhel-dmesg.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Dump dmesg to /var/log/dmesg...\nMon DD HH:MM:SS HOST systemd[PID]: Started Dump dmesg to /var/log/dmesg.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Dump dmesg to /var/log/dmesg.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "stop; start; status rhel-dmesg.service": [
+     "● rhel-dmesg.service - Dump dmesg to /var/log/dmesg\n   Loaded: loaded (/usr/lib/systemd/system/rhel-dmesg.service; enabled; vendor preset: enabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n  Process: PID ExecStart=/usr/lib/systemd/rhel-dmesg (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Dump dmesg to /var/log/dmesg...\nMon DD HH:MM:SS HOST systemd[PID]: Started Dump dmesg to /var/log/dmesg.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "status rhel-readonly.service": [
+     "● rhel-readonly.service - Configure read-only root support\n   Loaded: loaded (/usr/lib/systemd/system/rhel-readonly.service; enabled; vendor preset: enabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/rhel-readonly.service\n\nMon DD HH:MM:SS HOST systemd[PID]: Started Configure read-only root support.\nWarning: Journal has been rotated since unit was started. Log output is incomplete or unavailable.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "stop rhel-readonly.service; status": [
+     "● rhel-readonly.service - Configure read-only root support\n   Loaded: loaded (/usr/lib/systemd/system/rhel-readonly.service; enabled; vendor preset: enabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Started Configure read-only root support.\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Configure read-only root support.\nWarning: Journal has been rotated since unit was started. Log output is incomplete or unavailable.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "stop; start; status rhel-readonly.service": [
+     "● rhel-readonly.service - Configure read-only root support\n   Loaded: loaded (/usr/lib/systemd/system/rhel-readonly.service; enabled; vendor preset: enabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n  Process: PID ExecStart=/usr/lib/systemd/rhel-readonly (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Configure read-only root support...\nMon DD HH:MM:SS HOST systemd[PID]: Started Configure read-only root support.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "status systemd-vconsole-setup.service": [
+     "● systemd-vconsole-setup.service - Setup Virtual Console\n   Loaded: loaded (/usr/lib/systemd/system/systemd-vconsole-setup.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nmin Ns ago\n     Docs: man:systemd-vconsole-setup.service(8)\n           man:vconsole.conf(5)\n Main PID: PID (code=exited, status=0/SUCCESS)\n   CGroup: /system.slice/systemd-vconsole-setup.service\n\nWarning: Journal has been rotated since unit was started. Log output is incomplete or unavailable.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "stop systemd-vconsole-setup.service; status": [
+     "● systemd-vconsole-setup.service - Setup Virtual Console\n   Loaded: loaded (/usr/lib/systemd/system/systemd-vconsole-setup.service; static; vendor preset: disabled)\n   Active: inactive (dead) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-vconsole-setup.service(8)\n           man:vconsole.conf(5)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Stopped Setup Virtual Console.\nWarning: Journal has been rotated since unit was started. Log output is incomplete or unavailable.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     3
+    ],
+    "stop; start; status systemd-vconsole-setup.service": [
+     "● systemd-vconsole-setup.service - Setup Virtual Console\n   Loaded: loaded (/usr/lib/systemd/system/systemd-vconsole-setup.service; static; vendor preset: disabled)\n   Active: active (exited) since Day YYYY-MM-DD HH:MM:SS UTC; Nms ago\n     Docs: man:systemd-vconsole-setup.service(8)\n           man:vconsole.conf(5)\n  Process: PID ExecStart=/usr/lib/systemd/systemd-vconsole-setup (code=exited, status=0/SUCCESS)\n Main PID: PID (code=exited, status=0/SUCCESS)\n\nMon DD HH:MM:SS HOST systemd[PID]: Starting Setup Virtual Console...\nMon DD HH:MM:SS HOST systemd-vconsole-setup[PID]: /usr/bin/setfont failed with error code 1.\nMon DD HH:MM:SS HOST systemd-vconsole-setup[PID]: /usr/bin/loadkeys failed with error code 1.\nMon DD HH:MM:SS HOST systemd[PID]: Started Setup Virtual Console.\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "systemctl restart auditd; echo rc=$?": [
+     "rc=4\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\nFailed to restart auditd.service: Operation refused, unit auditd.service may be requested by dependency only (it is configured to refuse manual start/stop).\nSee system logs and 'systemctl status auditd.service' for details.\n",
+     0
+    ],
+    "systemctl reload auditd; echo rc=$?": [
+     "rc=3\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\nFailed to reload auditd.service: Job type reload is not applicable for unit auditd.service.\nSee system logs and 'systemctl status auditd.service' for details.\n",
+     0
+    ],
+    "systemctl kill auditd; echo rc=$?": [
+     "rc=0\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ],
+    "systemctl status auditd --no-pager | head -3": [
+     "● auditd.service - Security Auditing Service\n   Loaded: loaded (/usr/lib/systemd/system/auditd.service; enabled; vendor preset: enabled)\n   Active: failed (Result: exit-code) since Day YYYY-MM-DD HH:MM:SS UTC; Ns ago\n",
+     "sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)\n",
+     0
+    ]
+   }
+  }
+ }
+}

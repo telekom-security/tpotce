@@ -1,8 +1,10 @@
 """ps, top, uptime, w and /proc/loadavg of the patched Cowrie (patch_protocol_load, patch_uptime,
 patch_ps_top), run on stand-ins for Cowrie's protocol, pipe and reactor."""
 import ast
+import copy
 import hashlib
 import math
+import random
 import re
 import shutil
 import subprocess
@@ -100,10 +102,12 @@ def protocol_class(source, namespace):
             keep = [item for item in node.body
                     if (isinstance(item, ast.FunctionDef) and (item.name.startswith("tpot_") or item.name in
                                                                ("proc_loadavg", "uptime")))
-                    or (isinstance(item, ast.Assign) and any(getattr(t, "id", "") == "TPOT_LOAD_WAVES"
-                                                             for t in item.targets))]
+                    or (isinstance(item, ast.Assign) and any(getattr(t, "id", "").startswith("TPOT_")
+                                                             for t in item.targets))
+                    or (isinstance(item, ast.AnnAssign) and getattr(item.target, "id", "").startswith("TPOT_"))]
             cls = ast.ClassDef(name="TpotProtocol", bases=[], keywords=[], body=keep, decorator_list=[])
-            module = ast.Module([ast.ImportFrom("__future__", [ast.alias("annotations")], 0), cls], [])
+            module = ast.Module([ast.ImportFrom("__future__", [ast.alias("annotations")], 0),
+                                 ast.ImportFrom("typing", [ast.alias("ClassVar")], 0), cls], [])
             ast.fix_missing_locations(module)
             exec(compile(module, "<patched protocol>", "exec"), namespace)  # noqa: S102
             return namespace["TpotProtocol"]
@@ -192,7 +196,7 @@ class Session:
                                dict(common, HoneyPotCommand=Base))
         self.uptime_module = module_all((root / "src/cowrie/commands/uptime.py").read_text(),
                                         dict(common, HoneyPotCommand=Base))
-        protocol_ns = {"CowrieConfig": self.config, "hashlib": hashlib, "math": math}
+        protocol_ns = {"CowrieConfig": self.config, "hashlib": hashlib, "math": math, "random": random}
         cls = protocol_class((root / "src/cowrie/shell/protocol.py").read_text(), protocol_ns)
         for namespace in (self.base, self.uptime_module, protocol_ns):
             namespace["time"] = self.clock
@@ -247,6 +251,25 @@ class Session:
         if exec_mode:
             self.protocol.execcmd = "top"
         self.clock_ref = clock
+
+    def another(self, username=None, exec_mode=None, window="same"):
+        """A later session of the same Cowrie process: its modules, its protocol class (the PIDs of TPOT_PIDS),
+        config, clock and reactor; logged in now."""
+        other = copy.copy(self)
+        protocol = type(self.protocol)()
+        for name in ("terminal", "pp", "environ", "reactor", "fs"):
+            setattr(protocol, name, getattr(self.protocol, name))
+        protocol.terminal = type(self.protocol.terminal)()
+        protocol.user = type(self.protocol.user)()
+        if window != "same":
+            protocol.user.windowSize = list(window) if window is not None else None
+        protocol.cmdstack = []
+        protocol.username = username or self.protocol.username
+        protocol.logintime = self.clock.now
+        if exec_mode if exec_mode is not None else hasattr(self.protocol, "execcmd"):
+            protocol.execcmd = "top"
+        other.protocol = protocol
+        return other
 
     def run(self, name, *args):
         command = self.base.get(name) or self.uptime_module.get(name)

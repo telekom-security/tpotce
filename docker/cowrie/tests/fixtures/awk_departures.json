@@ -1,0 +1,1178 @@
+{
+ "_source": "awk of calls the persona answers another way (more arguments than parameters, an undefined function on a later line, an array where a scalar is expected, gawk's own strftime and builtin names), `docker run --rm --network none -e P=PROGRAM IMAGE sh -c 'awk \"$P\"'`, 2026-10-27, Docker on linux/arm64 (every image is its linux/arm64 variant of the index digest below except busybox_1.25.1, busybox:1.25, linux/amd64 under emulation, which has no arm64 variant; the `platform` of each image says which; `version` is the first line of the awk's own version output; LANG and LC_ALL unset). `programs` holds the program of every case name, `cases` [stdout, stderr, status] as the container answered. Nothing normalised.",
+ "programs": {
+  "undef_l1": "BEGIN { print nosuch(1) }",
+  "undef_l3": "BEGIN {\n x = 1\n print nosuch(1)\n}\n",
+  "undef_l5_trailing": "BEGIN {\n x = 1\n\n y = 2\n print nosuch(1)\n}\n\n\n",
+  "undef_after_func": "function f(a) {\n return a\n}\nBEGIN {\n print f(1)\n print nosuch(1)\n}\n",
+  "extra_args": "function f(x) { return x } BEGIN { print f(1, 2); print \"after\" }",
+  "extra_args_unrun": "function f(x) { return x } BEGIN { print \"before\"; if (0) print f(1, 2); print \"after\" }",
+  "extra_args_arr": "function f(x) { return x } BEGIN { a[1] = 1; print f(1, a); print \"after\" }",
+  "scalar_to_array": "function f(a) { a[1] = 1 } BEGIN { x = 1; f(x); print \"ok\" }",
+  "array_to_scalar": "function f(a) { return a + 1 } BEGIN { b[1] = 1; print f(b) }",
+  "array_to_scalar_unused": "function f(a) { return 1 } BEGIN { b[1] = 1; print f(b) }",
+  "strftime": "BEGIN { print strftime(\"%Y\", 0) }",
+  "function_strftime": "function strftime(a) { return a } BEGIN { print strftime(1) }",
+  "function_mktime": "function mktime(a) { return a } BEGIN { print mktime(1) }",
+  "function_systime": "function systime(a) { return a } BEGIN { print systime(1) }",
+  "function_and": "function and(a) { return a } BEGIN { print and(1) }",
+  "function_or": "function or(a) { return a } BEGIN { print or(1) }",
+  "function_xor": "function xor(a) { return a } BEGIN { print xor(1) }",
+  "function_compl": "function compl(a) { return a } BEGIN { print compl(1) }",
+  "function_lshift": "function lshift(a) { return a } BEGIN { print lshift(1) }",
+  "function_rshift": "function rshift(a) { return a } BEGIN { print rshift(1) }",
+  "function_gensub": "function gensub(a) { return a } BEGIN { print gensub(1) }",
+  "function_asort": "function asort(a) { return a } BEGIN { print asort(1) }",
+  "function_asorti": "function asorti(a) { return a } BEGIN { print asorti(1) }",
+  "function_patsplit": "function patsplit(a) { return a } BEGIN { print patsplit(1) }",
+  "function_strtonum": "function strtonum(a) { return a } BEGIN { print strtonum(1) }",
+  "function_isarray": "function isarray(a) { return a } BEGIN { print isarray(1) }",
+  "function_typeof": "function typeof(a) { return a } BEGIN { print typeof(1) }"
+ },
+ "images": {
+  "busybox_1.36.1-musl": {
+   "image": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "image_id": "sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "platform": "linux/arm64",
+   "version": "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.",
+   "cases": {
+    "undef_l1": [
+     "",
+     "awk: cmd. line:1: Call to undefined function\n",
+     1
+    ],
+    "undef_l3": [
+     "",
+     "awk: cmd. line:3: Call to undefined function\n",
+     1
+    ],
+    "undef_l5_trailing": [
+     "",
+     "awk: cmd. line:5: Call to undefined function\n",
+     1
+    ],
+    "undef_after_func": [
+     "1\n",
+     "awk: cmd. line:6: Call to undefined function\n",
+     1
+    ],
+    "extra_args": [
+     "1\nafter\n",
+     "",
+     0
+    ],
+    "extra_args_unrun": [
+     "before\nafter\n",
+     "",
+     0
+    ],
+    "extra_args_arr": [
+     "1\nafter\n",
+     "",
+     0
+    ],
+    "scalar_to_array": [
+     "ok\n",
+     "",
+     0
+    ],
+    "array_to_scalar": [
+     "1\n",
+     "",
+     0
+    ],
+    "array_to_scalar_unused": [
+     "1\n",
+     "",
+     0
+    ],
+    "strftime": [
+     "1970\n",
+     "",
+     0
+    ],
+    "function_strftime": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_mktime": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_systime": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_and": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_or": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_xor": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_compl": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_lshift": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_rshift": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_gensub": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_asort": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asorti": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_patsplit": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_strtonum": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_isarray": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_typeof": [
+     "1\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.28": {
+   "image": "busybox@sha256:141c253bc4c3fd0a201d32dc1f493bcf3fff003b6df416dea4f41046e0f37d47",
+   "image_id": "sha256:141c253bc4c3fd0a201d32dc1f493bcf3fff003b6df416dea4f41046e0f37d47",
+   "platform": "linux/arm64",
+   "version": "BusyBox v1.28.4 (2018-05-22 16:59:59 UTC) multi-call binary.",
+   "cases": {
+    "undef_l1": [
+     "",
+     "awk: cmd. line:1: Call to undefined function\n",
+     1
+    ],
+    "undef_l3": [
+     "",
+     "awk: cmd. line:3: Call to undefined function\n",
+     1
+    ],
+    "undef_l5_trailing": [
+     "",
+     "awk: cmd. line:5: Call to undefined function\n",
+     1
+    ],
+    "undef_after_func": [
+     "1\n",
+     "awk: cmd. line:6: Call to undefined function\n",
+     1
+    ],
+    "extra_args": [
+     "1\nafter\n",
+     "",
+     0
+    ],
+    "extra_args_unrun": [
+     "before\nafter\n",
+     "",
+     0
+    ],
+    "extra_args_arr": [
+     "1\nafter\n",
+     "",
+     0
+    ],
+    "scalar_to_array": [
+     "ok\n",
+     "",
+     0
+    ],
+    "array_to_scalar": [
+     "1\n",
+     "",
+     0
+    ],
+    "array_to_scalar_unused": [
+     "1\n",
+     "",
+     0
+    ],
+    "strftime": [
+     "1970\n",
+     "",
+     0
+    ],
+    "function_strftime": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_mktime": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_systime": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_and": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_or": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_xor": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_compl": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_lshift": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_rshift": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_gensub": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_asort": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asorti": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_patsplit": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_strtonum": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_isarray": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_typeof": [
+     "1\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.25.1": {
+   "image": "busybox@sha256:29f5d56d12684887bdfa50dcd29fc31eea4aaf4ad3bec43daf19026a7ce69912",
+   "image_id": "sha256:29f5d56d12684887bdfa50dcd29fc31eea4aaf4ad3bec43daf19026a7ce69912",
+   "platform": "linux/amd64",
+   "version": "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.",
+   "cases": {
+    "undef_l1": [
+     "",
+     "awk: cmd. line:1: Call to undefined function\n",
+     1
+    ],
+    "undef_l3": [
+     "",
+     "awk: cmd. line:3: Call to undefined function\n",
+     1
+    ],
+    "undef_l5_trailing": [
+     "",
+     "awk: cmd. line:5: Call to undefined function\n",
+     1
+    ],
+    "undef_after_func": [
+     "1\n",
+     "awk: cmd. line:6: Call to undefined function\n",
+     1
+    ],
+    "extra_args": [
+     "1\nafter\n",
+     "",
+     0
+    ],
+    "extra_args_unrun": [
+     "before\nafter\n",
+     "",
+     0
+    ],
+    "extra_args_arr": [
+     "1\nafter\n",
+     "",
+     0
+    ],
+    "scalar_to_array": [
+     "ok\n",
+     "",
+     0
+    ],
+    "array_to_scalar": [
+     "1\n",
+     "",
+     0
+    ],
+    "array_to_scalar_unused": [
+     "1\n",
+     "",
+     0
+    ],
+    "strftime": [
+     "1970\n",
+     "",
+     0
+    ],
+    "function_strftime": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_mktime": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_systime": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_and": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_or": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_xor": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_compl": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_lshift": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_rshift": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_gensub": [
+     "",
+     "awk: cmd. line:1: Unexpected token\n",
+     1
+    ],
+    "function_asort": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asorti": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_patsplit": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_strtonum": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_isarray": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_typeof": [
+     "1\n",
+     "",
+     0
+    ]
+   }
+  },
+  "debian_10": {
+   "image": "debian@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+   "image_id": "sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+   "platform": "linux/arm64",
+   "version": "mawk 1.3.3 Nov 1996, Copyright (C) Michael D. Brennan",
+   "cases": {
+    "undef_l1": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "undef_l3": [
+     "",
+     "awk: line 6: function nosuch never defined\n",
+     2
+    ],
+    "undef_l5_trailing": [
+     "",
+     "awk: line 10: function nosuch never defined\n",
+     2
+    ],
+    "undef_after_func": [
+     "",
+     "awk: line 9: function nosuch never defined\n",
+     2
+    ],
+    "extra_args": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "extra_args_unrun": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "extra_args_arr": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "scalar_to_array": [
+     "",
+     "awk: line 1: type error in arg(1) in call to f\n",
+     2
+    ],
+    "array_to_scalar": [
+     "",
+     "awk: line 1: type error in arg(1) in call to f\n",
+     2
+    ],
+    "array_to_scalar_unused": [
+     "1\n",
+     "",
+     0
+    ],
+    "strftime": [
+     "",
+     "awk: line 2: function strftime never defined\n",
+     2
+    ],
+    "function_strftime": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_mktime": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_systime": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_and": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_or": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_xor": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_compl": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_lshift": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_rshift": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_gensub": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asort": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asorti": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_patsplit": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_strtonum": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_isarray": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_typeof": [
+     "1\n",
+     "",
+     0
+    ]
+   }
+  },
+  "ubuntu_22.04": {
+   "image": "ubuntu@sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b",
+   "image_id": "sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b",
+   "platform": "linux/arm64",
+   "version": "mawk 1.3.4 20200120",
+   "cases": {
+    "undef_l1": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "undef_l3": [
+     "",
+     "awk: line 6: function nosuch never defined\n",
+     2
+    ],
+    "undef_l5_trailing": [
+     "",
+     "awk: line 10: function nosuch never defined\n",
+     2
+    ],
+    "undef_after_func": [
+     "",
+     "awk: line 9: function nosuch never defined\n",
+     2
+    ],
+    "extra_args": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "extra_args_unrun": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "extra_args_arr": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "scalar_to_array": [
+     "",
+     "awk: line 1: type error in arg(1) in call to f\n",
+     2
+    ],
+    "array_to_scalar": [
+     "",
+     "awk: line 1: type error in arg(1) in call to f\n",
+     2
+    ],
+    "array_to_scalar_unused": [
+     "1\n",
+     "",
+     0
+    ],
+    "strftime": [
+     "1970\n",
+     "",
+     0
+    ],
+    "function_strftime": [
+     "",
+     "awk: line 1: syntax error at or near strftime\nawk: line 1: return outside function body\n",
+     2
+    ],
+    "function_mktime": [
+     "",
+     "awk: line 1: syntax error at or near mktime\nawk: line 1: return outside function body\n",
+     2
+    ],
+    "function_systime": [
+     "",
+     "awk: line 1: syntax error at or near systime\nawk: line 1: return outside function body\nawk: line 1: wrong number of arguments in call to systime\n",
+     2
+    ],
+    "function_and": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_or": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_xor": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_compl": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_lshift": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_rshift": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_gensub": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asort": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asorti": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_patsplit": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_strtonum": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_isarray": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_typeof": [
+     "1\n",
+     "",
+     0
+    ]
+   }
+  },
+  "ubuntu_24.04": {
+   "image": "ubuntu@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c",
+   "image_id": "sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c",
+   "platform": "linux/arm64",
+   "version": "mawk 1.3.4 20240123",
+   "cases": {
+    "undef_l1": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "undef_l3": [
+     "",
+     "awk: line 6: function nosuch never defined\n",
+     2
+    ],
+    "undef_l5_trailing": [
+     "",
+     "awk: line 10: function nosuch never defined\n",
+     2
+    ],
+    "undef_after_func": [
+     "",
+     "awk: line 9: function nosuch never defined\n",
+     2
+    ],
+    "extra_args": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "extra_args_unrun": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "extra_args_arr": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "scalar_to_array": [
+     "",
+     "awk: line 1: type error in arg(1) in call to f (actual local variable vs local array)\n",
+     2
+    ],
+    "array_to_scalar": [
+     "",
+     "awk: line 1: type error in arg(1) in call to f (actual local array vs local variable)\n",
+     2
+    ],
+    "array_to_scalar_unused": [
+     "1\n",
+     "",
+     0
+    ],
+    "strftime": [
+     "1970\n",
+     "",
+     0
+    ],
+    "function_strftime": [
+     "",
+     "awk: line 1: syntax error at or near strftime\nawk: line 1: return outside function body\n",
+     2
+    ],
+    "function_mktime": [
+     "",
+     "awk: line 1: syntax error at or near mktime\nawk: line 1: return outside function body\n",
+     2
+    ],
+    "function_systime": [
+     "",
+     "awk: line 1: syntax error at or near systime\nawk: line 1: return outside function body\nawk: line 1: wrong number of arguments in call to systime\n",
+     2
+    ],
+    "function_and": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_or": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_xor": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_compl": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_lshift": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_rshift": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_gensub": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asort": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asorti": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_patsplit": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_strtonum": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_isarray": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_typeof": [
+     "1\n",
+     "",
+     0
+    ]
+   }
+  },
+  "debian_13": {
+   "image": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "image_id": "sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "platform": "linux/arm64",
+   "version": "mawk 1.3.4 20250131",
+   "cases": {
+    "undef_l1": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "undef_l3": [
+     "",
+     "awk: line 6: function nosuch never defined\n",
+     2
+    ],
+    "undef_l5_trailing": [
+     "",
+     "awk: line 10: function nosuch never defined\n",
+     2
+    ],
+    "undef_after_func": [
+     "",
+     "awk: line 9: function nosuch never defined\n",
+     2
+    ],
+    "extra_args": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "extra_args_unrun": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "extra_args_arr": [
+     "",
+     "awk: line 1: too many arguments in call to f\n",
+     2
+    ],
+    "scalar_to_array": [
+     "",
+     "awk: line 1: type error in arg(1) in call to f (actual local variable vs local array)\n",
+     2
+    ],
+    "array_to_scalar": [
+     "",
+     "awk: line 1: type error in arg(1) in call to f (actual local array vs local variable)\n",
+     2
+    ],
+    "array_to_scalar_unused": [
+     "1\n",
+     "",
+     0
+    ],
+    "strftime": [
+     "1970\n",
+     "",
+     0
+    ],
+    "function_strftime": [
+     "",
+     "awk: line 1: syntax error at or near strftime\nawk: line 1: return outside function body\n",
+     2
+    ],
+    "function_mktime": [
+     "",
+     "awk: line 1: syntax error at or near mktime\nawk: line 1: return outside function body\n",
+     2
+    ],
+    "function_systime": [
+     "",
+     "awk: line 1: syntax error at or near systime\nawk: line 1: return outside function body\nawk: line 1: too many arguments in call to systime: 1 (maximum 0)\n",
+     2
+    ],
+    "function_and": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_or": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_xor": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_compl": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_lshift": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_rshift": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_gensub": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asort": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_asorti": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_patsplit": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_strtonum": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_isarray": [
+     "1\n",
+     "",
+     0
+    ],
+    "function_typeof": [
+     "1\n",
+     "",
+     0
+    ]
+   }
+  },
+  "rockylinux_9": {
+   "image": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "image_id": "sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "platform": "linux/arm64",
+   "version": "GNU Awk 5.1.0, API: 3.0 (GNU MPFR 4.1.0-p9, GNU MP 6.2.0)",
+   "cases": {
+    "undef_l1": [
+     "",
+     "awk: cmd. line:1: fatal: function `nosuch' not defined\n",
+     2
+    ],
+    "undef_l3": [
+     "",
+     "awk: cmd. line:3: fatal: function `nosuch' not defined\n",
+     2
+    ],
+    "undef_l5_trailing": [
+     "",
+     "awk: cmd. line:5: fatal: function `nosuch' not defined\n",
+     2
+    ],
+    "undef_after_func": [
+     "1\n",
+     "awk: cmd. line:6: fatal: function `nosuch' not defined\n",
+     2
+    ],
+    "extra_args": [
+     "1\nafter\n",
+     "awk: cmd. line:1: warning: function `f' called with more arguments than declared\n",
+     0
+    ],
+    "extra_args_unrun": [
+     "before\nafter\n",
+     "",
+     0
+    ],
+    "extra_args_arr": [
+     "1\nafter\n",
+     "awk: cmd. line:1: warning: function `f' called with more arguments than declared\n",
+     0
+    ],
+    "scalar_to_array": [
+     "",
+     "awk: cmd. line:1: fatal: attempt to use scalar parameter `a' as an array\n",
+     2
+    ],
+    "array_to_scalar": [
+     "",
+     "awk: cmd. line:1: fatal: attempt to use array `a (from b)' in a scalar context\n",
+     2
+    ],
+    "array_to_scalar_unused": [
+     "1\n",
+     "",
+     0
+    ],
+    "strftime": [
+     "1970\n",
+     "",
+     0
+    ],
+    "function_strftime": [
+     "",
+     "awk: cmd. line:1: function strftime(a) { return a } BEGIN { print strftime(1) }\nawk: cmd. line:1:          ^ `strftime' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_mktime": [
+     "",
+     "awk: cmd. line:1: function mktime(a) { return a } BEGIN { print mktime(1) }\nawk: cmd. line:1:          ^ `mktime' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_systime": [
+     "",
+     "awk: cmd. line:1: function systime(a) { return a } BEGIN { print systime(1) }\nawk: cmd. line:1:          ^ `systime' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_and": [
+     "",
+     "awk: cmd. line:1: function and(a) { return a } BEGIN { print and(1) }\nawk: cmd. line:1:          ^ `and' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_or": [
+     "",
+     "awk: cmd. line:1: function or(a) { return a } BEGIN { print or(1) }\nawk: cmd. line:1:          ^ `or' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_xor": [
+     "",
+     "awk: cmd. line:1: function xor(a) { return a } BEGIN { print xor(1) }\nawk: cmd. line:1:          ^ `xor' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_compl": [
+     "",
+     "awk: cmd. line:1: function compl(a) { return a } BEGIN { print compl(1) }\nawk: cmd. line:1:          ^ `compl' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_lshift": [
+     "",
+     "awk: cmd. line:1: function lshift(a) { return a } BEGIN { print lshift(1) }\nawk: cmd. line:1:          ^ `lshift' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_rshift": [
+     "",
+     "awk: cmd. line:1: function rshift(a) { return a } BEGIN { print rshift(1) }\nawk: cmd. line:1:          ^ `rshift' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_gensub": [
+     "",
+     "awk: cmd. line:1: function gensub(a) { return a } BEGIN { print gensub(1) }\nawk: cmd. line:1:          ^ `gensub' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_asort": [
+     "",
+     "awk: cmd. line:1: function asort(a) { return a } BEGIN { print asort(1) }\nawk: cmd. line:1:          ^ `asort' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_asorti": [
+     "",
+     "awk: cmd. line:1: function asorti(a) { return a } BEGIN { print asorti(1) }\nawk: cmd. line:1:          ^ `asorti' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_patsplit": [
+     "",
+     "awk: cmd. line:1: function patsplit(a) { return a } BEGIN { print patsplit(1) }\nawk: cmd. line:1:          ^ `patsplit' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_strtonum": [
+     "",
+     "awk: cmd. line:1: function strtonum(a) { return a } BEGIN { print strtonum(1) }\nawk: cmd. line:1:          ^ `strtonum' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_isarray": [
+     "",
+     "awk: cmd. line:1: function isarray(a) { return a } BEGIN { print isarray(1) }\nawk: cmd. line:1:          ^ `isarray' is a built-in function, it cannot be redefined\n",
+     1
+    ],
+    "function_typeof": [
+     "",
+     "awk: cmd. line:1: function typeof(a) { return a } BEGIN { print typeof(1) }\nawk: cmd. line:1:          ^ `typeof' is a built-in function, it cannot be redefined\n",
+     1
+    ]
+   }
+  }
+ }
+}

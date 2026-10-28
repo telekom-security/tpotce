@@ -1,0 +1,659 @@
+{
+ "_source": "recorded 2026-10-28 in containers with --network none; three '/bin/sleep 30x &' jobs (PIDs 7, 8, 9 under the container's sh, PID 1) and each program called by name; stdout and stderr together, rc = exit status; the PIDs of pgrep / pidof themselves differ per run and are left out of the tests. busybox: busybox:1.36.1 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 (v1.36.1), busybox:1.35 sha256:98ad9d1a2be345201bb0709b0d38655eb1b370145c7d94ca1fe9c421f76e245a (v1.35.0). busybox_1_33: busybox:1.33 sha256:f7ca5a32c10d51aeda3b4d01c61c6061f497893d7f6628b92f822f7117182a57 (v1.33.1; getopt prints the option without quotes). busybox_1_26: busybox:1.26 sha256:be3c11fdba7cfe299214e46edc642e09514dbb9bbefcd0d3836c05a1e0cd0642 (v1.26.2; no pgrep -a, usage 'Usage: pidof [OPTIONS] [NAME]...'). The usage of 1.25 equals 1.26's, 1.27.2 to 1.32.1 have -a and the old pidof usage, 1.33 the new (all recorded). 1.19.4 and 1.24.1 are not recorded: derived from their source (busybox.net, procps/pgrep.c, pidof.c: same option letters and usage text as 1.26). pidof: debian:12 sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61, debian:13 sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308 and ubuntu:24.04 sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c print the same, ubuntu:22.04 (sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b) the same -h text. pidof_el9: rockylinux:9 sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6 after dnf install procps-ng (3.3.17); its pidof listed none of the sleeps without -w (not understood, so the lists of that file are not used by the tests). pidof_sysvinit: centos:7 sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4 after yum install sysvinit-tools (2.88; a pidof that is a link to killall5).",
+ "busybox": {
+  "pgrep sleep": {
+   "out": "7\n8\n9\n",
+   "rc": 0
+  },
+  "pgrep -l sleep": {
+   "out": "7 /bin/sleep\n8 /bin/sleep\n9 /bin/sleep\n",
+   "rc": 0
+  },
+  "pgrep -x sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pgrep -x sle": {
+   "out": "",
+   "rc": 1
+  },
+  "pgrep -f 'sleep 302'": {
+   "out": "8\n",
+   "rc": 0
+  },
+  "pgrep -lf 'sleep 302'": {
+   "out": "8 /bin/sleep\n",
+   "rc": 0
+  },
+  "pgrep -n sleep": {
+   "out": "9\n",
+   "rc": 0
+  },
+  "pgrep -o sleep": {
+   "out": "7\n",
+   "rc": 0
+  },
+  "pgrep -v sleep": {
+   "out": "1\n19\n",
+   "rc": 0
+  },
+  "pgrep nomatch": {
+   "out": "",
+   "rc": 1
+  },
+  "pgrep sle.p": {
+   "out": "7\n8\n9\n",
+   "rc": 0
+  },
+  "pgrep -c sleep": {
+   "out": "pgrep: invalid option -- 'c'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pgrep -a sleep": {
+   "out": "7 /bin/sleep\n8 /bin/sleep\n9 /bin/sleep\n",
+   "rc": 0
+  },
+  "pgrep": {
+   "out": "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pgrep -z": {
+   "out": "pgrep: invalid option -- 'z'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pgrep -h": {
+   "out": "pgrep: invalid option -- 'h'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pgrep -s 0": {
+   "out": "1\n7\n",
+   "rc": 0
+  },
+  "pgrep -P 1": {
+   "out": "7\n8\n",
+   "rc": 0
+  },
+  "pgrep 'sleep|nomatch'": {
+   "out": "7\n8\n9\n",
+   "rc": 0
+  },
+  "pgrep '('": {
+   "out": "pgrep: bad regex '(': Unmatched ( or \\(\n",
+   "rc": 1
+  },
+  "pgrep sleep nomatch": {
+   "out": "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pidof sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof nomatch": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -s sleep": {
+   "out": "9\n",
+   "rc": 0
+  },
+  "pidof -o %PPID sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof sleep nomatch sh": {
+   "out": "9 8 7 1\n",
+   "rc": 0
+  },
+  "pidof -x sh": {
+   "out": "pidof: invalid option -- 'x'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pidof [-s] [-o PID] [NAME]...\n\nList PIDs of all processes with names that match NAMEs\n\n\t-s\tShow only one PID\n\t-o PID\tOmit given pid\n\t\tUse %PPID to omit pid of pidof's parent\n",
+   "rc": 1
+  },
+  "pidof -z": {
+   "out": "pidof: invalid option -- 'z'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pidof [-s] [-o PID] [NAME]...\n\nList PIDs of all processes with names that match NAMEs\n\n\t-s\tShow only one PID\n\t-o PID\tOmit given pid\n\t\tUse %PPID to omit pid of pidof's parent\n",
+   "rc": 1
+  },
+  "pidof /bin/sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "3 pidof pidof": {
+   "out": "9\n",
+   "rc": 0
+  },
+  "3 pgrep pgrep": {
+   "out": "",
+   "rc": 1
+  },
+  "3 pgrep -f pgrep": {
+   "out": "",
+   "rc": 1
+  },
+  "3 pidof -s pidof sleep": {
+   "out": "12 8\n",
+   "rc": 0
+  },
+  "3 pidof -s sleep sh": {
+   "out": "8 1\n",
+   "rc": 0
+  },
+  "3 pgrep -l 'sl.*p'": {
+   "out": "7 /bin/sleep\n8 /bin/sleep\n",
+   "rc": 0
+  },
+  "3 pgrep -lx /bin/sleep": {
+   "out": "7 /bin/sleep\n8 /bin/sleep\n",
+   "rc": 0
+  },
+  "3 pgrep -x '/bin/sleep'": {
+   "out": "7\n8\n",
+   "rc": 0
+  },
+  "3 pgrep -lo sleep": {
+   "out": "7 /bin/sleep\n",
+   "rc": 0
+  },
+  "3 pgrep -ln sleep": {
+   "out": "8 /bin/sleep\n",
+   "rc": 0
+  },
+  "3 pgrep sleep -l": {
+   "out": "7 /bin/sleep\n8 /bin/sleep\n",
+   "rc": 0
+  },
+  "3 pgrep -s 0 sleep": {
+   "out": "7\n8\n",
+   "rc": 0
+  },
+  "3 pgrep -P 1 -l": {
+   "out": "7 /bin/sleep\n8 /bin/sleep\n",
+   "rc": 0
+  },
+  "3 pgrep -P 99999 sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "3 pgrep -s x sleep": {
+   "out": "pgrep: invalid number 'x'\n",
+   "rc": 1
+  },
+  "3 pgrep -- sleep": {
+   "out": "7\n8\n",
+   "rc": 0
+  },
+  "3 pgrep -i sleep": {
+   "out": "pgrep: invalid option -- 'i'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "3 pgrep ''": {
+   "out": "1\n7\n8\n",
+   "rc": 0
+  },
+  "3 pgrep -nv sleep": {
+   "out": "1\n",
+   "rc": 0
+  },
+  "3 pgrep -c": {
+   "out": "pgrep: invalid option -- 'c'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "3 pidof -o 7 sleep": {
+   "out": "8\n",
+   "rc": 0
+  },
+  "3 pidof -o 7 -o 8 sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "3 pidof -o": {
+   "out": "pidof: option requires an argument -- 'o'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: pidof [-s] [-o PID] [NAME]...\n\nList PIDs of all processes with names that match NAMEs\n\n\t-s\tShow only one PID\n\t-o PID\tOmit given pid\n\t\tUse %PPID to omit pid of pidof's parent\n",
+   "rc": 1
+  },
+  "3 pidof -s": {
+   "out": "",
+   "rc": 1
+  },
+  "3 pidof -o x sleep": {
+   "out": "pidof: invalid number 'x'\n",
+   "rc": 1
+  },
+  "3 pidof -o 7x sleep": {
+   "out": "pidof: invalid number '7x'\n",
+   "rc": 1
+  },
+  "3 pidof -s -o 7 sleep": {
+   "out": "9\n",
+   "rc": 0
+  },
+  "3 pidof -o 7,8 sleep": {
+   "out": "pidof: invalid number '7,8'\n",
+   "rc": 1
+  }
+ },
+ "busybox_1_33": {
+  "pgrep sleep": {
+   "out": "7\n8\n9\n",
+   "rc": 0
+  },
+  "pgrep -l sleep": {
+   "out": "7 /bin/sleep\n8 /bin/sleep\n9 /bin/sleep\n",
+   "rc": 0
+  },
+  "pgrep -x sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pgrep -x sle": {
+   "out": "",
+   "rc": 1
+  },
+  "pgrep -f 'sleep 302'": {
+   "out": "8\n",
+   "rc": 0
+  },
+  "pgrep -lf 'sleep 302'": {
+   "out": "8 /bin/sleep\n",
+   "rc": 0
+  },
+  "pgrep -n sleep": {
+   "out": "9\n",
+   "rc": 0
+  },
+  "pgrep -o sleep": {
+   "out": "7\n",
+   "rc": 0
+  },
+  "pgrep -v sleep": {
+   "out": "1\n20\n",
+   "rc": 0
+  },
+  "pgrep nomatch": {
+   "out": "",
+   "rc": 1
+  },
+  "pgrep sle.p": {
+   "out": "7\n8\n9\n",
+   "rc": 0
+  },
+  "pgrep -c sleep": {
+   "out": "pgrep: invalid option -- c\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pgrep -a sleep": {
+   "out": "7 /bin/sleep\n8 /bin/sleep\n9 /bin/sleep\n",
+   "rc": 0
+  },
+  "pgrep": {
+   "out": "BusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pgrep -z": {
+   "out": "pgrep: invalid option -- z\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pgrep -h": {
+   "out": "pgrep: invalid option -- h\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pgrep -s 0": {
+   "out": "1\n7\n",
+   "rc": 0
+  },
+  "pgrep -P 1": {
+   "out": "7\n8\n",
+   "rc": 0
+  },
+  "pgrep 'sleep|nomatch'": {
+   "out": "7\n8\n9\n",
+   "rc": 0
+  },
+  "pgrep '('": {
+   "out": "pgrep: bad regex '(': Unmatched ( or \\(\n",
+   "rc": 1
+  },
+  "pgrep sleep nomatch": {
+   "out": "BusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: pgrep [-flanovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-a\tShow command line too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pidof sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof nomatch": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -s sleep": {
+   "out": "9\n",
+   "rc": 0
+  },
+  "pidof -o %PPID sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof sleep nomatch sh": {
+   "out": "9 8 7 1\n",
+   "rc": 0
+  },
+  "pidof -x sh": {
+   "out": "pidof: invalid option -- x\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: pidof [-s] [-o PID] [NAME]...\n\nList PIDs of all processes with names that match NAMEs\n\n\t-s\tShow only one PID\n\t-o PID\tOmit given pid\n\t\tUse %PPID to omit pid of pidof's parent\n",
+   "rc": 1
+  },
+  "pidof -z": {
+   "out": "pidof: invalid option -- z\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: pidof [-s] [-o PID] [NAME]...\n\nList PIDs of all processes with names that match NAMEs\n\n\t-s\tShow only one PID\n\t-o PID\tOmit given pid\n\t\tUse %PPID to omit pid of pidof's parent\n",
+   "rc": 1
+  },
+  "pidof /bin/sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  }
+ },
+ "pidof": {
+  "pidof sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof nomatch": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof ": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -s sleep": {
+   "out": "9\n",
+   "rc": 0
+  },
+  "pidof -o %PPID sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof -o 1 sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof sleep nomatch sh": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof -x sh": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -q sleep": {
+   "out": "",
+   "rc": 0
+  },
+  "pidof -q nomatch": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -c sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof -n sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof -z sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof -S , sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof /bin/sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof -V": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -h": {
+   "out": "pidof usage: [options] <program-name>\n\n -c           Return PIDs with the same root directory\n -d <sep>     Use the provided character as output separator\n -h           Display this help text\n -n           Avoid using stat system function on network shares\n -o <pid>     Omit results with a given PID\n -q           Quiet mode. Do not display output\n -s           Only return one PID\n -x           Return PIDs of shells running scripts with a matching name\n -z           List zombie and I/O waiting processes. May cause pidof to hang.\n\n",
+   "rc": 0
+  },
+  "pidof -w sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -S": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -o": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -o x sleep": {
+   "out": "9 8 7\n",
+   "rc": 0
+  },
+  "pidof -z": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -Z sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof sl": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof SLEEP": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof pidof": {
+   "out": "36\n",
+   "rc": 0
+  },
+  "pidof -s pidof sleep": {
+   "out": "37 9\n",
+   "rc": 0
+  }
+ },
+ "busybox_1_26": {
+  "pgrep": {
+   "out": "BusyBox v1.26.2 (2017-06-15 00:40:02 UTC) multi-call binary.\n\nUsage: pgrep [-flnovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pgrep -a x": {
+   "out": "pgrep: invalid option -- a\nBusyBox v1.26.2 (2017-06-15 00:40:02 UTC) multi-call binary.\n\nUsage: pgrep [-flnovx] [-s SID|-P PPID|PATTERN]\n\nDisplay process(es) selected by regex PATTERN\n\n\t-l\tShow command name too\n\t-f\tMatch against entire command line\n\t-n\tShow the newest process only\n\t-o\tShow the oldest process only\n\t-v\tNegate the match\n\t-x\tMatch whole name (not substring)\n\t-s\tMatch session ID (0 for current)\n\t-P\tMatch parent process ID\n",
+   "rc": 1
+  },
+  "pidof -z": {
+   "out": "pidof: invalid option -- z\nBusyBox v1.26.2 (2017-06-15 00:40:02 UTC) multi-call binary.\n\nUsage: pidof [OPTIONS] [NAME]...\n\nList PIDs of all processes with names that match NAMEs\n\n\t-s\tShow only one PID\n\t-o PID\tOmit given pid\n\t\tUse %PPID to omit pid of pidof's parent\n",
+   "rc": 1
+  },
+  "pidof -o": {
+   "out": "pidof: option requires an argument -- o\nBusyBox v1.26.2 (2017-06-15 00:40:02 UTC) multi-call binary.\n\nUsage: pidof [OPTIONS] [NAME]...\n\nList PIDs of all processes with names that match NAMEs\n\n\t-s\tShow only one PID\n\t-o PID\tOmit given pid\n\t\tUse %PPID to omit pid of pidof's parent\n",
+   "rc": 1
+  },
+  "3 pidof -o x sleep": {
+   "out": "pidof: invalid number 'x'\n",
+   "rc": 1
+  },
+  "3 pidof -o 7x sleep": {
+   "out": "pidof: invalid number '7x'\n",
+   "rc": 1
+  },
+  "3 pidof -s -o 7 sleep": {
+   "out": "9\n",
+   "rc": 0
+  },
+  "3 pidof -o 7,8 sleep": {
+   "out": "pidof: invalid number '7,8'\n",
+   "rc": 1
+  }
+ },
+ "pidof_el9": {
+  "pidof sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof nomatch": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof ": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -s sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -o %PPID sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -q sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -c sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -n sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -z sleep": {
+   "out": "pidof: invalid option -- 'z'\n\nUsage:\n pidof [options] [program [...]]\n\nOptions:\n -s, --single-shot         return one PID only\n -c, --check-root          omit processes with different root\n -q,                       quiet mode, only set the exit code\n -w, --with-workers        show kernel workers too\n -x                        also find shells running the named scripts\n -o, --omit-pid <PID,...>  omit processes with PID\n -S, --separator SEP       use SEP as separator put between PIDs\n -h, --help     display this help and exit\n -V, --version  output version information and exit\n\nFor more details see pidof(1).\n",
+   "rc": 1
+  },
+  "pidof -S , sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -V": {
+   "out": "pidof from procps-ng 3.3.17\n",
+   "rc": 0
+  },
+  "pidof -h": {
+   "out": "\nUsage:\n pidof [options] [program [...]]\n\nOptions:\n -s, --single-shot         return one PID only\n -c, --check-root          omit processes with different root\n -q,                       quiet mode, only set the exit code\n -w, --with-workers        show kernel workers too\n -x                        also find shells running the named scripts\n -o, --omit-pid <PID,...>  omit processes with PID\n -S, --separator SEP       use SEP as separator put between PIDs\n -h, --help     display this help and exit\n -V, --version  output version information and exit\n\nFor more details see pidof(1).\n",
+   "rc": 0
+  },
+  "pidof --help": {
+   "out": "\nUsage:\n pidof [options] [program [...]]\n\nOptions:\n -s, --single-shot         return one PID only\n -c, --check-root          omit processes with different root\n -q,                       quiet mode, only set the exit code\n -w, --with-workers        show kernel workers too\n -x                        also find shells running the named scripts\n -o, --omit-pid <PID,...>  omit processes with PID\n -S, --separator SEP       use SEP as separator put between PIDs\n -h, --help     display this help and exit\n -V, --version  output version information and exit\n\nFor more details see pidof(1).\n",
+   "rc": 0
+  },
+  "pidof -w sleep": {
+   "out": "55 54 53\n",
+   "rc": 0
+  },
+  "pidof -o": {
+   "out": "pidof: option requires an argument -- 'o'\n\nUsage:\n pidof [options] [program [...]]\n\nOptions:\n -s, --single-shot         return one PID only\n -c, --check-root          omit processes with different root\n -q,                       quiet mode, only set the exit code\n -w, --with-workers        show kernel workers too\n -x                        also find shells running the named scripts\n -o, --omit-pid <PID,...>  omit processes with PID\n -S, --separator SEP       use SEP as separator put between PIDs\n -h, --help     display this help and exit\n -V, --version  output version information and exit\n\nFor more details see pidof(1).\n",
+   "rc": 1
+  },
+  "pidof -o x sleep": {
+   "out": "pidof: illegal omit pid value (x)!\n\n",
+   "rc": 1
+  },
+  "pidof -x sh": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -Z sleep": {
+   "out": "pidof: invalid option -- 'Z'\n\nUsage:\n pidof [options] [program [...]]\n\nOptions:\n -s, --single-shot         return one PID only\n -c, --check-root          omit processes with different root\n -q,                       quiet mode, only set the exit code\n -w, --with-workers        show kernel workers too\n -x                        also find shells running the named scripts\n -o, --omit-pid <PID,...>  omit processes with PID\n -S, --separator SEP       use SEP as separator put between PIDs\n -h, --help     display this help and exit\n -V, --version  output version information and exit\n\nFor more details see pidof(1).\n",
+   "rc": 1
+  },
+  "pidof pidof": {
+   "out": "77\n",
+   "rc": 0
+  }
+ },
+ "pidof_sysvinit": {
+  "pidof sleep": {
+   "out": "29 28 27\n",
+   "rc": 0
+  },
+  "pidof nomatch": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof ": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -s sleep": {
+   "out": "29\n",
+   "rc": 0
+  },
+  "pidof -o %PPID sleep": {
+   "out": "29 28 27\n",
+   "rc": 0
+  },
+  "pidof -q sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -c sleep": {
+   "out": "29 28 27\n",
+   "rc": 0
+  },
+  "pidof -n sleep": {
+   "out": "29 28 27\n",
+   "rc": 0
+  },
+  "pidof -z sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -S , sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -V": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -h": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof --help": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -w sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -o": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -o x sleep": {
+   "out": "29 28 27\n",
+   "rc": 0
+  },
+  "pidof -x sh": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof -Z sleep": {
+   "out": "",
+   "rc": 1
+  },
+  "pidof pidof": {
+   "out": "51\n",
+   "rc": 0
+  }
+ }
+}

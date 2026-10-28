@@ -28,6 +28,9 @@ ROTATION_STEP="true"
 ROTATION_DAYS="7"
 # the long lines of many commands (run_budget_probe); run_all_personas runs them once, for the first persona
 BUDGET_STEP="true"
+# "false" for a persona without an SSH server (the DIR-859, telnetd only): Cowrie closes the SSH connection
+#   before its banner ([ssh] drop_connections), the probes run over Telnet only
+SSH_SERVER="true"
 
 usage() {
   cat <<EOF
@@ -264,6 +267,85 @@ run_ssh_banner_probe_with_retries() {
   return 1
 }
 
+# A persona without an SSH server: the SSH port takes the connection and closes it without a byte, as a
+# port forwarded to a device without an sshd. docker-proxy closes the same way when nothing listens in the
+# container, so cowrie.json must have the closed SSH session (connect and closed, no client version).
+run_ssh_closed_probe() {
+  python3 - "${TEST_BIND_IP}" "${MAPPED_SSH_PORT}" "${JSON_LOG_FILE}" "${TEST_TIMEOUT}" <<'PY'
+import json
+import socket
+import sys
+import time
+from pathlib import Path
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+log = Path(sys.argv[3])
+timeout = int(sys.argv[4])
+deadline = time.monotonic() + timeout
+
+
+def ssh_sessions():
+    """{session: its eventids} of the SSH connections in cowrie.json."""
+    sessions = {}
+    try:
+        lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return sessions
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("protocol") == "ssh" and event.get("session"):
+            sessions.setdefault(event["session"], set()).add(str(event.get("eventid")))
+    return sessions
+
+
+tries = 0
+last = "no connection yet"
+while True:
+    tries += 1
+    received = b""
+    sock = None
+    try:
+        # a connect that fails or is slow (the port not mapped yet): the next try
+        sock = socket.create_connection((host, port), timeout=max(1.0, deadline - time.monotonic()))
+    except OSError as exc:
+        last = f"no connection: {exc}"
+    if sock is not None:
+        with sock:
+            try:
+                sock.settimeout(max(1.0, deadline - time.monotonic()))
+                while True:
+                    chunk = sock.recv(256)
+                    if not chunk:
+                        break
+                    received += chunk
+                last = "closed without a byte"
+            except socket.timeout:
+                sys.exit(f"SSH port {host}:{port} kept the connection open without a banner for {timeout} s")
+            except ConnectionResetError:
+                last = "reset without a byte"
+            except OSError as exc:
+                last = f"read failed: {exc}"
+    if received:
+        sys.exit(f"SSH port {host}:{port} of a persona without an SSH server sent {received[:80]!r}")
+    sessions = ssh_sessions()
+    closed = [s for s, ids in sessions.items() if {"cowrie.session.connect", "cowrie.session.closed"} <= ids]
+    spoken = [s for s, ids in sessions.items() if "cowrie.client.version" in ids]
+    if spoken:
+        sys.exit(f"cowrie.json has an SSH client version in {len(spoken)} session(s): the banner went out")
+    if closed:
+        print(f"SSH port {last} after {tries} connection(s); cowrie.json has {len(closed)} closed SSH session(s) "
+              "without a client version")
+        sys.exit(0)
+    if time.monotonic() > deadline:
+        sys.exit(f"No closed SSH session in cowrie.json after {tries} connection(s) ({last})")
+    time.sleep(1)
+PY
+}
+
 # An SSH session up to the authentication (the pre-login banner of /etc/issue.net is sent there), with
 # the Twisted SSH client of the image itself in a container in the honeypot's network: user
 # "smoke-test", the "none" method only, no password, nothing run.
@@ -323,8 +405,8 @@ PY
 }
 
 # Every pair of auth_refused_pairs three times over SSH (password, the Twisted client of the image, one
-# connection per pair) and three times over Telnet, with the clients in a container in the honeypot's
-# network: never a login.
+# connection per pair; not for a persona without an SSH server) and three times over Telnet, with the
+# clients in a container in the honeypot's network: never a login.
 run_refused_login_probe() {
   local pairs="$1"
 
@@ -340,6 +422,7 @@ from twisted.internet import defer, protocol, reactor
 
 PAIRS = [tuple(pair) for pair in json.loads(sys.argv[1])]
 TIMEOUT = int(sys.argv[2])
+SSH = sys.argv[3] == "true"
 TRIES = 3
 results = {"ssh_failed": 0, "ssh_success": 0, "telnet_failed": 0, "telnet_success": 0}
 
@@ -401,9 +484,10 @@ def ssh():
     defer.DeferredList([factory.done for factory in factories]).addBoth(lambda _: reactor.stop())
 
 
-reactor.callWhenRunning(ssh)
-reactor.callLater(TIMEOUT, reactor.stop)
-reactor.run()
+if SSH:
+    reactor.callWhenRunning(ssh)
+    reactor.callLater(TIMEOUT, reactor.stop)
+    reactor.run()
 
 
 class Deadline(Exception):
@@ -464,11 +548,11 @@ except OSError as exc:
     sys.exit(f"refused login probe: Telnet failed ({exc}); so far {json.dumps(results)}")
 
 print(json.dumps(results))
-expected = {"ssh_failed": TRIES * len(PAIRS), "ssh_success": 0, "telnet_failed": TRIES * len(PAIRS),
+expected = {"ssh_failed": TRIES * len(PAIRS) if SSH else 0, "ssh_success": 0, "telnet_failed": TRIES * len(PAIRS),
             "telnet_success": 0}
 if results != expected:
     sys.exit(f"refused login probe: {results}, expected {expected}")
-' "${pairs}" "${TEST_TIMEOUT}"
+' "${pairs}" "${TEST_TIMEOUT}" "${SSH_SERVER}"
 }
 
 # AuthRandom's state after run_refused_login_probe, read in the container ([honeypot] state_path
@@ -510,7 +594,7 @@ PY
 wait_for_refused_login_events() {
   local pairs="$1"
 
-  python3 - "${JSON_LOG_FILE}" "${pairs}" "${TEST_TIMEOUT}" <<'PY'
+  python3 - "${JSON_LOG_FILE}" "${pairs}" "${TEST_TIMEOUT}" "${SSH_SERVER}" <<'PY'
 import json
 import sys
 import time
@@ -519,6 +603,8 @@ from pathlib import Path
 path = Path(sys.argv[1])
 pairs = {tuple(pair) for pair in json.loads(sys.argv[2])}
 deadline = time.monotonic() + int(sys.argv[3])
+# three attempts over SSH (where the persona has an SSH server) and three over Telnet
+attempts = 6 if sys.argv[4] == "true" else 3
 while True:
     failed, success = {}, 0
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -535,8 +621,7 @@ while True:
             success += 1
     if success:
         sys.exit(f"cowrie.login.success for a pair of auth_refused_pairs ({success})")
-    # three attempts over SSH and three over Telnet
-    if all(failed.get(pair, 0) >= 6 for pair in pairs):
+    if all(failed.get(pair, 0) >= attempts for pair in pairs):
         print(f"cowrie.login.failed for {len(pairs)} pairs: {sorted(failed.values())}")
         break
     if time.monotonic() > deadline:
@@ -848,7 +933,7 @@ long_line() {
 run_long_line_probe() {
   docker run --rm -i --network "container:${TEST_CONTAINER_NAME}" --read-only --user 2000:2000 \
     --entrypoint python3 "${IMAGE}" - "$(long_line)" "${LONG_LINE_SECONDS}" "${LONG_LINE_OVER}" \
-    "${TEST_TIMEOUT}" "${LONG_LINE_WGET}" <<'PY'
+    "${TEST_TIMEOUT}" "${LONG_LINE_WGET}" "${SSH_SERVER}" <<'PY'
 import json
 import re
 import socket
@@ -861,6 +946,8 @@ SECONDS = float(sys.argv[2])
 OVER = int(sys.argv[3])
 TIMEOUT = int(sys.argv[4])
 WGET = sys.argv[5]
+# a persona without an SSH server: Telnet only
+PROTOCOLS = ("telnet", "ssh") if sys.argv[6] == "true" else ("telnet",)
 LENGTH = LINE.count(b"a")
 # AuthRandom accepts after 2 to 5 different attempts per source IP and keeps the pair it accepted
 PASSWORDS = [f"tpot-long-{n}" for n in range(1, 13)]
@@ -1051,7 +1138,7 @@ try:
     from twisted.internet import reactor
 
     threading.Thread(target=reactor.run, kwargs={"installSignalHandlers": False}, daemon=True).start()
-    for name in ("telnet", "ssh"):
+    for name in PROTOCOLS:
         for typed in (True, False):
             session = telnet_shell(deadline) if name == "telnet" else Ssh(deadline)
             echo, output = type_line(session, LINE, typed, deadline)
@@ -1083,10 +1170,11 @@ print(json.dumps(results))
 PY
 }
 
-# cowrie.command.input has the long line of each of the four sessions as it was sent, the line beyond
-# the bound cut to 64 KiB, and the next line of that session.
+# cowrie.command.input has the long line of each of the four sessions (two over Telnet only) as it was
+# sent, the line beyond the bound cut to 64 KiB, and the next line of that session.
 wait_for_long_line_events() {
-  python3 - "${JSON_LOG_FILE}" "$(long_line)" "${LONG_LINE_MAX}" "${LONG_LINE_OVER}" "${TEST_TIMEOUT}" <<'PY'
+  python3 - "${JSON_LOG_FILE}" "$(long_line)" "${LONG_LINE_MAX}" "${LONG_LINE_OVER}" "${TEST_TIMEOUT}" \
+    "${SSH_SERVER}" <<'PY'
 import json
 import sys
 import time
@@ -1097,6 +1185,7 @@ line = sys.argv[2]
 line_max = int(sys.argv[3])
 cut = ("echo " + "a" * int(sys.argv[4]))[:line_max]
 deadline = time.monotonic() + int(sys.argv[5])
+sessions = 4 if sys.argv[6] == "true" else 2
 while True:
     inputs = []
     for text in path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -1109,7 +1198,7 @@ while True:
     full = {session for session, value in inputs if value == line}
     cut_sessions = {session for session, value in inputs if value == cut}
     done = {session for session, value in inputs if value == "echo TPOT_LONG_DONE"}
-    if len(full) >= 4 and cut_sessions & done:
+    if len(full) >= sessions and cut_sessions & done:
         print(f"cowrie.command.input: the long line in {len(full)} sessions, {line_max} of the longer one")
         break
     if time.monotonic() > deadline:
@@ -1124,13 +1213,14 @@ PY
 # wc answer as in any session. Then long lines of many commands in one session (the session's time budget,
 # TPOT_BUDGET of the patched shell/command.py): 3000 times true, 640 endless awk loops, 20 rounds of apt-get
 # with hard patterns, awk, seq and sort. Each line must be back within BUDGET_LINE_SECONDS. Meanwhile new
-# connections wait for the SSH banner; their waits are reported (Cowrie's own parse of a line of 16 KiB holds
-# the reactor for a time of its own, which the budget does not cover).
+# connections wait for the SSH banner (not on a persona without an SSH server); their waits are reported
+# (Cowrie's own parse of a line of 16 KiB holds the reactor for a time of its own, which the budget does not
+# cover).
 BUDGET_LINE_SECONDS="${TEST_BUDGET_LINE_SECONDS:-6}"
 
 run_budget_probe() {
   docker run --rm -i --network "container:${TEST_CONTAINER_NAME}" --read-only --user 2000:2000 \
-    --entrypoint python3 "${IMAGE}" - "${BUDGET_LINE_SECONDS}" "${TEST_TIMEOUT}" <<'PY'
+    --entrypoint python3 "${IMAGE}" - "${BUDGET_LINE_SECONDS}" "${TEST_TIMEOUT}" "${SSH_SERVER}" <<'PY'
 import json
 import re
 import socket
@@ -1141,6 +1231,7 @@ import time
 
 LIMIT = float(sys.argv[1])
 TIMEOUT = int(sys.argv[2])
+SSH = sys.argv[3] == "true"
 # the passwords of the long line probe: AuthRandom keeps the pair it accepted for this source
 PASSWORDS = [f"tpot-long-{n}" for n in range(1, 13)]
 PROMPT = re.compile(rb"[$#] ?$")
@@ -1303,19 +1394,22 @@ try:
     for name, line in LINES.items():
         if len(line) > 16384:
             raise RuntimeError(f"{name}: {len(line)} characters, more than max_input_size")
-        banners = Banners()
-        banners.start()
+        banners = Banners() if SSH else None
+        if banners is not None:
+            banners.start()
         session.data.clear()
         started = time.monotonic()
         session.send(line.encode() + b" echo TPOT_BUDGET_DONE\r\n")
         back = session.wait(lambda data: DONE.search(clean(data)) is not None, deadline)
         took = time.monotonic() - started
-        banners.stop.set()
-        banners.join(TIMEOUT)
-        waits = banners.waits or [0.0]
-        results.append({"line": name, "characters": len(line), "seconds": round(took, 3),
-                        "banner_waits": len(banners.waits), "banner_max": round(max(waits), 3),
-                        "banner_median": round(statistics.median(waits), 3), "banner_failed": banners.failed})
+        result = {"line": name, "characters": len(line), "seconds": round(took, 3)}
+        if banners is not None:
+            banners.stop.set()
+            banners.join(TIMEOUT)
+            waits = banners.waits or [0.0]
+            result.update({"banner_waits": len(banners.waits), "banner_max": round(max(waits), 3),
+                           "banner_median": round(statistics.median(waits), 3), "banner_failed": banners.failed})
+        results.append(result)
         if not back or took >= LIMIT:
             raise RuntimeError(f"{name}: not back within {LIMIT} s ({took:.2f} s)")
     session.close()
@@ -1365,7 +1459,13 @@ has = {name: any(tree.resolve(fs, f"{folder}/{name}") is not None
        for name in ("uname", "hostname", "nproc", "grep", "awk", "wget", "df", "python3")}
 shell = config.get("shell", "shell_name", fallback="bash")
 ash = config.get("shell", "not_found_style", fallback="bash") == "ash"
-missing = (lambda name: f"-{shell}: {name}: not found") if ash else (lambda name: f"-{shell}: {name}: command not found")
+msh = config.get("shell", "not_found_style", fallback="bash") == "msh"
+if msh:
+    missing = lambda name: f"{name}: not found"  # noqa: E731 (msh does not name the shell)
+elif ash:
+    missing = lambda name: f"-{shell}: {name}: not found"  # noqa: E731
+else:
+    missing = lambda name: f"-{shell}: {name}: command not found"  # noqa: E731
 # what `wget http://127.0.0.1:1/x` answers: Cowrie's wget refuses the address before it connects (GNU),
 #   BusyBox's says its connection was refused ("cannot" up to 1.14)
 if not has["wget"]:
@@ -1385,6 +1485,7 @@ print(json.dumps({
     "df_avail": first["avail"],
     "persona": persona.id,
     "kind": persona.kind,
+    "ssh_server": persona.ssh_profile is not None,
     "os_id": persona.os_id,
     "os_release": Path("/tmp/cowrie/runtime/honeyfs/etc/os-release").is_file(),
     "hostname": identity["hostname"],
@@ -1497,7 +1598,11 @@ assert_host_keys() {
   keys="$(
     docker exec "${TEST_CONTAINER_NAME}" sed -n 's/^[a-z0-9]*_private_key = //p' /tmp/cowrie/runtime/cowrie.cfg
   )" || return 1
-  [[ "${keys}" == *"/ssh_host_rsa_key"* ]] || { printf 'cowrie.cfg names no RSA host key\n' >&2; return 1; }
+  [[ -n "${keys}" ]] || { printf 'cowrie.cfg names no host key\n' >&2; return 1; }
+  # a persona without an SSH server: the one ed25519 key Cowrie's factory starts with, never offered
+  if [[ "${SSH_SERVER}" == "true" ]]; then
+    [[ "${keys}" == *"/ssh_host_rsa_key"* ]] || { printf 'cowrie.cfg names no RSA host key\n' >&2; return 1; }
+  fi
 
   while IFS= read -r key; do
     [[ -n "${key}" ]] || continue
@@ -1781,7 +1886,12 @@ if [persona["id"] for persona in personas] != catalog.ids():
 for persona_id, persona in ids.items():
     if set(persona.get("package_managers", [])) != expected_package_managers[persona_id]:
         fail(f"{persona_id} package managers do not match: {sorted(persona.get('package_managers', []))}")
-    if not persona.get("ssh_banners") or not all(b.startswith("SSH-2.0-") for b in persona["ssh_banners"]):
+    if catalog.by_id(persona_id).ssh_profile is None:
+        # no SSH server (the DIR-859, telnetd only): no banner
+        if persona.get("ssh_banners") != []:
+            fail(f"{persona_id} personas.json names SSH banners of a persona without an SSH server: "
+                 f"{persona.get('ssh_banners')}")
+    elif not persona.get("ssh_banners") or not all(b.startswith("SSH-2.0-") for b in persona["ssh_banners"]):
         fail(f"{persona_id} personas.json has no valid SSH banners: {persona.get('ssh_banners')}")
     for key in ("family", "kind", "user", "arch", "summary"):
         if not persona.get(key):
@@ -1817,7 +1927,16 @@ expected_paths = (
 for section, key, expected in expected_paths:
     if config.get(section, key, fallback="") != str(expected):
         fail(f"Runtime config {section}.{key} is not {expected}")
-if config.get("ssh", "version", fallback="") not in persona["ssh_banners"]:
+ssh_server = catalog.by_id(selected).ssh_profile is not None
+if not ssh_server:
+    # no SSH server: Cowrie listens on 22 and closes each connection before its banner
+    if config.has_option("ssh", "version") or not config.getboolean("ssh", "drop_connections", fallback=False):
+        fail(f"Runtime config of {selected} (no SSH server) names a banner or does not drop the SSH connections")
+    if config.get("ssh", "listen_endpoints", fallback="") != "tcp:22:interface=0.0.0.0":
+        fail(f"Runtime config of {selected} does not listen on the SSH port")
+elif config.getboolean("ssh", "drop_connections", fallback=False):
+    fail(f"Runtime config of {selected} drops the connections of its SSH server")
+elif config.get("ssh", "version", fallback="") not in persona["ssh_banners"]:
     fail(f"Runtime config SSH banner {config.get('ssh', 'version', fallback='')!r} is not one of {selected}")
 if config.get("honeypot", "hostname", fallback="") != identity["hostname"]:
     fail("Runtime config hostname does not match identity.json")
@@ -1831,7 +1950,7 @@ if "ssh-dss" in host_key_text or re.search(r"(?m)^\s*dsa_\w*key\s*[=:]|ssh_host_
 # the live top of the patched Cowrie: its style, and the host key algorithms of the banner's server
 if config.get("shell", "top_style", fallback="") not in ("procps", "busybox"):
     fail(f"Runtime config has no top_style for the live top of {selected}")
-if not config.get("ssh", "host_key_algorithms", fallback=""):
+if ssh_server and not config.get("ssh", "host_key_algorithms", fallback=""):
     fail(f"Runtime config has no host_key_algorithms for {selected}")
 # Cowrie's apt answers on the Debian servers only (dpkg), everywhere else it is skipped
 skipped = {entry.strip() for entry in config.get("shell", "skip_python_commands", fallback="").split(",")}
@@ -1866,7 +1985,8 @@ if not cmdoutput.get("command", {}).get("ps"):
     fail(f"{selected} cmdoutput.json has no ps process list")
 package_managers = expected_package_managers[selected]
 # the txtcmds of the device commands; lscpu and nproc only where the system has them (the shell probe
-#   checks nproc), dmesg not on a firmware image without it
+#   checks nproc), dmesg not where the persona lists it in skip_python_commands (a firmware without the applet)
+skipped_commands = {entry.strip() for entry in config.get("shell", "skip_python_commands", fallback="").split(",")}
 for command_path in (
     "bin/dmesg",
     "bin/mount",
@@ -1876,7 +1996,7 @@ for command_path in (
 ):
     if command_path.startswith("usr/bin/") and persona["kind"] == "device":
         continue
-    if command_path == "bin/dmesg" and config.has_option("shell", "builtins"):
+    if command_path == "bin/dmesg" and "dmesg" in skipped_commands:
         continue
     if not (txtcmds_path / command_path).is_file():
         fail(f"{selected} txtcmds is missing {command_path}")
@@ -2033,27 +2153,44 @@ run_smoke_test() {
   local persona=""
   persona="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["persona"])' "${EXPECTED_IDENTITY_FILE}")"
   test_ok "Cowrie persona ${persona} is valid"
+  SSH_SERVER="$(python3 -c 'import json, sys; print("true" if json.load(open(sys.argv[1]))["ssh_server"] else "false")' "${EXPECTED_IDENTITY_FILE}")"
+  # the words of the steps that also run over SSH where the persona has an SSH server
+  local ssh_and="" and_ssh="" banner_waits=""
+  if [[ "${SSH_SERVER}" == "true" ]]; then
+    ssh_and="SSH and "
+    and_ssh=" and SSH"
+    banner_waits=" while new connections wait for the SSH banner"
+  fi
 
-  local ssh_token=""
-  ssh_token="ssh-test-$(date +%s)-$$"
-  test_info "Running SSH banner probe with token: ${ssh_token}"
-  run_ssh_banner_probe_with_retries "${ssh_token}" || test_die "SSH probe failed on ${TEST_BIND_IP}:${MAPPED_SSH_PORT}"
-  test_wait_for_container || test_die "Cowrie container stopped after SSH probe"
+  if [[ "${SSH_SERVER}" == "true" ]]; then
+    local ssh_token=""
+    ssh_token="ssh-test-$(date +%s)-$$"
+    test_info "Running SSH banner probe with token: ${ssh_token}"
+    run_ssh_banner_probe_with_retries "${ssh_token}" || test_die "SSH probe failed on ${TEST_BIND_IP}:${MAPPED_SSH_PORT}"
+    test_wait_for_container || test_die "Cowrie container stopped after SSH probe"
 
-  test_info "Waiting for SSH probe event in cowrie.json"
-  wait_for_json_event_containing "${ssh_token}" "ssh" || test_die "SSH probe token was not found in cowrie.json"
-  test_ok "SSH probe was written to cowrie.json"
+    test_info "Waiting for SSH probe event in cowrie.json"
+    wait_for_json_event_containing "${ssh_token}" "ssh" || test_die "SSH probe token was not found in cowrie.json"
+    test_ok "SSH probe was written to cowrie.json"
+  else
+    test_info "Connecting to the SSH port of ${persona}, a persona without an SSH server"
+    run_ssh_closed_probe || test_die "The SSH port of ${persona} did not close without a banner on ${TEST_BIND_IP}:${MAPPED_SSH_PORT}"
+    test_wait_for_container || test_die "Cowrie container stopped after the SSH probe"
+    test_ok "The SSH port of ${persona} takes the connection and closes it without a banner"
+  fi
 
   assert_host_keys "${persona}" || test_die "SSH host keys of ${persona} are missing in the keys volume"
   test_ok "SSH host keys of ${persona} are in the keys volume"
 
-  test_info "Running an SSH session up to the authentication"
-  run_ssh_userauth_probe || test_die "SSH session did not reach the authentication on ${persona}"
-  test_wait_for_container || test_die "Cowrie container stopped after the SSH session"
+  if [[ "${SSH_SERVER}" == "true" ]]; then
+    test_info "Running an SSH session up to the authentication"
+    run_ssh_userauth_probe || test_die "SSH session did not reach the authentication on ${persona}"
+    test_wait_for_container || test_die "Cowrie container stopped after the SSH session"
+  fi
 
   local refused_pairs=""
   refused_pairs="$(read_refused_pairs)" || test_die "Could not read auth_refused_pairs of ${persona}"
-  test_info "Trying the pairs of auth_refused_pairs over SSH and Telnet"
+  test_info "Trying the pairs of auth_refused_pairs over ${ssh_and}Telnet"
   run_refused_login_probe "${refused_pairs}" || test_die "A pair of auth_refused_pairs logged in on ${persona}"
   wait_for_refused_login_events "${refused_pairs}" || test_die "The refused logins of ${persona} are not in cowrie.json"
   assert_refused_pairs_left_no_state "${refused_pairs}" || test_die "The refused logins changed AuthRandom's state on ${persona}"
@@ -2080,7 +2217,7 @@ run_smoke_test() {
   wait_for_json_event_containing "TPOT_BEGIN" "closed" || test_die "No cowrie.session.closed event with an integer duration_ms for the shell session"
   test_ok "Shell commands and the closed session were written to cowrie.json"
 
-  test_info "Typing and pasting a line of ${LONG_LINE_LENGTH} characters with a download over Telnet and SSH"
+  test_info "Typing and pasting a line of ${LONG_LINE_LENGTH} characters with a download over Telnet${and_ssh}"
   local long_line_results=""
   # the answer of wget of the persona (GNU wget of Cowrie, BusyBox's, or none where the firmware has no wget)
   LONG_LINE_WGET="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["wget_answer"])' "${EXPECTED_IDENTITY_FILE}")"
@@ -2091,7 +2228,7 @@ run_smoke_test() {
   test_ok "The long line came back within ${LONG_LINE_SECONDS} s, cowrie.command.input has it with its wget"
 
   if [[ "${BUDGET_STEP}" == "true" ]]; then
-    test_info "Running long lines of many commands over Telnet while new connections wait for the SSH banner"
+    test_info "Running long lines of many commands over Telnet${banner_waits}"
     local budget_results=""
     budget_results="$(run_budget_probe)" || test_die "The script or a long line of many commands failed on ${persona}: ${budget_results}"
     test_info "Long lines of many commands: ${budget_results}"

@@ -3,6 +3,12 @@ what installing a package that ships a service does on each release, as recorded
 
 Usage: python3 -I build_package_installs.py REFS_JSON [OUT]
 
+The input is a recording, not a download: REFS_JSON is refs/t12.json of round 4 (apt-get / dnf runs in
+containers with systemd), so there is nothing to pin or to fetch (the package indexes of the lists of
+package_names/ are pinned in build_package_names.py). The file lay in /tmp of the build host and is gone;
+the checked-in package_installs.json.gz is the record of it and is not rebuilt from anything else. A new
+recording is made with the same runs on the releases named below and kept next to the lists it feeds.
+
 Per Debian / Ubuntu release (bookworm, trixie, jammy, noble):
 - installs: per recorded package the packages its install brought (name, version, all or -, pocket, component,
   download size, in the order of the Get lines) and the units that ran after it (the units of the package that are

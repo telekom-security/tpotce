@@ -147,6 +147,103 @@ class CpuCommandsTest(unittest.TestCase):
 
 
 
+class ZyxelTest(unittest.TestCase):
+    """The NAS326 has the program folders of its firmware V5.21 (firmware_images/nas326-v5.21.json): /bin and /sbin
+    of the initramfs (the applets of its BusyBox as links, `busybox --install -s`) with those of the system image
+    copied over them, /usr the system image (its /etc/init.d/rcS); no applet in /usr/bin."""
+
+    def rendered(self, seed=1):
+        persona = catalog.by_id("zyxel-nas326")
+        ident = draw(persona, seed)
+        return persona, ident, render.apply_to_tree(base_tree(), persona, ident, persona.builder(persona, ident))
+
+    def cfg(self, persona, ident):
+        import configparser
+        cfg = configparser.ConfigParser(interpolation=None)
+        cfg.read_string(render.render_cfg(persona, ident, Path("/tmp/r"), Path("/tmp/k")))
+        return cfg
+
+    def which(self, t, persona, ident, *args):
+        # which as the session runs it: the PATH of the login and the [shell] keys of the persona
+        from tests import test_patch
+        case = test_patch.PatchTest("test_which_a_prints_every_match")
+        self.addCleanup(case.doCleanups)
+        cfg = self.cfg(persona, ident)
+        keys = {("shell", key): cfg.get("shell", key) for key in ("which_dirs",) if cfg.has_option("shell", key)}
+        _, which = case.command("which", "Command_which", keys, list(args))
+        which.environ = {"PATH": cfg.get("shell", "login_path")}
+        which.fs, which.exit_code = test_patch.TreeFs(t), 0
+        which.call()
+        return bytes(which.out).decode(), which.exit_code
+
+    def found(self, t, persona, ident, name):
+        """The program a bare name runs: the first folder of the login's PATH that has it (Cowrie's getCommand)."""
+        for folder in self.cfg(persona, ident).get("shell", "login_path").split(":"):
+            if folder and tree.resolve(t, f"{folder.strip('/')}/{name}") is not None:
+                return f"{folder.rstrip('/')}/{name}"
+        return None
+
+    def test_the_program_folders_are_those_of_the_firmware(self):
+        for seed in range(4):
+            persona, ident, t = self.rendered(seed)
+            with self.subTest(release=ident.release.label):
+                found = {}
+                for folder in ("bin", "sbin", "usr/bin", "usr/sbin"):
+                    node = tree.find_node(t, folder)
+                    self.assertEqual(node[tree.A_TYPE], tree.T_DIR, folder)
+                    for child in tree.node_children(node):
+                        rel = f"{folder}/{child[tree.A_NAME]}"
+                        found[rel] = child[tree.A_TARGET] if child[tree.A_TYPE] == tree.T_LINK \
+                            else child[tree.A_SIZE]
+                table = {rel: value for rel, value in firmware.programs(persona, ident).items()
+                         if rel.rsplit("/", 1)[0] in firmware.PROGRAM_FOLDERS}
+                # ulimit is a builtin of its ash, answered by its txtcmd at /bin/ulimit as before (no table of the
+                #   builtins of the NAS326's ash was recorded)
+                self.assertIsInstance(found.pop("bin/ulimit"), int)
+                self.assertEqual(found, table)
+                # every applet in /bin or /sbin, as the initramfs has it; none in /usr/bin
+                for rel, target in (("bin/awk", "busybox"), ("bin/ls", "busybox"), ("bin/sh", "busybox"),
+                                    ("bin/ash", "busybox"), ("bin/wc", "busybox"), ("bin/which", "busybox"),
+                                    ("sbin/ifconfig", "../bin/busybox"), ("sbin/telnetd", "../bin/busybox"),
+                                    ("sbin/init", "../bin/busybox"), ("usr/sbin/wget", "../../bin/busybox"),
+                                    ("usr/bin/python", "python2"), ("usr/bin/python2", "python2.7")):
+                    self.assertEqual(found.get(rel), target, rel)
+                for rel in ("usr/bin/awk", "usr/bin/wc", "usr/bin/which", "usr/bin/sh", "usr/sbin/telnetd",
+                            "bin/bash", "usr/bin/bash", "bin/zysh"):
+                    self.assertNotIn(rel, found, rel)
+                # the programs of the firmware: mount and umount of its own (no applets of its BusyBox), the
+                #   system image's sshd (/sbin), python 2.7, smbd and httpd (/usr)
+                for rel in ("bin/busybox", "bin/mount", "bin/umount", "bin/ip", "sbin/sshd", "usr/bin/python2.7",
+                            "usr/sbin/smbd", "usr/sbin/httpd", "usr/bin/openssl"):
+                    self.assertIsInstance(found.get(rel), int, rel)
+                self.assertIs(tree.resolve(t, "bin/awk"), tree.find_node(t, "bin/busybox"))
+                self.assertIsInstance(tree.node_get(tree.find_node(t, "usr/local/bin/zysync"), tree.A_SIZE), int)
+
+    def test_which_names_the_folder_of_the_firmware(self):
+        persona, ident, t = self.rendered()
+        self.assertEqual(self.which(t, persona, ident, "awk"), ("/bin/awk\n", 0))
+        self.assertEqual(self.which(t, persona, ident, "-a", "awk", "ifconfig"), ("/bin/awk\n/sbin/ifconfig\n", 0))
+        self.assertEqual(self.which(t, persona, ident, "python"), ("/usr/bin/python\n", 0))
+        # wget of the NAS326 is a link of the system image (/usr/sbin/wget -> ../../bin/busybox)
+        self.assertEqual(self.which(t, persona, ident, "wget"), ("/usr/sbin/wget\n", 0))
+        self.assertEqual(self.which(t, persona, ident, "bash"), ("", 1))
+
+    def test_which_and_the_shell_agree(self):
+        # the folders are the firmware's own: which looks through the login's PATH (no which_dirs table), and a
+        #   name in two folders is the one of the first (pgrep: the applet in /bin and a program of the system image
+        #   in /usr/sbin; zysync: /usr/bin and /usr/local/bin of the system image)
+        persona, ident, t = self.rendered()
+        self.assertFalse(self.cfg(persona, ident).has_option("shell", "which_dirs"))
+        for name, first, every in (("pgrep", "/bin/pgrep", "/bin/pgrep\n/usr/sbin/pgrep\n"),
+                                   ("zysync", "/usr/bin/zysync", "/usr/bin/zysync\n/usr/local/bin/zysync\n"),
+                                   ("awk", "/bin/awk", "/bin/awk\n"),
+                                   ("info_printenv", "/firmware/sbin/info_printenv", "/firmware/sbin/info_printenv\n")):
+            with self.subTest(name=name):
+                self.assertEqual(self.found(t, persona, ident, name), first)
+                self.assertEqual(self.which(t, persona, ident, name), (first + "\n", 0))
+                self.assertEqual(self.which(t, persona, ident, "-a", name), (every, 0))
+
+
 class StrictLookupTest(unittest.TestCase):
     """getCommand of the patched protocol.py with [shell] builtins: a Python command answers a bare
     name only as a builtin of the shell or as a program found on PATH."""
@@ -266,7 +363,8 @@ class WhichTest(unittest.TestCase):
     def test_the_tables_of_the_devices(self):
         expected = {"openwrt": {"sh": "bin", "ls": "bin", "wc": "usr/bin", "ifconfig": "sbin"},
                     "ubiquiti-edgerouter-x": {"sh": "bin", "ls": "bin", "ip": "bin,sbin"},
-                    "dlink-dir859": {"sh": "bin", "ifconfig": "sbin", "wget": "usr/bin"}}
+                    "dlink-dir859": {"sh": "bin", "ifconfig": "sbin", "wget": "usr/bin"},
+                    "zyxel-nas326": {"sh": "bin", "awk": "bin", "wc": "bin", "ifconfig": "sbin", "telnetd": "sbin"}}
         for pid, part in expected.items():
             persona = catalog.by_id(pid)
             table = firmware.program_dirs(persona, system.busybox_applets(persona, draw(persona, 0)))
@@ -275,6 +373,13 @@ class WhichTest(unittest.TestCase):
         for pid in ("ubuntu-noble", "synology-dsm", "tplink-archer-c7"):
             persona = catalog.by_id(pid)
             self.assertIsNone(firmware.program_dirs(persona, ()), pid)
+        # the NAS326 places its applets as its firmware: wget is a link of its system image (/usr/sbin), the
+        #   applets without a link (start-stop-daemon is a program of its own) are in no folder of the table
+        persona = catalog.by_id("zyxel-nas326")
+        table = firmware.program_dirs(persona, system.busybox_applets(persona, draw(persona, 0)))
+        self.assertEqual(table["wget"], ("usr/sbin",))
+        for name in ("start-stop-daemon", "mke2fs", "linuxrc"):
+            self.assertNotIn(name, table)
         # names with a hyphen stay whole
         persona = catalog.by_id("openwrt")
         table = firmware.program_dirs(persona, system.busybox_applets(persona, draw(persona, 0)))
@@ -302,6 +407,32 @@ class WhichTest(unittest.TestCase):
                                   text=True)
             self.assertNotEqual(done.returncode, 0)
             self.assertIn("Could not find expected text", done.stderr)
+
+
+class CowrieCommandNamesTest(unittest.TestCase):
+    """system.COWRIE_COMMAND_NAMES holds every name a module of Cowrie's commands registers: those of the
+    fixture tree (an excerpt of v3.1.3) and those the T-Pot patch adds. A Cowrie bump that brings a new
+    command fails here until the constant has it."""
+
+    REGISTERED = re.compile(r'commands\[\s*\\?"([^"\\{]+)\\?"\s*\]')
+
+    def test_the_names_of_the_fixture_tree(self):
+        commands = Path(__file__).parent / "fixtures" / "v3.1.3" / "src" / "cowrie" / "commands"
+        found = set()
+        for path in commands.glob("*.py"):
+            found |= {name.rsplit("/", 1)[-1] for name in self.REGISTERED.findall(path.read_text())}
+        self.assertGreater(len(found), 50)
+        self.assertEqual(sorted(found - system.COWRIE_COMMAND_NAMES), [])
+
+    def test_the_names_of_the_patch(self):
+        from tests.test_patch import PATCH
+        text = PATCH.read_text()
+        found = {name.rsplit("/", 1)[-1] for name in self.REGISTERED.findall(text)}
+        # the loops of the patch (`for _name in ("ip", "/sbin/ip", ...)`, the file commands)
+        for loop in re.findall(r'for (?:_name|tpot_tool)[^\n]* in \(([^:]*?)\):\n', text):
+            found |= {name.rsplit("/", 1)[-1] for name in re.findall(r'"([/\w.-]+)"', loop)}
+        self.assertTrue({"df", "sort", "seq", "ip", "ps", "rm", "openssl"} <= found, found)
+        self.assertEqual(sorted(found - system.COWRIE_COMMAND_NAMES), [])
 
 
 if __name__ == "__main__":

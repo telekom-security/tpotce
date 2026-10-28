@@ -1,0 +1,2453 @@
+{
+ "_source": "awk run with sh -c in containers of these images (docker run -d, one docker exec per case as uid 0, a fresh /tmp/w per case, the locale of `locale` unless the case sets LC_ALL), 2026-10-21, Docker 29.8.2 on linux/arm64: user functions (recursion, a parameter shadowing a global, local parameters, an array by reference, an undefined function, reached and not), range patterns, rand() and srand() (in one run, in two runs, one second apart, the return value of srand), printf widths and conversions, large integers, the form of numbers in print, CONVFMT, length / substr / index / toupper of UTF-8 text with LC_ALL=C, C.UTF-8 and (Red Hat) en_US.UTF-8, index(s, \"\") and length() in BEGIN, a rule and END. awks: gawk 4.0.2 (centos:7), 4.1.4 (debian:9 with the gawk package of archive.debian.org), 5.1.0 (rockylinux:9), 5.2.1 (debian:12 with the gawk package), mawk 1.3.3 (debian:10), 1.3.4 20200120 (ubuntu:22.04), 20240123 (ubuntu:24.04), 20250131 (debian:13), BusyBox 1.36.1 (busybox:1.36.1-musl). Raw output, nothing normalised. Volatile (they carry the clock or the entropy of the run and differ in a second run; the tests compare their form only): every srand() without an argument and the value srand returns where it is the clock (gawk, BusyBox: the second srand() of `srand(); srand()`; mawk: every return value but an argument given before), rand() without srand in mawk 1.3.3, 20200120 and 20240123, srand(1) in mawk 20240123, CONVFMT=\"%d\" in mawk 20240123. A second run of a sample of 74 cases gave the same output but for five of these. `meta` names each case, `groups.version` the version calls (not run by the tests).",
+ "images": {
+  "busybox_1.36.1-musl": {
+   "cases": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": [
+     "3.14\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": [
+     "3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": [
+     "0.3 10000000000 9007199254740992 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": [
+     "1000000 10000000000000000 100000000000000000 123456789 1234567890123\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": [
+     "10000000 100000000 1000000000 10000000000 1000000000000 1000000000000000 2147483648 4294967296 9007199254740992 9223372036854775807 1.84467e+19 1.18059e+21\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print nosuch(1) }'": [
+     "",
+     "awk: cmd. line:1: Call to undefined function\n",
+     1
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.752709 0.189214\n0.752709 0.189214\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.752709 0.189214\n0.752709 0.189214\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(); print rand() }'": [
+     "0.752709\n0.189214\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(); print srand() }'": [
+     "1\n1792616341\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": [
+     "          42|ab          |0.333333333333|00000003.142|ff|10|A|   he\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": [
+     "   0.333333333333333 0.333333\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": [
+     "2147483647 2147483647\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'": [
+     "0.399931\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.399931\n0.442967\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.752709 0.189214\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.752709 0.189214\n0.752709 0.189214\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": [
+     "123456789012345680 123456789012345680 123456789012345680\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": [
+     "5 1\n",
+     "",
+     0
+    ],
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": [
+     "120 3628800 2432902008176640000\n",
+     "",
+     0
+    ],
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": [
+     "6 7\n",
+     "",
+     0
+    ],
+    "awk --version": [
+     "",
+     "awk: unrecognized option: version\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: awk [OPTIONS] [AWK_PROGRAM] [FILE]...\n\n\t-v VAR=VAL\tSet variable\n\t-F SEP\t\tUse SEP as field separator\n\t-f FILE\t\tRead program from FILE\n\t-e AWK_PROGRAM\n",
+     1
+    ],
+    "busybox | head -1": [
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": [
+     "3\n3\n3\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": [
+     "0.752709 0.189214\n0.752709 0.189214\n0.752709 0.189214\n",
+     "",
+     0
+    ],
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": [
+     "2\n3\n4\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": [
+     "b\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": [
+     "b\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": [
+     "a\nb\nc\na\nc\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": [
+     "0 0\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": [
+     "0 5\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": [
+     "0 5\n",
+     "",
+     0
+    ]
+   },
+   "digest": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "groups": {
+    "version": [
+     "awk --version",
+     "busybox | head -1"
+    ]
+   },
+   "image": "busybox:1.36.1-musl",
+   "kind": "busybox 1.36.1 musl awk",
+   "locale": "unset",
+   "meta": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C",
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C",
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C.UTF-8",
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": "CONVFMT %.2f",
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": "CONVFMT %d",
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": "undefined function not reached",
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": "arithmetic",
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": "exponent form",
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": "exponent form 2",
+    "awk 'BEGIN { print nosuch(1) }'": "undefined function",
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": "rand in two runs",
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": "rand in two runs 1 s apart",
+    "awk 'BEGIN { print rand(); print rand() }'": "rand twice in one run",
+    "awk 'BEGIN { print srand(); print srand() }'": "srand return value 2",
+    "awk 'BEGIN { print srand(5); print srand(7) }'": "srand return value",
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": "printf formats",
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": "printf %g",
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": "printf big integers",
+    "awk 'BEGIN { srand(); print rand() }'": "srand()",
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": "srand() two runs 1 s apart",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1)",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1) again",
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": "big literal",
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": "function",
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": "param shadows global",
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": "recursion",
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": "array by reference",
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": "local parameter",
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": "CONVFMT %d x3 runs",
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": "srand(1) x3 runs",
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": "range NR",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": "range same line",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": "range never closes",
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": "range regex",
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": "index empty / length() BEGIN",
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": "index empty / length() END",
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": "index empty / length() rule"
+   },
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "centos_7": {
+   "cases": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "2 \u00c4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "3 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\u00f6\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": [
+     "3.14\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": [
+     "3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": [
+     "0.3 10000000000 9007199254740992 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": [
+     "1000000 10000000000000000 100000000000000000 123456789 1234567890123\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": [
+     "10000000 100000000 1000000000 10000000000 1000000000000 1000000000000000 2147483648 4294967296 9007199254740992 9223372036854775808 18446744073709551616 1180591620717411303424\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print nosuch(1) }'": [
+     "",
+     "awk: cmd. line:1: fatal: function `nosuch' not defined\n",
+     2
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.237788 0.291066\n0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.237788 0.291066\n0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(); print rand() }'": [
+     "0.237788\n0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(); print srand() }'": [
+     "1\n1792616318\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": [
+     "          42|ab          |0.333333333333|00000003.142|ff|10|A|   he\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": [
+     "   0.333333333333333 0.333333\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": [
+     "2147483648 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'": [
+     "0.655639\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.0312752\n0.568801\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.237788 0.291066\n0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": [
+     "123456789012345680 123456789012345680 123456789012345680\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": [
+     "5 1\n",
+     "",
+     0
+    ],
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": [
+     "120 3628800 2432902008176640000\n",
+     "",
+     0
+    ],
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": [
+     "6 7\n",
+     "",
+     0
+    ],
+    "awk --version": [
+     "GNU Awk 4.0.2\nCopyright (C) 1989, 1991-2012 Free Software Foundation.\n\nThis program is free software; you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation; either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see http://www.gnu.org/licenses/.\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": [
+     "3\n3\n3\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": [
+     "0.237788 0.291066\n0.237788 0.291066\n0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "gawk --version": [
+     "GNU Awk 4.0.2\nCopyright (C) 1989, 1991-2012 Free Software Foundation.\n\nThis program is free software; you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation; either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see http://www.gnu.org/licenses/.\n",
+     "",
+     0
+    ],
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": [
+     "2\n3\n4\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": [
+     "b\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": [
+     "b\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": [
+     "a\nb\nc\na\nc\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ]
+   },
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "groups": {
+    "version": [
+     "awk --version",
+     "gawk --version"
+    ]
+   },
+   "image": "centos:7",
+   "kind": "gawk 4.0.2",
+   "locale": "en_US.UTF-8",
+   "meta": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C",
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C",
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C.UTF-8",
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 en_US.UTF-8",
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 en_US.UTF-8",
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 en_US.UTF-8",
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": "CONVFMT %.2f",
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": "CONVFMT %d",
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": "undefined function not reached",
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": "arithmetic",
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": "exponent form",
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": "exponent form 2",
+    "awk 'BEGIN { print nosuch(1) }'": "undefined function",
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": "rand in two runs",
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": "rand in two runs 1 s apart",
+    "awk 'BEGIN { print rand(); print rand() }'": "rand twice in one run",
+    "awk 'BEGIN { print srand(); print srand() }'": "srand return value 2",
+    "awk 'BEGIN { print srand(5); print srand(7) }'": "srand return value",
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": "printf formats",
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": "printf %g",
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": "printf big integers",
+    "awk 'BEGIN { srand(); print rand() }'": "srand()",
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": "srand() two runs 1 s apart",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1)",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1) again",
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": "big literal",
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": "function",
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": "param shadows global",
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": "recursion",
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": "array by reference",
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": "local parameter",
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": "CONVFMT %d x3 runs",
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": "srand(1) x3 runs",
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": "range NR",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": "range same line",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": "range never closes",
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": "range regex",
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": "index empty / length() BEGIN",
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": "index empty / length() END",
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": "index empty / length() rule"
+   },
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "debian_10": {
+   "cases": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": [
+     "3.14\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": [
+     "3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": [
+     "0.3 1e+10 9.0072e+15 9.0072e+15\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": [
+     "1000000 1e+16 1e+17 123456789 1.23457e+12\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": [
+     "10000000 100000000 1000000000 1e+10 1e+12 1e+15 2.14748e+09 4.29497e+09 9.0072e+15 9.22337e+18 1.84467e+19 1.18059e+21\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print nosuch(1) }'": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.774445 0.0905174\n0.774445 0.0905174\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.774445 0.0905174\n0.905982 0.846123\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(); print rand() }'": [
+     "0.774445\n0.0905174\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(); print srand() }'": [
+     "1792616331\n1792616331\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1792616331\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": [
+     "          42|ab          |0.333333333333|00000003.142|ff|10|A|   he\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": [
+     "   0.333333333333333 0.333333\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": [
+     "2147483647 2147483647\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'": [
+     "0.0375202\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.0375202\n0.169058\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.263076 0.511211\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.263076 0.511211\n0.263076 0.511211\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": [
+     "1.23457e+17 1.23457e+17 1.23457e+17\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": [
+     "5 1\n",
+     "",
+     0
+    ],
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": [
+     "120 3628800 2.4329e+18\n",
+     "",
+     0
+    ],
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": [
+     "6 7\n",
+     "",
+     0
+    ],
+    "awk -W version": [
+     "mawk 1.3.3 Nov 1996, Copyright (C) Michael D. Brennan\n\n",
+     "compiled limits:\nmax NF             32767\nsprintf buffer      2040\n",
+     0
+    ],
+    "awk -Wv": [
+     "mawk 1.3.3 Nov 1996, Copyright (C) Michael D. Brennan\n\n",
+     "compiled limits:\nmax NF             32767\nsprintf buffer      2040\n",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": [
+     "3\n3\n3\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": [
+     "0.263076 0.511211\n0.263076 0.511211\n0.263076 0.511211\n",
+     "",
+     0
+    ],
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": [
+     "2\n3\n4\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": [
+     "b\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": [
+     "b\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": [
+     "a\nb\nc\na\nc\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ]
+   },
+   "digest": "debian@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+   "groups": {
+    "version": [
+     "awk -W version",
+     "awk -Wv"
+    ]
+   },
+   "image": "debian:10",
+   "kind": "mawk 1.3.3",
+   "locale": "POSIX",
+   "meta": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C",
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C",
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C.UTF-8",
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": "CONVFMT %.2f",
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": "CONVFMT %d",
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": "undefined function not reached",
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": "arithmetic",
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": "exponent form",
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": "exponent form 2",
+    "awk 'BEGIN { print nosuch(1) }'": "undefined function",
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": "rand in two runs",
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": "rand in two runs 1 s apart",
+    "awk 'BEGIN { print rand(); print rand() }'": "rand twice in one run",
+    "awk 'BEGIN { print srand(); print srand() }'": "srand return value 2",
+    "awk 'BEGIN { print srand(5); print srand(7) }'": "srand return value",
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": "printf formats",
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": "printf %g",
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": "printf big integers",
+    "awk 'BEGIN { srand(); print rand() }'": "srand()",
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": "srand() two runs 1 s apart",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1)",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1) again",
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": "big literal",
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": "function",
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": "param shadows global",
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": "recursion",
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": "array by reference",
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": "local parameter",
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": "CONVFMT %d x3 runs",
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": "srand(1) x3 runs",
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": "range NR",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": "range same line",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": "range never closes",
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": "range regex",
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": "index empty / length() BEGIN",
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": "index empty / length() END",
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": "index empty / length() rule"
+   },
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "debian_12": {
+   "cases": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "2 \u00c4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "3 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\u00f6\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": [
+     "3.14\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": [
+     "3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": [
+     "0.3 10000000000 9007199254740992 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": [
+     "1000000 10000000000000000 100000000000000000 123456789 1234567890123\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": [
+     "10000000 100000000 1000000000 10000000000 1000000000000 1000000000000000 2147483648 4294967296 9007199254740992 9223372036854775808 18446744073709551616 1180591620717411303424\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print nosuch(1) }'": [
+     "",
+     "awk: cmd. line:1: fatal: function `nosuch' not defined\n",
+     2
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.924046 0.593909\n0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.924046 0.593909\n0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(); print rand() }'": [
+     "0.924046\n0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(); print srand() }'": [
+     "1\n1792616328\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": [
+     "          42|ab          |0.333333333333|00000003.142|ff|10|A|   he\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": [
+     "   0.333333333333333 0.333333\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": [
+     "2147483648 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'": [
+     "0.389894\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.520528\n0.46912\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.924046 0.593909\n0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": [
+     "123456789012345680 123456789012345680 123456789012345680\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": [
+     "5 1\n",
+     "",
+     0
+    ],
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": [
+     "120 3628800 2432902008176640000\n",
+     "",
+     0
+    ],
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": [
+     "6 7\n",
+     "",
+     0
+    ],
+    "awk --version": [
+     "GNU Awk 5.2.1, API 3.2, PMA Avon 8-g1, (GNU MPFR 4.2.0, GNU MP 6.2.1)\nCopyright (C) 1989, 1991-2022 Free Software Foundation.\n\nThis program is free software; you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation; either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see http://www.gnu.org/licenses/.\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": [
+     "3\n3\n3\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": [
+     "0.924046 0.593909\n0.924046 0.593909\n0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "gawk --version": [
+     "GNU Awk 5.2.1, API 3.2, PMA Avon 8-g1, (GNU MPFR 4.2.0, GNU MP 6.2.1)\nCopyright (C) 1989, 1991-2022 Free Software Foundation.\n\nThis program is free software; you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation; either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see http://www.gnu.org/licenses/.\n",
+     "",
+     0
+    ],
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": [
+     "2\n3\n4\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": [
+     "b\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": [
+     "b\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": [
+     "a\nb\nc\na\nc\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ]
+   },
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "groups": {
+    "version": [
+     "awk --version",
+     "gawk --version"
+    ]
+   },
+   "image": "debian:12",
+   "kind": "gawk 5.2.1",
+   "locale": "C.UTF-8",
+   "meta": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C",
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C",
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C.UTF-8",
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": "CONVFMT %.2f",
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": "CONVFMT %d",
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": "undefined function not reached",
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": "arithmetic",
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": "exponent form",
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": "exponent form 2",
+    "awk 'BEGIN { print nosuch(1) }'": "undefined function",
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": "rand in two runs",
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": "rand in two runs 1 s apart",
+    "awk 'BEGIN { print rand(); print rand() }'": "rand twice in one run",
+    "awk 'BEGIN { print srand(); print srand() }'": "srand return value 2",
+    "awk 'BEGIN { print srand(5); print srand(7) }'": "srand return value",
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": "printf formats",
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": "printf %g",
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": "printf big integers",
+    "awk 'BEGIN { srand(); print rand() }'": "srand()",
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": "srand() two runs 1 s apart",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1)",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1) again",
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": "big literal",
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": "function",
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": "param shadows global",
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": "recursion",
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": "array by reference",
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": "local parameter",
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": "CONVFMT %d x3 runs",
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": "srand(1) x3 runs",
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": "range NR",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": "range same line",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": "range never closes",
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": "range regex",
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": "index empty / length() BEGIN",
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": "index empty / length() END",
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": "index empty / length() rule"
+   },
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "debian_13": {
+   "cases": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": [
+     "3.14\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": [
+     "3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": [
+     "0.3 10000000000 9007199254740992 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": [
+     "1000000 10000000000000000 100000000000000000 123456789 1234567890123\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": [
+     "10000000 100000000 1000000000 10000000000 1000000000000 1000000000000000 2147483648 4294967296 9007199254740992 9223372036854775808 18446744073709551616 1.18059e+21\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print nosuch(1) }'": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.118709 0.56121\n0.118709 0.56121\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.118709 0.56121\n0.118709 0.56121\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(); print rand() }'": [
+     "0.118709\n0.56121\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(); print srand() }'": [
+     "1792616336983174912\n1792616336983197440\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1792616336913284608\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": [
+     "          42|ab          |0.333333333333|00000003.142|ff|10|A|   he\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": [
+     "   0.333333333333333 0.333333\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": [
+     "2147483648 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'": [
+     "0.118709\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.118709\n0.118709\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.840188 0.394383\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.840188 0.394383\n0.840188 0.394383\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": [
+     "123456789012345680 123456789012345680 123456789012345680\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": [
+     "5 1\n",
+     "",
+     0
+    ],
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": [
+     "120 3628800 2432902008176640000\n",
+     "",
+     0
+    ],
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": [
+     "6 7\n",
+     "",
+     0
+    ],
+    "awk -W version": [
+     "mawk 1.3.4 20250131\nCopyright 2008-2024,2025, Thomas E. Dickey\nCopyright 1991-1996,2014, Michael D. Brennan\n\nrandom-funcs:       srandom/random\nregex-funcs:        internal\n\ncompiled limits:\nsprintf buffer      8192\nmaximum-integer     9223372036854775808\n",
+     "",
+     0
+    ],
+    "awk -Wv": [
+     "mawk 1.3.4 20250131\nCopyright 2008-2024,2025, Thomas E. Dickey\nCopyright 1991-1996,2014, Michael D. Brennan\n\nrandom-funcs:       srandom/random\nregex-funcs:        internal\n\ncompiled limits:\nsprintf buffer      8192\nmaximum-integer     9223372036854775808\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": [
+     "3\n3\n3\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": [
+     "0.840188 0.394383\n0.840188 0.394383\n0.840188 0.394383\n",
+     "",
+     0
+    ],
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": [
+     "2\n3\n4\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": [
+     "b\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": [
+     "b\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": [
+     "a\nb\nc\na\nc\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ]
+   },
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "groups": {
+    "version": [
+     "awk -W version",
+     "awk -Wv"
+    ]
+   },
+   "image": "debian:13",
+   "kind": "mawk 1.3.4 20250131",
+   "locale": "C.UTF-8",
+   "meta": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C",
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C",
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C.UTF-8",
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": "CONVFMT %.2f",
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": "CONVFMT %d",
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": "undefined function not reached",
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": "arithmetic",
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": "exponent form",
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": "exponent form 2",
+    "awk 'BEGIN { print nosuch(1) }'": "undefined function",
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": "rand in two runs",
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": "rand in two runs 1 s apart",
+    "awk 'BEGIN { print rand(); print rand() }'": "rand twice in one run",
+    "awk 'BEGIN { print srand(); print srand() }'": "srand return value 2",
+    "awk 'BEGIN { print srand(5); print srand(7) }'": "srand return value",
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": "printf formats",
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": "printf %g",
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": "printf big integers",
+    "awk 'BEGIN { srand(); print rand() }'": "srand()",
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": "srand() two runs 1 s apart",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1)",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1) again",
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": "big literal",
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": "function",
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": "param shadows global",
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": "recursion",
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": "array by reference",
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": "local parameter",
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": "CONVFMT %d x3 runs",
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": "srand(1) x3 runs",
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": "range NR",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": "range same line",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": "range never closes",
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": "range regex",
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": "index empty / length() BEGIN",
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": "index empty / length() END",
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": "index empty / length() rule"
+   },
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "debian_9": {
+   "cases": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "2 \u00c4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "3 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\u00f6\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": [
+     "3.14\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": [
+     "3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": [
+     "0.3 10000000000 9007199254740992 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": [
+     "1000000 10000000000000000 100000000000000000 123456789 1234567890123\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": [
+     "10000000 100000000 1000000000 10000000000 1000000000000 1000000000000000 2147483648 4294967296 9007199254740992 9223372036854775808 18446744073709551616 1180591620717411303424\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print nosuch(1) }'": [
+     "",
+     "awk: cmd. line:1: fatal: function `nosuch' not defined\n",
+     2
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.237788 0.291066\n0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.237788 0.291066\n0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(); print rand() }'": [
+     "0.237788\n0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(); print srand() }'": [
+     "1\n1792616331\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": [
+     "          42|ab          |0.333333333333|00000003.142|ff|10|A|   he\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": [
+     "   0.333333333333333 0.333333\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": [
+     "2147483648 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'": [
+     "0.237515\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.237515\n0.320356\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.237788 0.291066\n0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": [
+     "123456789012345680 123456789012345680 123456789012345680\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": [
+     "5 1\n",
+     "",
+     0
+    ],
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": [
+     "120 3628800 2432902008176640000\n",
+     "",
+     0
+    ],
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": [
+     "6 7\n",
+     "",
+     0
+    ],
+    "awk --version": [
+     "GNU Awk 4.1.4, API: 1.1 (GNU MPFR 3.1.5, GNU MP 6.1.2)\nCopyright (C) 1989, 1991-2016 Free Software Foundation.\n\nThis program is free software; you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation; either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see http://www.gnu.org/licenses/.\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": [
+     "3\n3\n3\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": [
+     "0.237788 0.291066\n0.237788 0.291066\n0.237788 0.291066\n",
+     "",
+     0
+    ],
+    "gawk --version": [
+     "GNU Awk 4.1.4, API: 1.1 (GNU MPFR 3.1.5, GNU MP 6.1.2)\nCopyright (C) 1989, 1991-2016 Free Software Foundation.\n\nThis program is free software; you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation; either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see http://www.gnu.org/licenses/.\n",
+     "",
+     0
+    ],
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": [
+     "2\n3\n4\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": [
+     "b\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": [
+     "b\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": [
+     "a\nb\nc\na\nc\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ]
+   },
+   "digest": "debian@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+   "groups": {
+    "version": [
+     "awk --version",
+     "gawk --version"
+    ]
+   },
+   "image": "debian:9",
+   "kind": "gawk 4.1.4",
+   "locale": "C.UTF-8",
+   "meta": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C",
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C",
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C.UTF-8",
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": "CONVFMT %.2f",
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": "CONVFMT %d",
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": "undefined function not reached",
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": "arithmetic",
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": "exponent form",
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": "exponent form 2",
+    "awk 'BEGIN { print nosuch(1) }'": "undefined function",
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": "rand in two runs",
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": "rand in two runs 1 s apart",
+    "awk 'BEGIN { print rand(); print rand() }'": "rand twice in one run",
+    "awk 'BEGIN { print srand(); print srand() }'": "srand return value 2",
+    "awk 'BEGIN { print srand(5); print srand(7) }'": "srand return value",
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": "printf formats",
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": "printf %g",
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": "printf big integers",
+    "awk 'BEGIN { srand(); print rand() }'": "srand()",
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": "srand() two runs 1 s apart",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1)",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1) again",
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": "big literal",
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": "function",
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": "param shadows global",
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": "recursion",
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": "array by reference",
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": "local parameter",
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": "CONVFMT %d x3 runs",
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": "srand(1) x3 runs",
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": "range NR",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": "range same line",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": "range never closes",
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": "range regex",
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": "index empty / length() BEGIN",
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": "index empty / length() END",
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": "index empty / length() rule"
+   },
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "rockylinux_9": {
+   "cases": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "2 \u00c4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "3 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\u00f6\n",
+     "",
+     0
+    ],
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "2 \u00c4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "3 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\u00f6\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": [
+     "3.14\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": [
+     "3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": [
+     "ok\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": [
+     "0.3 10000000000 9007199254740992 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": [
+     "1000000 10000000000000000 100000000000000000 123456789 1234567890123\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": [
+     "10000000 100000000 1000000000 10000000000 1000000000000 1000000000000000 2147483648 4294967296 9007199254740992 9223372036854775808 18446744073709551616 1180591620717411303424\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print nosuch(1) }'": [
+     "",
+     "awk: cmd. line:1: fatal: function `nosuch' not defined\n",
+     2
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.924046 0.593909\n0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.924046 0.593909\n0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(); print rand() }'": [
+     "0.924046\n0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(); print srand() }'": [
+     "1\n1792616349\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": [
+     "          42|ab          |0.333333333333|00000003.142|ff|10|A|   he\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": [
+     "   0.333333333333333 0.333333\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": [
+     "2147483648 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'": [
+     "0.0458192\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.0458192\n0.834264\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.924046 0.593909\n0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": [
+     "123456789012345680 123456789012345680 123456789012345680\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": [
+     "5 1\n",
+     "",
+     0
+    ],
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": [
+     "120 3628800 2432902008176640000\n",
+     "",
+     0
+    ],
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": [
+     "6 7\n",
+     "",
+     0
+    ],
+    "awk --version": [
+     "GNU Awk 5.1.0, API: 3.0 (GNU MPFR 4.1.0-p9, GNU MP 6.2.0)\nCopyright (C) 1989, 1991-2020 Free Software Foundation.\n\nThis program is free software; you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation; either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see http://www.gnu.org/licenses/.\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": [
+     "3\n3\n3\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": [
+     "0.924046 0.593909\n0.924046 0.593909\n0.924046 0.593909\n",
+     "",
+     0
+    ],
+    "gawk --version": [
+     "GNU Awk 5.1.0, API: 3.0 (GNU MPFR 4.1.0-p9, GNU MP 6.2.0)\nCopyright (C) 1989, 1991-2020 Free Software Foundation.\n\nThis program is free software; you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation; either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see http://www.gnu.org/licenses/.\n",
+     "",
+     0
+    ],
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": [
+     "2\n3\n4\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": [
+     "b\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": [
+     "b\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": [
+     "a\nb\nc\na\nc\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ]
+   },
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "groups": {
+    "version": [
+     "awk --version",
+     "gawk --version"
+    ]
+   },
+   "image": "rockylinux:9",
+   "kind": "gawk 5.1.0",
+   "locale": "en_US.UTF-8",
+   "meta": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C",
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C",
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C.UTF-8",
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 en_US.UTF-8",
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 en_US.UTF-8",
+    "LC_ALL=en_US.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 en_US.UTF-8",
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": "CONVFMT %.2f",
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": "CONVFMT %d",
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": "undefined function not reached",
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": "arithmetic",
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": "exponent form",
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": "exponent form 2",
+    "awk 'BEGIN { print nosuch(1) }'": "undefined function",
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": "rand in two runs",
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": "rand in two runs 1 s apart",
+    "awk 'BEGIN { print rand(); print rand() }'": "rand twice in one run",
+    "awk 'BEGIN { print srand(); print srand() }'": "srand return value 2",
+    "awk 'BEGIN { print srand(5); print srand(7) }'": "srand return value",
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": "printf formats",
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": "printf %g",
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": "printf big integers",
+    "awk 'BEGIN { srand(); print rand() }'": "srand()",
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": "srand() two runs 1 s apart",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1)",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1) again",
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": "big literal",
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": "function",
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": "param shadows global",
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": "recursion",
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": "array by reference",
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": "local parameter",
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": "CONVFMT %d x3 runs",
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": "srand(1) x3 runs",
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": "range NR",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": "range same line",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": "range never closes",
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": "range regex",
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": "index empty / length() BEGIN",
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": "index empty / length() END",
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": "index empty / length() rule"
+   },
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "ubuntu_22.04": {
+   "cases": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": [
+     "3.14\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": [
+     "3\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": [
+     "0.3 1e+10 9.0072e+15 9.0072e+15\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": [
+     "1000000 1e+16 1e+17 123456789 1.23457e+12\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": [
+     "10000000 100000000 1000000000 1e+10 1e+12 1e+15 2.14748e+09 4.29497e+09 9.0072e+15 9.22337e+18 1.84467e+19 1.18059e+21\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print nosuch(1) }'": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.841277 0.941606\n0.841277 0.941606\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.841277 0.941606\n0.201178 0.359516\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(); print rand() }'": [
+     "0.841277\n0.941606\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(); print srand() }'": [
+     "1792616336\n1792616336\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1792616335\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": [
+     "          42|ab          |0.333333333333|00000003.142|ff|10|A|   he\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": [
+     "   0.333333333333333 0.333333\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": [
+     "2147483647 2147483647\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'": [
+     "0.201178\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.061011\n0.061011\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.840188 0.394383\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.840188 0.394383\n0.840188 0.394383\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": [
+     "1.23457e+17 1.23457e+17 1.23457e+17\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": [
+     "5 1\n",
+     "",
+     0
+    ],
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": [
+     "120 3628800 2.4329e+18\n",
+     "",
+     0
+    ],
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": [
+     "6 7\n",
+     "",
+     0
+    ],
+    "awk -W version": [
+     "mawk 1.3.4 20200120\nCopyright 2008-2019,2020, Thomas E. Dickey\nCopyright 1991-1996,2014, Michael D. Brennan\n\n",
+     "random-funcs:       srandom/random\nregex-funcs:        internal\ncompiled limits:\nsprintf buffer      8192\nmaximum-integer     2147483647\n",
+     0
+    ],
+    "awk -Wv": [
+     "mawk 1.3.4 20200120\nCopyright 2008-2019,2020, Thomas E. Dickey\nCopyright 1991-1996,2014, Michael D. Brennan\n\n",
+     "random-funcs:       srandom/random\nregex-funcs:        internal\ncompiled limits:\nsprintf buffer      8192\nmaximum-integer     2147483647\n",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": [
+     "3\n3\n3\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": [
+     "0.840188 0.394383\n0.840188 0.394383\n0.840188 0.394383\n",
+     "",
+     0
+    ],
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": [
+     "2\n3\n4\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": [
+     "b\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": [
+     "b\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": [
+     "a\nb\nc\na\nc\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ]
+   },
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "groups": {
+    "version": [
+     "awk -W version",
+     "awk -Wv"
+    ]
+   },
+   "image": "ubuntu:22.04",
+   "kind": "mawk 1.3.4 20200120",
+   "locale": "C.UTF-8",
+   "meta": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C",
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C",
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C.UTF-8",
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": "CONVFMT %.2f",
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": "CONVFMT %d",
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": "undefined function not reached",
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": "arithmetic",
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": "exponent form",
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": "exponent form 2",
+    "awk 'BEGIN { print nosuch(1) }'": "undefined function",
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": "rand in two runs",
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": "rand in two runs 1 s apart",
+    "awk 'BEGIN { print rand(); print rand() }'": "rand twice in one run",
+    "awk 'BEGIN { print srand(); print srand() }'": "srand return value 2",
+    "awk 'BEGIN { print srand(5); print srand(7) }'": "srand return value",
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": "printf formats",
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": "printf %g",
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": "printf big integers",
+    "awk 'BEGIN { srand(); print rand() }'": "srand()",
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": "srand() two runs 1 s apart",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1)",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1) again",
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": "big literal",
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": "function",
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": "param shadows global",
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": "recursion",
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": "array by reference",
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": "local parameter",
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": "CONVFMT %d x3 runs",
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": "srand(1) x3 runs",
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": "range NR",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": "range same line",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": "range never closes",
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": "range regex",
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": "index empty / length() BEGIN",
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": "index empty / length() END",
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": "index empty / length() rule"
+   },
+   "platform": "linux/arm64",
+   "uid": 0
+  },
+  "ubuntu_24.04": {
+   "cases": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": [
+     "3 \u00e4B\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": [
+     "6 3\n",
+     "",
+     0
+    ],
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": [
+     "\udca4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": [
+     "3.14\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": [
+     "-168967176\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": [
+     "0.3 10000000000 9007199254740992 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": [
+     "1000000 10000000000000000 100000000000000000 123456789 1234567890123\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": [
+     "10000000 100000000 1000000000 10000000000 1000000000000 1000000000000000 2147483648 4294967296 9007199254740992 9223372036854775808 18446744073709551615 1.18059e+21\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print nosuch(1) }'": [
+     "",
+     "awk: line 2: function nosuch never defined\n",
+     2
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.322728 0.604994\n0.114055 0.673341\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.10427 0.872609\n0.962298 0.511104\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(); print rand() }'": [
+     "0.76726\n0.920705\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(); print srand() }'": [
+     "1792616336\n1792616336\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1792616336\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": [
+     "          42|ab          |0.333333333333|00000003.142|ff|10|A|   he\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": [
+     "   0.333333333333333 0.333333\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": [
+     "2147483648 9007199254740992\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'": [
+     "0.47069\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.637462\n0.568038\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.863589 0.915612\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.273957 0.98848\n0.963495 0.0855741\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": [
+     "123456789012345680 123456789012345680 123456789012345680\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": [
+     "5 1\n",
+     "",
+     0
+    ],
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": [
+     "120 3628800 2432902008176640000\n",
+     "",
+     0
+    ],
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": [
+     "2\n",
+     "",
+     0
+    ],
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": [
+     "6 7\n",
+     "",
+     0
+    ],
+    "awk -W version": [
+     "mawk 1.3.4 20240123\nCopyright 2008-2023,2024, Thomas E. Dickey\nCopyright 1991-1996,2014, Michael D. Brennan\n\nrandom-funcs:       arc4random_stir/arc4random\nregex-funcs:        internal\n\ncompiled limits:\nsprintf buffer      8192\nmaximum-integer     9223372036854775808\n",
+     "",
+     0
+    ],
+    "awk -Wv": [
+     "mawk 1.3.4 20240123\nCopyright 2008-2023,2024, Thomas E. Dickey\nCopyright 1991-1996,2014, Michael D. Brennan\n\nrandom-funcs:       arc4random_stir/arc4random\nregex-funcs:        internal\n\ncompiled limits:\nsprintf buffer      8192\nmaximum-integer     9223372036854775808\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": [
+     "-812717496\n-718245272\n-510962360\n",
+     "",
+     0
+    ],
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": [
+     "0.405654 0.0145345\n0.891736 0.109523\n0.441868 0.198588\n",
+     "",
+     0
+    ],
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": [
+     "2\n3\n4\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": [
+     "b\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": [
+     "b\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": [
+     "a\nb\nc\na\nc\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": [
+     "1 0\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ],
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": [
+     "1 5\n",
+     "",
+     0
+    ]
+   },
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "groups": {
+    "version": [
+     "awk -W version",
+     "awk -Wv"
+    ]
+   },
+   "image": "ubuntu:24.04",
+   "kind": "mawk 1.3.4 20240123",
+   "locale": "C.UTF-8",
+   "meta": {
+    "LC_ALL=C awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C",
+    "LC_ALL=C awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C",
+    "LC_ALL=C awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print index(\"\u00e4\u00f6\u00fc\", \"\u00f6\"), toupper(\"\u00e4b\") }'": "index/toupper utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print length(\"\u00e4\u00f6\u00fc\"), length(\"abc\") }'": "length utf8 C.UTF-8",
+    "LC_ALL=C.UTF-8 awk 'BEGIN { print substr(\"\u00e4\u00f6\u00fc\", 2, 1) }'": "substr utf8 C.UTF-8",
+    "awk 'BEGIN { CONVFMT=\"%.2f\"; a = 3.14159; b = a \"\"; print b }'": "CONVFMT %.2f",
+    "awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'": "CONVFMT %d",
+    "awk 'BEGIN { if (0) nosuch(1); print \"ok\" }'": "undefined function not reached",
+    "awk 'BEGIN { print 0.1+0.2, 100000 * 100000, 2^53, 2^53+1 }'": "arithmetic",
+    "awk 'BEGIN { print 1e6, 1e16, 1e17, 123456789, 1234567890123 }'": "exponent form",
+    "awk 'BEGIN { print 1e7, 1e8, 1e9, 1e10, 1e12, 1e15, 2^31, 2^32, 2^53, 2^63, 2^64, 2^70 }'": "exponent form 2",
+    "awk 'BEGIN { print nosuch(1) }'": "undefined function",
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": "rand in two runs",
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": "rand in two runs 1 s apart",
+    "awk 'BEGIN { print rand(); print rand() }'": "rand twice in one run",
+    "awk 'BEGIN { print srand(); print srand() }'": "srand return value 2",
+    "awk 'BEGIN { print srand(5); print srand(7) }'": "srand return value",
+    "awk 'BEGIN { printf \"%12d|%-12s|%.12f|%012.3f|%x|%o|%c|%5.2s\\n\", 42, \"ab\", 1/3, 3.14159, 255, 8, 65, \"hello\" }'": "printf formats",
+    "awk 'BEGIN { printf \"%20.15g %s\\n\", 1/3, 1/3 }'": "printf %g",
+    "awk 'BEGIN { printf \"%d %d\\n\", 2147483648, 9007199254740993 }'": "printf big integers",
+    "awk 'BEGIN { srand(); print rand() }'": "srand()",
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": "srand() two runs 1 s apart",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1)",
+    "awk 'BEGIN { srand(1); print rand(), rand() }'; awk 'BEGIN { srand(1); print rand(), rand() }'": "srand(1) again",
+    "awk 'BEGIN { x = 123456789012345678; print x, x \"\" , x+0 }'": "big literal",
+    "awk 'function f(x) { return x+1 } BEGIN { print f(1) }'": "function",
+    "awk 'function f(x) { x = 5; return x } BEGIN { x = 1; print f(2), x }'": "param shadows global",
+    "awk 'function fact(n) { return n <= 1 ? 1 : n * fact(n-1) } BEGIN { print fact(5), fact(10), fact(20) }'": "recursion",
+    "awk 'function g(a) { a[1]=2 } BEGIN { g(x); print x[1] }'": "array by reference",
+    "awk 'function h(n,   x) { x = n * 2; return x } BEGIN { x = 7; print h(3), x }'": "local parameter",
+    "for i in 1 2 3; do awk 'BEGIN { CONVFMT=\"%d\"; a = 3.9; print a \"\" }'; done": "CONVFMT %d x3 runs",
+    "for i in 1 2 3; do awk 'BEGIN { srand(1); print rand(), rand() }'; done": "srand(1) x3 runs",
+    "printf '1\\n2\\n3\\n4\\n5\\n6\\n' | awk 'NR==2, NR==4'": "range NR",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/b/'": "range same line",
+    "printf 'a\\nb\\nc\\n' | awk '/b/,/zzz/'": "range never closes",
+    "printf 'a\\nb\\nc\\nd\\na\\nc\\n' | awk '/a/,/c/'": "range regex",
+    "printf 'hello\\n' | awk 'BEGIN { print index(\"abc\", \"\"), length() }'": "index empty / length() BEGIN",
+    "printf 'hello\\n' | awk 'END { print index(\"abc\", \"\"), length() }'": "index empty / length() END",
+    "printf 'hello\\n' | awk '{ print index(\"abc\", \"\"), length() }'": "index empty / length() rule"
+   },
+   "platform": "linux/arm64",
+   "uid": 0
+  }
+ }
+}

@@ -1,0 +1,1501 @@
+{
+ "_about": "The openssl of the personas (tpot_personas.system.openssl_data): per build of a release level its family and the size of /usr/bin/openssl and the lines of `version -a` with the option that prints each alone (CPUINFO: null, the CPU of the persona decides it); per family the style of its option parsing and its texts (help, help -help, version -help, list -commands; OpenSSL 1.0.2: the listing of its error for an unknown command). Recorded with the real openssl of each build in a container of its release (amd64; Raspberry Pi OS arm64; the EdgeOS and NAS326 programs from their firmware images under qemu-user); list -commands and help -help in containers of the release images (tests/fixtures/openssl_refs.json has the recordings). Derived: list -commands and help -help of the EdgeOS families are those of debian:9 (1.1.0l) and debian:10 (1.1.1n), help -help of the Red Hat families that of the other OpenSSL 3 builds (unverified).",
+ "builds": {
+  "bookworm_3.0.11-1~deb12u1": {
+   "family": "bookworm",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.11 19 Sep 2023 (Library: OpenSSL 3.0.11 19 Sep 2023)"
+    ],
+    [
+     "b",
+     "built on: Tue Sep 26 19:08:42 2023 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/reproducible-path/openssl-3.0.11=. -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 976616
+  },
+  "bookworm_3.0.11-1~deb12u2": {
+   "family": "bookworm",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.11 19 Sep 2023 (Library: OpenSSL 3.0.11 19 Sep 2023)"
+    ],
+    [
+     "b",
+     "built on: Mon Oct 23 17:52:22 2023 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/reproducible-path/openssl-3.0.11=. -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 976616
+  },
+  "bookworm_3.0.16-1~deb12u1": {
+   "family": "bookworm",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.16 11 Feb 2025 (Library: OpenSSL 3.0.16 11 Feb 2025)"
+    ],
+    [
+     "b",
+     "built on: Tue Apr 15 19:59:18 2025 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/reproducible-path/openssl-3.0.16=. -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 976136
+  },
+  "bookworm_3.0.20-1~deb12u1": {
+   "family": "bookworm",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.20 7 Apr 2026 (Library: OpenSSL 3.0.20 7 Apr 2026)"
+    ],
+    [
+     "b",
+     "built on: Mon May  4 18:47:50 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/reproducible-path/openssl-3.0.20=. -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 976136
+  },
+  "bookworm_3.0.20-1~deb12u2": {
+   "family": "bookworm",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.20 7 Apr 2026 (Library: OpenSSL 3.0.20 7 Apr 2026)"
+    ],
+    [
+     "b",
+     "built on: Sat Jun  6 19:56:20 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/reproducible-path/openssl-3.0.20=. -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 976136
+  },
+  "centos_1.0.2k-19.el7": {
+   "family": "centos",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 1.0.2k-fips  26 Jan 2017"
+    ],
+    [
+     "b",
+     "built on: reproducible build, date unspecified"
+    ],
+    [
+     "p",
+     "platform: linux-x86_64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64) md2(int) rc4(16x,int) des(idx,cisc,16,int) idea(int) blowfish(idx) "
+    ],
+    [
+     "f",
+     "compiler: gcc -I. -I.. -I../include  -fPIC -DOPENSSL_PIC -DZLIB -DOPENSSL_THREADS -D_REENTRANT -DDSO_DLFCN -DHAVE_DLFCN_H -DKRB5_MIT -m64 -DL_ENDIAN -Wall -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches   -m64 -mtune=generic -Wa,--noexecstack -DPURIFY -DOPENSSL_IA32_SSE2 -DOPENSSL_BN_ASM_MONT -DOPENSSL_BN_ASM_MONT5 -DOPENSSL_BN_ASM_GF2m -DRC4_ASM -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DMD5_ASM -DAES_ASM -DVPAES_ASM -DBSAES_ASM -DWHIRLPOOL_ASM -DGHASH_ASM -DECP_NISTZ256_ASM"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/etc/pki/tls\""
+    ],
+    [
+     "",
+     "engines:  rdrand dynamic "
+    ]
+   ],
+   "size": 555288
+  },
+  "centos_1.0.2k-25.el7_9": {
+   "family": "centos",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 1.0.2k-fips  26 Jan 2017"
+    ],
+    [
+     "b",
+     "built on: reproducible build, date unspecified"
+    ],
+    [
+     "p",
+     "platform: linux-x86_64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64) md2(int) rc4(16x,int) des(idx,cisc,16,int) idea(int) blowfish(idx) "
+    ],
+    [
+     "f",
+     "compiler: gcc -I. -I.. -I../include  -fPIC -DOPENSSL_PIC -DZLIB -DOPENSSL_THREADS -D_REENTRANT -DDSO_DLFCN -DHAVE_DLFCN_H -DKRB5_MIT -m64 -DL_ENDIAN -Wall -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches   -m64 -mtune=generic -Wa,--noexecstack -DPURIFY -DOPENSSL_IA32_SSE2 -DOPENSSL_BN_ASM_MONT -DOPENSSL_BN_ASM_MONT5 -DOPENSSL_BN_ASM_GF2m -DRC4_ASM -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DMD5_ASM -DAES_ASM -DVPAES_ASM -DBSAES_ASM -DWHIRLPOOL_ASM -DGHASH_ASM -DECP_NISTZ256_ASM"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/etc/pki/tls\""
+    ],
+    [
+     "",
+     "engines:  rdrand dynamic "
+    ]
+   ],
+   "size": 555280
+  },
+  "centos_1.0.2k-26.el7_9": {
+   "family": "centos",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 1.0.2k-fips  26 Jan 2017"
+    ],
+    [
+     "b",
+     "built on: reproducible build, date unspecified"
+    ],
+    [
+     "p",
+     "platform: linux-x86_64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64) md2(int) rc4(16x,int) des(idx,cisc,16,int) idea(int) blowfish(idx) "
+    ],
+    [
+     "f",
+     "compiler: gcc -I. -I.. -I../include  -fPIC -DOPENSSL_PIC -DZLIB -DOPENSSL_THREADS -D_REENTRANT -DDSO_DLFCN -DHAVE_DLFCN_H -DKRB5_MIT -m64 -DL_ENDIAN -Wall -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches   -m64 -mtune=generic -Wa,--noexecstack -DPURIFY -DOPENSSL_IA32_SSE2 -DOPENSSL_BN_ASM_MONT -DOPENSSL_BN_ASM_MONT5 -DOPENSSL_BN_ASM_GF2m -DRC4_ASM -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DMD5_ASM -DAES_ASM -DVPAES_ASM -DBSAES_ASM -DWHIRLPOOL_ASM -DGHASH_ASM -DECP_NISTZ256_ASM"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/etc/pki/tls\""
+    ],
+    [
+     "",
+     "engines:  rdrand dynamic "
+    ]
+   ],
+   "size": 555280
+  },
+  "edgeos_1.1.0l-1~deb9u1": {
+   "family": "edgeos-1.1.0",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 1.1.0l  10 Sep 2019"
+    ],
+    [
+     "b",
+     "built on: reproducible build, date unspecified"
+    ],
+    [
+     "p",
+     "platform: debian-mipsel"
+    ],
+    [
+     "o",
+     "options:  bn(64,32) rc4(char) des(long) blowfish(ptr) "
+    ],
+    [
+     "f",
+     "compiler: gcc -DDSO_DLFCN -DHAVE_DLFCN_H -DNDEBUG -DOPENSSL_THREADS -DOPENSSL_NO_STATIC_ENGINE -DOPENSSL_PIC -DOPENSSL_BN_ASM_MONT -DSHA1_ASM -DSHA256_ASM -DAES_ASM -DOPENSSLDIR=\"\\\"/usr/lib/ssl\\\"\" -DENGINESDIR=\"\\\"/usr/lib/mipsel-linux-gnu/engines-1.1\\\"\" "
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/mipsel-linux-gnu/engines-1.1\""
+    ]
+   ],
+   "size": 605020
+  },
+  "edgeos_1.1.1n-0+deb11u4.ui1": {
+   "family": "edgeos-1.1.1",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 1.1.1n  15 Mar 2022"
+    ],
+    [
+     "b",
+     "built on: Thu Feb  9 14:16:56 2023 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-mipsel"
+    ],
+    [
+     "o",
+     "options:  bn(64,32) rc4(char) des(long) blowfish(ptr) "
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -mabi=32 -Wa,--noexecstack -Wall -DL_ENDIAN -Wa,--noexecstack -g -O2 -fdebug-prefix-map=/build/openssl-Szo7BU/openssl-1.1.1n=. -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_USE_NODELETE -DOPENSSL_PIC -DOPENSSL_BN_ASM_MONT -DSHA1_ASM -DSHA256_ASM -DAES_ASM -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/mipsel-linux-gnu/engines-1.1\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ]
+   ],
+   "size": 672088
+  },
+  "jammy_3.0.2-0ubuntu1.19": {
+   "family": "jammy",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)"
+    ],
+    [
+     "b",
+     "built on: Wed Feb  5 13:19:41 2025 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/openssl-rEtvJl/openssl-3.0.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_TLS_SECURITY_LEVEL=2 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1001272
+  },
+  "jammy_3.0.2-0ubuntu1.20": {
+   "family": "jammy",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)"
+    ],
+    [
+     "b",
+     "built on: Thu Sep 18 12:06:16 2025 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/openssl-sIScyW/openssl-3.0.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_TLS_SECURITY_LEVEL=2 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1001272
+  },
+  "jammy_3.0.2-0ubuntu1.23": {
+   "family": "jammy",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)"
+    ],
+    [
+     "b",
+     "built on: Tue Apr  7 12:05:56 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/openssl-8MDSy9/openssl-3.0.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_TLS_SECURITY_LEVEL=2 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1001272
+  },
+  "jammy_3.0.2-0ubuntu1.26": {
+   "family": "jammy",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)"
+    ],
+    [
+     "b",
+     "built on: Wed Jul 29 16:56:04 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/openssl-YF6cG4/openssl-3.0.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_TLS_SECURITY_LEVEL=2 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1001272
+  },
+  "noble_3.0.13-0ubuntu3.11": {
+   "family": "noble",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)"
+    ],
+    [
+     "b",
+     "built on: Tue Jun  2 19:33:25 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/openssl-gza1f8/openssl-3.0.13=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/openssl-gza1f8/openssl-3.0.13=/usr/src/openssl-3.0.13-0ubuntu3.11 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=3"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1005368
+  },
+  "noble_3.0.13-0ubuntu3.6": {
+   "family": "noble",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)"
+    ],
+    [
+     "b",
+     "built on: Thu Sep 18 11:12:48 2025 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/openssl-S7huCI/openssl-3.0.13=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/openssl-S7huCI/openssl-3.0.13=/usr/src/openssl-3.0.13-0ubuntu3.6 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=3"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1005368
+  },
+  "noble_3.0.13-0ubuntu3.7": {
+   "family": "noble",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)"
+    ],
+    [
+     "b",
+     "built on: Mon Jan 26 12:31:31 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/openssl-a6kkWc/openssl-3.0.13=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/openssl-a6kkWc/openssl-3.0.13=/usr/src/openssl-3.0.13-0ubuntu3.7 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=3"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1005368
+  },
+  "noble_3.0.13-0ubuntu3.9": {
+   "family": "noble",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)"
+    ],
+    [
+     "b",
+     "built on: Tue Apr  7 12:05:56 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/openssl-a6Kur2/openssl-3.0.13=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/openssl-a6Kur2/openssl-3.0.13=/usr/src/openssl-3.0.13-0ubuntu3.9 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=3"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1005368
+  },
+  "raspios_3.0.14-1~deb12u2+rpt1": {
+   "family": "raspios",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.14 4 Jun 2024 (Library: OpenSSL 3.0.14 4 Jun 2024)"
+    ],
+    [
+     "b",
+     "built on: Fri Sep  6 13:56:14 2024 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-arm64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/openssl-AZFzqz/openssl-3.0.14=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -mbranch-protection=standard -DOPENSSL_USE_NODELETE -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/aarch64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/aarch64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1017208
+  },
+  "raspios_3.0.15-1~deb12u1+rpt1": {
+   "family": "raspios",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.15 3 Sep 2024 (Library: OpenSSL 3.0.15 3 Sep 2024)"
+    ],
+    [
+     "b",
+     "built on: Wed Nov  6 12:37:33 2024 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-arm64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/openssl-D6U5M7/openssl-3.0.15=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -mbranch-protection=standard -DOPENSSL_USE_NODELETE -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/aarch64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/aarch64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1016728
+  },
+  "raspios_3.0.17-1~deb12u2+rpt1": {
+   "family": "raspios",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.17 1 Jul 2025 (Library: OpenSSL 3.0.17 1 Jul 2025)"
+    ],
+    [
+     "b",
+     "built on: Fri Aug  8 17:08:42 2025 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-arm64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/openssl-jMwbmc/openssl-3.0.17=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -mbranch-protection=standard -DOPENSSL_USE_NODELETE -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/aarch64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/aarch64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1016744
+  },
+  "raspios_3.0.18-1~deb12u2+rpt1": {
+   "family": "raspios",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.18 30 Sep 2025 (Library: OpenSSL 3.0.18 30 Sep 2025)"
+    ],
+    [
+     "b",
+     "built on: Mon Feb  2 14:45:25 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-arm64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/openssl-hoDPI0/openssl-3.0.18=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -mbranch-protection=standard -DOPENSSL_USE_NODELETE -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/aarch64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/aarch64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1016744
+  },
+  "raspios_3.0.20-1~deb12u1": {
+   "family": "raspios",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.20 7 Apr 2026 (Library: OpenSSL 3.0.20 7 Apr 2026)"
+    ],
+    [
+     "b",
+     "built on: Mon May  4 18:47:50 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-arm64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2 -Wa,--noexecstack -g -O2 -ffile-prefix-map=/build/reproducible-path/openssl-3.0.20=. -fstack-protector-strong -Wformat -Werror=format-security -DOPENSSL_USE_NODELETE -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/aarch64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/aarch64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1016744
+  },
+  "rhel_3.0.7-28.el9_4": {
+   "family": "rhel-3.0",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.0.7 1 Nov 2022 (Library: OpenSSL 3.0.7 1 Nov 2022)"
+    ],
+    [
+     "b",
+     "built on: Tue Sep  3 00:00:00 2024 UTC"
+    ],
+    [
+     "p",
+     "platform: linux-x86_64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -O3 -O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -Wa,--noexecstack -Wa,--generate-missing-build-notes=yes -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DZLIB -DNDEBUG -DPURIFY -DDEVRANDOM=\"\\\"/dev/urandom\\\"\" -DREDHAT_FIPS_VERSION=\"\\\"3.0.7-d9e98a279cbb408d\\\"\" -DSYSTEM_CIPHERS_FILE=\"/etc/crypto-policies/back-ends/openssl.config\""
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/etc/pki/tls\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib64/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib64/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 999272
+  },
+  "rhel_3.2.2-6.el9_5": {
+   "family": "rhel-3.2",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.2.2 4 Jun 2024 (Library: OpenSSL 3.2.2 4 Jun 2024)"
+    ],
+    [
+     "b",
+     "built on: Thu Sep  5 00:00:00 2024 UTC"
+    ],
+    [
+     "p",
+     "platform: linux-x86_64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -O3 -O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -Wa,--noexecstack -Wa,--generate-missing-build-notes=yes -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DZLIB -DNDEBUG -DPURIFY -DDEVRANDOM=\"\\\"/dev/urandom\\\"\" -DREDHAT_FIPS_VERSION=\"\\\"3.2.2-203a145fe9a58be6\\\"\" -DSYSTEM_CIPHERS_FILE=\"/etc/crypto-policies/back-ends/openssl.config\""
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/etc/pki/tls\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib64/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib64/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1061216
+  },
+  "rhel_3.2.2-6.el9_5.1": {
+   "family": "rhel-3.2",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.2.2 4 Jun 2024 (Library: OpenSSL 3.2.2 4 Jun 2024)"
+    ],
+    [
+     "b",
+     "built on: Wed Jan 29 00:00:00 2025 UTC"
+    ],
+    [
+     "p",
+     "platform: linux-x86_64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -O3 -O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -Wa,--noexecstack -Wa,--generate-missing-build-notes=yes -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DZLIB -DNDEBUG -DPURIFY -DDEVRANDOM=\"\\\"/dev/urandom\\\"\" -DREDHAT_FIPS_VERSION=\"\\\"3.2.2-622cc79c634cbbef\\\"\" -D_GNU_SOURCE -DSYSTEM_CIPHERS_FILE=\"/etc/crypto-policies/back-ends/openssl.config\""
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/etc/pki/tls\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib64/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib64/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1061208
+  },
+  "trixie_3.5.1-1": {
+   "family": "trixie",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.5.1 1 Jul 2025 (Library: OpenSSL 3.5.1 1 Jul 2025)"
+    ],
+    [
+     "b",
+     "built on: Sat Jul 12 16:49:06 2025 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -Wa,--noexecstack -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=/build/reproducible-path/openssl-3.5.1=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DZLIB -DZSTD -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1099208
+  },
+  "trixie_3.5.4-1~deb13u1": {
+   "family": "trixie",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.5.4 30 Sep 2025 (Library: OpenSSL 3.5.4 30 Sep 2025)"
+    ],
+    [
+     "b",
+     "built on: Sat Nov  1 11:22:59 2025 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -Wa,--noexecstack -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=/build/reproducible-path/openssl-3.5.4=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DZLIB -DZSTD -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1099208
+  },
+  "trixie_3.5.4-1~deb13u2": {
+   "family": "trixie",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.5.4 30 Sep 2025 (Library: OpenSSL 3.5.4 30 Sep 2025)"
+    ],
+    [
+     "b",
+     "built on: Sat Jan 24 15:50:07 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -Wa,--noexecstack -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=/build/reproducible-path/openssl-3.5.4=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DZLIB -DZSTD -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1099208
+  },
+  "trixie_3.5.6-1~deb13u1": {
+   "family": "trixie",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.5.6 7 Apr 2026 (Library: OpenSSL 3.5.6 7 Apr 2026)"
+    ],
+    [
+     "b",
+     "built on: Mon May  4 18:39:11 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -Wa,--noexecstack -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=/build/reproducible-path/openssl-3.5.6=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DZLIB -DZSTD -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1103304
+  },
+  "trixie_3.5.7-1~deb13u2": {
+   "family": "trixie",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 3.5.7 9 Jun 2026 (Library: OpenSSL 3.5.7 9 Jun 2026)"
+    ],
+    [
+     "b",
+     "built on: Sun Aug 23 15:26:22 2026 UTC"
+    ],
+    [
+     "p",
+     "platform: debian-amd64"
+    ],
+    [
+     "o",
+     "options:  bn(64,64)"
+    ],
+    [
+     "f",
+     "compiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -Wa,--noexecstack -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=/build/reproducible-path/openssl-3.5.7=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_BUILDING_OPENSSL -DZLIB -DZSTD -DNDEBUG -Wdate-time -D_FORTIFY_SOURCE=2"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/usr/lib/ssl\""
+    ],
+    [
+     "e",
+     "ENGINESDIR: \"/usr/lib/x86_64-linux-gnu/engines-3\""
+    ],
+    [
+     "m",
+     "MODULESDIR: \"/usr/lib/x86_64-linux-gnu/ossl-modules\""
+    ],
+    [
+     "r",
+     "Seeding source: os-specific"
+    ],
+    [
+     "c",
+     null
+    ]
+   ],
+   "size": 1103304
+  },
+  "zyxel_1.0.2h": {
+   "family": "zyxel",
+   "lines": [
+    [
+     "v",
+     "OpenSSL 1.0.2h  3 May 2016"
+    ],
+    [
+     "b",
+     "built on: reproducible build, date unspecified"
+    ],
+    [
+     "p",
+     "platform: linux-armv4"
+    ],
+    [
+     "o",
+     "options:  bn(64,32) rc4(ptr,char) des(idx,cisc,16,long) idea(int) blowfish(ptr) "
+    ],
+    [
+     "f",
+     "compiler: /home/chungyu/buildroot/nas326_20220803_1848/buildroot-2015.02/output/host/usr/bin/arm-marvell-linux-gnueabihf-gcc -I. -I.. -I../include  -fPIC -DOPENSSL_PIC -DZLIB_SHARED -DZLIB -DOPENSSL_THREADS -D_REENTRANT -DDSO_DLFCN -DHAVE_DLFCN_H -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64   -Os  -Wall -DOPENSSL_BN_ASM_MONT -DOPENSSL_BN_ASM_GF2m -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DAES_ASM -DBSAES_ASM -DGHASH_ASM"
+    ],
+    [
+     "d",
+     "OPENSSLDIR: \"/etc/ssl\""
+    ]
+   ],
+   "size": 368432
+  }
+ },
+ "families": {
+  "bookworm": {
+   "cpuinfo": "ia32",
+   "help": "@01c5d99e7162",
+   "help_usage": "Usage: help [options] [command]\n\nGeneral options:\n -help      Display this summary\n\nParameters:\n command    Name of command to display help (optional)\n",
+   "list": "@0d81528861e1",
+   "style": "3.0",
+   "version_usage": "@1d9953687746"
+  },
+  "centos": {
+   "listing": "@3b70ad7d5228",
+   "style": "1.0.2"
+  },
+  "edgeos-1.1.0": {
+   "help": "@76ccaf85747b",
+   "help_usage": "Usage: help [options]\nValid options are:\n -help  Display this summary\n",
+   "list": "@0d19388a6993",
+   "style": "1.1.0",
+   "version_usage": "@527efa6b0aef"
+  },
+  "edgeos-1.1.1": {
+   "help": "@44a2d3ea9fea",
+   "help_usage": "Usage: help [options]\n       help [command]\n -help  Display this summary\n",
+   "list": "@b85cd08ea008",
+   "style": "1.1.1",
+   "version_usage": "@5f974142f8c0"
+  },
+  "jammy": {
+   "cpuinfo": "ia32",
+   "help": "@01c5d99e7162",
+   "help_usage": "Usage: help [options] [command]\n\nGeneral options:\n -help      Display this summary\n\nParameters:\n command    Name of command to display help (optional)\n",
+   "list": "@0d81528861e1",
+   "style": "3.0",
+   "version_usage": "@1d9953687746"
+  },
+  "noble": {
+   "cpuinfo": "ia32",
+   "help": "@01c5d99e7162",
+   "help_usage": "Usage: help [options] [command]\n\nGeneral options:\n -help      Display this summary\n\nParameters:\n command    Name of command to display help (optional)\n",
+   "list": "@0d81528861e1",
+   "style": "3.0",
+   "version_usage": "@1d9953687746"
+  },
+  "raspios": {
+   "cpuinfo": "arm",
+   "help": "@01c5d99e7162",
+   "help_usage": "Usage: help [options] [command]\n\nGeneral options:\n -help      Display this summary\n\nParameters:\n command    Name of command to display help (optional)\n",
+   "list": "@0d81528861e1",
+   "style": "3.0",
+   "version_usage": "@1d9953687746"
+  },
+  "rhel-3.0": {
+   "cpuinfo": "ia32",
+   "help": "@8590a0dc472a",
+   "help_usage": "Usage: help [options] [command]\n\nGeneral options:\n -help      Display this summary\n\nParameters:\n command    Name of command to display help (optional)\n",
+   "list": "@0d81528861e1",
+   "style": "3.0",
+   "version_usage": "@1d9953687746"
+  },
+  "rhel-3.2": {
+   "cpuinfo": "ia32",
+   "help": "@8590a0dc472a",
+   "help_usage": "Usage: help [options] [command]\n\nGeneral options:\n -help      Display this summary\n\nParameters:\n command    Name of command to display help (optional)\n",
+   "list": "@0d81528861e1",
+   "style": "3.2",
+   "version_usage": "@1d9953687746"
+  },
+  "trixie": {
+   "cpuinfo": "ia32-5",
+   "help": "@eba98f588dd7",
+   "help_usage": "Usage: help [options] [command]\n\nGeneral options:\n -help      Display this summary\n\nParameters:\n command    Name of command to display help (optional)\n",
+   "list": "@8c467bb449c7",
+   "style": "3.2",
+   "version_usage": "@1d9953687746"
+  },
+  "zyxel": {
+   "listing": "@20ae773c028b",
+   "style": "1.0.2"
+  }
+ },
+ "texts": {
+  "01c5d99e7162": "help:\n\nStandard commands\nasn1parse         ca                ciphers           cmp               \ncms               crl               crl2pkcs7         dgst              \ndhparam           dsa               dsaparam          ec                \necparam           enc               engine            errstr            \nfipsinstall       gendsa            genpkey           genrsa            \nhelp              info              kdf               list              \nmac               nseq              ocsp              passwd            \npkcs12            pkcs7             pkcs8             pkey              \npkeyparam         pkeyutl           prime             rand              \nrehash            req               rsa               rsautl            \ns_client          s_server          s_time            sess_id           \nsmime             speed             spkac             srp               \nstoreutl          ts                verify            version           \nx509              \n\nMessage Digest commands (see the `dgst' command for more details)\nblake2b512        blake2s256        md4               md5               \nrmd160            sha1              sha224            sha256            \nsha3-224          sha3-256          sha3-384          sha3-512          \nsha384            sha512            sha512-224        sha512-256        \nshake128          shake256          sm3               \n\nCipher commands (see the `enc' command for more details)\naes-128-cbc       aes-128-ecb       aes-192-cbc       aes-192-ecb       \naes-256-cbc       aes-256-ecb       aria-128-cbc      aria-128-cfb      \naria-128-cfb1     aria-128-cfb8     aria-128-ctr      aria-128-ecb      \naria-128-ofb      aria-192-cbc      aria-192-cfb      aria-192-cfb1     \naria-192-cfb8     aria-192-ctr      aria-192-ecb      aria-192-ofb      \naria-256-cbc      aria-256-cfb      aria-256-cfb1     aria-256-cfb8     \naria-256-ctr      aria-256-ecb      aria-256-ofb      base64            \nbf                bf-cbc            bf-cfb            bf-ecb            \nbf-ofb            camellia-128-cbc  camellia-128-ecb  camellia-192-cbc  \ncamellia-192-ecb  camellia-256-cbc  camellia-256-ecb  cast              \ncast-cbc          cast5-cbc         cast5-cfb         cast5-ecb         \ncast5-ofb         des               des-cbc           des-cfb           \ndes-ecb           des-ede           des-ede-cbc       des-ede-cfb       \ndes-ede-ofb       des-ede3          des-ede3-cbc      des-ede3-cfb      \ndes-ede3-ofb      des-ofb           des3              desx              \nrc2               rc2-40-cbc        rc2-64-cbc        rc2-cbc           \nrc2-cfb           rc2-ecb           rc2-ofb           rc4               \nrc4-40            seed              seed-cbc          seed-cfb          \nseed-ecb          seed-ofb          sm4-cbc           sm4-cfb           \nsm4-ctr           sm4-ecb           sm4-ofb           \n\n",
+  "0d19388a6993": "\nasn1parse         ca                ciphers           cms               \ncrl               crl2pkcs7         dgst              dhparam           \ndsa               dsaparam          ec                ecparam           \nenc               engine            errstr            exit              \ngendsa            genpkey           genrsa            help              \nlist              nseq              ocsp              passwd            \npkcs12            pkcs7             pkcs8             pkey              \npkeyparam         pkeyutl           prime             rand              \nrehash            req               rsa               rsautl            \ns_client          s_server          s_time            sess_id           \nsmime             speed             spkac             srp               \nts                verify            version           x509              \n",
+  "0d81528861e1": "asn1parse         ca                ciphers           cmp               \ncms               crl               crl2pkcs7         dgst              \ndhparam           dsa               dsaparam          ec                \necparam           enc               engine            errstr            \nfipsinstall       gendsa            genpkey           genrsa            \nhelp              info              kdf               list              \nmac               nseq              ocsp              passwd            \npkcs12            pkcs7             pkcs8             pkey              \npkeyparam         pkeyutl           prime             rand              \nrehash            req               rsa               rsautl            \ns_client          s_server          s_time            sess_id           \nsmime             speed             spkac             srp               \nstoreutl          ts                verify            version           \nx509              \n\n",
+  "1d9953687746": "Usage: version [options]\n\nGeneral options:\n -help  Display this summary\n\nOutput options:\n -a     Show all data\n -b     Show build date\n -d     Show configuration directory\n -e     Show engines directory\n -m     Show modules directory\n -f     Show compiler flags used\n -o     Show some internal datatype options\n -p     Show target build platform\n -r     Show random seeding options\n -v     Show library version\n -c     Show CPU settings info\n",
+  "20ae773c028b": "\nStandard commands\nasn1parse         ca                ciphers           cms               \ncrl               crl2pkcs7         dgst              dh                \ndhparam           dsa               dsaparam          ec                \necparam           enc               engine            errstr            \ngendh             gendsa            genpkey           genrsa            \nnseq              ocsp              passwd            pkcs12            \npkcs7             pkcs8             pkey              pkeyparam         \npkeyutl           prime             rand              req               \nrsa               rsautl            s_client          s_server          \ns_time            sess_id           smime             speed             \nspkac             srp               ts                verify            \nversion           x509              \n\nMessage Digest commands (see the `dgst' command for more details)\nmd4               md5               mdc2              rmd160            \nsha               sha1              \n\nCipher commands (see the `enc' command for more details)\naes-128-cbc       aes-128-ecb       aes-192-cbc       aes-192-ecb       \naes-256-cbc       aes-256-ecb       base64            bf                \nbf-cbc            bf-cfb            bf-ecb            bf-ofb            \ncamellia-128-cbc  camellia-128-ecb  camellia-192-cbc  camellia-192-ecb  \ncamellia-256-cbc  camellia-256-ecb  cast              cast-cbc          \ncast5-cbc         cast5-cfb         cast5-ecb         cast5-ofb         \ndes               des-cbc           des-cfb           des-ecb           \ndes-ede           des-ede-cbc       des-ede-cfb       des-ede-ofb       \ndes-ede3          des-ede3-cbc      des-ede3-cfb      des-ede3-ofb      \ndes-ofb           des3              desx              idea              \nidea-cbc          idea-cfb          idea-ecb          idea-ofb          \nrc2               rc2-40-cbc        rc2-64-cbc        rc2-cbc           \nrc2-cfb           rc2-ecb           rc2-ofb           rc4               \nrc4-40            seed              seed-cbc          seed-cfb          \nseed-ecb          seed-ofb          zlib              \n\n",
+  "3b70ad7d5228": "\nStandard commands\nasn1parse         ca                ciphers           cms               \ncrl               crl2pkcs7         dgst              dh                \ndhparam           dsa               dsaparam          ec                \necparam           enc               engine            errstr            \ngendh             gendsa            genpkey           genrsa            \nnseq              ocsp              passwd            pkcs12            \npkcs7             pkcs8             pkey              pkeyparam         \npkeyutl           prime             rand              req               \nrsa               rsautl            s_client          s_server          \ns_time            sess_id           smime             speed             \nspkac             ts                verify            version           \nx509              \n\nMessage Digest commands (see the `dgst' command for more details)\nmd2               md4               md5               rmd160            \nsha               sha1              \n\nCipher commands (see the `enc' command for more details)\naes-128-cbc       aes-128-ecb       aes-192-cbc       aes-192-ecb       \naes-256-cbc       aes-256-ecb       base64            bf                \nbf-cbc            bf-cfb            bf-ecb            bf-ofb            \ncamellia-128-cbc  camellia-128-ecb  camellia-192-cbc  camellia-192-ecb  \ncamellia-256-cbc  camellia-256-ecb  cast              cast-cbc          \ncast5-cbc         cast5-cfb         cast5-ecb         cast5-ofb         \ndes               des-cbc           des-cfb           des-ecb           \ndes-ede           des-ede-cbc       des-ede-cfb       des-ede-ofb       \ndes-ede3          des-ede3-cbc      des-ede3-cfb      des-ede3-ofb      \ndes-ofb           des3              desx              idea              \nidea-cbc          idea-cfb          idea-ecb          idea-ofb          \nrc2               rc2-40-cbc        rc2-64-cbc        rc2-cbc           \nrc2-cfb           rc2-ecb           rc2-ofb           rc4               \nrc4-40            rc5               rc5-cbc           rc5-cfb           \nrc5-ecb           rc5-ofb           seed              seed-cbc          \nseed-cfb          seed-ecb          seed-ofb          zlib              \n\n",
+  "44a2d3ea9fea": "Standard commands\nasn1parse         ca                ciphers           cms               \ncrl               crl2pkcs7         dgst              dhparam           \ndsa               dsaparam          ec                ecparam           \nenc               engine            errstr            gendsa            \ngenpkey           genrsa            help              list              \nnseq              ocsp              passwd            pkcs12            \npkcs7             pkcs8             pkey              pkeyparam         \npkeyutl           prime             rand              rehash            \nreq               rsa               rsautl            s_client          \ns_server          s_time            sess_id           smime             \nspeed             spkac             srp               storeutl          \nts                verify            version           x509              \n\nMessage Digest commands (see the `dgst' command for more details)\nblake2b512        blake2s256        gost              md4               \nmd5               rmd160            sha1              sha224            \nsha256            sha3-224          sha3-256          sha3-384          \nsha3-512          sha384            sha512            sha512-224        \nsha512-256        shake128          shake256          sm3               \n\nCipher commands (see the `enc' command for more details)\naes-128-cbc       aes-128-ecb       aes-192-cbc       aes-192-ecb       \naes-256-cbc       aes-256-ecb       aria-128-cbc      aria-128-cfb      \naria-128-cfb1     aria-128-cfb8     aria-128-ctr      aria-128-ecb      \naria-128-ofb      aria-192-cbc      aria-192-cfb      aria-192-cfb1     \naria-192-cfb8     aria-192-ctr      aria-192-ecb      aria-192-ofb      \naria-256-cbc      aria-256-cfb      aria-256-cfb1     aria-256-cfb8     \naria-256-ctr      aria-256-ecb      aria-256-ofb      base64            \nbf                bf-cbc            bf-cfb            bf-ecb            \nbf-ofb            camellia-128-cbc  camellia-128-ecb  camellia-192-cbc  \ncamellia-192-ecb  camellia-256-cbc  camellia-256-ecb  cast              \ncast-cbc          cast5-cbc         cast5-cfb         cast5-ecb         \ncast5-ofb         des               des-cbc           des-cfb           \ndes-ecb           des-ede           des-ede-cbc       des-ede-cfb       \ndes-ede-ofb       des-ede3          des-ede3-cbc      des-ede3-cfb      \ndes-ede3-ofb      des-ofb           des3              desx              \nrc2               rc2-40-cbc        rc2-64-cbc        rc2-cbc           \nrc2-cfb           rc2-ecb           rc2-ofb           rc4               \nrc4-40            seed              seed-cbc          seed-cfb          \nseed-ecb          seed-ofb          sm4-cbc           sm4-cfb           \nsm4-ctr           sm4-ecb           sm4-ofb           \n\n",
+  "527efa6b0aef": "Usage: version [options]\nValid options are:\n -help  Display this summary\n -a     Show all data\n -b     Show build date\n -d     Show configuration directory\n -e     Show engines directory\n -f     Show compiler flags used\n -o     Show some internal datatype options\n -p     Show target build platform\n -v     Show library version\n",
+  "5f974142f8c0": "Usage: version [options]\nValid options are:\n -help  Display this summary\n -a     Show all data\n -b     Show build date\n -d     Show configuration directory\n -e     Show engines directory\n -f     Show compiler flags used\n -o     Show some internal datatype options\n -p     Show target build platform\n -r     Show random seeding options\n -v     Show library version\n",
+  "76ccaf85747b": "\nStandard commands\nasn1parse         ca                ciphers           cms               \ncrl               crl2pkcs7         dgst              dhparam           \ndsa               dsaparam          ec                ecparam           \nenc               engine            errstr            exit              \ngendsa            genpkey           genrsa            help              \nlist              nseq              ocsp              passwd            \npkcs12            pkcs7             pkcs8             pkey              \npkeyparam         pkeyutl           prime             rand              \nrehash            req               rsa               rsautl            \ns_client          s_server          s_time            sess_id           \nsmime             speed             spkac             srp               \nts                verify            version           x509              \n\nMessage Digest commands (see the `dgst' command for more details)\nblake2b512        blake2s256        gost              md4               \nmd5               rmd160            sha1              sha224            \nsha256            sha384            sha512            \n\nCipher commands (see the `enc' command for more details)\naes-128-cbc       aes-128-ecb       aes-192-cbc       aes-192-ecb       \naes-256-cbc       aes-256-ecb       base64            bf                \nbf-cbc            bf-cfb            bf-ecb            bf-ofb            \ncamellia-128-cbc  camellia-128-ecb  camellia-192-cbc  camellia-192-ecb  \ncamellia-256-cbc  camellia-256-ecb  cast              cast-cbc          \ncast5-cbc         cast5-cfb         cast5-ecb         cast5-ofb         \ndes               des-cbc           des-cfb           des-ecb           \ndes-ede           des-ede-cbc       des-ede-cfb       des-ede-ofb       \ndes-ede3          des-ede3-cbc      des-ede3-cfb      des-ede3-ofb      \ndes-ofb           des3              desx              rc2               \nrc2-40-cbc        rc2-64-cbc        rc2-cbc           rc2-cfb           \nrc2-ecb           rc2-ofb           rc4               rc4-40            \nseed              seed-cbc          seed-cfb          seed-ecb          \nseed-ofb          \n\n",
+  "8590a0dc472a": "help:\n\nStandard commands\nasn1parse         ca                ciphers           cmp               \ncms               crl               crl2pkcs7         dgst              \ndhparam           dsa               dsaparam          ec                \necparam           enc               engine            errstr            \nfipsinstall       gendsa            genpkey           genrsa            \nhelp              info              kdf               list              \nmac               nseq              ocsp              passwd            \npkcs12            pkcs7             pkcs8             pkey              \npkeyparam         pkeyutl           prime             rand              \nrehash            req               rsa               rsautl            \ns_client          s_server          s_time            sess_id           \nsmime             speed             spkac             srp               \nstoreutl          ts                verify            version           \nx509              \n\nMessage Digest commands (see the `dgst' command for more details)\nblake2b512        blake2s256        md2               md4               \nmd5               rmd160            sha1              sha224            \nsha256            sha3-224          sha3-256          sha3-384          \nsha3-512          sha384            sha512            sha512-224        \nsha512-256        shake128          shake256          sm3               \n\nCipher commands (see the `enc' command for more details)\naes-128-cbc       aes-128-ecb       aes-192-cbc       aes-192-ecb       \naes-256-cbc       aes-256-ecb       aria-128-cbc      aria-128-cfb      \naria-128-cfb1     aria-128-cfb8     aria-128-ctr      aria-128-ecb      \naria-128-ofb      aria-192-cbc      aria-192-cfb      aria-192-cfb1     \naria-192-cfb8     aria-192-ctr      aria-192-ecb      aria-192-ofb      \naria-256-cbc      aria-256-cfb      aria-256-cfb1     aria-256-cfb8     \naria-256-ctr      aria-256-ecb      aria-256-ofb      base64            \nbf                bf-cbc            bf-cfb            bf-ecb            \nbf-ofb            camellia-128-cbc  camellia-128-ecb  camellia-192-cbc  \ncamellia-192-ecb  camellia-256-cbc  camellia-256-ecb  cast              \ncast-cbc          cast5-cbc         cast5-cfb         cast5-ecb         \ncast5-ofb         des               des-cbc           des-cfb           \ndes-ecb           des-ede           des-ede-cbc       des-ede-cfb       \ndes-ede-ofb       des-ede3          des-ede3-cbc      des-ede3-cfb      \ndes-ede3-ofb      des-ofb           des3              desx              \nidea              idea-cbc          idea-cfb          idea-ecb          \nidea-ofb          rc2               rc2-40-cbc        rc2-64-cbc        \nrc2-cbc           rc2-cfb           rc2-ecb           rc2-ofb           \nrc4               rc4-40            rc5               rc5-cbc           \nrc5-cfb           rc5-ecb           rc5-ofb           seed              \nseed-cbc          seed-cfb          seed-ecb          seed-ofb          \nzlib              \n\n",
+  "8c467bb449c7": "asn1parse         ca                ciphers           cmp               \ncms               crl               crl2pkcs7         dgst              \ndhparam           dsa               dsaparam          ec                \necparam           enc               engine            errstr            \nfipsinstall       gendsa            genpkey           genrsa            \nhelp              info              kdf               list              \nmac               nseq              ocsp              passwd            \npkcs12            pkcs7             pkcs8             pkey              \npkeyparam         pkeyutl           prime             rand              \nrehash            req               rsa               rsautl            \ns_client          s_server          s_time            sess_id           \nskeyutl           smime             speed             spkac             \nsrp               storeutl          ts                verify            \nversion           x509              \n\n",
+  "b85cd08ea008": "asn1parse         ca                ciphers           cms               \ncrl               crl2pkcs7         dgst              dhparam           \ndsa               dsaparam          ec                ecparam           \nenc               engine            errstr            gendsa            \ngenpkey           genrsa            help              list              \nnseq              ocsp              passwd            pkcs12            \npkcs7             pkcs8             pkey              pkeyparam         \npkeyutl           prime             rand              rehash            \nreq               rsa               rsautl            s_client          \ns_server          s_time            sess_id           smime             \nspeed             spkac             srp               storeutl          \nts                verify            version           x509              \n\n",
+  "eba98f588dd7": "help:\n\nStandard commands\nasn1parse         ca                ciphers           cmp               \ncms               crl               crl2pkcs7         dgst              \ndhparam           dsa               dsaparam          ec                \necparam           enc               engine            errstr            \nfipsinstall       gendsa            genpkey           genrsa            \nhelp              info              kdf               list              \nmac               nseq              ocsp              passwd            \npkcs12            pkcs7             pkcs8             pkey              \npkeyparam         pkeyutl           prime             rand              \nrehash            req               rsa               rsautl            \ns_client          s_server          s_time            sess_id           \nskeyutl           smime             speed             spkac             \nsrp               storeutl          ts                verify            \nversion           x509              \n\nMessage Digest commands (see the `dgst' command for more details)\nblake2b512        blake2s256        md4               md5               \nrmd160            sha1              sha224            sha256            \nsha3-224          sha3-256          sha3-384          sha3-512          \nsha384            sha512            sha512-224        sha512-256        \nshake128          shake256          sm3               \n\nCipher commands (see the `enc' command for more details)\naes-128-cbc       aes-128-ecb       aes-192-cbc       aes-192-ecb       \naes-256-cbc       aes-256-ecb       aria-128-cbc      aria-128-cfb      \naria-128-cfb1     aria-128-cfb8     aria-128-ctr      aria-128-ecb      \naria-128-ofb      aria-192-cbc      aria-192-cfb      aria-192-cfb1     \naria-192-cfb8     aria-192-ctr      aria-192-ecb      aria-192-ofb      \naria-256-cbc      aria-256-cfb      aria-256-cfb1     aria-256-cfb8     \naria-256-ctr      aria-256-ecb      aria-256-ofb      base64            \nbf                bf-cbc            bf-cfb            bf-ecb            \nbf-ofb            camellia-128-cbc  camellia-128-ecb  camellia-192-cbc  \ncamellia-192-ecb  camellia-256-cbc  camellia-256-ecb  cast              \ncast-cbc          cast5-cbc         cast5-cfb         cast5-ecb         \ncast5-ofb         des               des-cbc           des-cfb           \ndes-ecb           des-ede           des-ede-cbc       des-ede-cfb       \ndes-ede-ofb       des-ede3          des-ede3-cbc      des-ede3-cfb      \ndes-ede3-ofb      des-ofb           des3              desx              \nrc2               rc2-40-cbc        rc2-64-cbc        rc2-cbc           \nrc2-cfb           rc2-ecb           rc2-ofb           rc4               \nrc4-40            seed              seed-cbc          seed-cfb          \nseed-ecb          seed-ofb          sm4-cbc           sm4-cfb           \nsm4-ctr           sm4-ecb           sm4-ofb           zlib              \nzstd              \n\n"
+ }
+}

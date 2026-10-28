@@ -1,0 +1,1713 @@
+{
+ "_source": {
+  "date": "2026-10-28",
+  "how": [
+   "docker run --rm --network none --platform linux/amd64 <image> sh -c 'rpm -qf <path>' for each path of qf (stdout + stderr, rc)",
+   "libs: docker run --rm --platform linux/amd64 <image> after yum / dnf install of the packages of package_installs.json.gz, rpm -ql of each installed package filtered to shared libraries; kept for the packages that have a file list (CentOS 7.9.2009 as the pinned data; AlmaLinux 9 is a later point release than the pinned 9.4)",
+   "stat: docker run --rm --network none --platform linux/amd64 --name <n> <image> sh -c <script>: rpm -ql of glibc, openssl-libs, zlib filtered to the files directly below /lib64 or /usr/lib64 with .so in the name, per file stat -c '%n|%F|%s|%a|%U|%G', readlink and rpm -qf (images centos:7, almalinux:9.4, almalinux:9.5, almalinux:9.6; 2026-10-28; the build of each image: centos:7 glibc-2.17-317.el7.x86_64, openssl-libs-1.0.2k-19.el7.x86_64, zlib-1.2.7-18.el7.x86_64; almalinux:9.4 glibc-2.34-100.el9_4.3.x86_64, openssl-libs-3.0.7-28.el9_4.x86_64, zlib-1.2.11-40.el9.x86_64; almalinux:9.5 glibc-2.34-125.el9_5.8.alma.1.x86_64, openssl-libs-3.2.2-6.el9_5.1.x86_64, zlib-1.2.11-40.el9.x86_64; almalinux:9.6 glibc-2.34-168.el9_6.24.x86_64, openssl-libs-3.2.2-6.el9_5.1.x86_64, zlib-1.2.11-40.el9.x86_64)"
+  ],
+  "images": {
+   "centos:7": "sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4 arm64",
+   "almalinux:9": "sha256:245f8aab832fe800aa42bdab5fad75ebbd8e0b4c9f24820a83c638b177857ae2 arm64",
+   "almalinux:9.4": "sha256:1c718a4cd7bab3bdb069ddbbd1eb593a390e6932d51d0048a2f6556303bafba7",
+   "almalinux:9.5": "sha256:e9bc8f598ddfe585b2bcf6402e1f4dae7eb689c8c9361877fcdd1efc86c18799",
+   "almalinux:9.6": "sha256:995c8b08af9f7b7bce0f3f1d1559378261c5b29c4b8c6f77b4860833a0e7cbc7"
+  }
+ },
+ "images": {
+  "centos:7": {
+   "qf": {
+    "/usr/lib64/ld-2.17.so": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/ld-linux-x86-64.so.2": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/lib64/ld-linux-x86-64.so.2": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libc-2.17.so": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libc.so.6": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/lib64/libc.so.6": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libm-2.17.so": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libm.so.6": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libdl.so.2": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libpthread.so.0": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libresolv.so.2": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/librt.so.1": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libnss_files.so.2": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libnss_dns.so.2": {
+     "out": "glibc-2.17-317.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libssl.so.10": {
+     "out": "openssl-libs-1.0.2k-19.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libcrypto.so.10": {
+     "out": "openssl-libs-1.0.2k-19.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libz.so.1": {
+     "out": "zlib-1.2.7-18.el7.x86_64",
+     "rc": 0
+    },
+    "/lib64/libz.so.1": {
+     "out": "zlib-1.2.7-18.el7.x86_64",
+     "rc": 0
+    },
+    "/etc/hostname": {
+     "out": "systemd-219-78.el7.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libnosuch.so.9": {
+     "out": "error: file /usr/lib64/libnosuch.so.9: No such file or directory",
+     "rc": 1
+    },
+    "/usr/lib64/libssl.so.3": {
+     "out": "error: file /usr/lib64/libssl.so.3: No such file or directory",
+     "rc": 1
+    }
+   },
+   "libs": {
+    "httpd": [
+     "/usr/lib64/httpd/modules/mod_access_compat.so",
+     "/usr/lib64/httpd/modules/mod_actions.so",
+     "/usr/lib64/httpd/modules/mod_alias.so",
+     "/usr/lib64/httpd/modules/mod_allowmethods.so",
+     "/usr/lib64/httpd/modules/mod_asis.so",
+     "/usr/lib64/httpd/modules/mod_auth_basic.so",
+     "/usr/lib64/httpd/modules/mod_auth_digest.so",
+     "/usr/lib64/httpd/modules/mod_authn_anon.so",
+     "/usr/lib64/httpd/modules/mod_authn_core.so",
+     "/usr/lib64/httpd/modules/mod_authn_dbd.so",
+     "/usr/lib64/httpd/modules/mod_authn_dbm.so",
+     "/usr/lib64/httpd/modules/mod_authn_file.so",
+     "/usr/lib64/httpd/modules/mod_authn_socache.so",
+     "/usr/lib64/httpd/modules/mod_authz_core.so",
+     "/usr/lib64/httpd/modules/mod_authz_dbd.so",
+     "/usr/lib64/httpd/modules/mod_authz_dbm.so",
+     "/usr/lib64/httpd/modules/mod_authz_groupfile.so",
+     "/usr/lib64/httpd/modules/mod_authz_host.so",
+     "/usr/lib64/httpd/modules/mod_authz_owner.so",
+     "/usr/lib64/httpd/modules/mod_authz_user.so",
+     "/usr/lib64/httpd/modules/mod_autoindex.so",
+     "/usr/lib64/httpd/modules/mod_buffer.so",
+     "/usr/lib64/httpd/modules/mod_cache.so",
+     "/usr/lib64/httpd/modules/mod_cache_disk.so",
+     "/usr/lib64/httpd/modules/mod_cache_socache.so",
+     "/usr/lib64/httpd/modules/mod_cgi.so",
+     "/usr/lib64/httpd/modules/mod_cgid.so",
+     "/usr/lib64/httpd/modules/mod_charset_lite.so",
+     "/usr/lib64/httpd/modules/mod_data.so",
+     "/usr/lib64/httpd/modules/mod_dav.so",
+     "/usr/lib64/httpd/modules/mod_dav_fs.so",
+     "/usr/lib64/httpd/modules/mod_dav_lock.so",
+     "/usr/lib64/httpd/modules/mod_dbd.so",
+     "/usr/lib64/httpd/modules/mod_deflate.so",
+     "/usr/lib64/httpd/modules/mod_dialup.so",
+     "/usr/lib64/httpd/modules/mod_dir.so",
+     "/usr/lib64/httpd/modules/mod_dumpio.so",
+     "/usr/lib64/httpd/modules/mod_echo.so",
+     "/usr/lib64/httpd/modules/mod_env.so",
+     "/usr/lib64/httpd/modules/mod_expires.so",
+     "/usr/lib64/httpd/modules/mod_ext_filter.so",
+     "/usr/lib64/httpd/modules/mod_file_cache.so",
+     "/usr/lib64/httpd/modules/mod_filter.so",
+     "/usr/lib64/httpd/modules/mod_headers.so",
+     "/usr/lib64/httpd/modules/mod_heartbeat.so",
+     "/usr/lib64/httpd/modules/mod_heartmonitor.so",
+     "/usr/lib64/httpd/modules/mod_include.so",
+     "/usr/lib64/httpd/modules/mod_info.so",
+     "/usr/lib64/httpd/modules/mod_lbmethod_bybusyness.so",
+     "/usr/lib64/httpd/modules/mod_lbmethod_byrequests.so",
+     "/usr/lib64/httpd/modules/mod_lbmethod_bytraffic.so",
+     "/usr/lib64/httpd/modules/mod_lbmethod_heartbeat.so",
+     "/usr/lib64/httpd/modules/mod_log_config.so",
+     "/usr/lib64/httpd/modules/mod_log_debug.so",
+     "/usr/lib64/httpd/modules/mod_log_forensic.so",
+     "/usr/lib64/httpd/modules/mod_logio.so",
+     "/usr/lib64/httpd/modules/mod_lua.so",
+     "/usr/lib64/httpd/modules/mod_macro.so",
+     "/usr/lib64/httpd/modules/mod_mime.so",
+     "/usr/lib64/httpd/modules/mod_mime_magic.so",
+     "/usr/lib64/httpd/modules/mod_mpm_event.so",
+     "/usr/lib64/httpd/modules/mod_mpm_prefork.so",
+     "/usr/lib64/httpd/modules/mod_mpm_worker.so",
+     "/usr/lib64/httpd/modules/mod_negotiation.so",
+     "/usr/lib64/httpd/modules/mod_proxy.so",
+     "/usr/lib64/httpd/modules/mod_proxy_ajp.so",
+     "/usr/lib64/httpd/modules/mod_proxy_balancer.so",
+     "/usr/lib64/httpd/modules/mod_proxy_connect.so",
+     "/usr/lib64/httpd/modules/mod_proxy_express.so",
+     "/usr/lib64/httpd/modules/mod_proxy_fcgi.so",
+     "/usr/lib64/httpd/modules/mod_proxy_fdpass.so",
+     "/usr/lib64/httpd/modules/mod_proxy_ftp.so",
+     "/usr/lib64/httpd/modules/mod_proxy_http.so",
+     "/usr/lib64/httpd/modules/mod_proxy_scgi.so",
+     "/usr/lib64/httpd/modules/mod_proxy_wstunnel.so",
+     "/usr/lib64/httpd/modules/mod_ratelimit.so",
+     "/usr/lib64/httpd/modules/mod_reflector.so",
+     "/usr/lib64/httpd/modules/mod_remoteip.so",
+     "/usr/lib64/httpd/modules/mod_reqtimeout.so",
+     "/usr/lib64/httpd/modules/mod_request.so",
+     "/usr/lib64/httpd/modules/mod_rewrite.so",
+     "/usr/lib64/httpd/modules/mod_sed.so",
+     "/usr/lib64/httpd/modules/mod_setenvif.so",
+     "/usr/lib64/httpd/modules/mod_slotmem_plain.so",
+     "/usr/lib64/httpd/modules/mod_slotmem_shm.so",
+     "/usr/lib64/httpd/modules/mod_socache_dbm.so",
+     "/usr/lib64/httpd/modules/mod_socache_memcache.so",
+     "/usr/lib64/httpd/modules/mod_socache_shmcb.so",
+     "/usr/lib64/httpd/modules/mod_speling.so",
+     "/usr/lib64/httpd/modules/mod_status.so",
+     "/usr/lib64/httpd/modules/mod_substitute.so",
+     "/usr/lib64/httpd/modules/mod_suexec.so",
+     "/usr/lib64/httpd/modules/mod_systemd.so",
+     "/usr/lib64/httpd/modules/mod_unique_id.so",
+     "/usr/lib64/httpd/modules/mod_unixd.so",
+     "/usr/lib64/httpd/modules/mod_userdir.so",
+     "/usr/lib64/httpd/modules/mod_usertrack.so",
+     "/usr/lib64/httpd/modules/mod_version.so",
+     "/usr/lib64/httpd/modules/mod_vhost_alias.so",
+     "/usr/lib64/httpd/modules/mod_watchdog.so"
+    ],
+    "mariadb-server": [
+     "/usr/lib64/mysql/plugin/adt_null.so",
+     "/usr/lib64/mysql/plugin/auth_0x0100.so",
+     "/usr/lib64/mysql/plugin/auth_pam.so",
+     "/usr/lib64/mysql/plugin/auth_socket.so",
+     "/usr/lib64/mysql/plugin/auth_test_plugin.so",
+     "/usr/lib64/mysql/plugin/dialog_examples.so",
+     "/usr/lib64/mysql/plugin/ha_innodb.so",
+     "/usr/lib64/mysql/plugin/ha_sphinx.so",
+     "/usr/lib64/mysql/plugin/handlersocket.so",
+     "/usr/lib64/mysql/plugin/libdaemon_example.so",
+     "/usr/lib64/mysql/plugin/mypluglib.so",
+     "/usr/lib64/mysql/plugin/qa_auth_client.so",
+     "/usr/lib64/mysql/plugin/qa_auth_interface.so",
+     "/usr/lib64/mysql/plugin/qa_auth_server.so",
+     "/usr/lib64/mysql/plugin/query_cache_info.so",
+     "/usr/lib64/mysql/plugin/semisync_master.so",
+     "/usr/lib64/mysql/plugin/semisync_slave.so",
+     "/usr/lib64/mysql/plugin/server_audit.so",
+     "/usr/lib64/mysql/plugin/sphinx.so",
+     "/usr/lib64/mysql/plugin/sql_errlog.so"
+    ]
+   }
+  },
+  "almalinux:9": {
+   "qf": {
+    "/usr/lib64/ld-linux-x86-64.so.2": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/lib64/ld-linux-x86-64.so.2": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libc.so.6": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/lib64/libc.so.6": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libm.so.6": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libdl.so.2": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libpthread.so.0": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libresolv.so.2": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/librt.so.1": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libutil.so.1": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libnss_files.so.2": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libnss_dns.so.2": {
+     "out": "glibc-2.34-283.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libssl.so.3": {
+     "out": "openssl-libs-3.5.8-2.el9_8.x86_64",
+     "rc": 0
+    },
+    "/lib64/libssl.so.3": {
+     "out": "openssl-libs-3.5.8-2.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libcrypto.so.3": {
+     "out": "openssl-libs-3.5.8-2.el9_8.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libz.so.1": {
+     "out": "zlib-1.2.11-40.el9.x86_64",
+     "rc": 0
+    },
+    "/etc/hostname": {
+     "out": "systemd-252-67.el9_8.6.alma.1.x86_64",
+     "rc": 0
+    },
+    "/usr/lib64/libnosuch.so.9": {
+     "out": "error: file /usr/lib64/libnosuch.so.9: No such file or directory",
+     "rc": 1
+    },
+    "/usr/lib64/libssl.so.10": {
+     "out": "error: file /usr/lib64/libssl.so.10: No such file or directory",
+     "rc": 1
+    }
+   },
+   "libs": {
+    "NetworkManager": [
+     "/usr/lib64/NetworkManager/1.54.3-5.el9_8/libnm-settings-plugin-ifcfg-rh.so"
+    ],
+    "httpd": [
+     "/usr/lib64/httpd/modules/mod_brotli.so",
+     "/usr/lib64/httpd/modules/mod_systemd.so"
+    ],
+    "httpd-core": [
+     "/usr/lib64/httpd/modules/mod_access_compat.so",
+     "/usr/lib64/httpd/modules/mod_actions.so",
+     "/usr/lib64/httpd/modules/mod_alias.so",
+     "/usr/lib64/httpd/modules/mod_allowmethods.so",
+     "/usr/lib64/httpd/modules/mod_asis.so",
+     "/usr/lib64/httpd/modules/mod_auth_basic.so",
+     "/usr/lib64/httpd/modules/mod_auth_digest.so",
+     "/usr/lib64/httpd/modules/mod_authn_anon.so",
+     "/usr/lib64/httpd/modules/mod_authn_core.so",
+     "/usr/lib64/httpd/modules/mod_authn_dbd.so",
+     "/usr/lib64/httpd/modules/mod_authn_dbm.so",
+     "/usr/lib64/httpd/modules/mod_authn_file.so",
+     "/usr/lib64/httpd/modules/mod_authn_socache.so",
+     "/usr/lib64/httpd/modules/mod_authnz_fcgi.so",
+     "/usr/lib64/httpd/modules/mod_authz_core.so",
+     "/usr/lib64/httpd/modules/mod_authz_dbd.so",
+     "/usr/lib64/httpd/modules/mod_authz_dbm.so",
+     "/usr/lib64/httpd/modules/mod_authz_groupfile.so",
+     "/usr/lib64/httpd/modules/mod_authz_host.so",
+     "/usr/lib64/httpd/modules/mod_authz_owner.so",
+     "/usr/lib64/httpd/modules/mod_authz_user.so",
+     "/usr/lib64/httpd/modules/mod_autoindex.so",
+     "/usr/lib64/httpd/modules/mod_buffer.so",
+     "/usr/lib64/httpd/modules/mod_cache.so",
+     "/usr/lib64/httpd/modules/mod_cache_disk.so",
+     "/usr/lib64/httpd/modules/mod_cache_socache.so",
+     "/usr/lib64/httpd/modules/mod_cgi.so",
+     "/usr/lib64/httpd/modules/mod_cgid.so",
+     "/usr/lib64/httpd/modules/mod_charset_lite.so",
+     "/usr/lib64/httpd/modules/mod_data.so",
+     "/usr/lib64/httpd/modules/mod_dav.so",
+     "/usr/lib64/httpd/modules/mod_dav_fs.so",
+     "/usr/lib64/httpd/modules/mod_dav_lock.so",
+     "/usr/lib64/httpd/modules/mod_dbd.so",
+     "/usr/lib64/httpd/modules/mod_deflate.so",
+     "/usr/lib64/httpd/modules/mod_dialup.so",
+     "/usr/lib64/httpd/modules/mod_dir.so",
+     "/usr/lib64/httpd/modules/mod_dumpio.so",
+     "/usr/lib64/httpd/modules/mod_echo.so",
+     "/usr/lib64/httpd/modules/mod_env.so",
+     "/usr/lib64/httpd/modules/mod_expires.so",
+     "/usr/lib64/httpd/modules/mod_ext_filter.so",
+     "/usr/lib64/httpd/modules/mod_filter.so",
+     "/usr/lib64/httpd/modules/mod_headers.so",
+     "/usr/lib64/httpd/modules/mod_heartbeat.so",
+     "/usr/lib64/httpd/modules/mod_heartmonitor.so",
+     "/usr/lib64/httpd/modules/mod_include.so",
+     "/usr/lib64/httpd/modules/mod_info.so",
+     "/usr/lib64/httpd/modules/mod_lbmethod_bybusyness.so",
+     "/usr/lib64/httpd/modules/mod_lbmethod_byrequests.so",
+     "/usr/lib64/httpd/modules/mod_lbmethod_bytraffic.so",
+     "/usr/lib64/httpd/modules/mod_lbmethod_heartbeat.so",
+     "/usr/lib64/httpd/modules/mod_log_config.so",
+     "/usr/lib64/httpd/modules/mod_log_debug.so",
+     "/usr/lib64/httpd/modules/mod_log_forensic.so",
+     "/usr/lib64/httpd/modules/mod_logio.so",
+     "/usr/lib64/httpd/modules/mod_macro.so",
+     "/usr/lib64/httpd/modules/mod_mime.so",
+     "/usr/lib64/httpd/modules/mod_mime_magic.so",
+     "/usr/lib64/httpd/modules/mod_mpm_event.so",
+     "/usr/lib64/httpd/modules/mod_mpm_prefork.so",
+     "/usr/lib64/httpd/modules/mod_mpm_worker.so",
+     "/usr/lib64/httpd/modules/mod_negotiation.so",
+     "/usr/lib64/httpd/modules/mod_proxy.so",
+     "/usr/lib64/httpd/modules/mod_proxy_ajp.so",
+     "/usr/lib64/httpd/modules/mod_proxy_balancer.so",
+     "/usr/lib64/httpd/modules/mod_proxy_connect.so",
+     "/usr/lib64/httpd/modules/mod_proxy_express.so",
+     "/usr/lib64/httpd/modules/mod_proxy_fcgi.so",
+     "/usr/lib64/httpd/modules/mod_proxy_fdpass.so",
+     "/usr/lib64/httpd/modules/mod_proxy_ftp.so",
+     "/usr/lib64/httpd/modules/mod_proxy_hcheck.so",
+     "/usr/lib64/httpd/modules/mod_proxy_http.so",
+     "/usr/lib64/httpd/modules/mod_proxy_scgi.so",
+     "/usr/lib64/httpd/modules/mod_proxy_uwsgi.so",
+     "/usr/lib64/httpd/modules/mod_proxy_wstunnel.so",
+     "/usr/lib64/httpd/modules/mod_ratelimit.so",
+     "/usr/lib64/httpd/modules/mod_reflector.so",
+     "/usr/lib64/httpd/modules/mod_remoteip.so",
+     "/usr/lib64/httpd/modules/mod_reqtimeout.so",
+     "/usr/lib64/httpd/modules/mod_request.so",
+     "/usr/lib64/httpd/modules/mod_rewrite.so",
+     "/usr/lib64/httpd/modules/mod_sed.so",
+     "/usr/lib64/httpd/modules/mod_setenvif.so",
+     "/usr/lib64/httpd/modules/mod_slotmem_plain.so",
+     "/usr/lib64/httpd/modules/mod_slotmem_shm.so",
+     "/usr/lib64/httpd/modules/mod_socache_dbm.so",
+     "/usr/lib64/httpd/modules/mod_socache_memcache.so",
+     "/usr/lib64/httpd/modules/mod_socache_redis.so",
+     "/usr/lib64/httpd/modules/mod_socache_shmcb.so",
+     "/usr/lib64/httpd/modules/mod_speling.so",
+     "/usr/lib64/httpd/modules/mod_status.so",
+     "/usr/lib64/httpd/modules/mod_substitute.so",
+     "/usr/lib64/httpd/modules/mod_suexec.so",
+     "/usr/lib64/httpd/modules/mod_unique_id.so",
+     "/usr/lib64/httpd/modules/mod_unixd.so",
+     "/usr/lib64/httpd/modules/mod_userdir.so",
+     "/usr/lib64/httpd/modules/mod_usertrack.so",
+     "/usr/lib64/httpd/modules/mod_version.so",
+     "/usr/lib64/httpd/modules/mod_vhost_alias.so",
+     "/usr/lib64/httpd/modules/mod_watchdog.so"
+    ],
+    "kexec-tools": [
+     "/usr/lib64/eppic_makedumpfile.so"
+    ],
+    "mariadb-server": [
+     "/usr/lib64/mariadb/plugin/adt_null.so",
+     "/usr/lib64/mariadb/plugin/auth_0x0100.so",
+     "/usr/lib64/mariadb/plugin/auth_ed25519.so",
+     "/usr/lib64/mariadb/plugin/auth_test_plugin.so",
+     "/usr/lib64/mariadb/plugin/debug_key_management.so",
+     "/usr/lib64/mariadb/plugin/dialog_examples.so",
+     "/usr/lib64/mariadb/plugin/disks.so",
+     "/usr/lib64/mariadb/plugin/example_key_management.so",
+     "/usr/lib64/mariadb/plugin/file_key_management.so",
+     "/usr/lib64/mariadb/plugin/func_test.so",
+     "/usr/lib64/mariadb/plugin/ha_example.so",
+     "/usr/lib64/mariadb/plugin/ha_federated.so",
+     "/usr/lib64/mariadb/plugin/ha_spider.so",
+     "/usr/lib64/mariadb/plugin/ha_test_sql_discovery.so",
+     "/usr/lib64/mariadb/plugin/handlersocket.so",
+     "/usr/lib64/mariadb/plugin/libdaemon_example.so",
+     "/usr/lib64/mariadb/plugin/locales.so",
+     "/usr/lib64/mariadb/plugin/metadata_lock_info.so",
+     "/usr/lib64/mariadb/plugin/mypluglib.so",
+     "/usr/lib64/mariadb/plugin/qa_auth_client.so",
+     "/usr/lib64/mariadb/plugin/qa_auth_interface.so",
+     "/usr/lib64/mariadb/plugin/qa_auth_server.so",
+     "/usr/lib64/mariadb/plugin/query_cache_info.so",
+     "/usr/lib64/mariadb/plugin/query_response_time.so",
+     "/usr/lib64/mariadb/plugin/server_audit.so",
+     "/usr/lib64/mariadb/plugin/simple_password_check.so",
+     "/usr/lib64/mariadb/plugin/sql_errlog.so",
+     "/usr/lib64/mariadb/plugin/test_sql_service.so",
+     "/usr/lib64/mariadb/plugin/test_versioning.so",
+     "/usr/lib64/mariadb/plugin/type_mysql_json.so",
+     "/usr/lib64/mariadb/plugin/type_test.so",
+     "/usr/lib64/mariadb/plugin/wsrep_info.so"
+    ],
+    "postfix": [
+     "/usr/lib64/postfix/libpostfix-dns.so",
+     "/usr/lib64/postfix/libpostfix-global.so",
+     "/usr/lib64/postfix/libpostfix-master.so",
+     "/usr/lib64/postfix/libpostfix-tls.so",
+     "/usr/lib64/postfix/libpostfix-util.so"
+    ],
+    "rsyslog": [
+     "/usr/lib64/rsyslog/fmhash.so",
+     "/usr/lib64/rsyslog/fmhttp.so",
+     "/usr/lib64/rsyslog/imfile.so",
+     "/usr/lib64/rsyslog/imjournal.so",
+     "/usr/lib64/rsyslog/imklog.so",
+     "/usr/lib64/rsyslog/immark.so",
+     "/usr/lib64/rsyslog/impstats.so",
+     "/usr/lib64/rsyslog/imptcp.so",
+     "/usr/lib64/rsyslog/imtcp.so",
+     "/usr/lib64/rsyslog/imudp.so",
+     "/usr/lib64/rsyslog/imuxsock.so",
+     "/usr/lib64/rsyslog/lmnet.so",
+     "/usr/lib64/rsyslog/lmnetstrms.so",
+     "/usr/lib64/rsyslog/lmnsd_ptcp.so",
+     "/usr/lib64/rsyslog/lmregexp.so",
+     "/usr/lib64/rsyslog/lmtcpclt.so",
+     "/usr/lib64/rsyslog/lmtcpsrv.so",
+     "/usr/lib64/rsyslog/lmzlibw.so",
+     "/usr/lib64/rsyslog/mmanon.so",
+     "/usr/lib64/rsyslog/mmcount.so",
+     "/usr/lib64/rsyslog/mmexternal.so",
+     "/usr/lib64/rsyslog/mmleefparse.so",
+     "/usr/lib64/rsyslog/mmutf8fix.so",
+     "/usr/lib64/rsyslog/omhttp.so",
+     "/usr/lib64/rsyslog/omjournal.so",
+     "/usr/lib64/rsyslog/ommail.so",
+     "/usr/lib64/rsyslog/omprog.so",
+     "/usr/lib64/rsyslog/omstdout.so",
+     "/usr/lib64/rsyslog/omtesting.so",
+     "/usr/lib64/rsyslog/omuxsock.so",
+     "/usr/lib64/rsyslog/pmaixforwardedfrom.so",
+     "/usr/lib64/rsyslog/pmcisconames.so",
+     "/usr/lib64/rsyslog/pmlastmsg.so",
+     "/usr/lib64/rsyslog/pmsnare.so"
+    ]
+   }
+  }
+ },
+ "stat": {
+  "centos:7": {
+   "packages": {
+    "glibc": "glibc-2.17-317.el7.x86_64",
+    "openssl-libs": "openssl-libs-1.0.2k-19.el7.x86_64",
+    "zlib": "zlib-1.2.7-18.el7.x86_64"
+   },
+   "files": {
+    "/usr/lib64/ld-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 163312,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/ld-linux-x86-64.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 10,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "ld-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libBrokenLocale-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 8400,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libBrokenLocale.so.1": {
+     "package": "glibc",
+     "type": "link",
+     "size": 23,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libBrokenLocale-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libSegFault.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 21904,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libanl-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 19744,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libanl.so.1": {
+     "package": "glibc",
+     "type": "link",
+     "size": 14,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libanl-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libc-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 2156272,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libc.so.6": {
+     "package": "glibc",
+     "type": "link",
+     "size": 12,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libc-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libcidn-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 200992,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libcidn.so.1": {
+     "package": "glibc",
+     "type": "link",
+     "size": 15,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libcidn-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libcrypt-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 40600,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libcrypt.so.1": {
+     "package": "glibc",
+     "type": "link",
+     "size": 16,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libcrypt-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libdl-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 19248,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libdl.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 13,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libdl-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libm-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 1136944,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libm.so.6": {
+     "package": "glibc",
+     "type": "link",
+     "size": 12,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libm-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnsl-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 115816,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnsl.so.1": {
+     "package": "glibc",
+     "type": "link",
+     "size": 14,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libnsl-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_compat-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 46376,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_compat.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 21,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libnss_compat-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_db-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 38032,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_db.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 17,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libnss_db-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_dns-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 31344,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_dns.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 18,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libnss_dns-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_files-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 61560,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_files.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 20,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libnss_files-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_hesiod-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 23608,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_hesiod.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 21,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libnss_hesiod-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_nis-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 56600,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_nis.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 18,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libnss_nis-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_nisplus-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 69616,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libnss_nisplus.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 22,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libnss_nisplus-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libpthread-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 142144,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libpthread.so.0": {
+     "package": "glibc",
+     "type": "link",
+     "size": 18,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libpthread-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libresolv-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 109976,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libresolv.so.2": {
+     "package": "glibc",
+     "type": "link",
+     "size": 17,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libresolv-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/librt-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 43712,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/librt.so.1": {
+     "package": "glibc",
+     "type": "link",
+     "size": 13,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "librt-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libthread_db-1.0.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 38168,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libthread_db.so.1": {
+     "package": "glibc",
+     "type": "link",
+     "size": 19,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libthread_db-1.0.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libutil-2.17.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 14424,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libutil.so.1": {
+     "package": "glibc",
+     "type": "link",
+     "size": 15,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libutil-2.17.so",
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libmemusage.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 23224,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/libpcprofile.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 8736,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.17-317.el7.x86_64"
+    },
+    "/usr/lib64/.libcrypto.so.1.0.2k.hmac": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 65,
+     "mode": "644",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-1.0.2k-19.el7.x86_64"
+    },
+    "/usr/lib64/.libcrypto.so.10.hmac": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 25,
+     "mode": "777",
+     "owner": "root:root",
+     "target": ".libcrypto.so.1.0.2k.hmac",
+     "rpm": "openssl-libs-1.0.2k-19.el7.x86_64"
+    },
+    "/usr/lib64/.libssl.so.1.0.2k.hmac": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 65,
+     "mode": "644",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-1.0.2k-19.el7.x86_64"
+    },
+    "/usr/lib64/.libssl.so.10.hmac": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 22,
+     "mode": "777",
+     "owner": "root:root",
+     "target": ".libssl.so.1.0.2k.hmac",
+     "rpm": "openssl-libs-1.0.2k-19.el7.x86_64"
+    },
+    "/usr/lib64/libcrypto.so.1.0.2k": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 2521144,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-1.0.2k-19.el7.x86_64"
+    },
+    "/usr/lib64/libcrypto.so.10": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 19,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libcrypto.so.1.0.2k",
+     "rpm": "openssl-libs-1.0.2k-19.el7.x86_64"
+    },
+    "/usr/lib64/libssl.so.1.0.2k": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 470376,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-1.0.2k-19.el7.x86_64"
+    },
+    "/usr/lib64/libssl.so.10": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 16,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libssl.so.1.0.2k",
+     "rpm": "openssl-libs-1.0.2k-19.el7.x86_64"
+    },
+    "/usr/lib64/libz.so.1": {
+     "package": "zlib",
+     "type": "link",
+     "size": 13,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libz.so.1.2.7",
+     "rpm": "zlib-1.2.7-18.el7.x86_64"
+    },
+    "/usr/lib64/libz.so.1.2.7": {
+     "package": "zlib",
+     "type": "file",
+     "size": 90248,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "zlib-1.2.7-18.el7.x86_64"
+    }
+   }
+  },
+  "almalinux:9.4": {
+   "packages": {
+    "glibc": "glibc-2.34-100.el9_4.3.x86_64",
+    "openssl-libs": "openssl-libs-3.0.7-28.el9_4.x86_64",
+    "zlib": "zlib-1.2.11-40.el9.x86_64"
+   },
+   "files": {
+    "/usr/lib64/ld-linux-x86-64.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 861816,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libBrokenLocale.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15656,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libSegFault.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 24048,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libanl.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15624,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libc.so.6": {
+     "package": "glibc",
+     "type": "file",
+     "size": 2592552,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libc_malloc_debug.so.0": {
+     "package": "glibc",
+     "type": "file",
+     "size": 54496,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libdl.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15632,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libm.so.6": {
+     "package": "glibc",
+     "type": "file",
+     "size": 914360,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libmvec.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 177536,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libnss_compat.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 45776,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libnss_dns.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15480,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libnss_files.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15480,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libpthread.so.0": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15648,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libresolv.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 70936,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/librt.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15840,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libthread_db.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 42232,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libutil.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15632,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libmemusage.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 20232,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libpcprofile.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15680,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-100.el9_4.3.x86_64"
+    },
+    "/usr/lib64/libcrypto.so.3": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 18,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libcrypto.so.3.0.7",
+     "rpm": "openssl-libs-3.0.7-28.el9_4.x86_64"
+    },
+    "/usr/lib64/libcrypto.so.3.0.7": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 4487176,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-3.0.7-28.el9_4.x86_64"
+    },
+    "/usr/lib64/libssl.so.3": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 15,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libssl.so.3.0.7",
+     "rpm": "openssl-libs-3.0.7-28.el9_4.x86_64"
+    },
+    "/usr/lib64/libssl.so.3.0.7": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 688352,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-3.0.7-28.el9_4.x86_64"
+    },
+    "/usr/lib64/libz.so.1": {
+     "package": "zlib",
+     "type": "link",
+     "size": 14,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libz.so.1.2.11",
+     "rpm": "zlib-1.2.11-40.el9.x86_64"
+    },
+    "/usr/lib64/libz.so.1.2.11": {
+     "package": "zlib",
+     "type": "file",
+     "size": 102552,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "zlib-1.2.11-40.el9.x86_64"
+    }
+   }
+  },
+  "almalinux:9.5": {
+   "packages": {
+    "glibc": "glibc-2.34-125.el9_5.8.alma.1.x86_64",
+    "openssl-libs": "openssl-libs-3.2.2-6.el9_5.1.x86_64",
+    "zlib": "zlib-1.2.11-40.el9.x86_64"
+   },
+   "files": {
+    "/usr/lib64/ld-linux-x86-64.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 892632,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libBrokenLocale.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15656,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libSegFault.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 24040,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libanl.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15624,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libc.so.6": {
+     "package": "glibc",
+     "type": "file",
+     "size": 2539936,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libc_malloc_debug.so.0": {
+     "package": "glibc",
+     "type": "file",
+     "size": 54504,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libdl.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15624,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libm.so.6": {
+     "package": "glibc",
+     "type": "file",
+     "size": 912448,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libmvec.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 177488,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libnss_compat.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 45768,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libnss_dns.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15488,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libnss_files.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15488,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libpthread.so.0": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15648,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libresolv.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 70880,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/librt.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15840,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libthread_db.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 42152,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libutil.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15624,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libmemusage.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 20224,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libpcprofile.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15680,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-125.el9_5.8.alma.1.x86_64"
+    },
+    "/usr/lib64/libcrypto.so.3": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 18,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libcrypto.so.3.2.2",
+     "rpm": "openssl-libs-3.2.2-6.el9_5.1.x86_64"
+    },
+    "/usr/lib64/libcrypto.so.3.2.2": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 5436640,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-3.2.2-6.el9_5.1.x86_64"
+    },
+    "/usr/lib64/libssl.so.3": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 15,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libssl.so.3.2.2",
+     "rpm": "openssl-libs-3.2.2-6.el9_5.1.x86_64"
+    },
+    "/usr/lib64/libssl.so.3.2.2": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 957488,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-3.2.2-6.el9_5.1.x86_64"
+    },
+    "/usr/lib64/libz.so.1": {
+     "package": "zlib",
+     "type": "link",
+     "size": 14,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libz.so.1.2.11",
+     "rpm": "zlib-1.2.11-40.el9.x86_64"
+    },
+    "/usr/lib64/libz.so.1.2.11": {
+     "package": "zlib",
+     "type": "file",
+     "size": 102552,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "zlib-1.2.11-40.el9.x86_64"
+    }
+   }
+  },
+  "almalinux:9.6": {
+   "packages": {
+    "glibc": "glibc-2.34-168.el9_6.24.x86_64",
+    "openssl-libs": "openssl-libs-3.2.2-6.el9_5.1.x86_64",
+    "zlib": "zlib-1.2.11-40.el9.x86_64"
+   },
+   "files": {
+    "/usr/lib64/ld-linux-x86-64.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 897856,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libBrokenLocale.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15496,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libSegFault.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 23872,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libanl.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15464,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libc.so.6": {
+     "package": "glibc",
+     "type": "file",
+     "size": 2540248,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libc_malloc_debug.so.0": {
+     "package": "glibc",
+     "type": "file",
+     "size": 54344,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libdl.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15472,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libm.so.6": {
+     "package": "glibc",
+     "type": "file",
+     "size": 904752,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libmemusage.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 20064,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libmvec.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 176824,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libnss_compat.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 45552,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libnss_dns.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15344,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libnss_files.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15344,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libpcprofile.so": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15520,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libpthread.so.0": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15480,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libresolv.so.2": {
+     "package": "glibc",
+     "type": "file",
+     "size": 70520,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/librt.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15648,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libthread_db.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 41608,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libutil.so.1": {
+     "package": "glibc",
+     "type": "file",
+     "size": 15464,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "glibc-2.34-168.el9_6.24.x86_64"
+    },
+    "/usr/lib64/libcrypto.so.3": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 18,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libcrypto.so.3.2.2",
+     "rpm": "openssl-libs-3.2.2-6.el9_5.1.x86_64"
+    },
+    "/usr/lib64/libcrypto.so.3.2.2": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 5436640,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-3.2.2-6.el9_5.1.x86_64"
+    },
+    "/usr/lib64/libssl.so.3": {
+     "package": "openssl-libs",
+     "type": "link",
+     "size": 15,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libssl.so.3.2.2",
+     "rpm": "openssl-libs-3.2.2-6.el9_5.1.x86_64"
+    },
+    "/usr/lib64/libssl.so.3.2.2": {
+     "package": "openssl-libs",
+     "type": "file",
+     "size": 957488,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "openssl-libs-3.2.2-6.el9_5.1.x86_64"
+    },
+    "/usr/lib64/libz.so.1": {
+     "package": "zlib",
+     "type": "link",
+     "size": 14,
+     "mode": "777",
+     "owner": "root:root",
+     "target": "libz.so.1.2.11",
+     "rpm": "zlib-1.2.11-40.el9.x86_64"
+    },
+    "/usr/lib64/libz.so.1.2.11": {
+     "package": "zlib",
+     "type": "file",
+     "size": 102552,
+     "mode": "755",
+     "owner": "root:root",
+     "target": null,
+     "rpm": "zlib-1.2.11-40.el9.x86_64"
+    }
+   }
+  }
+ }
+}

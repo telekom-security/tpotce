@@ -1,0 +1,77 @@
+{
+ "_source": {
+  "date": "2026-10-28",
+  "how": "docker run --rm --platform linux/amd64 <image> sh -c 'yum|dnf provides <term>' (repositories reached over the network, CentOS 7 from vault.centos.org/7.9.2009), stdout of each command",
+  "images": {
+   "centos:7": "sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4 arm64",
+   "almalinux:9": "sha256:245f8aab832fe800aa42bdab5fad75ebbd8e0b4c9f24820a83c638b177857ae2 arm64"
+  },
+  "note": "run with --platform linux/amd64; the image ids are those docker inspect printed afterwards"
+ },
+ "images": {
+  "centos:7": {
+   "smtpdaemon": {
+    "stdout": "Loaded plugins: fastestmirror, ovl\nDetermining fastest mirrors\n2:postfix-2.10.1-9.el7.x86_64 : Postfix Mail Transport Agent\nRepo        : base\nMatched from:\nProvides    : smtpdaemon\n\n\n\nsendmail-8.14.7-6.el7.x86_64 : A widely used Mail Transport Agent (MTA)\nRepo        : base\nMatched from:\nProvides    : smtpdaemon\n\n\n\n",
+    "rc": 0
+   },
+   "MTA": {
+    "stdout": "Loaded plugins: fastestmirror, ovl\nLoading mirror speeds from cached hostfile\n2:postfix-2.10.1-9.el7.x86_64 : Postfix Mail Transport Agent\nRepo        : base\nMatched from:\nProvides    : MTA\n\n\n\nsendmail-8.14.7-6.el7.x86_64 : A widely used Mail Transport Agent (MTA)\nRepo        : base\nMatched from:\nProvides    : MTA\n\n\n\n",
+    "rc": 0
+   },
+   "webserver": {
+    "stdout": "Loaded plugins: fastestmirror, ovl\nLoading mirror speeds from cached hostfile\nhttpd-2.4.6-95.el7.centos.x86_64 : Apache HTTP Server\nRepo        : base\nMatched from:\nProvides    : webserver\n\n\n\nhttpd-2.4.6-97.el7.centos.x86_64 : Apache HTTP Server\nRepo        : updates\nMatched from:\nProvides    : webserver\n\n\n\nhttpd-2.4.6-97.el7.centos.1.x86_64 : Apache HTTP Server\nRepo        : updates\nMatched from:\nProvides    : webserver\n\n\n\nhttpd-2.4.6-97.el7.centos.2.x86_64 : Apache HTTP Server\nRepo        : updates\nMatched from:\nProvides    : webserver\n\n\n\nhttpd-2.4.6-97.el7.centos.4.x86_64 : Apache HTTP Server\nRepo        : updates\nMatched from:\nProvides    : webserver\n\n\n\nhttpd-2.4.6-97.el7.centos.5.x86_64 : Apache HTTP Server\nRepo        : updates\nMatched from:\nProvides    : webserver\n\n\n\nhttpd-2.4.6-98.el7.centos.6.x86_64 : Apache HTTP Server\nRepo        : updates\nMatched from:\nProvides    : webserver\n\n\n\nhttpd-2.4.6-98.el7.centos.7.x86_64 : Apache HTTP Server\nRepo        : updates\nMatched from:\nProvides    : webserver\n\n\n\nhttpd-2.4.6-99.el7.centos.1.x86_64 : Apache HTTP Server\nRepo        : updates\nMatched from:\nProvides    : webserver\n\n\n\n",
+    "rc": 0
+   },
+   "/usr/sbin/sendmail": {
+    "stdout": "Loaded plugins: fastestmirror, ovl\nLoading mirror speeds from cached hostfile\n2:postfix-2.10.1-9.el7.x86_64 : Postfix Mail Transport Agent\nRepo        : base\nMatched from:\nFilename    : /usr/sbin/sendmail\n\n\n\nsendmail-8.14.7-6.el7.x86_64 : A widely used Mail Transport Agent (MTA)\nRepo        : base\nMatched from:\nFilename    : /usr/sbin/sendmail\n\n\n\n",
+    "rc": 0
+   },
+   "mysql": {
+    "stdout": "Loaded plugins: fastestmirror, ovl\nLoading mirror speeds from cached hostfile\n1:mariadb-5.5.68-1.el7.x86_64 : A community developed branch of MySQL\nRepo        : base\nMatched from:\nProvides    : mysql = 1:5.5.68-1.el7\n\n\n\n",
+    "rc": 0
+   },
+   "httpd": {
+    "stdout": "Loaded plugins: fastestmirror, ovl\nLoading mirror speeds from cached hostfile\nhttpd-2.4.6-95.el7.centos.x86_64 : Apache HTTP Server\nRepo        : base\n\n\n\nhttpd-2.4.6-97.el7.centos.x86_64 : Apache HTTP Server\nRepo        : updates\n\n\n\nhttpd-2.4.6-97.el7.centos.1.x86_64 : Apache HTTP Server\nRepo        : updates\n\n\n\nhttpd-2.4.6-97.el7.centos.2.x86_64 : Apache HTTP Server\nRepo        : updates\n\n\n\nhttpd-2.4.6-97.el7.centos.4.x86_64 : Apache HTTP Server\nRepo        : updates\n\n\n\nhttpd-2.4.6-97.el7.centos.5.x86_64 : Apache HTTP Server\nRepo        : updates\n\n\n\nhttpd-2.4.6-98.el7.centos.6.x86_64 : Apache HTTP Server\nRepo        : updates\n\n\n\nhttpd-2.4.6-98.el7.centos.7.x86_64 : Apache HTTP Server\nRepo        : updates\n\n\n\nhttpd-2.4.6-99.el7.centos.1.x86_64 : Apache HTTP Server\nRepo        : updates\n\n\n\n",
+    "rc": 0
+   },
+   "mailx": {
+    "stdout": "Loaded plugins: fastestmirror, ovl\nLoading mirror speeds from cached hostfile\nmailx-12.5-19.el7.x86_64 : Enhanced implementation of the mailx command\nRepo        : base\n\n\n\n",
+    "rc": 0
+   },
+   "/bin/mail": {
+    "stdout": "Loaded plugins: fastestmirror, ovl\nLoading mirror speeds from cached hostfile\nmailx-12.5-19.el7.x86_64 : Enhanced implementation of the mailx command\nRepo        : base\nMatched from:\nFilename    : /bin/mail\n\n\n\n",
+    "rc": 0
+   },
+   "nosuchterm123": {
+    "stdout": "Loaded plugins: fastestmirror, ovl\nLoading mirror speeds from cached hostfile\nNo matches found\n",
+    "rc": 0
+   }
+  },
+  "almalinux:9": {
+   "smtpdaemon": {
+    "stdout": "AlmaLinux 9 - AppStream                         3.9 MB/s |  31 MB     00:07    \nAlmaLinux 9 - BaseOS                            6.1 MB/s |  52 MB     00:08    \nAlmaLinux 9 - Extras                             58 kB/s |  33 kB     00:00    \npostfix-2:3.5.25-2.el9.x86_64 : Postfix Mail Transport Agent\nRepo        : appstream\nMatched from:\nProvide    : smtpdaemon\n\npostfix-2:3.5.25-3.el9_8.x86_64 : Postfix Mail Transport Agent\nRepo        : appstream\nMatched from:\nProvide    : smtpdaemon\n\nsendmail-8.16.1-11.el9.x86_64 : A widely used Mail Transport Agent (MTA)\nRepo        : appstream\nMatched from:\nProvide    : smtpdaemon\n\n",
+    "rc": 0
+   },
+   "webserver": {
+    "stdout": "Last metadata expiration check: 0:00:02 ago on Wed Oct 28 07:09:00 2026.\nhttpd-2.4.62-13.el9.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\nhttpd-2.4.62-13.el9_8.1.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\nhttpd-2.4.62-13.el9_8.5.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\nhttpd-2.4.62-13.el9_8.6.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\nhttpd-2.4.62-13.el9_8.9.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\nnginx-2:1.20.1-28.el9_8.2.alma.1.x86_64 : A high performance web server and reverse proxy server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\nnginx-2:1.20.1-28.el9_8.3.alma.1.x86_64 : A high performance web server and reverse proxy server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\nnginx-2:1.20.1-28.el9_8.4.alma.1.x86_64 : A high performance web server and reverse proxy server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\nnginx-2:1.20.1-28.el9_8.5.alma.1.x86_64 : A high performance web server and reverse proxy server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\nnginx-2:1.20.1-28.el9_8.6.alma.1.x86_64 : A high performance web server and reverse proxy server\nRepo        : appstream\nMatched from:\nProvide    : webserver\n\n",
+    "rc": 0
+   },
+   "/usr/sbin/sendmail": {
+    "stdout": "Last metadata expiration check: 0:00:03 ago on Wed Oct 28 07:09:00 2026.\npostfix-2:3.5.25-2.el9.x86_64 : Postfix Mail Transport Agent\nRepo        : appstream\nMatched from:\nFilename    : /usr/sbin/sendmail\n\npostfix-2:3.5.25-3.el9_8.x86_64 : Postfix Mail Transport Agent\nRepo        : appstream\nMatched from:\nFilename    : /usr/sbin/sendmail\n\nsendmail-8.16.1-11.el9.x86_64 : A widely used Mail Transport Agent (MTA)\nRepo        : appstream\nMatched from:\nFilename    : /usr/sbin/sendmail\n\n",
+    "rc": 0
+   },
+   "mysql": {
+    "stdout": "Last metadata expiration check: 0:00:03 ago on Wed Oct 28 07:09:00 2026.\nmysql-8.0.45-1.el9_7.x86_64 : MySQL client programs and shared libraries\nRepo        : appstream\nMatched from:\nProvide    : mysql = 8.0.45-1.el9_7\n\nmysql-8.0.46-1.el9_8.x86_64 : MySQL client programs and shared libraries\nRepo        : appstream\nMatched from:\nProvide    : mysql = 8.0.46-1.el9_8\n\n",
+    "rc": 0
+   },
+   "httpd": {
+    "stdout": "Last metadata expiration check: 0:00:04 ago on Wed Oct 28 07:09:00 2026.\nhttpd-2.4.62-13.el9.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : httpd = 2.4.62-13.el9\n\nhttpd-2.4.62-13.el9_8.1.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : httpd = 2.4.62-13.el9_8.1\n\nhttpd-2.4.62-13.el9_8.5.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : httpd = 2.4.62-13.el9_8.5\n\nhttpd-2.4.62-13.el9_8.6.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : httpd = 2.4.62-13.el9_8.6\n\nhttpd-2.4.62-13.el9_8.9.x86_64 : Apache HTTP Server\nRepo        : appstream\nMatched from:\nProvide    : httpd = 2.4.62-13.el9_8.9\n\n",
+    "rc": 0
+   },
+   "nosuchterm123": {
+    "stdout": "Last metadata expiration check: 0:00:05 ago on Wed Oct 28 07:09:00 2026.\nError: No matches found. If searching for a file, try specifying the full path or using a wildcard prefix (\"*/\") at the beginning.\n",
+    "rc": 1
+   }
+  }
+ }
+}

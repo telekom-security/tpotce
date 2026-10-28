@@ -1,0 +1,1901 @@
+{
+ "_source": {
+  "origin": "docker run --rm --network none [-e LANG] <image> sh -c <command>, run on the host (Docker 29.8.2); uniq cases from w2/gnu/shell_tools.json plus EXTRA, help and version recorded in full",
+  "recorded": "2026-10-27",
+  "ledger": "task-3.8a-record-uniq.py",
+  "locale": "centos_7 en_US.UTF-8, debian and ubuntu C.UTF-8, rockylinux_9 unset (en_US.UTF-8 is not installed there: setlocale fails), BusyBox unset",
+  "docker_cli_note": "the Docker CLI's line on stderr of busybox_1.25.1 (40 of 40 cases; amd64 image on an arm64 host) was removed by hand, not by task-3.8a-record-uniq.py, which does not strip it: it is not output of the program. The removed line: \"WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested\". No other image has it (0 of 40)."
+ },
+ "images": {
+  "busybox_1.25.1": {
+   "kind": "busybox uclibc",
+   "image": "busybox:1.25",
+   "locale": "unset",
+   "platform": "linux/amd64",
+   "digest": "busybox@sha256:29f5d56d12684887bdfa50dcd29fc31eea4aaf4ad3bec43daf19026a7ce69912",
+   "lang": null,
+   "cases": {
+    "printf '1 a\\n2 a\\n3 b\\n' | uniq -f 1": [
+     "1 a\n3 b\n",
+     "",
+     0
+    ],
+    "printf 'A\\na\\nb\\n' | uniq -i": [
+     "",
+     "uniq: invalid option -- i\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq --all-repeated=separate": [
+     "",
+     "uniq: unrecognized option `--all-repeated=separate'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -D": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c": [
+     "      2 a\n      1 b\n      3 c\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c -u": [
+     "      1 b\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -d": [
+     "a\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -dc": [
+     "      2 a\n      3 c\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -q": [
+     "",
+     "uniq: invalid option -- q\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -u": [
+     "b\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -z": [
+     "",
+     "uniq: invalid option -- z\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d": [
+     "",
+     "",
+     0
+    ],
+    "printf 'ab\\nac\\nbd\\n' | uniq -w 1": [
+     "ab\nbd\n",
+     "",
+     0
+    ],
+    "printf 'xa\\nya\\nzb\\n' | uniq -s 1": [
+     "xa\nzb\n",
+     "",
+     0
+    ],
+    "uniq nosuch": [
+     "",
+     "uniq: can't open 'nosuch': No such file or directory\n",
+     1
+    ],
+    "uniq --help": [
+     "",
+     "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     0
+    ],
+    "uniq --version": [
+     "",
+     "uniq: unrecognized option `--version'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -c": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -d": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -u": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -c -d -u": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -cu": [
+     "      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --count --repeated": [
+     "",
+     "uniq: unrecognized option `--count'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d -c": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --co": [
+     "",
+     "uniq: unrecognized option `--co'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated": [
+     "",
+     "uniq: unrecognized option `--all-repeated'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=prepend": [
+     "",
+     "uniq: unrecognized option `--all-repeated=prepend'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=bogus": [
+     "",
+     "uniq: unrecognized option `--all-repeated=bogus'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f x": [
+     "",
+     "uniq: invalid number 'x'\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f": [
+     "",
+     "uniq: option requires an argument -- f\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -s -1": [
+     "",
+     "uniq: invalid number '-1'\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -w x": [
+     "",
+     "uniq: invalid number 'x'\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -x": [
+     "",
+     "uniq: invalid option -- x\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --bogus": [
+     "",
+     "uniq: unrecognized option `--bogus'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -": [
+     "a\nb\n",
+     "",
+     0
+    ],
+    "printf 'Ab\\naB\\nb\\n' | uniq -i -c": [
+     "",
+     "uniq: invalid option -- i\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a1x\\na2x\\nb1x\\n' | uniq -f 1 -c": [
+     "      3 a1x\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D nosuch": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: uniq [-cdu][-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "uniq a b c": [
+     "",
+     "uniq: can't open 'a': No such file or directory\n",
+     1
+    ]
+   }
+  },
+  "busybox_1.33.1": {
+   "kind": "busybox uclibc",
+   "image": "busybox:1.33",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "digest": "busybox@sha256:f7ca5a32c10d51aeda3b4d01c61c6061f497893d7f6628b92f822f7117182a57",
+   "lang": null,
+   "cases": {
+    "printf '1 a\\n2 a\\n3 b\\n' | uniq -f 1": [
+     "1 a\n3 b\n",
+     "",
+     0
+    ],
+    "printf 'A\\na\\nb\\n' | uniq -i": [
+     "A\nb\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq --all-repeated=separate": [
+     "",
+     "uniq: unrecognized option `--all-repeated=separate'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -D": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c": [
+     "      2 a\n      1 b\n      3 c\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c -u": [
+     "      1 b\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -d": [
+     "a\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -dc": [
+     "      2 a\n      3 c\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -q": [
+     "",
+     "uniq: invalid option -- q\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -u": [
+     "b\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -z": [
+     "",
+     "uniq: invalid option -- z\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d": [
+     "",
+     "",
+     0
+    ],
+    "printf 'ab\\nac\\nbd\\n' | uniq -w 1": [
+     "ab\nbd\n",
+     "",
+     0
+    ],
+    "printf 'xa\\nya\\nzb\\n' | uniq -s 1": [
+     "xa\nzb\n",
+     "",
+     0
+    ],
+    "uniq nosuch": [
+     "",
+     "uniq: can't open 'nosuch': No such file or directory\n",
+     1
+    ],
+    "uniq --help": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     0
+    ],
+    "uniq --version": [
+     "",
+     "uniq: unrecognized option `--version'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -c": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -d": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -u": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -c -d -u": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -cu": [
+     "      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --count --repeated": [
+     "",
+     "uniq: unrecognized option `--count'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d -c": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --co": [
+     "",
+     "uniq: unrecognized option `--co'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated": [
+     "",
+     "uniq: unrecognized option `--all-repeated'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=prepend": [
+     "",
+     "uniq: unrecognized option `--all-repeated=prepend'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=bogus": [
+     "",
+     "uniq: unrecognized option `--all-repeated=bogus'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f x": [
+     "",
+     "uniq: invalid number 'x'\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f": [
+     "",
+     "uniq: option requires an argument -- f\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -s -1": [
+     "",
+     "uniq: invalid number '-1'\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -w x": [
+     "",
+     "uniq: invalid number 'x'\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -x": [
+     "",
+     "uniq: invalid option -- x\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --bogus": [
+     "",
+     "uniq: unrecognized option `--bogus'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -": [
+     "a\nb\n",
+     "",
+     0
+    ],
+    "printf 'Ab\\naB\\nb\\n' | uniq -i -c": [
+     "      2 Ab\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a1x\\na2x\\nb1x\\n' | uniq -f 1 -c": [
+     "      3 a1x\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D nosuch": [
+     "",
+     "uniq: invalid option -- D\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: uniq [-cdui] [-f,s,w N] [INPUT [OUTPUT]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "uniq a b c": [
+     "",
+     "uniq: can't open 'a': No such file or directory\n",
+     1
+    ]
+   }
+  },
+  "busybox_1.36.1-musl": {
+   "kind": "busybox musl",
+   "image": "busybox:1.36.1-musl",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "digest": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "lang": null,
+   "cases": {
+    "printf '1 a\\n2 a\\n3 b\\n' | uniq -f 1": [
+     "1 a\n3 b\n",
+     "",
+     0
+    ],
+    "printf 'A\\na\\nb\\n' | uniq -i": [
+     "A\nb\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq --all-repeated=separate": [
+     "",
+     "uniq: unrecognized option: all-repeated=separate\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -D": [
+     "",
+     "uniq: unrecognized option: D\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c": [
+     "      2 a\n      1 b\n      3 c\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c -u": [
+     "      1 b\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -d": [
+     "a\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -dc": [
+     "      2 a\n      3 c\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -q": [
+     "",
+     "uniq: unrecognized option: q\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -u": [
+     "b\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -z": [
+     "a\u0000b\u0000c\u0000d\u0000",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d": [
+     "",
+     "",
+     0
+    ],
+    "printf 'ab\\nac\\nbd\\n' | uniq -w 1": [
+     "ab\nbd\n",
+     "",
+     0
+    ],
+    "printf 'xa\\nya\\nzb\\n' | uniq -s 1": [
+     "xa\nzb\n",
+     "",
+     0
+    ],
+    "uniq nosuch": [
+     "",
+     "uniq: can't open 'nosuch': No such file or directory\n",
+     1
+    ],
+    "uniq --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     0
+    ],
+    "uniq --version": [
+     "",
+     "uniq: unrecognized option: version\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -c": [
+     "",
+     "uniq: unrecognized option: D\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -d": [
+     "",
+     "uniq: unrecognized option: D\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -u": [
+     "",
+     "uniq: unrecognized option: D\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -c -d -u": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -cu": [
+     "      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --count --repeated": [
+     "",
+     "uniq: unrecognized option: count\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d -c": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --co": [
+     "",
+     "uniq: unrecognized option: co\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated": [
+     "",
+     "uniq: unrecognized option: all-repeated\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=prepend": [
+     "",
+     "uniq: unrecognized option: all-repeated=prepend\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=bogus": [
+     "",
+     "uniq: unrecognized option: all-repeated=bogus\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f x": [
+     "",
+     "uniq: invalid number 'x'\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f": [
+     "",
+     "uniq: option requires an argument: f\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -s -1": [
+     "",
+     "uniq: invalid number '-1'\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -w x": [
+     "",
+     "uniq: invalid number 'x'\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -x": [
+     "",
+     "uniq: unrecognized option: x\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --bogus": [
+     "",
+     "uniq: unrecognized option: bogus\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -": [
+     "a\nb\n",
+     "",
+     0
+    ],
+    "printf 'Ab\\naB\\nb\\n' | uniq -i -c": [
+     "      2 Ab\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a1x\\na2x\\nb1x\\n' | uniq -f 1 -c": [
+     "      3 a1x\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D nosuch": [
+     "",
+     "uniq: unrecognized option: D\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: uniq [-cduiz] [-f,s,w N] [FILE [OUTFILE]]\n\nDiscard duplicate lines\n\n\t-c\tPrefix lines by the number of occurrences\n\t-d\tOnly print duplicate lines\n\t-u\tOnly print unique lines\n\t-i\tIgnore case\n\t-z\tNUL terminated output\n\t-f N\tSkip first N fields\n\t-s N\tSkip first N chars (after any skipped fields)\n\t-w N\tCompare N characters in line\n",
+     1
+    ],
+    "uniq a b c": [
+     "",
+     "uniq: can't open 'a': No such file or directory\n",
+     1
+    ]
+   }
+  },
+  "centos_7": {
+   "kind": "gnu 8.22 en-2.17",
+   "image": "centos:7",
+   "locale": "en_US.UTF-8",
+   "platform": "linux/arm64",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "lang": "en_US.UTF-8",
+   "cases": {
+    "printf '1 a\\n2 a\\n3 b\\n' | uniq -f 1": [
+     "1 a\n3 b\n",
+     "",
+     0
+    ],
+    "printf 'A\\na\\nb\\n' | uniq -i": [
+     "A\nb\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq --all-repeated=separate": [
+     "a\na\n\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -D": [
+     "a\na\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c": [
+     "      2 a\n      1 b\n      3 c\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c -u": [
+     "      1 b\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -d": [
+     "a\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -dc": [
+     "      2 a\n      3 c\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -q": [
+     "",
+     "uniq: invalid option -- 'q'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -u": [
+     "b\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -z": [
+     "a\na\nb\nc\nc\nc\nd\n\u0000",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d": [
+     "",
+     "",
+     0
+    ],
+    "printf 'ab\\nac\\nbd\\n' | uniq -w 1": [
+     "ab\nbd\n",
+     "",
+     0
+    ],
+    "printf 'xa\\nya\\nzb\\n' | uniq -s 1": [
+     "xa\nzb\n",
+     "",
+     0
+    ],
+    "uniq nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq --help": [
+     "Usage: uniq [OPTION]... [INPUT [OUTPUT]]\nFilter adjacent matching lines from INPUT (or standard input),\nwriting to OUTPUT (or standard output).\n\nWith no options, matching lines are merged to the first occurrence.\n\nMandatory arguments to long options are mandatory for short options too.\n  -c, --count           prefix lines by the number of occurrences\n  -d, --repeated        only print duplicate lines, one for each group\n  -D, --all-repeated[=METHOD]  print all duplicate lines\n                          groups can be delimited with an empty line\n                          METHOD={none(default),prepend,separate}\n  -f, --skip-fields=N   avoid comparing the first N fields\n      --group[=METHOD]  show all items, separating groups with an empty line\n                          METHOD={separate(default),prepend,append,both}\n  -i, --ignore-case     ignore differences in case when comparing\n  -s, --skip-chars=N    avoid comparing the first N characters\n  -u, --unique          only print unique lines\n  -z, --zero-terminated  end lines with 0 byte, not newline\n  -w, --check-chars=N   compare no more than N characters in lines\n      --help     display this help and exit\n      --version  output version information and exit\n\nA field is a run of blanks (usually spaces and/or TABs), then non-blank\ncharacters.  Fields are skipped before chars.\n\nNote: 'uniq' does not detect repeated lines unless they are adjacent.\nYou may want to sort the input first, or use 'sort -u' without 'uniq'.\nAlso, comparisons honor the rules specified by 'LC_COLLATE'.\n\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\nFor complete documentation, run: info coreutils 'uniq invocation'\n",
+     "",
+     0
+    ],
+    "uniq --version": [
+     "uniq (GNU coreutils) 8.22\nCopyright (C) 2013 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Richard M. Stallman and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -c": [
+     "",
+     "uniq: printing all duplicated lines and repeat counts is meaningless\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -d": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -u": [
+     "a\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -c -d -u": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -cu": [
+     "      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --count --repeated": [
+     "      2 a\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d -c": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --co": [
+     "      2 a\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=prepend": [
+     "\na\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=bogus": [
+     "",
+     "uniq: invalid argument ‘bogus’ for ‘--all-repeated’\nValid arguments are:\n  - ‘none’\n  - ‘prepend’\n  - ‘separate’\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f x": [
+     "",
+     "uniq: x: invalid number of fields to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f": [
+     "",
+     "uniq: option requires an argument -- 'f'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -s -1": [
+     "",
+     "uniq: -1: invalid number of bytes to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -w x": [
+     "",
+     "uniq: x: invalid number of bytes to compare\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -x": [
+     "",
+     "uniq: invalid option -- 'x'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --bogus": [
+     "",
+     "uniq: unrecognized option '--bogus'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -": [
+     "a\nb\n",
+     "",
+     0
+    ],
+    "printf 'Ab\\naB\\nb\\n' | uniq -i -c": [
+     "      2 Ab\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a1x\\na2x\\nb1x\\n' | uniq -f 1 -c": [
+     "      3 a1x\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq a b c": [
+     "",
+     "uniq: extra operand ‘c’\nTry 'uniq --help' for more information.\n",
+     1
+    ]
+   }
+  },
+  "debian_12": {
+   "kind": "gnu 9.1 c",
+   "image": "debian:12",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "lang": "C.UTF-8",
+   "cases": {
+    "printf '1 a\\n2 a\\n3 b\\n' | uniq -f 1": [
+     "1 a\n3 b\n",
+     "",
+     0
+    ],
+    "printf 'A\\na\\nb\\n' | uniq -i": [
+     "A\nb\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq --all-repeated=separate": [
+     "a\na\n\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -D": [
+     "a\na\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c": [
+     "      2 a\n      1 b\n      3 c\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c -u": [
+     "      1 b\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -d": [
+     "a\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -dc": [
+     "      2 a\n      3 c\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -q": [
+     "",
+     "uniq: invalid option -- 'q'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -u": [
+     "b\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -z": [
+     "a\na\nb\nc\nc\nc\nd\n\u0000",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d": [
+     "",
+     "",
+     0
+    ],
+    "printf 'ab\\nac\\nbd\\n' | uniq -w 1": [
+     "ab\nbd\n",
+     "",
+     0
+    ],
+    "printf 'xa\\nya\\nzb\\n' | uniq -s 1": [
+     "xa\nzb\n",
+     "",
+     0
+    ],
+    "uniq nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq --help": [
+     "Usage: uniq [OPTION]... [INPUT [OUTPUT]]\nFilter adjacent matching lines from INPUT (or standard input),\nwriting to OUTPUT (or standard output).\n\nWith no options, matching lines are merged to the first occurrence.\n\nMandatory arguments to long options are mandatory for short options too.\n  -c, --count           prefix lines by the number of occurrences\n  -d, --repeated        only print duplicate lines, one for each group\n  -D                    print all duplicate lines\n      --all-repeated[=METHOD]  like -D, but allow separating groups\n                                 with an empty line;\n                                 METHOD={none(default),prepend,separate}\n  -f, --skip-fields=N   avoid comparing the first N fields\n      --group[=METHOD]  show all items, separating groups with an empty line;\n                          METHOD={separate(default),prepend,append,both}\n  -i, --ignore-case     ignore differences in case when comparing\n  -s, --skip-chars=N    avoid comparing the first N characters\n  -u, --unique          only print unique lines\n  -z, --zero-terminated     line delimiter is NUL, not newline\n  -w, --check-chars=N   compare no more than N characters in lines\n      --help        display this help and exit\n      --version     output version information and exit\n\nA field is a run of blanks (usually spaces and/or TABs), then non-blank\ncharacters.  Fields are skipped before chars.\n\nNote: 'uniq' does not detect repeated lines unless they are adjacent.\nYou may want to sort the input first, or use 'sort -u' without 'uniq'.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/uniq>\nor available locally via: info '(coreutils) uniq invocation'\n",
+     "",
+     0
+    ],
+    "uniq --version": [
+     "uniq (GNU coreutils) 9.1\nCopyright (C) 2022 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Richard M. Stallman and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -c": [
+     "",
+     "uniq: printing all duplicated lines and repeat counts is meaningless\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -d": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -u": [
+     "a\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -c -d -u": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -cu": [
+     "      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --count --repeated": [
+     "      2 a\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d -c": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --co": [
+     "      2 a\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=prepend": [
+     "\na\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=bogus": [
+     "",
+     "uniq: invalid argument ‘bogus’ for ‘--all-repeated’\nValid arguments are:\n  - ‘none’\n  - ‘prepend’\n  - ‘separate’\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f x": [
+     "",
+     "uniq: x: invalid number of fields to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f": [
+     "",
+     "uniq: option requires an argument -- 'f'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -s -1": [
+     "",
+     "uniq: -1: invalid number of bytes to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -w x": [
+     "",
+     "uniq: x: invalid number of bytes to compare\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -x": [
+     "",
+     "uniq: invalid option -- 'x'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --bogus": [
+     "",
+     "uniq: unrecognized option '--bogus'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -": [
+     "a\nb\n",
+     "",
+     0
+    ],
+    "printf 'Ab\\naB\\nb\\n' | uniq -i -c": [
+     "      2 Ab\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a1x\\na2x\\nb1x\\n' | uniq -f 1 -c": [
+     "      3 a1x\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq a b c": [
+     "",
+     "uniq: extra operand ‘c’\nTry 'uniq --help' for more information.\n",
+     1
+    ]
+   }
+  },
+  "debian_13": {
+   "kind": "gnu 9.7 c",
+   "image": "debian:13",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "lang": "C.UTF-8",
+   "cases": {
+    "printf '1 a\\n2 a\\n3 b\\n' | uniq -f 1": [
+     "1 a\n3 b\n",
+     "",
+     0
+    ],
+    "printf 'A\\na\\nb\\n' | uniq -i": [
+     "A\nb\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq --all-repeated=separate": [
+     "a\na\n\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -D": [
+     "a\na\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c": [
+     "      2 a\n      1 b\n      3 c\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c -u": [
+     "      1 b\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -d": [
+     "a\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -dc": [
+     "      2 a\n      3 c\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -q": [
+     "",
+     "uniq: invalid option -- 'q'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -u": [
+     "b\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -z": [
+     "a\na\nb\nc\nc\nc\nd\n\u0000",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d": [
+     "",
+     "",
+     0
+    ],
+    "printf 'ab\\nac\\nbd\\n' | uniq -w 1": [
+     "ab\nbd\n",
+     "",
+     0
+    ],
+    "printf 'xa\\nya\\nzb\\n' | uniq -s 1": [
+     "xa\nzb\n",
+     "",
+     0
+    ],
+    "uniq nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq --help": [
+     "Usage: uniq [OPTION]... [INPUT [OUTPUT]]\nFilter adjacent matching lines from INPUT (or standard input),\nwriting to OUTPUT (or standard output).\n\nWith no options, matching lines are merged to the first occurrence.\n\nMandatory arguments to long options are mandatory for short options too.\n  -c, --count           prefix lines by the number of occurrences\n  -d, --repeated        only print duplicate lines, one for each group\n  -D                    print all duplicate lines\n      --all-repeated[=METHOD]  like -D, but allow separating groups\n                                 with an empty line;\n                                 METHOD={none(default),prepend,separate}\n  -f, --skip-fields=N   avoid comparing the first N fields\n      --group[=METHOD]  show all items, separating groups with an empty line;\n                          METHOD={separate(default),prepend,append,both}\n  -i, --ignore-case     ignore differences in case when comparing\n  -s, --skip-chars=N    avoid comparing the first N characters\n  -u, --unique          only print unique lines\n  -z, --zero-terminated     line delimiter is NUL, not newline\n  -w, --check-chars=N   compare no more than N characters in lines\n      --help        display this help and exit\n      --version     output version information and exit\n\nA field is a run of blanks (usually spaces and/or TABs), then non-blank\ncharacters.  Fields are skipped before chars.\n\n'uniq' does not detect repeated lines unless they are adjacent.\nYou may want to sort the input first, or use 'sort -u' without 'uniq'.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/uniq>\nor available locally via: info '(coreutils) uniq invocation'\n",
+     "",
+     0
+    ],
+    "uniq --version": [
+     "uniq (GNU coreutils) 9.7\nPackaged by Debian (9.7-3)\nCopyright (C) 2025 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Richard M. Stallman and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -c": [
+     "",
+     "uniq: printing all duplicated lines and repeat counts is meaningless\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -d": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -u": [
+     "a\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -c -d -u": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -cu": [
+     "      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --count --repeated": [
+     "      2 a\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d -c": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --co": [
+     "      2 a\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=prepend": [
+     "\na\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=bogus": [
+     "",
+     "uniq: invalid argument ‘bogus’ for ‘--all-repeated’\nValid arguments are:\n  - ‘none’\n  - ‘prepend’\n  - ‘separate’\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f x": [
+     "",
+     "uniq: x: invalid number of fields to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f": [
+     "",
+     "uniq: option requires an argument -- 'f'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -s -1": [
+     "",
+     "uniq: -1: invalid number of bytes to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -w x": [
+     "",
+     "uniq: x: invalid number of bytes to compare\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -x": [
+     "",
+     "uniq: invalid option -- 'x'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --bogus": [
+     "",
+     "uniq: unrecognized option '--bogus'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -": [
+     "a\nb\n",
+     "",
+     0
+    ],
+    "printf 'Ab\\naB\\nb\\n' | uniq -i -c": [
+     "      2 Ab\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a1x\\na2x\\nb1x\\n' | uniq -f 1 -c": [
+     "      3 a1x\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq a b c": [
+     "",
+     "uniq: extra operand ‘c’\nTry 'uniq --help' for more information.\n",
+     1
+    ]
+   }
+  },
+  "rockylinux_9": {
+   "kind": "gnu 8.32 en",
+   "image": "rockylinux:9",
+   "locale": "en_US.UTF-8",
+   "platform": "linux/arm64",
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "lang": null,
+   "cases": {
+    "printf '1 a\\n2 a\\n3 b\\n' | uniq -f 1": [
+     "1 a\n3 b\n",
+     "",
+     0
+    ],
+    "printf 'A\\na\\nb\\n' | uniq -i": [
+     "A\nb\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq --all-repeated=separate": [
+     "a\na\n\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -D": [
+     "a\na\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c": [
+     "      2 a\n      1 b\n      3 c\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c -u": [
+     "      1 b\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -d": [
+     "a\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -dc": [
+     "      2 a\n      3 c\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -q": [
+     "",
+     "uniq: invalid option -- 'q'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -u": [
+     "b\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -z": [
+     "a\na\nb\nc\nc\nc\nd\n\u0000",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d": [
+     "",
+     "",
+     0
+    ],
+    "printf 'ab\\nac\\nbd\\n' | uniq -w 1": [
+     "ab\nbd\n",
+     "",
+     0
+    ],
+    "printf 'xa\\nya\\nzb\\n' | uniq -s 1": [
+     "xa\nzb\n",
+     "",
+     0
+    ],
+    "uniq nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq --help": [
+     "Usage: uniq [OPTION]... [INPUT [OUTPUT]]\nFilter adjacent matching lines from INPUT (or standard input),\nwriting to OUTPUT (or standard output).\n\nWith no options, matching lines are merged to the first occurrence.\n\nMandatory arguments to long options are mandatory for short options too.\n  -c, --count           prefix lines by the number of occurrences\n  -d, --repeated        only print duplicate lines, one for each group\n  -D                    print all duplicate lines\n      --all-repeated[=METHOD]  like -D, but allow separating groups\n                                 with an empty line;\n                                 METHOD={none(default),prepend,separate}\n  -f, --skip-fields=N   avoid comparing the first N fields\n      --group[=METHOD]  show all items, separating groups with an empty line;\n                          METHOD={separate(default),prepend,append,both}\n  -i, --ignore-case     ignore differences in case when comparing\n  -s, --skip-chars=N    avoid comparing the first N characters\n  -u, --unique          only print unique lines\n  -z, --zero-terminated     line delimiter is NUL, not newline\n  -w, --check-chars=N   compare no more than N characters in lines\n      --help     display this help and exit\n      --version  output version information and exit\n\nA field is a run of blanks (usually spaces and/or TABs), then non-blank\ncharacters.  Fields are skipped before chars.\n\nNote: 'uniq' does not detect repeated lines unless they are adjacent.\nYou may want to sort the input first, or use 'sort -u' without 'uniq'.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/uniq>\nor available locally via: info '(coreutils) uniq invocation'\n",
+     "",
+     0
+    ],
+    "uniq --version": [
+     "uniq (GNU coreutils) 8.32\nCopyright (C) 2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Richard M. Stallman and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -c": [
+     "",
+     "uniq: printing all duplicated lines and repeat counts is meaningless\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -d": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -u": [
+     "a\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -c -d -u": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -cu": [
+     "      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --count --repeated": [
+     "      2 a\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d -c": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --co": [
+     "      2 a\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=prepend": [
+     "\na\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=bogus": [
+     "",
+     "uniq: invalid argument 'bogus' for '--all-repeated'\nValid arguments are:\n  - 'none'\n  - 'prepend'\n  - 'separate'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f x": [
+     "",
+     "uniq: x: invalid number of fields to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f": [
+     "",
+     "uniq: option requires an argument -- 'f'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -s -1": [
+     "",
+     "uniq: -1: invalid number of bytes to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -w x": [
+     "",
+     "uniq: x: invalid number of bytes to compare\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -x": [
+     "",
+     "uniq: invalid option -- 'x'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --bogus": [
+     "",
+     "uniq: unrecognized option '--bogus'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -": [
+     "a\nb\n",
+     "",
+     0
+    ],
+    "printf 'Ab\\naB\\nb\\n' | uniq -i -c": [
+     "      2 Ab\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a1x\\na2x\\nb1x\\n' | uniq -f 1 -c": [
+     "      3 a1x\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq a b c": [
+     "",
+     "uniq: extra operand 'c'\nTry 'uniq --help' for more information.\n",
+     1
+    ]
+   }
+  },
+  "ubuntu_22.04": {
+   "kind": "gnu 8.32 c",
+   "image": "ubuntu:22.04",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "lang": "C.UTF-8",
+   "cases": {
+    "printf '1 a\\n2 a\\n3 b\\n' | uniq -f 1": [
+     "1 a\n3 b\n",
+     "",
+     0
+    ],
+    "printf 'A\\na\\nb\\n' | uniq -i": [
+     "A\nb\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq --all-repeated=separate": [
+     "a\na\n\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -D": [
+     "a\na\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c": [
+     "      2 a\n      1 b\n      3 c\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c -u": [
+     "      1 b\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -d": [
+     "a\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -dc": [
+     "      2 a\n      3 c\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -q": [
+     "",
+     "uniq: invalid option -- 'q'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -u": [
+     "b\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -z": [
+     "a\na\nb\nc\nc\nc\nd\n\u0000",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d": [
+     "",
+     "",
+     0
+    ],
+    "printf 'ab\\nac\\nbd\\n' | uniq -w 1": [
+     "ab\nbd\n",
+     "",
+     0
+    ],
+    "printf 'xa\\nya\\nzb\\n' | uniq -s 1": [
+     "xa\nzb\n",
+     "",
+     0
+    ],
+    "uniq nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq --help": [
+     "Usage: uniq [OPTION]... [INPUT [OUTPUT]]\nFilter adjacent matching lines from INPUT (or standard input),\nwriting to OUTPUT (or standard output).\n\nWith no options, matching lines are merged to the first occurrence.\n\nMandatory arguments to long options are mandatory for short options too.\n  -c, --count           prefix lines by the number of occurrences\n  -d, --repeated        only print duplicate lines, one for each group\n  -D                    print all duplicate lines\n      --all-repeated[=METHOD]  like -D, but allow separating groups\n                                 with an empty line;\n                                 METHOD={none(default),prepend,separate}\n  -f, --skip-fields=N   avoid comparing the first N fields\n      --group[=METHOD]  show all items, separating groups with an empty line;\n                          METHOD={separate(default),prepend,append,both}\n  -i, --ignore-case     ignore differences in case when comparing\n  -s, --skip-chars=N    avoid comparing the first N characters\n  -u, --unique          only print unique lines\n  -z, --zero-terminated     line delimiter is NUL, not newline\n  -w, --check-chars=N   compare no more than N characters in lines\n      --help     display this help and exit\n      --version  output version information and exit\n\nA field is a run of blanks (usually spaces and/or TABs), then non-blank\ncharacters.  Fields are skipped before chars.\n\nNote: 'uniq' does not detect repeated lines unless they are adjacent.\nYou may want to sort the input first, or use 'sort -u' without 'uniq'.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/uniq>\nor available locally via: info '(coreutils) uniq invocation'\n",
+     "",
+     0
+    ],
+    "uniq --version": [
+     "uniq (GNU coreutils) 8.32\nCopyright (C) 2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Richard M. Stallman and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -c": [
+     "",
+     "uniq: printing all duplicated lines and repeat counts is meaningless\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -d": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -u": [
+     "a\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -c -d -u": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -cu": [
+     "      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --count --repeated": [
+     "      2 a\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d -c": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --co": [
+     "      2 a\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=prepend": [
+     "\na\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=bogus": [
+     "",
+     "uniq: invalid argument ‘bogus’ for ‘--all-repeated’\nValid arguments are:\n  - ‘none’\n  - ‘prepend’\n  - ‘separate’\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f x": [
+     "",
+     "uniq: x: invalid number of fields to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f": [
+     "",
+     "uniq: option requires an argument -- 'f'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -s -1": [
+     "",
+     "uniq: -1: invalid number of bytes to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -w x": [
+     "",
+     "uniq: x: invalid number of bytes to compare\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -x": [
+     "",
+     "uniq: invalid option -- 'x'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --bogus": [
+     "",
+     "uniq: unrecognized option '--bogus'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -": [
+     "a\nb\n",
+     "",
+     0
+    ],
+    "printf 'Ab\\naB\\nb\\n' | uniq -i -c": [
+     "      2 Ab\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a1x\\na2x\\nb1x\\n' | uniq -f 1 -c": [
+     "      3 a1x\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq a b c": [
+     "",
+     "uniq: extra operand ‘c’\nTry 'uniq --help' for more information.\n",
+     1
+    ]
+   }
+  },
+  "ubuntu_24.04": {
+   "kind": "gnu 9.4 c",
+   "image": "ubuntu:24.04",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "lang": "C.UTF-8",
+   "cases": {
+    "printf '1 a\\n2 a\\n3 b\\n' | uniq -f 1": [
+     "1 a\n3 b\n",
+     "",
+     0
+    ],
+    "printf 'A\\na\\nb\\n' | uniq -i": [
+     "A\nb\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq --all-repeated=separate": [
+     "a\na\n\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -D": [
+     "a\na\nc\nc\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c": [
+     "      2 a\n      1 b\n      3 c\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -c -u": [
+     "      1 b\n      1 d\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -d": [
+     "a\nc\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -dc": [
+     "      2 a\n      3 c\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -q": [
+     "",
+     "uniq: invalid option -- 'q'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -u": [
+     "b\nd\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\nc\\nc\\nc\\nd\\n' | uniq -z": [
+     "a\na\nb\nc\nc\nc\nd\n\u0000",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d": [
+     "",
+     "",
+     0
+    ],
+    "printf 'ab\\nac\\nbd\\n' | uniq -w 1": [
+     "ab\nbd\n",
+     "",
+     0
+    ],
+    "printf 'xa\\nya\\nzb\\n' | uniq -s 1": [
+     "xa\nzb\n",
+     "",
+     0
+    ],
+    "uniq nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq --help": [
+     "Usage: uniq [OPTION]... [INPUT [OUTPUT]]\nFilter adjacent matching lines from INPUT (or standard input),\nwriting to OUTPUT (or standard output).\n\nWith no options, matching lines are merged to the first occurrence.\n\nMandatory arguments to long options are mandatory for short options too.\n  -c, --count           prefix lines by the number of occurrences\n  -d, --repeated        only print duplicate lines, one for each group\n  -D                    print all duplicate lines\n      --all-repeated[=METHOD]  like -D, but allow separating groups\n                                 with an empty line;\n                                 METHOD={none(default),prepend,separate}\n  -f, --skip-fields=N   avoid comparing the first N fields\n      --group[=METHOD]  show all items, separating groups with an empty line;\n                          METHOD={separate(default),prepend,append,both}\n  -i, --ignore-case     ignore differences in case when comparing\n  -s, --skip-chars=N    avoid comparing the first N characters\n  -u, --unique          only print unique lines\n  -z, --zero-terminated     line delimiter is NUL, not newline\n  -w, --check-chars=N   compare no more than N characters in lines\n      --help        display this help and exit\n      --version     output version information and exit\n\nA field is a run of blanks (usually spaces and/or TABs), then non-blank\ncharacters.  Fields are skipped before chars.\n\nNote: 'uniq' does not detect repeated lines unless they are adjacent.\nYou may want to sort the input first, or use 'sort -u' without 'uniq'.\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/uniq>\nor available locally via: info '(coreutils) uniq invocation'\n",
+     "",
+     0
+    ],
+    "uniq --version": [
+     "uniq (GNU coreutils) 9.4\nCopyright (C) 2023 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Richard M. Stallman and David MacKenzie.\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -c": [
+     "",
+     "uniq: printing all duplicated lines and repeat counts is meaningless\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -d": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D -u": [
+     "a\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -c -d -u": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -cu": [
+     "      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --count --repeated": [
+     "      2 a\n",
+     "",
+     0
+    ],
+    "printf 'a\\nb\\na\\n' | uniq -d -c": [
+     "",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --co": [
+     "      2 a\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated": [
+     "a\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=prepend": [
+     "\na\na\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --all-repeated=bogus": [
+     "",
+     "uniq: invalid argument ‘bogus’ for ‘--all-repeated’\nValid arguments are:\n  - ‘none’\n  - ‘prepend’\n  - ‘separate’\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f x": [
+     "",
+     "uniq: x: invalid number of fields to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -f": [
+     "",
+     "uniq: option requires an argument -- 'f'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -s -1": [
+     "",
+     "uniq: -1: invalid number of bytes to skip\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -w x": [
+     "",
+     "uniq: x: invalid number of bytes to compare\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -x": [
+     "",
+     "uniq: invalid option -- 'x'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq --bogus": [
+     "",
+     "uniq: unrecognized option '--bogus'\nTry 'uniq --help' for more information.\n",
+     1
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -": [
+     "a\nb\n",
+     "",
+     0
+    ],
+    "printf 'Ab\\naB\\nb\\n' | uniq -i -c": [
+     "      2 Ab\n      1 b\n",
+     "",
+     0
+    ],
+    "printf 'a1x\\na2x\\nb1x\\n' | uniq -f 1 -c": [
+     "      3 a1x\n",
+     "",
+     0
+    ],
+    "printf 'a\\na\\nb\\n' | uniq -D nosuch": [
+     "",
+     "uniq: nosuch: No such file or directory\n",
+     1
+    ],
+    "uniq a b c": [
+     "",
+     "uniq: extra operand ‘c’\nTry 'uniq --help' for more information.\n",
+     1
+    ]
+   }
+  }
+ }
+}

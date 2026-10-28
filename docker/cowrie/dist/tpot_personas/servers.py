@@ -517,6 +517,8 @@ def dnf_packages(persona, ident):
         owners.update({f"/usr/sbin/{name}": package for name in sbin.split()})
     for package, files in system.RPM_OWNED_FILES.items():
         owners.update({"/" + rel: package for rel in files})
+    for package, files in system.rpm_libraries(persona, ident).items():
+        owners.update({"/" + rel: package for rel in files})
     for tool in system.installed_tools(persona, ident):
         for rel in system.tool_paths(persona, tool).values():
             owners["/" + rel] = system.RPM_TOOLS[tool]
@@ -774,7 +776,9 @@ def build_ubuntu(persona, ident):
 
 
 def build_gpu_ubuntu(persona, ident):
-    """Ubuntu with NVIDIA GPUs, Ollama and Jupyter as one system."""
+    """Ubuntu with NVIDIA GPUs, Ollama and Jupyter as one system.
+
+    The NVIDIA lines are unverified: proprietary driver, no amd64 host to record them on."""
     user = persona.user
     files, ctimes = _ubuntu_files(persona, ident)
     home = f"home/{user}"
@@ -1091,6 +1095,7 @@ REDHAT_SUPPORT_PRODUCT_VERSION="7"
 #   (unverified: the package version of each patch level, the feature lists)
 SYSTEMD = {"noble": (255, "255.4-1ubuntu8.10"), "jammy": (249, "249.11-0ubuntu3.16"),
            "trixie": (257, "257.9-1~deb13u1"), "bookworm": (252, "252.39-1~deb12u1"), "centos": (219, "")}
+# 9.4: unverified: bug fix errata (RHBA) are not in Red Hat's public CSAF data
 RHEL_SYSTEMD = {"9.4": "252-32.el9_4.7", "9.5": "252-46.el9_5.3", "9.6": "252-51.el9_6.3"}
 _FEATURES_DEBIAN = ("+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL "
                     "+ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT "
@@ -1400,9 +1405,17 @@ def unit_file(persona, ident, unit):
         kind = (f"Type={UNIT_TYPE[name]}\n" if name in UNIT_TYPE else "") if unit["sub"] == "running" \
             else "Type=oneshot\nRemainAfterExit=yes\n"
         body = f"[Service]\n{kind}ExecStart={command}\n"
+        if persona.family == "centos" and name in UNIT_STOP_CENTOS:
+            body += f"ExecStop={UNIT_STOP_CENTOS[name]}\n"
     install = f"\n[Install]\nWantedBy={wants_target(name)}\n" if unit["state"] == "enabled" else ""
     return f"[Unit]\nDescription={unit['description']}\n\n{body}{install}"
 
+
+# the ExecStop= of CentOS 7's units (refs systemd_stops.json centos_7: status names it after the stop)
+UNIT_STOP_CENTOS = {"postfix.service": "/usr/sbin/postfix stop"}
+# snapd.socket of Ubuntu (derived from the TriggeredBy: of snapd.service in systemd_stops.json, not recorded itself)
+SNAPD_SOCKET = ("snapd.socket", "Socket activation for snappy daemon", "snapd.service",
+                ("/run/snapd.socket (Stream)", "/run/snapd-snap.socket (Stream)"))
 
 GPU_UNITS = (("nvidia-persistenced.service", "NVIDIA Persistence Daemon", "nvidia-persistenced", "enabled"),
              ("ollama.service", "Ollama Service", "ollama serve", "enabled"))
@@ -1462,6 +1475,10 @@ _DOCS = {"sshd.service": ["man:sshd(8)", "man:sshd_config(5)"], "tuned.service":
          "getty@tty1.service": ["man:agetty(8)", "man:systemd-getty-generator(8)",
                                 "http://0pointer.de/blog/projects/serial-console.html"],
          "systemd-journald.service": ["man:systemd-journald.service(8)", "man:journald.conf(5)"]}
+# the Documentation= of CentOS 7 units that have no unit file here (refs systemd_stops.json centos_7)
+_DOCS_FAMILY = {"centos": {"rsyslog.service": ["man:rsyslogd(8)", "http://www.rsyslog.com/doc/"],
+                          "chronyd.service": ["man:chronyd(8)", "man:chrony.conf(5)"],
+                          "NetworkManager.service": ["man:NetworkManager(8)"]}}
 # the targets of a booted server (unit, description, seconds after boot; unverified: when each is reached)
 TARGETS = (("basic.target", "Basic System", 3.0), ("getty.target", "Login Prompts", 9.0),
            ("local-fs.target", "Local File Systems", 1.5), ("multi-user.target", "Multi-User System", 9.5),
@@ -1479,7 +1496,8 @@ def _unit_details(unit, text, family):
     """Docs, Type, the .wants / .requires links, the aliases and the command of a unit from its file."""
     name = unit["name"]
     if text is None:
-        unit.update({"docs": list(_DOCS.get(name, ())), "wants": [f"{wants_target(name)}.wants"]
+        unit.update({"docs": list(_DOCS_FAMILY.get(family, {}).get(name, _DOCS.get(name, ()))),
+                     "wants": [f"{wants_target(name)}.wants"]
                      if unit["state"] in ("enabled", "disabled") else [], "alias": []})
         if name in UNIT_EXEC or name in UNIT_EXEC_FAMILY.get(family, {}):
             unit["exec"] = UNIT_EXEC_FAMILY.get(family, {}).get(name, UNIT_EXEC.get(name, ""))
@@ -1574,13 +1592,25 @@ def systemd_units(persona, ident, processes):
             if noble:
                 # 24.04 starts sshd from ssh.socket; ssh.service itself is disabled
                 unit.update({"state": "disabled", "triggered_by": "ssh.socket"})
+        if name == "snapd.service":
+            unit["triggered_by"] = "snapd.socket"
+            if noble:
+                unit["fd_store"] = 1024
+        if name == "rsyslog.service" and family == "rhel":
+            unit["sw_version"] = system.rpm_evr(system.RPM_INSTALLED["rsyslog"][3],
+                                               ident.release.os_version_id).split(":")[-1]
+        if family == "centos" and name == "rsyslog.service":
+            unit["sw_version"] = system.centos_installed(ident)["rsyslog"].split(":")[-1]
+        if family == "centos" and name == "postfix.service":
+            unit["preset"] = "disabled"
         units.append(unit)
     services = {u["name"] for u in units}
     dbus = "dbus-broker.service" if "dbus-broker.service" in services else "dbus.service"
-    sockets = SOCKETS + ((SSH_SOCKET,) if noble else ()) + ((TELNET_SOCKET,) if family in ("rhel", "centos") else ())
+    sockets = SOCKETS + ((SSH_SOCKET,) if noble else ()) + ((SNAPD_SOCKET,) if family == "ubuntu" else ()) + \
+        ((TELNET_SOCKET,) if family in ("rhel", "centos") else ())
     for name, description, triggers, listen in sockets:
         triggers = dbus if name == "dbus.socket" else triggers
-        static = name not in ("ssh.socket", "telnet.socket")
+        static = name not in ("ssh.socket", "telnet.socket", "snapd.socket")
         unit = {"name": name, "description": description, "state": "static" if static else "enabled",
                 "preset": "disabled" if name == "telnet.socket" else "enabled", "path": f"{directory}/{name}",
                 "sub": "running" if name in _RUNNING_SOCKETS or name == "ssh.socket" else "listening",
@@ -1619,7 +1649,8 @@ def systemd_units(persona, ident, processes):
     data = {"version": version, "full": full, "features": SYSTEMD_FEATURES.get(
                 "centos" if family == "centos" else "rhel" if family == "rhel" else ident.release.extra["codename"],
                 _FEATURES_DEBIAN),
-            "unit_dir": directory, "tasks_max": int(ident.hardware.mem_kb / 128 * 0.15),
+            "family": family, "unit_dir": directory, "tasks_max": int(ident.hardware.mem_kb / 128 * 0.15),
+            **({"sysv": system.sysv_levels(persona)} if family == "centos" else {}),
             "init": processes[0]["COMMAND"], "units": units,
             # the preset of a unit no preset file names: Debian enables, Red Hat disables
             "preset": "disabled" if family in ("rhel", "centos") else "enabled"}
@@ -1630,6 +1661,13 @@ def systemd_units(persona, ident, processes):
         data["aliases"] = {**data.get("aliases", {}), "openbsd-inetd.service": "inetd.service"}
     if family in ("rhel", "centos"):
         data["redirect"] = True
+    # journald: Debian and Ubuntu keep the journal in /var/log/journal, Red Hat in /run only; the groups its hint
+    # names (refs systemd_journal.json: Red Hat adds wheel; systemd 219 names the one group, no list here)
+    data["journal"] = {"persistent": family not in ("rhel", "centos")}
+    if family != "centos":
+        data["journal"]["groups"] = ["adm", "systemd-journal"] + (["wheel"] if family == "rhel" else [])
+    # polkit: centos-7 (ps) and raspios (fs.pickle) list it, rhel-9 the package only; ubuntu and debian unverified
+    data["polkit"] = family in ("rhel", "centos", "raspios", "ubuntu")
     if family == "rhel":
         # Red Hat's 252 has the peak memory and the Until: line of later releases, and names units in its journal
         #   by their description (refs almalinux-9-status-sshd)

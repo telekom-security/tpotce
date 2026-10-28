@@ -1,0 +1,4770 @@
+{
+ "_source": "readlink of GNU coreutils (debian:10, debian:12, debian:13, ubuntu:22.04, ubuntu:24.04, rockylinux:9, centos:7) and of BusyBox (busybox:1.25 = 1.25.1 uClibc, busybox:1.33 = 1.33.1 uClibc, busybox:1.36.1-musl), and a few texts of /proc, run with sh -c in containers of these images (docker run -d --rm --network none, one docker exec per case, cwd /tmp/w), 2026-10-22. Every case runs in /tmp/w as made once per container: a folder d, an empty file file, the links l1 -> file, l2 -> l1, dangling -> missing, dl -> d, abs -> /tmp/w/l2, loop1 -> loop2, loop2 -> loop1 and notdir -> file/x. Each case is [stdout, stderr, exit status]. Docker host linux/arm64 (Docker Desktop, kernel 7.0.14-linuxkit): every image ran as arm64 except busybox:1.25 (linux/amd64 only, emulated; its /proc/1/exe is the emulator's). LC_ALL as in the locale field (unset for BusyBox); rockylinux:9 has no en_US.UTF-8 without its langpack (no network), so it ran with C.UTF-8 (the quotes of gnulib's quote() are the same in both). The texts that name a PID (/proc/self, /etc/mtab -f) and the times of ls -l are those of the run. applets: busybox --list | grep -x readlink and the banner of the image. proc: /proc/1 is the container's sleep, /proc/self the reading program. A second run on the same images and digests (2026-10-22, the same setup) added the cases of a name with a slash at its end: readlink -f / -m / -e missing/, -f d/missing/, -f file/, -f dangling/. A third run on the same images and digests (2026-10-22) added -f of a missing name followed by a dot or two slashes: readlink -f missing/., missing/./, missing// and the case d/missing/. (the dot belongs to the case name, the period after it ends the sentence).",
+ "images": {
+  "busybox_1.25.1": {
+   "applets": [
+    "readlink\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n",
+    "",
+    0
+   ],
+   "cases": {
+    "readlink": [
+     "",
+     "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: unrecognized option `--canon'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "",
+     "readlink: unrecognized option `--canonicalize'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option `--foo'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --help": [
+     "",
+     "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "",
+     "readlink: unrecognized option `--no-newline'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: unrecognized option `--verbose'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --version": [
+     "",
+     "readlink: unrecognized option `--version'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --zero l1": [
+     "",
+     "readlink: unrecognized option `--zero'\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e d/": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e dangling": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e l2": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e missing/": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/452/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "",
+     "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -f l1/": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fz l2": [
+     "",
+     "readlink: invalid option -- z\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m file/x": [
+     "",
+     "readlink: invalid option -- m\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m missing": [
+     "",
+     "readlink: invalid option -- m\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m missing/": [
+     "",
+     "readlink: invalid option -- m\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m nodir/x/../y": [
+     "",
+     "readlink: invalid option -- m\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "",
+     "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: cannot read link: not a symlink\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: cannot read link: not a symlink\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: cannot read link: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: invalid option -- x\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: invalid option -- x\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -z l1": [
+     "",
+     "readlink: invalid option -- z\nBusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/run/rosetta/rosetta\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "473\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "",
+     "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink l1 l2": [
+     "",
+     "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "busybox@sha256:29f5d56d12684887bdfa50dcd29fc31eea4aaf4ad3bec43daf19026a7ce69912",
+   "image": "busybox:1.25",
+   "locale": "unset",
+   "platform": "linux/amd64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 928 0 2 0 0 0 0 0 20 0 1 0 5264 428236800 1333 18446744073709551615 140737488510976 140737488974984 281474016863040 0 0 0 0 0 1040 1 0 0 17 0 0 0 0 0 0 140737489010688 140737490079968 140738011058176 281474016866144 281474016866186 281474016866186 281474016866285 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 10 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t  418200 kB\nVmSize:\t  418200 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t    5424 kB\nVmRSS:\t    5424 kB\nRssAnon:\t    4356 kB\nRssFile:\t    1068 kB\nRssShmem:\t       0 kB\nVmData:\t  414392 kB\nVmStk:\t     132 kB\nVmExe:\t     456 kB\nVmLib:\t     996 kB\nVmPTE:\t      96 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000410\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t32\nnonvoluntary_ctxt_switches:\t17\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "595 (cat) R 589 589 589 0 -1 4194304 217 0 0 0 0 0 0 0 20 0 1 0 5755 428244992 1364 18446744073709551615 140737488510976 140737488974984 281474767336336 0 0 0 0 0 1040 0 0 0 17 0 0 0 0 0 0 140737489010688 140737490079968 140737547268096 281474767339335 281474767339385 281474767339385 281474767339503 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x    2 root     root             0 Oct 22 05:12 attr\n-rw-r--r--    1 root     root             0 Oct 22 05:12 autogroup\n-r--------    1 root     root             0 Oct 22 05:12 auxv\n-r--r--r--    1 root     root             0 Oct 22 05:12 cgroup\n--w-------    1 root     root             0 Oct 22 05:12 clear_refs\n-r--r--r--    1 root     root             0 Oct 22 05:12 cmdline\n-rw-r--r--    1 root     root             0 Oct 22 05:12 comm\n-rw-r--r--    1 root     root             0 Oct 22 05:12 coredump_filter\n-r--r--r--    1 root     root             0 Oct 22 05:12 cpuset\nlrwxrwxrwx    1 root     root             0 Oct 22 05:12 cwd -> /\n-r--------    1 root     root             0 Oct 22 05:12 environ\nlrwxrwxrwx    1 root     root             0 Oct 22 05:12 exe -> /run/rosetta/rosetta\ndr-x------    2 root     root             6 Oct 22 05:12 fd\ndr-xr-xr-x    2 root     root             0 Oct 22 05:12 fdinfo\n-rw-r--r--    1 root     root             0 Oct 22 05:12 gid_map\n-r--------    1 root     root             0 Oct 22 05:12 io\n-r--------    1 root     root             0 Oct 22 05:12 ksm_merging_pages\n-r--------    1 root     root             0 Oct 22 05:12 ksm_stat\n-r--r--r--    1 root     root             0 Oct 22 05:12 limits\n-rw-r--r--    1 root     root             0 Oct 22 05:12 loginuid\ndr-x------    2 root     root             0 Oct 22 05:12 map_files\n-r--r--r--    1 root     root             0 Oct 22 05:12 maps\n-rw-------    1 root     root             0 Oct 22 05:12 mem\n-r--r--r--    1 root     root             0 Oct 22 05:12 mountinfo\n-r--r--r--    1 root     root             0 Oct 22 05:12 mounts\n-r--------    1 root     root             0 Oct 22 05:12 mountstats\ndr-xr-xr-x   13 root     root             0 Oct 22 05:12 net\ndr-x--x--x    2 root     root             0 Oct 22 05:12 ns\n-rw-r--r--    1 root     root             0 Oct 22 05:12 oom_adj\n-r--r--r--    1 root     root             0 Oct 22 05:12 oom_score\n-rw-r--r--    1 root     root             0 Oct 22 05:12 oom_score_adj\n-r--------    1 root     root             0 Oct 22 05:12 pagemap\n-r--------    1 root     root             0 Oct 22 05:12 personality\n-rw-r--r--    1 root     root             0 Oct 22 05:12 projid_map\nlrwxrwxrwx    1 root     root             0 Oct 22 05:12 root -> /\n-rw-r--r--    1 root     root             0 Oct 22 05:12 sched\n-r--r--r--    1 root     root             0 Oct 22 05:12 schedstat\n-r--r--r--    1 root     root             0 Oct 22 05:12 sessionid\n-rw-r--r--    1 root     root             0 Oct 22 05:12 setgroups\n-r--r--r--    1 root     root             0 Oct 22 05:12 smaps\n-r--r--r--    1 root     root             0 Oct 22 05:12 smaps_rollup\n-r--------    1 root     root             0 Oct 22 05:12 stack\n-r--r--r--    1 root     root             0 Oct 22 05:12 stat\n-r--r--r--    1 root     root             0 Oct 22 05:12 statm\n-r--r--r--    1 root     root             0 Oct 22 05:12 status\n-r--------    1 root     root             0 Oct 22 05:12 syscall\ndr-xr-xr-x    3 root     root             0 Oct 22 05:12 task\n-rw-r--r--    1 root     root             0 Oct 22 05:12 timens_offsets\n-r--r--r--    1 root     root             0 Oct 22 05:12 timers\n-rw-rw-rw-    1 root     root             0 Oct 22 05:12 timerslack_ns\n-rw-r--r--    1 root     root             0 Oct 22 05:12 uid_map\n-r--r--r--    1 root     root             0 Oct 22 05:12 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------    1 root     root            64 Oct 22 05:12 0 -> /dev/null\nl-wx------    1 root     root            64 Oct 22 05:12 1 -> pipe:[73210]\nl-wx------    1 root     root            64 Oct 22 05:12 2 -> pipe:[73211]\nlr-x------    1 root     root            64 Oct 22 05:12 3 -> /bin/sleep\nlr-x------    1 root     root            64 Oct 22 05:12 4 -> /bin/sleep\nlr-x------    1 root     root            64 Oct 22 05:12 5 -> /run/rosetta/rosetta\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n581\n587\n588\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevice-tree\ndevices\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkey-users\nkeys\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   s   l   e   e   p  \\0   9   0   0  \\0\n0000012\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.33.1": {
+   "applets": [
+    "readlink\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n",
+    "",
+    0
+   ],
+   "cases": {
+    "readlink": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: unrecognized option `--canon'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "",
+     "readlink: unrecognized option `--canonicalize'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option `--foo'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --help": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "",
+     "readlink: unrecognized option `--no-newline'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: unrecognized option `--verbose'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --version": [
+     "",
+     "readlink: unrecognized option `--version'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --zero l1": [
+     "",
+     "readlink: unrecognized option `--zero'\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e d/": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e dangling": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e l2": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e missing/": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: invalid option -- e\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/386/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dangling/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -f l1/": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fz l2": [
+     "",
+     "readlink: invalid option -- z\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m file/x": [
+     "",
+     "readlink: invalid option -- m\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m missing": [
+     "",
+     "readlink: invalid option -- m\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m missing/": [
+     "",
+     "readlink: invalid option -- m\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m nodir/x/../y": [
+     "",
+     "readlink: invalid option -- m\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: cannot read link: not a symlink\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: cannot read link: not a symlink\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: cannot read link: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: invalid option -- x\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: invalid option -- x\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -z l1": [
+     "",
+     "readlink: invalid option -- z\nBusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/bin/sleep\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "404\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink l1 l2": [
+     "",
+     "BusyBox v1.33.1 (2021-09-13 17:21:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "busybox@sha256:f7ca5a32c10d51aeda3b4d01c61c6061f497893d7f6628b92f822f7117182a57",
+   "image": "busybox:1.33",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 845 0 1 0 0 0 0 0 20 0 1 0 4681 1409024 129 18446744073709551615 4194304 5411688 281474701224896 0 0 0 0 0 0 1 0 0 17 3 0 0 0 0 0 5479912 5481461 735293440 281474701225856 281474701225866 281474701225866 281474701225965 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 10 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t    1376 kB\nVmSize:\t    1376 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t     540 kB\nVmRSS:\t     540 kB\nRssAnon:\t      24 kB\nRssFile:\t     516 kB\nRssShmem:\t       0 kB\nVmData:\t      28 kB\nVmStk:\t     132 kB\nVmExe:\t    1192 kB\nVmLib:\t       8 kB\nVmPTE:\t      28 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t23\nnonvoluntary_ctxt_switches:\t0\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "512 (cat) R 0 512 512 0 -1 4194560 816 0 0 0 0 0 0 0 20 0 1 0 5242 1409024 129 18446744073709551615 4194304 5411688 281474044127904 0 0 0 0 4 0 0 0 0 17 7 0 0 0 0 0 5479912 5481461 742305792 281474044129125 281474044129145 281474044129145 281474044129263 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x    2 root     root             0 Oct 22 05:12 attr\n-rw-r--r--    1 root     root             0 Oct 22 05:12 autogroup\n-r--------    1 root     root             0 Oct 22 05:12 auxv\n-r--r--r--    1 root     root             0 Oct 22 05:12 cgroup\n--w-------    1 root     root             0 Oct 22 05:12 clear_refs\n-r--r--r--    1 root     root             0 Oct 22 05:12 cmdline\n-rw-r--r--    1 root     root             0 Oct 22 05:12 comm\n-rw-r--r--    1 root     root             0 Oct 22 05:12 coredump_filter\n-r--r--r--    1 root     root             0 Oct 22 05:12 cpuset\nlrwxrwxrwx    1 root     root             0 Oct 22 05:12 cwd -> /\n-r--------    1 root     root             0 Oct 22 05:12 environ\nlrwxrwxrwx    1 root     root             0 Oct 22 05:12 exe -> /bin/sleep\ndr-x------    2 root     root             3 Oct 22 05:12 fd\ndr-xr-xr-x    2 root     root             0 Oct 22 05:12 fdinfo\n-rw-r--r--    1 root     root             0 Oct 22 05:12 gid_map\n-r--------    1 root     root             0 Oct 22 05:12 io\n-r--------    1 root     root             0 Oct 22 05:12 ksm_merging_pages\n-r--------    1 root     root             0 Oct 22 05:12 ksm_stat\n-r--r--r--    1 root     root             0 Oct 22 05:12 limits\n-rw-r--r--    1 root     root             0 Oct 22 05:12 loginuid\ndr-x------    2 root     root             0 Oct 22 05:12 map_files\n-r--r--r--    1 root     root             0 Oct 22 05:12 maps\n-rw-------    1 root     root             0 Oct 22 05:12 mem\n-r--r--r--    1 root     root             0 Oct 22 05:12 mountinfo\n-r--r--r--    1 root     root             0 Oct 22 05:12 mounts\n-r--------    1 root     root             0 Oct 22 05:12 mountstats\ndr-xr-xr-x   13 root     root             0 Oct 22 05:12 net\ndr-x--x--x    2 root     root             0 Oct 22 05:12 ns\n-rw-r--r--    1 root     root             0 Oct 22 05:12 oom_adj\n-r--r--r--    1 root     root             0 Oct 22 05:12 oom_score\n-rw-r--r--    1 root     root             0 Oct 22 05:12 oom_score_adj\n-r--------    1 root     root             0 Oct 22 05:12 pagemap\n-r--------    1 root     root             0 Oct 22 05:12 personality\n-rw-r--r--    1 root     root             0 Oct 22 05:12 projid_map\nlrwxrwxrwx    1 root     root             0 Oct 22 05:12 root -> /\n-rw-r--r--    1 root     root             0 Oct 22 05:12 sched\n-r--r--r--    1 root     root             0 Oct 22 05:12 schedstat\n-r--r--r--    1 root     root             0 Oct 22 05:12 sessionid\n-rw-r--r--    1 root     root             0 Oct 22 05:12 setgroups\n-r--r--r--    1 root     root             0 Oct 22 05:12 smaps\n-r--r--r--    1 root     root             0 Oct 22 05:12 smaps_rollup\n-r--------    1 root     root             0 Oct 22 05:12 stack\n-r--r--r--    1 root     root             0 Oct 22 05:12 stat\n-r--r--r--    1 root     root             0 Oct 22 05:12 statm\n-r--r--r--    1 root     root             0 Oct 22 05:12 status\n-r--------    1 root     root             0 Oct 22 05:12 syscall\ndr-xr-xr-x    3 root     root             0 Oct 22 05:11 task\n-rw-r--r--    1 root     root             0 Oct 22 05:12 timens_offsets\n-r--r--r--    1 root     root             0 Oct 22 05:12 timers\n-rw-rw-rw-    1 root     root             0 Oct 22 05:12 timerslack_ns\n-rw-r--r--    1 root     root             0 Oct 22 05:12 uid_map\n-r--r--r--    1 root     root             0 Oct 22 05:12 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------    1 root     root            64 Oct 22 05:12 0 -> /dev/null\nl-wx------    1 root     root            64 Oct 22 05:12 1 -> pipe:[72840]\nl-wx------    1 root     root            64 Oct 22 05:12 2 -> pipe:[72841]\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n504\n510\n511\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevice-tree\ndevices\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkey-users\nkeys\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   s   l   e   e   p  \\0   9   0   0  \\0\n0000012\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  },
+  "busybox_1.36.1-musl": {
+   "applets": [
+    "readlink\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n",
+    "",
+    0
+   ],
+   "cases": {
+    "readlink": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: unrecognized option: canon\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "",
+     "readlink: unrecognized option: canonicalize\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option: foo\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --help": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "",
+     "readlink: unrecognized option: no-newline\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: unrecognized option: verbose\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --version": [
+     "",
+     "readlink: unrecognized option: version\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink --zero l1": [
+     "",
+     "readlink: unrecognized option: zero\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "",
+     "readlink: unrecognized option: e\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e d/": [
+     "",
+     "readlink: unrecognized option: e\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e dangling": [
+     "",
+     "readlink: unrecognized option: e\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e l2": [
+     "",
+     "readlink: unrecognized option: e\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e missing/": [
+     "",
+     "readlink: unrecognized option: e\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "readlink: unrecognized option: e\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: unrecognized option: e\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "//tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/386/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "/tmp/w/d/missing\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dangling/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -f l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fz l2": [
+     "",
+     "readlink: unrecognized option: z\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m file/x": [
+     "",
+     "readlink: unrecognized option: m\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m missing": [
+     "",
+     "readlink: unrecognized option: m\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m missing/": [
+     "",
+     "readlink: unrecognized option: m\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -m nodir/x/../y": [
+     "",
+     "readlink: unrecognized option: m\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: cannot read link: not a symlink\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: cannot read link: not a symlink\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: cannot read link: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: unrecognized option: x\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: unrecognized option: x\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink -z l1": [
+     "",
+     "readlink: unrecognized option: z\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/bin/sleep\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "404\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink l1 l2": [
+     "",
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: readlink [-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+     1
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "image": "busybox:1.36.1-musl",
+   "locale": "unset",
+   "platform": "linux/arm64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 848 0 1 0 0 0 0 0 20 0 1 0 4224 1466368 137 18446744073709551615 281473143013376 281473144292056 281474183596928 0 0 0 0 0 0 1 0 0 17 1 0 0 0 0 0 281473144375696 281473144390449 187650958323712 281474183597952 281474183597962 281474183597962 281474183598061 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 10 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t    1484 kB\nVmSize:\t    1432 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t     576 kB\nVmRSS:\t     576 kB\nRssAnon:\t      28 kB\nRssFile:\t     548 kB\nRssShmem:\t       0 kB\nVmData:\t      24 kB\nVmStk:\t     132 kB\nVmExe:\t    1252 kB\nVmLib:\t       8 kB\nVmPTE:\t      24 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t22\nnonvoluntary_ctxt_switches:\t0\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "512 (cat) R 0 512 512 0 -1 4194560 720 0 0 0 0 0 0 0 20 0 1 0 4656 1466368 105 18446744073709551615 281473482096640 281473483375320 281473925168144 0 0 0 0 4 0 0 0 0 17 15 0 0 0 0 0 281473483458960 281473483473713 187650267832320 281473925168997 281473925169017 281473925169017 281473925169135 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x    2 root     root             0 Oct 22 05:11 attr\n-rw-r--r--    1 root     root             0 Oct 22 05:11 autogroup\n-r--------    1 root     root             0 Oct 22 05:11 auxv\n-r--r--r--    1 root     root             0 Oct 22 05:11 cgroup\n--w-------    1 root     root             0 Oct 22 05:11 clear_refs\n-r--r--r--    1 root     root             0 Oct 22 05:11 cmdline\n-rw-r--r--    1 root     root             0 Oct 22 05:11 comm\n-rw-r--r--    1 root     root             0 Oct 22 05:11 coredump_filter\n-r--r--r--    1 root     root             0 Oct 22 05:11 cpuset\nlrwxrwxrwx    1 root     root             0 Oct 22 05:11 cwd -> /\n-r--------    1 root     root             0 Oct 22 05:11 environ\nlrwxrwxrwx    1 root     root             0 Oct 22 05:11 exe -> /bin/sleep\ndr-x------    2 root     root             3 Oct 22 05:11 fd\ndr-xr-xr-x    2 root     root             0 Oct 22 05:11 fdinfo\n-rw-r--r--    1 root     root             0 Oct 22 05:11 gid_map\n-r--------    1 root     root             0 Oct 22 05:11 io\n-r--------    1 root     root             0 Oct 22 05:11 ksm_merging_pages\n-r--------    1 root     root             0 Oct 22 05:11 ksm_stat\n-r--r--r--    1 root     root             0 Oct 22 05:11 limits\n-rw-r--r--    1 root     root             0 Oct 22 05:11 loginuid\ndr-x------    2 root     root             0 Oct 22 05:11 map_files\n-r--r--r--    1 root     root             0 Oct 22 05:11 maps\n-rw-------    1 root     root             0 Oct 22 05:11 mem\n-r--r--r--    1 root     root             0 Oct 22 05:11 mountinfo\n-r--r--r--    1 root     root             0 Oct 22 05:11 mounts\n-r--------    1 root     root             0 Oct 22 05:11 mountstats\ndr-xr-xr-x   13 root     root             0 Oct 22 05:11 net\ndr-x--x--x    2 root     root             0 Oct 22 05:11 ns\n-rw-r--r--    1 root     root             0 Oct 22 05:11 oom_adj\n-r--r--r--    1 root     root             0 Oct 22 05:11 oom_score\n-rw-r--r--    1 root     root             0 Oct 22 05:11 oom_score_adj\n-r--------    1 root     root             0 Oct 22 05:11 pagemap\n-r--------    1 root     root             0 Oct 22 05:11 personality\n-rw-r--r--    1 root     root             0 Oct 22 05:11 projid_map\nlrwxrwxrwx    1 root     root             0 Oct 22 05:11 root -> /\n-rw-r--r--    1 root     root             0 Oct 22 05:11 sched\n-r--r--r--    1 root     root             0 Oct 22 05:11 schedstat\n-r--r--r--    1 root     root             0 Oct 22 05:11 sessionid\n-rw-r--r--    1 root     root             0 Oct 22 05:11 setgroups\n-r--r--r--    1 root     root             0 Oct 22 05:11 smaps\n-r--r--r--    1 root     root             0 Oct 22 05:11 smaps_rollup\n-r--------    1 root     root             0 Oct 22 05:11 stack\n-r--r--r--    1 root     root             0 Oct 22 05:11 stat\n-r--r--r--    1 root     root             0 Oct 22 05:11 statm\n-r--r--r--    1 root     root             0 Oct 22 05:11 status\n-r--------    1 root     root             0 Oct 22 05:11 syscall\ndr-xr-xr-x    3 root     root             0 Oct 22 05:11 task\n-rw-r--r--    1 root     root             0 Oct 22 05:11 timens_offsets\n-r--r--r--    1 root     root             0 Oct 22 05:11 timers\n-rw-rw-rw-    1 root     root             0 Oct 22 05:11 timerslack_ns\n-rw-r--r--    1 root     root             0 Oct 22 05:11 uid_map\n-r--r--r--    1 root     root             0 Oct 22 05:11 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------    1 root     root            64 Oct 22 05:11 0 -> /dev/null\nl-wx------    1 root     root            64 Oct 22 05:11 1 -> pipe:[67613]\nl-wx------    1 root     root            64 Oct 22 05:11 2 -> pipe:[67614]\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n504\n510\n511\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevice-tree\ndevices\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkey-users\nkeys\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   s   l   e   e   p  \\0   9   0   0  \\0\n0000012\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  },
+  "centos_7": {
+   "cases": {
+    "readlink": [
+     "",
+     "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: option '--canon' is ambiguous; possibilities: '--canonicalize' '--canonicalize-missing' '--canonicalize-existing'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option '--foo'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --help": [
+     "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet,\n  -s, --silent                  suppress most error messages\n  -v, --verbose                 report error messages\n  -z, --zero                    separate output with NUL rather than newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\nFor complete documentation, run: info coreutils 'readlink invocation'\n",
+     "",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink --version": [
+     "readlink (GNU coreutils) 8.22\nCopyright (C) 2013 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Dmitry V. Levin.\n",
+     "",
+     0
+    ],
+    "readlink --zero l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -e d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -e dangling": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -e missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: dangling: No such file or directory\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/375/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "/tmp/w/d/missing\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dangling/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "/tmp/w/file\n/tmp/w/file\n",
+     "",
+     1
+    ],
+    "readlink -f l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "readlink: file/x: Not a directory\n",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "readlink: loop1: Too many levels of symbolic links\n",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "readlink: missing/x: No such file or directory\n",
+     1
+    ],
+    "readlink -fz l2": [
+     "/tmp/w/file\u0000",
+     "",
+     0
+    ],
+    "readlink -m file/x": [
+     "/tmp/w/file/x\n",
+     "",
+     0
+    ],
+    "readlink -m missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m nodir/x/../y": [
+     "/tmp/w/nodir/y\n",
+     "",
+     0
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "file\nl1\n",
+     "readlink: ignoring --no-newline with multiple arguments\n",
+     0
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -z l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/usr/bin/sleep\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "393\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "file\nl1\n",
+     "",
+     1
+    ],
+    "readlink l1 l2": [
+     "file\nl1\n",
+     "",
+     0
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "image": "centos:7",
+   "locale": "en_US.UTF-8",
+   "platform": "linux/arm64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 780 0 4 0 0 0 0 0 20 0 1 0 3609 2080768 246 18446744073709551615 4194304 4219068 281474402839760 0 0 0 0 0 0 1 0 0 17 11 0 0 0 0 0 4324536 4325912 855330816 281474402840444 281474402840454 281474402840454 281474402840553 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t    2032 kB\nVmSize:\t    2032 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t    1084 kB\nVmRSS:\t    1084 kB\nRssAnon:\t      84 kB\nRssFile:\t    1000 kB\nRssShmem:\t       0 kB\nVmData:\t     184 kB\nVmStk:\t     132 kB\nVmExe:\t      28 kB\nVmLib:\t    1564 kB\nVmPTE:\t      40 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t35\nnonvoluntary_ctxt_switches:\t0\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "501 (cat) R 0 501 501 0 -1 4194560 939 0 0 0 0 0 0 0 20 0 1 0 4201 5947392 343 18446744073709551615 4194304 4237324 281474094521360 0 0 0 0 0 0 0 0 0 17 15 0 0 0 0 0 4324328 4326096 930402304 281474094522175 281474094522195 281474094522195 281474094522347 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 attr\n-rw-r--r--  1 root root 0 Oct 22 05:11 autogroup\n-r--------  1 root root 0 Oct 22 05:11 auxv\n-r--r--r--  1 root root 0 Oct 22 05:11 cgroup\n--w-------  1 root root 0 Oct 22 05:11 clear_refs\n-r--r--r--  1 root root 0 Oct 22 05:11 cmdline\n-rw-r--r--  1 root root 0 Oct 22 05:11 comm\n-rw-r--r--  1 root root 0 Oct 22 05:11 coredump_filter\n-r--r--r--  1 root root 0 Oct 22 05:11 cpuset\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 cwd -> /\n-r--------  1 root root 0 Oct 22 05:11 environ\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 exe -> /usr/bin/sleep\ndr-x------  2 root root 3 Oct 22 05:11 fd\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 fdinfo\n-rw-r--r--  1 root root 0 Oct 22 05:11 gid_map\n-r--------  1 root root 0 Oct 22 05:11 io\n-r--------  1 root root 0 Oct 22 05:11 ksm_merging_pages\n-r--------  1 root root 0 Oct 22 05:11 ksm_stat\n-r--r--r--  1 root root 0 Oct 22 05:11 limits\n-rw-r--r--  1 root root 0 Oct 22 05:11 loginuid\ndr-x------  2 root root 0 Oct 22 05:11 map_files\n-r--r--r--  1 root root 0 Oct 22 05:11 maps\n-rw-------  1 root root 0 Oct 22 05:11 mem\n-r--r--r--  1 root root 0 Oct 22 05:11 mountinfo\n-r--r--r--  1 root root 0 Oct 22 05:11 mounts\n-r--------  1 root root 0 Oct 22 05:11 mountstats\ndr-xr-xr-x 13 root root 0 Oct 22 05:11 net\ndr-x--x--x  2 root root 0 Oct 22 05:11 ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_adj\n-r--r--r--  1 root root 0 Oct 22 05:11 oom_score\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_score_adj\n-r--------  1 root root 0 Oct 22 05:11 pagemap\n-r--------  1 root root 0 Oct 22 05:11 personality\n-rw-r--r--  1 root root 0 Oct 22 05:11 projid_map\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 root -> /\n-rw-r--r--  1 root root 0 Oct 22 05:11 sched\n-r--r--r--  1 root root 0 Oct 22 05:11 schedstat\n-r--r--r--  1 root root 0 Oct 22 05:11 sessionid\n-rw-r--r--  1 root root 0 Oct 22 05:11 setgroups\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps_rollup\n-r--------  1 root root 0 Oct 22 05:11 stack\n-r--r--r--  1 root root 0 Oct 22 05:11 stat\n-r--r--r--  1 root root 0 Oct 22 05:11 statm\n-r--r--r--  1 root root 0 Oct 22 05:11 status\n-r--------  1 root root 0 Oct 22 05:11 syscall\ndr-xr-xr-x  3 root root 0 Oct 22 05:11 task\n-rw-r--r--  1 root root 0 Oct 22 05:11 timens_offsets\n-r--r--r--  1 root root 0 Oct 22 05:11 timers\n-rw-rw-rw-  1 root root 0 Oct 22 05:11 timerslack_ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 uid_map\n-r--r--r--  1 root root 0 Oct 22 05:11 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------ 1 root root 64 Oct 22 05:11 0 -> /dev/null\nl-wx------ 1 root root 64 Oct 22 05:11 1 -> pipe:[56490]\nl-wx------ 1 root root 64 Oct 22 05:11 2 -> pipe:[56491]\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n493\n499\n500\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevices\ndevice-tree\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkeys\nkey-users\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   s   l   e   e   p  \\0   9   0   0  \\0\n0000012\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  },
+  "debian_10": {
+   "cases": {
+    "readlink": [
+     "",
+     "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: option '--canon' is ambiguous; possibilities: '--canonicalize' '--canonicalize-existing' '--canonicalize-missing'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option '--foo'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --help": [
+     "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport readlink translation bugs to <https://translationproject.org/team/>\nFull documentation at: <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+     "",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink --version": [
+     "readlink (GNU coreutils) 8.30\nCopyright (C) 2018 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Dmitry V. Levin.\n",
+     "",
+     0
+    ],
+    "readlink --zero l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -e d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -e dangling": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -e missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: dangling: No such file or directory\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/441/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "/tmp/w/d/missing\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dangling/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "/tmp/w/file\n/tmp/w/file\n",
+     "",
+     1
+    ],
+    "readlink -f l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "readlink: file/x: Not a directory\n",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "readlink: loop1: Too many levels of symbolic links\n",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "readlink: missing/x: No such file or directory\n",
+     1
+    ],
+    "readlink -fz l2": [
+     "/tmp/w/file\u0000",
+     "",
+     0
+    ],
+    "readlink -m file/x": [
+     "/tmp/w/file/x\n",
+     "",
+     0
+    ],
+    "readlink -m missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m nodir/x/../y": [
+     "/tmp/w/nodir/y\n",
+     "",
+     0
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "file\nl1\n",
+     "readlink: ignoring --no-newline with multiple arguments\n",
+     0
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -z l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/bin/sleep\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "462\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "file\nl1\n",
+     "",
+     1
+    ],
+    "readlink l1 l2": [
+     "file\nl1\n",
+     "",
+     0
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "debian@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+   "image": "debian:10",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 879 0 4 0 0 0 0 0 20 0 1 0 1287 1990656 245 18446744073709551615 187650405826560 187650405853400 281474485097888 0 0 0 0 0 0 1 0 0 17 3 0 0 0 0 0 187650405919880 187650405921368 187650597629952 281474485100416 281474485100426 281474485100426 281474485100525 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t    1944 kB\nVmSize:\t    1944 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t    1068 kB\nVmRSS:\t    1068 kB\nRssAnon:\t      76 kB\nRssFile:\t     992 kB\nRssShmem:\t       0 kB\nVmData:\t     176 kB\nVmStk:\t     132 kB\nVmExe:\t      28 kB\nVmLib:\t    1508 kB\nVmPTE:\t      40 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t35\nnonvoluntary_ctxt_switches:\t0\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "584 (cat) R 578 578 578 0 -1 4194304 86 0 0 0 0 0 0 0 20 0 1 0 1745 3928064 363 18446744073709551615 187650281766912 187650281796336 281474045010000 0 0 0 0 0 0 0 0 0 17 13 0 0 0 0 0 187650281864120 187650281865912 187651239198720 281474045013854 281474045013874 281474045013874 281474045013999 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 attr\n-rw-r--r--  1 root root 0 Oct 22 05:11 autogroup\n-r--------  1 root root 0 Oct 22 05:11 auxv\n-r--r--r--  1 root root 0 Oct 22 05:11 cgroup\n--w-------  1 root root 0 Oct 22 05:11 clear_refs\n-r--r--r--  1 root root 0 Oct 22 05:11 cmdline\n-rw-r--r--  1 root root 0 Oct 22 05:11 comm\n-rw-r--r--  1 root root 0 Oct 22 05:11 coredump_filter\n-r--r--r--  1 root root 0 Oct 22 05:11 cpuset\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 cwd -> /\n-r--------  1 root root 0 Oct 22 05:11 environ\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 exe -> /bin/sleep\ndr-x------  2 root root 3 Oct 22 05:11 fd\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 fdinfo\n-rw-r--r--  1 root root 0 Oct 22 05:11 gid_map\n-r--------  1 root root 0 Oct 22 05:11 io\n-r--------  1 root root 0 Oct 22 05:11 ksm_merging_pages\n-r--------  1 root root 0 Oct 22 05:11 ksm_stat\n-r--r--r--  1 root root 0 Oct 22 05:11 limits\n-rw-r--r--  1 root root 0 Oct 22 05:11 loginuid\ndr-x------  2 root root 0 Oct 22 05:11 map_files\n-r--r--r--  1 root root 0 Oct 22 05:11 maps\n-rw-------  1 root root 0 Oct 22 05:11 mem\n-r--r--r--  1 root root 0 Oct 22 05:11 mountinfo\n-r--r--r--  1 root root 0 Oct 22 05:11 mounts\n-r--------  1 root root 0 Oct 22 05:11 mountstats\ndr-xr-xr-x 13 root root 0 Oct 22 05:11 net\ndr-x--x--x  2 root root 0 Oct 22 05:11 ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_adj\n-r--r--r--  1 root root 0 Oct 22 05:11 oom_score\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_score_adj\n-r--------  1 root root 0 Oct 22 05:11 pagemap\n-r--------  1 root root 0 Oct 22 05:11 personality\n-rw-r--r--  1 root root 0 Oct 22 05:11 projid_map\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 root -> /\n-rw-r--r--  1 root root 0 Oct 22 05:11 sched\n-r--r--r--  1 root root 0 Oct 22 05:11 schedstat\n-r--r--r--  1 root root 0 Oct 22 05:11 sessionid\n-rw-r--r--  1 root root 0 Oct 22 05:11 setgroups\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps_rollup\n-r--------  1 root root 0 Oct 22 05:11 stack\n-r--r--r--  1 root root 0 Oct 22 05:11 stat\n-r--r--r--  1 root root 0 Oct 22 05:11 statm\n-r--r--r--  1 root root 0 Oct 22 05:11 status\n-r--------  1 root root 0 Oct 22 05:11 syscall\ndr-xr-xr-x  3 root root 0 Oct 22 05:11 task\n-rw-r--r--  1 root root 0 Oct 22 05:11 timens_offsets\n-r--r--r--  1 root root 0 Oct 22 05:11 timers\n-rw-rw-rw-  1 root root 0 Oct 22 05:11 timerslack_ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 uid_map\n-r--r--r--  1 root root 0 Oct 22 05:11 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------ 1 root root 64 Oct 22 05:11 0 -> /dev/null\nl-wx------ 1 root root 64 Oct 22 05:11 1 -> pipe:[25729]\nl-wx------ 1 root root 64 Oct 22 05:11 2 -> pipe:[25730]\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n570\n576\n577\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevice-tree\ndevices\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkey-users\nkeys\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   s   l   e   e   p  \\0   9   0   0  \\0\n0000012\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/bin/readlink\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  },
+  "debian_12": {
+   "cases": {
+    "readlink": [
+     "",
+     "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: option '--canon' is ambiguous; possibilities: '--canonicalize' '--canonicalize-existing' '--canonicalize-missing'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option '--foo'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --help": [
+     "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+     "",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink --version": [
+     "readlink (GNU coreutils) 9.1\nCopyright (C) 2022 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Dmitry V. Levin.\n",
+     "",
+     0
+    ],
+    "readlink --zero l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -e d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -e dangling": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -e missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: dangling: No such file or directory\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/441/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "/tmp/w/d/missing\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dangling/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "/tmp/w/file\n/tmp/w/file\n",
+     "",
+     1
+    ],
+    "readlink -f l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "readlink: file/x: Not a directory\n",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "readlink: loop1: Too many levels of symbolic links\n",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "readlink: missing/x: No such file or directory\n",
+     1
+    ],
+    "readlink -fz l2": [
+     "/tmp/w/file\u0000",
+     "",
+     0
+    ],
+    "readlink -m file/x": [
+     "/tmp/w/file/x\n",
+     "",
+     0
+    ],
+    "readlink -m missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m nodir/x/../y": [
+     "/tmp/w/nodir/y\n",
+     "",
+     0
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "file\nl1\n",
+     "readlink: ignoring --no-newline with multiple arguments\n",
+     0
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -z l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/usr/bin/sleep\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "463\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "file\nl1\n",
+     "",
+     1
+    ],
+    "readlink l1 l2": [
+     "file\nl1\n",
+     "",
+     0
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "image": "debian:12",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 778 0 4 0 0 0 0 0 20 0 1 0 255 2293760 256 18446744073709551615 187650305359872 187650305390672 281474879829584 0 0 0 0 0 0 1 0 0 17 1 0 0 0 0 0 187650305490064 187650305491576 187650407624704 281474879831932 281474879831942 281474879831942 281474879832041 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t    2240 kB\nVmSize:\t    2240 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t    1112 kB\nVmRSS:\t    1112 kB\nRssAnon:\t      88 kB\nRssFile:\t    1024 kB\nRssShmem:\t       0 kB\nVmData:\t     220 kB\nVmStk:\t     132 kB\nVmExe:\t      32 kB\nVmLib:\t    1748 kB\nVmPTE:\t      44 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t37\nnonvoluntary_ctxt_switches:\t0\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "585 (cat) R 579 579 579 0 -1 4194304 62 0 0 0 0 0 0 0 20 0 1 0 781 2867200 291 18446744073709551615 187650307194880 187650307228176 281474319879168 0 0 0 0 0 0 0 0 0 17 6 0 0 0 0 0 187650307324864 187650307326688 187650714415104 281474319880026 281474319880046 281474319880046 281474319880171 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 attr\n-rw-r--r--  1 root root 0 Oct 22 05:11 autogroup\n-r--------  1 root root 0 Oct 22 05:11 auxv\n-r--r--r--  1 root root 0 Oct 22 05:11 cgroup\n--w-------  1 root root 0 Oct 22 05:11 clear_refs\n-r--r--r--  1 root root 0 Oct 22 05:11 cmdline\n-rw-r--r--  1 root root 0 Oct 22 05:11 comm\n-rw-r--r--  1 root root 0 Oct 22 05:11 coredump_filter\n-r--r--r--  1 root root 0 Oct 22 05:11 cpuset\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 cwd -> /\n-r--------  1 root root 0 Oct 22 05:11 environ\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 exe -> /usr/bin/sleep\ndr-x------  2 root root 3 Oct 22 05:11 fd\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 fdinfo\n-rw-r--r--  1 root root 0 Oct 22 05:11 gid_map\n-r--------  1 root root 0 Oct 22 05:11 io\n-r--------  1 root root 0 Oct 22 05:11 ksm_merging_pages\n-r--------  1 root root 0 Oct 22 05:11 ksm_stat\n-r--r--r--  1 root root 0 Oct 22 05:11 limits\n-rw-r--r--  1 root root 0 Oct 22 05:11 loginuid\ndr-x------  2 root root 0 Oct 22 05:11 map_files\n-r--r--r--  1 root root 0 Oct 22 05:11 maps\n-rw-------  1 root root 0 Oct 22 05:11 mem\n-r--r--r--  1 root root 0 Oct 22 05:11 mountinfo\n-r--r--r--  1 root root 0 Oct 22 05:11 mounts\n-r--------  1 root root 0 Oct 22 05:11 mountstats\ndr-xr-xr-x 13 root root 0 Oct 22 05:11 net\ndr-x--x--x  2 root root 0 Oct 22 05:11 ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_adj\n-r--r--r--  1 root root 0 Oct 22 05:11 oom_score\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_score_adj\n-r--------  1 root root 0 Oct 22 05:11 pagemap\n-r--------  1 root root 0 Oct 22 05:11 personality\n-rw-r--r--  1 root root 0 Oct 22 05:11 projid_map\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 root -> /\n-rw-r--r--  1 root root 0 Oct 22 05:11 sched\n-r--r--r--  1 root root 0 Oct 22 05:11 schedstat\n-r--r--r--  1 root root 0 Oct 22 05:11 sessionid\n-rw-r--r--  1 root root 0 Oct 22 05:11 setgroups\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps_rollup\n-r--------  1 root root 0 Oct 22 05:11 stack\n-r--r--r--  1 root root 0 Oct 22 05:11 stat\n-r--r--r--  1 root root 0 Oct 22 05:11 statm\n-r--r--r--  1 root root 0 Oct 22 05:11 status\n-r--------  1 root root 0 Oct 22 05:11 syscall\ndr-xr-xr-x  3 root root 0 Oct 22 05:11 task\n-rw-r--r--  1 root root 0 Oct 22 05:11 timens_offsets\n-r--r--r--  1 root root 0 Oct 22 05:11 timers\n-rw-rw-rw-  1 root root 0 Oct 22 05:11 timerslack_ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 uid_map\n-r--r--r--  1 root root 0 Oct 22 05:11 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------ 1 root root 64 Oct 22 05:11 0 -> /dev/null\nl-wx------ 1 root root 64 Oct 22 05:11 1 -> pipe:[5902]\nl-wx------ 1 root root 64 Oct 22 05:11 2 -> pipe:[5903]\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n571\n577\n578\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevice-tree\ndevices\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkey-users\nkeys\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   s   l   e   e   p  \\0   9   0   0  \\0\n0000012\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  },
+  "debian_13": {
+   "cases": {
+    "readlink": [
+     "",
+     "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: option '--canon' is ambiguous; possibilities: '--canonicalize' '--canonicalize-existing' '--canonicalize-missing'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option '--foo'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --help": [
+     "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+     "",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink --version": [
+     "readlink (GNU coreutils) 9.7\nPackaged by Debian (9.7-3)\nCopyright (C) 2025 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Dmitry V. Levin.\n",
+     "",
+     0
+    ],
+    "readlink --zero l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -e d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -e dangling": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -e missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: dangling: No such file or directory\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/441/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "/tmp/w/d/missing\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dangling/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "/tmp/w/file\n/tmp/w/file\n",
+     "",
+     1
+    ],
+    "readlink -f l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "readlink: file/x: Not a directory\n",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "readlink: loop1: Too many levels of symbolic links\n",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "readlink: missing/x: No such file or directory\n",
+     1
+    ],
+    "readlink -fz l2": [
+     "/tmp/w/file\u0000",
+     "",
+     0
+    ],
+    "readlink -m file/x": [
+     "/tmp/w/file/x\n",
+     "",
+     0
+    ],
+    "readlink -m missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m nodir/x/../y": [
+     "/tmp/w/nodir/y\n",
+     "",
+     0
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "file\nl1\n",
+     "readlink: ignoring --no-newline with multiple arguments\n",
+     0
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -z l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/usr/bin/sleep\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "462\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "file\nl1\n",
+     "",
+     1
+    ],
+    "readlink l1 l2": [
+     "file\nl1\n",
+     "",
+     0
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "image": "debian:13",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 855 0 4 0 0 0 0 0 20 0 1 0 803 2367488 296 18446744073709551615 187650809004032 187650809040472 281474486981808 0 0 0 0 0 0 1 0 0 17 9 0 0 0 0 0 187650809133776 187650809135336 187651643613184 281474486984572 281474486984582 281474486984582 281474486984681 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t    2312 kB\nVmSize:\t    2312 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t    1312 kB\nVmRSS:\t    1312 kB\nRssAnon:\t      88 kB\nRssFile:\t    1224 kB\nRssShmem:\t       0 kB\nVmData:\t     220 kB\nVmStk:\t     132 kB\nVmExe:\t      36 kB\nVmLib:\t    1816 kB\nVmPTE:\t      44 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t32\nnonvoluntary_ctxt_switches:\t2\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "585 (cat) R 579 579 579 0 -1 4194304 66 0 0 0 0 0 0 0 20 0 1 0 1264 3088384 356 18446744073709551615 187651034644480 187651034685512 281474483655616 0 0 0 0 0 0 0 0 0 17 4 0 0 0 0 0 187651034773936 187651034775824 187651514634240 281474483658586 281474483658606 281474483658606 281474483658731 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 attr\n-rw-r--r--  1 root root 0 Oct 22 05:11 autogroup\n-r--------  1 root root 0 Oct 22 05:11 auxv\n-r--r--r--  1 root root 0 Oct 22 05:11 cgroup\n--w-------  1 root root 0 Oct 22 05:11 clear_refs\n-r--r--r--  1 root root 0 Oct 22 05:11 cmdline\n-rw-r--r--  1 root root 0 Oct 22 05:11 comm\n-rw-r--r--  1 root root 0 Oct 22 05:11 coredump_filter\n-r--r--r--  1 root root 0 Oct 22 05:11 cpuset\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 cwd -> /\n-r--------  1 root root 0 Oct 22 05:11 environ\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 exe -> /usr/bin/sleep\ndr-x------  2 root root 3 Oct 22 05:11 fd\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 fdinfo\n-rw-r--r--  1 root root 0 Oct 22 05:11 gid_map\n-r--------  1 root root 0 Oct 22 05:11 io\n-r--------  1 root root 0 Oct 22 05:11 ksm_merging_pages\n-r--------  1 root root 0 Oct 22 05:11 ksm_stat\n-r--r--r--  1 root root 0 Oct 22 05:11 limits\n-rw-r--r--  1 root root 0 Oct 22 05:11 loginuid\ndr-x------  2 root root 0 Oct 22 05:11 map_files\n-r--r--r--  1 root root 0 Oct 22 05:11 maps\n-rw-------  1 root root 0 Oct 22 05:11 mem\n-r--r--r--  1 root root 0 Oct 22 05:11 mountinfo\n-r--r--r--  1 root root 0 Oct 22 05:11 mounts\n-r--------  1 root root 0 Oct 22 05:11 mountstats\ndr-xr-xr-x 13 root root 0 Oct 22 05:11 net\ndr-x--x--x  2 root root 0 Oct 22 05:11 ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_adj\n-r--r--r--  1 root root 0 Oct 22 05:11 oom_score\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_score_adj\n-r--------  1 root root 0 Oct 22 05:11 pagemap\n-r--------  1 root root 0 Oct 22 05:11 personality\n-rw-r--r--  1 root root 0 Oct 22 05:11 projid_map\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 root -> /\n-rw-r--r--  1 root root 0 Oct 22 05:11 sched\n-r--r--r--  1 root root 0 Oct 22 05:11 schedstat\n-r--r--r--  1 root root 0 Oct 22 05:11 sessionid\n-rw-r--r--  1 root root 0 Oct 22 05:11 setgroups\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps_rollup\n-r--------  1 root root 0 Oct 22 05:11 stack\n-r--r--r--  1 root root 0 Oct 22 05:11 stat\n-r--r--r--  1 root root 0 Oct 22 05:11 statm\n-r--r--r--  1 root root 0 Oct 22 05:11 status\n-r--------  1 root root 0 Oct 22 05:11 syscall\ndr-xr-xr-x  3 root root 0 Oct 22 05:11 task\n-rw-r--r--  1 root root 0 Oct 22 05:11 timens_offsets\n-r--r--r--  1 root root 0 Oct 22 05:11 timers\n-rw-rw-rw-  1 root root 0 Oct 22 05:11 timerslack_ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 uid_map\n-r--r--r--  1 root root 0 Oct 22 05:11 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------ 1 root root 64 Oct 22 05:11 0 -> /dev/null\nl-wx------ 1 root root 64 Oct 22 05:11 1 -> pipe:[9148]\nl-wx------ 1 root root 64 Oct 22 05:11 2 -> pipe:[9149]\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n571\n577\n578\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevice-tree\ndevices\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkey-users\nkeys\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   s   l   e   e   p  \\0   9   0   0  \\0\n0000012\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  },
+  "rockylinux_9": {
+   "cases": {
+    "readlink": [
+     "",
+     "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: option '--canon' is ambiguous; possibilities: '--canonicalize' '--canonicalize-existing' '--canonicalize-missing'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option '--foo'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --help": [
+     "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+     "",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink --version": [
+     "readlink (GNU coreutils) 8.32\nCopyright (C) 2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Dmitry V. Levin.\n",
+     "",
+     0
+    ],
+    "readlink --zero l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -e d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -e dangling": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -e missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: dangling: No such file or directory\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/376/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/usr/bin/coreutils\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "/tmp/w/d/missing\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dangling/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "/tmp/w/file\n/tmp/w/file\n",
+     "",
+     1
+    ],
+    "readlink -f l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "readlink: file/x: Not a directory\n",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "readlink: loop1: Too many levels of symbolic links\n",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "readlink: missing/x: No such file or directory\n",
+     1
+    ],
+    "readlink -fz l2": [
+     "/tmp/w/file\u0000",
+     "",
+     0
+    ],
+    "readlink -m file/x": [
+     "/tmp/w/file/x\n",
+     "",
+     0
+    ],
+    "readlink -m missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m nodir/x/../y": [
+     "/tmp/w/nodir/y\n",
+     "",
+     0
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "file\nl1\n",
+     "readlink: ignoring --no-newline with multiple arguments\n",
+     0
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -z l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/usr/bin/coreutils\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "394\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/coreutils\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "file\nl1\n",
+     "",
+     1
+    ],
+    "readlink l1 l2": [
+     "file\nl1\n",
+     "",
+     0
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "image": "rockylinux:9",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 855 0 9 0 0 0 0 0 20 0 1 0 3014 5017600 512 18446744073709551615 187650253783040 187650255059056 281474273411008 0 0 0 0 0 0 1 0 0 17 6 0 0 0 0 0 187650255182408 187650255238676 187651073458176 281474273414977 281474273415046 281474273415046 281474273415145 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t    4900 kB\nVmSize:\t    4900 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t    2164 kB\nVmRSS:\t    2164 kB\nRssAnon:\t     180 kB\nRssFile:\t    1984 kB\nRssShmem:\t       0 kB\nVmData:\t     340 kB\nVmStk:\t     132 kB\nVmExe:\t    1248 kB\nVmLib:\t    2512 kB\nVmPTE:\t      48 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t49\nnonvoluntary_ctxt_switches:\t1\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "503 (cat) R 0 503 503 0 -1 4194560 940 0 0 0 0 0 0 0 20 0 1 0 3587 5554176 527 18446744073709551615 187650548367360 187650549643376 281474066172656 0 0 0 0 0 0 0 0 0 17 13 0 0 0 0 0 187650549766728 187650549822996 187651098808320 281474066173706 281474066173783 281474066173783 281474066173931 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 attr\n-rw-r--r--  1 root root 0 Oct 22 05:11 autogroup\n-r--------  1 root root 0 Oct 22 05:11 auxv\n-r--r--r--  1 root root 0 Oct 22 05:11 cgroup\n--w-------  1 root root 0 Oct 22 05:11 clear_refs\n-r--r--r--  1 root root 0 Oct 22 05:11 cmdline\n-rw-r--r--  1 root root 0 Oct 22 05:11 comm\n-rw-r--r--  1 root root 0 Oct 22 05:11 coredump_filter\n-r--r--r--  1 root root 0 Oct 22 05:11 cpuset\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 cwd -> /\n-r--------  1 root root 0 Oct 22 05:11 environ\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 exe -> /usr/bin/coreutils\ndr-x------  2 root root 3 Oct 22 05:11 fd\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 fdinfo\n-rw-r--r--  1 root root 0 Oct 22 05:11 gid_map\n-r--------  1 root root 0 Oct 22 05:11 io\n-r--------  1 root root 0 Oct 22 05:11 ksm_merging_pages\n-r--------  1 root root 0 Oct 22 05:11 ksm_stat\n-r--r--r--  1 root root 0 Oct 22 05:11 limits\n-rw-r--r--  1 root root 0 Oct 22 05:11 loginuid\ndr-x------  2 root root 0 Oct 22 05:11 map_files\n-r--r--r--  1 root root 0 Oct 22 05:11 maps\n-rw-------  1 root root 0 Oct 22 05:11 mem\n-r--r--r--  1 root root 0 Oct 22 05:11 mountinfo\n-r--r--r--  1 root root 0 Oct 22 05:11 mounts\n-r--------  1 root root 0 Oct 22 05:11 mountstats\ndr-xr-xr-x 13 root root 0 Oct 22 05:11 net\ndr-x--x--x  2 root root 0 Oct 22 05:11 ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_adj\n-r--r--r--  1 root root 0 Oct 22 05:11 oom_score\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_score_adj\n-r--------  1 root root 0 Oct 22 05:11 pagemap\n-r--------  1 root root 0 Oct 22 05:11 personality\n-rw-r--r--  1 root root 0 Oct 22 05:11 projid_map\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 root -> /\n-rw-r--r--  1 root root 0 Oct 22 05:11 sched\n-r--r--r--  1 root root 0 Oct 22 05:11 schedstat\n-r--r--r--  1 root root 0 Oct 22 05:11 sessionid\n-rw-r--r--  1 root root 0 Oct 22 05:11 setgroups\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps_rollup\n-r--------  1 root root 0 Oct 22 05:11 stack\n-r--r--r--  1 root root 0 Oct 22 05:11 stat\n-r--r--r--  1 root root 0 Oct 22 05:11 statm\n-r--r--r--  1 root root 0 Oct 22 05:11 status\n-r--------  1 root root 0 Oct 22 05:11 syscall\ndr-xr-xr-x  3 root root 0 Oct 22 05:11 task\n-rw-r--r--  1 root root 0 Oct 22 05:11 timens_offsets\n-r--r--r--  1 root root 0 Oct 22 05:11 timers\n-rw-rw-rw-  1 root root 0 Oct 22 05:11 timerslack_ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 uid_map\n-r--r--r--  1 root root 0 Oct 22 05:11 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------ 1 root root 64 Oct 22 05:11 0 -> /dev/null\nl-wx------ 1 root root 64 Oct 22 05:11 1 -> pipe:[42596]\nl-wx------ 1 root root 64 Oct 22 05:11 2 -> pipe:[42597]\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n495\n501\n502\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevice-tree\ndevices\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkey-users\nkeys\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   /   u   s   r   /   b   i   n   /   c   o   r   e   u   t   i\n0000020   l   s  \\0   -   -   c   o   r   e   u   t   i   l   s   -   p\n0000040   r   o   g   -   s   h   e   b   a   n   g   =   s   l   e   e\n0000060   p  \\0   /   u   s   r   /   b   i   n   /   s   l   e   e   p\n0000100  \\0   9   0   0  \\0\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/coreutils\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  },
+  "ubuntu_22.04": {
+   "cases": {
+    "readlink": [
+     "",
+     "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: option '--canon' is ambiguous; possibilities: '--canonicalize' '--canonicalize-existing' '--canonicalize-missing'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option '--foo'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --help": [
+     "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+     "",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink --version": [
+     "readlink (GNU coreutils) 8.32\nCopyright (C) 2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Dmitry V. Levin.\n",
+     "",
+     0
+    ],
+    "readlink --zero l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -e d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -e dangling": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -e missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: dangling: No such file or directory\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/440/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "/tmp/w/d/missing\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dangling/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "/tmp/w/file\n/tmp/w/file\n",
+     "",
+     1
+    ],
+    "readlink -f l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "readlink: file/x: Not a directory\n",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "readlink: loop1: Too many levels of symbolic links\n",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "readlink: missing/x: No such file or directory\n",
+     1
+    ],
+    "readlink -fz l2": [
+     "/tmp/w/file\u0000",
+     "",
+     0
+    ],
+    "readlink -m file/x": [
+     "/tmp/w/file/x\n",
+     "",
+     0
+    ],
+    "readlink -m missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m nodir/x/../y": [
+     "/tmp/w/nodir/y\n",
+     "",
+     0
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "file\nl1\n",
+     "readlink: ignoring --no-newline with multiple arguments\n",
+     0
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -z l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/usr/bin/sleep\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "461\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "file\nl1\n",
+     "",
+     1
+    ],
+    "readlink l1 l2": [
+     "file\nl1\n",
+     "",
+     0
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "image": "ubuntu:22.04",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 789 0 4 0 0 0 0 0 20 0 1 0 1767 2289664 241 18446744073709551615 187650734686208 187650734705608 281474662985152 0 0 0 0 0 0 1 0 0 17 12 0 0 0 0 0 187650734775184 187650734776536 187650738577408 281474662985596 281474662985606 281474662985606 281474662985705 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t    2236 kB\nVmSize:\t    2236 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t    1092 kB\nVmRSS:\t    1092 kB\nRssAnon:\t      84 kB\nRssFile:\t    1008 kB\nRssShmem:\t       0 kB\nVmData:\t     208 kB\nVmStk:\t     132 kB\nVmExe:\t      20 kB\nVmLib:\t    1772 kB\nVmPTE:\t      40 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t34\nnonvoluntary_ctxt_switches:\t1\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "584 (cat) R 578 578 578 0 -1 4194304 63 0 0 0 0 0 0 0 20 0 1 0 2265 2863104 320 18446744073709551615 187650223964160 187650223987152 281473979799504 0 0 0 0 0 0 0 0 0 17 7 0 0 0 0 0 187650224052880 187650224054472 187650898612224 281473979801434 281473979801454 281473979801454 281473979801579 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 attr\n-rw-r--r--  1 root root 0 Oct 22 05:11 autogroup\n-r--------  1 root root 0 Oct 22 05:11 auxv\n-r--r--r--  1 root root 0 Oct 22 05:11 cgroup\n--w-------  1 root root 0 Oct 22 05:11 clear_refs\n-r--r--r--  1 root root 0 Oct 22 05:11 cmdline\n-rw-r--r--  1 root root 0 Oct 22 05:11 comm\n-rw-r--r--  1 root root 0 Oct 22 05:11 coredump_filter\n-r--r--r--  1 root root 0 Oct 22 05:11 cpuset\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 cwd -> /\n-r--------  1 root root 0 Oct 22 05:11 environ\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 exe -> /usr/bin/sleep\ndr-x------  2 root root 3 Oct 22 05:11 fd\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 fdinfo\n-rw-r--r--  1 root root 0 Oct 22 05:11 gid_map\n-r--------  1 root root 0 Oct 22 05:11 io\n-r--------  1 root root 0 Oct 22 05:11 ksm_merging_pages\n-r--------  1 root root 0 Oct 22 05:11 ksm_stat\n-r--r--r--  1 root root 0 Oct 22 05:11 limits\n-rw-r--r--  1 root root 0 Oct 22 05:11 loginuid\ndr-x------  2 root root 0 Oct 22 05:11 map_files\n-r--r--r--  1 root root 0 Oct 22 05:11 maps\n-rw-------  1 root root 0 Oct 22 05:11 mem\n-r--r--r--  1 root root 0 Oct 22 05:11 mountinfo\n-r--r--r--  1 root root 0 Oct 22 05:11 mounts\n-r--------  1 root root 0 Oct 22 05:11 mountstats\ndr-xr-xr-x 13 root root 0 Oct 22 05:11 net\ndr-x--x--x  2 root root 0 Oct 22 05:11 ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_adj\n-r--r--r--  1 root root 0 Oct 22 05:11 oom_score\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_score_adj\n-r--------  1 root root 0 Oct 22 05:11 pagemap\n-r--------  1 root root 0 Oct 22 05:11 personality\n-rw-r--r--  1 root root 0 Oct 22 05:11 projid_map\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 root -> /\n-rw-r--r--  1 root root 0 Oct 22 05:11 sched\n-r--r--r--  1 root root 0 Oct 22 05:11 schedstat\n-r--r--r--  1 root root 0 Oct 22 05:11 sessionid\n-rw-r--r--  1 root root 0 Oct 22 05:11 setgroups\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps_rollup\n-r--------  1 root root 0 Oct 22 05:11 stack\n-r--r--r--  1 root root 0 Oct 22 05:11 stat\n-r--r--r--  1 root root 0 Oct 22 05:11 statm\n-r--r--r--  1 root root 0 Oct 22 05:11 status\n-r--------  1 root root 0 Oct 22 05:11 syscall\ndr-xr-xr-x  3 root root 0 Oct 22 05:11 task\n-rw-r--r--  1 root root 0 Oct 22 05:11 timens_offsets\n-r--r--r--  1 root root 0 Oct 22 05:11 timers\n-rw-rw-rw-  1 root root 0 Oct 22 05:11 timerslack_ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 uid_map\n-r--r--r--  1 root root 0 Oct 22 05:11 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------ 1 root root 64 Oct 22 05:11 0 -> /dev/null\nl-wx------ 1 root root 64 Oct 22 05:11 1 -> pipe:[23244]\nl-wx------ 1 root root 64 Oct 22 05:11 2 -> pipe:[23245]\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n570\n576\n577\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevice-tree\ndevices\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkey-users\nkeys\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   s   l   e   e   p  \\0   9   0   0  \\0\n0000012\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  },
+  "ubuntu_24.04": {
+   "cases": {
+    "readlink": [
+     "",
+     "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -- -x": [
+     "",
+     "",
+     1
+    ],
+    "readlink --canon l2": [
+     "",
+     "readlink: option '--canon' is ambiguous; possibilities: '--canonicalize' '--canonicalize-existing' '--canonicalize-missing'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --canonicalize l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink --foo l1": [
+     "",
+     "readlink: unrecognized option '--foo'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink --help": [
+     "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+     "",
+     0
+    ],
+    "readlink --no-newline l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink --verbose file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink --version": [
+     "readlink (GNU coreutils) 9.4\nCopyright (C) 2023 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Dmitry V. Levin.\n",
+     "",
+     0
+    ],
+    "readlink --zero l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink -e /tmp/w/d/..": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -e d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -e dangling": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -e missing/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -e missing/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -ev dangling": [
+     "",
+     "readlink: dangling: No such file or directory\n",
+     1
+    ],
+    "readlink -f ''": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f .": [
+     "/tmp/w\n",
+     "",
+     0
+    ],
+    "readlink -f ../w/./l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink -f //tmp//w//l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f /etc/mtab": [
+     "/proc/442/mounts\n",
+     "",
+     0
+    ],
+    "readlink -f /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink -f abs": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f d/../l1": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/": [
+     "/tmp/w/d/missing\n",
+     "",
+     0
+    ],
+    "readlink -f d/missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f dangling": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dangling/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f dl": [
+     "/tmp/w/d\n",
+     "",
+     0
+    ],
+    "readlink -f file/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f file/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l1 missing/x l2": [
+     "/tmp/w/file\n/tmp/w/file\n",
+     "",
+     1
+    ],
+    "readlink -f l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f l2": [
+     "/tmp/w/file\n",
+     "",
+     0
+    ],
+    "readlink -f loop1": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f missing/.": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing/./": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f missing//": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -f nodir/x": [
+     "",
+     "",
+     1
+    ],
+    "readlink -f notdir": [
+     "",
+     "",
+     1
+    ],
+    "readlink -fn l2": [
+     "/tmp/w/file",
+     "",
+     0
+    ],
+    "readlink -fv file/x": [
+     "",
+     "readlink: file/x: Not a directory\n",
+     1
+    ],
+    "readlink -fv loop1": [
+     "",
+     "readlink: loop1: Too many levels of symbolic links\n",
+     1
+    ],
+    "readlink -fv missing/x": [
+     "",
+     "readlink: missing/x: No such file or directory\n",
+     1
+    ],
+    "readlink -fz l2": [
+     "/tmp/w/file\u0000",
+     "",
+     0
+    ],
+    "readlink -m file/x": [
+     "/tmp/w/file/x\n",
+     "",
+     0
+    ],
+    "readlink -m missing": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m missing/": [
+     "/tmp/w/missing\n",
+     "",
+     0
+    ],
+    "readlink -m nodir/x/../y": [
+     "/tmp/w/nodir/y\n",
+     "",
+     0
+    ],
+    "readlink -n l1": [
+     "file",
+     "",
+     0
+    ],
+    "readlink -n l1 l2": [
+     "file\nl1\n",
+     "readlink: ignoring --no-newline with multiple arguments\n",
+     0
+    ],
+    "readlink -q file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -s file": [
+     "",
+     "",
+     1
+    ],
+    "readlink -sv file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v file": [
+     "",
+     "readlink: file: Invalid argument\n",
+     1
+    ],
+    "readlink -v missing": [
+     "",
+     "readlink: missing: No such file or directory\n",
+     1
+    ],
+    "readlink -x": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -x l1": [
+     "",
+     "readlink: invalid option -- 'x'\nTry 'readlink --help' for more information.\n",
+     1
+    ],
+    "readlink -z l1": [
+     "file\u0000",
+     "",
+     0
+    ],
+    "readlink /": [
+     "",
+     "",
+     1
+    ],
+    "readlink /etc/mtab": [
+     "/proc/mounts\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/cwd": [
+     "/\n",
+     "",
+     0
+    ],
+    "readlink /proc/1/exe": [
+     "/usr/bin/sleep\n",
+     "",
+     0
+    ],
+    "readlink /proc/self": [
+     "463\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/fd/0": [
+     "/dev/null\n",
+     "",
+     0
+    ],
+    "readlink abs": [
+     "/tmp/w/l2\n",
+     "",
+     0
+    ],
+    "readlink dangling": [
+     "missing\n",
+     "",
+     0
+    ],
+    "readlink dl": [
+     "d\n",
+     "",
+     0
+    ],
+    "readlink file": [
+     "",
+     "",
+     1
+    ],
+    "readlink l1": [
+     "file\n",
+     "",
+     0
+    ],
+    "readlink l1 file l2": [
+     "file\nl1\n",
+     "",
+     1
+    ],
+    "readlink l1 l2": [
+     "file\nl1\n",
+     "",
+     0
+    ],
+    "readlink l1/": [
+     "",
+     "",
+     1
+    ],
+    "readlink l2": [
+     "l1\n",
+     "",
+     0
+    ],
+    "readlink loop1": [
+     "loop2\n",
+     "",
+     0
+    ],
+    "readlink missing": [
+     "",
+     "",
+     1
+    ]
+   },
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "image": "ubuntu:24.04",
+   "locale": "C.UTF-8",
+   "platform": "linux/arm64",
+   "proc": {
+    "cat /proc/1/comm": [
+     "sleep\n",
+     "",
+     0
+    ],
+    "cat /proc/1/stat": [
+     "1 (sleep) S 0 1 1 0 -1 4194560 802 0 4 0 0 0 0 0 20 0 1 0 2307 2334720 285 18446744073709551615 187650765815808 187650765835932 281474780116896 0 0 0 0 0 0 1 0 0 17 0 0 0 0 0 0 187650765945744 187650765947096 187651542929408 281474780118908 281474780118918 281474780118918 281474780119017 0\n",
+     "",
+     0
+    ],
+    "cat /proc/1/status": [
+     "Name:\tsleep\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1\nNgid:\t0\nPid:\t1\nPPid:\t0\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 \nNStgid:\t1\nNSpid:\t1\nNSpgid:\t1\nNSsid:\t1\nKthread:\t0\nVmPeak:\t    2280 kB\nVmSize:\t    2280 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t    1284 kB\nVmRSS:\t    1284 kB\nRssAnon:\t      80 kB\nRssFile:\t    1204 kB\nRssShmem:\t       0 kB\nVmData:\t     208 kB\nVmStk:\t     132 kB\nVmExe:\t      20 kB\nVmLib:\t    1804 kB\nVmPTE:\t      44 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffff\nThreads:\t1\nSigQ:\t0/64020\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\tunknown\nCpus_allowed:\tffff\nCpus_allowed_list:\t0-15\nMems_allowed:\t1\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t31\nnonvoluntary_ctxt_switches:\t0\n",
+     "",
+     0
+    ],
+    "cat /proc/self/stat": [
+     "584 (cat) R 578 578 578 0 -1 4194304 66 0 0 0 0 0 0 0 20 0 1 0 2992 2920448 353 18446744073709551615 187650255421440 187650255446684 281474610690960 0 0 0 0 0 0 0 0 0 17 2 0 0 0 0 0 187650255551072 187650255552712 187651049082880 281474610691930 281474610691950 281474610691950 281474610692075 0\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1 2>&1 | head -80": [
+     "total 0\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 attr\n-rw-r--r--  1 root root 0 Oct 22 05:11 autogroup\n-r--------  1 root root 0 Oct 22 05:11 auxv\n-r--r--r--  1 root root 0 Oct 22 05:11 cgroup\n--w-------  1 root root 0 Oct 22 05:11 clear_refs\n-r--r--r--  1 root root 0 Oct 22 05:11 cmdline\n-rw-r--r--  1 root root 0 Oct 22 05:11 comm\n-rw-r--r--  1 root root 0 Oct 22 05:11 coredump_filter\n-r--r--r--  1 root root 0 Oct 22 05:11 cpuset\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 cwd -> /\n-r--------  1 root root 0 Oct 22 05:11 environ\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 exe -> /usr/bin/sleep\ndr-x------  2 root root 3 Oct 22 05:11 fd\ndr-xr-xr-x  2 root root 0 Oct 22 05:11 fdinfo\n-rw-r--r--  1 root root 0 Oct 22 05:11 gid_map\n-r--------  1 root root 0 Oct 22 05:11 io\n-r--------  1 root root 0 Oct 22 05:11 ksm_merging_pages\n-r--------  1 root root 0 Oct 22 05:11 ksm_stat\n-r--r--r--  1 root root 0 Oct 22 05:11 limits\n-rw-r--r--  1 root root 0 Oct 22 05:11 loginuid\ndr-x------  2 root root 0 Oct 22 05:11 map_files\n-r--r--r--  1 root root 0 Oct 22 05:11 maps\n-rw-------  1 root root 0 Oct 22 05:11 mem\n-r--r--r--  1 root root 0 Oct 22 05:11 mountinfo\n-r--r--r--  1 root root 0 Oct 22 05:11 mounts\n-r--------  1 root root 0 Oct 22 05:11 mountstats\ndr-xr-xr-x 13 root root 0 Oct 22 05:11 net\ndr-x--x--x  2 root root 0 Oct 22 05:11 ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_adj\n-r--r--r--  1 root root 0 Oct 22 05:11 oom_score\n-rw-r--r--  1 root root 0 Oct 22 05:11 oom_score_adj\n-r--------  1 root root 0 Oct 22 05:11 pagemap\n-r--------  1 root root 0 Oct 22 05:11 personality\n-rw-r--r--  1 root root 0 Oct 22 05:11 projid_map\nlrwxrwxrwx  1 root root 0 Oct 22 05:11 root -> /\n-rw-r--r--  1 root root 0 Oct 22 05:11 sched\n-r--r--r--  1 root root 0 Oct 22 05:11 schedstat\n-r--r--r--  1 root root 0 Oct 22 05:11 sessionid\n-rw-r--r--  1 root root 0 Oct 22 05:11 setgroups\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps\n-r--r--r--  1 root root 0 Oct 22 05:11 smaps_rollup\n-r--------  1 root root 0 Oct 22 05:11 stack\n-r--r--r--  1 root root 0 Oct 22 05:11 stat\n-r--r--r--  1 root root 0 Oct 22 05:11 statm\n-r--r--r--  1 root root 0 Oct 22 05:11 status\n-r--------  1 root root 0 Oct 22 05:11 syscall\ndr-xr-xr-x  3 root root 0 Oct 22 05:11 task\n-rw-r--r--  1 root root 0 Oct 22 05:11 timens_offsets\n-r--r--r--  1 root root 0 Oct 22 05:11 timers\n-rw-rw-rw-  1 root root 0 Oct 22 05:11 timerslack_ns\n-rw-r--r--  1 root root 0 Oct 22 05:11 uid_map\n-r--r--r--  1 root root 0 Oct 22 05:11 wchan\n",
+     "",
+     0
+    ],
+    "ls -l /proc/1/fd": [
+     "total 0\nlrwx------ 1 root root 64 Oct 22 05:11 0 -> /dev/null\nl-wx------ 1 root root 64 Oct 22 05:11 1 -> pipe:[31708]\nl-wx------ 1 root root 64 Oct 22 05:11 2 -> pipe:[31709]\n",
+     "",
+     0
+    ],
+    "ls /proc | head -40": [
+     "1\n570\n576\n577\nbuddyinfo\nbus\ncgroups\ncmdline\nconfig.gz\nconsoles\ncpuinfo\ncrypto\ndevice-tree\ndevices\ndiskstats\ndocker\ndriver\nexecdomains\nfilesystems\nfs\ninterrupts\niomem\nioports\nirq\nkallsyms\nkcore\nkey-users\nkeys\nkmsg\nkpagecgroup\nkpagecount\nkpageflags\nloadavg\nlocks\nmeminfo\nmisc\nmodules\nmounts\nnet\npagetypeinfo\n",
+     "",
+     0
+    ],
+    "od -c /proc/1/cmdline | head -5": [
+     "0000000   s   l   e   e   p  \\0   9   0   0  \\0\n0000012\n",
+     "",
+     0
+    ],
+    "readlink /proc/self/exe": [
+     "/usr/bin/readlink\n",
+     "",
+     0
+    ],
+    "uname -r": [
+     "7.0.14-linuxkit\n",
+     "",
+     0
+    ]
+   }
+  }
+ }
+}

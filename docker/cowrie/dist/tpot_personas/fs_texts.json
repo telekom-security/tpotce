@@ -1,5 +1,5 @@
 {
- "_about": "Texts of the persona's rm, cp, mv, touch, rmdir and mkdir per variant, made by docker/cowrie/tools/build_fs_texts.py from tests/fixtures/fs_tools.json and fs_help.json (recordings of the real programs); do not edit.",
+ "_about": "Texts of the persona's rm, cp, mv, touch, rmdir, mkdir and readlink per variant, made by docker/cowrie/tools/build_fs_texts.py from tests/fixtures/fs_tools.json, fs_help.json and readlink.json (recordings of the real programs); do not edit.",
  "authors": {
   "rm": "Paul Rubin, David MacKenzie, Richard M. Stallman,\nand Jim Meyering.",
   "cp": "Torbjörn Granlund, David MacKenzie, and Jim Meyering.",
@@ -201,6 +201,22 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.25",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": false,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "busybox_1.26.2": {
@@ -395,6 +411,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "busybox_1.27.2": {
@@ -589,6 +622,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "busybox_1.28.4": {
@@ -788,6 +838,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "busybox_1.29.3": {
@@ -987,6 +1054,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "busybox_1.30.1": {
@@ -1186,6 +1270,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "busybox_1.31.1": {
@@ -1385,6 +1486,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "busybox_1.32.1": {
@@ -1584,6 +1702,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "busybox_1.33.1": {
@@ -1783,6 +1918,22 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "busybox_1.33.1-musl": {
@@ -1982,6 +2133,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": false,
+    "double_slash": false
    }
   },
   "busybox_1.34.1": {
@@ -2196,6 +2364,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.36.1-musl",
+    "stand_in": "busybox_1.36.1-musl",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": true,
+    "slash_file": false,
+    "double_slash": false
    }
   },
   "busybox_1.35.0": {
@@ -2410,6 +2595,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.36.1-musl",
+    "stand_in": "busybox_1.36.1-musl",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": true,
+    "slash_file": false,
+    "double_slash": false
    }
   },
   "busybox_1.36.1-glibc": {
@@ -2624,6 +2826,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.36.1-musl",
+    "stand_in": "busybox_1.36.1-musl",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": true,
+    "slash_file": false,
+    "double_slash": false
    }
   },
   "busybox_1.36.1-musl": {
@@ -2838,6 +3057,22 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.36.1-musl",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": true,
+    "slash_file": false,
+    "double_slash": true
    }
   },
   "busybox_1.36.1-uclibc": {
@@ -3052,6 +3287,23 @@
     "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.36.1-musl",
+    "stand_in": "busybox_1.36.1-musl",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": true,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "centos_7": {
@@ -3440,6 +3692,57 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of ‘{0:c}’: {1}\n",
     "touch.setting_times": "touch: setting times of ‘{0:c}’: Operation not permitted\n"
+   },
+   "readlink": {
+    "recorded": "centos:7",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet,\n  -s, --silent                  suppress most error messages\n  -v, --verbose                 report error messages\n  -z, --zero                    separate output with NUL rather than newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\nFor complete documentation, run: info coreutils 'readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   },
   "debian_10": {
@@ -3828,6 +4131,61 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
     "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
+   },
+   "readlink": {
+    "recorded": "debian:10",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport readlink translation bugs to <https://translationproject.org/team/>\nFull documentation at: <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "quiet": [
+       "q",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   },
   "debian_12": {
@@ -4216,6 +4574,61 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
     "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
+   },
+   "readlink": {
+    "recorded": "debian:12",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "quiet": [
+       "q",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   },
   "debian_12_en": {
@@ -4596,6 +5009,62 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
     "touch.setting_times": "touch: setting times of {0:q}: {1}\n"
+   },
+   "readlink": {
+    "recorded": "debian:12",
+    "stand_in": "debian_12",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "quiet": [
+       "q",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   },
   "debian_13": {
@@ -5004,6 +5473,61 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
     "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
+   },
+   "readlink": {
+    "recorded": "debian:13",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "quiet": [
+       "q",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   },
   "debian_8": {
@@ -5398,6 +5922,58 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of ‘{0:c}’: {1}\n",
     "touch.setting_times": "touch: setting times of ‘{0:c}’: Operation not permitted\n"
+   },
+   "readlink": {
+    "recorded": "centos:7",
+    "stand_in": "centos_7",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet,\n  -s, --silent                  suppress most error messages\n  -v, --verbose                 report error messages\n  -z, --zero                    separate output with NUL rather than newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\nFor complete documentation, run: info coreutils 'readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   },
   "debian_9": {
@@ -5792,6 +6368,58 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
     "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
+   },
+   "readlink": {
+    "recorded": "centos:7",
+    "stand_in": "centos_7",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet,\n  -s, --silent                  suppress most error messages\n  -v, --verbose                 report error messages\n  -z, --zero                    separate output with NUL rather than newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <http://www.gnu.org/software/coreutils/>\nFor complete documentation, run: info coreutils 'readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   },
   "fw_dlink_dir859_105b03": {
@@ -5866,6 +6494,23 @@
     "rm.removed_dir": "removed directory: '{0}'\n",
     "rm.stat": "rm: cannot stat '{0}': {1}\n",
     "touch.cannot_touch": "touch: {0}: {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.25",
+    "stand_in": "busybox_1.25.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": false,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "fw_edgeos_209hf5": {
@@ -6060,6 +6705,23 @@
     "touch.cannot_touch": "touch: {0}: {1}\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": false,
+    "double_slash": false
    }
   },
   "fw_openwrt_21.02.7": {
@@ -6236,6 +6898,23 @@
     "touch.cannot_touch": "touch: {0}: {1}\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.33",
+    "stand_in": "busybox_1.33.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": false,
+    "slash_file": false,
+    "double_slash": false
    }
   },
   "fw_openwrt_22.03.7": {
@@ -6432,6 +7111,23 @@
     "touch.cannot_touch": "touch: {0}: {1}\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.36.1-musl",
+    "stand_in": "busybox_1.36.1-musl",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": true,
+    "missing_last": true,
+    "slash_file": false,
+    "double_slash": true
    }
   },
   "fw_tplink_c7v5": {
@@ -6509,6 +7205,23 @@
     "rm.stat": "rm: can't stat '{0}': {1}\n",
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "touch.cannot_touch": "touch: {0}: {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.25",
+    "stand_in": "busybox_1.25.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": false,
+    "missing_last": false,
+    "slash_file": true,
+    "double_slash": false
    }
   },
   "fw_zyxel_nas326_aazf18": {
@@ -6671,6 +7384,23 @@
     "rm.stat": "rm: can't stat '{0}': {1}\n",
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "touch.cannot_touch": "touch: {0}: {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.25",
+    "stand_in": "busybox_1.25.1",
+    "usage": "[-fnv] FILE\n\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": false,
+    "missing_last": false,
+    "slash_file": false,
+    "double_slash": false
    }
   },
   "rockylinux_9": {
@@ -7059,6 +7789,61 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
     "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
+   },
+   "readlink": {
+    "recorded": "rockylinux:9",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "quiet": [
+       "q",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   },
   "src_qnap_1.24.1": {
@@ -7250,8 +8035,26 @@
     "rmdir.failed": "rmdir: '{0}': {1}\n",
     "rmdir.verbose": "rmdir: removing directory, '{0}'\n",
     "touch.cannot_touch": "touch: {0}: {1}\n",
+    "touch.cannot_touch.EPERM": "touch: {0}: Operation not permitted\n",
     "touch.invalid_date": "touch: invalid date '{0}'\n",
     "touch.reference": "touch: can't stat '{0}': {1}\n"
+   },
+   "readlink": {
+    "recorded": "busybox:1.25",
+    "stand_in": "busybox_1.25.1",
+    "usage": "[-fnv] FILE\n\nDisplay the value of a symlink\n\n\t-f\tCanonicalize by following all symlinks\n\t-n\tDon't add newline\n\t-v\tVerbose\n",
+    "options": {
+     "short": "fnvsq",
+     "long": {}
+    },
+    "templates": {
+     "readlink.not_link": "readlink: {0}: cannot read link: not a symlink\n",
+     "readlink.error": "readlink: {0}: cannot read link: {1}\n"
+    },
+    "follow_dangling": false,
+    "missing_last": false,
+    "slash_file": false,
+    "double_slash": false
    }
   },
   "ubuntu_22.04": {
@@ -7640,6 +8443,61 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
     "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
+   },
+   "readlink": {
+    "recorded": "ubuntu:22.04",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help     display this help and exit\n      --version  output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "quiet": [
+       "q",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   },
   "ubuntu_24.04": {
@@ -8040,6 +8898,61 @@
     "touch.missing_operand": "touch: missing file operand\nTry 'touch --help' for more information.\n",
     "touch.reference": "touch: failed to get attributes of {0:q}: {1}\n",
     "touch.setting_times": "touch: setting times of {0:q}: Operation not permitted\n"
+   },
+   "readlink": {
+    "recorded": "ubuntu:24.04",
+    "help": "Usage: readlink [OPTION]... FILE...\nPrint value of a symbolic link or canonical file name\n\n  -f, --canonicalize            canonicalize by following every symlink in\n                                every component of the given name recursively;\n                                all but the last component must exist\n  -e, --canonicalize-existing   canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                all components must exist\n  -m, --canonicalize-missing    canonicalize by following every symlink in\n                                every component of the given name recursively,\n                                without requirements on components existence\n  -n, --no-newline              do not output the trailing delimiter\n  -q, --quiet\n  -s, --silent                  suppress most error messages (on by default)\n  -v, --verbose                 report error messages\n  -z, --zero                    end each output line with NUL, not newline\n      --help        display this help and exit\n      --version     output version information and exit\n\nGNU coreutils online help: <https://www.gnu.org/software/coreutils/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/readlink>\nor available locally via: info '(coreutils) readlink invocation'\n",
+    "options": {
+     "short": "femnqsvz",
+     "long": {
+      "canonicalize": [
+       "f",
+       0
+      ],
+      "canonicalize-existing": [
+       "e",
+       0
+      ],
+      "canonicalize-missing": [
+       "m",
+       0
+      ],
+      "no-newline": [
+       "n",
+       0
+      ],
+      "quiet": [
+       "q",
+       0
+      ],
+      "silent": [
+       "s",
+       0
+      ],
+      "verbose": [
+       "v",
+       0
+      ],
+      "zero": [
+       "z",
+       0
+      ],
+      "help": [
+       "help",
+       0
+      ],
+      "version": [
+       "version",
+       0
+      ]
+     }
+    },
+    "authors": "Dmitry V. Levin.",
+    "templates": {
+     "readlink.missing_operand": "readlink: missing operand\nTry 'readlink --help' for more information.\n",
+     "readlink.no_newline": "readlink: ignoring --no-newline with multiple arguments\n",
+     "readlink.error": "readlink: {0}: {1}\n"
+    }
    }
   }
  }

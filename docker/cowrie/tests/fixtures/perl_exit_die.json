@@ -1,0 +1,1450 @@
+{
+ "_source": {
+  "date": "2026-10-27",
+  "how": "docker run --rm --network none IMAGE perl -e CODE, harmless code only; stdout and stderr apart, exit status of docker run; the perl version per image is the output of perl -e 'printf \"%vd\\n\", $^V'. rockylinux:9 has no perl in its image and is left out.",
+  "images": {
+   "debian:12": {
+    "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+    "perl": "5.36.0"
+   },
+   "debian:13": {
+    "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "perl": "5.40.1"
+   },
+   "ubuntu:22.04": {
+    "digest": "ubuntu@sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b",
+    "perl": "5.34.0"
+   },
+   "ubuntu:24.04": {
+    "digest": "ubuntu@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c",
+    "perl": "5.38.2"
+   }
+  },
+  "commands": "cases: docker run --rm --network none IMAGE perl -e CODE, CODE = the case's code field, for every image in _source.images; not_modelled: the same, the persona's answer differs from it on purpose (fallback until the construct is modelled); status_only: the same, only the exit status is compared (the stderr text holds an address, CODE(0x...), that differs per run)"
+ },
+ "cases": [
+  {
+   "image": "debian:12",
+   "code": "$x=3; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; exit($x)",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:12",
+   "code": "my $x = '7abc'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 7
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 300; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 44
+  },
+  {
+   "image": "debian:12",
+   "code": "exit $nothing",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 'abc'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = -1; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3.7; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = ' 12'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 12
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = '1e2'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 100
+  },
+  {
+   "image": "debian:12",
+   "code": "exit",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "debian:12",
+   "code": "die",
+   "stdout": "",
+   "stderr": "Died at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "die \"x\"",
+   "stdout": "",
+   "stderr": "x at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "die \"x\\n\"",
+   "stdout": "",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "print \"a\\n\"; die \"x\\n\"",
+   "stdout": "a\n",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "$m = \"y\"; die $m",
+   "stdout": "",
+   "stderr": "y at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "print 1;\ndie",
+   "stdout": "1",
+   "stderr": "Died at -e line 2.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "print 1; exit 3; print 2",
+   "stdout": "1",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:12",
+   "code": "print \"a\\n\"; $x = 4; exit $x; print \"b\"",
+   "stdout": "a\n",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "debian:12",
+   "code": "exit -1",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = '9007199254740993'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 1
+  },
+  {
+   "image": "debian:13",
+   "code": "$x=3; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; exit($x)",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:13",
+   "code": "my $x = '7abc'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 7
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 300; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 44
+  },
+  {
+   "image": "debian:13",
+   "code": "exit $nothing",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 'abc'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = -1; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3.7; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = ' 12'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 12
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = '1e2'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 100
+  },
+  {
+   "image": "debian:13",
+   "code": "exit",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "debian:13",
+   "code": "die",
+   "stdout": "",
+   "stderr": "Died at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "die \"x\"",
+   "stdout": "",
+   "stderr": "x at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "die \"x\\n\"",
+   "stdout": "",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "print \"a\\n\"; die \"x\\n\"",
+   "stdout": "a\n",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$m = \"y\"; die $m",
+   "stdout": "",
+   "stderr": "y at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "print 1;\ndie",
+   "stdout": "1",
+   "stderr": "Died at -e line 2.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "print 1; exit 3; print 2",
+   "stdout": "1",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:13",
+   "code": "print \"a\\n\"; $x = 4; exit $x; print \"b\"",
+   "stdout": "a\n",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "debian:13",
+   "code": "exit -1",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = '9007199254740993'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 1
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x=3; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; exit($x)",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "my $x = '7abc'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 7
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 300; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 44
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "exit $nothing",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 'abc'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = -1; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3.7; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = ' 12'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 12
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = '1e2'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 100
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "exit",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "die",
+   "stdout": "",
+   "stderr": "Died at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "die \"x\"",
+   "stdout": "",
+   "stderr": "x at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "die \"x\\n\"",
+   "stdout": "",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "print \"a\\n\"; die \"x\\n\"",
+   "stdout": "a\n",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$m = \"y\"; die $m",
+   "stdout": "",
+   "stderr": "y at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "print 1;\ndie",
+   "stdout": "1",
+   "stderr": "Died at -e line 2.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "print 1; exit 3; print 2",
+   "stdout": "1",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "print \"a\\n\"; $x = 4; exit $x; print \"b\"",
+   "stdout": "a\n",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "exit -1",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = '9007199254740993'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 1
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x=3; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; exit($x)",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "my $x = '7abc'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 7
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 300; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 44
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "exit $nothing",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 'abc'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = -1; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3.7; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = ' 12'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 12
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = '1e2'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 100
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "exit",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "die",
+   "stdout": "",
+   "stderr": "Died at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "die \"x\"",
+   "stdout": "",
+   "stderr": "x at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "die \"x\\n\"",
+   "stdout": "",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "print \"a\\n\"; die \"x\\n\"",
+   "stdout": "a\n",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$m = \"y\"; die $m",
+   "stdout": "",
+   "stderr": "y at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "print 1;\ndie",
+   "stdout": "1",
+   "stderr": "Died at -e line 2.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "print 1; exit 3; print 2",
+   "stdout": "1",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "print \"a\\n\"; $x = 4; exit $x; print \"b\"",
+   "stdout": "a\n",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "exit -1",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = '9007199254740993'; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 1
+  },
+  {
+   "image": "debian:12",
+   "code": "exit 1234567890",
+   "stdout": "",
+   "stderr": "",
+   "rc": 210
+  },
+  {
+   "image": "debian:13",
+   "code": "exit 1234567890",
+   "stdout": "",
+   "stderr": "",
+   "rc": 210
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "exit 1234567890",
+   "stdout": "",
+   "stderr": "",
+   "rc": 210
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "exit 1234567890",
+   "stdout": "",
+   "stderr": "",
+   "rc": 210
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; 1 && 2; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:12",
+   "code": "$_ = \"5\"; chop; exit $_",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; $y = lc(\"A\"); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; 1 && 2; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:13",
+   "code": "$_ = \"5\"; chop; exit $_",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; $y = lc(\"A\"); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; 1 && 2; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$_ = \"5\"; chop; exit $_",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; $y = lc(\"A\"); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; 1 && 2; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$_ = \"5\"; chop; exit $_",
+   "stdout": "",
+   "stderr": "",
+   "rc": 0
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; $y = lc(\"A\"); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  }
+ ],
+ "not_modelled": [
+  {
+   "image": "debian:12",
+   "code": "$x = 3; $x++; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; $x++; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; $x++; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; $x++; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "debian:12",
+   "code": "print \"a\\n\"; $x = 3; $x++; print \"b\\n\"; exit $x",
+   "stdout": "a\nb\n",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "debian:13",
+   "code": "print \"a\\n\"; $x = 3; $x++; print \"b\\n\"; exit $x",
+   "stdout": "a\nb\n",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "print \"a\\n\"; $x = 3; $x++; print \"b\\n\"; exit $x",
+   "stdout": "a\nb\n",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "print \"a\\n\"; $x = 3; $x++; print \"b\\n\"; exit $x",
+   "stdout": "a\nb\n",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "debian:12",
+   "code": "die \"a\", $nothing",
+   "stdout": "",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "die \"a\", $nothing",
+   "stdout": "",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "die \"a\", $nothing",
+   "stdout": "",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "die \"a\", $nothing",
+   "stdout": "",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; $f = sub { $x = 5 }; $f->(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; $f = sub { $x = 5 }; $f->(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; $f = sub { $x = 5 }; $f->(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; $f = sub { $x = 5 }; $f->(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; $r = \\$x; $x = 3; $$r = 5; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; $r = \\$x; $x = 3; $$r = 5; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; $r = \\$x; $x = 3; $$r = 5; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; $r = \\$x; $x = 3; $$r = 5; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; my $y = do { $x = 5 }; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; my $y = do { $x = 5 }; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; my $y = do { $x = 5 }; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; my $y = do { $x = 5 }; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:12",
+   "code": "exit 1 + 2",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:13",
+   "code": "exit 1 + 2",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "exit 1 + 2",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "exit 1 + 2",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:12",
+   "code": "exit 010",
+   "stdout": "",
+   "stderr": "",
+   "rc": 8
+  },
+  {
+   "image": "debian:13",
+   "code": "exit 010",
+   "stdout": "",
+   "stderr": "",
+   "rc": 8
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "exit 010",
+   "stdout": "",
+   "stderr": "",
+   "rc": 8
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "exit 010",
+   "stdout": "",
+   "stderr": "",
+   "rc": 8
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; print join(\",\", 1); exit $x",
+   "stdout": "1",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; print join(\",\", 1); exit $x",
+   "stdout": "1",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; print join(\",\", 1); exit $x",
+   "stdout": "1",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; print join(\",\", 1); exit $x",
+   "stdout": "1",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; sub f { $x = 5 } f(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; sub f { $x = 5 } f(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; sub f { $x = 5 } f(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; sub f { $x = 5 } f(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:12",
+   "code": "sub f { $x = 5 }; $x = 3; f(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:13",
+   "code": "sub f { $x = 5 }; $x = 3; f(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "sub f { $x = 5 }; $x = 3; f(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "sub f { $x = 5 }; $x = 3; f(); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 5
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 1e30; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 1e30; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 1e30; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 1e30; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "die \"a\", $nothing",
+   "stdout": "",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "print \"a\\n\"; die \"a\", $nothing",
+   "stdout": "a\n",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; $x <<= 2; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 12
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = \"5\"; substr($x,0,1,\"9\"); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 9
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; foo(1); exit $x",
+   "stdout": "",
+   "stderr": "Undefined subroutine &main::foo called at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; if (1) { exit 4 }; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; if (1) { die \"x\\n\" }; exit $x",
+   "stdout": "",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; /a/; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:12",
+   "code": "print \"a\\n\"; $x = 3; foo(1); print \"b\\n\"",
+   "stdout": "a\n",
+   "stderr": "Undefined subroutine &main::foo called at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; Foo->bar(1); exit $x",
+   "stdout": "",
+   "stderr": "Can't locate object method \"bar\" via package \"Foo\" (perhaps you forgot to load \"Foo\"?) at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "$x = 3; $o->bar(1); exit $x",
+   "stdout": "",
+   "stderr": "Can't call method \"bar\" on an undefined value at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:12",
+   "code": "foo 1;",
+   "stdout": "",
+   "stderr": "Number found where operator expected at -e line 1, near \"foo 1\"\n\t(Do you need to predeclare foo?)\nsyntax error at -e line 1, near \"foo 1\"\nExecution of -e aborted due to compilation errors.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "die \"a\", $nothing",
+   "stdout": "",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "print \"a\\n\"; die \"a\", $nothing",
+   "stdout": "a\n",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; $x <<= 2; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 12
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = \"5\"; substr($x,0,1,\"9\"); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 9
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; foo(1); exit $x",
+   "stdout": "",
+   "stderr": "Undefined subroutine &main::foo called at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; if (1) { exit 4 }; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; if (1) { die \"x\\n\" }; exit $x",
+   "stdout": "",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; /a/; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "debian:13",
+   "code": "print \"a\\n\"; $x = 3; foo(1); print \"b\\n\"",
+   "stdout": "a\n",
+   "stderr": "Undefined subroutine &main::foo called at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; Foo->bar(1); exit $x",
+   "stdout": "",
+   "stderr": "Can't locate object method \"bar\" via package \"Foo\" (perhaps you forgot to load \"Foo\"?) at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$x = 3; $o->bar(1); exit $x",
+   "stdout": "",
+   "stderr": "Can't call method \"bar\" on an undefined value at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "foo 1;",
+   "stdout": "",
+   "stderr": "Number found where operator expected (Do you need to predeclare \"foo\"?) at -e line 1, near \"foo 1\"\nsyntax error at -e line 1, near \"foo 1\"\nExecution of -e aborted due to compilation errors.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "die \"a\", $nothing",
+   "stdout": "",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "print \"a\\n\"; die \"a\", $nothing",
+   "stdout": "a\n",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; $x <<= 2; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 12
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = \"5\"; substr($x,0,1,\"9\"); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 9
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; foo(1); exit $x",
+   "stdout": "",
+   "stderr": "Undefined subroutine &main::foo called at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; if (1) { exit 4 }; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; if (1) { die \"x\\n\" }; exit $x",
+   "stdout": "",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; /a/; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "print \"a\\n\"; $x = 3; foo(1); print \"b\\n\"",
+   "stdout": "a\n",
+   "stderr": "Undefined subroutine &main::foo called at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; Foo->bar(1); exit $x",
+   "stdout": "",
+   "stderr": "Can't locate object method \"bar\" via package \"Foo\" (perhaps you forgot to load \"Foo\"?) at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$x = 3; $o->bar(1); exit $x",
+   "stdout": "",
+   "stderr": "Can't call method \"bar\" on an undefined value at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "foo 1;",
+   "stdout": "",
+   "stderr": "Number found where operator expected at -e line 1, near \"foo 1\"\n\t(Do you need to predeclare foo?)\nsyntax error at -e line 1, near \"foo 1\"\nExecution of -e aborted due to compilation errors.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "die \"a\", $nothing",
+   "stdout": "",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "print \"a\\n\"; die \"a\", $nothing",
+   "stdout": "a\n",
+   "stderr": "a at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; $x <<= 2; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 12
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = \"5\"; substr($x,0,1,\"9\"); exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 9
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; foo(1); exit $x",
+   "stdout": "",
+   "stderr": "Undefined subroutine &main::foo called at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; if (1) { exit 4 }; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 4
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; if (1) { die \"x\\n\" }; exit $x",
+   "stdout": "",
+   "stderr": "x\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; /a/; exit $x",
+   "stdout": "",
+   "stderr": "",
+   "rc": 3
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "print \"a\\n\"; $x = 3; foo(1); print \"b\\n\"",
+   "stdout": "a\n",
+   "stderr": "Undefined subroutine &main::foo called at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; Foo->bar(1); exit $x",
+   "stdout": "",
+   "stderr": "Can't locate object method \"bar\" via package \"Foo\" (perhaps you forgot to load \"Foo\"?) at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$x = 3; $o->bar(1); exit $x",
+   "stdout": "",
+   "stderr": "Can't call method \"bar\" on an undefined value at -e line 1.\n",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "foo 1;",
+   "stdout": "",
+   "stderr": "Number found where operator expected (Do you need to predeclare \"foo\"?) at -e line 1, near \"foo 1\"\nsyntax error at -e line 1, near \"foo 1\"\nExecution of -e aborted due to compilation errors.\n",
+   "rc": 255
+  }
+ ],
+ "version_dependent": [
+  {
+   "code": "$x = 'inf'; exit $x",
+   "images": {
+    "debian:12": {
+     "stdout": "",
+     "stderr": "",
+     "rc": 255
+    },
+    "debian:13": {
+     "stdout": "",
+     "stderr": "",
+     "rc": 255
+    },
+    "ubuntu:22.04": {
+     "stdout": "",
+     "stderr": "",
+     "rc": 0
+    },
+    "ubuntu:24.04": {
+     "stdout": "",
+     "stderr": "",
+     "rc": 255
+    }
+   }
+  }
+ ],
+ "status_only": [
+  {
+   "image": "debian:12",
+   "code": "$m = sub {1}; die $m",
+   "rc": 255
+  },
+  {
+   "image": "debian:13",
+   "code": "$m = sub {1}; die $m",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:22.04",
+   "code": "$m = sub {1}; die $m",
+   "rc": 255
+  },
+  {
+   "image": "ubuntu:24.04",
+   "code": "$m = sub {1}; die $m",
+   "rc": 255
+  }
+ ]
+}

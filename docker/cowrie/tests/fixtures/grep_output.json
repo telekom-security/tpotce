@@ -1,0 +1,3665 @@
+{
+ "_source": {
+  "recorded": "2026-10-28",
+  "script": "a recorder of 2026-10-28 that is not part of the repository; the cases are listed here with their results",
+  "how": "docker run -d --network none IMAGE sleep 300, then docker exec -i NAME grep ARGS with the stdin of the case; stdout, stderr and status kept apart; a long number in stdout or stderr is stored as <ARG:i> (the i-th argument without its dash), a number of N nines in arguments as {digits: N}; every case ran on every image listed under images for its set, none of the results is copied from another image",
+  "derived": "the boundary of 21 digits for a number bundled with options (-n777...) and the -A0 separator of GNU grep before 3.8 are not recorded",
+  "images": "image -> style, libc, version, image id, repo digests, platform"
+ },
+ "images": {
+  "debian:9": {
+   "style": "gnu",
+   "libc": "glibc",
+   "version": "2.27",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+   "digests": [
+    "debian@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be"
+   ],
+   "platform": "linux/arm64"
+  },
+  "centos:7": {
+   "style": "gnu",
+   "libc": "glibc",
+   "version": "2.20",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "digests": [
+    "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4"
+   ],
+   "platform": "linux/arm64"
+  },
+  "almalinux:9": {
+   "style": "gnu",
+   "libc": "glibc",
+   "version": "3.6",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:245f8aab832fe800aa42bdab5fad75ebbd8e0b4c9f24820a83c638b177857ae2",
+   "digests": [
+    "almalinux@sha256:245f8aab832fe800aa42bdab5fad75ebbd8e0b4c9f24820a83c638b177857ae2"
+   ],
+   "platform": "linux/arm64"
+  },
+  "debian:12": {
+   "style": "gnu",
+   "libc": "glibc",
+   "version": "3.8",
+   "sets": [
+    "output",
+    "status"
+   ],
+   "id": "sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "digests": [
+    "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61"
+   ],
+   "platform": "linux/arm64"
+  },
+  "debian:13": {
+   "style": "gnu",
+   "libc": "glibc",
+   "version": "3.11",
+   "sets": [
+    "output",
+    "status"
+   ],
+   "id": "sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "digests": [
+    "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.27.2": {
+   "style": "busybox",
+   "libc": "uclibc",
+   "version": "BusyBox v1.27.2 (2017-11-01 23:22:25 UTC)",
+   "sets": [
+    "output",
+    "status"
+   ],
+   "id": "sha256:bbc3a03235220b170ba48a157dd097dd1379299370e1ed99ce976df0355d24f0",
+   "digests": [
+    "busybox@sha256:bbc3a03235220b170ba48a157dd097dd1379299370e1ed99ce976df0355d24f0"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.28.4": {
+   "style": "busybox",
+   "libc": "uclibc",
+   "version": "BusyBox v1.28.4 (2018-05-22 16:59:59 UTC)",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:141c253bc4c3fd0a201d32dc1f493bcf3fff003b6df416dea4f41046e0f37d47",
+   "digests": [
+    "busybox@sha256:141c253bc4c3fd0a201d32dc1f493bcf3fff003b6df416dea4f41046e0f37d47"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.29.3": {
+   "style": "busybox",
+   "libc": "uclibc",
+   "version": "BusyBox v1.29.3 (2018-12-24 21:33:16 UTC)",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:8ccbac733d19c0dd4d70b4f0c1e12245b5fa3ad24758a11035ee505c629c0796",
+   "digests": [
+    "busybox@sha256:8ccbac733d19c0dd4d70b4f0c1e12245b5fa3ad24758a11035ee505c629c0796"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.30.1": {
+   "style": "busybox",
+   "libc": "uclibc",
+   "version": "BusyBox v1.30.1 (2019-05-09 10:07:54 UTC)",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:4b6ad3a68d34da29bf7c8ccb5d355ba8b4babcad1f99798204e7abb43e54ee3d",
+   "digests": [
+    "busybox@sha256:4b6ad3a68d34da29bf7c8ccb5d355ba8b4babcad1f99798204e7abb43e54ee3d"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.31.1": {
+   "style": "busybox",
+   "libc": "uclibc",
+   "version": "BusyBox v1.31.1 (2020-06-02 01:33:44 UTC)",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:95cf004f559831017cdf4628aaf1bb30133677be8702a8c5f2994629f637a209",
+   "digests": [
+    "busybox@sha256:95cf004f559831017cdf4628aaf1bb30133677be8702a8c5f2994629f637a209"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.32.1": {
+   "style": "busybox",
+   "libc": "uclibc",
+   "version": "BusyBox v1.32.1 (2021-04-07 20:59:04 UTC)",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:ae39a6f5c07297d7ab64dbd4f82c77c874cc6a94cea29fdec309d0992574b4f7",
+   "digests": [
+    "busybox@sha256:ae39a6f5c07297d7ab64dbd4f82c77c874cc6a94cea29fdec309d0992574b4f7"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.33.1-musl": {
+   "style": "busybox",
+   "libc": "musl",
+   "version": "BusyBox v1.33.1 (2021-09-13 17:23:32 UTC)",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:5b10c7344dc49babf0ab258c94cb1ffc513832bc51dd35bb559fccdca0d1fdfe",
+   "digests": [
+    "busybox@sha256:5b10c7344dc49babf0ab258c94cb1ffc513832bc51dd35bb559fccdca0d1fdfe"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.34.1": {
+   "style": "busybox",
+   "libc": "glibc",
+   "version": "BusyBox v1.34.1 (2022-12-21 18:33:56 UTC)",
+   "sets": [
+    "status"
+   ],
+   "id": "sha256:05a79c7279f71f86a2a0d05eb72fcb56ea36139150f0a75cd87e80a4272e4e39",
+   "digests": [
+    "busybox@sha256:05a79c7279f71f86a2a0d05eb72fcb56ea36139150f0a75cd87e80a4272e4e39"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.36.1": {
+   "style": "busybox",
+   "libc": "glibc",
+   "version": "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC)",
+   "sets": [
+    "output",
+    "status"
+   ],
+   "id": "sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662",
+   "digests": [
+    "busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.36.1-uclibc": {
+   "style": "busybox",
+   "libc": "uclibc",
+   "version": "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC)",
+   "sets": [
+    "output",
+    "status"
+   ],
+   "id": "sha256:0872fb3a7632ba9d0ae46a8e832a62b30ce83a6f220b8bb52903d9cf477dabe3",
+   "digests": [
+    "busybox@sha256:0872fb3a7632ba9d0ae46a8e832a62b30ce83a6f220b8bb52903d9cf477dabe3"
+   ],
+   "platform": "linux/arm64"
+  },
+  "busybox:1.36.1-musl": {
+   "style": "busybox",
+   "libc": "musl",
+   "version": "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC)",
+   "sets": [
+    "output",
+    "status"
+   ],
+   "id": "sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "digests": [
+    "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213"
+   ],
+   "platform": "linux/arm64"
+  }
+ },
+ "cases": [
+  {
+   "set": "output",
+   "stdin": "abab xab\n",
+   "args": [
+    "-o",
+    "ab"
+   ],
+   "results": {
+    "debian:12": [
+     "ab\nab\nab\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "ab\nab\nab\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "ab\nab\nab\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "ab\nab\nab\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "ab\nab\nab\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "ab\nab\nab\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "ab\n",
+   "args": [
+    "-oE",
+    "a|ab"
+   ],
+   "results": {
+    "debian:12": [
+     "ab\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "ab\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "ab\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "ab\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "ab\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "ab\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "axb\n",
+   "args": [
+    "-o",
+    "x*"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "x\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "aaa\nbaa\n",
+   "args": [
+    "-o",
+    "^a"
+   ],
+   "results": {
+    "debian:12": [
+     "a\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "a\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "a\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "a\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "a\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "foo-bar foobar foo\n",
+   "args": [
+    "-ow",
+    "foo"
+   ],
+   "results": {
+    "debian:12": [
+     "foo\nfoo\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "foo\nfoo\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "foo\nfoo\nfoo\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "foo\nfoo\nfoo\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "foo\nfoo\nfoo\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "foo\nfoo\nfoo\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "Foo foo\n",
+   "args": [
+    "-oi",
+    "foo"
+   ],
+   "results": {
+    "debian:12": [
+     "Foo\nfoo\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "Foo\nfoo\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "Foo\nfoo\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "Foo\nfoo\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "Foo\nfoo\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "Foo\nfoo\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\n",
+   "args": [
+    "-on",
+    "."
+   ],
+   "results": {
+    "debian:12": [
+     "1:a\n2:b\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "1:a\n2:b\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "1:a\n2:b\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "1:a\n2:b\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "1:a\n2:b\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "1:a\n2:b\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "foo\nbar\n",
+   "args": [
+    "-ov",
+    "foo"
+   ],
+   "results": {
+    "debian:12": [
+     "",
+     "",
+     0
+    ],
+    "debian:13": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "foo\nbar\n",
+   "args": [
+    "-oc",
+    "foo"
+   ],
+   "results": {
+    "debian:12": [
+     "1\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "1\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "1\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "1\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "1\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "1\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "ab12cd345\n",
+   "args": [
+    "-oE",
+    "[0-9]+|[a-z]+"
+   ],
+   "results": {
+    "debian:12": [
+     "ab\n12\ncd\n345\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "ab\n12\ncd\n345\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "ab\n12\ncd\n345\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "ab\n12\ncd\n345\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "ab\n12\ncd\n345\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "ab\n12\ncd\n345\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\ne\nf\n",
+   "args": [
+    "-B2",
+    "-n",
+    "e"
+   ],
+   "results": {
+    "debian:12": [
+     "3-c\n4-d\n5:e\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "3-c\n4-d\n5:e\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "3-c\n4-d\n5:e\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "3-c\n4-d\n5:e\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "3-c\n4-d\n5:e\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "3-c\n4-d\n5:e\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\ne\nf\n",
+   "args": [
+    "-A1",
+    "-B1",
+    "-e",
+    "b",
+    "-e",
+    "e"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nc\nd\ne\nf\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nc\nd\ne\nf\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "a\nb\nc\nd\ne\nf\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "a\nb\nc\nd\ne\nf\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "a\nb\nc\nd\ne\nf\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "a\nb\nc\nd\ne\nf\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\ne\nf\n",
+   "args": [
+    "-C1",
+    "-e",
+    "a",
+    "-e",
+    "f"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\n--\ne\nf\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\n--\ne\nf\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "a\nb\n--\ne\nf\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "a\nb\n--\ne\nf\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "a\nb\n--\ne\nf\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "a\nb\n--\ne\nf\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\n",
+   "args": [
+    "-5",
+    "b"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 5\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '5'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 5\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 5\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\n",
+   "args": [
+    "-x",
+    "-v",
+    "b"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "a\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "a\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "a\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "a\nc\nd\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\ne\nf\n",
+   "args": [
+    "-A0",
+    "-e",
+    "b",
+    "-e",
+    "e"
+   ],
+   "results": {
+    "debian:12": [
+     "b\n--\ne\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "b\n--\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "b\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "b\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "b\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "b\ne\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\ne\nf\n",
+   "args": [
+    "-B0",
+    "-e",
+    "b",
+    "-e",
+    "e"
+   ],
+   "results": {
+    "debian:12": [
+     "b\n--\ne\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "b\n--\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "b\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "b\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "b\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "b\ne\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\ne\nf\n",
+   "args": [
+    "-C0",
+    "-e",
+    "b",
+    "-e",
+    "e"
+   ],
+   "results": {
+    "debian:12": [
+     "b\n--\ne\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "b\n--\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "b\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "b\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "b\ne\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "b\ne\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\ne\nf\n",
+   "args": [
+    "-2n",
+    "c"
+   ],
+   "results": {
+    "debian:12": [
+     "1-a\n2-b\n3:c\n4-d\n5-e\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "1-a\n2-b\n3:c\n4-d\n5-e\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 2\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '2'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 2\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 2\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nc\nd\ne\nf\n",
+   "args": [
+    "-n2",
+    "c"
+   ],
+   "results": {
+    "debian:12": [
+     "1-a\n2-b\n3:c\n4-d\n5-e\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "1-a\n2-b\n3:c\n4-d\n5-e\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 2\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '2'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 2\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 2\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nx\nb\nx\nc\nd\n",
+   "args": [
+    "-m1",
+    "-A2",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "x\nb\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "x\nb\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "x\nb\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "x\nb\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nx\nx\nb\nc\n",
+   "args": [
+    "-m1",
+    "-A2",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nx\nb\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nx\nb\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "x\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nx\nb\nx\nc\n",
+   "args": [
+    "-m1",
+    "-A5",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nb\nx\nc\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nb\nx\nc\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "x\nb\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "x\nb\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "x\nb\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "x\nb\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    "2147483647",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "x\nc\nd\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    "2147483647",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "a\nb\nx\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    "2147483647",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": "2147483647"
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 2\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '2'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 2\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 2\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    "2147483647",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "x\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    "2147483648",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    "2147483648",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    "2147483648",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": "2147483648"
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 2\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '2'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 2\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 2\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    "2147483648",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: number 2147483648 is not in 0..2147483647 range\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    "4294967295",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    "4294967295",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    "4294967295",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": "4294967295"
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 4\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '4'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 4\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 4\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    "4294967295",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: number 4294967295 is not in 0..2147483647 range\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    "4294967296",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    "4294967296",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    "4294967296",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": "4294967296"
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 4\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '4'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 4\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 4\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    "4294967296",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '4294967296'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    "18446744073709551615",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    "18446744073709551615",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    "18446744073709551615",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": "18446744073709551615"
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 1\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '1'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 1\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 1\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    "18446744073709551615",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    "18446744073709551616",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    "18446744073709551616",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    "18446744073709551616",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": "18446744073709551616"
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 1\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '1'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 1\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 1\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    "18446744073709551616",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    {
+     "digits": 21
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    {
+     "digits": 21
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    {
+     "digits": 21
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": {
+      "digits": 21
+     }
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 9\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '9'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 9\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 9\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    {
+     "digits": 21
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    {
+     "digits": 22
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    {
+     "digits": 22
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    {
+     "digits": 22
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": {
+      "digits": 22
+     }
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "",
+     "grep: 999999999999999999999...: invalid context length argument\n",
+     2
+    ],
+    "debian:13": [
+     "",
+     "grep: 999999999999999999999...: invalid context length argument\n",
+     2
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 9\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '9'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 9\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 9\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    {
+     "digits": 22
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    "123456789012345678901234567890",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    "123456789012345678901234567890",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    "123456789012345678901234567890",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": "123456789012345678901234567890"
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "",
+     "grep: 123456789012345678901...: invalid context length argument\n",
+     2
+    ],
+    "debian:13": [
+     "",
+     "grep: 123456789012345678901...: invalid context length argument\n",
+     2
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 1\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '1'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 1\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 1\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    "123456789012345678901234567890",
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    {
+     "digits": 30
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    {
+     "digits": 30
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    {
+     "digits": 30
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": {
+      "digits": 30
+     }
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "",
+     "grep: 999999999999999999999...: invalid context length argument\n",
+     2
+    ],
+    "debian:13": [
+     "",
+     "grep: 999999999999999999999...: invalid context length argument\n",
+     2
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 9\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '9'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 9\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 9\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    {
+     "digits": 30
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-A",
+    {
+     "digits": 5000
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-B",
+    {
+     "digits": 5000
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-C",
+    {
+     "digits": 5000
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "a\nb\nx\nc\nd\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    {
+     "prefix": "-",
+     "number": {
+      "digits": 5000
+     }
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "",
+     "grep: 999999999999999999999...: invalid context length argument\n",
+     2
+    ],
+    "debian:13": [
+     "",
+     "grep: 999999999999999999999...: invalid context length argument\n",
+     2
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid option -- 9\nBusyBox v1.27.2 (2017-11-01 23:22:25 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsriwFE] [-m N] [-A/B/C N] PATTERN/-e PATTERN.../-f FILE [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid option -- '9'\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid option -- 9\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: unrecognized option: 9\nBusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n\nUsage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...\n\nSearch for PATTERN in FILEs (or stdin)\n\n\t-H\tAdd 'filename:' prefix\n\t-h\tDo not add 'filename:' prefix\n\t-n\tAdd 'line_no:' prefix\n\t-l\tShow only names of files that match\n\t-L\tShow only names of files that don't match\n\t-c\tShow only count of matching lines\n\t-o\tShow only the matching part of line\n\t-q\tQuiet. Return 0 if PATTERN is found, 1 otherwise\n\t-v\tSelect non-matching lines\n\t-s\tSuppress open and read errors\n\t-r\tRecurse\n\t-R\tRecurse and dereference symlinks\n\t-i\tIgnore case\n\t-w\tMatch whole words only\n\t-x\tMatch whole lines only\n\t-F\tPATTERN is a literal (not regexp)\n\t-E\tPATTERN is an extended regexp\n\t-m N\tMatch up to N times per file\n\t-A N\tPrint N lines of trailing context\n\t-B N\tPrint N lines of leading context\n\t-C N\tSame as '-A N -B N'\n\t-e PTRN\tPattern to match\n\t-f FILE\tRead pattern from file\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "output",
+   "stdin": "a\nb\nx\nc\nd\n",
+   "args": [
+    "-m",
+    {
+     "digits": 5000
+    },
+    "x"
+   ],
+   "results": {
+    "debian:12": [
+     "x\n",
+     "",
+     0
+    ],
+    "debian:13": [
+     "x\n",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "grep: invalid number '<ARG:1>'\n",
+     2
+    ]
+   }
+  },
+  {
+   "set": "status",
+   "stdin": "a\nb\n",
+   "args": [
+    "-L",
+    "z"
+   ],
+   "results": {
+    "debian:9": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "centos:7": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "almalinux:9": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "debian:12": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "debian:13": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "busybox:1.27.2": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "busybox:1.28.4": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "busybox:1.29.3": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "busybox:1.30.1": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "busybox:1.31.1": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "busybox:1.32.1": [
+     "(standard input)\n",
+     "",
+     1
+    ],
+    "busybox:1.33.1-musl": [
+     "(standard input)\n",
+     "",
+     0
+    ],
+    "busybox:1.34.1": [
+     "(standard input)\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1": [
+     "(standard input)\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-uclibc": [
+     "(standard input)\n",
+     "",
+     0
+    ],
+    "busybox:1.36.1-musl": [
+     "(standard input)\n",
+     "",
+     0
+    ]
+   }
+  },
+  {
+   "set": "status",
+   "stdin": "a\nb\n",
+   "args": [
+    "-L",
+    "b"
+   ],
+   "results": {
+    "debian:9": [
+     "",
+     "",
+     0
+    ],
+    "centos:7": [
+     "",
+     "",
+     0
+    ],
+    "almalinux:9": [
+     "",
+     "",
+     0
+    ],
+    "debian:12": [
+     "",
+     "",
+     0
+    ],
+    "debian:13": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.27.2": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.28.4": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.29.3": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.30.1": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.31.1": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.32.1": [
+     "",
+     "",
+     0
+    ],
+    "busybox:1.33.1-musl": [
+     "",
+     "",
+     1
+    ],
+    "busybox:1.34.1": [
+     "",
+     "",
+     1
+    ],
+    "busybox:1.36.1": [
+     "",
+     "",
+     1
+    ],
+    "busybox:1.36.1-uclibc": [
+     "",
+     "",
+     1
+    ],
+    "busybox:1.36.1-musl": [
+     "",
+     "",
+     1
+    ]
+   }
+  }
+ ]
+}

@@ -298,7 +298,7 @@ class ShellKeyTest(unittest.TestCase):
 
     def test_the_rendered_keys_pass(self):
         for persona_id in ("tplink-archer-c7", "openwrt", "debian-bookworm", "debian-trixie", "ubuntu-noble", "rhel-9",
-                           "dlink-dir859", "ubiquiti-edgerouter-x"):
+                           "dlink-dir859", "ubiquiti-edgerouter-x", "centos-7"):
             with self.subTest(persona=persona_id):
                 self.assertEqual(self.check(persona_id), [])
 
@@ -312,7 +312,7 @@ class ShellKeyTest(unittest.TestCase):
             "dlink-dir859": {"wget_style": None},
             "debian-bookworm": {"telnet_server": "netkit", "history_control_root": "ignoreall",
                                 "history_control": "ignoredups", "history_export": "HISTSIZE", "ls_style": "busybox"},
-            "debian-trixie": {"telnet_server": "inetutils"},
+            "debian-trixie": {"telnet_server": "inetutils", "history_untimed": "format"},
             "ubuntu-noble": {"command_not_found_sudo": "nobody", "command_not_found": "/nonexistent/cnf.txt"},
             "rhel-9": {"telnet_server": None, "history_export": "HISTSIZE,HISTFILE", "command_not_found": "/x"},
         }
@@ -1032,10 +1032,16 @@ class StopStatusTest(PackageSession):
         run("apt-get install -y nginx")
         run("systemctl stop nginx")
         status = run("systemctl status nginx --no-pager -n0")[0]
-        self.assertRegex(status, r"\n   Duration: \d+ms\n       Docs: man:nginx\(8\)\n    Process: \d+ "
-                         + re.escape(self.STOP) + r"\n   Main PID: \d+ \(code=exited, status=0/SUCCESS\)\n")
+        # the run the session started lists ExecStartPre, the forking ExecStart and ExecStop (recorded: systemd_stops.json
+        #   debian_12 nginx, start; stop; status)
+        pre = r"    Process: \d+ ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; " \
+              r"\(code=exited, status=0/SUCCESS\)\n"
+        start = r"    Process: \d+ ExecStart=/usr/sbin/nginx -g daemon on; master_process on; " \
+                r"\(code=exited, status=0/SUCCESS\)\n"
+        self.assertRegex(status, r"\n   Duration: \d+ms\n       Docs: man:nginx\(8\)\n" + pre + start
+                         + r"    Process: \d+ " + re.escape(self.STOP)
+                         + r"\n   Main PID: \d+ \(code=exited, status=0/SUCCESS\)\n")
         self.assertNotIn("signal=TERM", status)
-        self.assertNotIn("ExecStart=", status)
 
     def test_noble_names_every_process_of_the_run(self):
         run = self.session("ubuntu-noble")

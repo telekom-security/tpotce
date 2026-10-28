@@ -1,0 +1,1350 @@
+{
+ "_source": {
+  "recorded": "2026-10-21",
+  "how": "systemctl / service as uid 1000 (user rec) in containers that boot systemd as PID 1 (docker run --privileged, linux/arm64 Docker Desktop VM, --cgroupns=private); helper images with systemd as PID 1 built from the official image; no tty, stdout / stderr / exit status apart. *_nopolkit: the official image as it is; *_polkit: polkit in the helper image before the boot for deb (w2sd-<key>-pk from scripts/images/polkit/Dockerfile.deb; a polkit installed into a running deb container is not reached through the bus, record_polkit.py:33), installed into the running container for rpm (centos_7, rockylinux_9: its scriptlets reload the bus); *_polkit_tty: as *_polkit with docker exec -t (stdin closed), stdout and stderr merged by the pty, so the stderr text is in the first field and the second is empty; line ends \\r\\r\\n and \\r\\n of the pty normalised to \\n (wave w2/systemd: noroot.json, noroot_polkit.json). Raw: out/raw of that wave.",
+  "images": {
+   "debian_12_nopolkit": {
+    "image": "debian:12",
+    "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+    "systemd": 252
+   },
+   "debian_13_nopolkit": {
+    "image": "debian:13",
+    "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "systemd": 257
+   },
+   "ubuntu_22.04_nopolkit": {
+    "image": "ubuntu:22.04",
+    "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+    "systemd": 249
+   },
+   "ubuntu_24.04_nopolkit": {
+    "image": "ubuntu:24.04",
+    "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+    "systemd": 255
+   },
+   "rockylinux_9_nopolkit": {
+    "image": "rockylinux:9",
+    "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+    "systemd": 252
+   },
+   "centos_7_nopolkit": {
+    "image": "centos:7",
+    "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+    "systemd": 219
+   },
+   "debian_12_polkit": {
+    "image": "debian:12",
+    "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+    "systemd": 252
+   },
+   "debian_13_polkit": {
+    "image": "debian:13",
+    "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "systemd": 257
+   },
+   "ubuntu_22.04_polkit": {
+    "image": "ubuntu:22.04",
+    "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+    "systemd": 249
+   },
+   "ubuntu_24.04_polkit": {
+    "image": "ubuntu:24.04",
+    "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+    "systemd": 255
+   },
+   "centos_7_polkit": {
+    "image": "centos:7",
+    "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+    "systemd": 219
+   },
+   "rockylinux_9_polkit": {
+    "image": "rockylinux:9",
+    "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+    "systemd": 252
+   },
+   "debian_12_polkit_tty": {
+    "image": "debian:12",
+    "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+    "systemd": 252
+   },
+   "debian_13_polkit_tty": {
+    "image": "debian:13",
+    "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "systemd": 257
+   },
+   "ubuntu_22.04_polkit_tty": {
+    "image": "ubuntu:22.04",
+    "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+    "systemd": 249
+   },
+   "ubuntu_24.04_polkit_tty": {
+    "image": "ubuntu:24.04",
+    "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+    "systemd": 255
+   },
+   "centos_7_polkit_tty": {
+    "image": "centos:7",
+    "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+    "systemd": 219
+   },
+   "rockylinux_9_polkit_tty": {
+    "image": "rockylinux:9",
+    "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+    "systemd": 252
+   }
+  },
+  "normalised": "hostname -> HOST; PIDs -> PID; nothing in these cases needed more",
+  "not_recorded": "tty variant of the no-polkit cases (the polkit recording has it: error lines wrapped in ESC[0;1;31m ... ESC[0m on 252, 255 and 257, none on 219 and 249; report.md of the wave says 249 too, its data does not); 232 (EdgeOS) as 219; 250 and 251 as 249; halt as reboot; reset-failed; unmask; enable / disable of a unit without an init script on Debian and Ubuntu; the standalone reboot, poweroff, halt and shutdown programs"
+ },
+ "images": {
+  "debian_12_nopolkit": {
+   "persona": "debian-bookworm",
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "polkit": false,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl start ssh": [
+     "",
+     "Failed to start ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl restart ssh": [
+     "",
+     "Failed to restart ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl reload ssh": [
+     "",
+     "Failed to reload ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl enable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install enable ssh\nReload daemon failed: Access denied\nReload daemon failed: Access denied\nFailed to enable unit: Access denied\n",
+     1
+    ],
+    "systemctl disable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install disable ssh\nReload daemon failed: Access denied\nupdate-rc.d: error: Permission denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Reload daemon failed: Access denied\n",
+     1
+    ],
+    "systemctl kill ssh": [
+     "",
+     "Failed to kill unit ssh.service: Access denied\n",
+     1
+    ],
+    "systemctl mask ssh": [
+     "",
+     "Failed to mask unit: Access denied\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Access denied\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     4
+    ],
+    "systemctl reboot": [
+     "",
+     "Call to Reboot failed: Access denied\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Call to PowerOff failed: Access denied\n",
+     1
+    ],
+    "service ssh stop": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "service ssh restart": [
+     "",
+     "Failed to restart ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ],
+    "systemctl stop ssh nosuch": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\nFailed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ]
+   },
+   "systemd": 252
+  },
+  "debian_13_nopolkit": {
+   "persona": "debian-trixie",
+   "image": "debian:13",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "polkit": false,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl start ssh": [
+     "",
+     "Failed to start ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl restart ssh": [
+     "",
+     "Failed to restart ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl reload ssh": [
+     "",
+     "Failed to reload ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl enable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install enable ssh\nReload daemon failed: Access denied\nReload daemon failed: Access denied\nFailed to enable unit: Access denied\n",
+     1
+    ],
+    "systemctl disable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install disable ssh\nReload daemon failed: Access denied\nupdate-rc.d: error: Permission denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Reload daemon failed: Access denied\n",
+     1
+    ],
+    "systemctl kill ssh": [
+     "",
+     "Failed to kill unit ssh.service: Access denied\n",
+     1
+    ],
+    "systemctl mask ssh": [
+     "",
+     "Failed to mask unit: Access denied\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Access denied\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     4
+    ],
+    "systemctl reboot": [
+     "",
+     "Call to Reboot failed: Access denied\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Call to PowerOff failed: Access denied\n",
+     1
+    ],
+    "service ssh stop": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "service ssh restart": [
+     "",
+     "Failed to restart ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ],
+    "systemctl stop ssh nosuch": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\nFailed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ]
+   },
+   "systemd": 257
+  },
+  "ubuntu_22.04_nopolkit": {
+   "persona": "ubuntu-jammy",
+   "image": "ubuntu:22.04",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "polkit": false,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl start ssh": [
+     "",
+     "Failed to start ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl restart ssh": [
+     "",
+     "Failed to restart ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl reload ssh": [
+     "",
+     "Failed to reload ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl enable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install enable ssh\nFailed to reload daemon: Access denied\nFailed to reload daemon: Access denied\nFailed to enable unit: Access denied\n",
+     1
+    ],
+    "systemctl disable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install disable ssh\nFailed to reload daemon: Access denied\nupdate-rc.d: error: Permission denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Failed to reload daemon: Access denied\n",
+     1
+    ],
+    "systemctl kill ssh": [
+     "",
+     "Failed to kill unit ssh.service: Access denied\n",
+     1
+    ],
+    "systemctl mask ssh": [
+     "",
+     "Failed to mask unit: Access denied\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Access denied\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     4
+    ],
+    "systemctl reboot": [
+     "",
+     "Failed to set wall message, ignoring: Access denied\nFailed to reboot system via logind: Access denied\nFailed to start reboot.target: Access denied\nSee system logs and 'systemctl status reboot.target' for details.\n",
+     4
+    ],
+    "systemctl poweroff": [
+     "",
+     "Failed to set wall message, ignoring: Access denied\nFailed to power off system via logind: Access denied\nFailed to start poweroff.target: Access denied\nSee system logs and 'systemctl status poweroff.target' for details.\n",
+     4
+    ],
+    "service ssh stop": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "service ssh restart": [
+     "",
+     "Failed to restart ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ],
+    "systemctl stop ssh nosuch": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\nFailed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ]
+   },
+   "systemd": 249
+  },
+  "ubuntu_24.04_nopolkit": {
+   "persona": "ubuntu-noble",
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "polkit": false,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl start ssh": [
+     "",
+     "Failed to start ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl restart ssh": [
+     "",
+     "Failed to restart ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl reload ssh": [
+     "",
+     "Failed to reload ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl enable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install enable ssh\nReload daemon failed: Access denied\nReload daemon failed: Access denied\nFailed to enable unit: Access denied\n",
+     1
+    ],
+    "systemctl disable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install disable ssh\nReload daemon failed: Access denied\nupdate-rc.d: error: Permission denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Reload daemon failed: Access denied\n",
+     1
+    ],
+    "systemctl kill ssh": [
+     "",
+     "Failed to kill unit ssh.service: Access denied\n",
+     1
+    ],
+    "systemctl mask ssh": [
+     "",
+     "Failed to mask unit: Access denied\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Access denied\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     4
+    ],
+    "systemctl reboot": [
+     "",
+     "Call to Reboot failed: Access denied\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Call to PowerOff failed: Access denied\n",
+     1
+    ],
+    "service ssh stop": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "service ssh restart": [
+     "",
+     "Failed to restart ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     4
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ],
+    "systemctl stop ssh nosuch": [
+     "",
+     "Failed to stop ssh.service: Access denied\nSee system logs and 'systemctl status ssh.service' for details.\nFailed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ]
+   },
+   "systemd": 255
+  },
+  "rockylinux_9_nopolkit": {
+   "persona": "rhel-9",
+   "image": "rockylinux:9",
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "polkit": false,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop sshd": [
+     "",
+     "Failed to stop sshd.service: Access denied\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     4
+    ],
+    "systemctl start sshd": [
+     "",
+     "Failed to start sshd.service: Access denied\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     4
+    ],
+    "systemctl restart sshd": [
+     "",
+     "Failed to restart sshd.service: Access denied\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     4
+    ],
+    "systemctl reload sshd": [
+     "",
+     "Failed to reload sshd.service: Access denied\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     4
+    ],
+    "systemctl enable sshd": [
+     "",
+     "Failed to enable unit: Access denied\n",
+     1
+    ],
+    "systemctl disable sshd": [
+     "",
+     "Failed to disable unit: Access denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Failed to reload daemon: Access denied\n",
+     1
+    ],
+    "systemctl kill sshd": [
+     "",
+     "Failed to kill unit sshd.service: Access denied\n",
+     1
+    ],
+    "systemctl mask sshd": [
+     "",
+     "Failed to mask unit: Access denied\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Access denied\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     4
+    ],
+    "systemctl reboot": [
+     "",
+     "Call to Reboot failed: Access denied\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Call to PowerOff failed: Access denied\n",
+     1
+    ],
+    "service sshd stop": [
+     "",
+     "Redirecting to /bin/systemctl stop sshd.service\nFailed to stop sshd.service: Access denied\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     4
+    ],
+    "service sshd restart": [
+     "",
+     "Redirecting to /bin/systemctl restart sshd.service\nFailed to restart sshd.service: Access denied\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     4
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ],
+    "systemctl stop sshd nosuch": [
+     "",
+     "Failed to stop sshd.service: Access denied\nSee system logs and 'systemctl status sshd.service' for details.\nFailed to stop nosuch.service: Access denied\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     4
+    ]
+   },
+   "systemd": 252
+  },
+  "centos_7_nopolkit": {
+   "persona": "centos-7",
+   "image": "centos:7",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "polkit": false,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop sshd": [
+     "",
+     "Failed to stop sshd.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl start sshd": [
+     "",
+     "Failed to start sshd.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl restart sshd": [
+     "",
+     "Failed to restart sshd.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl reload sshd": [
+     "",
+     "Failed to reload sshd.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl enable sshd": [
+     "",
+     "Failed to execute operation: The name org.freedesktop.PolicyKit1 was not provided by any .service files\n",
+     1
+    ],
+    "systemctl disable sshd": [
+     "",
+     "Failed to execute operation: The name org.freedesktop.PolicyKit1 was not provided by any .service files\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Failed to execute operation: The name org.freedesktop.PolicyKit1 was not provided by any .service files\n",
+     1
+    ],
+    "systemctl kill sshd": [
+     "",
+     "Failed to kill unit sshd.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\n",
+     1
+    ],
+    "systemctl mask sshd": [
+     "",
+     "Failed to execute operation: The name org.freedesktop.PolicyKit1 was not provided by any .service files\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     1
+    ],
+    "systemctl reboot": [
+     "",
+     "Failed to execute operation: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nFailed to start reboot.target: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status reboot.target' for details.\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Failed to execute operation: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nFailed to start poweroff.target: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status poweroff.target' for details.\n",
+     1
+    ],
+    "service sshd stop": [
+     "",
+     "Redirecting to /bin/systemctl stop sshd.service\nFailed to stop sshd.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "service sshd restart": [
+     "",
+     "Redirecting to /bin/systemctl restart sshd.service\nFailed to restart sshd.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     1
+    ],
+    "systemctl stop sshd nosuch": [
+     "",
+     "Failed to stop sshd.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status sshd.service' for details.\nFailed to stop nosuch.service: The name org.freedesktop.PolicyKit1 was not provided by any .service files\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     1
+    ]
+   },
+   "systemd": 219
+  },
+  "debian_12_polkit": {
+   "persona": "debian-bookworm",
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "polkit": true,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "",
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl start ssh": [
+     "",
+     "Failed to start ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl restart ssh": [
+     "",
+     "Failed to restart ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl reload ssh": [
+     "",
+     "Failed to reload ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl enable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install enable ssh\nReload daemon failed: Interactive authentication required.\nReload daemon failed: Interactive authentication required.\nFailed to enable unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl disable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install disable ssh\nReload daemon failed: Interactive authentication required.\nupdate-rc.d: error: Permission denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Reload daemon failed: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl kill ssh": [
+     "",
+     "Failed to kill unit ssh.service: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl mask ssh": [
+     "",
+     "Failed to mask unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Interactive authentication required.\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     1
+    ],
+    "systemctl reboot": [
+     "",
+     "Call to Reboot failed: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Call to PowerOff failed: Interactive authentication required.\n",
+     1
+    ],
+    "service ssh stop": [
+     "",
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "service ssh restart": [
+     "",
+     "Failed to restart ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Interactive authentication required.\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     1
+    ]
+   },
+   "systemd": 252
+  },
+  "debian_13_polkit": {
+   "persona": "debian-trixie",
+   "image": "debian:13",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "polkit": true,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "",
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl start ssh": [
+     "",
+     "Failed to start ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl restart ssh": [
+     "",
+     "Failed to restart ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl reload ssh": [
+     "",
+     "Failed to reload ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl enable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install enable ssh\nReload daemon failed: Interactive authentication required.\nReload daemon failed: Interactive authentication required.\nFailed to enable unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl disable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install disable ssh\nReload daemon failed: Interactive authentication required.\nupdate-rc.d: error: Permission denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Reload daemon failed: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl kill ssh": [
+     "",
+     "Failed to kill unit ssh.service: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl mask ssh": [
+     "",
+     "Failed to mask unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Interactive authentication required.\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     1
+    ],
+    "systemctl reboot": [
+     "",
+     "Call to Reboot failed: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Call to PowerOff failed: Interactive authentication required.\n",
+     1
+    ],
+    "service ssh stop": [
+     "",
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "service ssh restart": [
+     "",
+     "Failed to restart ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Interactive authentication required.\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     1
+    ]
+   },
+   "systemd": 257
+  },
+  "ubuntu_22.04_polkit": {
+   "persona": "ubuntu-jammy",
+   "image": "ubuntu:22.04",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "polkit": true,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "",
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl start ssh": [
+     "",
+     "Failed to start ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl restart ssh": [
+     "",
+     "Failed to restart ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl reload ssh": [
+     "",
+     "Failed to reload ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl enable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install enable ssh\nFailed to reload daemon: Interactive authentication required.\nFailed to reload daemon: Interactive authentication required.\nFailed to enable unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl disable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install disable ssh\nFailed to reload daemon: Interactive authentication required.\nupdate-rc.d: error: Permission denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Failed to reload daemon: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl kill ssh": [
+     "",
+     "Failed to kill unit ssh.service: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl mask ssh": [
+     "",
+     "Failed to mask unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Interactive authentication required.\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     1
+    ],
+    "systemctl reboot": [
+     "",
+     "Failed to set wall message, ignoring: Interactive authentication required.\nFailed to reboot system via logind: Interactive authentication required.\nFailed to start reboot.target: Interactive authentication required.\nSee system logs and 'systemctl status reboot.target' for details.\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Failed to set wall message, ignoring: Interactive authentication required.\nFailed to power off system via logind: Interactive authentication required.\nFailed to start poweroff.target: Interactive authentication required.\nSee system logs and 'systemctl status poweroff.target' for details.\n",
+     1
+    ],
+    "service ssh stop": [
+     "",
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "service ssh restart": [
+     "",
+     "Failed to restart ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Interactive authentication required.\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     1
+    ]
+   },
+   "systemd": 249
+  },
+  "ubuntu_24.04_polkit": {
+   "persona": "ubuntu-noble",
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "polkit": true,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "",
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl start ssh": [
+     "",
+     "Failed to start ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl restart ssh": [
+     "",
+     "Failed to restart ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl reload ssh": [
+     "",
+     "Failed to reload ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl enable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install enable ssh\nReload daemon failed: Interactive authentication required.\nReload daemon failed: Interactive authentication required.\nFailed to enable unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl disable ssh": [
+     "",
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install disable ssh\nReload daemon failed: Interactive authentication required.\nupdate-rc.d: error: Permission denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Reload daemon failed: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl kill ssh": [
+     "",
+     "Failed to kill unit ssh.service: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl mask ssh": [
+     "",
+     "Failed to mask unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Interactive authentication required.\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     1
+    ],
+    "systemctl reboot": [
+     "",
+     "Call to Reboot failed: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Call to PowerOff failed: Interactive authentication required.\n",
+     1
+    ],
+    "service ssh stop": [
+     "",
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "service ssh restart": [
+     "",
+     "Failed to restart ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     1
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Interactive authentication required.\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     1
+    ]
+   },
+   "systemd": 255
+  },
+  "centos_7_polkit": {
+   "persona": "centos-7",
+   "image": "centos:7",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "polkit": true,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop sshd": [
+     "",
+     "Failed to stop sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl start sshd": [
+     "",
+     "Failed to start sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl restart sshd": [
+     "",
+     "Failed to restart sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl reload sshd": [
+     "",
+     "Failed to reload sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl enable sshd": [
+     "",
+     "Failed to execute operation: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl disable sshd": [
+     "",
+     "Failed to execute operation: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Failed to execute operation: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl kill sshd": [
+     "",
+     "Failed to kill unit sshd.service: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl mask sshd": [
+     "",
+     "Failed to execute operation: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Interactive authentication required.\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     1
+    ],
+    "systemctl reboot": [
+     "",
+     "Failed to execute operation: Interactive authentication required.\nFailed to start reboot.target: Interactive authentication required.\nSee system logs and 'systemctl status reboot.target' for details.\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Failed to execute operation: Interactive authentication required.\nFailed to start poweroff.target: Interactive authentication required.\nSee system logs and 'systemctl status poweroff.target' for details.\n",
+     1
+    ],
+    "service sshd stop": [
+     "",
+     "Redirecting to /bin/systemctl stop sshd.service\nFailed to stop sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "service sshd restart": [
+     "",
+     "Redirecting to /bin/systemctl restart sshd.service\nFailed to restart sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Interactive authentication required.\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     1
+    ]
+   },
+   "systemd": 219
+  },
+  "rockylinux_9_polkit": {
+   "persona": "rhel-9",
+   "image": "rockylinux:9",
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "polkit": true,
+   "tty": false,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop sshd": [
+     "",
+     "Failed to stop sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl start sshd": [
+     "",
+     "Failed to start sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl restart sshd": [
+     "",
+     "Failed to restart sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl reload sshd": [
+     "",
+     "Failed to reload sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl enable sshd": [
+     "",
+     "Failed to enable unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl disable sshd": [
+     "",
+     "Failed to disable unit: Access denied\n",
+     1
+    ],
+    "systemctl daemon-reload": [
+     "",
+     "Failed to reload daemon: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl kill sshd": [
+     "",
+     "Failed to kill unit sshd.service: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl mask sshd": [
+     "",
+     "Failed to mask unit: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl isolate multi-user.target": [
+     "",
+     "Failed to start multi-user.target: Interactive authentication required.\nSee system logs and 'systemctl status multi-user.target' for details.\n",
+     1
+    ],
+    "systemctl reboot": [
+     "",
+     "Call to Reboot failed: Interactive authentication required.\n",
+     1
+    ],
+    "systemctl poweroff": [
+     "",
+     "Call to PowerOff failed: Interactive authentication required.\n",
+     1
+    ],
+    "service sshd stop": [
+     "",
+     "Redirecting to /bin/systemctl stop sshd.service\nFailed to stop sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "service sshd restart": [
+     "",
+     "Redirecting to /bin/systemctl restart sshd.service\nFailed to restart sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     1
+    ],
+    "systemctl stop nosuch.service": [
+     "",
+     "Failed to stop nosuch.service: Interactive authentication required.\nSee system logs and 'systemctl status nosuch.service' for details.\n",
+     1
+    ]
+   },
+   "systemd": 252
+  },
+  "debian_12_polkit_tty": {
+   "persona": "debian-bookworm",
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "polkit": true,
+   "tty": true,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "\u001b[0;1;31mFailed to stop ssh.service: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mSee system logs and 'systemctl status ssh.service' for details.\u001b[0m\n",
+     "",
+     1
+    ],
+    "systemctl enable ssh": [
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install enable ssh\n\u001b[0;1;31mReload daemon failed: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mReload daemon failed: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mFailed to enable unit: Interactive authentication required.\u001b[0m\n",
+     "",
+     1
+    ],
+    "systemctl reboot": [
+     "\u001b[0;1;31mCall to Reboot failed: Interactive authentication required.\u001b[0m\n",
+     "",
+     1
+    ],
+    "service ssh stop": [
+     "\u001b[0;1;31mFailed to stop ssh.service: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mSee system logs and 'systemctl status ssh.service' for details.\u001b[0m\n",
+     "",
+     1
+    ]
+   },
+   "systemd": 252
+  },
+  "debian_13_polkit_tty": {
+   "persona": "debian-trixie",
+   "image": "debian:13",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "polkit": true,
+   "tty": true,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "\u001b[0;1;31mFailed to stop ssh.service: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mSee system logs and 'systemctl status ssh.service' for details.\u001b[0m\n",
+     "",
+     1
+    ],
+    "systemctl enable ssh": [
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install enable ssh\n\u001b[0;1;31mReload daemon failed: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mReload daemon failed: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mFailed to enable unit: Interactive authentication required.\u001b[0m\n",
+     "",
+     1
+    ],
+    "systemctl reboot": [
+     "\u001b[0;1;31mCall to Reboot failed: Interactive authentication required.\u001b[0m\n",
+     "",
+     1
+    ],
+    "service ssh stop": [
+     "\u001b[0;1;31mFailed to stop ssh.service: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mSee system logs and 'systemctl status ssh.service' for details.\u001b[0m\n",
+     "",
+     1
+    ]
+   },
+   "systemd": 257
+  },
+  "ubuntu_22.04_polkit_tty": {
+   "persona": "ubuntu-jammy",
+   "image": "ubuntu:22.04",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "polkit": true,
+   "tty": true,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     "",
+     1
+    ],
+    "systemctl enable ssh": [
+     "Synchronizing state of ssh.service with SysV service script with /lib/systemd/systemd-sysv-install.\nExecuting: /lib/systemd/systemd-sysv-install enable ssh\nFailed to reload daemon: Interactive authentication required.\nFailed to reload daemon: Interactive authentication required.\nFailed to enable unit: Interactive authentication required.\n",
+     "",
+     1
+    ],
+    "systemctl reboot": [
+     "Failed to set wall message, ignoring: Interactive authentication required.\nFailed to reboot system via logind: Interactive authentication required.\nFailed to start reboot.target: Interactive authentication required.\nSee system logs and 'systemctl status reboot.target' for details.\n",
+     "",
+     1
+    ],
+    "service ssh stop": [
+     "Failed to stop ssh.service: Interactive authentication required.\nSee system logs and 'systemctl status ssh.service' for details.\n",
+     "",
+     1
+    ]
+   },
+   "systemd": 249
+  },
+  "ubuntu_24.04_polkit_tty": {
+   "persona": "ubuntu-noble",
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "polkit": true,
+   "tty": true,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop ssh": [
+     "\u001b[0;1;31mFailed to stop ssh.service: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mSee system logs and 'systemctl status ssh.service' for details.\u001b[0m\n",
+     "",
+     1
+    ],
+    "systemctl enable ssh": [
+     "Synchronizing state of ssh.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.\nExecuting: /usr/lib/systemd/systemd-sysv-install enable ssh\n\u001b[0;1;31mReload daemon failed: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mReload daemon failed: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mFailed to enable unit: Interactive authentication required.\u001b[0m\n",
+     "",
+     1
+    ],
+    "systemctl reboot": [
+     "\u001b[0;1;31mCall to Reboot failed: Interactive authentication required.\u001b[0m\n",
+     "",
+     1
+    ],
+    "service ssh stop": [
+     "\u001b[0;1;31mFailed to stop ssh.service: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mSee system logs and 'systemctl status ssh.service' for details.\u001b[0m\n",
+     "",
+     1
+    ]
+   },
+   "systemd": 255
+  },
+  "centos_7_polkit_tty": {
+   "persona": "centos-7",
+   "image": "centos:7",
+   "digest": "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+   "polkit": true,
+   "tty": true,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop sshd": [
+     "Failed to stop sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     "",
+     1
+    ],
+    "systemctl enable sshd": [
+     "Failed to execute operation: Interactive authentication required.\n",
+     "",
+     1
+    ],
+    "systemctl reboot": [
+     "Failed to execute operation: Interactive authentication required.\nFailed to start reboot.target: Interactive authentication required.\nSee system logs and 'systemctl status reboot.target' for details.\n",
+     "",
+     1
+    ],
+    "service sshd stop": [
+     "Redirecting to /bin/systemctl stop sshd.service\nFailed to stop sshd.service: Interactive authentication required.\nSee system logs and 'systemctl status sshd.service' for details.\n",
+     "",
+     1
+    ]
+   },
+   "systemd": 219
+  },
+  "rockylinux_9_polkit_tty": {
+   "persona": "rhel-9",
+   "image": "rockylinux:9",
+   "digest": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "polkit": true,
+   "tty": true,
+   "uid": 1000,
+   "cases": {
+    "systemctl stop sshd": [
+     "\u001b[0;1;31mFailed to stop sshd.service: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mSee system logs and 'systemctl status sshd.service' for details.\u001b[0m\n",
+     "",
+     1
+    ],
+    "systemctl enable sshd": [
+     "\u001b[0;1;31mFailed to enable unit: Interactive authentication required.\u001b[0m\n",
+     "",
+     1
+    ],
+    "systemctl reboot": [
+     "\u001b[0;1;31mCall to Reboot failed: Interactive authentication required.\u001b[0m\n",
+     "",
+     1
+    ],
+    "service sshd stop": [
+     "Redirecting to /bin/systemctl stop sshd.service\n\u001b[0;1;31mFailed to stop sshd.service: Interactive authentication required.\u001b[0m\n\u001b[0;1;31mSee system logs and 'systemctl status sshd.service' for details.\u001b[0m\n",
+     "",
+     1
+    ]
+   },
+   "systemd": 252
+  }
+ }
+}

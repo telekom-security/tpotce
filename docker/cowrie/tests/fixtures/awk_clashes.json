@@ -1,0 +1,427 @@
+{
+ "_source": {
+  "how": "docker run --rm --network none IMAGE awk PROGRAM, one run per case (busybox:1.25 as linux/amd64 under emulation, the docker warning about it left out)",
+  "date": "2026-10-22",
+  "what": "mawk names every clash of a name used as an array and as a scalar, up to five; BusyBox takes for ((k) in a) and stops at delete a[1], a[2] with Not an array"
+ },
+ "images": {
+  "debian_9": {
+   "image": "debian:9",
+   "digest": "debian@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+   "awk": "mawk 1.3.3 Nov 1996, Copyright (C) Michael D. Brennan",
+   "cases": [
+    {
+     "program": "BEGIN{a[1]=1; a=1; a=2; a=3; a=4; a=5; a=6; a=7}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{x=1; x[1]=2; y[1]=1; y=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable x\nawk: line 1: illegal reference to array y\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; a=1\na=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 2: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; print length(a); print length(a)}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{s=1; split(\"x y\", s); n[1]=1; n++}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable s\nawk: line 1: illegal reference to array n\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{k=1; for (k in m) print k; m=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array m\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{v[1]=1; print v}\nEND{v=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array v\nawk: line 2: illegal reference to array v\n",
+     "rc": 2
+    }
+   ]
+  },
+  "debian_10": {
+   "image": "debian:10",
+   "digest": "debian@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+   "awk": "mawk 1.3.3 Nov 1996, Copyright (C) Michael D. Brennan",
+   "cases": [
+    {
+     "program": "BEGIN{a[1]=1; a=1; a=2; a=3; a=4; a=5; a=6; a=7}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{x=1; x[1]=2; y[1]=1; y=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable x\nawk: line 1: illegal reference to array y\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; a=1\na=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 2: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; print length(a); print length(a)}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{s=1; split(\"x y\", s); n[1]=1; n++}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable s\nawk: line 1: illegal reference to array n\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{k=1; for (k in m) print k; m=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array m\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{v[1]=1; print v}\nEND{v=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array v\nawk: line 2: illegal reference to array v\n",
+     "rc": 2
+    }
+   ]
+  },
+  "debian_12": {
+   "image": "debian:12",
+   "digest": "debian@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+   "awk": "mawk 1.3.4 20200120",
+   "cases": [
+    {
+     "program": "BEGIN{a[1]=1; a=1; a=2; a=3; a=4; a=5; a=6; a=7}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{x=1; x[1]=2; y[1]=1; y=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable x\nawk: line 1: illegal reference to array y\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; a=1\na=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 2: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; print length(a); print length(a)}",
+     "out": "1\n1\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{s=1; split(\"x y\", s); n[1]=1; n++}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable s\nawk: line 1: illegal reference to array n\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{k=1; for (k in m) print k; m=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array m\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{v[1]=1; print v}\nEND{v=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array v\nawk: line 2: illegal reference to array v\n",
+     "rc": 2
+    }
+   ]
+  },
+  "debian_13": {
+   "image": "debian:13",
+   "digest": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "awk": "mawk 1.3.4 20250131",
+   "cases": [
+    {
+     "program": "BEGIN{a[1]=1; a=1; a=2; a=3; a=4; a=5; a=6; a=7}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{x=1; x[1]=2; y[1]=1; y=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable x\nawk: line 1: illegal reference to array y\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; a=1\na=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 2: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; print length(a); print length(a)}",
+     "out": "1\n1\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{s=1; split(\"x y\", s); n[1]=1; n++}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable s\nawk: line 1: illegal reference to array n\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{k=1; for (k in m) print k; m=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array m\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{v[1]=1; print v}\nEND{v=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array v\nawk: line 2: illegal reference to array v\n",
+     "rc": 2
+    }
+   ]
+  },
+  "ubuntu_22.04": {
+   "image": "ubuntu:22.04",
+   "digest": "ubuntu@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956",
+   "awk": "mawk 1.3.4 20200120",
+   "cases": [
+    {
+     "program": "BEGIN{a[1]=1; a=1; a=2; a=3; a=4; a=5; a=6; a=7}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{x=1; x[1]=2; y[1]=1; y=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable x\nawk: line 1: illegal reference to array y\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; a=1\na=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 2: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; print length(a); print length(a)}",
+     "out": "1\n1\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{s=1; split(\"x y\", s); n[1]=1; n++}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable s\nawk: line 1: illegal reference to array n\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{k=1; for (k in m) print k; m=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array m\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{v[1]=1; print v}\nEND{v=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array v\nawk: line 2: illegal reference to array v\n",
+     "rc": 2
+    }
+   ]
+  },
+  "ubuntu_24.04": {
+   "image": "ubuntu:24.04",
+   "digest": "ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+   "awk": "mawk 1.3.4 20240123",
+   "cases": [
+    {
+     "program": "BEGIN{a[1]=1; a=1; a=2; a=3; a=4; a=5; a=6; a=7}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\nawk: line 1: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{x=1; x[1]=2; y[1]=1; y=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable x\nawk: line 1: illegal reference to array y\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; a=1\na=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array a\nawk: line 2: illegal reference to array a\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{a[1]=1; print length(a); print length(a)}",
+     "out": "1\n1\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{s=1; split(\"x y\", s); n[1]=1; n++}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to variable s\nawk: line 1: illegal reference to array n\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{k=1; for (k in m) print k; m=2}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array m\n",
+     "rc": 2
+    },
+    {
+     "program": "BEGIN{v[1]=1; print v}\nEND{v=3}",
+     "out": "",
+     "err": "awk: line 1: illegal reference to array v\nawk: line 2: illegal reference to array v\n",
+     "rc": 2
+    }
+   ]
+  },
+  "busybox_1.25.1": {
+   "image": "busybox:1.25",
+   "digest": "busybox@sha256:29f5d56d12684887bdfa50dcd29fc31eea4aaf4ad3bec43daf19026a7ce69912",
+   "cases": [
+    {
+     "program": "BEGIN{print \"x\"; a[1]=1; delete a[1], a[2]}",
+     "out": "x\n",
+     "err": "awk: cmd. line:1: Not an array\n",
+     "rc": 1
+    },
+    {
+     "program": "BEGIN{a[1]=1; for (((k)) in a) print k}",
+     "out": "1\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{a[1]=1; a[2]=2; for ((k) in a) print k, a[k]}",
+     "out": "1 1\n2 2\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{a[1]=1; for ((k) in a) {print k}; print \"z\"}",
+     "out": "1\nz\n",
+     "err": "",
+     "rc": 0
+    }
+   ],
+   "kind": "busybox uclibc"
+  },
+  "busybox_1.30.1": {
+   "image": "busybox:1.30",
+   "digest": "busybox@sha256:4b6ad3a68d34da29bf7c8ccb5d355ba8b4babcad1f99798204e7abb43e54ee3d",
+   "cases": [
+    {
+     "program": "BEGIN{print \"x\"; a[1]=1; delete a[1], a[2]}",
+     "out": "x\n",
+     "err": "awk: cmd. line:1: Not an array\n",
+     "rc": 1
+    },
+    {
+     "program": "BEGIN{a[1]=1; for (((k)) in a) print k}",
+     "out": "1\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{a[1]=1; a[2]=2; for ((k) in a) print k, a[k]}",
+     "out": "1 1\n2 2\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{a[1]=1; for ((k) in a) {print k}; print \"z\"}",
+     "out": "1\nz\n",
+     "err": "",
+     "rc": 0
+    }
+   ],
+   "kind": "busybox uclibc"
+  },
+  "busybox_1.36.1-musl": {
+   "image": "busybox:1.36.1-musl",
+   "digest": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "cases": [
+    {
+     "program": "BEGIN{print \"x\"; a[1]=1; delete a[1], a[2]}",
+     "out": "x\n",
+     "err": "awk: cmd. line:1: Not an array\n",
+     "rc": 1
+    },
+    {
+     "program": "BEGIN{a[1]=1; for (((k)) in a) print k}",
+     "out": "1\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{a[1]=1; a[2]=2; for ((k) in a) print k, a[k]}",
+     "out": "1 1\n2 2\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{a[1]=1; for ((k) in a) {print k}; print \"z\"}",
+     "out": "1\nz\n",
+     "err": "",
+     "rc": 0
+    }
+   ],
+   "kind": "busybox musl"
+  },
+  "busybox_1.36.1-glibc": {
+   "image": "busybox:1.36.1-glibc",
+   "digest": "busybox@sha256:7e567dff0fbaa48cddc5f52ae5201a7f417436aa20e70c8750814692043dfa38",
+   "cases": [
+    {
+     "program": "BEGIN{print \"x\"; a[1]=1; delete a[1], a[2]}",
+     "out": "x\n",
+     "err": "awk: cmd. line:1: Not an array\n",
+     "rc": 1
+    },
+    {
+     "program": "BEGIN{a[1]=1; for (((k)) in a) print k}",
+     "out": "1\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{a[1]=1; a[2]=2; for ((k) in a) print k, a[k]}",
+     "out": "1 1\n2 2\n",
+     "err": "",
+     "rc": 0
+    },
+    {
+     "program": "BEGIN{a[1]=1; for ((k) in a) {print k}; print \"z\"}",
+     "out": "1\nz\n",
+     "err": "",
+     "rc": 0
+    }
+   ],
+   "kind": "busybox glibc"
+  }
+ }
+}

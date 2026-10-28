@@ -1,0 +1,400 @@
+{
+ "_source": "awk run with sh -c in containers of these images (docker run -d --network none --platform P IMAGE sleep, one docker exec -u 0:0 per case, stdout and stderr apart), 2026-10-22, Docker on linux/arm64 with linux/amd64 under emulation: the cases whose output depends on the platform, recorded on linux/amd64 and linux/arm64. mawk 1.3.4 20250131 (debian:13, amd64; its arm64 cases are in awk_lang.json): rand() without srand, srand() and srand with seeds beyond 32 bits or below 0; BusyBox 1.36.1 (busybox:1.36.1-musl, amd64 and arm64) and 1.25.1 (busybox:1.25, amd64 only): print of 2**63, printf of integer conversions out of the int, srand with a negative or wide seed, CONVFMT=\"%d\", the text a copied number keeps; gawk 5.1.0 (rockylinux:9, amd64 and arm64) and the others: for-in of keys with bytes beyond ASCII. `image` is the index digest, `image_id` the platform image. Volatile (clock-seeded, compared by form): the rand() and srand() cases of mawk on amd64 without a seed and the value srand(5) returns there. Nothing normalised. Locale: LANG and LC_ALL unset (the C locale) in every entry but rockylinux_9_arm64_utf8 (LC_ALL=C.utf8, gawk in its character mode as the persona runs it; the octal escapes beyond ASCII). Recorded 2026-10-27 with `docker run --rm --network none --platform P IMAGE sh -c CASE` on the same images: in the busybox entries the text a copy of a cached number keeps and srand(0); in rockylinux_9_arm64_utf8 the four octal-escape cases (the Invalid multibyte warning of gawk's length() is not emulated).",
+ "images": {
+  "busybox_1.25.1_amd64": {
+   "cases": {
+    "awk 'BEGIN { CONVFMT = \"%d\"; x = 3e10 + 0.5; print x \"\" }'": [
+     "-2147483648\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { a[\"\\344\"]; a[\"\\374b\"]; a[\"a\"]; a[\"x\\351y\"]; a[\"\\303\\244\"]; for (k in a) print k }'": [
+     "\u00e4\nx\udce9y\na\n\udce4\n\udcfcb\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 2^63, -2^63, 2^63+2^12, 2^64, 2^62 }'": [
+     "9.22337e+18 -9223372036854775808 9.22337e+18 1.84467e+19 4611686018427387904\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d %x %u %d %i\\n\", 2147483648, 9007199254740993, -1, -1, -2^40, 2^31 }'": [
+     "-2147483648 -2147483648 ffffffff 4294967295 -2147483648 -2147483648\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-1); print rand() }'": [
+     "0.832668\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-1); print srand(); }'": [
+     "4294967295\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-5); print srand(1) }'": [
+     "4294967291\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(4294967301); print srand(1) }'": [
+     "5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 0.5; CONVFMT = \"%.2f\"; y = x; a = x \"\"; CONVFMT = \"%.3f\"; print a, x \"\", y \"\" }'": [
+     "0.50 0.50 0.500\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 0.5; y = x; CONVFMT = \"%.2f\"; a = x \"\"; CONVFMT = \"%.3f\"; print a, y \"\" }'": [
+     "0.50 0.500\n",
+     "",
+     0
+    ],
+    "awk 'function f(v) { CONVFMT = \"%.3f\"; return v \"\" } BEGIN { x = 0.5; CONVFMT = \"%.2f\"; a = x \"\"; print a, f(x) }'": [
+     "0.50 0.50\n",
+     "",
+     0
+    ],
+    "busybox | head -1": [
+     "BusyBox v1.25.1 (2016-10-07 18:17:00 UTC) multi-call binary.\n",
+     "",
+     0
+    ],
+    "uname -m": [
+     "x86_64\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 0.5; s = x \"\"; y = x; CONVFMT = \"%.2f\"; print y \"\" }'": [
+     "0.5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(0); print rand() }'": [
+     "0.840188\n",
+     "",
+     0
+    ]
+   },
+   "image": "busybox@sha256:29f5d56d12684887bdfa50dcd29fc31eea4aaf4ad3bec43daf19026a7ce69912",
+   "image_id": "sha256:29f5d56d12684887bdfa50dcd29fc31eea4aaf4ad3bec43daf19026a7ce69912",
+   "platform": "linux/amd64"
+  },
+  "busybox_1.36.1-musl_amd64": {
+   "cases": {
+    "awk 'BEGIN { CONVFMT = \"%d\"; x = 3e10 + 0.5; print x \"\" }'": [
+     "-2147483648\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { a[\"\\344\"]; a[\"\\374b\"]; a[\"a\"]; a[\"x\\351y\"]; a[\"\\303\\244\"]; for (k in a) print k }'": [
+     "\u00e4\nx\udce9y\na\n\udce4\n\udcfcb\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 2^63, -2^63, 2^63+2^12, 2^64, 2^62 }'": [
+     "9.22337e+18 -9223372036854775808 9.22337e+18 1.84467e+19 4611686018427387904\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d %x %u %d %i\\n\", 2147483648, 9007199254740993, -1, -1, -2^40, 2^31 }'": [
+     "-2147483648 -2147483648 ffffffff 4294967295 -2147483648 -2147483648\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-1); print rand() }'": [
+     "0.612517\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-1); print srand(); }'": [
+     "4294967295\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-5); print srand(1) }'": [
+     "4294967291\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(4294967301); print srand(1) }'": [
+     "5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 0.5; CONVFMT = \"%.2f\"; y = x; a = x \"\"; CONVFMT = \"%.3f\"; print a, x \"\", y \"\" }'": [
+     "0.50 0.50 0.500\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 0.5; y = x; CONVFMT = \"%.2f\"; a = x \"\"; CONVFMT = \"%.3f\"; print a, y \"\" }'": [
+     "0.50 0.500\n",
+     "",
+     0
+    ],
+    "awk 'function f(v) { CONVFMT = \"%.3f\"; return v \"\" } BEGIN { x = 0.5; CONVFMT = \"%.2f\"; a = x \"\"; print a, f(x) }'": [
+     "0.50 0.50\n",
+     "",
+     0
+    ],
+    "busybox | head -1": [
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n",
+     "",
+     0
+    ],
+    "uname -m": [
+     "x86_64\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 0.5; s = x \"\"; y = x; CONVFMT = \"%.2f\"; print y \"\" }'": [
+     "0.5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(0); print rand() }'": [
+     "0.655553\n",
+     "",
+     0
+    ]
+   },
+   "image": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "image_id": "sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "platform": "linux/amd64"
+  },
+  "busybox_1.36.1-musl_arm64": {
+   "cases": {
+    "awk 'BEGIN { CONVFMT = \"%d\"; x = 3e10 + 0.5; print x \"\" }'": [
+     "2147483647\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { a[\"\\344\"]; a[\"\\374b\"]; a[\"a\"]; a[\"x\\351y\"]; a[\"\\303\\244\"]; for (k in a) print k }'": [
+     "\u00e4\nx\udce9y\na\n\udce4\n\udcfcb\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 2^63, -2^63, 2^63+2^12, 2^64, 2^62 }'": [
+     "9223372036854775807 -9223372036854775808 9.22337e+18 1.84467e+19 4611686018427387904\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d %x %u %d %i\\n\", 2147483648, 9007199254740993, -1, -1, -2^40, 2^31 }'": [
+     "2147483647 2147483647 ffffffff 4294967295 -2147483648 2147483647\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-1); print rand() }'": [
+     "0.655553\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-1); print srand(); }'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-5); print srand(1) }'": [
+     "0\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(4294967301); print srand(1) }'": [
+     "4294967295\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 0.5; CONVFMT = \"%.2f\"; y = x; a = x \"\"; CONVFMT = \"%.3f\"; print a, x \"\", y \"\" }'": [
+     "0.50 0.50 0.500\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 0.5; y = x; CONVFMT = \"%.2f\"; a = x \"\"; CONVFMT = \"%.3f\"; print a, y \"\" }'": [
+     "0.50 0.500\n",
+     "",
+     0
+    ],
+    "awk 'function f(v) { CONVFMT = \"%.3f\"; return v \"\" } BEGIN { x = 0.5; CONVFMT = \"%.2f\"; a = x \"\"; print a, f(x) }'": [
+     "0.50 0.50\n",
+     "",
+     0
+    ],
+    "busybox | head -1": [
+     "BusyBox v1.36.1 (2023-05-18 22:34:17 UTC) multi-call binary.\n",
+     "",
+     0
+    ],
+    "uname -m": [
+     "aarch64\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { x = 0.5; s = x \"\"; y = x; CONVFMT = \"%.2f\"; print y \"\" }'": [
+     "0.5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(0); print rand() }'": [
+     "0.655553\n",
+     "",
+     0
+    ]
+   },
+   "image": "busybox@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "image_id": "sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213",
+   "platform": "linux/arm64"
+  },
+  "debian_13_amd64": {
+   "cases": {
+    "awk 'BEGIN { a[\"\\344\"]; a[\"\\374b\"]; a[\"a\"]; a[\"x\\351y\"]; a[\"\\303\\244\"]; for (k in a) print k }'": [
+     "\udcfcb\n\u00e4\nx\udce9y\na\n\udce4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print 2^63, 2^64, -2^63, 2^31 }'": [
+     "9223372036854775808 18446744073709551616 -9223372036854775808 2147483648\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; awk 'BEGIN { print rand(), rand() }'": [
+     "0.91984 0.000724768\n0.330393 0.53306\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print rand(), rand() }'; sleep 1; awk 'BEGIN { print rand(), rand() }'": [
+     "0.558805 0.121443\n0.950562 0.392029\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { print srand(5); print srand(7) }'": [
+     "1792666980100682496\n5\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%d %d %x %u\\n\", 2147483648, 2^63, -1, -1 }'": [
+     "2147483648 9223372036854775808 ffffffffffffffff 18446744073709551615\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(); print rand() }'; sleep 1; awk 'BEGIN { srand(); print rand() }'": [
+     "0.842958\n0.345134\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(-1); print rand() }'": [
+     "0.118709\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(1); print rand(), rand() }'": [
+     "0.840188 0.394383\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(2147483653); print rand() }'": [
+     "0.420218\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(4294967296); print rand() }'": [
+     "0.840188\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { srand(4294967301); print rand() }'": [
+     "0.274746\n",
+     "",
+     0
+    ],
+    "awk -W version 2>&1 | head -1": [
+     "mawk 1.3.4 20250131\n",
+     "",
+     0
+    ],
+    "uname -m": [
+     "x86_64\n",
+     "",
+     0
+    ]
+   },
+   "image": "debian@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "image_id": "sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+   "platform": "linux/amd64"
+  },
+  "rockylinux_9_amd64": {
+   "cases": {
+    "awk 'BEGIN { a[\"\\344\"]; a[\"\\374b\"]; a[\"a\"]; a[\"x\\351y\"]; a[\"\\303\\244\"]; for (k in a) print k }'": [
+     "a\n\udce4\nx\udce9y\n\u00e4\n\udcfcb\n",
+     "",
+     0
+    ],
+    "awk --version | head -1": [
+     "GNU Awk 5.1.0, API: 3.0 (GNU MPFR 4.1.0-p9, GNU MP 6.2.0)\n",
+     "",
+     0
+    ],
+    "uname -m": [
+     "x86_64\n",
+     "",
+     0
+    ]
+   },
+   "image": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "image_id": "sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "platform": "linux/amd64"
+  },
+  "rockylinux_9_arm64": {
+   "cases": {
+    "awk 'BEGIN { a[\"\\344\"]; a[\"\\374b\"]; a[\"a\"]; a[\"x\\351y\"]; a[\"\\303\\244\"]; for (k in a) print k }'": [
+     "x\udce9y\na\n\udce4\n\u00e4\n\udcfcb\n",
+     "",
+     0
+    ],
+    "awk --version | head -1": [
+     "GNU Awk 5.1.0, API: 3.0 (GNU MPFR 4.1.0-p9, GNU MP 6.2.0)\n",
+     "",
+     0
+    ],
+    "uname -m": [
+     "aarch64\n",
+     "",
+     0
+    ]
+   },
+   "image": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "image_id": "sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "platform": "linux/arm64"
+  },
+  "rockylinux_9_arm64_utf8": {
+   "image": "rockylinux@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "image_id": "sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+   "platform": "linux/arm64",
+   "locale": "LC_ALL=C.utf8",
+   "cases": {
+    "awk 'BEGIN { s = \"\\344\"; print length(s) }'": [
+     "1\n",
+     "awk: cmd. line:1: warning: Invalid multibyte data detected. There may be a mismatch between your data and your locale.\n",
+     0
+    ],
+    "awk 'BEGIN { s = \"\\303\\244\"; print length(s), s }'": [
+     "1 \u00e4\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { printf \"%s|%s\\n\", \"\\344\", \"\\374b\" }'": [
+     "\udce4|\udcfcb\n",
+     "",
+     0
+    ],
+    "awk 'BEGIN { a[\"\\344\"]; a[\"\\374b\"]; a[\"a\"]; a[\"x\\351y\"]; a[\"\\303\\244\"]; for (k in a) print k }'": [
+     "x\udce9y\na\n\udce4\n\u00e4\n\udcfcb\n",
+     "",
+     0
+    ]
+   }
+  }
+ }
+}

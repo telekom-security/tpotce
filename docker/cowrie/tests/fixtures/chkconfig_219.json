@@ -1,0 +1,65 @@
+{
+ "_source": {
+  "image": "centos:7",
+  "digest": [
+   "centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4"
+  ],
+  "id": "sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+  "arch": "arm64",
+  "date": "2026-10-28",
+  "recorder": "task-3.10-25-chkconfig-rec.py of the ledger",
+  "how": "docker run --rm --network none centos:7 chkconfig ARGS; stdout, stderr and status apart; the image has chkconfig 1.7.6 and no initscripts, so no SysV script is listed"
+ },
+ "cases": {
+  "chkconfig --list": [
+   "",
+   "\nNote: This output shows SysV services only and does not include native\n      systemd services. SysV configuration data might be overridden by native\n      systemd configuration.\n\n      If you want to list systemd services use 'systemctl list-unit-files'.\n      To see services enabled on particular target use\n      'systemctl list-dependencies [target]'.\n\n",
+   0
+  ],
+  "chkconfig ": [
+   "",
+   "\nNote: This output shows SysV services only and does not include native\n      systemd services. SysV configuration data might be overridden by native\n      systemd configuration.\n\n      If you want to list systemd services use 'systemctl list-unit-files'.\n      To see services enabled on particular target use\n      'systemctl list-dependencies [target]'.\n\n",
+   0
+  ],
+  "chkconfig --list nosuch": [
+   "",
+   "\nNote: This output shows SysV services only and does not include native\n      systemd services. SysV configuration data might be overridden by native\n      systemd configuration.\n\n      If you want to list systemd services use 'systemctl list-unit-files'.\n      To see services enabled on particular target use\n      'systemctl list-dependencies [target]'.\n\nerror reading information on service nosuch: No such file or directory\n",
+   1
+  ],
+  "chkconfig --list sshd": [
+   "",
+   "\nNote: This output shows SysV services only and does not include native\n      systemd services. SysV configuration data might be overridden by native\n      systemd configuration.\n\n      If you want to list systemd services use 'systemctl list-unit-files'.\n      To see services enabled on particular target use\n      'systemctl list-dependencies [target]'.\n\nerror reading information on service sshd: No such file or directory\n",
+   1
+  ],
+  "chkconfig --list network": [
+   "",
+   "\nNote: This output shows SysV services only and does not include native\n      systemd services. SysV configuration data might be overridden by native\n      systemd configuration.\n\n      If you want to list systemd services use 'systemctl list-unit-files'.\n      To see services enabled on particular target use\n      'systemctl list-dependencies [target]'.\n\nerror reading information on service network: No such file or directory\n",
+   1
+  ],
+  "chkconfig nosuch": [
+   "",
+   "",
+   1
+  ],
+  "chkconfig nosuch on": [
+   "",
+   "error reading information on service nosuch: No such file or directory\n",
+   1
+  ],
+  "chkconfig --level 3 network on": [
+   "",
+   "error reading information on service network: No such file or directory\n",
+   1
+  ],
+  "chkconfig --bogus": [
+   "",
+   "--bogus: unknown option\n",
+   1
+  ],
+  "chkconfig --list nosuch other": [
+   "",
+   "chkconfig version 1.7.6 - Copyright (C) 1997-2000 Red Hat, Inc.\nThis may be freely redistributed under the terms of the GNU Public License.\n\nusage:   chkconfig [--list] [--type <type>] [name]\n         chkconfig --add <name>\n         chkconfig --del <name>\n         chkconfig --override <name>\n         chkconfig [--level <levels>] [--type <type>] <name> <on|off|reset|resetpriorities>\n",
+   1
+  ]
+ }
+}

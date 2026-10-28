@@ -14,6 +14,7 @@ from tpot_personas import catalog, network, servers, system
 from tpot_personas.identity import draw
 
 DEBIAN_FAMILY = ("ubuntu-noble", "ubuntu-jammy", "debian-trixie", "debian-bookworm", "raspios", "gpu-ubuntu")
+SSDUMP = json.loads((Path(__file__).parent / "fixtures" / "systemd_ssdump.json").read_text(encoding="utf-8"))["images"]
 
 
 def persona_parts(pid, seed=5):
@@ -272,12 +273,13 @@ class TelnetNetworkTest(unittest.TestCase):
         cmd.fs = fs
         cmd.start()
         self.assertEqual((cmd.err, cmd.exit_code), ("fopen dump file: No such file or directory\n", 255))
-        # a user writes only where the directory lets them
+        # a user writes only where the directory lets them (Red Hat's ss says so, the others stay silent: refs below)
         user = Base(["-D", "/x", "-tln"], protocol, {"uid": 1000, "gid": 1000, "username": "eve"})
         cmd = namespace["Command_tpot_ss"](["-D", "/x", "-tln"], protocol, {"uid": 1000, "gid": 1000})
         cmd.fs = fs
         cmd.start()
-        self.assertEqual((cmd.err, cmd.exit_code), ("fopen dump file: Permission denied\n", 255))
+        self.assertEqual((cmd.err, cmd.exit_code), ("", 0))
+        self.assertNotIn("/x", fs.made)
         cmd = namespace["Command_tpot_ss"](["-D", "/tmp/u", "-tln"], protocol, {"uid": 1000, "gid": 1000})
         cmd.fs = fs
         cmd.start()
@@ -286,6 +288,55 @@ class TelnetNetworkTest(unittest.TestCase):
         err, code = self.run_cmd(data, "ss", ["-D"])[1:]
         self.assertTrue(err.startswith("ss: option requires an argument -- 'D'\nUsage: ss [ OPTIONS ]\n"), err)
         self.assertEqual(code, 255)
+
+    def test_ss_dump_of_a_user_follows_the_recorded_releases(self):
+        # refs systemd_ssdump.json (uid 1000): only Red Hat's ss reports the file it cannot open
+        class Fs:
+            made = {}
+            dirs = {"/": ["", 1, 0, 0, 4096, 0o40755], "/tmp": ["tmp", 1, 0, 0, 4096, 0o41777],
+                    "/root": ["root", 1, 0, 0, 4096, 0o40700], "/etc": ["etc", 1, 0, 0, 4096, 0o40755]}
+
+            def resolve_path(self, path, cwd):
+                return path
+
+            def isdir(self, path):
+                return path in self.dirs
+
+            def mkfile(self, path, uid, gid, size, mode):
+                self.made[path] = ["x", 2, uid, gid, size, mode, 0, [], None, None]
+                return True
+
+            def exists(self, path):
+                return path in self.made or path in self.dirs
+
+            def getfile(self, path):
+                return self.dirs[path] if path in self.dirs else self.made[path]
+
+        personas = {"debian_12": "debian-bookworm", "debian_13": "debian-trixie", "ubuntu_22.04": "ubuntu-jammy",
+                    "ubuntu_24.04": "ubuntu-noble", "rockylinux_9": "rhel-9", "centos_7": "centos-7"}
+        for image, pid in personas.items():
+            persona, ident, content = persona_parts(pid)
+            data = network.network(persona, ident, content.processes)
+            path = Path(tempfile.mkdtemp()) / "network.json"
+            path.write_text(json.dumps(data))
+            namespace = module_all(patched_source(), {"HoneyPotCommand": Base, "CowrieConfig": FakeConfig(
+                {("shell", "network"): str(path)}), "log": Log, "commands": {}})
+            for case, (out, err, code) in SSDUMP[image]["cases"].items():
+                target = case.split()[2].rstrip(";")
+                protocol = Protocol()
+                protocol.cwd = "/tmp"
+                fs = Fs()
+                fs.made = {}
+                cmd = namespace["Command_tpot_ss"](["-D", target], protocol, {"uid": 1000, "gid": 1000})
+                cmd.fs = fs
+                cmd.start()
+                with self.subTest(image, case=case):
+                    if "echo $?" in case:
+                        # the recorded file: 40 bytes, owned by the user
+                        self.assertEqual((cmd.err, cmd.exit_code, len(fs.made[target][7]), fs.made[target][2]),
+                                         ("", 0, 40, 1000))
+                    else:
+                        self.assertEqual((cmd.out, cmd.err, cmd.exit_code, fs.made), (out, err, code, {}))
 
 
 if __name__ == "__main__":

@@ -25,6 +25,8 @@ TWISTED = {
     "kex": set(TWISTED_KEX),
     # SSHServerTransport.sendExtInfo, called by its _keySetup
     "ext_info": True,
+    # SSHServerTransport.sendKexInit keeps what it sends in ourKexInitPayload and sends it with sendPacket
+    "kex_init": True,
 }
 
 
@@ -43,6 +45,9 @@ class SshSupportTest(unittest.TestCase):
         # the image runs the check on the patched Cowrie
         subprocess.run([sys.executable, str(DIST / "patch_cowrie_persona_support.py"), "--cowrie-root", str(self.root)],
                        check=True, capture_output=True, text=True)
+        # the excerpt has the methods of the class only: the class line makes it a module (as the whole file is)
+        transport = self.root / "src/cowrie/ssh/transport.py"
+        transport.write_text("class HoneyPotSSHTransport:\n" + transport.read_text())
 
     def problems(self, twisted=None):
         return self.check.problems(twisted or TWISTED, self.root)
@@ -103,7 +108,15 @@ class SshSupportTest(unittest.TestCase):
         self.assertEqual(self.problems(),
                          ["host key algorithms: Cowrie (ssh/factory.py) does not advertise [ssh] host_key_algorithms",
                           "key exchanges: Cowrie (ssh/factory.py) does not offer [ssh] kex_algorithms",
-                          "server-sig-algs: Cowrie (ssh/transport.py) does not send [ssh] server_sig_algs"])
+                          "server-sig-algs: Cowrie (ssh/transport.py) does not send [ssh] server_sig_algs",
+                          "ext-info-s: Cowrie (ssh/transport.py) does not read [ssh] ext_info_s in its one sendPacket",
+                          "no SSH server: Cowrie (ssh/transport.py) does not read [ssh] drop_connections"])
+
+    def test_cowrie_without_the_drop_patch(self):
+        self.edit("src/cowrie/ssh/transport.py", 'CowrieConfig.getboolean("ssh", "drop_connections"',
+                  'CowrieConfig.getboolean("ssh", "drop"')
+        self.assertEqual(self.problems(),
+                         ["no SSH server: Cowrie (ssh/transport.py) does not read [ssh] drop_connections"])
 
     def test_twisted_without_a_key_exchange(self):
         twisted = dict(TWISTED, kex=TWISTED["kex"] - {"curve25519-sha256"})
@@ -112,6 +125,24 @@ class SshSupportTest(unittest.TestCase):
     def test_twisted_without_send_ext_info(self):
         self.assertEqual(self.problems(dict(TWISTED, ext_info=False)),
                          ["server-sig-algs: Twisted's server sends no EXT_INFO through sendExtInfo in _keySetup"])
+
+    def test_twisted_whose_kexinit_cannot_be_cut(self):
+        self.assertEqual(self.problems(dict(TWISTED, kex_init=False)),
+                         ["ext-info-s: Twisted's sendKexInit no longer sends ourKexInitPayload with sendPacket "
+                          "and ext-info-s from _EXT_INFO_S"])
+
+    def test_cowrie_without_the_ext_info_s_patch(self):
+        self.edit("src/cowrie/ssh/transport.py", 'CowrieConfig.getboolean("ssh", "ext_info_s"',
+                  'CowrieConfig.getboolean("ssh", "ext_info"')
+        self.assertEqual(self.problems(),
+                         ["ext-info-s: Cowrie (ssh/transport.py) does not read [ssh] ext_info_s in its one sendPacket"])
+
+    def test_a_second_send_packet_shadows_the_cut(self):
+        path = self.root / "src/cowrie/ssh/transport.py"
+        path.write_text(path.read_text() + "\n    def sendPacket(self, messageType: int, payload: bytes) -> None:\n"
+                        "        transport.SSHServerTransport.sendPacket(self, messageType, payload)\n")
+        self.assertEqual(self.problems(),
+                         ["ext-info-s: Cowrie (ssh/transport.py) does not read [ssh] ext_info_s in its one sendPacket"])
 
     def test_cowrie_without_the_kex_and_sig_algs_patch(self):
         self.edit("src/cowrie/ssh/factory.py", 'CowrieConfig.get("ssh", "kex_algorithms"',

@@ -4,6 +4,7 @@ extra["firmware"]), so kernel, BusyBox and the SSH server are those of that
 image. Mount, /proc/mounts and df come from one table of file systems, dmesg
 names the root that table mounts, and the delay loop of dmesg is the BogoMIPS
 of cpuinfo."""
+import dataclasses
 import re
 
 from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, assign_processes, base_files, bogomips,
@@ -12,7 +13,8 @@ from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, assign_processes, 
 from .model import Content
 from . import firmware
 from .firmware import programs as firmware_programs
-from .system import busybox_applets, cpu_commands, init_scripts, lsmod_text, proc_modules
+from .system import (APPLET_TXTCMDS, busybox_applets, cpu_commands, init_scripts, lsmod_text,
+                     missing_applet_txtcmds, proc_modules)
 
 
 # --- shared parts of the device builders -------------------------------------------
@@ -167,9 +169,12 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
     busybox runs the applets and prints the help of that BusyBox."""
     hw, r = ident.hardware, ident.release
     processes = assign_processes(ident, processes)
-    passwd, group, shadow = accounts or (embedded_passwd(persona.user, persona.uid, persona.gid, persona.shell),
-                                         embedded_group(persona.user, persona.gid),
-                                         embedded_shadow(persona.user, ident))
+    # a firmware without an SSH server has no sshd account
+    sshd = persona.ssh_profile is not None
+    passwd, group, shadow = accounts or (embedded_passwd(persona.user, persona.uid, persona.gid, persona.shell,
+                                                         sshd=sshd),
+                                         embedded_group(persona.user, persona.gid, sshd=sshd),
+                                         embedded_shadow(persona.user, ident, sshd=sshd))
     all_files = base_files(persona, ident, passwd, group, shadow)
     mount, proc_mounts, filesystems = fs_tables(ident, entries)
     all_files["proc/mounts"] = proc_mounts
@@ -190,10 +195,16 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
     if hw.cpu_model in NAS_LSPCI:
         commands["usr/bin/lspci"] = NAS_LSPCI[hw.cpu_model]
     commands.update(txtcmds or {})
+    # no dmesg where the firmware's BusyBox has no such applet (the DIR-859)
+    for name in missing_applet_txtcmds(persona, ident):
+        commands.pop(APPLET_TXTCMDS[name], None)
     own = firmware_programs(persona, ident)
-    if own is not None:
-        # a firmware with its own programs: no txtcmd of a program it has not (bin/ulimit and bin/help are
-        # the texts of ash's builtins, which the patched getCommand answers without a program)
+    if own is not None and firmware.is_image(persona):
+        # a firmware image throughout (the Archer C7): no txtcmd of a program it has not (bin/ulimit and bin/help
+        # are the texts of ash's builtins, which the patched getCommand answers without a program); with only the
+        # program folders of its firmware (the NAS326) the txtcmds stay: dmesg, mount and lsmod are programs of its
+        # folders (mount is no applet of its BusyBox, /bin/mount of its initramfs is a program of its own),
+        # ulimit keeps its program (render._firmware_programs)
         builtins = set(firmware.builtins(persona) or ())
         commands = {rel: text for rel, text in commands.items()
                     if rel in own or (rel.startswith("bin/") and rel[4:] in builtins)}
@@ -243,7 +254,6 @@ def build_dlink(persona, ident):
         ps_entry("root", 0, "/usr/sbin/httpd -f /var/run/httpd.conf", vsz=1632, rss=588),
         ps_entry("root", 0, "/usr/sbin/udhcpd /var/servd/LAN-1-udhcpd.conf", vsz=1580, rss=404),
         ps_entry("root", 0, "telnetd -i br0", vsz=1584, rss=388),
-        ps_entry("root", 0, "/usr/sbin/dropbear -p 22", vsz=1180, rss=432),
         ps_entry(persona.user, 0, "-sh", vsz=1588, rss=480, tty="pts/0"),
     ]
     return device_content(persona, ident, files, entries, cmdline, boot, processes)
@@ -387,11 +397,15 @@ def build_zyxel(persona, ident):
             "VFS: Mounted root (ext2 filesystem) on device 1:0.",
             "Freeing unused kernel memory: 228K (c0866000 - c089f000)"]
     files = {"firmware/mnt/info/fwversion": f"{r.os_version}\n"}
+    # the programs where the firmware has them (firmware_images/nas326-v5.21.json): sshd of the system image in /sbin
+    #   (its sbin/controlSSH.sh: /sbin/sshd -f /etc/ssh/sshd_config), httpd, smbd, nmbd and syslog-ng in /usr/sbin
+    #   (/etc/init.d/httpd.sh of the initramfs: /usr/sbin/httpd -f /etc/service_conf/httpd.conf); unverified:
+    #   which of them run, their order and sizes
     processes = [
         ps_entry("root", 0, "init", vsz=1760, rss=612),
-        ps_entry("root", 0, "/sbin/syslog-ng", vsz=5616, rss=1876),
-        ps_entry("root", 0, "/usr/sbin/sshd", vsz=5128, rss=1092),
-        ps_entry("root", 0, "/usr/local/apache/bin/httpd -f /etc/service_conf/httpd.conf", vsz=13632, rss=4980),
+        ps_entry("root", 0, "/usr/sbin/syslog-ng", vsz=5616, rss=1876),
+        ps_entry("root", 0, "/sbin/sshd -f /etc/ssh/sshd_config", vsz=5128, rss=1092),
+        ps_entry("root", 0, "/usr/sbin/httpd -f /etc/service_conf/httpd.conf", vsz=13632, rss=4980),
         ps_entry("root", 0, "/usr/sbin/smbd -D", vsz=21540, rss=6312),
         ps_entry("root", 0, "/usr/sbin/nmbd -D", vsz=11080, rss=3240),
         ps_entry(persona.user, 0, "-sh", vsz=1764, rss=640, tty="pts/0"),
@@ -532,6 +546,19 @@ QPKG_CLI_HELP = """Usage: qpkg_cli [options]
 """
 
 
+# bash --version of QNAP's bash (catalog._qts: built from the GPL tree of QTS 5.2.3, run under qemu; two lines)
+QNAP_BASH_VERSION = ("GNU bash, version {version} (x86_64-QNAP-linux-gnu)\n"
+                     "Copyright (C) 2007 Free Software Foundation, Inc.\n")
+
+
+def bash_version(persona, ident):
+    """What `bash --version` prints on the persona (Content.bash_version): QNAP's bash of the release, "" where
+    Cowrie's bash answers. $BASH_VERSION and $MACHTYPE are set by no persona (Cowrie's shell has neither)."""
+    if persona.kind == "device" and persona.family == "qnap":
+        return QNAP_BASH_VERSION.format(version=ident.release.extra["bash"])
+    return ""
+
+
 def build_qnap(persona, ident):
     """QNAP QTS on an x86 NAS: the system runs from an initramfs (tmpfs root), the
     system partition md9 on /mnt/HDA_ROOT, the data volume on CACHEDEV1_DATA.
@@ -583,8 +610,9 @@ def build_qnap(persona, ident):
     shadow = (f"admin:$1$admin$Qd4NFXmPRH2LcGv5jAO.k1:{root_day}:0:99999:7:::\n"
               f"guest:!:{root_day}:0:99999:7:::\nhttpdusr:!:{root_day}:0:99999:7:::\nsshd:*:{root_day}:0:99999:7:::\n"
               f"root:!:{root_day}:0:99999:7:::\n")
-    return device_content(persona, ident, files, entries, cmdline, boot, processes, accounts=(passwd, group, shadow),
-                          txtcmds={"sbin/qpkg_cli": QPKG_CLI_HELP})
+    content = device_content(persona, ident, files, entries, cmdline, boot, processes,
+                             accounts=(passwd, group, shadow), txtcmds={"sbin/qpkg_cli": QPKG_CLI_HELP})
+    return dataclasses.replace(content, bash_version=bash_version(persona, ident))
 
 
 # Synology model and platform per CPU of the catalog's hardware
@@ -603,7 +631,9 @@ SYNOPKG_HELP = """Usage: synopkg <command> [<args>...]
 def build_synology(persona, ident):
     """Synology DSM 7.2 on an x86 DiskStation: system on /dev/md0 (ext4), data on
     the btrfs volume1 of the storage pool, VERSION under /etc.defaults.
-    Unverified: command line, mount options, builddate, process list."""
+    Unverified: command line, mount options, builddate, process list. The
+    data stay unverified on purpose: they are not in Synology's GPL archive;
+    the DSM image is not open source and is not read."""
     r, hw = ident.release, ident.hardware
     x = r.extra
     model, platform, ports = SYNOLOGY_MODELS[hw.cpu_model]
@@ -854,14 +884,16 @@ def device_units(persona, ident, processes):
     units.sort(key=lambda u: u["name"].lower())
     return {"version": version, "full": full, "features": features, "unit_dir": directory,
             "tasks_max": int(ident.hardware.mem_kb / 128 * 0.15), "init": processes[0]["COMMAND"], "units": units,
-            "preset": "enabled"}
+            # polkit: the EdgeOS dpkg status lists none; DSM unverified
+            "polkit": False, "preset": "enabled"}
 
 
 # --- the daemons of a device in its tree ---------------------------------------------------------------------------
 # the program of the telnet session of a device whose ps list has no telnetd ([shell] telnet_daemon): BusyBox telnetd
 #   where BusyBox installs it; on a BusyBox without the applet (the Archer C7 and OpenWrt images have no telnet
-#   daemon) a telnetd of its own, a deviation on purpose: T-Pot serves Telnet on every persona, as it serves SSH on
-#   the DIR-859 1.05B03 (catalog)
+#   daemon) a standalone program of the persona at that path (daemon_programs), a deviation on purpose: T-Pot
+#   serves Telnet on every persona (catalog: TPLINK, OPENWRT); validate._check_device_programs checks that no
+#   link to busybox stands for an applet its BusyBox has not
 SESSION_TELNETD = "/usr/sbin/telnetd"
 BUSYBOX = "/bin/busybox"
 
@@ -886,10 +918,7 @@ def daemon_programs(persona, ident, processes):
         return {}
     banner = ident.release.extra.get("busybox")
     applets = set(busybox_applets(persona, ident)) if banner else set()
-    where = {}
-    for folder, names in firmware.BUSYBOX_DIRS.items():
-        for name in "".join(names).split():
-            where.setdefault(name, folder)
+    where = _applet_homes(persona, applets)
     found = {}
 
     def add(path):
@@ -907,11 +936,34 @@ def daemon_programs(persona, ident, processes):
             add(program)
     if not any(ps_program(p.get("COMMAND")) and ps_program(p.get("COMMAND")).rsplit("/", 1)[-1] in
                ("telnetd", "utelnetd") for p in processes):
-        add(SESSION_TELNETD)
+        add(telnet_daemon(persona, ident))
     return found
+
+
+def _applet_homes(persona, applets):
+    """{applet: folder} where the persona's firmware has each of its applets: the folders of its firmware
+    (firmware.program_dirs of the NAS326), else where BusyBox installs it (firmware.BUSYBOX_DIRS); a name
+    that is no applet of its BusyBox has none."""
+    if firmware.has_programs(persona) and not firmware.is_image(persona):
+        dirs = firmware.program_dirs(persona, sorted(applets))
+        if dirs is not None:
+            return {name: folders[0] for name, folders in dirs.items()}
+    where = {}
+    for folder, names in firmware.BUSYBOX_DIRS.items():
+        for name in "".join(names).split():
+            if name in applets:
+                where.setdefault(name, folder)
+    return where
 
 
 def telnet_daemon(persona, ident):
     """[shell] telnet_daemon: the program of the telnet session of a device whose ps list has no telnetd (tpot_session;
-    a listed telnetd serves its sessions itself), "" for a server (its telnet_server)."""
-    return SESSION_TELNETD if persona.kind == "device" else ""
+    a listed telnetd serves its sessions itself), "" for a server (its telnet_server). The telnetd applet where the
+    program folders of its firmware have it (/sbin/telnetd of the NAS326), else SESSION_TELNETD."""
+    if persona.kind != "device":
+        return ""
+    if firmware.has_programs(persona) and not firmware.is_image(persona) and ident.release.extra.get("busybox"):
+        home = _applet_homes(persona, set(busybox_applets(persona, ident))).get("telnetd")
+        if home:
+            return f"/{home}/telnetd"
+    return SESSION_TELNETD

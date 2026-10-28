@@ -1,8 +1,9 @@
 """The quoting of names by the persona's rm, cp, mv, touch, rmdir and mkdir against the recordings of the real
 tools (fixtures/fs_quote.json): names with quotes, shell characters, control characters, bytes of no UTF-8 character
 and letters beyond ASCII, in GNU coreutils 8.22 to 9.7 (quoteaf, and quote() in the two messages that keep it) and
-in BusyBox (the bytes as they are), each case run through the patched wc.py on Cowrie's file system as
-tests.test_fs_tools runs the recorded cases."""
+in BusyBox (the bytes as they are), and the dates touch -d takes or refuses (a newline around a letter, an empty
+date), each case run through the patched wc.py on Cowrie's file system as tests.test_fs_tools runs the recorded
+cases."""
 import json
 import unittest
 from pathlib import Path
@@ -26,6 +27,9 @@ CASES = {
     "mv -T": ("dir", ["mv", "-T", "--", "a", "NAME"]),
     "rmdir -v": ("dir", ["rmdir", "-v", "--", "NAME"]),
     "cp same": ("file", ["cp", "--", "NAME", "NAME"]),
+    "cp -v b2": ("file", ["cp", "-v", "--", "NAME", "b2"]),
+    "mv -v b3": ("file", ["mv", "-v", "--", "NAME", "b3"]),
+    "rmdir dir": ("dir", ["rmdir", "--", "NAME"]),
 }
 
 
@@ -40,8 +44,6 @@ class FsQuoteTest(unittest.TestCase):
                 name = json.loads(name_json)
                 for label, result in body.items():
                     before, words = CASES[label]
-                    if label == "touch -d" and not result[1]:
-                        continue  # GNU date took the name (a newline around a word) as a date: no message to compare
                     fs = make_fs({"r": [], "bin": []})
                     w = fs.getfile("/tmp/w")[7]
                     if before == "file":
@@ -55,8 +57,11 @@ class FsQuoteTest(unittest.TestCase):
                             out2, err2, status = shell.run(fs, words, 0, None)
                             out, err = out + out2, err + err2
                         self.assertEqual([out, err, status], result)
+                        if label == "touch -d":
+                            # a date touch took makes f (the `; ls x` runs of the recording listed x exactly then)
+                            self.assertEqual(fs.getfile("/tmp/w/f") is not None, status == 0)
                     count += 1
-        self.assertGreater(count, 2000)
+        self.assertGreater(count, 3000)
 
 
 if __name__ == "__main__":

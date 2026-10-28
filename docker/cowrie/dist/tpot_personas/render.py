@@ -11,8 +11,8 @@ from pathlib import Path
 
 from . import devices, firmware, kthreads, network, package_units, servers, system, tree
 from .common import home_dir, is_login_shell, rng_for, top_keys
-from .identity import DAY, to_json
-from .ssh_profiles import PROFILES, host_key_algorithms, kex_algorithms, server_sig_algs
+from .identity import DAY, drawn_at, to_json
+from .ssh_profiles import PROFILES, ext_info_s, host_key_algorithms, kex_algorithms, server_sig_algs
 
 COWRIE_ROOT = Path("/home/cowrie/cowrie")
 
@@ -126,6 +126,8 @@ COMMON_SKIP_PYTHON_COMMANDS = (
     "/usr/bin/sudo",
     "/usr/bin/yum",
     "/usr/sbin/service",
+    "chkconfig",
+    "/usr/sbin/chkconfig",
     "/bin/opkg",
     "opkg",
     "/usr/bin/dpkg",
@@ -157,6 +159,8 @@ EMBEDDED_SKIP_PYTHON_COMMANDS = (
     "scp",
     "systemctl",
 )
+# Cowrie's ssh: not on a system without an SSH server (system.SSH_CLIENT_PATHS)
+SSH_CLIENT_COMMANDS = ("ssh", "/bin/ssh", "/usr/bin/ssh")
 # Cowrie's busybox runs the applets: only on a system with BusyBox (Content.busybox_help)
 BUSYBOX_PYTHON_COMMANDS = ("/bin/busybox", "busybox")
 KEY_FILES = {"ssh-rsa": "rsa", "ecdsa-sha2-nistp256": "ecdsa", "ssh-ed25519": "ed25519"}
@@ -191,6 +195,13 @@ def skip_python_commands(persona, ident, content):
                  for spelling in (name, f"/bin/{name}", f"/usr/bin/{name}")}
     commands |= {spelling for name in system.missing_fs_tools(persona, ident)
                  for spelling in (name, f"/bin/{name}", f"/usr/bin/{name}")}
+    # Cowrie's commands and the persona's texts named like an applet the firmware's BusyBox has not (df,
+    #   head, env and dmesg of the DIR-859)
+    commands |= {spelling for name in system.missing_applet_commands(persona, ident)
+                 + system.missing_applet_txtcmds(persona, ident)
+                 for spelling in (name, f"/bin/{name}", f"/usr/bin/{name}", f"/sbin/{name}", f"/usr/sbin/{name}")}
+    # the builtins of bash that msh has not (alias, history, type ... of the DIR-859: not found)
+    commands |= set(system.missing_builtin_commands(persona, ident))
     # ip, ss, ifconfig and netstat where the firmware has no such program
     if persona.kind == "device":
         tools = network.tool_styles(persona, ident)
@@ -209,10 +220,16 @@ def skip_python_commands(persona, ident, content):
     # the shells the firmware has not (Cowrie's bash answers bash and /bin/bash before the tree)
     for name in firmware.shell_links(persona)[1]:
         commands |= {name, f"/bin/{name}", f"/usr/bin/{name}"}
+    # no ssh client where the system has no SSH server: the shell says it is not found
+    if persona.ssh_profile is None:
+        commands |= set(SSH_CLIENT_COMMANDS)
     if persona.family == "openwrt":
         commands -= {"/bin/opkg", "opkg"}
     if persona.family == "ubiquiti":
         commands -= {"/bin/apt-get", "/usr/bin/apt-get", "apt-get"}
+    # the patched openssl answers where the system has an openssl program
+    if system.openssl_build(persona, ident) is None:
+        commands.add("openssl")
     return sorted(commands)
 
 
@@ -318,6 +335,11 @@ def adapt_system(t, persona, ident):
     foreign paths removed, the multiarch directory and Python named as on that system,
     no x86_64 names on another architecture and no names of Debian's own packages without dpkg."""
     remove_paths(t, system.foreign_paths(persona))
+    # a router keeps only the names of Cowrie's /etc its firmware has too (firmware.etc_names)
+    keep = firmware.etc_names(persona)
+    etc = tree.find_dir(t, "etc") if keep is not None else None
+    if etc is not None:
+        tree.node_children(etc)[:] = [c for c in tree.node_children(etc) if tree.node_get(c, tree.A_NAME) in keep]
     triplet = system.triplet(persona)
     replacements = [(system.MULTIARCH, triplet)] if triplet and triplet != system.MULTIARCH else []
     python = system.tools(persona, ident).get("python")
@@ -443,6 +465,298 @@ def _login_links(t, persona, ident, content_group=""):
     tree.ensure_dir(t, f"{process}/task/{process.rsplit('/', 1)[-1]}", mode=0o555, ctime=ident.now)
 
 
+# /proc/<PID> of every process ps shows (_process_proc): cmdline, comm, stat and status as on Linux (recorded: the
+#   7.0 kernel of the Docker VM, tests/fixtures/readlink.json "proc"); a folder holds only these, no environ or maps
+PROC_STATES = {"R": "R (running)", "S": "S (sleeping)", "D": "D (disk sleep)", "T": "T (stopped)",
+               "t": "t (tracing stop)", "Z": "Z (zombie)", "X": "X (dead)", "I": "I (idle)"}
+# the major of the pseudo terminals (/dev/pts/N: 136), of the virtual consoles and serial lines (tty1, ttyS0: 4)
+PROC_TTY_MAJOR = {"pts/": (136, 0), "ttyS": (4, 64), "tty": (4, 0)}
+CLOCK_TICKS = 100
+
+
+def _proc_tty(tty):
+    """tty_nr of /proc/<PID>/stat: major << 8 | minor of the terminal, 0 without one."""
+    for prefix, (major, base) in PROC_TTY_MAJOR.items():
+        if tty.startswith(prefix) and tty[len(prefix):].isdigit():
+            return major << 8 | (base + int(tty[len(prefix):]))
+    return 0
+
+
+# the name of a task (TASK_COMM_LEN less its NUL), the buffer /proc gives a longer one in (fs/proc/array.c)
+TASK_COMM = 15
+PROC_COMM = 63
+
+
+def proc_comm(command, kernel=False, ident=None):
+    """The name of a process (comm, 15 characters), the one ps and top show: the program of its first word, of a
+    login shell without its dash, of a script run by its interpreter the script's (tpot_top_comm of the patch). A
+    kernel thread's as fs/proc/array.c proc_task_name gives it: from Linux 4.18 a workqueue worker with its
+    description after the 15 characters (wq_worker_comm, kworker/0:0H-events_highpri), from 5.17 any kernel thread
+    its full name (get_kthread_comm), at most 63 characters; before, and without ident (the release), the 15
+    characters of the task."""
+    if kernel:
+        name = command.strip("[]")
+        version = kthreads.kernel_version(ident) if ident is not None else (0, 0, 0)
+        full = (version >= (4, 18) and name.startswith("kworker/") and "-" in name) or version >= (5, 17)
+        return name[:PROC_COMM] if full else name[:TASK_COMM]
+    words = command.split()
+    if not words:
+        return ""
+    name = words[0].rstrip(":").rsplit("/", 1)[-1].lstrip("-")
+    if re.fullmatch(r"(python|perl|ruby|bash|sh)[0-9.]*", name) and len(words) > 1 and words[1].startswith("/"):
+        name = words[1].rsplit("/", 1)[-1]
+    return name[:TASK_COMM]
+
+
+def proc_cmdline(command, kernel=False):
+    """/proc/<PID>/cmdline: its words, each ending in a NUL; empty for a kernel thread. A title a daemon set for
+    itself ("sshd: /usr/sbin/sshd -D [listener] ...", "nginx: master process ...") is one string (unverified: the
+    padding a daemon leaves after its title)."""
+    if kernel:
+        return b""
+    words = command.split()
+    if words and (words[0].endswith(":") or words[0].startswith("@")):
+        return command.encode("utf-8", "surrogateescape") + b"\0"
+    return b"".join(word.encode("utf-8", "surrogateescape") + b"\0" for word in words)
+
+
+def _real_program(t, path, folders=True):
+    """The path of a program with every link of it resolved (/sbin/init -> /usr/lib/systemd/systemd), as the kernel
+    names it in /proc/<PID>/exe; None where the tree has no such file. folders False keeps the folders as the path
+    names them (a device: Cowrie's tree links /sbin to /usr/sbin, its firmware has folders of its own)."""
+    path = "/" + path.lstrip("/")
+    for _ in range(tree.MAX_LINKS):
+        real = tree.real_path(t, path)
+        node = tree.find_node(t, real) if real is not None else None
+        if node is None:
+            return None
+        here = "/" + real if folders else path
+        if tree.node_get(node, tree.A_TYPE) != tree.T_LINK:
+            return here if tree.node_get(node, tree.A_TYPE) == tree.T_FILE else None
+        target = tree.node_get(node, tree.A_TARGET) or ""
+        path = posixpath.normpath(target if target.startswith("/") else posixpath.join(posixpath.dirname(here),
+                                                                                       target))
+    return None
+
+
+def proc_program(t, persona, ident, command):
+    """The program of a process of ps (its first word, the program of a title, a bare name in the folders of the
+    PATH), resolved as /proc/<PID>/exe shows it; a login shell's is the program of the login shell
+    (system.login_program); None for a kernel thread and a program the tree has not."""
+    words = str(command or "").split()
+    if not words or words[0].startswith("["):
+        return None
+    first = words[0]
+    if first.startswith("-"):
+        program = "/" + system.login_program(persona, ident)
+    elif first in system.TITLE_PROGRAMS:
+        program = system.TITLE_PROGRAMS[first]
+    elif first.endswith(":"):
+        program = devices.ps_program(command) or ""
+    else:
+        program = first
+    if not program:
+        return None
+    folders = persona.kind == "server"
+    if program.startswith("/"):
+        return _real_program(t, program, folders)
+    for folder in ("usr/sbin", "usr/bin", "sbin", "bin") if folders else ("sbin", "usr/sbin", "bin", "usr/bin"):
+        found = _real_program(t, f"{folder}/{program}", folders)
+        if found:
+            return found
+    return None
+
+
+def _kernel_bits(ident):
+    v = kthreads.kernel_version(ident)
+    # the capabilities of the kernel (CAP_LAST_CAP + 1): 41 from 5.9, 40 in 5.8, 38 from 3.16, 37 before
+    caps = 41 if v >= (5, 9) else 40 if v >= (5, 8) else 38 if v >= (3, 16) else 37
+    return v, f"{(1 << caps) - 1:016x}"
+
+
+def proc_status(persona, ident, process, uid, gid, threads):
+    """/proc/<PID>/status of a process (process: pid, ppid, comm, state, vsz, rss, kernel, tty) in the layout of the
+    kernel of the release: the fields of fs/proc/array.c in their order, those a kernel has not yet left out
+    (unverified: the kernel versions the fields came with; the values a running process would have are drawn)."""
+    v, full = _kernel_bits(ident)
+    rng = rng_for(ident, f"proc status {process['pid']}")
+    kernel = process["kernel"]
+    pid, ppid = process["pid"], process["ppid"]
+    groups = " ".join(str(g) for g in process.get("groups", ())) + (" " if process.get("groups") else "")
+    lines = [("Name", process["comm"])]
+    if v >= (4, 7):
+        lines.append(("Umask", "0000" if kernel else "0022"))
+    lines += [("State", PROC_STATES.get(process["state"][:1], "S (sleeping)")), ("Tgid", pid)]
+    if v >= (3, 13):
+        lines.append(("Ngid", 0))
+    lines += [("Pid", pid), ("PPid", ppid), ("TracerPid", 0), ("Uid", "\t".join([str(uid)] * 4)),
+              ("Gid", "\t".join([str(gid)] * 4)), ("FDSize", 64 if kernel else rng.choice((64, 64, 128, 256))),
+              ("Groups", groups)]
+    if v >= (4, 1):
+        lines += [("NStgid", pid), ("NSpid", pid), ("NSpgid", process["pgrp"]), ("NSsid", process["sid"])]
+    if v >= (6, 9):
+        lines.append(("Kthread", 1 if kernel else 0))
+    if not kernel:
+        vsz, rss = max(process["vsz"], 4), max(process["rss"], 0)
+        anon = min(rss, max(4, rss * rng.randint(10, 60) // 100))
+        shmem = 0
+        memory = [("VmPeak", vsz + rng.randint(0, 2048)), ("VmSize", vsz), ("VmLck", 0), ("VmPin", 0),
+                  ("VmHWM", rss + rng.randint(0, 512)), ("VmRSS", rss)]
+        if v >= (4, 5):
+            memory += [("RssAnon", anon), ("RssFile", rss - anon - shmem), ("RssShmem", shmem)]
+        memory += [("VmData", max(4, vsz // rng.randint(4, 12))), ("VmStk", 132), ("VmExe", rng.randint(8, 900)),
+                   ("VmLib", max(4, vsz // rng.randint(3, 8))), ("VmPTE", rng.randint(11, 30) * 4), ("VmSwap", 0)]
+        if v >= (4, 4):
+            memory.append(("HugetlbPages", 0))
+        lines += [(key, f"{value:8d} kB") for key, value in memory]
+    if v >= (4, 15):
+        lines.append(("CoreDumping", 0))
+    if v >= (5, 0):
+        lines.append(("THP_enabled", 1))
+    if v >= (6, 4):
+        lines.append(("untag_mask", "0xffffffffffffffff" if persona.hardware_platform == "x86_64" else
+                      "0xffffffffffffff"))
+    cpus = max(1, ident.hardware.cpus)
+    # RLIMIT_SIGPENDING: half of threads-max, which the kernel sets from the memory
+    lines += [("Threads", threads), ("SigQ", f"0/{max(1024, ident.hardware.mem_kb // 256)}"),
+              ("SigPnd", "0" * 16), ("ShdPnd", "0" * 16), ("SigBlk", "0" * 16),
+              ("SigIgn", "0" * 16 if kernel else process.get("sigign", "0000000000001000")),
+              ("SigCgt", "0" * 16 if kernel else process.get("sigcgt", "0000000180004002")),
+              ("CapInh", "0" * 16), ("CapPrm", full if uid == 0 else "0" * 16),
+              ("CapEff", full if uid == 0 else "0" * 16), ("CapBnd", full)]
+    if v >= (4, 3):
+        lines.append(("CapAmb", "0" * 16))
+    if v >= (4, 10):
+        lines.append(("NoNewPrivs", 0))
+    lines.append(("Seccomp", 0))
+    if v >= (5, 9):
+        lines.append(("Seccomp_filters", 0))
+    if v >= (4, 17):
+        lines.append(("Speculation_Store_Bypass", "thread vulnerable" if persona.hardware_platform == "x86_64"
+                      else "not vulnerable"))
+    if v >= (5, 1):
+        lines.append(("SpeculationIndirectBranch", "conditional enabled" if persona.hardware_platform == "x86_64"
+                      else "unknown"))
+    mask = f"{(1 << cpus) - 1:x}"
+    lines += [("Cpus_allowed", mask), ("Cpus_allowed_list", "0" if cpus == 1 else f"0-{cpus - 1}"),
+              ("Mems_allowed", ",".join(["00000000"] * 31 + ["00000001"]) if persona.hardware_platform == "x86_64"
+               else "1"), ("Mems_allowed_list", 0),
+              ("voluntary_ctxt_switches", rng.randint(2, 40000)),
+              ("nonvoluntary_ctxt_switches", rng.randint(0, 900))]
+    if v >= (6, 6) and persona.hardware_platform == "x86_64":
+        # the user shadow stack of x86 (arch_proc_pid_thread_features), none enabled
+        lines += [("x86_Thread_features", ""), ("x86_Thread_features_locked", "")]
+    return "".join(f"{key}:\t{value}\n" for key, value in lines).encode("utf-8", "surrogateescape")
+
+
+def proc_stat(ident, process, threads, start_ticks):
+    """/proc/<PID>/stat: the 52 fields of fs/proc/array.c do_task_stat; the CPU times stay 0 here (the patched
+    Cowrie writes those of ps when the file is read: tpot_proc_stat), the start in clock ticks after the boot."""
+    rng = rng_for(ident, f"proc stat {process['pid']}")
+    kernel = process["kernel"]
+    state = process["state"][:1] or "S"
+    nice = -20 if "<" in process["state"] else 19 if "N" in process["state"] else 0
+    vsize = 0 if kernel else process["vsz"] * 1024
+    rss = 0 if kernel else process["rss"] // 4
+    code = 0 if kernel else 0x555555554000 + rng.randrange(0, 1 << 30, 4096)
+    stack = 0 if kernel else 0x7ffc00000000 + rng.randrange(0, 1 << 32, 16)
+    fields = [process["pid"], f"({process['comm']})", state, process["ppid"], process["pgrp"], process["sid"],
+              process["tty_nr"], process["tpgid"], 2129984 if kernel else 4194560 if process["uid"] == 0 else 4194304,
+              0 if kernel else rng.randint(80, 9000), 0, 0 if kernel else rng.randint(0, 60), 0,
+              0, 0, 0, 0, 20 + nice, nice, threads, 0, start_ticks, vsize, rss, 18446744073709551615,
+              1 if kernel else code, 1 if kernel else code + rng.randrange(4096, 1 << 20, 4096), 0 if kernel else stack,
+              0, 0, 0, 0, 0 if kernel else 4096, 0 if kernel else 81920, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0]
+    data = 0 if kernel else code + (1 << 21)
+    fields += [data, data + 4096 if data else 0, data + (1 << 22) if data else 0, stack + 2000 if data else 0,
+               stack + 2040 if data else 0, stack + 2040 if data else 0, stack + 4000 if data else 0, 0]
+    return (" ".join(str(f) for f in fields) + "\n").encode("utf-8", "surrogateescape")
+
+
+def proc_processes(persona, ident, content):
+    """Every process of the persona's ps list and its kernel threads, with what its /proc/<PID> folder needs:
+    pid, ppid, process group, session, terminal, comm, command line, state, sizes, user and kernel thread or not."""
+    accounts = {}
+    for line in content.files.get("etc/passwd", "").splitlines():
+        parts = line.split(":")
+        if len(parts) > 3 and parts[2].isdigit() and parts[3].isdigit():
+            accounts.setdefault(parts[0], (int(parts[2]), int(parts[3])))
+    members = {}
+    for line in content.files.get("etc/group", "").splitlines():
+        parts = line.split(":")
+        if len(parts) > 3 and parts[2].isdigit():
+            for member in filter(None, parts[3].split(",")):
+                members.setdefault(member, set()).add(int(parts[2]))
+    out = []
+    listed = [p for p in content.processes if isinstance(p.get("PID"), int)]
+    shells = [p["PID"] for p in listed if is_login_shell(p)]
+    threads = kthreads.kernel_threads(persona, ident, content.processes, content.filesystems)
+    for entry in listed:
+        pid, command, stat = entry["PID"], str(entry.get("COMMAND") or ""), str(entry.get("STAT") or "S")
+        login = bool(shells) and pid == shells[-1]
+        name = persona.user if login else str(entry.get("USERNAME") or entry.get("USER") or "root")
+        uid, gid = accounts.get(name, (persona.uid, persona.gid) if login else (0, 0))
+        ppid = 0 if pid == 1 else (pid - 1 if login else entry.get("PPID") if isinstance(entry.get("PPID"), int)
+                                   else 1)
+        leader = "s" in stat or login
+        tty = str(entry.get("TTY") or "?")
+        out.append({"pid": pid, "ppid": ppid, "pgrp": pid if leader else ppid, "sid": pid if leader else ppid,
+                    "tty_nr": _proc_tty(tty), "tpgid": pid if login else -1 if tty == "?" else ppid,
+                    "comm": proc_comm(command), "command": command, "state": stat, "vsz": int(entry.get("VSZ") or 0),
+                    "rss": int(entry.get("RSS") or 0), "uid": uid, "gid": gid, "kernel": False, "login": login,
+                    # the groups of a login (initgroups: the primary and every group that names the user)
+                    "groups": sorted({gid} | members.get(name, set())) if login else ()})
+    for entry in threads:
+        pid, command = entry["PID"], str(entry.get("COMMAND") or "")
+        out.append({"pid": pid, "ppid": int(entry.get("PPID", 2)), "pgrp": 0, "sid": 0, "tty_nr": 0, "tpgid": -1,
+                    "comm": proc_comm(command, True, ident), "command": command,
+                    "state": str(entry.get("STAT") or "S"), "vsz": 0, "rss": 0, "uid": 0, "gid": 0, "kernel": True,
+                    "login": False})
+    return out
+
+
+def _process_proc(t, persona, ident, content):
+    """/proc/<PID> of every process ps shows: the persona's list and its kernel threads (the session's own, its
+    sshd, in.telnetd or login and the PID of its shell, are the patched Cowrie's: tpot_proc_session). Each folder
+    has cmdline, comm, stat and status, the links exe (not for a kernel thread, nor where the tree has not the
+    program), cwd and root, and an empty fd (the login shell's has its terminal: _login_links). A number of
+    Cowrie's tree that is no such process goes, so ls /proc lists what ps lists."""
+    processes = proc_processes(persona, ident, content)
+    wanted = {str(p["pid"]) for p in processes}
+    proc = tree.find_dir(t, "proc")
+    if proc is not None:
+        tree.node_children(proc)[:] = [c for c in tree.node_children(proc)
+                                       if not str(tree.node_get(c, tree.A_NAME)).isdigit()
+                                       or tree.node_get(c, tree.A_NAME) in wanted]
+    for process in processes:
+        pid, uid, gid = process["pid"], process["uid"], process["gid"]
+        rel = f"proc/{pid}"
+        rng = rng_for(ident, f"proc {pid}")
+        threads = rng.randint(2, 8) if "l" in process["state"] else 1
+        start = 0 if pid == 1 else 1 + pid * 3 % 2400 if not process["login"] else \
+            int(max(0, drawn_at(ident) - ident.booted_at)) * CLOCK_TICKS
+        files = {"cmdline": proc_cmdline(process["command"], process["kernel"]),
+                 "comm": (process["comm"] + "\n").encode("utf-8", "surrogateescape"),
+                 "stat": proc_stat(ident, process, threads, start),
+                 "status": proc_status(persona, ident, process, uid, gid, threads)}
+        when = ident.now if process["login"] else ident.booted_at
+        for name, data in files.items():
+            node = tree.ensure_file(t, f"{rel}/{name}", data, uid, gid, 0o644 if name == "comm" else 0o444,
+                                    ctime=when)
+            tree.node_set(node, tree.A_SIZE, 0)
+            tree.node_set(node, tree.A_CTIME, when)
+        if not process["login"]:
+            program = None if process["kernel"] else proc_program(t, persona, ident, process["command"])
+            if program:
+                tree.ensure_link(t, f"{rel}/exe", program, ctime=when)
+            else:
+                tree.remove_node(t, f"{rel}/exe")
+            for name in ("cwd", "root"):
+                tree.ensure_link(t, f"{rel}/{name}", "/", ctime=when)
+            tree.ensure_dir(t, f"{rel}/fd", uid, gid, 0o500, ctime=when)
+        tree.ensure_dir(t, rel, uid, gid, 0o555, ctime=when)
+        tree.node_set(tree.find_dir(t, rel), tree.A_CTIME, when)
+
+
 def _mode(rel):
     if rel == "etc/shadow":
         return 0o640
@@ -468,6 +782,9 @@ def _set_dirs(t, persona, ctime):
 def apply_to_tree(base_tree, persona, ident, content):
     rng = random.Random(ident.seed ^ 0x5EED)
     t = copy.deepcopy(base_tree)
+    # the link nodes of Cowrie's tree (the nodes themselves, held until the cleanup below): one whose program the
+    #   persona has not goes with it; ensure_link makes a new node, so a link of the persona is never among them
+    upstream_links = [node for _, node in tree.iter_nodes(t) if tree.node_get(node, tree.A_TYPE) == tree.T_LINK]
     real_links(t, persona, ident)
     for rel in COMMON_REMOVE_PATHS + persona.remove_paths + PACKAGE_MANAGER_PATHS + HIGH_VARIANCE_COMMAND_PATHS:
         tree.remove_node(t, rel)
@@ -486,6 +803,10 @@ def apply_to_tree(base_tree, persona, ident, content):
     # txtcmds and the commands of Cowrie's Python: programs with a size and no contents
     # (cat / dd give the ELF header of [shell] arch)
     sizes = {**PROGRAM_SIZES, **system.program_sizes(persona)}
+    openssl = system.openssl_build(persona, ident)
+    if openssl:
+        # /usr/bin/openssl of the build
+        sizes["openssl"] = (system.openssl_size(openssl),) * 2
     tools, tool_links = system.tool_programs(persona, ident)
     for rel in sorted(set(content.txtcmds) | set(content.programs) | set(system.programs(persona, ident)) | set(tools)):
         tree.ensure_executable(t, rel, program_size(ident, rel, sizes), ctime=ident.installed_at)
@@ -500,8 +821,10 @@ def apply_to_tree(base_tree, persona, ident, content):
                 tree.remove_node(t, f"{folder}/{rel.rsplit('/', 1)[1]}")
         for rel, target in links.items():
             tree.ensure_link(t, rel, target, ctime=ident.installed_at)
-        # a file command the firmware's BusyBox has not (the rmdir of the DIR-859) is no program either
-        for name in system.missing_fs_tools(persona, ident):
+        # a file command the firmware's BusyBox has not (the rmdir of the DIR-859) is no program either, nor
+        #   Cowrie's Debian program of another command its BusyBox has no applet for (df, head of the DIR-859)
+        for name in set(system.missing_fs_tools(persona, ident)) | set(system.missing_applet_commands(persona, ident)) \
+                | set(system.missing_applet_txtcmds(persona, ident)):
             for folder in firmware.PROGRAM_FOLDERS:
                 tree.remove_node(t, f"{folder}/{name}")
     # wc, sort and seq as the system has them: coreutils (Cowrie's tree has those of Debian) or the
@@ -547,12 +870,27 @@ def apply_to_tree(base_tree, persona, ident, content):
         _unit_files(t, persona, ident, content.processes)
     if persona.kind == "server":
         _unit_files(t, persona, ident, content.processes)
+        # /sbin/init of systemd-sysv is a link to systemd, which runs as PID 1 (/proc/1/exe; unverified: the
+        #   spelling of the target, absolute before the /usr merge of the packages, as /lib/systemd/systemd)
+        prefix = systemd_prefix(persona, ident)
+        if prefix and tree.find_node(t, "usr/lib/systemd/systemd") is not None and \
+                any(p["COMMAND"].split()[:1] == ["/sbin/init"] for p in content.processes):
+            tree.remove_node(t, "usr/sbin/init")
+            tree.ensure_link(t, "usr/sbin/init", "/lib/systemd/systemd" if prefix == "/lib/systemd"
+                             else "../lib/systemd/systemd", ctime=ident.installed_at)
         # the daemons of ps are programs of the tree
         for process in content.processes:
             program = process["COMMAND"].split()[0]
             if program.startswith("/") and tree.find_node(t, program) is None:
                 tree.ensure_executable(t, program.lstrip("/"), program_size(ident, program), ctime=ident.installed_at)
-    _firmware_programs(t, persona, ident)
+    for files in system.rpm_libraries(persona, ident).values():
+        for rel, value in files.items():
+            tree.remove_node(t, rel)
+            if isinstance(value, str):
+                tree.ensure_link(t, rel, value, ctime=ident.installed_at)
+            else:
+                tree.ensure_executable(t, rel, value, ctime=ident.installed_at)
+    _firmware_programs(t, persona, ident, content)
     # the daemons of a device's ps list and the telnetd of its telnet sessions, where the tree has them not
     for path, target in devices.daemon_programs(persona, ident, content.processes).items():
         if tree.resolve(t, path.lstrip("/")) is not None:
@@ -586,15 +924,23 @@ def apply_to_tree(base_tree, persona, ident, content):
                 tree.remove_node(t, rel.lstrip("/"))
     _shell_proc(t, content.processes)
     _login_links(t, persona, ident, content.files.get("etc/group", ""))
+    # a folder of its own for every process of ps (after the shell's: its exe, cwd and terminal stay)
+    _process_proc(t, persona, ident, content)
+    # a link of Cowrie's tree whose target the persona has not (lastb -> last, slogin -> ssh, pidof -> killall5 of a
+    #   firmware without them) goes with it, once the login shell has its /proc (/proc/thread-self names its task);
+    #   the links the persona makes are the validator's (_check_links)
+    tree.remove_dangling_links(t, upstream_links)
     _set_dirs(t, persona, ident.installed_at)
     return t
 
 
-def _firmware_programs(t, persona, ident):
+def _firmware_programs(t, persona, ident, content):
     """The program folders of a firmware image (firmware.programs) in place of Cowrie's: folders of
     their own (no /usr merge), the BusyBox applets as links, the vendor's programs of its release, the
     folders at the root of the image (firmware.root_dirs; the others of Cowrie's tree go, but /home).
-    ulimit is a builtin of its ash (its txtcmd answers without a program)."""
+    ulimit is a builtin of the Archer C7's ash (its txtcmd answers without a program); a persona with only
+    the program folders of its firmware (the NAS326) keeps Cowrie's root and its txtcmds as programs where
+    the table has none (/bin/ulimit: no table of the builtins of its ash was recorded)."""
     table = firmware.programs(persona, ident)
     if table is None:
         return
@@ -607,10 +953,14 @@ def _firmware_programs(t, persona, ident):
             tree.ensure_link(t, rel, value, ctime=ident.installed_at)
         else:
             tree.ensure_executable(t, rel, value, ctime=ident.installed_at)
+    if not firmware.is_image(persona):
+        for rel in sorted(set(content.txtcmds) | set(content.programs)):
+            if tree.resolve(t, rel) is None:
+                tree.ensure_executable(t, rel, program_size(ident, rel), ctime=ident.installed_at)
     root = firmware.root_dirs(persona)
     for rel in root:
         tree.ensure_dir(t, rel, ctime=ident.installed_at)
-    for child in list(tree.node_children(t)):
+    for child in list(tree.node_children(t)) if root else ():
         name = child[tree.A_NAME]
         if name not in root and name not in firmware.ROOT_KEEP:
             tree.remove_node(t, name)
@@ -637,13 +987,53 @@ def _firmware_programs(t, persona, ident):
             tree.remove_node(t, rel.lstrip("/"))
 
 
+def _host_key_lines(names, keys_dir):
+    return "".join(
+        f"{KEY_FILES[k]}_public_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key.pub\n"
+        f"{KEY_FILES[k]}_private_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key\n"
+        for k in names)
+
+
+# the options of an SSH session ([ssh] after listen_endpoints): only for a persona with an SSH server
+SSH_SESSION_OPTIONS = """sftp_enabled = true
+forwarding = false
+forward_redirect = false
+forward_tunnel = false
+auth_none_enabled = false
+auth_keyboard_interactive_enabled = true
+auth_publickey_allow_any = true
+"""
+
+
+def ssh_server_options(persona, ident, keys_dir):
+    """The options of [ssh] before listen_endpoints: the host keys and algorithms of the persona's SSH
+    server. Without one (ssh_profile None) Cowrie still listens on 22 and closes each connection
+    before its banner (drop_connections, patch_ssh_drop); its factory needs one host key to start,
+    an ed25519 key that is never offered."""
+    if persona.ssh_profile is None:
+        return "drop_connections = true\n" + _host_key_lines(("ssh-ed25519",), keys_dir) + \
+            "public_key_auth = ssh-ed25519\n"
+    r = ident.release
+    profile = PROFILES[persona.ssh_profile]
+    return f"""{_host_key_lines(profile.host_keys, keys_dir)}public_key_auth = {",".join(profile.host_keys)}
+host_key_algorithms = {",".join(host_key_algorithms(profile, r))}
+kex_algorithms = {",".join(kex_algorithms(profile, r))}
+server_sig_algs = {server_sig_algs(profile, r)}
+ext_info_s = {"true" if ext_info_s(profile, r) else "false"}
+version = {r.ssh_banner}
+ciphers = {",".join(profile.ciphers)}
+macs = {",".join(profile.macs)}
+compression = {",".join(profile.compression)}
+"""
+
+
 def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, content=None):
     r = ident.release
     content = content if content is not None else persona.builder(persona, ident)
     busybox = f"busybox_help = {runtime_dir}/{BUSYBOX_HELP}\n" if content.busybox_help else ""
     names = firmware.builtins(persona)
     builtins = f"builtins = {','.join(names)}\n" if names is not None else ""
-    if firmware.program_dirs(persona, system.busybox_applets(persona, ident)) is not None:
+    if firmware.which_table(persona, system.busybox_applets(persona, ident)) is not None:
         builtins += f"which_dirs = {runtime_dir}/{PROGRAM_DIRS}\n"
     # wget of the firmware's BusyBox (the patched wget.py writes its texts)
     if content.busybox_help and persona.family != "ubiquiti" and "wget" in system.busybox_applets(persona, ident):
@@ -658,7 +1048,11 @@ def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, c
     # HISTTIMEFORMAT as a JSON string: the format ends in a space, which the config file would drop
     stamp = system.history_time_format(persona)
     history_time_format = f"history_time_format = {json.dumps(stamp)}\n" if stamp else ""
-    if persona.family in system.ASH_FAMILIES:
+    untimed = system.history_untimed(persona)
+    history_time_format += f"history_untimed = {untimed}\n" if untimed else ""
+    # bash --version of the persona's bash (QNAP), a JSON string as it has two lines
+    bash_version = f"bash_version = {json.dumps(content.bash_version)}\n" if content.bash_version else ""
+    if persona.family in system.BUSYBOX_FAMILIES:
         # ls -l of BusyBox, the total line of a build with CONFIG_DESKTOP
         builtins += "ls_style = busybox\n" + ("ls_total = yes\n" if system.busybox_desktop(persona) else "")
     usage = firmware.usage_table(persona)
@@ -677,15 +1071,14 @@ def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, c
     top += "".join(f"{key} = {value}\n" for key, value in system.text_keys(persona, ident).items())
     top += "".join(f"{key} = {value}\n" for key, value in system.fs_keys(persona, ident).items())
     top += f"network = {runtime_dir}/{network.NETWORK_FILE}\n"
+    if system.openssl_build(persona, ident):
+        top += f"openssl = {runtime_dir}/{system.OPENSSL_DATA}\n"
     if network.telnet_server(persona, ident):
         top += f"telnet_server = {network.telnet_server(persona, ident)}\n"
     if devices.telnet_daemon(persona, ident):
         top += f"telnet_daemon = {devices.telnet_daemon(persona, ident)}\n"
-    profile = PROFILES[persona.ssh_profile]
-    keys = "\n".join(
-        f"{KEY_FILES[k]}_public_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key.pub\n"
-        f"{KEY_FILES[k]}_private_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key"
-        for k in profile.host_keys)
+    ssh = ssh_server_options(persona, ident, keys_dir)
+    ssh_sessions = SSH_SESSION_OPTIONS
     return f"""[honeypot]
 hostname = {ident.hostname}
 log_path = {cowrie_root}/log
@@ -725,29 +1118,13 @@ history_control_root = {system.history_controls(persona)[0]}
 history_file_size = {system.history_file_sizes(persona, r)[1]}
 history_file_size_root = {system.history_file_sizes(persona, r)[0]}
 history_export = {",".join(system.history_exports(persona))}
-{history_time_format}ssh_version = {r.ssh_version}
+{history_time_format}{bash_version}ssh_version = {r.ssh_version}
 skip_python_commands = {",".join(skip_python_commands(persona, ident, content))}
 {top}{busybox}{tools}
 [ssh]
 enabled = true
-{keys}
-public_key_auth = {",".join(profile.host_keys)}
-host_key_algorithms = {",".join(host_key_algorithms(profile, r))}
-kex_algorithms = {",".join(kex_algorithms(profile, r))}
-server_sig_algs = {server_sig_algs(profile, r)}
-version = {r.ssh_banner}
-ciphers = {",".join(profile.ciphers)}
-macs = {",".join(profile.macs)}
-compression = {",".join(profile.compression)}
-listen_endpoints = tcp:22:interface=0.0.0.0
-sftp_enabled = true
-forwarding = false
-forward_redirect = false
-forward_tunnel = false
-auth_none_enabled = false
-auth_keyboard_interactive_enabled = true
-auth_publickey_allow_any = true
-
+{ssh}listen_endpoints = tcp:22:interface=0.0.0.0
+{ssh_sessions if persona.ssh_profile is not None else ""}
 [telnet]
 enabled = true
 listen_endpoints = tcp:23:interface=0.0.0.0
@@ -808,7 +1185,7 @@ def render(persona, ident, base_tree, out_dir, runtime_dir, keys_dir, cowrie_roo
            json.dumps({"command": {"ps": content.processes}}, indent=2, sort_keys=True) + "\n")
     if content.busybox_help:
         _write(out_dir / BUSYBOX_HELP, content.busybox_help)
-    dirs = firmware.program_dirs(persona, system.busybox_applets(persona, ident))
+    dirs = firmware.which_table(persona, system.busybox_applets(persona, ident))
     if dirs is not None:
         _write(out_dir / PROGRAM_DIRS, "".join(f"{name} {','.join(folders)}\n" for name, folders in sorted(dirs.items())))
     cnf = system.command_not_found_lines(persona, ident)
@@ -821,6 +1198,9 @@ def render(persona, ident, base_tree, out_dir, runtime_dir, keys_dir, cowrie_roo
     _write(out_dir / DF_TABLE, json.dumps(system.df_table(persona, ident, content.filesystems), indent=1, sort_keys=True) + "\n")
     if persona.family == "openwrt":
         _write(out_dir / system.OPKG_HELP_FILE, system.OPKG_HELP)
+    openssl = system.openssl_data(persona, ident)
+    if openssl is not None:
+        _write(out_dir / system.OPENSSL_DATA, json.dumps(openssl, indent=1, sort_keys=True) + "\n")
     names = system.package_names(persona, ident)
     if names is not None:
         _write(out_dir / system.PACKAGE_NAMES, "".join(f"{line}\n" for line in names))

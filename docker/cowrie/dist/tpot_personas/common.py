@@ -300,18 +300,20 @@ fi
     }
 
 
-def embedded_passwd(user, uid, gid, shell="/bin/sh", gecos=None):
+def embedded_passwd(user, uid, gid, shell="/bin/sh", gecos=None, sshd=True):
+    """sshd=False: a firmware without an SSH server has no privilege separation account."""
     gecos = gecos or user
+    account = "sshd:x:22:22:sshd:/var/empty:/bin/false\n" if sshd else ""
     return f"""root:x:0:0:root:/root:/bin/sh
 daemon:x:1:1:daemon:/var:/bin/false
 bin:x:2:2:bin:/bin:/bin/false
 nobody:x:65534:65534:nobody:/var:/bin/false
-sshd:x:22:22:sshd:/var/empty:/bin/false
-{user}:x:{uid}:{gid}:{gecos}:/home/{user}:{shell}
+{account}{user}:x:{uid}:{gid}:{gecos}:/home/{user}:{shell}
 """
 
 
-def embedded_group(user, gid):
+def embedded_group(user, gid, sshd=True):
+    account = "sshd:x:22:\n" if sshd else ""
     return f"""root:x:0:
 daemon:x:1:
 bin:x:2:
@@ -322,19 +324,18 @@ wheel:x:10:{user}
 audio:x:29:
 users:x:100:
 nobody:x:65534:
-sshd:x:22:
-{user}:x:{gid}:
+{account}{user}:x:{gid}:
 """
 
 
-def embedded_shadow(user, ident):
+def embedded_shadow(user, ident, sshd=True):
     system, root, own = shadow_days(ident)
+    account = f"sshd:*:{system}:0:99999:7:::\n" if sshd else ""
     return f"""root:$1$root$A3qH7I7U2vW0nLJ9rKaNl/:{root}:0:99999:7:::
 daemon:*:{system}:0:99999:7:::
 bin:*:{system}:0:99999:7:::
 nobody:*:{system}:0:99999:7:::
-sshd:*:{system}:0:99999:7:::
-{user}:*:{own}:0:99999:7:::
+{account}{user}:*:{own}:0:99999:7:::
 """
 
 
@@ -738,6 +739,9 @@ def nproc(hw):
 #   3.3.12, DSM 7.2 3.3.15 (the procps-ng-3.x of Synology's GPL sources of 7.2-64570 and 7.2-72806)
 PROCPS_VERSIONS = {"noble": "4.0.4", "jammy": "3.3.17", "trixie": "4.0.4", "bookworm": "4.0.2"}
 PROCPS_FAMILIES = {"rhel": "3.3.17", "centos": "3.3.10", "ubiquiti": "3.3.12", "synology": "3.3.15"}
+# the pidof of each system: procps-ng's (RHEL 9, recorded), sysvinit 2.88's killall5 (CentOS 7 recorded; EdgeOS and DSM
+#   unverified, derived from it), else sysvinit-utils of Debian and Ubuntu (recorded)
+PIDOF_STYLES = {"rhel": "procps-ng", "centos": "sysvinit", "ubiquiti": "sysvinit", "synology": "sysvinit"}
 
 
 def procps_version(persona, ident):
@@ -760,6 +764,7 @@ def top_keys(persona, ident, content):
     keys = {"top_style": content.top_style}
     if content.top_style == "procps":
         keys["procps_version"] = procps_version(persona, ident)
+        keys["pidof_style"] = PIDOF_STYLES.get(persona.family, "debian")
     keys["kernel_threads"] = len(kernel_threads(persona, ident, content.processes, content.filesystems))
     keys["pid_max"] = pid_max(persona)
     keys["load_base"] = f"{load_base(ident):.2f}"

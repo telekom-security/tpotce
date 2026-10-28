@@ -249,6 +249,34 @@ def remove_node(root, relative_path):
     children[:] = [child for child in children if node_get(child, A_NAME) != parts[-1]]
 
 
+def dangling_links(root):
+    """The paths of the links that name no node (the links of its directories followed; an empty target
+    names nothing). A link to such a link names a node: it shows up once that link is gone."""
+    found = []
+    for path, node in iter_nodes(root):
+        if node_get(node, A_TYPE) != T_LINK:
+            continue
+        resolved = target_path(root, path) if node_get(node, A_TARGET) else None
+        if resolved is None or find_node(root, resolved) is None:
+            found.append(path)
+    return found
+
+
+def remove_dangling_links(root, among=None):
+    """Remove the links that name no node (only the link nodes of among, a list of the nodes themselves, if
+    given), until none is left (a chain of links goes with its end); the removed paths. among holds the nodes,
+    not their id(): the caller keeps them alive, so no node made later can share the id of one of them."""
+    removed = []
+    ids = None if among is None else {id(node) for node in among}
+    while True:
+        gone = [path for path in dangling_links(root) if ids is None or id(find_node(root, path)) in ids]
+        if not gone:
+            return removed
+        for path in gone:
+            remove_node(root, path)
+        removed += gone
+
+
 def iter_nodes(root, prefix=""):
     for child in node_children(root):
         path = f"{prefix}/{node_get(child, A_NAME)}"
