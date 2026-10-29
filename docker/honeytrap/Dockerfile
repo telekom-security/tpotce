@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 ENV DEBIAN_FRONTEND=noninteractive
 #
 # Include dist
@@ -9,7 +9,8 @@ RUN apt-get update && \
     apt-get -y upgrade && \
 #
 # Install packages
-    apt-get install -y autoconf \
+    apt-get install -y adduser \
+                       autoconf \
                        build-essential \
                        git \
                        iptables \
@@ -18,7 +19,7 @@ RUN apt-get update && \
                        libnetfilter-queue1 \
                        libnetfilter-queue-dev \
                        libjson-c-dev \
-                       libcurl4 \
+                       libcurl4t64 \
                        libcurl4-openssl-dev \
                        libtool \
                        libpq5 \
@@ -28,7 +29,7 @@ RUN apt-get update && \
                        wget && \
 #
 # Install honeytrap from source
-    git clone --depth 1 --branch v1.1.2 https://github.com/telekom-security/honeytrap /root/honeytrap && \
+    git clone --depth 1 --branch v1.1.3 https://github.com/telekom-security/honeytrap /root/honeytrap && \
     cd /root/honeytrap/ && \
     autoreconf -vfi && \
     ./configure \

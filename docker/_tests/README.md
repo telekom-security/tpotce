@@ -27,6 +27,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh heralding
 ./docker/_tests/run.sh honeyaml
 ./docker/_tests/run.sh honeypots
+./docker/_tests/run.sh honeytrap
 ./docker/_tests/run.sh log4pot
 ./docker/_tests/run.sh logstash_fixtures
 ./docker/_tests/run.sh mailoney
@@ -92,6 +93,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/honeyaml.sh --image dtagdevsec/honeyaml:24.04.2
 ./docker/_tests/tests/honeypots.sh
 ./docker/_tests/tests/honeypots.sh --image dtagdevsec/honeypots:24.04.2
+./docker/_tests/tests/honeytrap.sh --image dtagdevsec/honeytrap:24.04.2
 ./docker/_tests/tests/log4pot.sh
 ./docker/_tests/tests/log4pot.sh --image log4pot:alpine-check --http-port 18080
 ./docker/_tests/tests/logstash_fixtures.sh
@@ -125,6 +127,16 @@ stopping its containers, it uses the tested image in a networkless, read-only
 helper container to return ownership of its temporary SSH-key directory to
 that user. A failure keeps the artifacts and makes the test fail; no `sudo`
 or additional cleanup image is needed.
+
+The Honeytrap test configures NFQUEUE only inside its container network
+namespace. A second container probes 2222, 2323 and 31337/tcp; each probe must
+receive a response, produce JSON and attacker.log entries, and save a payload
+identical to the JSON event. It also checks for runtime errors. This does not
+test host firewall rules: validate `tpotinit`'s `rules.sh` and host-network
+Honeytrap in a disposable Linux VM, including SSH on 64295, the web UI on
+64297, sensor ingest on 64294, the other reserved management ports, published
+honeypot ports, restart and rule removal. Never run host-rule experiments on
+a production T-Pot or the development host.
 
 The Dionaea test maps the tested service ports to temporary loopback ports,
 mounts a temporary config without `services/sip.yaml`, and skips the SIP ports
