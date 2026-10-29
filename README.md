@@ -1455,7 +1455,7 @@ The software that T-Pot is built on uses the following licenses.
 [cowrie](https://github.com/cowrie/cowrie/blob/main/LICENSE.rst),
 [mailoney](https://github.com/phin3has/mailoney),
 [Elastic License](https://www.elastic.co/licensing/elastic-license),
-[Wordpot](https://github.com/gbrindisi/wordpot)
+[Wordpot](https://github.com/telekom-security/wordpot)
 <br>AGPL-3.0:
 [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
 <br>LGPL 2.1:
@@ -1510,7 +1510,7 @@ Without open source and the development community we are proud to be a part of, 
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/project_members),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
 [suricata](https://github.com/OISF/suricata/graphs/contributors),
-[wordpot](https://github.com/gbrindisi/wordpot)
+[wordpot](https://github.com/telekom-security/wordpot/graphs/contributors)
 <br><br>
 
 ## **The following companies and organizations**
