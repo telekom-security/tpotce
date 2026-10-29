@@ -5,6 +5,7 @@ services:
     build: .
     container_name: glutton
     restart: always
+    stop_grace_period: 30s
     tmpfs:
      - /var/lib/glutton:uid=2000,gid=2000
      - /run:uid=2000,gid=2000
@@ -21,4 +22,4 @@ services:
     volumes:
      - $HOME/tpotce/data/glutton/log:/var/log/glutton
      - $HOME/tpotce/data/glutton/payloads:/opt/glutton/payloads
-#     - $HOME/tpotce/docker/glutton/dist/rules.yaml:/opt/glutton/config/rules.yaml
+     - $HOME/tpotce/data/glutton/samples:/opt/glutton/samples

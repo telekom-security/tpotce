@@ -1,12 +1,14 @@
 #!/bin/bash
 
+unset CDPATH
+myBIN="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 ### Vars, Ports for Standard services
 myHOSTPORTS="7634 64294 64295 64296 64297 64298 64299 64305"
 myDOCKERCOMPOSEYML="$1"
 myRULESFUNCTION="$2"
 myNFTTABLE="tpot"
 myRULESFAILED=0
-myNFQUNSUPPORTED=0
 
 function fuCHECKFORARGS {
 ### Check if args are present, if not throw error
@@ -21,15 +23,17 @@ fi
 }
 
 function fuNFQCHECK {
-### Check if honeytrap or glutton is actively enabled in docker-compose.yml
+### Check if a catch-all honeypot is enabled in docker-compose.yml
 
-myNFQCHECK=$(grep -e '^\s*honeytrap:\|^\s*glutton:' $myDOCKERCOMPOSEYML | tr -d ': ' | uniq)
+if ! myNFQCHECK=$(yq -r '.services | keys | .[] | select(. == "honeytrap" or . == "glutton")' "$myDOCKERCOMPOSEYML"); then
+    echo "Cannot read the Compose services; no catch-all rules will be installed."
+    exit 1
+fi
 if [ "$myNFQCHECK" == "" ];
   then
-    echo "No NFQ related honeypot detected, no firewall rules needed. Exiting."
-    exit
+    echo "No catch-all honeypot detected, no firewall rules needed. Exiting."
   else
-    echo "Detected $myNFQCHECK as NFQ based honeypot, firewall rules needed. Continuing."
+    echo "Detected $myNFQCHECK as catch-all honeypot, firewall rules needed. Continuing."
 fi
 }
 
@@ -113,24 +117,6 @@ if [ "$myNFQCHECK" == "honeytrap" ] && [ "$myBACKEND" == "nft" ];
     fuRUN nft add rule ip $myNFTTABLE input tcp flags syn ct state new queue num 0
 fi
 
-### Setting up iptables rules for glutton
-### Kept on iptables even where the kernel has no xtables modules: glutton adds
-### its own NFQ rules to the same chain, and an accept in a separate nftables
-### table would not keep glutton from queueing these ports.
-if [ "$myNFQCHECK" == "glutton" ];
-  then
-    fuRUN iptables -w -t mangle -A PREROUTING -s 127.0.0.1 -j ACCEPT
-    fuRUN iptables -w -t mangle -A PREROUTING -d 127.0.0.1 -j ACCEPT
-
-    for myPORT in $myRULESPORTS; do
-      fuRUN iptables -w -t mangle -A PREROUTING -p tcp --dport $myPORT -j ACCEPT
-    done
-    # No need for NFQ forwarding, such rules are set up by glutton
-    if [ "$myBACKEND" == "nft" ];
-      then
-        myNFQUNSUPPORTED=1
-    fi
-fi
 }
 
 function fuUNSETRULES {
@@ -158,22 +144,29 @@ if [ "$myNFQCHECK" == "honeytrap" ] && [ "$myBACKEND" == "nft" ];
     fi
 fi
 
-### Removing iptables rules for glutton
-if [ "$myNFQCHECK" == "glutton" ];
-  then
-    fuRUN iptables -w -t mangle -D PREROUTING -s 127.0.0.1 -j ACCEPT
-    fuRUN iptables -w -t mangle -D PREROUTING -d 127.0.0.1 -j ACCEPT
-
-    for myPORT in $myRULESPORTS; do
-      fuRUN iptables -w -t mangle -D PREROUTING -p tcp --dport $myPORT -j ACCEPT
-    done
-    # No need for removing NFQ forwarding, such rules are removed by glutton
-fi
 }
 
 # Main
 fuCHECKFORARGS
 fuNFQCHECK
+# Also remove stale Glutton rules when switching to an edition without it.
+if [ "$myRULESFUNCTION" == "unset" ] || [ "$myNFQCHECK" != "glutton" ]; then
+    python3 "$myBIN/glutton_rules.py" unset || exit 1
+fi
+if [ -z "$myNFQCHECK" ]; then
+    exit 0
+fi
+if [ "$myNFQCHECK" == "glutton" ]; then
+    if [ "$myRULESFUNCTION" == "set" ]; then
+        python3 "$myBIN/glutton_rules.py" set "$myDOCKERCOMPOSEYML"
+        exit $?
+    fi
+    exit 0
+fi
+if [ "$myNFQCHECK" != "honeytrap" ]; then
+    echo "Glutton and Honeytrap cannot run together."
+    exit 1
+fi
 fuDETECTBACKEND
 fuGETPORTS
 
@@ -194,15 +187,5 @@ if [ "$myRULESFAILED" -ne 0 ];
       else
         echo "$myRULESFAILED rule(s) could not be removed, review 'iptables -S' and 'nft list ruleset'."
     fi
-    exit 1
-fi
-
-### glutton brings its own NFQ rules and needs the xtables modules for them, the
-### exceptions set above cannot make up for that
-if [ "$myNFQUNSUPPORTED" == "1" ];
-  then
-    echo
-    echo "This kernel has no xtables modules, glutton sets up its own NFQ rules"
-    echo "through iptables and will not receive traffic on this host."
     exit 1
 fi

@@ -64,6 +64,32 @@
         }
       ],
       "properties": {
+        "glutton": {
+          "properties": {
+            "decoded": {
+              "type": "object",
+              "enabled": false
+            },
+            "payload": {
+              "type": "text",
+              "index": false
+            },
+            "duration_ms": {
+              "type": "long"
+            },
+            "frame_count": {
+              "type": "long"
+            },
+            "tls": {
+              "properties": {
+                "clientHello": {
+                  "type": "text",
+                  "index": false
+                }
+              }
+            }
+          }
+        },
         "geoip.ip": {
           "type": "ip"
         },

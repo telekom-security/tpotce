@@ -1740,7 +1740,7 @@ class CoverageTest(unittest.TestCase):
         self.assertEqual(set(probes.PROBES) - honeypots, set())
         self.assertEqual(set(probes.PROBES) & inventory.EXTERNAL, set())
         self.assertEqual(inventory.EXTERNAL, {"honeytrap", "glutton", "p0f", "suricata"})
-        self.assertEqual(inventory.EXTERNAL_HINT, "seen only for traffic from outside (NFQ / passive capture)")
+        self.assertEqual(inventory.EXTERNAL_HINT, "seen only for traffic from outside (NFQUEUE / TPROXY / passive capture)")
         for name in inventory.EXTERNAL:
             self.assertIn(name, self.groups)
         for name, group in self.groups.items():
@@ -2766,7 +2766,7 @@ class FixturesTest(unittest.TestCase):
             for word in ("/dev/tcp", "pty.spawn", "/bin/sh", "jndi:", "wget ", "curl "):
                 self.assertNotIn(word, text, name)
 
-    def test_glutton_takes_the_time_of_its_slog_line_in_both_pipelines(self):
+    def test_glutton_takes_session_and_legacy_times_in_both_pipelines(self):
         blocks = []
         for conf in ("logstash.conf", "http_output.conf"):
             with open(os.path.join(os.path.dirname(LOGSTASH_CONF), conf), encoding="utf-8") as handle:
@@ -2776,7 +2776,10 @@ class FixturesTest(unittest.TestCase):
         self.assertEqual(blocks[0], blocks[1])
         self.assertIn('match => [ "time", "ISO8601" ]', blocks[0])
         self.assertIn('match => [ "ts", "UNIX" ]', blocks[0])
-        self.assertIn('"time":"{ts:', fixtures.template("glutton"))
+        self.assertIn('match => [ "timestamp", "ISO8601" ]', blocks[0])
+        self.assertIn('"timestamp":"{ts:', fixtures.template("glutton"))
+        for field in ("srcHost", "dstPort", "handlers", "decoded", "tls"):
+            self.assertIn('"' + field + '" =>', blocks[0])
 
     def test_the_smoke_test_feeds_every_fixture_through_logstash(self):
         self.assertTrue(os.access(FIXTURE_SMOKE, os.X_OK))

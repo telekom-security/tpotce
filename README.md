@@ -311,7 +311,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 ¹ The Tarpit edition has no Mailoney, there Heralding also takes 21, 23, 25, 443, 445, 465, 587, 1433, 1883, 3306, 3389 and 6379 (tcp) and 5060 (tcp / udp). The Mac / Windows edition adds 445 (tcp).<br>
 ² The Mac / Windows edition leaves out 445 (tcp), Heralding takes it there.
 
-The ports are those of the standard edition (`compose/standard.yml`), a honeypot it does not run is listed with the edition it belongs to. Honeytrap (standard edition) and Glutton (with the customizer) publish no port of their own: they take the TCP connections to every port no other honeypot listens on.
+The ports are those of the standard edition (`compose/standard.yml`), a honeypot it does not run is listed with the edition it belongs to. Honeytrap (standard edition) and Glutton (with the customizer) publish no port of their own: Honeytrap takes unused TCP ports, Glutton unused IPv4 TCP and UDP ports. Glutton also protects published Compose ports, T-Pot's reserved ports and normal host listeners (see [Glutton catch-all](#glutton-catch-all)).
 
 Ports and availability of SaaS services may vary based on your geographical location.
 
@@ -412,6 +412,68 @@ The SSH host keys of each persona and the state of the rotation (`persona-state.
 
 The emulated shell supports line continuation, here-documents and positional arguments in scripts, including quoted `"$@"`; it is not a full shell of the advertised operating system. T-Pot keeps its persona-specific command behavior and bounded arithmetic expansion on top of Cowrie's parser. The optional MalwareBazaar output plugin is disabled by default; upgrading Cowrie does not enable sample uploads.
 <br><br>
+
+## Glutton catch-all
+
+Glutton complements the other honeypots by answering on unused IPv4 TCP and UDP ports.
+Select it instead of Honeytrap with the customizer (*Edition & services* in the T-Pot
+Manager, or `tpot customize --base standard --add glutton --remove honeytrap`).
+They cannot run together. Glutton requires Linux Docker Engine, not Docker Desktop.
+
+The image uses a pinned Glutton commit, Debian 13 slim and checksummed Zeek Spicy
+1.17 packages for amd64 and arm64. It includes upstream's TCP/UDP protocol handlers,
+TLS detection, Spicy parsers, reply budgets and storage limits. External producers
+remain disabled. The local producer writes one structured event per produced
+TCP/UDP session to `data/glutton/log/glutton.log`, after upstream's sanitisation
+and event budget. Diagnostic slog messages go to `diagnostic.log` and container
+stdout, not into Elasticsearch as attacks. Payloads and samples are stored under
+`data/glutton/payloads` and `data/glutton/samples`.
+
+The Glutton dashboard includes transport, protocol stacks, commands, payload
+SHA256, scanner attribution, TLS SNI, JA3/JA4, version and ALPN. The session table
+also shows duration, frame count and end reason. Missing values mean the session
+did not provide that metadata; scanner attribution is heuristic, not verified
+identity. Logstash keeps the complete decoded frames in `glutton.decoded` in
+`_source`, but does not dynamically index their protocol-dependent shapes.
+Base64 payloads and raw TLS ClientHello bytes are likewise not indexed.
+The sensor and HIVE pipelines accept the structured format and drain legacy logs.
+
+**ewsposter rollout dependency:** the new session format requires
+[telekom-security/ewsposter#33](https://github.com/telekom-security/ewsposter/pull/33).
+Merge that upstream change and update the ewsposter image pin through the normal
+release process before deploying this Glutton update with event submission.
+T-Pot carries no ewsposter parser patch or unmerged PR pin. The old parser ignores
+the new session records; Kibana ingestion is independent of that PR.
+After dashboard changes run `python3 docker/glutton/tools/build_dashboard.py`
+(`--check` verifies the generated objects), then regenerate the Kibana manifest
+after committing the export.
+
+**tpotinit owns the firewall**, using its own `ip tpot_glutton` nftables table.
+Glutton does not add or delete iptables rules, nor change SSH conntrack handling.
+The host kernel must support native nftables TPROXY, socket lookup and conntrack.
+This is checked by installing the complete ruleset; on failure Glutton refuses to
+start, while the other T-Pot services can continue. A working `iptables-nft`
+command alone does not prove that the required kernel features are present.
+
+The rules protect SSH (`64295/tcp`), the Web UI (`64297/tcp`), sensor ingest
+(`64294/tcp`), T-Pot's reserved ports (`64290-64309`, plus `7634`) and every
+explicitly published Compose port, including ranges and UDP. Normal host sockets
+take priority dynamically, including services started after Glutton. Compose
+bindings with random or unresolved host ports are refused instead of guessed.
+Only local IPv4 destinations arriving on the capture interface are candidates;
+IPv6, forwarded traffic, other interfaces and loopback are not redirected.
+
+Stopping or killing Glutton closes its transparent listeners. Without a listener,
+the native TPROXY rule falls through instead of blackholing the port. tpotinit
+removes its own table on shutdown or an edition change; it never flushes the host
+ruleset. Exact historical Glutton iptables redirects are removed during migration,
+without deleting foreign or modified rules. The image also fixes blocking listener
+file descriptors so normal shutdown can interrupt TCP accept and UDP reads.
+
+To test a build, use `docker/_builder/builder.sh -i glutton -a host -T`. The builder
+also prepares the tpotinit image needed by the isolated integration test. The test
+checks protected TCP/UDP services, dynamically opened sockets, protocol replies,
+JSON events, restart, SIGTERM and SIGKILL without modifying the host firewall.
 
 # System Placement
 It is recommended to get yourself familiar with how T-Pot and the honeypots work before you start exposing towards the internet. For a quickstart run a T-Pot installation in a virtual machine.

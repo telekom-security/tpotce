@@ -21,6 +21,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh elasticpot
 ./docker/_tests/run.sh endlessh
 ./docker/_tests/run.sh ewsposter
+./docker/_tests/run.sh glutton
 ./docker/_tests/run.sh go-pot
 ./docker/_tests/run.sh h0neytr4p
 ./docker/_tests/run.sh hellpot
@@ -81,6 +82,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/endlessh.sh --ssh-port 2222
 ./docker/_tests/tests/ewsposter.sh
 ./docker/_tests/tests/ewsposter.sh --image dtagdevsec/ewsposter:24.04.2
+./docker/_tests/tests/glutton.sh --image dtagdevsec/glutton:24.04.2 --init-image dtagdevsec/tpotinit:24.04.2
 ./docker/_tests/tests/go-pot.sh
 ./docker/_tests/tests/go-pot.sh --http-port 18080
 ./docker/_tests/tests/h0neytr4p.sh
@@ -137,6 +139,18 @@ Honeytrap in a disposable Linux VM, including SSH on 64295, the web UI on
 64297, sensor ingest on 64294, the other reserved management ports, published
 honeypot ports, restart and rule removal. Never run host-rule experiments on
 a production T-Pot or the development host.
+
+The Glutton test needs both the Glutton and tpotinit images locally
+(`--image` and `--init-image`). It runs the actual tpotinit firewall helper in a
+shared, isolated container network namespace, publishing only dynamic IPv4 loopback
+ports. It checks reserved and Compose ports, existing and newly opened host
+listeners, an established SSH-port connection, TCP/UDP protocol replies, JSON logs,
+legacy-rule migration where supported, SIGTERM, SIGKILL and both shutdown orders.
+It verifies structured TCP/UDP sessions, real TLS JA3/JA4 and nested protocol
+stacks, and keeps diagnostic messages out of the session log.
+Native nftables TPROXY support is mandatory: the integration test fails rather than
+skipping it. `docker/_builder/builder.sh -i glutton -a host -T` also builds its
+tpotinit dependency automatically.
 
 The Dionaea test maps the tested service ports to temporary loopback ports,
 mounts a temporary config without `services/sip.yaml`, and skips the SIP ports

@@ -22,10 +22,10 @@ HONEYPOT_GROUPS = ("honeypots", "conpot", "llm")
 PASSIVE_GROUPS = ("nsm",)
 CATALOGUE = os.path.join("compose", "tpot_services.yml")
 
-# what only sees traffic from outside: honeytrap and glutton take the connections the NFQ rules of
+# what only sees traffic from outside: honeytrap and glutton take the connections the firewall rules of
 # tpotinit hand them, p0f and suricata capture passively; a probe from this host reaches none
 EXTERNAL = {"honeytrap", "glutton", "p0f", "suricata"}
-EXTERNAL_HINT = "seen only for traffic from outside (NFQ / passive capture)"
+EXTERNAL_HINT = "seen only for traffic from outside (NFQUEUE / TPROXY / passive capture)"
 
 # 64290 - 64309 are the ports of T-Pot itself (SSH, web UI, sensor ingest), as in hptest.sh
 OWN_PORTS = range(64290, 64310)

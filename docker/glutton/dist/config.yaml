@@ -2,13 +2,15 @@ ports:
   tcp: 5000
   udp: 5001
   ssh: 64295
+  # tpotinit owns all T-Pot firewall exceptions; never bypass host conntrack.
+  ssh_notrack: false
 
 rules_path: config/rules.yaml
 
-addresses: ["1.2.3.4", "5.4.3.2"]
+addresses: []
 
 producers:
-  enabled: false
+  enabled: true
   http:
     enabled: false
     remote: https://localhost:9000
@@ -22,3 +24,10 @@ producers:
 
 conn_timeout: 45
 max_tcp_payload: 4096
+dial_timeout: 5
+
+spicy:
+  enabled: true
+
+tpot:
+  events: /var/log/glutton/glutton.log

@@ -267,7 +267,7 @@ fuGALAH () {
 # Let's create a function to clean up and prepare glutton data
 fuGLUTTON () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
-  mkdir -vp /data/glutton/{log,payloads}
+  mkdir -vp /data/glutton/{log,payloads,samples}
   fuDATA_MODES /data/glutton
   chown tpot:tpot /data/glutton -R
 }

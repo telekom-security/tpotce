@@ -1102,7 +1102,7 @@ class SmokeTest(BuilderHarness):
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
         for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes", "tpotinit_users",
-                     "logstash_fixtures", "nginx", "redis"):
+                     "logstash_fixtures", "nginx", "glutton", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
 
@@ -1117,12 +1117,14 @@ class SmokeTest(BuilderHarness):
         self.assertEqual([line[2:] for line in lines if line.startswith("N ")],
                          ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
                           "tpotinit_users",
-                          "logstash_fixtures", "nginx", "redis"])
+                          "logstash_fixtures", "nginx", "glutton", "redis"])
         self.assertEqual([line[2:] for line in lines if line.startswith("A ")],
                          ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 5
-                         + ["--image hub/logstash:1.0", "--image hub/nginx:1.0", "--image hub/redis:1.0"])
+                         + ["--image hub/logstash:1.0", "--image hub/nginx:1.0",
+                            "--image hub/glutton:1.0 --init-image hub/tpotinit:1.0",
+                            "--image hub/redis:1.0"])
         self.assertEqual([line[2:] for line in lines if line.startswith("I ")],
-                         ["cowrie", "tpotinit", "logstash", "nginx", "redis"])
+                         ["cowrie", "tpotinit", "logstash", "nginx", "glutton", "redis"])
         notes = [line[2:] for line in lines if line.startswith("W ")]
         self.assertEqual(len(notes), 1, notes)
         self.assertIn("No smoke test for adbhoney", notes[0])
@@ -1137,11 +1139,30 @@ class SmokeTest(BuilderHarness):
         self.assertEqual([line[2:] for line in lines if line.startswith("I ")], ["tpotinit"])
         self.assertEqual([line[2:] for line in lines if line.startswith("W ")],
                          [f"No smoke test for tpotinit ({self.tests}/tpotinit_ilm.sh)"])
+
         result = self.bash('myHUB=hub myGHCR=ghcr.io/me myVER=1.0 myPUSH_GHCR=1\n'
                            'fuSMOKE_PLAN redis\n'
                            'printf "N %s\\n" "${mySMOKE_NAMES[@]}"; printf "A %s\\n" "${mySMOKE_ARGS[@]}"',
                            TPOT_BUILDER_TESTS_DIR=self.tests)
         self.assertEqual(result.stdout.splitlines(), ["N redis", "A --image ghcr.io/me/redis:1.0"])
+
+    def test_glutton_needs_tpotinit_once_even_when_selected_later(self):
+        for selection in ("glutton", "glutton tpotinit", "tpotinit glutton"):
+            result = self.bash(f"myHUB=hub myVER=1.0\nfuSMOKE_PLAN {selection}\n"
+                               'printf "%s\\n" "${mySMOKE_IMAGES[@]}"',
+                               TPOT_BUILDER_TESTS_DIR=self.tests)
+            images = result.stdout.splitlines()
+            self.assertEqual(images.count("glutton"), 1, images)
+            self.assertEqual(images.count("tpotinit"), 1, images)
+
+    def test_glutton_host_smoke_builds_its_tpotinit_dependency(self):
+        rc, out = self.builder("-i", "glutton", "-a", "host", "-T",
+                               TPOT_BUILDER_TESTS_DIR=self.tests)
+        self.assertEqual(rc, 0, out)
+        self.assertTrue(any(" build glutton tpotinit " in line and "override-load.yml" in line
+                            for line in self.calls()), self.calls())
+        self.assertTrue(any("test glutton --image " in line and " --init-image " in line
+                            for line in self.calls()), self.calls())
 
     def test_every_test_the_plan_names_is_in_the_repo(self):
         names = set()
@@ -1252,7 +1273,7 @@ class SmokeTest(BuilderHarness):
         self.assertIn("### [ERROR] - docker compose 2.20.3 is too old: the smoke test build (-T) needs 2.24.4.", out)
         self.assertFalse(any(" build " in line for line in self.calls()), self.calls())
         # no test for the image, or this host's platform without a push (no load build): no override
-        for args in (["-i", "glutton", "-T"], ["-i", "cowrie"]):
+        for args in (["-i", "map", "-T"], ["-i", "cowrie"]):
             with self.subTest(args=args):
                 rc, out = self.builder(*args, STUB_COMPOSE_VERSION="2.20.3", TPOT_BUILDER_TESTS_DIR=self.tests)
                 self.assertEqual(rc, 0, out)

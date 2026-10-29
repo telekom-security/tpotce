@@ -1,0 +1,159 @@
+--- a/glutton.go
++++ b/glutton.go
+@@ -326,6 +326,3 @@
+ 		case <-g.ctx.Done():
+-			if err := g.Server.udpConn.Close(); err != nil {
+-				g.Logger.Error("Failed to close UDP listener", producer.ErrAttr(err))
+-			}
+ 			return
+ 		default:
+@@ -335,3 +332,6 @@
+ 		if err != nil {
++			if g.ctx.Err() != nil {
++				return
++			}
+ 			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+ 				continue
+@@ -402,6 +402,3 @@
+ 		case <-g.ctx.Done():
+-			if err := g.Server.tcpListener.Close(); err != nil {
+-				g.Logger.Error("Failed to close TCP listener", producer.ErrAttr(err))
+-			}
+ 			return
+ 		default:
+@@ -411,3 +408,6 @@
+ 		if err != nil {
++			if g.ctx.Err() != nil {
++				return
++			}
+ 			g.Logger.Error("Failed to accept connection", producer.ErrAttr(err))
+ 			continue
+@@ -464,20 +464,8 @@
+ func (g *Glutton) Start() error {
+ 	g.startMonitor()
+ 
+-	var err error
+-	if g.ignorePorts, err = ignoredPortsFromConfig(); err != nil {
+-		return err
+-	}
+-	if err := setNoTrackIPTables(viper.GetString("interface"), g.ignorePorts); err != nil {
+-		return err
+-	}
+-	if err := setTProxyIPTables(viper.GetString("interface"), g.publicAddrs[0].String(), "tcp", uint32(g.Server.tcpPort), g.ignorePorts); err != nil {
+-		return err
+-	}
+-
+-	if err := setTProxyIPTables(viper.GetString("interface"), g.publicAddrs[0].String(), "udp", uint32(g.Server.udpPort), g.ignorePorts); err != nil {
+-		return err
+-	}
++	// T-Pot owns the native nftables rules, including all service exceptions.
++	// A stopped listener makes nft_tproxy fall through without redirecting.
+ 
+ 	wg := &sync.WaitGroup{}
+ 
+@@ -686,17 +674,18 @@
+ func (g *Glutton) Shutdown() {
+ 	g.cancel() // close all connection
+ 
+-	g.Logger.Info("Flushing TCP iptables")
+-	if err := flushTProxyIPTables(viper.GetString("interface"), g.publicAddrs[0].String(), "tcp", uint32(g.Server.tcpPort), g.ignorePorts); err != nil {
+-		g.Logger.Error("Failed to drop tcp iptables", producer.ErrAttr(err))
+-	}
+-	g.Logger.Info("Flushing UDP iptables")
+-	if err := flushTProxyIPTables(viper.GetString("interface"), g.publicAddrs[0].String(), "udp", uint32(g.Server.udpPort), g.ignorePorts); err != nil {
+-		g.Logger.Error("Failed to drop udp iptables", producer.ErrAttr(err))
+-	}
+-	g.Logger.Info("Flushing conntrack exemption iptables")
+-	if err := flushNoTrackIPTables(viper.GetString("interface"), g.ignorePorts); err != nil {
+-		g.Logger.Error("Failed to drop conntrack exemption iptables", producer.ErrAttr(err))
++	// Close listeners before the optional parser runtime shuts down.
++	if g.Server != nil {
++		if g.Server.tcpListener != nil {
++			if err := g.Server.tcpListener.Close(); err != nil {
++				g.Logger.Error("Failed to close TCP listener", producer.ErrAttr(err))
++			}
++		}
++		if g.Server.udpConn != nil {
++			if err := g.Server.udpConn.Close(); err != nil {
++				g.Logger.Error("Failed to close UDP listener", producer.ErrAttr(err))
++			}
++		}
+ 	}
+ 	if viper.GetBool("spicy.enabled") {
+ 		g.Logger.Info("Cleaning up and shutting down Spicy and HILTI runtimes")
+--- a/app/server.go
++++ b/app/server.go
+@@ -74,6 +74,7 @@
+ 
+ 	// capture and handle signals
+ 	sig := make(chan os.Signal, 1)
++	stopped := make(chan struct{})
+ 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+ 	go func() {
+ 		<-sig
+@@ -81,11 +82,12 @@
+ 		fmt.Print("\r")
+ 		exit()
+ 		fmt.Println()
+-		os.Exit(0)
++		close(stopped)
+ 	}()
+ 
+ 	if err := g.Start(); err != nil {
+ 		exit()
+ 		log.Fatal("Failed to start Glutton server:", err)
+ 	}
++	<-stopped
+ }
+--- a/server.go
++++ b/server.go
+@@ -3,7 +3,5 @@
+ import (
+ 	"errors"
+ 	"fmt"
+ 	"net"
+-
+-	"github.com/seud0nym/tproxy-go/tproxy"
+ )
+@@ -44,7 +42,7 @@
+ 	if err != nil {
+ 		return err
+ 	}
+-	if s.udpConn, err = tproxy.ListenUDP("udp4", udpAddr); err != nil {
++	if s.udpConn, err = listenTProxyUDP("udp4", udpAddr); err != nil {
+ 		return err
+ 	}
+ 	if s.udpConn == nil {
+--- a/producer/producer.go
++++ b/producer/producer.go
+@@ -38,2 +38,3 @@
+ type Producer struct {
++	tpotEvents    io.Writer
+ 	sensorID      string
+@@ -108,2 +109,5 @@
+-	if viper.GetBool("producers.hpfeeds.enabled") {
++	if err := producer.initTpotEvents(); err != nil {
++		return nil, err
++	}
++	if viper.GetBool("producers.hpfeeds.enabled") {
+ 		producer.hpfClient = hpfeeds.NewClient(
+@@ -131,6 +135,9 @@
+ 	event, err := p.makeEventTCP(handler, conn, md, payload, decoded)
+ 	if err != nil {
+ 		return err
+ 	}
++	if err := p.logTpotEvent(event); err != nil {
++		return err
++	}
+ 	if viper.GetBool("producers.hpfeeds.enabled") {
+ 		if err := p.logHPFeeds(event); err != nil {
+@@ -151,6 +158,9 @@
+ 	event, err := p.makeEventUDP(handler, srcAddr, dstAddr, md, payload, decoded)
+ 	if err != nil {
+ 		return err
+ 	}
++	if err := p.logTpotEvent(event); err != nil {
++		return err
++	}
+ 	if viper.GetBool("producers.hpfeeds.enabled") {
+ 		if err := p.logHPFeeds(event); err != nil {

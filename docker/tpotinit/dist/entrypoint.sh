@@ -430,7 +430,7 @@ echo
 # Update permissions
 update_permissions
 
-# Update interface settings (NSM services) and setup iptables to support NFQ based honeypots (glutton, honeytrap)
+# Update NSM interfaces and set up Honeytrap NFQUEUE / Glutton native nftables TPROXY.
 ### This is currently not supported on Docker for Desktop, only on Docker Engine for Linux
 if [ "${TPOT_OSTYPE}" == "linux" ];
   then

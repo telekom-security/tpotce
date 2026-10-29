@@ -282,6 +282,16 @@ for name, want in sorted(manifest.items()):
             problems.append(f"@timestamp {event.get('@timestamp')!r}, the event says {want['second']}")
         if "geoip" not in event or "latitude" not in (event.get("geoip") or {}):
             problems.append("no geoip.latitude")
+        if name == "glutton":
+            details = event.get("glutton", {})
+            if event.get("transport") != "tcp" or not details.get("handlers"):
+                problems.append("structured Glutton transport or handler stack missing")
+            if details.get("protocol_stack") != "tcp > spicy-http":
+                problems.append("structured Glutton ordered protocol stack missing")
+            if details.get("commands") != ["GET"] or details.get("duration_ms") != 12:
+                problems.append("structured Glutton commands or session duration missing")
+            if not isinstance(details.get("decoded"), list):
+                problems.append("structured Glutton decoded frames missing")
     expected = KNOWN.get(name)
     if expected:
         matching = [problem for problem in problems if problem.startswith(expected[0])]

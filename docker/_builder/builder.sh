@@ -1182,8 +1182,9 @@ fuDOCKER_READY () {
 
 fuLOAD_BUILD () {
   # the smoke tests need a build for this host loaded into docker: the run builds more
-  # than this host's platform, or pushes (a pushed build is not loaded)
-  ! fuHOST_ONLY || fuPUSHING
+  # than this host's platform, pushes, or Glutton also needs an unselected tpotinit
+  ! fuHOST_ONLY || fuPUSHING || \
+    { [[ " ${myLIST[*]} " == *" glutton "* ]] && [[ " ${myLIST[*]} " != *" tpotinit "* ]]; }
 }
 
 fuLOAD_NEEDED () {
@@ -1449,13 +1450,13 @@ fuSMOKE_PLAN () {
   # mySMOKE_IMAGES (once each) and what has none into mySMOKE_NOTES. A test has the name
   # of its image, tpotinit has tpotinit_env, tpotinit_ilm, tpotinit_kibana,
   # tpotinit_modes and tpotinit_users, logstash has logstash_fixtures; Elasticsearch,
-  # Kibana, the Attack Map and glutton have none
+  # Kibana and the Attack Map have none
   local myI myT myHAS
   local -a myTESTS
   mySMOKE_NAMES=() mySMOKE_ARGS=() mySMOKE_IMAGES=() mySMOKE_NOTES=()
   for myI in "$@"; do
     case "${myI}" in
-      elasticsearch|kibana|map|glutton) continue ;;
+      elasticsearch|kibana|map) continue ;;
       logstash) myTESTS=(logstash_fixtures) ;;
       tpotinit) myTESTS=(tpotinit_env tpotinit_ilm tpotinit_kibana tpotinit_modes tpotinit_users) ;;
       *) myTESTS=("${myI}") ;;
@@ -1466,12 +1467,18 @@ fuSMOKE_PLAN () {
         then
           mySMOKE_NAMES+=("${myT}")
           mySMOKE_ARGS+=("--image $(fuIMAGE_REF "${myI}")")
+          if [ "${myI}" = "glutton" ]; then
+            mySMOKE_ARGS[$((${#mySMOKE_ARGS[@]} - 1))]+=" --init-image $(fuIMAGE_REF tpotinit)"
+          fi
           myHAS="1"
         else mySMOKE_NOTES+=("No smoke test for ${myI} (${myTESTDIR}/${myT}.sh)")
       fi
     done
     [ -z "${myHAS}" ] || mySMOKE_IMAGES+=("${myI}")
   done
+  if [[ " ${mySMOKE_NAMES[*]} " == *" glutton "* ]] && [[ " ${mySMOKE_IMAGES[*]} " != *" tpotinit "* ]]; then
+    mySMOKE_IMAGES+=(tpotinit)
+  fi
   return 0
 }
 

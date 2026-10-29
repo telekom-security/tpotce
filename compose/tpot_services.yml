@@ -529,9 +529,10 @@ services:
 
 # Glutton service
   glutton:
-    x-tpot: {group: honeypots, description: "Catch-all for every port without a honeypot (NFQ)", conflicts: [honeytrap], linux_only: true}
+    x-tpot: {group: honeypots, description: "TCP/UDP catch-all for unused ports (native nftables TPROXY)", conflicts: [honeytrap], linux_only: true}
     container_name: glutton
     restart: always
+    stop_grace_period: 30s
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -549,6 +550,7 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/glutton/log:/var/log/glutton
      - ${TPOT_DATA_PATH}/glutton/payloads:/opt/glutton/payloads
+     - ${TPOT_DATA_PATH}/glutton/samples:/opt/glutton/samples
 
 # Go-pot service
   go-pot:
