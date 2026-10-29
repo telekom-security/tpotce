@@ -103,7 +103,8 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 - The folders `data/ddospot/bl` and `data/ddospot/db` are not used by Ddospot 2.0 and can be deleted with `sudo rm -rf ~/tpotce/data/ddospot/bl ~/tpotce/data/ddospot/db`.
 
 ### Dionaea
-- Dionaea 0.12.4 builds on Ubuntu 26.04 with bundled libemu and fixed TFTP, FTP and HTTP download paths. Dionaea stays idle when stdin is closed and when a mirror connect-back ends.
+- Dionaea 0.12.5 builds from the [T-Pot maintained fork](https://github.com/telekom-security/dionaea) on Ubuntu 26.04 with bundled libemu and fixed TFTP, FTP and HTTP download paths. The repository has moved from `t3chn0m4g3/dionaea` to `telekom-security/dionaea`, preserving its history, PRs and releases. Dionaea stays idle when stdin is closed and when a mirror connect-back ends.
+- Outbound connections made by emulated socket calls and profile-shell callbacks follow the configured download destination policy. Rejected connections produce no parent-child connection link; JSON keys and value types and the SQLite schema remain compatible.
 - The mirror service of Dionaea (port 42) is no longer enabled, port 42 is not published.
 - TFTP events carry `dst_port` 69 (the port of the service) in `dionaea.json` and `local_port` 69 in the `connections` table of the SQLite database; before it was the port of the transfer.
 - `dionaea-errors.log` is quieter and also shows errors of the services: it has the level `critical` now (`errors.levels=warning,error,critical`), and what clients send (unreadable or unknown messages of SMB, MQTT, MSSQL, DCERPC, SIP, memcache, printer and TFTP, ignored POST data) is logged at info or debug. If you use a `dionaea.cfg` of your own, set `errors.levels=warning,error,critical`.

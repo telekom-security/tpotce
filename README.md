@@ -142,7 +142,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [cowrie](https://github.com/cowrie/cowrie),
 [ddospot](https://github.com/telekom-security/ddospot),
 [dicompot](https://github.com/nsmfoo/dicompot),
-[dionaea](https://github.com/DinoTools/dionaea),
+[dionaea](https://github.com/telekom-security/dionaea),
 [elasticpot](https://gitlab.com/bontchev/elasticpot),
 [endlessh](https://github.com/telekom-security/endlessh),
 [galah](https://github.com/0x4D31/galah),
@@ -1400,6 +1400,8 @@ While T-Pot keeps trying to restart the services / containers run `docker logs -
 
 Elasticsearch runs with a 2 GB heap (`ES_JAVA_OPTS`) inside a `mem_limit` of 4 GB. On hosts with many CPU cores (about 28 or more) raise both, otherwise free text searches in Kibana over a daily index that holds close to its limit of 3000 fields may fail with `field expansion matches too many fields`. Elasticsearch derives that limit from the heap size and the number of search threads.
 
+Dionaea uses the [T-Pot maintained fork](https://github.com/telekom-security/dionaea), pinned to release 0.12.5. Outbound connections from emulated socket calls and profile-shell callbacks follow the configured download destination policy; rejected connections produce no parent-child connection link. JSON keys and value types and the SQLite schema remain compatible.
+
 Dionaea is limited to 1 GB of memory (no swap), 256 processes and 1 CPU (`mem_limit`, `memswap_limit`, `pids_limit`, `cpus`): a container that reaches its memory limit is restarted, and the host keeps its memory and CPU for the rest.
 
 Kibana runs with a 1 GB Node.js heap inside a `mem_limit` of 2 GB. The heap is set by `KIBANA_HEAP_MB` in `~/tpotce/docker/elk/kibana/Dockerfile` (or `--build-arg KIBANA_HEAP_MB=<MB>`) and has to stay well below the `mem_limit` of the `kibana` service in `docker-compose.yml`. If you use a `docker-compose.yml` of your own, raise its Kibana `mem_limit` to `2g`.
@@ -1430,7 +1432,7 @@ The software that T-Pot is built on uses the following licenses.
 <br>GPLv2:
 [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt),
 [galah](https://github.com/0x4D31/galah?tab=Apache-2.0-1-ov-file#readme),
-[dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE),
+[dionaea](https://github.com/telekom-security/dionaea/blob/master/LICENSE),
 [honeytrap](https://github.com/telekom-security/honeytrap/blob/v1.1.2/LICENSE),
 [suricata](https://suricata.io/features/open-source/)
 <br>GPLv3:
@@ -1496,7 +1498,7 @@ Without open source and the development community we are proud to be a part of, 
 [cowrie](https://github.com/cowrie/cowrie/graphs/contributors),
 [ddospot](https://github.com/telekom-security/ddospot/graphs/contributors),
 [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors),
-[dionaea](https://github.com/DinoTools/dionaea/graphs/contributors),
+[dionaea](https://github.com/telekom-security/dionaea/graphs/contributors),
 [docker](https://github.com/moby/moby/graphs/contributors),
 [elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members),
 [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors),
