@@ -86,12 +86,14 @@ def run_script_file(
     path: str,
     *,
     name: str,
+    args: list[str],
     not_found_message: str,
     binary_message: str,
 ) -> None:
     """Read ``path`` from the emulated filesystem and run it as a shell script.
 
     ``name`` is the script as invoked, which names it in its own errors.
+    ``args`` are its arguments, bound to its positional parameters.
     ``not_found_message`` / ``binary_message`` are the errors to write (with the
     caller's preferred ``bash:`` / ``-bash:`` prefix) when the file is missing or
     is an executable binary. The command's ``exit_code`` is set to the status of
@@ -131,6 +133,11 @@ def run_script_file(
         # Errors in a script name it as invoked, with the line: "./x.sh: line 3:".
         shell.name = name
         shell.syntax_label = None
+        # A script is a new process: it sees its own arguments, never the
+        # positional parameters of a function that ran it.
+        for key in [k for k in shell.environ if k.isdigit() or k in ("#", "@", "*")]:
+            del shell.environ[key]
+        shell.set_positional_params(args)
         protocol.cmdstack.append(shell)
         # Hand the whole script to the parser: newlines separate statements and
         # "#" lines (the shebang included) are comments, so flow control that

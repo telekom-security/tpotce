@@ -193,6 +193,13 @@ networks:
 EOF
 }
 
+test_release_artifacts() {
+  [[ -n "${KEYS_DIR}" && -d "${KEYS_DIR}" ]] || return 0
+  docker run --rm --network none --read-only --user 0:0 \
+    --entrypoint chown --mount "type=bind,src=${KEYS_DIR},dst=/keys" \
+    "${IMAGE}" -R -h "$(id -u):$(id -g)" /keys
+}
+
 wait_for_json_log() {
   local deadline=$((SECONDS + TEST_TIMEOUT))
 
@@ -1744,7 +1751,7 @@ runtime = Path("/tmp/cowrie/runtime")
 runtime_config_path = runtime / "cowrie.cfg"
 protocol_path = root / "src" / "cowrie" / "shell" / "protocol.py"
 offenders = []
-expected_source_commit = "c7773f49758bc021c8276924f05b5c58dc20d542"
+expected_source_commit = "085ed091a84ae1cee7f15b6e8aa549d11826a0f7"
 # docker/cowrie/tests/test_catalog.py PACKAGES + DEVICE_PACKAGES
 expected_package_managers = {
     "ubuntu-noble": {"apt", "apt-get", "dpkg"},

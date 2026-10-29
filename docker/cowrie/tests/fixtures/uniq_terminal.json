@@ -1,0 +1,29 @@
+{
+ "_source": {
+  "recorded": "2026-10-29",
+  "platform": "linux/arm64",
+  "method": "Container-only pty.openpty; canonical input, ECHO and OPOST disabled; complete input followed by Ctrl-D. Additionally send each chunk separately and collect output for 0.5 seconds before the next chunk. No shell is used.",
+  "images": {
+   "gnu8": "python:3.9-slim-bullseye@sha256:b9e06687fbfc57f6fe563e94e4c8751e39513dde89afc120dc6f56afe5ffc761",
+   "gnu9": "python:3.13-slim-bookworm@sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f",
+   "busybox": "Cowrie 3.1.4 test image on Alpine 3.24; BusyBox v1.37.0 (2026-01-10 15:38:28 UTC)"
+  },
+  "versions": ["GNU coreutils 8.32", "GNU coreutils 9.1", "BusyBox 1.37.0"],
+  "scope": "Final output and status match on all three images. Staged snapshots show different buffering: GNU emits the first line immediately, BusyBox retains its current group, T-Pot buffers terminal input until EOF. No claim of equivalent streaming."
+ },
+ "staged_output": {
+  "method": "Send the same chunk three times, then Ctrl-D; each value is cumulative output after its step.",
+  "gnu8_and_gnu9": {
+   "test\n": ["test\n", "test\n", "test\n", "test\n"],
+   "test\n\n": ["test\n\n", "test\n\ntest\n\n", "test\n\ntest\n\ntest\n\n", "test\n\ntest\n\ntest\n\n"]
+  },
+  "busybox_1.37.0": {
+   "test\n": ["", "", "", "test\n"],
+   "test\n\n": ["test\n", "test\n\ntest\n", "test\n\ntest\n\ntest\n", "test\n\ntest\n\ntest\n\n"]
+  }
+ },
+ "cases": [
+  {"input": "test\ntest\ntest\n", "output": "test\n", "status": 0},
+  {"input": "test\n\ntest\n\ntest\n\n", "output": "test\n\ntest\n\ntest\n\n", "status": 0}
+ ]
+}

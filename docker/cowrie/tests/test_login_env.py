@@ -2,7 +2,6 @@
 Debian PATH and /bin/bash, or [shell] login_path / login_shell of the persona (the Archer C7:
 the PATH of its /etc/profile and its /bin/ash)."""
 import configparser
-import copy
 import json
 import posixpath
 import shutil
@@ -13,7 +12,7 @@ import types
 import unittest
 from pathlib import Path
 
-from tests.test_patch import FIXTURE, PATCH, FakeConfig, method, tmpdir
+from tests.test_patch import FIXTURE, PATCH, FakeConfig, method, shell_with_environment, tmpdir
 from tpot_personas import catalog, render
 from tpot_personas.identity import draw
 
@@ -120,13 +119,7 @@ class LoginEnvTest(unittest.TestCase):
         """environ and exported of the first shell of a session (the patched HoneyPotShell.__init__)."""
         source = (self.root / "src/cowrie/shell/honeypot.py").read_text()
 
-        class Shell:
-            pass
-
-        init = method(source, "HoneyPotShell", "__init__", {"CowrieConfig": FakeConfig(values), "copy": copy,
-                                                            "HoneyPotShell": Shell})
-        shell = Shell()
-        init(shell, types.SimpleNamespace(cmdstack=[], environ=environ))
+        shell = shell_with_environment(source, values, environ)
         return shell.environ, shell.exported
 
     def test_the_history_variables_are_exported_where_the_profile_exports_them(self):
@@ -256,7 +249,7 @@ class MshLoginTest(unittest.TestCase):
         written = []
         protocol = types.SimpleNamespace(terminal=types.SimpleNamespace(write=written.append), ps=None,
                                          hostname="DIR-859")
-        shell = types.SimpleNamespace(interactive=True, protocol=protocol, cwd="/root",
+        shell = types.SimpleNamespace(interactive=True, protocol=protocol, cwd="/root", _pending=None,
                                       user={"username": "root" if uid == 0 else "user", "uid": uid,
                                             "home": "/root" if uid == 0 else "/home/user"})
         method(self.honeypot, "HoneyPotShell", "showPrompt", {"CowrieConfig": FakeConfig(self.values),
@@ -269,7 +262,7 @@ class MshLoginTest(unittest.TestCase):
         self.assertIn("\r\n\r\n# echo a\r\na\r\n# exit", MSH_PTY["echo a\nexit\n"][0])
         self.assertIn("# if true\r\n> then\r\n> echo y\r\n> fi\r\ny\r\n# ", MSH_PTY["if true\nthen\necho y\nfi\nexit\n"][0])
         self.assertEqual(self.prompt(0), ("# ", (b"# ", b"> ")))
-        # a trailing backslash continues with PS1 again (a known deviation: Cowrie has no continuation prompt)
+        # Recorded msh uses PS1 for backslash continuation; this is not a Cowrie continuation assertion.
         self.assertIn("# echo a \\\r\n# b\r\na b\r\n# ", MSH_PTY["echo a \\\nb\nexit\n"][0])
         # msh.c: "$ " for the others (the source default; no recording as another user)
         self.assertEqual(self.prompt(1000), ("$ ", (b"$ ", b"> ")))

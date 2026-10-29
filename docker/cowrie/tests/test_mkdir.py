@@ -1,5 +1,5 @@
 """mkdir of the patched Cowrie (MKDIR_COMMAND of patch_text_tools): GNU coreutils on servers, BusyBox on
-devices, with -p, -m MODE and -v. Upstream's mkdir takes every option for a folder name, so from v3.1.3 on
+devices, with -p, -m MODE and -v. Upstream's mkdir takes every option for a folder name, so from v3.1.4 on
 (which gives its errors status 1) `mkdir -p DIR && ...` stopped at an existing folder. The texts are those
 of mkdir in containers of debian:12 (coreutils 9.1, C.UTF-8), rockylinux:9 (8.32), centos:7 (8.22,
 en_US.UTF-8) and busybox:1.36.1 (musl, uClibc), the usage of older BusyBox from its sources (1.14.1,

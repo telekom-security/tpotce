@@ -316,6 +316,12 @@ test_cleanup() {
     test_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
   fi
 
+  if declare -F test_release_artifacts >/dev/null && ! test_release_artifacts; then
+    printf '[FAIL] Could not release test artifacts; kept at: %s\n' "${TEST_TMP_ROOT}" >&2
+    TEST_KEEP_ARTIFACTS="true"
+    (( status != 0 )) || status=1
+  fi
+
   if [[ "${TEST_KEEP_ARTIFACTS}" == "true" ]]; then
     if [[ -n "${TEST_TMP_ROOT}" ]]; then
       printf 'Artifacts kept at: %s\n' "${TEST_TMP_ROOT}" >&2

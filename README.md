@@ -409,6 +409,8 @@ Cowrie answers on SSH and Telnet as one of 16 systems, its persona: the servers 
 - `COWRIE_PERSONA_ROTATION`: The days Cowrie keeps its persona (0 to 365). With `0` (default) every start draws a new persona and identity. With i.e. `7` a start within seven days of the draw keeps persona, host name, release, hardware and boot time, so the uptime goes on, as long as `COWRIE_PERSONA` still names the persona. `docker logs cowrie` says why a start drew a new one.
 
 The SSH host keys of each persona and the state of the rotation (`persona-state.json`) are kept in `~/tpotce/data/cowrie/keys`. They stay with `TPOT_PERSISTENCE=off` as well, which only deletes the logs, tty records and downloads of Cowrie on every start (see [Log Persistence](#log-persistence)).
+
+The emulated shell supports line continuation, here-documents and positional arguments in scripts, including quoted `"$@"`; it is not a full shell of the advertised operating system. T-Pot keeps its persona-specific command behavior and bounded arithmetic expansion on top of Cowrie's parser. The optional MalwareBazaar output plugin is disabled by default; upgrading Cowrie does not enable sample uploads.
 <br><br>
 
 # System Placement

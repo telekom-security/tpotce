@@ -219,6 +219,7 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
                     self,
                     path,
                     name=name,
+                    args=self.args,
                     not_found_message=f"{prefix}{name}: No such file or directory\n",
                     binary_message=(
                         f"{prefix}{name}: cannot execute binary file: "
@@ -459,10 +460,18 @@ class HoneyPotExecProtocol(HoneyPotBaseProtocol):
                 # A final line without a terminator still runs, as bash does
                 # when its stdin ends without a newline.
                 self._dispatch_stdin_line()
-            if not any(getattr(item, "reads_stdin", False) for item in self.cmdstack):
+            readers = [
+                item for item in self.cmdstack if getattr(item, "reads_stdin", False)
+            ]
+            if not readers:
                 # The stdin-reading shell already exited (e.g. `exit`) and
                 # ended the process; nothing is left to deliver EOF to.
                 return
+            # The shell learns of the EOF now even when a running command
+            # receives it: once that command exits, the shell has nothing
+            # more to read and must finish its buffered lines, then end.
+            for shell in readers:
+                shell.stdin_eof = True
         HoneyPotBaseProtocol.eofReceived(self)
 
 

@@ -1,5 +1,6 @@
 import ast
 import configparser
+import copy
 import json
 import random
 import re
@@ -16,19 +17,22 @@ from pathlib import Path
 from tests.helpers import DIST, base_tree, tmpdir
 from tpot_personas import catalog, system, tree
 
-FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.3"
+FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.4"
 PATCH = DIST / "patch_cowrie_persona_support.py"
 
 
 def method(source, cls, name, namespace=None):
     """The function `name` of class `cls` in source, compiled on its own (with the
     module globals of namespace)."""
-    for node in ast.parse(source).body:
+    module = ast.parse(source)
+    future = [node for node in module.body
+              if isinstance(node, ast.ImportFrom) and node.module == "__future__"]
+    for node in module.body:
         if isinstance(node, ast.ClassDef) and node.name == cls:
             for item in node.body:
                 if isinstance(item, ast.FunctionDef) and item.name == name:
                     namespace = dict(namespace or {})
-                    exec(compile(ast.Module([item], []), "<patched>", "exec"), namespace)  # noqa: S102
+                    exec(compile(ast.Module(future + [item], []), "<patched>", "exec"), namespace)  # noqa: S102
                     return namespace[name]
     raise AssertionError(f"{cls}.{name} not found")
 
@@ -82,6 +86,26 @@ def module_parts(source, names, namespace):
         raise AssertionError(f"missing in patched source: {sorted(set(names) - found)}")
     exec(compile(ast.Module(keep, []), "<patched>", "exec"), namespace)  # noqa: S102
     return namespace
+
+
+def shell_with_environment(source, values, environ):
+    class Shell:
+        pass
+
+    init = method(source, "HoneyPotShell", "__init__", {
+        "CowrieConfig": FakeConfig(values), "copy": copy, "HoneyPotShell": Shell,
+        "CommandParser": lambda: None, "BashParser": lambda shell: None,
+        "FD_TERMINAL": "terminal",
+    })
+    protocol = types.SimpleNamespace(
+        cmdstack=[], environ=environ,
+        user=types.SimpleNamespace(uid=0, gid=0, username="root",
+                                   avatar=types.SimpleNamespace(home="/root")),
+        fs=types.SimpleNamespace(exists=lambda path: path == "/root"),
+    )
+    shell = Shell()
+    init(shell, protocol)
+    return shell
 
 
 CPUINFO = b"".join(b"processor\t: %d\nmodel name\t: Intel(R) Xeon(R)\n\n" % n for n in range(4))
@@ -150,7 +174,7 @@ class FakeCommand:
         self.code = code
 
     def check_arguments(self, application, args):
-        # verbatim logic of HoneyPotCommand.check_arguments in v3.1.3
+        # verbatim logic of HoneyPotCommand.check_arguments in v3.1.4
         files = []
         for arg in args:
             path = self.fs.resolve_path(arg, self.cwd)
@@ -303,6 +327,15 @@ def unbound_names(source):
 
 
 class PatchTest(unittest.TestCase):
+    def test_method_preserves_deferred_annotations(self):
+        source = ("from __future__ import annotations\n"
+                  "class Shell:\n"
+                  "    def get_env(self) -> dict[str, Any]:\n"
+                  "        return {}\n")
+        get_env = method(source, "Shell", "get_env")
+        self.assertEqual(get_env(None), {})
+        self.assertEqual(get_env.__annotations__["return"], "dict[str, Any]")
+
     def patched(self):
         root = tmpdir(self) / "cowrie"
         shutil.copytree(FIXTURE, root)
@@ -310,7 +343,7 @@ class PatchTest(unittest.TestCase):
                        check=True, capture_output=True, text=True)
         return root
 
-    def test_applies_to_v3_1_3(self):
+    def test_applies_to_v3_1_4(self):
         protocol = (self.patched() / "src/cowrie/shell/protocol.py").read_text()
         self.assertIn("skip_python_commands", protocol)
         self.assertIn("self.fs.resolve_path(cmd, cwd)", protocol)
@@ -2002,7 +2035,7 @@ class PatchTest(unittest.TestCase):
 
     def upstream_session(self, pid="ubuntu-noble", uid=1000, extra_modules=(), deferred=False):
         """A session on Cowrie's own HoneyPotCommand (exec_command, exit) and call_command of
-        v3.1.3, with the patched sudo, systemctl, apt and yum of a rendered persona. With deferred, a
+        v3.1.4, with the patched sudo, systemctl, apt and yum of a rendered persona. With deferred, a
         command's sleep waits as on the reactor: the rest of the command runs when run.settle() fires
         the sleeps, after its start() has returned."""
         from tpot_personas.identity import draw
@@ -3183,6 +3216,7 @@ class PatchTest(unittest.TestCase):
         class Shell:
             interactive = True
             protocol = Protocol()
+            _pending = None
 
         shell = Shell()
         shell.user = {"username": user, "uid": uid, "home": home}
@@ -3369,8 +3403,8 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/telnet/factory.py", "\nimport time\n", "\nimport time as clock\n"),
                  ("src/cowrie/telnet/factory.py", "\n\nclass HoneyPotTelnetFactory(protocol.ServerFactory):\n",
                   "\n\nclass HoneyPotTelnetFactory(protocol.ServerFactory):  # telnet\n"),
-                 ("src/cowrie/commands/fs.py", "        return re.compile(bmatch)\n",
-                  "        return re.compile(bmatch, 0)\n"),
+                 ("src/cowrie/commands/fs.py", "        return re.compile(bmatch, flags)\n",
+                  "        return re.compile(bmatch, flags=flags)\n"),
                  ("src/cowrie/commands/fs.py", "    def compile_match(self, match: str) -> re.Pattern[bytes]:\n",
                   "    def compile_match(self, match: str) -> re.Pattern:\n"),
                  ("src/cowrie/commands/fs.py", "class Command_grep(HoneyPotCommand):\n",
@@ -3513,8 +3547,8 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/shell/bashparse.py", '            elif part.data == "cmdsub":\n',
                   '            elif part.data in ("cmdsub",):\n'),
                  ("src/cowrie/shell/honeypot.py",
-                  "        for statement in statements:\n            error = self._find_syntax_error([statement])\n",
-                  "        for statement in statements:\n            error = self._find_syntax_error([statement])  # e\n"),
+                  "        for statement in statements:\n            if isinstance(statement, _Continuation):\n",
+                  "        for statement in statements:\n            if isinstance(statement, _Continuation):  # c\n"),
                  ("src/cowrie/shell/honeypot.py", "                self.cmdpending.append(error)\n                return False\n",
                   "                self.cmdpending.append(error)  # e\n                return False\n"),
                  ("src/cowrie/shell/honeypot.py", "            self.cmdpending.append(statement)\n        return True\n",

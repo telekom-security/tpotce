@@ -1,5 +1,5 @@
-"""The patched HoneyPotShell of Cowrie v3.1.3 (the whole honeypot.py, bashparse.py and script.py of
-tests/fixtures/v3.1.3-full, run through the patch file) with a small protocol and commands around it: the turn
+"""The patched HoneyPotShell of Cowrie v3.1.4 (the whole honeypot.py, bashparse.py and script.py of
+tests/fixtures/v3.1.4-full, run through the patch file) with a small protocol and commands around it: the turn
 the top-level shell gives the reactor between the commands of a line must keep order, statuses, EOF, Ctrl-C,
 nested shells, scripts and the script depth limit as they were. Needs twisted and lark (the venv)."""
 
@@ -15,6 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tests.test_patch import FIXTURE, PATCH
+from tests.helpers import shell_support
 
 try:
     from twisted.internet.task import Clock
@@ -22,9 +23,10 @@ try:
 except ImportError:
     Clock = None
 
-FULL = Path(__file__).parent / "fixtures" / "v3.1.3-full"
+FULL = Path(__file__).parent / "fixtures" / "v3.1.4-full"
 MODULES = ("cowrie", "cowrie.core", "cowrie.core.config", "cowrie.shell", "cowrie.shell.fs", "cowrie.shell.parser",
-           "cowrie.shell.pipe", "cowrie.shell.bashparse", "cowrie.shell.honeypot", "cowrie.shell.script")
+           "cowrie.shell.pipe", "cowrie.shell.bashparse", "cowrie.shell.honeypot", "cowrie.shell.script",
+           "cowrie.shell.prescan")
 
 
 class Config:
@@ -126,7 +128,7 @@ class Script(Cmd):
 
     def start(self):
         name = self.pp.argv0
-        self.script.run_script_file(self, self.fs.resolve_path(name, self.cwd), name=name,
+        self.script.run_script_file(self, self.fs.resolve_path(name, self.cwd), name=name, args=self.args,
                                     not_found_message=f"bash: {name}: No such file or directory\n",
                                     binary_message=f"bash: {name}: cannot execute binary file\n")
         self.exit()
@@ -182,14 +184,15 @@ def load(root):
     saved = {name: sys.modules.get(name) for name in MODULES}
     package, core, config, shell = (types.ModuleType(name) for name in MODULES[:4])
     config.CowrieConfig = Config()
-    fs, parser, pipe = (types.ModuleType(name) for name in MODULES[4:7])
+    fs, _, pipe = (types.ModuleType(name) for name in MODULES[4:7])
+    parser, prescan = shell_support()
     fs.FileNotFound = FileNotFoundError
-    parser.Field = str
-    parser.CommandParser = lambda: SimpleNamespace(parse_redirections=lambda tokens: (list(tokens), []))
     pipe.FD_CAPTURE, pipe.FD_TERMINAL, pipe.PipeProtocol = "capture", "terminal", object
     package.core, package.shell, core.config, shell.fs = core, shell, config, fs
     for module in (package, core, config, shell, fs, parser, pipe):
         sys.modules[module.__name__] = module
+    sys.modules["cowrie.shell.parser"] = parser
+    sys.modules["cowrie.shell.prescan"] = prescan
     loaded = {}
     for name in ("bashparse", "honeypot", "script"):
         path = root / "src" / "cowrie" / "shell" / f"{name}.py"
@@ -376,6 +379,24 @@ class RealShellTest(unittest.TestCase):
         self.assertEqual((protocol.out, protocol.ends), (["one\n", "1\n"], [0]))
         protocol, _ = self.run_line("./x.sh || echo failed", files=files)
         self.assertEqual(protocol.out, ["one\n", "failed\n"])
+
+    def test_script_arguments_and_quoted_at_keep_each_word(self):
+        files = {"/root/x.sh": b'for value in "$@"; do echo "$value"; done\necho "${#}"\n'}
+        protocol, _ = self.run_line('./x.sh "one two" three', files=files)
+        self.assertEqual((protocol.out, protocol.ends), (["one two\n", "three\n", "2\n"], [0]))
+
+    def test_interactive_continuation_keeps_input_until_complete(self):
+        protocol, shell = self.session(interactive=True)
+        shell.lineReceived('echo "one')
+        self.assertFalse(any("one" in text for text in protocol.out))
+        shell.lineReceived('two"')
+        self.drain()
+        self.assertIn("one\ntwo\n", protocol.out)
+
+    def test_heredoc_arithmetic_uses_the_persona_evaluator(self):
+        protocol, _ = self.run_line('true <<EOF\n$((3*4))\nEOF')
+        self.assertEqual(protocol.ends, [0])
+        self.assertFalse(any("command not found" in text for text in protocol.out))
 
     def test_a_script_that_runs_itself_stops_at_the_depth_limit(self):
         protocol, _ = self.run_line("./x.sh", files={"/root/x.sh": b"echo hi\n./x.sh\n"})

@@ -478,9 +478,9 @@ class LayoutTest(unittest.TestCase):
             for old in OLD_IDS:
                 self.assertFalse(old in text, f"{old} in {path.name}")
 
-    def test_dockerfile_pins_v3_1_3_and_boots_a_catalog_persona(self):
+    def test_dockerfile_pins_v3_1_4_and_boots_a_catalog_persona(self):
         text = DOCKERFILE.read_text()
-        for needle in ("ARG COWRIE_VERSION=v3.1.3", "ARG COWRIE_COMMIT=c7773f49758bc021c8276924f05b5c58dc20d542",
+        for needle in ("ARG COWRIE_VERSION=v3.1.4", "ARG COWRIE_COMMIT=085ed091a84ae1cee7f15b6e8aa549d11826a0f7",
                        "COWRIE_PERSONA=debian-bookworm ",
                        "python3 /root/dist/check_ssh_support.py --cowrie-root /home/cowrie/cowrie &&",
                        "python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie --self-test &&"):
