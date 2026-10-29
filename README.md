@@ -897,7 +897,9 @@ The customizer writes the edition and your changes into the header of the file. 
 <br><br>
 
 ## Honeytrap Downloads
-Honeytrap is built from [telekom-security/honeytrap v1.1.1](https://github.com/telekom-security/honeytrap/releases/tag/v1.1.1), following the repository transfer from `t3chn0m4g3`. HTTP downloads use libcurl instead of a shell command. Every HTTP destination and redirect is resolved and checked before connecting, with the connection pinned to the checked address and proxies disabled.
+Honeytrap is built from [telekom-security/honeytrap v1.1.2](https://github.com/telekom-security/honeytrap/releases/tag/v1.1.2), following the repository transfer from `t3chn0m4g3`. HTTP downloads use libcurl instead of a shell command. Every HTTP destination and redirect is resolved and checked before connecting, with the connection pinned to the checked address and proxies disabled.
+
+Version 1.1.2 fixes saving attack payloads and downloaded samples on Docker Desktop bind mounts: files are created with the correct `0644` permissions and checked through their open descriptors. Existing files are not overwritten. The smoke test checks that each probe's saved attack file contains exactly the payload recorded in its JSON event.
 
 HTTP, FTP and TFTP downloaders reject private, loopback, link-local, multicast and other non-public destinations by default. For a controlled private test network only, set an explicit IP or CIDR allowlist in [docker/honeytrap/dist/honeytrap.conf](docker/honeytrap/dist/honeytrap.conf):
 ```
@@ -1429,7 +1431,7 @@ The software that T-Pot is built on uses the following licenses.
 [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt),
 [galah](https://github.com/0x4D31/galah?tab=Apache-2.0-1-ov-file#readme),
 [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE),
-[honeytrap](https://github.com/telekom-security/honeytrap/blob/v1.1.1/LICENSE),
+[honeytrap](https://github.com/telekom-security/honeytrap/blob/v1.1.2/LICENSE),
 [suricata](https://suricata.io/features/open-source/)
 <br>GPLv3:
 [adbhoney](https://github.com/telekom-security/ADBHoney),

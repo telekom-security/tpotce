@@ -28,7 +28,7 @@ RUN apt-get update && \
                        wget && \
 #
 # Install honeytrap from source
-    git clone --depth 1 --branch v1.1.1 https://github.com/telekom-security/honeytrap /root/honeytrap && \
+    git clone --depth 1 --branch v1.1.2 https://github.com/telekom-security/honeytrap /root/honeytrap && \
     cd /root/honeytrap/ && \
     autoreconf -vfi && \
     ./configure \

@@ -271,8 +271,42 @@ wait_for_attacker_log_port() {
   return 1
 }
 
+wait_for_attack_file() {
+  local port="$1"
+  local token="$2"
+
+  python3 - "${ATTACKS_DIR}" "${port}" "${token}" "${TEST_TIMEOUT}" "${JSON_LOG_FILE}" <<'PY'
+import json
+import sys
+import time
+from pathlib import Path
+
+directory = Path(sys.argv[1])
+port = int(sys.argv[2])
+token = sys.argv[3].encode("ascii")
+deadline = time.monotonic() + int(sys.argv[4])
+events = [json.loads(line) for line in Path(sys.argv[5]).read_text().splitlines() if line.strip()]
+payload = next(
+    bytes.fromhex(event["attack_connection"]["payload"]["data_hex"])
+    for event in events
+    if int(event["attack_connection"]["local_port"]) == port
+    and token in bytes.fromhex(event["attack_connection"]["payload"]["data_hex"])
+)
+
+while time.monotonic() < deadline:
+    for path in directory.glob(f"from_port_{port}-tcp_*"):
+        if path.read_bytes() == payload:
+            print(f"Honeytrap attack payload found in {path}")
+            sys.exit(0)
+    time.sleep(0.2)
+
+print(f"No saved Honeytrap attack payload found for {port}/tcp", file=sys.stderr)
+sys.exit(1)
+PY
+}
+
 assert_no_runtime_errors() {
-  local pattern="Permission denied|Operation not permitted|NFQ.*(fail|error)|nfq.*(fail|error)|fatal|panic|Segmentation fault|Traceback|Assertion .*failed"
+  local pattern="SaveFile (error|warning)|Permission denied|Operation not permitted|NFQ.*(fail|error)|nfq.*(fail|error)|fatal|panic|Segmentation fault|Traceback|Assertion .*failed"
 
   if grep -R -I -E "${pattern}" "${LOG_DIR}" >/dev/null 2>&1; then
     test_die "Honeytrap runtime error found in log artifacts"
@@ -328,6 +362,10 @@ main() {
     test_info "Waiting for Honeytrap attacker.log entry on ${port}/tcp"
     wait_for_attacker_log_port "${port}" || test_die "Expected Honeytrap attacker.log entry was not found for ${port}/tcp"
     test_ok "Honeytrap attacker.log entry was written for ${port}/tcp"
+
+    test_info "Waiting for saved Honeytrap attack payload on ${port}/tcp"
+    wait_for_attack_file "${port}" "${token}" || test_die "Expected Honeytrap attack payload was not saved for ${port}/tcp"
+    test_ok "Honeytrap attack payload was saved for ${port}/tcp"
   done
 
   assert_no_runtime_errors
