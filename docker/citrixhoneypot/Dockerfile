@@ -9,13 +9,13 @@ RUN apk --no-cache -U upgrade && \
 		py3-pip \
 		python3 && \
     pip3 install --break-system-packages --no-cache-dir \
-        pyinstaller \
-        python-json-logger
+        pyinstaller
 #
 # Install CitrixHoneypot from GitHub
 RUN git clone https://github.com/telekom-security/citrixhoneypot /opt/citrixhoneypot && \
     cd /opt/citrixhoneypot && \
     git checkout 9f07fe5f5bde733278ffa73c6d87d54b808b3b27 && \
+    pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
     mkdir -p /opt/citrixhoneypot/logs /opt/citrixhoneypot/ssl && \
     openssl req \
           -nodes \
