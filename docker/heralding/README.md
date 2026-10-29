@@ -1,9 +1,9 @@
 # Heralding 2.0 integration
 
-The image builds the current master of `t3chn0m4g3/heralding` on Python 3.14 with uv
-(`uv.lock` owns the dependencies). It runs as uid/gid 2000 with cap_net_bind_service,
-a read-only rootfs and a writable `/tmp/heralding` tmpfs. Logs remain in `/var/log/heralding`.
-No tests are shipped in the image.
+The image builds the `v2.0.0` release from `telekom-security/heralding` at the commit pinned
+in `Dockerfile`, on Python 3.14 with uv (`uv.lock` owns the dependencies). It runs as uid/gid
+2000 with cap_net_bind_service, a read-only rootfs and a writable `/tmp/heralding` tmpfs.
+Logs remain in `/var/log/heralding`. No tests are shipped in the image.
 
 ## Build and test
 
@@ -18,8 +18,8 @@ docker/_tests/tests/heralding.sh --extended
 python3 -m unittest discover compose/tests
 ```
 
-The source is not pinned, so an upstream change reaches the next build. The log format
-that Logstash and ewsposter read (`auth.csv`, `log_session.json`) is guarded by
+The source is pinned to a release commit; a later release requires an explicit pin update.
+The log format that Logstash and ewsposter read (`auth.csv`, `log_session.json`) is guarded by
 `validation/test_compat.py`, which needs a Heralding checkout:
 
 ```sh

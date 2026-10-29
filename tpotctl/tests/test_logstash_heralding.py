@@ -14,7 +14,7 @@ ROOT = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 CONFS = [ROOT / "docker" / "elk" / "logstash" / "dist" / name for name in ("logstash.conf", "http_output.conf")]
 
 # The header of auth.csv as the fork writes it: AUTH_FIELDS of heralding/reporting/file_sink.py,
-# github.com/t3chn0m4g3/heralding master 8a21ca0cbeeeb53b05b20f773f1155ef13f78a73 (2.0.0).
+# github.com/telekom-security/heralding v2.0.0 3ad0110dad7bfd2b23bd1a30278f76368c8a8772.
 # The fork only appends new columns at the end.
 HEADER = ("timestamp", "auth_id", "session_id", "source_ip", "source_port", "destination_ip",
           "destination_port", "protocol", "username", "password", "password_hash")
