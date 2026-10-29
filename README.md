@@ -133,7 +133,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 
 ## Honeypots and Tools
 - T-Pot offers docker images for the following honeypots:<br>
-[adbhoney](https://github.com/huuck/ADBHoney),
+[adbhoney](https://github.com/telekom-security/ADBHoney),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub),
 [ciscoasa](https://github.com/telekom-security/ciscoasa_honeypot),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
@@ -1419,7 +1419,7 @@ The software that T-Pot is built on uses the following licenses.
 [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE),
 [suricata](https://suricata.io/features/open-source/)
 <br>GPLv3:
-[adbhoney](https://github.com/huuck/ADBHoney),
+[adbhoney](https://github.com/telekom-security/ADBHoney),
 [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE),
 [ewsposter](https://github.com/telekom-security/ewsposter),
 [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE),
@@ -1473,7 +1473,7 @@ Without open source and the development community we are proud to be a part of, 
 
 ## The developers and development communities of
 
-* [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors),
+* [adbhoney](https://github.com/telekom-security/ADBHoney/graphs/contributors),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub/graphs/contributors),
 [ciscoasa](https://github.com/telekom-security/ciscoasa_honeypot/graphs/contributors),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),

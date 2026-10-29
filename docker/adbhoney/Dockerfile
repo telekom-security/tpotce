@@ -16,9 +16,9 @@ RUN	apk --no-cache -U upgrade && \
 		pip3 install --break-system-packages pyinstaller && \
 #
 # Install adbhoney from git
-    git clone https://github.com/t3chn0m4g3/ADBHoney /opt/adbhoney && \
+    git clone https://github.com/telekom-security/ADBHoney /opt/adbhoney && \
     cd /opt/adbhoney && \
-	git checkout e03c608a662e381e645a3641d2286e80db006591 && \
+	git checkout 6f2ac93063b9fd34ce1d173bdd77d1ab95b42c1e && \
     cp /root/dist/adbhoney.cfg /opt/adbhoney && \
     sed -i 's/dst_ip/dest_ip/' /opt/adbhoney/adbhoney/core.py && \
     sed -i 's/dst_port/dest_port/' /opt/adbhoney/adbhoney/core.py && \
