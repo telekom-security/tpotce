@@ -78,6 +78,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
     - [True colours over SSH](#true-colours-over-ssh)
   - [T-Pot Config File](#t-pot-config-file)
   - [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
+  - [Honeytrap Downloads](#honeytrap-downloads)
 - [Maintenance](#maintenance)
   - [The T-Pot Scripts](#the-t-pot-scripts)
   - [General Updates](#general-updates)
@@ -893,6 +894,18 @@ python3 customizer.py --base standard --add citrixhoneypot --remove honeytrap --
 `--port SERVICE:HOSTPORT[/udp]=NEWPORT` moves a host port, `=-` removes it, `-o FILE` writes somewhere else, `python3 customizer.py -h` lists everything.
 
 The customizer writes the edition and your changes into the header of the file. `update.sh` builds it again from the new release, so new honeypots of the edition and changed service definitions are included. That only works as long as you change the file with the customizer: once you edit it by hand, `update.sh` puts it back unchanged and you have to run the customizer again. A file that `TPOT_DOCKER_COMPOSE` in `.env` points to is never touched by `update.sh`.
+<br><br>
+
+## Honeytrap Downloads
+Honeytrap is built from [telekom-security/honeytrap v1.1.1](https://github.com/telekom-security/honeytrap/releases/tag/v1.1.1), following the repository transfer from `t3chn0m4g3`. HTTP downloads use libcurl instead of a shell command. Every HTTP destination and redirect is resolved and checked before connecting, with the connection pinned to the checked address and proxies disabled.
+
+HTTP, FTP and TFTP downloaders reject private, loopback, link-local, multicast and other non-public destinations by default. For a controlled private test network only, set an explicit IP or CIDR allowlist in [docker/honeytrap/dist/honeytrap.conf](docker/honeytrap/dist/honeytrap.conf):
+```
+download_allow_private_ips = "192.168.56.0/24,fd00:1234::/48"
+```
+The shipped value is empty: no non-public destination is allowed. Allowlist entries permit outbound connections to those addresses; keep them as narrow as possible and never include management networks. This is a Honeytrap setting, not a T-Pot `.env` key. The configuration is copied into the image at build time, so rebuild the Honeytrap image and recreate its container after changing it.
+
+FTP and TFTP downloading are enabled in the shipped configuration; HTTP downloading remains disabled unless `plugin-httpDownload = ""` is enabled. The old `http_program` and `http_options` settings are accepted for compatibility but ignored. Source builds require libcurl development headers and library version 7.62.0 or newer; the T-Pot Dockerfile installs them.
 <br><br>
 
 # Maintenance
