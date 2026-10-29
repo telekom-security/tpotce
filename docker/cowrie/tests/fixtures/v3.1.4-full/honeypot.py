@@ -15,9 +15,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from twisted.python.failure import Failure
+
+    from cowrie.shell.prescan import HereDoc
 
 from twisted.internet.defer import Deferred, succeed
 from twisted.logger import Logger
@@ -173,6 +175,16 @@ class HoneyPotShell:
             self.syntax_label = None if interactive else "-c"
             self.line_base = 0
         self.current_line: int = self.line_base + 1
+        # A shell fed one line at a time (interactive, or reading live stdin)
+        # keeps the lines of a construct still being written -- an open `if`,
+        # quote or here-document -- until the input completes, as bash does
+        # at its `> ` prompt. ``_lines_fed`` counts the
+        # lines consumed so far, so errors name their line in the whole
+        # input; ``stdin_eof`` is set once the live stdin feeding a
+        # ``reads_stdin`` shell has closed.
+        self._pending: list[str] = []
+        self._lines_fed: int = 0
+        self.stdin_eof: bool = False
         # Child-shell state (see run_child): a pipeline stage, a "(...)" group
         # or a $(...) substitution runs in its own shell, as a forked child.
         # ``stdin`` is the pipe buffer feeding it, handed to the first command
@@ -269,7 +281,7 @@ class HoneyPotShell:
             # The captured output is attacker bytes and need not be valid UTF-8.
             return subshell.captured.decode(errors="replace").rstrip("\n")
 
-        statements = self.bashparser.parse(source)
+        statements = self._resolve_eof(self.bashparser.parse(source), source, 1)
         fds, buf = self._capture_fds()
         return self.run_child(statements, fds=fds, capture_buf=buf).addCallback(
             finished
@@ -284,7 +296,7 @@ class HoneyPotShell:
 
     def run_child(
         self,
-        statements: list[Statement],
+        statements: Sequence[Statement | _Continuation],
         *,
         fds: dict[int, tuple[str, Any]],
         capture_buf: bytearray | None = None,
@@ -340,14 +352,7 @@ class HoneyPotShell:
 
     def lineReceived(self, line: str) -> None:
         """Parse a command line with the Lark grammar and run the result."""
-        self.protocol.events.dispatch(
-            "cowrie.command.input", "CMD: %(input)s", input=line
-        )
-        if self._reject_oversized(line):
-            self._advance()
-            return
-        self._queue_statements(self.bashparser.parse(line), line)
-        self._advance()
+        self._feed_line(line, run=True)
 
     def queue_line(self, line: str) -> None:
         """Queue a line that arrived while a command holds the terminal.
@@ -355,12 +360,126 @@ class HoneyPotShell:
         The statements are parsed now but run only when this shell resumes
         after the command exits, like tty input read by the next reader.
         """
+        self._feed_line(line, run=False)
+
+    def _feed_line(self, line: str, *, run: bool) -> None:
+        """Take one unit of input: a physical line for a shell fed line by
+        line, or the whole text for one given it at once (`bash -c`, a
+        script, an exec command).
+
+        A line-fed shell joins the line onto the lines of a construct still
+        open and parses them together; while the result is incomplete it
+        waits for more (showing the `> ` prompt when interactive). A whole
+        text that ends inside a construct is reported as bash reports an
+        unexpected end of file. ``run`` starts the queue; a line that arrives
+        while a command holds the terminal is only queued.
+        """
         self.protocol.events.dispatch(
             "cowrie.command.input", "CMD: %(input)s", input=line
         )
-        if self._reject_oversized(line):
-            return
-        self._queue_statements(self.bashparser.parse(line), line)
+        if self.interactive or self.reads_stdin:
+            self._pending.append(line)
+            text = self._pending_text()
+            first_line = self._lines_fed + 1
+            # The newline _pending_text adds is not part of what was sent.
+            if self._reject_oversized(text[:-1]):
+                self._discard_pending()
+                if run:
+                    self._advance()
+                return
+            statements = self.bashparser.parse(text, first_line=first_line)
+            if self._incomplete(statements):
+                if run:
+                    self.showPrompt()
+                return
+            self._discard_pending()
+            queued: Sequence[Statement | _Continuation] = statements
+        else:
+            if self._reject_oversized(line):
+                if run:
+                    self._advance()
+                return
+            text, first_line = line, 1
+            queued = self._resolve_eof(self.bashparser.parse(line), line, 1)
+        self._queue_statements(queued, text, first_line)
+        if run:
+            self._advance()
+
+    @staticmethod
+    def _incomplete(statements: list[Statement]) -> SyntaxError_ | None:
+        """The trailing incomplete-input marker of a parse, if any."""
+        if statements and isinstance(statements[-1], SyntaxError_):
+            if statements[-1].incomplete:
+                return statements[-1]
+        return None
+
+    def _pending_text(self) -> str:
+        """The buffered lines as the input they came from: each one ends in
+        a newline, so an empty line typed into a here-document is a body
+        line and a trailing backslash still awaits the next line."""
+        return "\n".join(self._pending) + "\n"
+
+    def _discard_pending(self) -> None:
+        """Forget the buffered lines, counting them as consumed."""
+        self._lines_fed += len(self._pending)
+        self._pending.clear()
+
+    def _flush_pending(self) -> None:
+        """Stdin ended inside a construct: run the buffered lines as they
+        stand, reporting the unexpected end of file as bash does."""
+        text = self._pending_text()
+        first_line = self._lines_fed + 1
+        statements = self.bashparser.parse(text, first_line=first_line)
+        self._discard_pending()
+        self._queue_statements(
+            self._resolve_eof(statements, text, first_line), text, first_line
+        )
+
+    def _resolve_eof(
+        self, statements: list[Statement], text: str, first_line: int
+    ) -> list[Statement | _Continuation]:
+        """Settle a parse of ``text`` that ended inside a construct, now that
+        no more input is coming: an unfinished here-document body is used as
+        it is after bash's warning, a backslash-newline at the very end is
+        dropped, and the other markers become the error bash prints for an
+        unexpected end of file. ``first_line`` is the line number of the
+        text's first line."""
+        error = self._incomplete(statements)
+        if error is None:
+            return list(statements)
+        rest: list[Statement | _Continuation] = list(statements[:-1])
+        if error.opener == "heredoc":
+            # bash warns once it has parsed the command holding the
+            # here-document, after running the lines before it.
+            last_line = first_line - 1 + len(text.rstrip("\n").split("\n"))
+            heredocs = error.heredocs
+
+            def warn() -> None:
+                for heredoc in heredocs:
+                    self._warn_unterminated_heredoc(heredoc, last_line)
+                self._advance()
+
+            rest.insert(max(len(rest) - 1, 0), _Continuation(warn))
+            return rest
+        if error.opener == "\\":
+            # A backslash-newline at the very end: nothing follows it.
+            return rest
+        error.incomplete = False
+        return [*rest, error]
+
+    def _warn_unterminated_heredoc(self, heredoc: HereDoc, last_line: int) -> None:
+        """bash's warning for a here-document that ran to the end of the
+        input: named by the shell and the last line read, without the "-c"
+        label its syntax errors carry."""
+        label = (
+            f"{self.name}: line {last_line}: "
+            if self.line_numbers
+            else f"{self.name}: "
+        )
+        self._write_shell_error(
+            f"{label}warning: here-document at line {heredoc.lineno} delimited "
+            f"by end-of-file (wanted `{heredoc.delimiter}')\n".encode()
+        )
 
     def _reject_oversized(self, line: str) -> bool:
         """Refuse a line longer than max_input_size before it reaches the
@@ -372,7 +491,12 @@ class HoneyPotShell:
         self._report_syntax_error(SyntaxError_(token=""))
         return True
 
-    def _queue_statements(self, statements: list[Statement], source: str = "") -> bool:
+    def _queue_statements(
+        self,
+        statements: Sequence[Statement | _Continuation],
+        source: str = "",
+        first_line: int = 1,
+    ) -> bool:
         """Append parsed statements to ``cmdpending`` for sequential execution.
 
         A subshell is queued as one unit so its join operator (e.g. the || in
@@ -384,13 +508,18 @@ class HoneyPotShell:
         A syntax error is queued in place of the statement holding it and
         ends the queue: as in bash, earlier lines run, then the error is
         reported and nothing after it runs. Returns False at a syntax error.
+        ``first_line`` is the line number of the first line of ``source``.
         """
         for statement in statements:
+            if isinstance(statement, _Continuation):
+                self.cmdpending.append(statement)
+                continue
             error = self._find_syntax_error([statement])
             if error is not None:
                 lines = source.split("\n")
-                if not error.source and 0 < error.lineno <= len(lines):
-                    error.source = lines[error.lineno - 1]
+                index = error.lineno - first_line
+                if not error.source and 0 <= index < len(lines):
+                    error.source = lines[index]
                 self.cmdpending.append(error)
                 return False
             self.cmdpending.append(statement)
@@ -414,12 +543,20 @@ class HoneyPotShell:
         return None
 
     def _report_syntax_error(self, statement: SyntaxError_) -> None:
-        """Write the message bash prints for a syntax error and set $? to 2."""
+        """Write the message bash prints for a syntax error and set $? to 2.
+
+        For input that ended inside a quote, backtick, ``$(`` or ``${``,
+        that is the "unexpected EOF while looking for matching" line; an
+        interactive bash follows it with the plain unexpected end of file.
+        """
         self.current_line = self.line_base + (statement.lineno or 1)
         if statement.token:
             text = f"syntax error near unexpected token `{statement.token}'"
         else:
             text = "syntax error: unexpected end of file"
+        if statement.opener:
+            matching = f"unexpected EOF while looking for matching `{statement.opener}'"
+            text = matching if self.line_numbers else f"{matching}\n{self.name}: {text}"
         if self.line_numbers:
             # A non-interactive bash also quotes the offending line.
             label = f"{self.name}: "
@@ -465,8 +602,18 @@ class HoneyPotShell:
         if self.interactive:
             self.showPrompt()
         elif self.reads_stdin:
-            # Idle, not done: the channel will deliver more lines or EOF.
-            pass
+            if not self.stdin_eof:
+                # Idle, not done: the channel will deliver more lines or EOF.
+                pass
+            elif self._pending:
+                # EOF arrived while a command held the terminal, with the
+                # lines typed after it still open: run them as they stand.
+                self._flush_pending()
+                self._advance()
+            else:
+                # Stdin has closed: end with the last command's status, as
+                # bash does when it runs out of input.
+                self.protocol.end_process(self.last_exit_code)
         elif self.done is not None:
             # Child shell: its program has run to completion, so the parent's
             # read on its pipe sees EOF. The parent carries on from the done
@@ -703,6 +850,14 @@ class HoneyPotShell:
             return pattern[1:-1]
         return pattern
 
+    def set_positional_params(self, args: list[str]) -> None:
+        """Bind $1.. , $#, $@ and $* to ``args``."""
+        for i, value in enumerate(args, start=1):
+            self.environ[str(i)] = value
+        self.environ["#"] = str(len(args))
+        self.environ["@"] = " ".join(args)
+        self.environ["*"] = " ".join(args)
+
     def _call_function(self, name: str, args: list[str]) -> None:
         """Run a function body with $1.. , $#, $@ and $* bound to ``args``.
 
@@ -714,12 +869,7 @@ class HoneyPotShell:
         body = self.functions[name]
         params = [str(i) for i in range(1, len(args) + 1)] + ["#", "@", "*"]
         saved = {key: self.environ.get(key) for key in params}
-
-        for i, value in enumerate(args, start=1):
-            self.environ[str(i)] = value
-        self.environ["#"] = str(len(args))
-        self.environ["@"] = " ".join(args)
-        self.environ["*"] = " ".join(args)
+        self.set_positional_params(args)
 
         def restore() -> None:
             for key, value in saved.items():
@@ -872,40 +1022,61 @@ class HoneyPotShell:
         shell's fd table for the group's duration and restored afterwards. A
         subshell copies the table into its child; an in-place group ({ }, a
         loop, if, case) reads the swapped table directly and the restore
-        continuation, queued before the body, runs once the body drains.
+        continuation, queued before the body, runs once the body drains. An
+        input redirection (`{ cat; } < f`, `done <<EOF`) likewise becomes
+        the shell's own stdin for the group, read by the first command in it
+        that consumes stdin, as a shared pipe would be.
         """
 
         def apply(tokens: list[str]) -> None:
             _, ops = self.parser.parse_redirections(tokens)
-            fds, error = self._open_redirection_fds(ops)
+            fds, stdin, error = self._open_redirection_fds(ops)
             if error:
                 # bash reports the failure (already written) and skips the group.
                 self.last_exit_code = 1
                 self._advance()
                 return
-            saved, self.fds = self.fds, fds
-            self.cmdpending.insert(0, _Continuation(lambda: self._restore_fds(saved)))
+            saved_fds, self.fds = self.fds, fds
+            saved_stdin = None
+            if stdin is not None:
+                saved_stdin = (self.stdin,)
+                self.stdin = stdin
+            self.cmdpending.insert(
+                0, _Continuation(lambda: self._restore_fds(saved_fds, saved_stdin))
+            )
             self._run_compound(command)
 
         d = Deferred.fromCoroutine(self.bashparser.evaluate(redirections))
         d.addCallback(apply)
         d.addErrback(self._statement_failed)
 
-    def _restore_fds(self, saved: dict[int, tuple[str, Any]]) -> None:
-        """Restore the shell's fd table after a redirected group finishes."""
+    def _restore_fds(
+        self,
+        saved: dict[int, tuple[str, Any]],
+        saved_stdin: tuple[bytes | None] | None = None,
+    ) -> None:
+        """Restore the shell's fd table, and its stdin when the group
+        redirected that too, after a redirected group finishes."""
         self.fds = saved
+        if saved_stdin is not None:
+            (self.stdin,) = saved_stdin
         self._advance()
 
     def _open_redirection_fds(
         self, ops: list[dict[str, Any]]
-    ) -> tuple[dict[int, tuple[str, Any]], bool]:
+    ) -> tuple[dict[int, tuple[str, Any]], bytes | None, bool]:
         """Apply redirection ops over this shell's fd table, opening any files
         once for the whole group, and register their backing files. Returns the
-        new table and whether a redirection failed."""
+        new table, the stdin an input redirection among them supplies (or
+        None), and whether a redirection failed."""
         pp = self._make_pipe(None, [], None, ops)
         for real_path, virtual_path in pp.redirect_real_files:
             self.protocol.terminal.redirFiles.add((real_path, virtual_path))
-        return {1: pp.targets[1], 2: pp.targets[2]}, pp.has_redirection_error
+        return (
+            {1: pp.targets[1], 2: pp.targets[2]},
+            pp.input_data,
+            pp.has_redirection_error,
+        )
 
     def _run_pipeline(self, node: Pipeline) -> None:
         """Run the stages left to right, each in its own child shell, the
@@ -1050,7 +1221,11 @@ class HoneyPotShell:
         if cmdclass.consumes_stdin:
             self.stdin = None
         pp = self._make_pipe(cmdclass, args, stdin, ops)
-        pp.stdin_from_pipe = stdin is not None
+        # Buffered input -- a pipe, a `< file` or a here-document -- ends in
+        # EOF once read; only a terminal or the live channel stays open.
+        pp.stdin_from_pipe = stdin is not None or any(
+            op["type"] in ("stdin", "heredoc") for op in ops
+        )
         # The name the command was invoked by, its argv[0].
         pp.argv0 = cmd
         if pp.has_redirection_error:
@@ -1113,6 +1288,8 @@ class HoneyPotShell:
             self.protocol.end_process(code)
 
     def showPrompt(self) -> None:
+        """Write the prompt: PS1, or the `> ` continuation prompt (PS2) while
+        lines of an unfinished construct are buffered."""
         if not self.interactive:
             return
 
@@ -1143,20 +1320,33 @@ class HoneyPotShell:
         # The username is attacker input from SSH/Telnet auth and is decoded
         # with errors="replace" rather than restricted to ASCII, so the prompt
         # goes to the terminal as UTF-8, the way a real shell writes it.
-        self.protocol.terminal.write(prompt.encode("utf-8"))
+        # ``ps`` / ``pn`` are what the line editor redraws (CTRL-L).
         self.protocol.ps = (prompt.encode("utf-8"), b"> ")
+        self.protocol.pn = 1 if self._pending else 0
+        self.protocol.terminal.write(self.protocol.ps[self.protocol.pn])
 
     def eofReceived(self) -> None:
         """
         EOF with the shell as the active reader (no command running) logs out,
-        exiting with the last command's status ($?) as bash does.
+        exiting with the last command's status ($?) as bash does. At the `> `
+        prompt it instead ends the construct being written: bash reports the
+        unexpected end of file (or runs an unfinished here-document after a
+        warning) and, when interactive, shows the next prompt rather than
+        logging out.
         """
+        self.stdin_eof = True
+        if self._pending:
+            self._flush_pending()
+            self._advance()
+            return
         self._log.info("received eof, logging out")
         self.protocol.end_process(self.last_exit_code)
 
     def handle_CTRL_C(self) -> None:
         self.protocol.lineBuffer = []
         self.protocol.lineBufferIndex = 0
+        # At the `> ` prompt CTRL-C abandons the construct being written.
+        self._discard_pending()
         self.protocol.terminal.write(b"\n")
         self.showPrompt()
 

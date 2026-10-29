@@ -1,7 +1,6 @@
 """Shell details of the personas (tests/fixtures/shell_details.json, recorded with `sh -c` / `bash -c` /
 `bash -ic` in Docker): the status and text of a file without an x bit and of a folder run as a command,
 $HISTFILE, and the HISTTIMEFORMAT of `history`."""
-import copy
 import json
 import shutil
 import stat
@@ -12,7 +11,7 @@ import types
 import unittest
 from pathlib import Path
 
-from tests.test_patch import FIXTURE, PATCH, FakeConfig, method, module_parts
+from tests.test_patch import FIXTURE, PATCH, FakeConfig, method, module_parts, shell_with_environment
 
 HONEYPOT = "src/cowrie/shell/honeypot.py"
 RECORDED = json.loads((Path(__file__).parent / "fixtures" / "shell_details.json").read_text(encoding="utf-8"))["images"]
@@ -195,13 +194,7 @@ class HistFileTest(Patched):
         for exports, expected in (("", {"PATH"}), ("HISTFILE", {"PATH", "HISTFILE"})):
             values[("shell", "history_export")] = exports
 
-            class Shell:
-                pass
-
-            init = method(source, "HoneyPotShell", "__init__", {"CowrieConfig": FakeConfig(values), "copy": copy,
-                                                                "HoneyPotShell": Shell})
-            shell = Shell()
-            init(shell, types.SimpleNamespace(cmdstack=[], environ={"PATH": "/bin", "HISTFILE": "/root/.bash_history"}))
+            shell = shell_with_environment(source, values, {"PATH": "/bin", "HISTFILE": "/root/.bash_history"})
             self.assertEqual(shell.exported, expected)
 
 

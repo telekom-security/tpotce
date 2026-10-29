@@ -1058,6 +1058,9 @@ class Command_set(HoneyPotCommand):
     # With enhancements it should work like env when -o posix is used
     def call(self) -> None:
         for i in sorted(self.environ):
+            # Positional parameters live in environ but are not variables.
+            if i.isdigit() or i in ("#", "@", "*"):
+                continue
             self.write(f"{i}={self.environ[i]}\n")
 
 

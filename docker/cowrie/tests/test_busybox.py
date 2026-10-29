@@ -411,13 +411,13 @@ class WhichTest(unittest.TestCase):
 
 class CowrieCommandNamesTest(unittest.TestCase):
     """system.COWRIE_COMMAND_NAMES holds every name a module of Cowrie's commands registers: those of the
-    fixture tree (an excerpt of v3.1.3) and those the T-Pot patch adds. A Cowrie bump that brings a new
+    fixture tree (an excerpt of v3.1.4) and those the T-Pot patch adds. A Cowrie bump that brings a new
     command fails here until the constant has it."""
 
     REGISTERED = re.compile(r'commands\[\s*\\?"([^"\\{]+)\\?"\s*\]')
 
     def test_the_names_of_the_fixture_tree(self):
-        commands = Path(__file__).parent / "fixtures" / "v3.1.3" / "src" / "cowrie" / "commands"
+        commands = Path(__file__).parent / "fixtures" / "v3.1.4" / "src" / "cowrie" / "commands"
         found = set()
         for path in commands.glob("*.py"):
             found |= {name.rsplit("/", 1)[-1] for name in self.REGISTERED.findall(path.read_text())}

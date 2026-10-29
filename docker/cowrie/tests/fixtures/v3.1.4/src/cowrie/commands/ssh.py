@@ -18,7 +18,7 @@ from twisted.logger import Logger
 from cowrie.core.config import CowrieConfig
 from cowrie.shell.command import HoneyPotCommand
 
-# Excerpt of Cowrie v3.1.3 (c7773f49), the text patch_cowrie_persona_support.py touches.
+# Excerpt of Cowrie v3.1.4 (085ed091), the text patch_cowrie_persona_support.py touches.
 
             host = "localhost"
         self.protocol.hostname = host

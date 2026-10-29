@@ -982,7 +982,7 @@ class TerminalQuestionTest(unittest.TestCase):
                     pass
 
             def key(self, key):
-                # the patched keystrokeReceived of v3.1.3: the hook of the command on top, then the line mode
+                # the patched keystrokeReceived of v3.1.4: the hook of the command on top, then the line mode
                 hook = getattr(self.cmd, "tpot_key", None)
                 if hook is not None and hook(key):
                     return

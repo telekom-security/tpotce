@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Excerpt of Cowrie v3.1.3 (c7773f49): the text check_ssh_support.py reads, the methods the
+# Excerpt of Cowrie v3.1.4 (085ed091): the text check_ssh_support.py reads, the methods the
 # server-sig-algs patch (patch_ssh_sig_algs) adds its method before, sendPacket (Cowrie's own, which the
 # ext-info-s cut of the same patch starts) and connectionMade, which the patch for a persona without an
 # SSH server (patch_ssh_drop) changes.

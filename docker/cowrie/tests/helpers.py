@@ -1,5 +1,6 @@
 """Shared helpers for the tpot_personas tests (stdlib only)."""
 import io
+import importlib.util
 import pickle
 import pickletools
 import sys
@@ -13,6 +14,20 @@ if str(DIST) not in sys.path:
 from tpot_personas import tree  # noqa: E402
 
 OLD = 1_300_000_000
+
+
+def shell_support():
+    modules = []
+    for name in ("parser", "prescan"):
+        key = f"tests.upstream_{name}"
+        if key not in sys.modules:
+            path = Path(__file__).parent / "fixtures/v3.1.4/src/cowrie/shell" / f"{name}.py"
+            spec = importlib.util.spec_from_file_location(key, path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[key] = module
+            spec.loader.exec_module(module)
+        modules.append(sys.modules[key])
+    return modules
 
 
 def _link(root, rel, target):

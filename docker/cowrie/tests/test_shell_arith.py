@@ -19,7 +19,7 @@ from tests.test_patch import FIXTURE, PATCH, FakeConfig
 
 REF = json.loads((Path(__file__).parent / "fixtures" / "shell_arith.json").read_text(encoding="utf-8"))
 MSH = json.loads((Path(__file__).parent / "fixtures" / "msh.json").read_text(encoding="utf-8"))
-FULL_BASHPARSE = Path(__file__).parent / "fixtures" / "v3.1.3-full" / "bashparse.py"
+FULL_BASHPARSE = Path(__file__).parent / "fixtures" / "v3.1.4-full" / "bashparse.py"
 BASH_IMAGES = ("debian_12", "debian_13", "ubuntu_22.04", "ubuntu_24.04", "rockylinux_9")
 ASH_IMAGES = {"busybox_1.25.1": "BusyBox v1.25.1", "busybox_1.33.1": "BusyBox v1.33.1",
               "busybox_1.36.1-musl": "BusyBox v1.36.1"}
@@ -686,11 +686,14 @@ class GrammarTest(unittest.TestCase):
 
         text = (Patched.get() / "src/cowrie/shell/bashparse.py").read_text(encoding="utf-8")
         cls.module = {"Lark": lark.Lark, "Token": lark.Token, "Tree": lark.Tree, "Protocol": typing.Protocol,
-                      "CowrieConfig": FakeConfig({})}
-        exec(compile(text, "<bashparse>", "exec"), cls.module)  # noqa: S102
+                      "CowrieConfig": FakeConfig({}), "Logger": lambda: None}
+        parsed = ast.parse(text)
+        parsed.body = [node for node in parsed.body
+                       if not (isinstance(node, ast.ImportFrom) and node.module.split(".")[0] in ("cowrie", "twisted"))]
+        exec(compile(parsed, "<bashparse>", "exec"), cls.module)  # noqa: S102
 
     def kinds(self, line):
-        tree = self.module["_parser"].parse(line)
+        tree = self.module["_parser"].parse(line, start="start")
         return [node.data for node in tree.iter_subtrees_topdown() if node.data in ("arith", "cmdsub")]
 
     def test_an_expression_is_an_arith_term_in_a_word_and_in_double_quotes(self):
@@ -735,7 +738,7 @@ class GrammarTest(unittest.TestCase):
 
 @unittest.skipIf(lark is None, "lark is not installed")
 class EndToEndTest(unittest.TestCase):
-    """The patched parser of Cowrie v3.1.3 (the whole bashparse.py, tests/fixtures/v3.1.3-full) parses lines and
+    """The patched parser of Cowrie v3.1.4 (the whole bashparse.py, tests/fixtures/v3.1.4-full) parses lines and
     the evaluator expands them; the statements run in a small shell, and for an error through the hooks of the
     patched honeypot.py as the shell queues them."""
 
@@ -759,8 +762,12 @@ class EndToEndTest(unittest.TestCase):
                 return fallback
 
         cls.config = Config({})
+        from tests.helpers import shell_support
+        parser, prescan = shell_support()
         module = types.ModuleType("tpot_bashparse_full")
-        module.__dict__.update({"CowrieConfig": cls.config, "Logger": lambda *args, **kwargs: None, "Field": str})
+        module.__dict__.update({"CowrieConfig": cls.config, "Logger": lambda *args, **kwargs: None,
+                                "Field": parser.Field, "HereDocBody": parser.HereDocBody,
+                                "HereDoc": prescan.HereDoc, "scan": prescan.scan})
         sys.modules[module.__name__] = module
         cls.addClassCleanup(sys.modules.pop, module.__name__, None)
         exec(compile(ast.Module(keep, []), "<bashparse>", "exec"), module.__dict__)  # noqa: S102
@@ -779,6 +786,10 @@ class EndToEndTest(unittest.TestCase):
         asyncio.run(shell.run(line))
         self.assertEqual("".join(shell.out), REF["images"]["debian_12"]["shells"]["bash"][line][0])
         self.assertEqual("".join(shell.out), "2\n4\n6\n")
+
+    def test_here_document_arithmetic_expands_to_its_value(self):
+        shell = self.shell()
+        self.assertEqual(asyncio.run(shell.parser._expand_heredoc("value=$((3*4))\n")), "value=12\n")
 
     def test_the_same_line_as_a_command_of_the_exec_channel_prints_the_same(self):
         line = "for i in $(seq 1 3); do echo $((i*2)); done"

@@ -5903,6 +5903,7 @@ def patch_shell_arith(cowrie_root):
     replace_once(path, '\n_GRAMMAR = r"""', SHELL_ARITH + '\n_GRAMMAR = r"""')
     replace_once(path, "_atom: sq | dq | cmdsub | backtick |", "_atom: sq | dq | arith | cmdsub | backtick |")
     replace_once(path, '_dq_part: cmdsub | backtick |', '_dq_part: arith | cmdsub | backtick |')
+    replace_once(path, '_hd_part: cmdsub | backtick |', '_hd_part: arith | cmdsub | backtick |')
     replace_once(path, 'cmdsub: CMDSUB_OPEN start ")"\nCMDSUB_OPEN: "$("\n',
                  'cmdsub: CMDSUB_OPEN start ")"\nCMDSUB_OPEN: /@CMDSUB@/\n'
                  '// T-Pot: $((...)) is a term of its own; a $( that starts a group of its own is a substitution\n'
@@ -5918,15 +5919,19 @@ def patch_shell_arith(cowrie_root):
                  '            # T-Pot: $(( )) of the persona\'s shell\n'
                  '            return await tpot_arith_value(self.context, str(atom.children[0])[3:-2])\n'
                  '        if atom.data == "cmdsub":\n')
+    replace_once(path, '        if part.data == "cmdsub":\n',
+                 '        if part.data == "arith":\n'
+                 '            return await tpot_arith_value(self.context, str(part.children[0])[3:-2])\n'
+                 '        if part.data == "cmdsub":\n')
     replace_once(path, '            elif part.data == "cmdsub":\n',
                  '            elif part.data == "arith":\n'
                  '                parts.append(await tpot_arith_value(self.context, str(part.children[0])[3:-2]))\n'
                  '            elif part.data == "cmdsub":\n')
     path = cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py"
     replace_once(path, "\n\nclass HoneyPotShell:\n", ARITH_HOOKS + "\n\nclass HoneyPotShell:\n")
-    replace_once(path, "        for statement in statements:\n            error = self._find_syntax_error([statement])\n",
+    replace_once(path, "        for statement in statements:\n            if isinstance(statement, _Continuation):\n",
                  "        tpot_arith_batch(self)\n"
-                 "        for statement in statements:\n            error = self._find_syntax_error([statement])\n")
+                 "        for statement in statements:\n            if isinstance(statement, _Continuation):\n")
     replace_once(path, "                self.cmdpending.append(error)\n                return False\n",
                  "                self.cmdpending.append(error)\n                tpot_mark_top(self, error)\n"
                  "                return False\n")
@@ -16298,7 +16303,10 @@ def patch_grep(cowrie_root):
         path,
         r"""    def compile_match(self, match: str) -> re.Pattern[bytes]:
         bmatch = os.path.basename(match).replace('"', "").encode("utf8")
-        return re.compile(bmatch)
+        flags = re.NOFLAG
+        if self.ignore_case:
+            flags = re.IGNORECASE
+        return re.compile(bmatch, flags)
 """,
         GREP_COMPILE,
     )

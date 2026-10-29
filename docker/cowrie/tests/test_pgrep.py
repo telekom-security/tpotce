@@ -258,6 +258,8 @@ class PidofStyleTest(RunTest):
                 self.assertEqual(self.run_style(line, "procps-ng"), recorded(refs, line))
 
     def test_procps_ng_lists_the_pids_with_its_separator_and_single_shot(self):
+        """Derived list semantics: the el9 recording did not resolve its sleep processes without -w.
+        This synthetic process table verifies our model, not an observed el9 PID list."""
         self.assertEqual(self.run_style("pidof sleep", "procps-ng"), ("9 8 7\n", 0))
         self.assertEqual(self.run_style("pidof -s sleep", "procps-ng"), ("9\n", 0))
         self.assertEqual(self.run_style("pidof -S , sleep", "procps-ng"), ("9,8,7\n", 0))
@@ -279,6 +281,14 @@ class PidofStyleTest(RunTest):
 
 
 class RegistrationTest(PatchedTest):
+    def test_busybox_1_14_persona_does_not_offer_process_applets(self):
+        from tpot_personas import catalog, system
+        from tpot_personas.identity import draw
+        persona = catalog.by_id("dlink-dir859")
+        applets = system.busybox_applets(persona, draw(persona, 1))
+        self.assertNotIn("pgrep", applets)
+        self.assertNotIn("pidof", applets)
+
     def test_the_programs_of_the_persona_are_answered_by_path(self):
         """A node of the file system for pgrep or pidof reaches the command (not Cowrie's script runner: Exec format
         error); a name alone is not a command, a persona without the node has none."""

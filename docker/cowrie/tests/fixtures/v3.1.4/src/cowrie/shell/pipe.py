@@ -115,8 +115,10 @@ class PipeProtocol:
         # when an output redirection truncates the file also used for input
         # (`cat < f > f`) the read sees the truncated file, as in a real shell.
         # The file is still looked up in order, so a missing one is reported
-        # in its place among the other redirection errors.
-        pending_stdin_path: str | None = None
+        # in its place among the other redirection errors. The last input
+        # redirection wins (`cat < f <<EOF` reads the here-document): a path
+        # to read, or the bytes of a here-document.
+        pending_stdin: str | bytes | None = None
 
         # bash applies redirections left to right and stops at the first one
         # that fails; the command does not run (POSIX XCU 2.8.1).
@@ -146,19 +148,26 @@ class PipeProtocol:
             elif op["type"] == "stdin":
                 fd = op["fd"]
                 target = op["target"]
-                pending_stdin_path = self._open_stdin(target)
-                if pending_stdin_path is None:
+                path = self._open_stdin(target)
+                if path is None:
                     break
+                pending_stdin = path
                 # Stdin is handled by loading input_data, so we don't strictly need it in targets for writing,
                 # but we track it for completeness if needed.
                 self.targets[fd] = (FD_FILE_INPUT, target)
+
+            elif op["type"] == "heredoc":
+                pending_stdin = op["data"]
+                self.targets[op["fd"]] = (FD_FILE_INPUT, "<<")
 
             elif op["type"] == "dup":
                 fd = op["fd"]
                 self.targets[fd] = self.targets[op["target"]]
 
-        if pending_stdin_path is not None:
-            self.input_data = self.protocol.fs.file_contents(pending_stdin_path)
+        if isinstance(pending_stdin, str):
+            self.input_data = self.protocol.fs.file_contents(pending_stdin)
+        elif pending_stdin is not None:
+            self.input_data = pending_stdin
 
     def _open_stdin(self, target: str) -> str | None:
         """Resolve a stdin redirection's file, or report it missing and return

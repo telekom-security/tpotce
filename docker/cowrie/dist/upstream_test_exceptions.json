@@ -48,7 +48,7 @@
    "expect": "not found in b\"touch: cannot touch '/proc/x': Permission denied\\n"
   },
   "cowrie.test.test_uniq.ShellUniqCommandTests.test_uniq_command_003": {
-   "reason": "an input artefact of the test and GNU's buffering: upstream's test types lines that carry their own newline, the persona reads the terminal until Ctrl-D and treats that newline as an empty line; GNU uniq writes a group at its end, not at its first line (tests/test_text_tools.py covers the persona's uniq)",
+   "reason": "upstream's test types lines that already carry a newline, introducing alternating empty lines; real GNU 8.32/9.1 and BusyBox 1.37.0 preserve those groups too. T-Pot waits until Ctrl-D, unlike GNU's observed immediate terminal output (fixtures/uniq_terminal.json); tests/test_text_tools.py checks final output, not equivalent streaming",
    "expect": "AssertionError: b'test\\n\\ntest\\n\\ntest\\n\\nroot@unitTest:~# ' != b'test\\n\\nroot@unitTest:~# '"
   }
  }

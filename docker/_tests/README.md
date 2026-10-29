@@ -120,6 +120,12 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/wordpot.sh --http-port 18080
 ```
 
+Cowrie's smoke test can run as an ordinary user with Docker access. After
+stopping its containers, it uses the tested image in a networkless, read-only
+helper container to return ownership of its temporary SSH-key directory to
+that user. A failure keeps the artifacts and makes the test fail; no `sudo`
+or additional cleanup image is needed.
+
 The Dionaea test maps the tested service ports to temporary loopback ports,
 mounts a temporary config without `services/sip.yaml`, and skips the SIP ports
 `5060/tcp`, `5060/udp`, and `5061/tcp`. The `--ftp-port` option pins only the
@@ -219,6 +225,8 @@ data in memory only (`/etc/redis.conf`).
 
 - Put one executable test script per honeypot in `tests/<service>.sh`.
 - Source `lib/common.sh` for Docker, Compose, cleanup, and artifact helpers.
+- If container-owned artifacts need ownership repair, define `test_release_artifacts`;
+  it runs after Compose teardown. A nonzero return preserves artifacts and fails cleanup.
 - Use temporary directories under `/tmp` for logs and downloads.
 - Bind host ports to loopback by default and prefer dynamic host ports.
 - Fail with a clear image build hint when the target image is missing.

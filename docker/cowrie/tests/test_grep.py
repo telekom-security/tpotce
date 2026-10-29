@@ -73,6 +73,26 @@ def busybox_rows():
 
 
 class ReferenceTest(unittest.TestCase):
+    def test_gate_exceptions_have_the_intended_semantics_for_every_persona(self):
+        from tpot_personas import catalog, system
+        from tpot_personas.identity import draw
+        for persona in catalog.PERSONAS:
+            keys = system.text_keys(persona, draw(persona, 1))
+            style = keys.get("grep_style", "gnu")
+            options = {"style": style, "libc": keys.get("text_libc", "glibc"),
+                       "banner": keys.get("text_banner", "BusyBox")}
+            version = keys.get("grep_version", "3.11")
+            with self.subTest(persona=persona.id, keys=keys):
+                out, err, status = run(version, [], **options)
+                self.assertEqual(status, 2)
+                self.assertIn("Usage: grep", out + err)
+                files = {"/w/pattern": b"a(\n", "/w/data": b"a(\nno\n"}
+                self.assertEqual(run(version, ["-f", "/w/pattern", "/w/data"], files=files, **options),
+                                 ("a(\n", "", 0))
+                out, err, status = run(version, ["-E", "-f", "/w/pattern", "/w/data"], files=files, **options)
+                self.assertEqual((out, status), ("", 2))
+                self.assertTrue(err)
+
     def test_patterns_select_the_lines_of_the_real_grep(self):
         # every pattern of the matrix as BRE (no option), -E and -F on the same lines, for each GNU grep
         checked = 0

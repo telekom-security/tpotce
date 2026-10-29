@@ -637,6 +637,23 @@ class UniqTest(unittest.TestCase):
         for spelling in ("uniq", "/bin/uniq", "/usr/bin/uniq"):
             self.assertIs(namespace["commands"].get(spelling), namespace["Command_tpot_uniq"], spelling)
 
+    def test_terminal_final_newlines_match_the_recorded_tools(self):
+        refs = json.loads((Path(__file__).parent / "fixtures/uniq_terminal.json").read_text())
+        for keys in ({"text_style": "gnu", "text_version": "8.32"},
+                     {"text_style": "gnu", "text_version": "9.1"},
+                     {"text_style": "busybox", "text_version": "1.37.0", "text_banner": "BusyBox v1.37.0"}):
+            namespace = self.namespace(keys)
+            for case in refs["cases"]:
+                with self.subTest(keys=keys, input=case["input"]):
+                    cmd = namespace["commands"]["uniq"]([], None, Fs())
+                    cmd.start()
+                    for line in case["input"].splitlines():
+                        cmd.lineReceived(line)
+                    self.assertEqual(cmd.out, b"")  # T-Pot buffers until EOF; GNU does not.
+                    cmd.eofReceived()
+                    self.assertEqual((cmd.out.decode(), cmd.err, cmd.exit_code),
+                                     (case["output"], "", case["status"]))
+
     def test_every_recorded_case(self):
         done = 0
         for image, ref in self.RECORDING["images"].items():
@@ -1438,7 +1455,7 @@ class XargsTest(unittest.TestCase):
     def test_every_builtin_the_shell_registers_is_no_program(self):
         # the names come from the registrations (upstream commands and the patch), not from TPOT_XARGS_BUILTINS
         registered = set()
-        sources = list((Path(__file__).parent / "fixtures" / "v3.1.3" / "src" / "cowrie" / "commands").glob("*.py"))
+        sources = list((Path(__file__).parent / "fixtures" / "v3.1.4" / "src" / "cowrie" / "commands").glob("*.py"))
         for source in sources + [Path(__file__).parent.parent / "dist" / "patch_cowrie_persona_support.py"]:
             registered |= set(re.findall(r'^\s*commands\["([^"/]+)"\]\s*=', source.read_text(encoding="utf-8"), re.M))
         shell_words = set(": [[ alias bg bind break builtin caller cd command compgen complete compopt continue declare "
@@ -1505,7 +1522,7 @@ class XargsTest(unittest.TestCase):
         self.assertEqual(budget.depth, 0)
 
     def real_pipe(self):
-        """PipeProtocol of Cowrie's own shell/pipe.py (verbatim v3.1.3 in the fixture tree). What the file imports of
+        """PipeProtocol of Cowrie's own shell/pipe.py (verbatim v3.1.4 in the fixture tree). What the file imports of
         Twisted and Cowrie is stubbed: a command without redirections never reaches that code."""
         source = (FIXTURE / "src" / "cowrie" / "shell" / "pipe.py").read_text(encoding="utf-8")
         keep = [node for node in ast.parse(source).body

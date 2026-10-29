@@ -64,6 +64,7 @@ class Command_sh(HoneyPotCommand):
             self,
             path,
             name=filename,
+            args=self.args[1:],
             not_found_message=f"{self.argv0}: {filename}: No such file or directory\n",
             binary_message=(
                 f"{self.argv0}: {filename}: cannot execute binary file: "

@@ -61,6 +61,34 @@ def shell_scripts():
                 yield path
 
 
+class CleanupTest(unittest.TestCase):
+    def test_release_hook_runs_after_down_and_keeps_failures_visible(self):
+        for result in (0, 7):
+            with self.subTest(result=result), tempfile.TemporaryDirectory() as folder:
+                root = os.path.join(folder, "artifacts")
+                os.mkdir(root)
+                compose = os.path.join(root, "compose.yml")
+                order = os.path.join(folder, "order")
+                with open(compose, "w") as handle:
+                    handle.write("services: {}\n")
+                script = f'''
+source docker/_tests/lib/common.sh
+TEST_TMP_ROOT={root!r}
+TEST_HARNESS_COMPOSE={compose!r}
+test_compose() {{ printf down > {order!r}; }}
+test_release_artifacts() {{ printf release >> {order!r}; printf release; return {result}; }}
+trap test_cleanup EXIT
+'''
+                done = run(["-c", script])
+                self.assertEqual(done.returncode, 0 if result == 0 else 1, done.stderr)
+                self.assertIn("release", done.stdout)
+                with open(order) as handle:
+                    self.assertEqual(handle.read(), "downrelease")
+                self.assertEqual(os.path.isdir(root), result != 0)
+                if result:
+                    self.assertIn("Could not release test artifacts", done.stderr)
+
+
 class CdpathTest(unittest.TestCase):
     """verify #2: `CDPATH=. bash docker/_tests/run.sh --list` printed "find: …/docker/_tests\\n…/tests: No such
     file or directory" and listed nothing (rc 0); a single test broke the same way."""
