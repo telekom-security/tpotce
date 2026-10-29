@@ -161,7 +161,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer),
-[wordpot](https://github.com/t3chn0m4g3/wordpot)
+[wordpot](https://github.com/telekom-security/wordpot)
 
 Alongside the following tools:
 * [Autoheal](https://github.com/willfarrell/docker-autoheal) a tool to automatically restart containers with failed healthchecks.
