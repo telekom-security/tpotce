@@ -150,7 +150,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [h0neytr4p](https://github.com/telekom-security/h0neytr4p),
 [hellpot](https://github.com/telekom-security/hellpot),
 [heralding](https://github.com/telekom-security/heralding),
-[honeyaml](https://github.com/mmta/honeyaml),
+[honeyaml](https://github.com/telekom-security/honeyaml),
 [honeypots](https://github.com/qeeqbox/honeypots),
 [honeytrap](https://github.com/telekom-security/honeytrap/),
 [ipphoney](https://gitlab.com/bontchev/ipphoney),
@@ -1446,7 +1446,7 @@ The software that T-Pot is built on uses the following licenses.
 [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE),
 [glutton](https://github.com/mushorg/glutton/blob/main/LICENSE),
 [hellpot](https://github.com/telekom-security/hellpot/blob/main/LICENSE),
-[honeyaml](https://github.com/mmta/honeyaml?tab=MIT-1-ov-file#readme),
+[honeyaml](https://github.com/telekom-security/honeyaml?tab=MIT-1-ov-file#readme),
 [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br>Unlicense:
 [endlessh](https://github.com/telekom-security/endlessh/blob/master/UNLICENSE)
@@ -1494,7 +1494,7 @@ Without open source and the development community we are proud to be a part of, 
 [h0neytr4p](https://github.com/telekom-security/h0neytr4p/graphs/contributors),
 [hellpot](https://github.com/telekom-security/hellpot/graphs/contributors),
 [heralding](https://github.com/telekom-security/heralding/graphs/contributors),
-[honeyaml](https://github.com/mmta/honeyaml/graphs/contributors),
+[honeyaml](https://github.com/telekom-security/honeyaml/graphs/contributors),
 [honeypots](https://github.com/qeeqbox/honeypots/graphs/contributors),
 [honeytrap](https://github.com/telekom-security/honeytrap/graphs/contributors),
 [ipphoney](https://gitlab.com/bontchev/ipphoney/-/project_members),

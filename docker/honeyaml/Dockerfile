@@ -12,11 +12,11 @@ ARG TARGETPLATFORM
 RUN apk --no-cache -U add clang lld git musl-dev && \
     xx-apk --no-cache add musl-dev gcc
 #
-# Fetch honeyaml, branch tpot-24.04.2 of the T-Pot fork (upstream is no longer maintained)
+# Fetch the reviewed v1.0.1 release from the T-Pot honeyaml repository
 WORKDIR /opt/honeyaml
 RUN git -c init.defaultBranch=master init --quiet && \
-    git remote add origin https://github.com/t3chn0m4g3/honeyaml && \
-    git fetch --quiet --depth 1 origin 39e524adf12ac7825b902d24b5df935b7735599c && \
+    git remote add origin https://github.com/telekom-security/honeyaml && \
+    git fetch --quiet --depth 1 origin 6f9bab30b9450de88e639478a28774ae3f63dce4 && \
     git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
 #
 # Test on the build platform, then cross-compile for the target
