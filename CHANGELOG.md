@@ -50,7 +50,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Elasticvue** has been updated to 1.15.0.
 * **EWSPoster** has been updated to 1.33, pinned to a commit of the master branch, and builds the upstream commit without local changes. Until the open ewsposter pull requests ([#22](https://github.com/telekom-security/ewsposter/pull/22), [#25](https://github.com/telekom-security/ewsposter/pull/25)) are merged, an empty honeypot log file (Python 3.13 and later) and the Telnet label of Cowrie sessions behave as upstream does.
 * **Go-Pot** has been updated to 1.2.0-rc-7.
-* **H0neytr4p** has been updated to 0.44.
+* **H0neytr4p** has been updated to 0.44 and is now built from the [repository transferred to Telekom Security](https://github.com/telekom-security/h0neytr4p).
 * **Hellpot** has been updated to 0.60.
 * **Heralding** has been updated to [2.0.0](https://github.com/telekom-security/heralding/releases/tag/v2.0.0), the first official release of the maintained Telekom Security fork, on Python 3.14. It catches credentials on 27 instead of 16 services. New services only get a host port where no other honeypot of the edition uses it: 389, 636, 990 and 8883 in Standard, Sensor and Mobile, 445 as well in Mac / Win, 445, 587, 1433, 1883, 6379 and 5060 (TCP / UDP) as well in Tarpit. RDP logs plaintext logins of the TLS fallback and NTLM hashes of NLA. `auth.csv` and `log_session.json` keep their format.
 * **Honeyaml** builds again: its Rust dependencies have been updated and it is now a static binary on a scratch image (branch `tpot-24.04.2` of the T-Pot fork, upstream is no longer maintained).
