@@ -137,7 +137,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [adbhoney](https://github.com/telekom-security/ADBHoney),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub),
 [ciscoasa](https://github.com/telekom-security/ciscoasa_honeypot),
-[citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
+[citrixhoneypot](https://github.com/telekom-security/citrixhoneypot),
 [conpot](http://conpot.org/),
 [cowrie](https://github.com/cowrie/cowrie),
 [ddospot](https://github.com/telekom-security/ddospot),
@@ -1468,7 +1468,7 @@ The software that T-Pot is built on uses the following licenses.
 <br>Unlicense:
 [endlessh](https://github.com/telekom-security/endlessh/blob/master/UNLICENSE)
 <br>Other:
-[citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence),
+[citrixhoneypot](https://github.com/telekom-security/citrixhoneypot#licencing-agreement-malwaretech-public-licence),
 [cowrie](https://github.com/cowrie/cowrie/blob/main/LICENSE.rst),
 [mailoney](https://github.com/phin3has/mailoney),
 [Elastic License](https://www.elastic.co/licensing/elastic-license),
@@ -1493,7 +1493,7 @@ Without open source and the development community we are proud to be a part of, 
 * [adbhoney](https://github.com/telekom-security/ADBHoney/graphs/contributors),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub/graphs/contributors),
 [ciscoasa](https://github.com/telekom-security/ciscoasa_honeypot/graphs/contributors),
-[citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),
+[citrixhoneypot](https://github.com/telekom-security/citrixhoneypot/graphs/contributors),
 [conpot](https://github.com/mushorg/conpot/graphs/contributors),
 [cowrie](https://github.com/cowrie/cowrie/graphs/contributors),
 [ddospot](https://github.com/telekom-security/ddospot/graphs/contributors),

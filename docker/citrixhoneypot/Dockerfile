@@ -13,9 +13,9 @@ RUN apk --no-cache -U upgrade && \
         python-json-logger
 #
 # Install CitrixHoneypot from GitHub
-RUN git clone https://github.com/t3chn0m4g3/CitrixHoneypot /opt/citrixhoneypot && \
+RUN git clone https://github.com/telekom-security/citrixhoneypot /opt/citrixhoneypot && \
     cd /opt/citrixhoneypot && \
-    git checkout dee32447033a0296d053e8f881bf190f9dd7ad44 && \
+    git checkout 9f07fe5f5bde733278ffa73c6d87d54b808b3b27 && \
     mkdir -p /opt/citrixhoneypot/logs /opt/citrixhoneypot/ssl && \
     openssl req \
           -nodes \
