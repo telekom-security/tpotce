@@ -13,10 +13,10 @@ RUN apk --no-cache -U upgrade && \
 		git \
 		py3-pip && \
 #
-# Install wordpot from git (v3.0.1), it runs from its folder with gunicorn
-    git clone https://github.com/t3chn0m4g3/wordpot /opt/wordpot && \
+# Install wordpot from git (v3.0.3), it runs from its folder with gunicorn
+    git clone https://github.com/telekom-security/wordpot /opt/wordpot && \
     cd /opt/wordpot && \
-    git checkout 8b9bea94f7e782cbbbe27786d0f62b08255c6d7c && \
+    git checkout 732b20ff9fe9231a7cab24ae22369d1f06e2cb00 && \
 #
 # hpfeeds is only imported when HPFEEDS_ENABLED is set, T-Pot does not use it.
 # pip only adds gunicorn (< 24, gunicorn.conf.py patches its internals) and user-agents.
