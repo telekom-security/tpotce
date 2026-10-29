@@ -18,6 +18,8 @@ RUN apt-get update && \
                        libnetfilter-queue1 \
                        libnetfilter-queue-dev \
                        libjson-c-dev \
+                       libcurl4 \
+                       libcurl4-openssl-dev \
                        libtool \
                        libpq5 \
                        libpq-dev \
@@ -26,7 +28,7 @@ RUN apt-get update && \
                        wget && \
 #
 # Install honeytrap from source
-    git clone https://github.com/t3chn0m4g3/honeytrap /root/honeytrap && \
+    git clone --depth 1 --branch v1.1.1 https://github.com/telekom-security/honeytrap /root/honeytrap && \
     cd /root/honeytrap/ && \
     autoreconf -vfi && \
     ./configure \
@@ -50,6 +52,7 @@ RUN apt-get update && \
     apt-get purge -y autoconf \
                      build-essential \
                      git \
+                     libcurl4-openssl-dev \
                      libnetfilter-queue-dev \
                      libpq-dev && \
     apt-get autoremove -y --purge && \
