@@ -7,8 +7,9 @@
   bind_addr = "0.0.0.0"
   bind_port = "8080"
 
-  # header name containing clients real IP, for reverse proxy deployments
+  # Only trust this header when the peer is listed in trusted_proxies.
   real_ip_header = 'X-Real-IP'
+  trusted_proxies = []
 
   # this contains a list of blacklisted useragent strings. (case sensitive)
   # clients with useragents containing any of these strings will receive "Not found" for any requests.
@@ -16,7 +17,7 @@
 
   # Unix Socket Listener (will override default)
   unix_socket_path = "/var/run/hellpot"
-  unix_socket_permissions = "0666"
+  unix_socket_permissions = "0600"
   use_unix_socket = false
 
   [http.router]

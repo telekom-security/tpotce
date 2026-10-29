@@ -12,7 +12,7 @@ RUN apk --no-cache -U upgrade && \
 #
 # Setup go, hellpot
     cd /root && \
-    git clone https://github.com/t3chn0m4g3/HellPot -b v0.60 && \
+    git clone https://github.com/telekom-security/hellpot -b v0.61 HellPot && \
     cd HellPot && \
     sed -i 's#logFileName := "HellPot"#logFileName := "hellpot"#g' internal/config/logger.go && \
     go mod download && \
