@@ -18,7 +18,7 @@ RUN apk --no-cache -U upgrade && \
 # Setup ConPot
     git clone https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
-    git checkout a61a58af283c84837fe7f75ff57ced26105ee6fa && \
+    git checkout 342d3a74c7093d1e95b1577704d98e5fc7319cef && \
     # T-Pot hooks (see dist/tpot.patch), then T-Pot templates and overrides
     git apply /root/dist/tpot.patch && \
     python3 /root/dist/tpot/tpot_templates.py build conpot/templates /root/dist/tpot/templates.toml && \
