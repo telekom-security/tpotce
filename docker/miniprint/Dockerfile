@@ -4,22 +4,27 @@ FROM python:3.14-alpine3.24 AS build
 COPY --from=ghcr.io/astral-sh/uv:0.12@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 ARG MINIPRINT_VERSION=v0.2.3
-# only the server and its seed files, no tests or docs in the image
+# only the server and its seed files: no tests or docs in the image, no tests of
+# pyfakefs either, and the build files go once the venv is synced
 RUN apk --no-cache add git \
     && git clone --depth 1 --branch ${MINIPRINT_VERSION} https://github.com/telekom-security/miniprint /root/miniprint \
     && mkdir -p /opt/miniprint \
     && cp -r /root/miniprint/pyproject.toml /root/miniprint/uv.lock /root/miniprint/README.md \
              /root/miniprint/*.py /root/miniprint/fake-files /opt/miniprint/
 WORKDIR /opt/miniprint
-RUN uv sync --locked --no-dev --no-install-project
+RUN uv sync --locked --no-dev --no-install-project \
+    && rm -rf pyproject.toml uv.lock README.md \
+              .venv/lib/python3.14/site-packages/pyfakefs/tests \
+              .venv/lib/python3.14/site-packages/pyfakefs/pytest_tests
 
 FROM python:3.14-alpine3.24
+# one layer for packages, user and the writable folders; the COPY below leaves
+# their owner alone
 RUN apk --no-cache -U upgrade \
     && addgroup -g 2000 miniprint \
-    && adduser -S -H -s /sbin/nologin -u 2000 -G miniprint miniprint
+    && adduser -S -H -s /sbin/nologin -u 2000 -G miniprint miniprint \
+    && install -d -o miniprint -g miniprint /opt/miniprint/log /opt/miniprint/uploads /opt/miniprint/data
 COPY --from=build /opt/miniprint /opt/miniprint
-RUN mkdir -p /opt/miniprint/log /opt/miniprint/uploads /opt/miniprint/data \
-    && chown miniprint:miniprint /opt/miniprint/log /opt/miniprint/uploads /opt/miniprint/data
 ENV PATH=/opt/miniprint/.venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 EXPOSE 9100 8000
