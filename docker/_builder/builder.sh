@@ -398,7 +398,7 @@ fuCOMPOSE_SERVICES () {
 }
 
 fuHELP () {
-  fuUI_HELP "Image Builder" "builder.sh [options]" \
+  fuUI_HELP "Image Builder" "./builder.sh [options]" \
     --about "Builds the images of docker/_builder/docker-compose.yml with buildx for linux/amd64 and
 linux/arm64, pushes them on request and runs the smoke tests of docker/_tests after it.
 With no option at a terminal it asks (a menu); with -y, any option or without a
@@ -434,10 +434,13 @@ ${mySETTING_KEYS// /, }" \
     --opt "--unset KEY" "Remove a setting from docker/_builder/.env.local" \
     --opt "--show-config" "Show every setting and where it comes from" \
     --opt "-h, --help" "Show this help" \
-    --example "sudo builder.sh -y" "Build every image for both platforms" \
-    --example "builder.sh -i cowrie,tpotinit -a host -T" "Two images for this host, then their smoke tests" \
-    --example "sudo builder.sh -g honeypots -p -l 80mbit" "Build the honeypots, push them with an upload limit" \
-    --example "builder.sh --set TPOT_DOCKER_REPO=me --set TPOT_BUILDER_JOBS=4" "Build for your own Docker Hub repository, four at a time" \
+    --example "sudo ./builder.sh -y" "Build every image for both platforms" \
+    --example "./builder.sh -i cowrie,tpotinit -a host -T" "Two images for this host, then their smoke tests" \
+    --example "sudo ./builder.sh -g honeypots -p -l 80mbit" "Build the honeypots, push them with an upload limit" \
+    --example "./builder.sh --set TPOT_DOCKER_REPO=me --set TPOT_BUILDER_JOBS=4" "Build for your own Docker Hub repository, four at a time" \
+    --note "Run these examples from docker/_builder in your checkout. The builder is not installed
+in PATH: use ./builder.sh, not builder.sh (also with sudo). From another folder, use
+its relative or full path, e.g. sudo ~/tpotce/docker/_builder/builder.sh -h." \
     --note "A setting comes from an option, else the environment, else docker/_builder/.env.local,
 else docker/_builder/.env, else the built-in default. The version is no setting: the file
 version of the checkout, -t for one run." \
@@ -791,8 +794,8 @@ fuLOCAL_WRITE () {
     [ -w "$(dirname -- "${myLOCALFILE}")" ] || return 1
     myCREATE=1
     printf -v myNEW '%s\n' "# The settings of the T-Pot image builder in this checkout (not in git), over" \
-      "# docker/_builder/.env: builder.sh --set KEY=VALUE / --unset KEY, or Settings in" \
-      "# its menu. An option or the environment wins over them; builder.sh -h names the keys." \
+      "# docker/_builder/.env. Use --set KEY=VALUE / --unset KEY, or Settings in" \
+      "# its menu. An option or the environment wins over them; -h names the keys." \
       "${myKEY}=${2-}"
   else
     [ -r "${myLOCALFILE}" ] && [ -w "${myLOCALFILE}" ] || return 1

@@ -12,6 +12,7 @@ import os
 import pty
 import re
 import select
+import shlex
 import shutil
 import signal
 import struct
@@ -221,6 +222,32 @@ class BuilderHarness(base.Harness):
 
 
 class CliTest(BuilderHarness):
+
+    def test_help_commands_resolve_without_path_entry(self):
+        checkout = os.path.join(self.home, "checkout space")
+        os.symlink(REPO, checkout)
+        for script in (BUILDER, os.path.join(checkout, "docker", "_builder", "builder.sh")):
+            with self.subTest(script=script):
+                result = self.run_script(script, "-h", env=self.env(), cwd=self.home)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Run these examples from docker/_builder", result.stdout)
+                usage = result.stdout.split("Usage: ", 1)[1].splitlines()[0]
+                examples = result.stdout.split("Examples:\n", 1)[1].split("\nNotes:", 1)[0]
+                commands = [usage] + [line.strip() for line in examples.splitlines()
+                                      if line.startswith("  ") and not line.startswith("   ")]
+                self.assertEqual(len(commands), 5, result.stdout)
+                for command in commands:
+                    argv = shlex.split(command)
+                    if argv[0] == "sudo":
+                        argv.pop(0)
+                    self.assertIn("/", argv[0], command)
+                    folder = os.path.dirname(script)
+                    self.assertEqual(os.path.realpath(os.path.join(folder, argv[0])),
+                                     os.path.realpath(BUILDER))
+                    check = subprocess.run([argv[0], "-h"], cwd=folder, env=self.terminal_env(),
+                                           capture_output=True, text=True, timeout=60)
+                    self.assertEqual(check.returncode, 0, check.stderr)
+        self.assertEqual(self.calls(), [])
 
     def test_help_names_every_option_and_the_exit_codes(self):
         rc, out = self.builder("-h")
