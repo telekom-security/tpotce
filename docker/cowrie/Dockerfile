@@ -40,6 +40,7 @@ RUN apk --no-cache -U upgrade && \
 #
 # Cowrie's own tests on the patched checkout: a failure must be one of upstream_test_exceptions.json, with its
 #   reason (on a bump of COWRIE_VERSION, a new failure or a listed test that passes stops the build)
+#   the long-pipeline tests get more parse time only while they run, not in the image's runtime
     python3 /root/dist/run_upstream_tests.py --cowrie-root /home/cowrie/cowrie \
                                              --exceptions /root/dist/upstream_test_exceptions.json && \
 #

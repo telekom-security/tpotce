@@ -2,6 +2,7 @@
 Dockerfile runs it after the patch). A failure that is not listed, a listed one that passes and a run without
 tests fail; the test modules of skip_modules are left out."""
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -28,11 +29,11 @@ class GateTest(unittest.TestCase):
             (tests / f"{name}.py").write_text(text)
         return root
 
-    def run_gate(self, root, exceptions):
+    def run_gate(self, root, exceptions, environ=None):
         path = root.parent / "exceptions.json"
         path.write_text(json.dumps(exceptions))
         return subprocess.run([sys.executable, str(GATE), "--cowrie-root", str(root), "--exceptions", str(path)],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True, env=environ)
 
     MODULES = {
         "test_ok": "import unittest\n\n\nclass T(unittest.TestCase):\n    def test_a(self):\n        pass\n",
@@ -43,6 +44,24 @@ class GateTest(unittest.TestCase):
     LISTED = {"skip_modules": {"cowrie.test.test_output_x": "plugin"},
               "expected_failures": {"cowrie.test.test_text.T.test_old_text": {
                   "reason": "persona text", "expect": "AssertionError: 'a' != 'b'"}}}
+    PIPELINE_MODULES = {
+        "test_pipe_recursion": (
+            "import os\nimport unittest\n\nclass LongPipelineTests(unittest.TestCase):\n"
+            "    def test_long_pipeline_does_not_crash(self):\n"
+            "        self.assertEqual(os.environ.get('COWRIE_SHELL_PARSE_TIMEOUT_SECONDS'), '120')\n"
+        ),
+        "test_pipeline": (
+            "import os\nimport unittest\n\nclass PipelineTests(unittest.TestCase):\n"
+            "    def test_long_pipeline_runs_flat(self):\n"
+            "        self.assertEqual(os.environ.get('COWRIE_SHELL_PARSE_TIMEOUT_SECONDS'), '120')\n"
+        ),
+    }
+    CHECK_ORIGINAL_TIMEOUT = (
+        "import os\nimport unittest\n\nclass T(unittest.TestCase):\n"
+        "    def test_original_timeout(self):\n"
+        "        self.assertEqual(os.environ.get('COWRIE_SHELL_PARSE_TIMEOUT_SECONDS', '<unset>'),\n"
+        "                         os.environ['TPOT_TEST_ORIGINAL_TIMEOUT'])\n"
+    )
 
     def test_a_run_as_listed_passes(self):
         done = self.run_gate(self.checkout(self.MODULES), self.LISTED)
@@ -76,6 +95,34 @@ class GateTest(unittest.TestCase):
         self.assertIn("fails, but not as listed (without \"AssertionError: 'a' != 'b'\"): "
                       "cowrie.test.test_text.T.test_old_text", done.stderr)
         self.assertIn("ZeroDivisionError", done.stderr)
+
+    def test_only_the_long_pipeline_tests_get_more_parse_time(self):
+        modules = dict(self.PIPELINE_MODULES, test_a_before=self.CHECK_ORIGINAL_TIMEOUT,
+                       test_z_after=self.CHECK_ORIGINAL_TIMEOUT)
+        for original in (None, "2.5"):
+            with self.subTest(original=original):
+                environ = dict(os.environ, TPOT_TEST_ORIGINAL_TIMEOUT=original or "<unset>")
+                if original is None:
+                    environ.pop("COWRIE_SHELL_PARSE_TIMEOUT_SECONDS", None)
+                else:
+                    environ["COWRIE_SHELL_PARSE_TIMEOUT_SECONDS"] = original
+                done = self.run_gate(self.checkout(modules), {}, environ)
+                self.assertEqual(done.returncode, 0, done.stderr)
+                self.assertEqual(done.stdout, "upstream tests: 4 tests, 0 expected failures as listed\n")
+
+    def test_a_long_pipeline_failure_is_reported_and_restores_the_timeout(self):
+        modules = {
+            "test_pipeline": self.PIPELINE_MODULES["test_pipeline"] + "        self.fail('pipeline regression')\n",
+            "test_z_after": self.CHECK_ORIGINAL_TIMEOUT,
+        }
+        environ = dict(os.environ, TPOT_TEST_ORIGINAL_TIMEOUT="<unset>")
+        environ.pop("COWRIE_SHELL_PARSE_TIMEOUT_SECONDS", None)
+        done = self.run_gate(self.checkout(modules), {}, environ)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("fails and is not listed: cowrie.test.test_pipeline.PipelineTests.test_long_pipeline_runs_flat",
+                      done.stderr)
+        self.assertIn("AssertionError: pipeline regression", done.stderr)
+        self.assertNotIn("test_z_after", done.stderr)
 
     def test_the_suite_runs_on_a_copy(self):
         # what the tests write in the checkout (downloads, tty logs, Twisted's dropin.cache) stays in the copy,

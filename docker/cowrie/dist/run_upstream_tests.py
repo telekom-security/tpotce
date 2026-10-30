@@ -12,7 +12,10 @@ on the patched tree, except those in the exceptions file, each with its reason:
 The build fails on a test that fails and is not listed, on a listed test that fails without its text, and on
 a listed test that passes (the list is out of date). The suite runs in a child process on a copy of the
 checkout, the copy its working folder, as `python -m unittest discover src` does upstream: what the tests
-write there (downloads, tty logs, Twisted's dropin.cache) stays out of the image."""
+write there (downloads, tty logs, Twisted's dropin.cache) stays out of the image.
+
+The two long-pipeline tests check stack safety, not parser speed. Each gets a 120-second parse limit for
+slow or emulated builds; the other tests and the image's runtime keep their normal configuration."""
 
 import argparse
 import json
@@ -23,6 +26,31 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+
+PARSE_TIMEOUT = "COWRIE_SHELL_PARSE_TIMEOUT_SECONDS"
+LONG_PIPELINE_TESTS = {
+    "cowrie.test.test_pipe_recursion.LongPipelineTests.test_long_pipeline_does_not_crash",
+    "cowrie.test.test_pipeline.PipelineTests.test_long_pipeline_runs_flat",
+}
+
+
+class GateResult(unittest.TextTestResult):
+    def startTest(self, test):
+        super().startTest(test)
+        if test.id() in LONG_PIPELINE_TESTS:
+            self._previous_timeout = os.environ.get(PARSE_TIMEOUT)
+            os.environ[PARSE_TIMEOUT] = "120"
+
+    def stopTest(self, test):
+        try:
+            if test.id() in LONG_PIPELINE_TESTS:
+                if self._previous_timeout is None:
+                    os.environ.pop(PARSE_TIMEOUT, None)
+                else:
+                    os.environ[PARSE_TIMEOUT] = self._previous_timeout
+        finally:
+            super().stopTest(test)
 
 
 def child(out: Path) -> None:
@@ -51,7 +79,7 @@ def child(out: Path) -> None:
                               if not any(module_of(test) == name or module_of(test).startswith(name + ".")
                                          for name in skip))
     with open(os.devnull, "w") as quiet:
-        result = unittest.TextTestRunner(stream=quiet, verbosity=0).run(kept)
+        result = unittest.TextTestRunner(stream=quiet, verbosity=0, resultclass=GateResult).run(kept)
     failed = sorted({test.id() for test, _ in result.failures + result.errors}
                     | {test.id() for test in result.unexpectedSuccesses})
     out.write_text(json.dumps({"ran": result.testsRun, "failed": failed,
