@@ -135,6 +135,7 @@ services:
     container_name: "${TEST_CONTAINER_NAME}"
     restart: "no"
     read_only: true
+    mem_limit: 320m
     user: "2000:2000"
     environment:
       REDISHONEYPOT_PROFILE: "${PROFILE}"
@@ -447,8 +448,8 @@ assert_stdout_lifecycle_only() {
   if ! grep -F '"event":"start"' <<< "${output}" | grep -F "\"profile\":\"${PROFILE}\"" | grep -q -F '"log_stdout":false'; then
     test_die "RedisHoneyPot start event with profile ${PROFILE} and log_stdout false missing in Docker logs"
   fi
-  if ! grep -F '"event":"start"' <<< "${output}" | grep -F '"max_clients_per_ip":16' | grep -F '"max_data_bytes":33554432' | grep -q -F '"max_reply_bytes":33554432'; then
-    test_die "RedisHoneyPot start event lacks the limits of the image (16 clients per address, 32 MiB data and reply budgets)"
+  if ! grep -F '"event":"start"' <<< "${output}" | grep -F '"max_clients_per_ip":16' | grep -F '"max_data_bytes":67108864' | grep -q -F '"max_reply_bytes":33554432'; then
+    test_die "RedisHoneyPot start event lacks the limits of the image (16 clients per address, 64 MiB data and 32 MiB reply budget)"
   fi
   if grep -q -E '"event":"(connect|command|close|protocol_error)"' <<< "${output}"; then
     test_die "RedisHoneyPot honeypot events found in Docker logs, they belong in redishoneypot.log only"

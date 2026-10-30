@@ -11,11 +11,11 @@ ENV CGO_ENABLED=0 \
 # Install packages
 RUN apk --no-cache -U add git
 #
-# Fetch RedisHoneyPot v2.1.0 (telekom-security/redishoneypot, based on cypwnpwnsocute/RedisHoneyPot)
+# Fetch RedisHoneyPot v2.1.1 (telekom-security/redishoneypot, based on cypwnpwnsocute/RedisHoneyPot)
 WORKDIR /root/redishoneypot
 RUN git -c init.defaultBranch=main init --quiet && \
     git remote add origin https://github.com/telekom-security/redishoneypot && \
-    git fetch --quiet --depth 1 origin c7ae77fd90947392c00d8a8877cb3c00b0b41421 && \
+    git fetch --quiet --depth 1 origin c18d29800ef90bbc0af85ab54c698e3f9d8a650b && \
     git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
 #
 # Test on the build platform, then cross-compile for the target
@@ -30,12 +30,13 @@ RUN apk --no-cache -U upgrade
 COPY --from=builder /root/RedisHoneyPot /opt/redishoneypot/
 #
 # Start redishoneypot, the persona comes from REDISHONEYPOT_PROFILE (.env);
-# events go to the log file only, stdout keeps start and shutdown. Keys and
-# replies have 32 MiB budgets each, so with 128 clients of at most 1 MiB the
-# honeypot stays near 200 MiB; the GC works harder before Go reaches it.
-ENV GOMEMLIMIT=200MiB
+# events go to the log file only, stdout keeps start and shutdown. Keys have a
+# 64 MiB budget, replies 32 MiB; with 128 clients of at most 1 MiB the
+# honeypot peaked at 227 MiB, the compose files give it 320 MiB and the GC
+# works harder before Go reaches GOMEMLIMIT.
+ENV GOMEMLIMIT=224MiB
 WORKDIR /opt/redishoneypot
 USER 2000:2000
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["./RedisHoneyPot", "healthcheck", "-addr", "127.0.0.1:6379", "-timeout", "2s"]
-CMD ["sh", "-c", "exec ./RedisHoneyPot -addr 0.0.0.0:6379 -proto tcp -profile \"${REDISHONEYPOT_PROFILE:-redis74}\" -max-clients 128 -max-command-bytes 1048576 -max-data-bytes 33554432 -max-reply-bytes 33554432 -log-file /var/log/redishoneypot/redishoneypot.log -log-stdout=false"]
+CMD ["sh", "-c", "exec ./RedisHoneyPot -addr 0.0.0.0:6379 -proto tcp -profile \"${REDISHONEYPOT_PROFILE:-redis74}\" -max-clients 128 -max-command-bytes 1048576 -max-data-bytes 67108864 -max-reply-bytes 33554432 -log-file /var/log/redishoneypot/redishoneypot.log -log-stdout=false"]
