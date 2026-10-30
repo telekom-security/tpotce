@@ -17,6 +17,8 @@ services:
       - "8000:8000"
     image: dtagdevsec/miniprint:24.04.2
     read_only: true
+    tmpfs:
+     - /tmp:size=16m,noexec,nosuid,nodev
     volumes:
      - $HOME/tpotce/data/miniprint/data/:/opt/miniprint/data/
      - $HOME/tpotce/data/miniprint/log/:/opt/miniprint/log/

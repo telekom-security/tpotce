@@ -141,6 +141,8 @@ services:
     restart: "no"
     read_only: true
     user: "2000:2000"
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
     environment:
       MINIPRINT_PERSONA: "brother"
     healthcheck:

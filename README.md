@@ -158,7 +158,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [log4pot](https://github.com/thomaspatzke/Log4Pot),
 [mailoney](https://github.com/phin3has/mailoney),
 [medpot](https://github.com/schmalle/medpot),
-[miniprint](https://github.com/t3chn0m4g3/miniprint),
+[miniprint](https://github.com/telekom-security/miniprint),
 [redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer),
@@ -1508,7 +1508,7 @@ The software that T-Pot is built on uses the following licenses.
 [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE),
 [heralding](https://github.com/telekom-security/heralding/blob/master/LICENSE.txt),
 [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE),
-[miniprint](https://github.com/t3chn0m4g3/miniprint/blob/master/LICENSE.md),
+[miniprint](https://github.com/telekom-security/miniprint/blob/master/LICENSE.md),
 [redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot/blob/main/LICENSE),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/blob/master/LICENSE),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only)

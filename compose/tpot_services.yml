@@ -835,6 +835,8 @@ services:
     image: ${TPOT_REPO}/miniprint:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
+    tmpfs:
+     - /tmp:size=16m,noexec,nosuid,nodev
     volumes:
      - ${TPOT_DATA_PATH}/miniprint/data/:/opt/miniprint/data/
      - ${TPOT_DATA_PATH}/miniprint/log/:/opt/miniprint/log/

@@ -3,10 +3,10 @@
 FROM python:3.14-alpine3.24 AS build
 COPY --from=ghcr.io/astral-sh/uv:0.12@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
-ARG MINIPRINT_VERSION=v0.2.2
+ARG MINIPRINT_VERSION=v0.2.3
 # only the server and its seed files, no tests or docs in the image
 RUN apk --no-cache add git \
-    && git clone --depth 1 --branch ${MINIPRINT_VERSION} https://github.com/t3chn0m4g3/miniprint /root/miniprint \
+    && git clone --depth 1 --branch ${MINIPRINT_VERSION} https://github.com/telekom-security/miniprint /root/miniprint \
     && mkdir -p /opt/miniprint \
     && cp -r /root/miniprint/pyproject.toml /root/miniprint/uv.lock /root/miniprint/README.md \
              /root/miniprint/*.py /root/miniprint/fake-files /opt/miniprint/
