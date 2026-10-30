@@ -159,7 +159,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [mailoney](https://github.com/telekom-security/mailoney),
 [medpot](https://github.com/schmalle/medpot),
 [miniprint](https://github.com/t3chn0m4g3/miniprint),
-[redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot),
+[redishoneypot](https://github.com/telekom-security/redishoneypot),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer),
 [wordpot](https://github.com/telekom-security/wordpot)
@@ -1509,7 +1509,7 @@ The software that T-Pot is built on uses the following licenses.
 [heralding](https://github.com/telekom-security/heralding/blob/master/LICENSE.txt),
 [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE),
 [miniprint](https://github.com/t3chn0m4g3/miniprint/blob/master/LICENSE.md),
-[redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot/blob/main/LICENSE),
+[redishoneypot](https://github.com/telekom-security/redishoneypot/blob/main/LICENSE),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/blob/master/LICENSE),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only)
 <br>Apache 2 License:
@@ -1589,7 +1589,7 @@ Without open source and the development community we are proud to be a part of, 
 [medpot](https://github.com/schmalle/medpot/graphs/contributors),
 [miniprint](https://github.com/sa7mon/miniprint/graphs/contributors),
 [p0f](https://lcamtuf.coredump.cx/p0f3/),
-[redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot/graphs/contributors),
+[redishoneypot](https://github.com/telekom-security/redishoneypot/graphs/contributors),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/project_members),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
 [suricata](https://github.com/OISF/suricata/graphs/contributors),
