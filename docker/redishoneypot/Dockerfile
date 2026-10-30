@@ -11,11 +11,11 @@ ENV CGO_ENABLED=0 \
 # Install packages
 RUN apk --no-cache -U add git
 #
-# Fetch RedisHoneyPot v2.0.2 (T-Pot fork of cypwnpwnsocute/RedisHoneyPot)
+# Fetch RedisHoneyPot v2.1.0 (telekom-security/redishoneypot, based on cypwnpwnsocute/RedisHoneyPot)
 WORKDIR /root/redishoneypot
 RUN git -c init.defaultBranch=main init --quiet && \
-    git remote add origin https://github.com/t3chn0m4g3/RedisHoneyPot && \
-    git fetch --quiet --depth 1 origin 6eb3446e77e1bb86f269737d8a72572a6dd13e5c && \
+    git remote add origin https://github.com/telekom-security/redishoneypot && \
+    git fetch --quiet --depth 1 origin c7ae77fd90947392c00d8a8877cb3c00b0b41421 && \
     git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
 #
 # Test on the build platform, then cross-compile for the target
@@ -30,9 +30,12 @@ RUN apk --no-cache -U upgrade
 COPY --from=builder /root/RedisHoneyPot /opt/redishoneypot/
 #
 # Start redishoneypot, the persona comes from REDISHONEYPOT_PROFILE (.env);
-# events go to the log file only, stdout keeps start and shutdown
+# events go to the log file only, stdout keeps start and shutdown. Keys and
+# replies have 32 MiB budgets each, so with 128 clients of at most 1 MiB the
+# honeypot stays near 200 MiB; the GC works harder before Go reaches it.
+ENV GOMEMLIMIT=200MiB
 WORKDIR /opt/redishoneypot
 USER 2000:2000
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["./RedisHoneyPot", "healthcheck", "-addr", "127.0.0.1:6379", "-timeout", "2s"]
-CMD ["sh", "-c", "exec ./RedisHoneyPot -addr 0.0.0.0:6379 -proto tcp -profile \"${REDISHONEYPOT_PROFILE:-redis74}\" -max-clients 128 -max-command-bytes 1048576 -log-file /var/log/redishoneypot/redishoneypot.log -log-stdout=false"]
+CMD ["sh", "-c", "exec ./RedisHoneyPot -addr 0.0.0.0:6379 -proto tcp -profile \"${REDISHONEYPOT_PROFILE:-redis74}\" -max-clients 128 -max-command-bytes 1048576 -max-data-bytes 33554432 -max-reply-bytes 33554432 -log-file /var/log/redishoneypot/redishoneypot.log -log-stdout=false"]
