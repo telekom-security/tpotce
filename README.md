@@ -156,7 +156,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [honeytrap](https://github.com/telekom-security/honeytrap/),
 [ipphoney](https://gitlab.com/bontchev/ipphoney),
 [log4pot](https://github.com/thomaspatzke/Log4Pot),
-[mailoney](https://github.com/phin3has/mailoney),
+[mailoney](https://github.com/telekom-security/mailoney),
 [medpot](https://github.com/schmalle/medpot),
 [miniprint](https://github.com/t3chn0m4g3/miniprint),
 [redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot),
@@ -1536,7 +1536,7 @@ The software that T-Pot is built on uses the following licenses.
 <br>Other:
 [citrixhoneypot](https://github.com/telekom-security/citrixhoneypot#licencing-agreement-malwaretech-public-licence),
 [cowrie](https://github.com/cowrie/cowrie/blob/main/LICENSE.rst),
-[mailoney](https://github.com/phin3has/mailoney),
+[mailoney](https://github.com/telekom-security/mailoney/blob/master/LICENSE),
 [Elastic License](https://www.elastic.co/licensing/elastic-license),
 [Wordpot](https://github.com/telekom-security/wordpot)
 <br>AGPL-3.0:
@@ -1584,7 +1584,7 @@ Without open source and the development community we are proud to be a part of, 
 [kibana](https://github.com/elastic/kibana/graphs/contributors),
 [logstash](https://github.com/elastic/logstash/graphs/contributors),
 [log4pot](https://github.com/thomaspatzke/Log4Pot/graphs/contributors),
-[mailoney](https://github.com/phin3has/mailoney),
+[mailoney](https://github.com/telekom-security/mailoney/graphs/contributors),
 [maltrail](https://github.com/stamparm/maltrail/graphs/contributors),
 [medpot](https://github.com/schmalle/medpot/graphs/contributors),
 [miniprint](https://github.com/sa7mon/miniprint/graphs/contributors),

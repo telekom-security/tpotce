@@ -14,10 +14,10 @@ RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add --virtual .mailoney-build-deps \
 		git && \
 #
-# Install mailoney from git (v3.0.0), it runs from its folder without pip
-    git clone https://github.com/t3chn0m4g3/mailoney /opt/mailoney && \
+# Install mailoney from git (v3.1.0), it runs from its folder without pip
+    git clone https://github.com/telekom-security/mailoney /opt/mailoney && \
     cd /opt/mailoney && \
-    git checkout 52ff7a34b9772a4249aee23686163ed2e4c48e42 && \
+    git checkout b119261c15e036900c33541d70d4893d330b2c82 && \
     cp /root/dist/mailoney.toml /opt/mailoney/mailoney.toml && \
 #
 # Setup user, groups and configs
@@ -30,7 +30,7 @@ RUN apk --no-cache -U upgrade && \
     apk del --purge .mailoney-build-deps && \
     rm -rf /root/* /var/cache/apk/* \
            /opt/mailoney/.devcontainer \
-           /opt/mailoney/.env.example \
+           /opt/mailoney/env.example \
            /opt/mailoney/.git \
            /opt/mailoney/.gitignore \
            /opt/mailoney/Dockerfile \
