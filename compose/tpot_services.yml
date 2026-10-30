@@ -871,6 +871,7 @@ services:
      - REDISHONEYPOT_PROFILE=${REDISHONEYPOT_PROFILE:-redis74}
     networks:
      - honeypot_local
+    mem_limit: 320m
     ports:
      - "6379:6379"
     image: ${TPOT_REPO}/redishoneypot:${TPOT_VERSION}
