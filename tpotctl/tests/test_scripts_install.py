@@ -427,7 +427,7 @@ class InstallShTest(Scripts):
         write(os.path.join(self.home, "os-release"), 'NAME="Gentoo"\nVERSION_ID="2.17"\n')
         result = self.install("-s", "-M", "-t", "s")
         self.assertEqual(result.returncode, 1, result.stdout[-800:])
-        self.assertIn("This installer accepts only", result.stdout)
+        self.assertIn("Only the following distributions are supported", result.stdout)
         self.assertEqual(self.marks(result.stdout)[-2:], ["@@tpot fail checks", "@@tpot phase failed"])
 
     def test_the_comment_of_mark_failed_says_what_the_assistant_does(self):
@@ -445,7 +445,7 @@ class InstallShTest(Scripts):
                                 env=self.env(TPOT_GUM="off", TPOT_INSTALL_PACKAGES_DONE="1"), cwd=self.home,
                                 stdin=subprocess.DEVNULL, timeout=60)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("### [ERROR] - This installer accepts only", result.stderr)
+        self.assertIn("### [ERROR] - Only the following distributions are supported", result.stderr)
         self.assertEqual([line for line in result.stderr.splitlines() if not line.startswith("###")], [],
                          result.stderr)
 
@@ -611,9 +611,7 @@ class DistributionTest(Scripts):
                                         env=self.env(TPOT_GUM="off"), cwd=self.home, stdin=subprocess.DEVNULL,
                                         timeout=60)
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                prefix = ("This installer accepts only" if script == "install.sh"
-                          else "Only the following distributions are supported:")
-                self.assertIn(f"### [ERROR] - {prefix} {listed}.",
+                self.assertIn(f"### [ERROR] - Only the following distributions are supported: {listed}.",
                               result.stderr)
                 self.assertEqual([line for line in result.stderr.splitlines() if not line.startswith("###")], [])
                 self.assertNotIn("bad ", result.stdout + result.stderr)
@@ -645,9 +643,7 @@ class DistributionTest(Scripts):
                 result = self.run_merged(path, "-s", "-t", "s") if script == "install.sh" \
                     else self.run_merged(path, "-y")
                 self.assertEqual(result.returncode, 1, result.stdout)
-                prefix = ("This installer accepts only" if script == "install.sh"
-                          else "Only the following distributions are supported:")
-                self.assertIn(f"{prefix} {listed}.", result.stdout)
+                self.assertIn(f"Only the following distributions are supported: {listed}.", result.stdout)
                 for name in installer.SUPPORTED:
                     self.assertIn(name, result.stdout)
                 self.assertNotIn("ansible-playbook", self.calls())
