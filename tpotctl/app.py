@@ -25,7 +25,7 @@ from textual.widgets.option_list import Option
 
 from tpotctl.widgets import nav
 from tpotctl.widgets.nav import DialogTitle, NavDataTable, NavInput, NavModal, NavOptionList, NavScroll
-from tpotctl import glyphs, logo, ops, prefs, theme
+from tpotctl import glyphs, logo, menu, ops, prefs, theme
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.commands import TpotCommands
 from tpotctl.screens.dialogs import ConfirmDialog, QuitDialog, SensorDialog, UserDialog
@@ -298,9 +298,18 @@ def meter(label: str, percent: Optional[float], detail: str = "", width: int = 1
     return text
 
 
-def system_text(state) -> Text:
+def system_text(state, compact: bool = False) -> Text:
     from tpotctl.system import human
     text = Text()
+    if compact:
+        values = (("CPU", state.cpu), ("RAM", state.memory.percent if state.memory else None),
+                  ("Disk", state.disk.percent if state.disk else None))
+        for label, value in values:
+            if text.plain:
+                text.append("  ")
+            text.append(f"{label} ", style=theme.color("mist"))
+            text.append(f"{value:.0f}%" if value is not None else "n/a", style=theme.color("glass"))
+        return text
     text.append_text(meter("CPU", state.cpu))
     text.append("\n")
     memory = state.memory
@@ -460,7 +469,8 @@ class StatusPane(Vertical):
         self.attacks, self.sources = attacks, sources
         width = self.query_one("#attacks").content_region.width or 40
         tall = self.app.size.height >= SOURCES_TALL
-        self.query_one("#attacks", Static).update(attacks_text(attacks, width, 5 if tall else 3,
+        short = self.app.size.height < 34
+        self.query_one("#attacks", Static).update(attacks_text(attacks, width, 0 if short else 5 if tall else 3,
                                                                rows=2 if tall else 1))
         busiest = attacks is not None and not attacks.problem and attacks.top
         self.query_one("#attacks-block").border_subtitle = \
@@ -470,6 +480,8 @@ class StatusPane(Vertical):
     def on_resize(self) -> None:
         if getattr(self, "attacks", None) is not None:
             self.show_attacks(self.attacks, getattr(self, "sources", None))
+        if getattr(self, "shown", None):
+            self.show(*self.shown)
 
     def repaint(self) -> None:
         """After a change of theme or icons."""
@@ -488,7 +500,7 @@ class StatusPane(Vertical):
             self.show_attacks(self.attacks, getattr(self, "sources", None))
         self.query_one(Honeycomb).show(containers)
         if machine is not None:
-            self.query_one("#system", Static).update(system_text(machine))
+            self.query_one("#system", Static).update(system_text(machine, compact=self.app.size.height < 34))
         info = Text()
         running = sum(c.state == "running" for c in containers)
         info.append(f"{running} of {len(containers)} containers running", style="bold")
@@ -671,12 +683,13 @@ class SettingsPane(Vertical):
     def compose(self) -> ComposeResult:
         with Horizontal(id=f"{self.PREFIX}-head", classes="settings-head"):
             yield Static("", id=f"{self.PREFIX}-status", classes="settings-status")
-            if self.ALL_TOGGLE:
-                yield Checkbox("All settings", False, id=f"{self.PREFIX}-all",
-                               tooltip="also the ones of services that are not in your edition and of the other "
-                                       "T-Pot type (tpot env list --all)")
-            yield Button("Revert", id=f"{self.PREFIX}-revert")
-            yield Button("Save", id=f"{self.PREFIX}-save", variant="primary", disabled=True)
+            with Horizontal(classes="settings-actions"):
+                if self.ALL_TOGGLE:
+                    yield Checkbox("All settings", False, id=f"{self.PREFIX}-all",
+                                   tooltip="also the ones of services that are not in your edition and of the other "
+                                           "T-Pot type (tpot env list --all)")
+                yield Button("Revert", id=f"{self.PREFIX}-revert")
+                yield Button("Save", id=f"{self.PREFIX}-save", variant="primary", disabled=True)
         yield from self.extra()
         yield TabbedContent(id=f"{self.PREFIX}-tabs", classes="settings-tabs")
 
@@ -789,6 +802,10 @@ class SettingsPane(Vertical):
     def loaded(self) -> None:
         """After a reload, for subclasses."""
 
+    def on_resize(self) -> None:
+        if getattr(self, "current", None) is not None:
+            self.call_after_refresh(self.check)
+
     def action_save(self) -> None:
         """ctrl+s: the Save button, or why it does not save."""
         if self.current is None:
@@ -872,6 +889,12 @@ class SettingsPane(Vertical):
         if others:
             names = ", ".join(others[:4]) + (", ..." if len(others) > 4 else "")
             status.append(f"\n{glyphs.g('fail')} T-Pot would not start: {names}", style=theme.color("error"))
+        if self.app.size.width < 100:
+            if others:
+                status = Text(f"{glyphs.g('fail')} T-Pot would not start: {names}",
+                              style=theme.color("error"))
+            status.no_wrap = True
+            status.overflow = "ellipsis"
         self.query_one(f"#{self.PREFIX}-status", Static).update(status)
 
     def on_setting_row_changed(self, event) -> None:
@@ -3036,6 +3059,7 @@ PANES = [
     ("elastic", "Elastic", ElasticPane, "host+hive"),
     ("update", "Update & backup", UpdatePane, "host"),
 ]
+PANES.sort(key=lambda pane: menu.PAGE_ORDER.index(pane[0]))
 NOT_HERE = "needs a T-Pot host: Linux with systemd. On macOS and Windows T-Pot runs in Docker Desktop."
 ON_A_SENSOR = {"users": "a SENSOR has no web UI, its events go to its HIVE.",
                "sensors": "sensors are managed on their HIVE, this is a SENSOR.",
@@ -3110,7 +3134,10 @@ class TpotApp(App):
     def compose(self) -> ComposeResult:
         yield TpotHeader(id="header")
         with Horizontal(id="body"):
-            yield ListView(*[ListItem(Label(menu_text(key, title, False, key in self.locked), classes="menu-long"),
+            yield ListView(*[ListItem(
+                                      *([Label(Text(menu.PAGE_HEADINGS[key], overflow="ellipsis", no_wrap=True),
+                                               classes="menu-group")] if key in menu.PAGE_HEADINGS else []),
+                                      Label(menu_text(key, title, False, key in self.locked), classes="menu-long"),
                                       Label(menu_text(key, SHORT.get(key, title), False, key in self.locked),
                                             classes="menu-short"),
                                       id=f"menu-{key}")

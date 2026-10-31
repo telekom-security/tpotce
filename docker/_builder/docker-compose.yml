@@ -9,8 +9,8 @@
 x-common-build: &common-build
   dockerfile: ./Dockerfile
   platforms:
-    - ${TPOT_AMD64}
-    - ${TPOT_ARM64}
+    - ${TPOT_AMD64:-linux/amd64}
+    - ${TPOT_ARM64:-linux/arm64}
 
 services:
 

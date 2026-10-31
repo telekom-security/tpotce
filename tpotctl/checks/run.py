@@ -1668,6 +1668,11 @@ class Check:
             event = self.geo_event(honeypot.name)
             row.geo = event
             try:
+                if self.options.geo_only and self.files.size(event.file) is None:
+                    row.set("geoip", FAILED, f"no structured log yet at {event.file}; run "
+                                             f"tpot check honeypots --only {honeypot.name} first")
+                    row.set("attack_map", NOT_REACHED)
+                    continue
                 line = self.render(honeypot, event, self.now())
                 self.files.append(event.file, line + "\n")
             except (CheckError, ValueError, OSError) as error:

@@ -299,6 +299,12 @@ main() {
   wait_for_json_log_event "${token}" || test_die "Expected IPPHoney event was not found in ipphoney.json"
   test_ok "IPPHoney logged the request from ${PRIVATE_SUBNET} to ipphoney.json"
 
+  test_json_log_marker append "${JSON_LOG_FILE}" "${token}"
+  run_ipphoney_probe "${token}-after-append" || test_die "IPPHoney repeat probe failed"
+  wait_for_json_log_event "${token}-after-append" || test_die "IPPHoney event after external append is missing"
+  test_json_log_marker check "${JSON_LOG_FILE}" "${token}" || test_die "IPPHoney overwrote an external log record"
+  test_ok "External log record and subsequent honeypot events are preserved"
+
   assert_no_runtime_errors
   test_ok "No IPPHoney runtime errors found in logs"
 

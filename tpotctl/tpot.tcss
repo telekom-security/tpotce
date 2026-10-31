@@ -82,6 +82,12 @@ Screen.-narrow #header-chips {
     display: none;
 }
 
+.menu-group {
+    height: 1;
+    color: $mist;
+    text-style: bold;
+}
+
 Screen.-narrow #sidebar {
     width: 14;
 }
@@ -210,6 +216,24 @@ Screen.-short #containers {
     display: none;
 }
 
+Screen.-short #dash {
+    layout: vertical;
+}
+
+Screen.-short #side-blocks {
+    width: 1fr;
+    margin-left: 0;
+}
+
+Screen.-short .block {
+    border: none;
+    padding: 0;
+}
+
+Screen.-short #sources-block {
+    display: none;
+}
+
 #status-info {
     margin: 1 0 0 0;
 }
@@ -227,6 +251,26 @@ Screen.-short #containers {
 
 .settings-head Button {
     margin-left: 2;
+}
+
+.settings-actions {
+    width: auto;
+    height: 1;
+}
+
+Screen.-narrow .settings-head {
+    layout: vertical;
+}
+
+Screen.-narrow .settings-status {
+    width: 1fr;
+    height: 1;
+}
+
+Screen.-narrow .settings-actions Button {
+    margin-left: 1;
+    min-width: 8;
+    padding: 0 1;
 }
 
 .settings-tabs {

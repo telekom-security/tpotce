@@ -20,6 +20,13 @@ class State:
         self.folded = {"conpot"}
         self.message = ""
         self.set_selection(selection)
+        self.original = self.selection.copy()
+
+    @property
+    def changed(self) -> bool:
+        before, after = self.original, self.selection
+        return (before.base != after.base or set(before.add) != set(after.add)
+                or set(before.remove) != set(after.remove) or before.ports != after.ports)
 
     def set_selection(self, selection: core.Selection) -> None:
         self.selection = selection
@@ -31,9 +38,9 @@ class State:
         return self.catalog.editions[self.selection.base].services
 
     def visible(self, group: str) -> List[str]:
-        return [n for n in self.catalog.order
+        return sorted([n for n in self.catalog.order
                 if self.catalog.group(n) == group and not self.catalog.flag(n, "hidden")
-                and self.catalog.offered(self.selection.base, n)]
+                and self.catalog.offered(self.selection.base, n)], key=str.casefold)
 
     def rows(self) -> List[Tuple[str, str]]:
         """(kind, name) with kind group | service, in display order."""

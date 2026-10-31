@@ -967,7 +967,7 @@ class ColoursTest(unittest.IsolatedAsyncioTestCase):
                 found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
                 await pilot.press("escape")
                 await pilot.pause(0.3)
-            await pilot.press("down", "down")                   # Settings: rows, tabs, fields
+            app.goto("settings")                              # rows, tabs, fields
             await pilot.pause(0.5)
             found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
             await pilot.press("right")                          # into the page: a focused field

@@ -59,7 +59,12 @@ fi
 }
 
 function fuGETPORTS {
-myDOCKERCOMPOSEPORTS=$(cat $myDOCKERCOMPOSEYML | yq -r '.services[].ports' | grep ':' | sed -e s/127.0.0.1// | tr -d '", ' | sed -e s/^:// | cut -f1 -d ':' | grep -v "6429\|6430" | sort -gu)
+local myDOCKERCOMPOSEYML="${1:-$HOME/tpotce/docker-compose.yml}"
+if [ ! -r "$myDOCKERCOMPOSEYML" ]; then
+  echo "Cannot read Compose file: $myDOCKERCOMPOSEYML" >&2
+  return 1
+fi
+myDOCKERCOMPOSEPORTS=$(cat "$myDOCKERCOMPOSEYML" | yq -r '.services[].ports' | grep ':' | sed -e s/127.0.0.1// | tr -d '", ' | sed -e s/^:// | cut -f1 -d ':' | grep -v "6429\|6430" | sort -gu)
 myPORTS=$(for i in $myDOCKERCOMPOSEPORTS; do echo "$i"; done)
 echo "Found these ports enabled:"
 echo "$myPORTS"

@@ -103,7 +103,7 @@ class Honeycomb(Static):
         names = fits_names(len(self.containers), width) and not self.screen.has_class("-short")
         text = render(self.containers, width, names)
         text.append("\n\n")
-        text.append_text(legend(self.containers, name_problems=not names))
+        text.append_text(legend(self.containers, name_problems=not names and not self.screen.has_class("-short")))
         self.update(text)
 
     def on_resize(self) -> None:

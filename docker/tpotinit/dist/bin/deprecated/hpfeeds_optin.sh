@@ -91,10 +91,17 @@ echo "Done."
 }
 
 # Check for cmdline argument and parse config file
-filename=$(echo $@ | cut -d= -f2)
-if [ $# == 1 ] && echo $@ | grep '\-\-conf=' > /dev/null && [ ! -z $filename ] && [ -f $filename ]
-  then
-    source $filename
+if [ "$#" -gt 0 ]; then
+  if [ "$#" -ne 1 ] || [[ "$1" != --conf=* ]]; then
+    echo "Usage: hpfeeds_optin.sh [--conf=FILE]" >&2
+    exit 1
+  fi
+  filename="${1#--conf=}"
+  if [ ! -f "$filename" ] || [ ! -r "$filename" ]; then
+    echo "Cannot read HPFeeds configuration: $filename" >&2
+    exit 1
+  fi
+  source "$filename"
 else
 
 # Proceed with interactive setup when no config file is found

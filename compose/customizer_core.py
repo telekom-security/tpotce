@@ -39,7 +39,7 @@ GROUPS = [
     ("tools", "Tools"),
 ]
 GROUP_TITLES = dict(GROUPS)
-EDITION_ORDER = ["STANDARD", "SENSOR", "MINI", "LLM", "TARPIT", "MOBILE", "MAC_WIN"]
+EDITION_ORDER = ["STANDARD", "SENSOR", "LLM", "MINI", "MOBILE", "TARPIT", "MAC_WIN"]
 
 _ENTRY_RE = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*$")
 _TOPLEVEL_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):\s*$")

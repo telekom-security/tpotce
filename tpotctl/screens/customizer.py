@@ -223,6 +223,9 @@ class CustomizerScreen(Screen):
                                            allow_yes=not errors), answered)
 
     def action_leave(self) -> None:
+        if not self.state.changed:
+            self.dismiss(None)
+            return
         self.app.push_screen(ConfirmDialog("Leave without writing?", yes="Leave"),
                              lambda yes: self.dismiss(None) if yes else None)
 

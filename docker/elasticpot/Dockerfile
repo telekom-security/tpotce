@@ -39,6 +39,7 @@ RUN apk --no-cache -U upgrade && \
 WORKDIR /opt/elasticpot
 RUN pip3 install --break-system-packages pyinstaller
 RUN pip3 install --break-system-packages -r requirements.txt
+COPY dist/jsonlog.py /opt/elasticpot/output_plugins/jsonlog.py
 RUN pyinstaller --name elasticpot honeypot.py \
 		--hidden-import output_plugins \
 		--hidden-import output_plugins.jsonlog

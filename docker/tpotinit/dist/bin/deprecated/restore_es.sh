@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 # Restore folder based ES backup
 # Make sure ES is available
 myES="http://127.0.0.1:64298/"

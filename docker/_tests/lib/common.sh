@@ -27,6 +27,30 @@ test_ok() {
   printf '[OK] %s\n' "$*"
 }
 
+test_json_log_marker() {
+  python3 - "$@" <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+mode, filename, token = sys.argv[1:]
+marker = {"tpot_smoke_marker": token}
+if mode == "append":
+    fd = os.open(filename, os.O_WRONLY | os.O_APPEND)
+    try:
+        os.write(fd, (json.dumps(marker) + "\n").encode())
+    finally:
+        os.close(fd)
+elif mode == "check":
+    records = [json.loads(line) for line in Path(filename).read_text().splitlines() if line.strip()]
+    if marker not in records:
+        raise SystemExit("External JSON log marker was overwritten by a honeypot event")
+else:
+    raise SystemExit("Unknown marker action: " + mode)
+PY
+}
+
 test_die() {
   printf '[FAIL] %s\n' "$*" >&2
   exit 1

@@ -5,7 +5,7 @@ from typing import Callable, Iterator, Tuple
 
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 
-from tpotctl import prefs
+from tpotctl import menu, prefs
 
 Command = Tuple[str, str, Callable]
 
@@ -15,7 +15,7 @@ class TpotCommands(Provider):
     def commands(self) -> Iterator[Command]:
         app = self.app
         for key, title, _cls, _host in app.panes:
-            yield f"Go to {title}", "page", partial(app.goto, key)
+            yield f"Go to {title}", f"page · {menu.PAGE_GROUPS[key]}", partial(app.goto, key)
         host = app.backend.linux_host()
         for name, help_text, callback in (
                 ("Start T-Pot", "sudo systemctl start tpot.service", partial(app.service, "start")),

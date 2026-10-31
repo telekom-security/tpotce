@@ -40,6 +40,7 @@ RUN apk --no-cache -U upgrade && \
 WORKDIR /opt/ipphoney
 RUN pip3 install --break-system-packages pyinstaller
 RUN pip3 install --break-system-packages -r requirements.txt
+COPY dist/jsonlog.py /opt/ipphoney/output_plugins/jsonlog.py
 RUN pyinstaller honeypot.py \
 		--hidden-import output_plugins \
 		--hidden-import output_plugins.jsonlog

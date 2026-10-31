@@ -6,7 +6,7 @@ import sys
 import time
 from typing import List, Optional
 
-from tpotctl import bootstrap, ops, say
+from tpotctl import bootstrap, menu, ops, say
 from tpotctl.bootstrap import REPO_DIR
 
 MAGENTA = "#E20074"
@@ -19,8 +19,34 @@ KIBANA_IMPORT_MODES = ("add", "update", "overwrite")
 KIBANA_COMMANDS = ("export", "import", "restore")
 
 
+class HelpFormatter(argparse.HelpFormatter):
+    def _format_usage(self, usage, actions, groups, prefix):
+        return super()._format_usage(usage, actions, groups, prefix or "Usage: ")
+
+    def _format_action(self, action):
+        if isinstance(action, argparse._SubParsersAction) and action.dest == "command":
+            choices = {choice.dest: choice for choice in action._choices_actions}
+            return "\n".join(
+                f"  {title}:\n" + "".join(super(HelpFormatter, self)._format_action(choices[name])
+                                         for name in names if name in choices)
+                for title, _, names in menu.GROUPS)
+        return super()._format_action(action)
+
+
+class ArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("formatter_class", HelpFormatter)
+        super().__init__(*args, **kwargs)
+        self._positionals.title = "Commands" if self.prog == "tpot" else "Arguments"
+        self._optionals.title = "Options"
+
+    def format_help(self):
+        title = "T-Pot Manager" if self.prog == "tpot" else f"T-Pot Manager: {self.prog}"
+        return title + "\n\n" + super().format_help()
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = ArgumentParser(
         prog="tpot", description="Configure and run T-Pot.",
         epilog="Without a command tpot opens the T-Pot Manager, its menu. update, restore and customize hand all their "
                "options to update.sh, restore.sh and compose/customizer.py, i.e. tpot update -h. status, ps, "

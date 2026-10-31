@@ -380,6 +380,12 @@ main() {
     || test_die "ElasticPot did not log the request from ${PRIVATE_SUBNET} (blacklist of honeypot.cfg)"
   test_ok "ElasticPot logged the request from ${PRIVATE_SUBNET}"
 
+  test_json_log_marker append "${LOG_DIR}/elasticpot.json" "${token}"
+  run_elasticsearch_probes_with_retries "${token}-after-append" || test_die "ElasticPot repeat probes failed"
+  wait_for_json_log_events "${token}-after-append" || test_die "ElasticPot events after external append are missing"
+  test_json_log_marker check "${LOG_DIR}/elasticpot.json" "${token}" || test_die "ElasticPot overwrote an external log record"
+  test_ok "External log record and subsequent honeypot events are preserved"
+
   assert_no_runtime_errors
   test_ok "No ElasticPot runtime errors found in logs"
 

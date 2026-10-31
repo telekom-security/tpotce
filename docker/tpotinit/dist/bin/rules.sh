@@ -1,6 +1,16 @@
 #!/bin/bash
 
 unset CDPATH
+if [ "$#" -eq 1 ] && { [ "$1" == "-h" ] || [ "$1" == "--help" ]; }; then
+    echo "Usage: rules.sh <docker-compose.yml> <set|unset>"
+    echo "Set or remove catch-all firewall rules for the Compose services."
+    exit 0
+fi
+if [ "$#" -ne 2 ] || [ -z "$1" ] || { [ "$2" != "set" ] && [ "$2" != "unset" ]; }; then
+    echo "Invalid arguments." >&2
+    echo "Usage: rules.sh <docker-compose.yml> <set|unset>" >&2
+    exit 1
+fi
 myBIN="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 ### Vars, Ports for Standard services
@@ -18,7 +28,7 @@ if [ "$myDOCKERCOMPOSEYML" != "" ] && ([ "$myRULESFUNCTION" == "set" ] || [ "$my
     echo "All arguments met. Continuing."
   else
     echo "Usage: rules.sh <docker-compose.yml> <[set, unset]>"
-    exit
+    exit 1
 fi
 }
 

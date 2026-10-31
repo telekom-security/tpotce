@@ -841,34 +841,46 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 ## The T-Pot Manager (tpot)
 **Names:** *T-Pot* is the honeypot platform. The *T-Pot Manager* is the tool that sets it up and runs it, started with the command `tpot` (the installer links it to `/usr/local/bin/tpot`). The service that runs T-Pot is `tpot.service`. So *Restart T-Pot* restarts the honeypots, *Restart the Manager* only starts the menu anew.
 
-`tpot` configures and runs T-Pot from one place. Without arguments it opens the T-Pot Manager, a menu (status, edition & services, settings, LLM, web users, sensors, images, checks, update & backup), every menu page is a command as well. *Where* says where a command works: on every host (also on macOS / Windows with Docker Desktop), on a T-Pot host (Linux with systemd) or on a HIVE (not on a SENSOR):
+`tpot` configures and runs T-Pot from one place. Without arguments it opens the grouped T-Pot Manager menu; every menu page has a command as well. *Where* says where a command works: on every host (also on macOS / Windows with Docker Desktop), on a T-Pot host (Linux with systemd) or on a HIVE (not on a SENSOR):
+
+The menu, command help and page search use four task groups: *Monitor*
+(Status, Checks, Images), *Configure* (Edition & services, LLM, Settings),
+*Access* (Sensors, Web users), and *Data & maintenance* (Elastic, Update & backup).
+Status stays first. At 80x24 the dashboard keeps its complete honeycomb, a short
+attack/system summary and service actions visible; larger terminals retain the
+container table and detailed blocks. At narrow widths Settings uses a two-row
+header instead of letting its path squeeze out the form.
 
 | Command | Menu | Where | Does |
 |---|---|---|---|
 | `tpot` | | every host | the menu |
+| **Monitor** | | | |
 | `tpot status` | *Status* | T-Pot host | version, edition, type, service state and containers |
-| `tpot ps [--watch [SECONDS]]` | *Status* | T-Pot host | containers with status and ports, `dps` / `dpsw` are short for it |
-| `tpot images` | *Images* | T-Pot host | Docker images, `dim` is short for it |
-| `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot.service` |
-| `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log, after `--check-data-loss` and a question if the update would [lose data](#loss-of-data) |
-| `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` (naming the size of the Elasticsearch data when the archive holds it) |
-| `tpot edition [list]` / `tpot edition set EDITION` | *Edition & services* | every host (switching: T-Pot host) | the editions, and switching to another one: T-Pot stops, `docker-compose.yml` is kept in `~/tpot_backups`, the edition takes its place, T-Pot starts again |
-| `tpot customize [OPTIONS]` | *Edition & services*, `c` | every host | the [customizer](#customize-t-pot-honeypots-and-services) |
-| `tpot env [list [--all] [--show-secrets]]` | *Settings* (*All settings*) | every host | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
-| `tpot env get KEY` / `tpot env set KEY=VALUE …` | *Settings* | every host | read or change a setting, it is only written if it is valid afterwards |
-| `tpot env check` | `ctrl+f` *Check the settings* | every host | checks `.env` as T-Pot does on start, exit code 1 on errors |
-| `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--adopt] [--force] [--accept-data-loss]` | *Elastic* | T-Pot host, HIVE | how long Elasticsearch keeps the events (`TPOT_ES_RETENTION`, the ILM policy `tpot`); a shorter time always asks first (also with `-y`; without a terminal `--accept-data-loss`), T-Pot never shortens it on its own, and lists the indices it deletes; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value), `DAYS` alone writes only `.env` then and says so (exit 0), as the pages do; where Elasticsearch cannot be read it says why and writes only `.env`. `status` also shows `TPOT_KIBANA_OBJECTS` and what an import would bring (new, to update, the same, yours), or why Kibana cannot be read |
-| `tpot elastic export [FILE]` / `tpot elastic import [--mode add\|update\|overwrite] [--dry-run] [-y]` / `tpot elastic import --prune [--dry-run] [-y]` / `tpot elastic restore FILE [-y]` | *Elastic* | T-Pot host, HIVE (with Kibana) | T-Pot's [Kibana objects](#kibana-objects): `export` saves every object into `~/tpot_backups` (or into the new `FILE`); `import` brings T-Pot's objects in as the mode does (default `update`: the missing and the unchanged ones, yours stay), `--dry-run` only shows what it would do, `overwrite` lists the objects of yours it replaces and asks first (`-y` confirms, without a terminal it needs `-y`, exit 2); `import --prune` imports nothing, it lists the unchanged objects of earlier releases that this one no longer ships and removes them after an export and its question (default no, `-y` confirms, without a terminal it needs `-y`, exit 2; with `--mode` exit 2); `restore` checks the file, asks and imports every object of it, the advanced settings too; `restore` and `import` with `update` or `overwrite` export first and import nothing if that fails (`add` replaces nothing and makes no export); exit 1 on an error or an object Kibana refused, "This edition runs no Kibana." where it has none |
-| `tpot llm [detect [--scan]\|models\|test]` | *LLM* | every host | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
-| `tpot users [list\|add\|passwd\|remove\|import]` | *Web users* (`import` is *Take over*) | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
-| `tpot sensors [list\|add\|remove\|set\|cert\|import]` | *Sensors* (`set` is *Edit*, `import` is *Take over*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
+| `tpot attackers [--hours H] [--count N] [--plain]` | *Status* (top five) | T-Pot host, HIVE | the source IPs with the most attacks, with country and reputation (`--plain`: only the IPs, one per line) |
 | `tpot check honeypots [--only A,B] [--no-geo] [--keep] [--timeout S] [--dry-run] [-B\|--become-file FILE] [-y]` | *Checks* | T-Pot host | probes every honeypot of this host and follows it from the port through its answer, its log line, Elasticsearch and GeoIP (a test event with a fixed test IP) to the Attack Map, a table of the stages at the end (`~/.local/share/tpotce/checks/last.json`); ewsposter sends nothing meanwhile, so real attacks of those minutes are not reported either; asks first (`-y` confirms, without a terminal it needs `-y`, exit 2); the test events are removed from Elasticsearch afterwards in two passes a minute apart, only those that are the check's own beyond doubt (its token, a test IP with its marker port, or a test IP with its type in the window for the four honeypots that log no source port, go-pot, hellpot, h0neytr4p and honeyaml, the probe source with a source port of the probe; never Suricata or P0f), the probe events it cannot tell apart from real ones stay and are counted with a Kibana link (`--keep` leaves them all); a SENSOR checks port, answer and log line; a honeypot whose ewsposter module cannot be held (its idle pass fails, `hold.ack` names it) gets no probe and no test event, its row says why and fails; exit 1 when a stage failed, 3 when ewsposter did not confirm its hold (nothing probed). The *Checks* page runs it in the task screen after its question (the switches *Geo probe* and *Clean up afterwards* are `--no-geo` and `--keep`), shows the stages of the last check from `last.json` with the details of each honeypot on enter (its Kibana link and the cleanup), says whether ewsposter is held or stuck, and also runs the service requests and the nmap scan of `hptest.sh --nmap` |
 | `tpot check pipeline [--only A,B] [--keep] [--timeout S] [--dry-run] [-B\|--become-file FILE] [-y]` | *Checks* | T-Pot host, HIVE | the same without the probes: a test event per honeypot from its log through Logstash, Elasticsearch and Redis to the WebSocket of the Attack Map, removed from Elasticsearch afterwards; a SENSOR refuses it (exit 2) |
 | `tpot check cleanup [--dry-run] [-y]` | *Checks* | T-Pot host | removes the test events of earlier checks whose cleanup did not run through (Elasticsearch down, a reboot during the check; `~/.local/share/tpotce/checks/pending`), by the rules of their cleanup and in their window, one pass (a file that names more than its run can have sent is refused and kept, nothing of it deleted; while a check runs it does nothing); asks first (`-y` confirms, without a terminal it needs `-y`, exit 2), exit 1 when Elasticsearch failed (the runs stay pending); every check does it first as well, before it takes the hold. The *Checks* page names such runs and has *Remove them now* |
-| `tpot attackers [--hours H] [--count N] [--plain]` | *Status* (top five) | T-Pot host, HIVE | the source IPs with the most attacks, with country and reputation (`--plain`: only the IPs, one per line) |
+| `tpot images` | *Images* | T-Pot host | Docker images, `dim` is short for it |
+| `tpot ps [--watch [SECONDS]]` | *Status* | T-Pot host | containers with status and ports, `dps` / `dpsw` are short for it |
+| **Configure** | | | |
+| `tpot customize [OPTIONS]` | *Edition & services*, `c` | every host | the [customizer](#customize-t-pot-honeypots-and-services) |
+| `tpot edition [list]` / `tpot edition set EDITION` | *Edition & services* | every host (switching: T-Pot host) | the editions, and switching to another one: T-Pot stops, `docker-compose.yml` is kept in `~/tpot_backups`, the edition takes its place, T-Pot starts again |
+| `tpot env [list [--all] [--show-secrets]]` | *Settings* (*All settings*) | every host | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
+| `tpot env get KEY` / `tpot env set KEY=VALUE …` | *Settings* | every host | read or change a setting, it is only written if it is valid afterwards |
+| `tpot env check` | `ctrl+f` *Check the settings* | every host | checks `.env` as T-Pot does on start, exit code 1 on errors |
+| `tpot llm [detect [--scan]\|models\|test]` | *LLM* | every host | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
+| **Access** | | | |
+| `tpot sensors [list\|add\|remove\|set\|cert\|import]` | *Sensors* (`set` is *Edit*, `import` is *Take over*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
+| `tpot users [list\|add\|passwd\|remove\|import]` | *Web users* (`import` is *Take over*) | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
+| **Data & maintenance** | | | |
+| `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--adopt] [--force] [--accept-data-loss]` | *Elastic* | T-Pot host, HIVE | how long Elasticsearch keeps the events (`TPOT_ES_RETENTION`, the ILM policy `tpot`); a shorter time always asks first (also with `-y`; without a terminal `--accept-data-loss`), T-Pot never shortens it on its own, and lists the indices it deletes; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value), `DAYS` alone writes only `.env` then and says so (exit 0), as the pages do; where Elasticsearch cannot be read it says why and writes only `.env`. `status` also shows `TPOT_KIBANA_OBJECTS` and what an import would bring (new, to update, the same, yours), or why Kibana cannot be read |
+| `tpot elastic export [FILE]` / `tpot elastic import [--mode add\|update\|overwrite] [--dry-run] [-y]` / `tpot elastic import --prune [--dry-run] [-y]` / `tpot elastic restore FILE [-y]` | *Elastic* | T-Pot host, HIVE (with Kibana) | T-Pot's [Kibana objects](#kibana-objects): `export` saves every object into `~/tpot_backups` (or into the new `FILE`); `import` brings T-Pot's objects in as the mode does (default `update`: the missing and the unchanged ones, yours stay), `--dry-run` only shows what it would do, `overwrite` lists the objects of yours it replaces and asks first (`-y` confirms, without a terminal it needs `-y`, exit 2); `import --prune` imports nothing, it lists the unchanged objects of earlier releases that this one no longer ships and removes them after an export and its question (default no, `-y` confirms, without a terminal it needs `-y`, exit 2; with `--mode` exit 2); `restore` checks the file, asks and imports every object of it, the advanced settings too; `restore` and `import` with `update` or `overwrite` export first and import nothing if that fails (`add` replaces nothing and makes no export); exit 1 on an error or an object Kibana refused, "This edition runs no Kibana." where it has none |
 | `tpot install [--classic]` | `ctrl+f` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
-| `tpot uninstall` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
+| `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` (naming the size of the Elasticsearch data when the archive holds it) |
 | `tpot setup [--force]` | *Update & backup* (*Rebuild the Manager's packages*) | every host | sets up or refreshes the Python packages of `tpot`; `--force` builds the venv anew, next to the old one, swapped when it works |
+| `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot.service` |
+| `tpot uninstall` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
+| `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log, after `--check-data-loss` and a question if the update would [lose data](#loss-of-data) |
 
 The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed.
 
@@ -934,6 +946,11 @@ tarpit.yml
 tpot_services.yml
 ```
 The `.yml` files are docker compose files, each representing a different set of honeypots and tools with `tpot_services.yml` being the catalog of all services `customizer.py` builds a customized docker compose file from.<br><br>
+CitrixHoneypot and Glutton are deliberately optional services available through the
+customizer, not part of a shipped edition. CitrixHoneypot's default HTTPS port can
+conflict with h0neytr4p; the customizer checks it. Glutton replaces Honeytrap, never
+runs beside it, and requires Linux Docker Engine.
+
 To switch to another edition run `tpot edition set <edition>` (i.e. `tpot edition set mini`) or choose it on the *Edition & services* page of the `tpot` menu. It stops T-Pot, keeps your `docker-compose.yml` in `~/tpot_backups` (a customized one too), copies the edition in its place and starts T-Pot again. A SENSOR that becomes a HIVE needs a web user (`--web-user NAME`, the menu asks for it), a HIVE that becomes a SENSOR keeps the data of its Elastic Stack in `data/elk` and sends its events once you run `tpot sensors add` on its HIVE.
 
 To activate a compose file by hand follow these steps:
@@ -956,6 +973,32 @@ Running the customizer again starts from your current configuration. Without a t
 python3 customizer.py --base standard --add citrixhoneypot --remove honeytrap --port citrixhoneypot:443=8444
 ```
 `--port SERVICE:HOSTPORT[/udp]=NEWPORT` moves a host port, `=-` removes it, `-o FILE` writes somewhere else, `python3 customizer.py -h` lists everything.
+
+Services are displayed alphabetically within their groups; the catalogue and
+generated Compose service order are unchanged. Edition choices use the same
+Hive, Sensor, LLM, Mini, Mobile, Tarpit order as the installer (plus macOS/Windows
+where offered). Leaving an unchanged or fully reverted selection does not ask
+for confirmation; unsaved configuration changes still do.
+
+The pipeline-only check requires existing structured honeypot logs. A service
+that has not logged its first event is reported with a prerequisite hint:
+run `tpot check honeypots --only SERVICE` first. Other available logs are still
+checked, but missing logs keep the overall result unsuccessful; no empty log
+files are created to manufacture a successful check.
+
+When changing `docker/tpotinit/dist/etc/objects/kibana_export.ndjson`, refresh its
+ZIP with `zip -X kibana_export.ndjson.zip kibana_export.ndjson` in that directory,
+then regenerate/check the Kibana hash manifest. The Cisco-ASA integration test
+checks that the ZIP contains exactly the shipped NDJSON.
+
+Historical helpers in `docker/tpotinit/dist/bin/deprecated/` remain shipped for
+legacy reference; they are not the supported Manager or wrapper commands.
+`docker/tpotinit/macvlan/docker-compose.yml` is likewise a historical example,
+not a maintained edition. Use the current Manager commands and customizer instead.
+
+The JSON log overlays of Elasticpot and IPPHoney preserve their upstream event
+format while writing each complete record in append mode. This allows the check's
+GeoIP fixtures to be appended without later honeypot writes overwriting them.
 
 The customizer writes the edition and your changes into the header of the file. `update.sh` builds it again from the new release, so new honeypots of the edition and changed service definitions are included. That only works as long as you change the file with the customizer: once you edit it by hand, `update.sh` puts it back unchanged and you have to run the customizer again. A file that `TPOT_DOCKER_COMPOSE` in `.env` points to is never touched by `update.sh`.
 <br><br>

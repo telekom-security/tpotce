@@ -266,7 +266,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             switcher = app.query_one("ContentSwitcher")
             self.assertEqual(switcher.current, "status")
             self.assertEqual(app.query_one("#containers").row_count, 2)
-            await pilot.press("down", "down", "down", "down", "down", "down")
+            await pilot.press("down", "down")
             await pilot.pause(0.2)
             self.assertEqual(switcher.current, "images")
             self.assertEqual(app.query_one("#images-table").row_count, 1)
@@ -3030,7 +3030,7 @@ class CustomizerScreenTest(unittest.IsolatedAsyncioTestCase):
             await pilot.press("b")
             await pilot.pause(0.2)
             self.assertIsInstance(app.screen, ChoiceDialog)
-            await pilot.press("down", "down", "enter")    # STANDARD, SENSOR, MINI
+            await pilot.press("down", "down", "down", "enter")    # STANDARD, SENSOR, LLM, MINI
             await pilot.pause(0.3)
             self.assertEqual(self.screen(app).state.selection.base, "MINI")
             self.assertNotIn("wordpot", self.screen(app).state.result.services)

@@ -4129,6 +4129,17 @@ class RunTest(unittest.TestCase):
         self.assertEqual(report.rows[0].state("geoip"), stages.FAILED)
         self.assertIn("does not exist", report.rows[0].stages["geoip"].detail)
 
+    def test_pipeline_missing_log_is_incomplete_but_other_logs_are_checked(self):
+        world = self.world(("cowrie", "dionaea"), geo_only=True)
+        del world.files.logs["cowrie/log/cowrie.json"]
+        report = world.run()
+        rows = {row.name: row for row in report.rows}
+        self.assertEqual(report.exit_code, 1)
+        self.assertEqual(rows["cowrie"].state("geoip"), stages.FAILED)
+        self.assertIn("tpot check honeypots", rows["cowrie"].stages["geoip"].detail)
+        self.assertEqual(rows["dionaea"].state("geoip"), stages.OK)
+        self.assertNotIn("cowrie/log/cowrie.json", world.files.logs)
+
     def test_the_dry_run_touches_nothing(self):
         world = self.world(("cowrie", "honeytrap"), dry_run=True)
         lines = world.check.plan()
