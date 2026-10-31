@@ -2264,11 +2264,65 @@ class ComposeAdoptTest(Scripts):
 
     def first_pass(self, *args, **extra):
         """update.sh -y of this checkout up to its edition check: the version of the release, the internet
-        check answers, a branch to update from."""
+        check answers, a branch to update from (master of an origin that has it, fuCHECK_SOURCE asks it)."""
         with open(os.path.join(REPO, "version"), encoding="utf-8") as handle:
             self.write(os.path.join(self.tpotce, "version"), handle.read())
         self.stub("curl", '#!/bin/sh\necho "curl $*" >> "$HOME/calls"\nexit 0\n')
+        self.with_origin()
         return self.run_plain(UPDATE_SH, "-y", *args, cwd=self.tpotce, TPOT_UPDATE_PREPARED=None, **extra)
+
+    def with_origin(self):
+        """HOME/origin, a clone of this checkout that master of the checkout follows; its path."""
+        origin = os.path.join(self.home, "origin")
+        if not os.path.isdir(origin):
+            subprocess.run(["git", "clone", "-q", self.tpotce, origin], check=True)
+            subprocess.run(["git", "-C", self.tpotce, "remote", "add", "origin", origin], check=True)
+            subprocess.run(["git", "-C", self.tpotce, "fetch", "-q", "origin"], check=True)
+            subprocess.run(["git", "-C", self.tpotce, "branch", "-q", "--set-upstream-to=origin/master"], check=True)
+        return origin
+
+    def test_a_branch_gone_upstream_stops_before_stop_and_backup(self):
+        """The branch ~/tpotce follows was deleted upstream (a test branch, merged): update.sh -y ends at the
+        source check, T-Pot keeps running, no backup, no export, the way back in the summary."""
+        origin = self.with_origin()
+        subprocess.run(["git", "-C", origin, "branch", "-q", "gone"], check=True)
+        subprocess.run(["git", "-C", self.tpotce, "fetch", "-q", "origin"], check=True)
+        subprocess.run(["git", "-C", self.tpotce, "checkout", "-q", "-b", "gone", "--track", "origin/gone"], check=True)
+        subprocess.run(["git", "-C", origin, "branch", "-q", "-D", "gone"], check=True)
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)
+        env = self.read(os.path.join(self.tpotce, ".env"))
+        git = ["git", "-C", self.tpotce, "rev-parse"]
+        head = subprocess.run(git + ["HEAD"], capture_output=True, text=True, check=True).stdout
+        for args in ((), ("-b", "gone")):
+            with self.subTest(args=args):
+                result = self.first_pass(*args)
+                out = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 1, out[-1500:])
+                self.assertIn(f"The branch gone does not exist (any longer) in {origin}.", out)
+                calls = self.calls()
+                self.assertNotIn("systemctl stop", calls)
+                self.assertNotIn("--dry-run", calls)                        # the edition check is not reached
+                self.assertFalse([c for c in calls.splitlines() if c.startswith("docker ")], calls)
+                backups = os.path.join(self.home, "tpot_backups")
+                self.assertEqual([n for n in os.listdir(backups) if n.endswith(".tar")]
+                                 if os.path.isdir(backups) else [], [])
+                self.assertEqual(self.compose(), self.OWN)
+                self.assertEqual(self.read(os.path.join(self.tpotce, ".env")), env)
+                self.assertEqual(subprocess.run(git + ["HEAD"], capture_output=True, text=True,
+                                                check=True).stdout, head)
+                self.assertEqual(subprocess.run(git + ["refs/remotes/origin/gone"], capture_output=True, text=True,
+                                                check=True).stdout, head)
+                self.assertFalse(os.path.exists(os.path.join(self.home, "tpot_inactive")))
+                summary = self.summary(result.stdout)
+                self.assertIn(f"### [FAILED] - The branch gone does not exist in {origin}, nothing was changed. "
+                              "'./update.sh -y -b master' updates from the release.", summary)
+                self.assertIn("T-Pot was left running.",
+                              result.stdout[result.stdout.index("### The update did not finish"):])
+        # An explicit valid branch gets past this check; the unconfirmed compose adaptation stops it.
+        result = self.first_pass("-b", "master")
+        self.assertIn("Repository and branch are available.", result.stdout)
+        self.assertIn("--dry-run", self.calls())
+        self.assertNotIn("systemctl stop", self.calls())
 
     def test_own_without_tty_cancels_before_stop_and_backup(self):
         self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.OWN)

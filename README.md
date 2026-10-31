@@ -7,7 +7,7 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
 
 # TL;DR
 1. Meet the [system requirements](#system-requirements). The T-Pot installation needs at least 8-16 GB RAM, 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
-2. [Download](#choose-your-distro) or use a running, supported distribution.
+2. [Download](#choose-your-distro) or prepare a dedicated Debian 13 host or VM (preferred). [Raspberry Pi OS](#raspberry-pi-4-8gb-support) remains supported for T-Pot Mobile; other listed Linux distributions are best effort.
 3. Install the ISO with as minimal packages / services as possible (`ssh` required)
 4. Install `curl`: `$ sudo [apt, dnf, zypper] install curl` if not installed already
 5. Run installer as non-root from `$HOME`:
@@ -47,6 +47,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 - [Installation](#installation)
   - [Choose your distro](#choose-your-distro)
   - [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
+  - [T-Pot ISO (preview)](#t-pot-iso-preview)
   - [Get and install T-Pot](#get-and-install-t-pot)
   - [Unattended Installation](#unattended-installation)
   - [Testing a Branch](#testing-a-branch)
@@ -129,7 +130,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 <br><br>
 
 # Technical Concept
-T-Pot's main components have been moved into the `tpotinit` Docker image allowing T-Pot to now support multiple Linux distributions, even macOS and Windows (although both limited to the feature set of Docker Desktop). T-Pot uses [docker](https://www.docker.com/) and [docker compose](https://docs.docker.com/compose/) to reach its goal of running as many honeypots and tools as possible simultaneously and thus utilizing the host's hardware to its maximum.
+T-Pot's main components live in the `tpotinit` Docker image. Debian is the preferred host platform, Raspberry Pi OS remains supported for T-Pot Mobile, and other listed Linux distributions are best effort (see [host support tiers](#choose-your-distro)). Containers still depend on the host kernel and networking; Docker Desktop has a limited feature set. T-Pot uses [docker](https://www.docker.com/) and [docker compose](https://docs.docker.com/compose/) to reach its goal of running as many honeypots and tools as possible simultaneously and thus utilizing the host's hardware to its maximum.
 <br><br>
 
 ## Honeypots and Tools
@@ -223,7 +224,7 @@ During the installation and during the usage of T-Pot there are two different ty
 
 # System Requirements
 
-Depending on the [supported Linux distro images](#choose-your-distro), hive / sensor, installing on [real hardware](#running-on-hardware), in a [virtual machine](#running-in-a-vm) or other environments there are different kind of requirements to be met regarding OS, RAM, storage and network for a successful installation of T-Pot (you can always adjust `~/tpotce/docker-compose.yml` and `~/tpotce/.env`to your needs to overcome these requirements).
+Use a dedicated host or VM, preferably Debian 13, without unrelated production services. T-Pot changes host networking, firewall settings and packages. Depending on the [listed Linux distro images and their support tiers](#choose-your-distro), hive / sensor, installing on [real hardware](#running-on-hardware), in a [virtual machine](#running-in-a-vm) or other environments there are different requirements regarding OS, RAM, storage and network. Adjusting `~/tpotce/docker-compose.yml` and `~/tpotce/.env` does not replace the host requirements.
 <br><br>
 
 | T-Pot Type | RAM  | Storage   | Description                                                                                      |
@@ -236,11 +237,11 @@ T-Pot does require ...
 - a working, non-proxied, internet connection
 ... for a successful installation and operation.
 <br><br>
-*If you need proxy support or otherwise non-standard features, you should check the docs of the [supported Linux distro images](#choose-your-distro) and / or the [Docker documentation](https://docs.docker.com/).*
+*If you need proxy support or otherwise non-standard features, you should check the docs of the [listed Linux distributions](#choose-your-distro) and / or the [Docker documentation](https://docs.docker.com/).*
 <br><br>
 
 ## Running in a VM
-All of the [supported Linux distro images](#choose-your-distro) will run in a VM which means T-Pot will just run fine. The following were tested / reported to work:
+A dedicated Debian VM is the preferred virtualized deployment. Booting a [listed Linux distribution](#choose-your-distro) in a VM alone does not verify T-Pot's host kernel and network requirements. The following hypervisors were tested / reported to work:
 * [UTM (Intel & Apple Silicon)](https://mac.getutm.app/)
 * [VirtualBox](https://www.virtualbox.org/)
 * [VMWare Fusion](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion) and [VMWare Workstation](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion)
@@ -253,7 +254,7 @@ All of the [supported Linux distro images](#choose-your-distro) will run in a VM
 <br><br>
 
 ## Running on Hardware
-T-Pot is only limited by the hardware support of the [supported Linux distro images](#choose-your-distro). It is recommended to check the HCL (hardware compatibility list) and test the supported distros with T-Pot before investing in dedicated hardware.
+Check the hardware compatibility list of the [chosen Linux distribution](#choose-your-distro), preferably Debian, and test T-Pot's kernel, firewall, NIC and storage requirements before investing in dedicated hardware. OS hardware support alone is not enough to verify honeypot operation.
 <br><br>
 
 ## Running in a Cloud
@@ -482,13 +483,22 @@ Once you are familiar with how things work you should choose a network you suspe
 <br><br>
 
 # Installation
-[Download](#choose-your-distro) one of the [supported Linux distro images](#choose-your-distro), follow the [TL;DR](#tldr) instructions or `git clone` the T-Pot repository and run the installer `~/tpotce/install.sh`. Running T-Pot on top of a running and supported Linux system is possible, but a clean installation is recommended to avoid port conflicts with running services. The T-Pot installer will require direct access to the internet as described [here](#required-ports).
+[Download](#choose-your-distro) Debian 13 (preferred), follow the [TL;DR](#tldr) instructions or `git clone` the T-Pot repository and run the installer `~/tpotce/install.sh`. A clean, dedicated host or VM is recommended; an already prepared host must meet the same requirements and be dedicated to T-Pot. Raspberry Pi OS uses the same installer for T-Pot Mobile. The T-Pot installer will require direct access to the internet as described [here](#required-ports).
 <br><br>
 
 ## Choose your distro
+
+Starting with T-Pot 24.04.2, the host support tiers are:
+
+- **Preferred: Debian 13**, on x86-64 or arm64. It is recommended for new deployments and is the reference platform for host compatibility testing and distribution-specific fixes.
+- **Supported: Raspberry Pi OS Lite (64-bit, Debian 13 / Trixie)** for T-Pot Mobile. It is not part of the best-effort group.
+- **Best effort: AlmaLinux, Fedora, openSUSE Tumbleweed, Red Hat Enterprise Linux, Rocky Linux and Ubuntu**, at the versions listed below. Their installation paths remain available, but there is no equal test coverage or commitment to fix distribution-specific problems. Both the installer and the T-Pot Manager display a warning, not a new installation block.
+
+The version checks still apply to every tier; best effort does not make an unlisted distribution or OS version acceptable to the installer. Whether the 27.04 release removes other Linux distribution paths is **not decided**. No such support cut is made here. A [T-Pot ISO](#t-pot-iso-preview) based on Debian's netinst is available as a preview to build from source, not as a released download. Guided cross-host migration is planned, not an available migration path yet.
+
 **Steps to Follow:**
 
-1. Download a supported Linux distribution from the list below. T-Pot follows the current release of each distribution, the installer will stop on an older one. (NOTE: Red Hat Enterprise Linux 10 is supported, but omitted from the list below due to its subscription-based nature. See [Red Hat Enterprise Linux](#red-hat-enterprise-linux) for details).
+1. Download Debian 13 (preferred), or a distribution at the required version below. The installer rejects other versions; openSUSE Tumbleweed is rolling. Red Hat Enterprise Linux 10 is best effort and omitted from the download table due to its subscription-based nature; see [Red Hat Enterprise Linux](#red-hat-enterprise-linux).
 2. During installation choose a **minimum**, **netinstall** or **server** version that will only install essential packages.
 3. **Never** install a graphical desktop environment such as Gnome or KDE. T-Pot will fail to work with it due to port conflicts. 
 4. Make sure to install SSH, so you can connect to the machine remotely.
@@ -496,8 +506,8 @@ Once you are familiar with how things work you should choose a network you suspe
 
 | Distribution Name                                                                  | x64                                                                                                                                   | arm64                                                                                                                                   |
 |:-----------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------|
+| [**Debian 13 Network Install (preferred)**](https://www.debian.org/CD/netinst/index.en.html) | [images](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/) | [images](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/) |
 | [Alma Linux OS 10.x Minimal ISO](https://almalinux.org)                               | [download](https://repo.almalinux.org/almalinux/10/isos/x86_64/AlmaLinux-10-latest-x86_64-minimal.iso)                                 | [download](https://repo.almalinux.org/almalinux/10/isos/aarch64/AlmaLinux-10-latest-aarch64-minimal.iso)                                 |
-| [Debian 13 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.6.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.6.0-arm64-netinst.iso)                                   |
 | [Fedora Server 44 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso/Fedora-Server-netinst-x86_64-44-1.7.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/aarch64/iso/Fedora-Server-netinst-aarch64-44-1.7.iso) |
 | [OpenSuse Tumbleweed Network Image](https://get.opensuse.org/tumbleweed/#download) | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                      |
 | [Rocky Linux OS 10.x Minimal ISO](https://rockylinux.org/download)                    | [download](https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10-latest-x86_64-minimal.iso)                               | [download](https://download.rockylinux.org/pub/rocky/10/isos/aarch64/Rocky-10-latest-aarch64-minimal.iso)                               |
@@ -506,9 +516,56 @@ Once you are familiar with how things work you should choose a network you suspe
 <br>
 
 ## Raspberry Pi 4 (8GB) Support
+
+Raspberry Pi OS remains supported for **T-Pot Mobile**. Use **Lite, 64-bit, Debian 13 / Trixie**, not a desktop or 32-bit image and not an older Bookworm image. The Mobile edition recommends 8 GB RAM and 128 GB storage. Prepare the OS with Raspberry Pi Imager (enable SSH and create a regular user), then use the same T-Pot installer and select Mobile. This is a prepared-OS installation, not a Debian Installer/preseed ISO.
+
+The Mobile edition includes Honeytrap, so the Pi kernel must provide its NFQUEUE support. Successful OS installation alone does not validate that requirement. No new Pi models or additional edition restrictions are introduced by the support-tier transition.
+
 | Distribution Name                                                | arm64                                                                                                                                               |
 |:-----------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------|
-| [Raspberry Pi OS (**64Bit, Lite**)](https://www.raspberrypi.com) | [download](https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2024-03-15/2024-03-15-raspios-bookworm-arm64-lite.img.xz) |
+| [Raspberry Pi OS (**64-bit, Lite, Trixie**)](https://www.raspberrypi.com/software/operating-systems/) | [download](https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-10-06/2026-10-06-raspios-trixie-arm64-lite.img.xz) |
+
+<br>
+
+## T-Pot ISO (preview)
+
+The T-Pot ISO is a **preview you build from source**; there is no released ISO download yet. It is Debian's own current Debian 13 netinst (x86-64 or arm64) with **Install T-Pot** added as the default boot menu entry: it installs the preferred host platform and then hands over to the same T-Pot installer as on a prepared Debian.
+
+```bash
+git clone https://github.com/telekom-security/tpotce
+cd tpotce
+installer/iso/build.sh                       # the menu: build an ISO, write one to a USB stick
+installer/iso/build.sh -a amd64 -b master    # the same without the menu (-a arm64, -h lists all options)
+```
+
+- **Build host:** Linux with `xorriso`, `python3`, `gpg` and `curl`, or Docker (`-D`, the default outside Linux; macOS needs `bash` 4 or newer, e.g. `brew install bash`). The menu (and its [gum](https://github.com/charmbracelet/gum) look) needs a terminal; every choice it makes is also shown as the command line that does the same. Each ISO is written to `installer/iso/out/` with its `.sha256`, `.sha512` and a `.buildinfo` (source, Debian netinst and its checksum, build tool versions).
+- **Netinst cache:** downloads stay in `installer/iso/out/cache` (`TPOT_ISO_CACHE`). Every build asks Debian for its signed `SHA512SUMS`: a new point release replaces the cached netinst, a damaged one is downloaded again, a cut-off download is resumed.
+- **Trust:** the netinst is downloaded from `cdimage.debian.org` (or taken from disk with `-i`) and checked against Debian's `SHA512SUMS` and its signature by the [Debian CD signing key](https://www.debian.org/CD/verify) (pinned fingerprint). Debian's kernels, initrds and signed boot loaders stay untouched and its boot records are replayed, preserving Debian's BIOS, UEFI and Secure Boot chain. Like Debian's arm64 netinst, the arm64 ISO boots via UEFI only. A self-built ISO has checksums and build provenance; only the `SHA256SUMS` / `SHA512SUMS` of a release can carry a T-Pot GPG signature.
+- **Source:** `-b` and `-r` select the branch and the repository the ISO installs T-Pot from (default: the branch and origin of your checkout, otherwise `master` of this repository). T-Pot is cloned at the first login, so the branch must be pushed to that repository. In the menu, *Source* lists the branches of the repository (`master`, the release, and `dev` first); with gum, type to filter the list. It also takes another repository, e.g. your fork, with its branches. A tag or a commit works too, with a warning: such a T-Pot is not on a branch and `update.sh` cannot update it until it is moved to one (`./update.sh -y -b master`).
+
+**Write the ISO to a USB stick:** choose *Write an ISO to a USB stick* in the menu, or:
+
+```bash
+installer/iso/build.sh -l                                  # the USB sticks and SD cards it may write to
+installer/iso/build.sh -w installer/iso/out/<name>.iso     # pick the stick from a list, confirm, write
+installer/iso/build.sh -a amd64 -d /dev/sdb                # build and write in one go (asks before it erases)
+```
+
+Only USB and removable drives are offered, each with its vendor, model, size, bus and volume names; the disk of the running system, of your home folder and of the ISOs never is. The ISO is checked against its `.sha256` first, written with `dd` (`sudo` only where your user may not write to the stick), read back and compared, then the stick is ejected. On Windows, write the ISO with [Rufus](https://rufus.ie) (DD image mode) or [balenaEtcher](https://etcher.balena.io).
+
+**Release ISOs (maintainers):** `installer/iso/build.sh -R [-s <gpg-key>] [-U <tag>]` (or *Build the ISOs of a release* in the menu) builds `tpot-<version>-debian-<x.y.z>-<arch>.iso` for amd64 and arm64 into `installer/iso/out/release-<version>/`, each with `.sha256`, `.sha512` and `.buildinfo`, plus `SHA256SUMS` and `SHA512SUMS`. The checkout must be clean and its branch (usually `master`) pushed; release ISOs install that branch, because the T-Pot updater needs a branch, not a tag. `-s` signs both SUMS files (`.asc`, detached and armored) and verifies the signatures; `-U` uploads all files to the existing GitHub release of that tag with `gh release upload --clobber`. To verify a download:
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS        # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS
+gpg --verify SHA256SUMS.asc SHA256SUMS
+```
+
+What the ISO does:
+
+1. **Install T-Pot** starts the regular Debian Installer with a small [preseed](installer/iso/preseed.cfg) that only answers what is safe on any machine: no root login (the user you create gets `sudo`), standard system utilities and an SSH server, no desktop, plus `curl`, `git`, `sudo` and `ca-certificates`. The host name (`t-pot` is pre-filled) and the proxy are still asked, and so are the language, keyboard, time zone, network, **disks**, user and password. The ISO never partitions or erases a disk on its own and contains no password or key. Debian's own menu entries stay and install a plain Debian; the accessibility (speech synthesis) entries have no T-Pot variant.
+2. After the reboot, log in as the user you created, on the console or via SSH. The ISO names the source it was built for: **Enter** installs it with the T-Pot installer of the ISO, which asks before it changes anything (see [Get and install T-Pot](#get-and-install-t-pot)). To test another branch with the same ISO, type its name (and, if needed, the URL of another repository): it is checked against the repository, cloned into `~/tpotce`, and the installer of that branch runs. A tag or a commit needs a confirmation (`update.sh` cannot update it), a branch the repository does not have is asked again. If you decline in the installer, the system stays a plain Debian and the installer asks again at the next login until T-Pot is installed. Start it by hand with `bash /usr/local/share/tpot-iso/start.sh [-b <branch>] [-r <repository>]`, or stop the prompt for good with `sudo rm /etc/profile.d/tpot-iso.sh`.
+
+Validation status of the preview: in QEMU, the amd64 ISO boots under BIOS, UEFI and UEFI Secure Boot, the arm64 ISO under UEFI and UEFI Secure Boot, and an automated amd64 installation confirmed the preseed and the hand-off to the T-Pot installer at the first login. An interactive Debian Installer run, real hardware and a complete T-Pot installation from the ISO are not validated yet. Boot success does not qualify the host kernel and firewall for the honeypots.
 
 <br><br> 
 ## Get and install T-Pot
@@ -573,6 +630,9 @@ git clone -b my-feature https://github.com/telekom-security/tpotce ~/tpotce
 
 # as environment variables, i.e. for the one-liner or cloud provisioning
 TPOT_BRANCH=my-feature env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/my-feature/install.sh)"
+
+# from a T-Pot ISO: type the branch at the first login, or
+bash /usr/local/share/tpot-iso/start.sh -b my-feature -r https://github.com/someuser/tpotce
 ```
 | Option | Environment | Description |
 |---|---|---|
@@ -594,13 +654,17 @@ The installer takes the first of these it finds: the options, the environment va
 # back to the released version
 ~/tpotce/update.sh -y -b master
 ```
-The branch is checked out for good, so every following `update.sh -y` keeps updating from it. Here `-b` names a branch, not a tag or commit, and there are two more differences to the installer:
+The branch is checked out for good, so every following `update.sh -y` keeps updating from it. Here `-b` names a branch, not a tag or commit, and there are more differences to the installer:
 * Without `-b` and `-r` nothing changes, the branch and `origin` of `~/tpotce` are kept - a plain `update.sh -y` behaves as it always has.
+* Before it stops T-Pot, `update.sh` asks the repository for that branch. A branch that is gone (e.g. a merged and deleted test branch), a repository out of reach or a checkout that follows no branch (a tag or a commit) stop the update with nothing changed; `update.sh -y -b master` moves such an installation back to the release.
+* As long as `~/tpotce` follows another branch than `master` of `https://github.com/telekom-security/tpotce`, every update says so, in its output and in its summary, together with the way back.
 * If a branch has moved the version tag on, `update.sh` only warns about it as long as `-b` or `-r` is given. On such an installation keep passing the option, a plain `update.sh -y` refuses to update a version it does not know.
 <br><br>
 
 ## macOS & Windows
-Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
+Docker Desktop runtime support is planned for retirement; the removal date is still open and these paths are not removed yet. Use a dedicated [Debian VM](#running-in-a-vm) for a preferred T-Pot deployment on these workstations. Browser and SSH access to a T-Pot host are unaffected.
+
+Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Debian](#choose-your-distro).<br>
 To get things up and running just follow these steps:
 1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/setup/install/mac-install/) or [Windows](https://docs.docker.com/desktop/setup/install/windows-install/).
 2. Clone the GitHub repository: `git clone https://github.com/telekom-security/tpotce` (in Windows make sure the code is checked out with `LF` instead of `CRLF`!)
@@ -620,6 +684,8 @@ To get things up and running just follow these steps:
 There is no `update.sh` for macOS and Windows. When updating to a release with a newer Elastic Stack, stop T-Pot and copy `~/tpotce/data/elk/data` somewhere safe before `git pull` and `docker compose pull` - the upgrade of that data cannot be undone, see [Elastic Stack Upgrades](#elastic-stack-upgrades).
 
 ## Red Hat Enterprise Linux
+
+RHEL 10 is a **best-effort** host platform, not an alternative with the same support commitment as Debian.
 
 Red Hat Enterprise Linux (RHEL) is a somewhat unique case in that:
 

@@ -98,7 +98,7 @@
     - name: Check if supported distribution (All)
       assert:
         that: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
-        fail_msg: "T-Pot is not supported on this platform: {{ ansible_facts.distribution }}."
+        fail_msg: "This installer does not accept {{ ansible_facts.distribution }}. See the T-Pot README for host requirements and support tiers."
         success_msg: "T-Pot will now install on {{ ansible_facts.distribution }}."
 
     - name: Check if supported distribution version (All)
@@ -107,7 +107,7 @@
       # and is not listed, so the check skips it.
       assert:
         that: my_current_version == my_supported_version[ansible_facts.distribution]
-        fail_msg: "T-Pot supports {{ ansible_facts.distribution }} {{ my_supported_version[ansible_facts.distribution] }}, this system runs {{ my_current_version }}."
+        fail_msg: "The installer requires {{ ansible_facts.distribution }} {{ my_supported_version[ansible_facts.distribution] }}, this system runs {{ my_current_version }}."
         success_msg: "T-Pot will now install on {{ ansible_facts.distribution }} {{ my_current_version }}."
       vars:
         my_supported_version:
@@ -121,6 +121,15 @@
         # Ubuntu is identified by major and minor, every other one by major
         my_current_version: "{{ ansible_facts.distribution_version if ansible_facts.distribution == 'Ubuntu' else ansible_facts.distribution_major_version }}"
       when: ansible_facts.distribution in my_supported_version
+
+    - name: Show preferred host platforms (All)
+      debug:
+        msg: "Debian is the preferred T-Pot platform. Raspberry Pi OS remains supported for T-Pot Mobile."
+
+    - name: Warn about best-effort distribution (All)
+      debug:
+        msg: "WARNING: {{ ansible_facts.distribution }} is best effort only: no equal test coverage or guaranteed distribution-specific fixes."
+      when: ansible_facts.distribution not in ["Debian", "Raspbian"]
 
     - name: Count default routes (All)
       ansible.builtin.shell: ip route show default | wc -l

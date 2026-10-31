@@ -12,5 +12,6 @@ AGENTS.md
 UPDATE_SH_FIXES.md
 docker/_builder/log/
 docker/_builder/.env.local
+installer/iso/out/
 .github/copilot-instructions.md
 .github/skills/

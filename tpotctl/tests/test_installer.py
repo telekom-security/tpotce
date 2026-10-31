@@ -131,14 +131,51 @@ class ScriptsInSyncTest(unittest.TestCase):
 
 
 OS_RELEASES = {
-    "debian": ('NAME="Debian GNU/Linux"\nVERSION_ID="13"\n', "ok"),
-    "ubuntu": ('NAME="Ubuntu"\nVERSION_ID="26.04"\n', "ok"),
+    "debian": ('NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="13"\n', "ok"),
+    "debian point release": ('NAME="Debian GNU/Linux"\nVERSION_ID="13.7"\n', "ok"),
+    "raspbian": ('NAME="Raspbian GNU/Linux"\nID=raspbian\nVERSION_ID="13"\n', "ok"),
+    "pi with debian identity": ('NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="13"\n'
+                               'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\n', "ok"),
+    "old debian": ('NAME="Debian GNU/Linux"\nVERSION_ID="12"\n', "fail"),
+    "old raspbian": ('NAME="Raspbian GNU/Linux"\nVERSION_ID="12"\n', "fail"),
+    "missing version": ('NAME="Debian GNU/Linux"\n', "fail"),
+    "ubuntu": ('NAME="Ubuntu"\nVERSION_ID="26.04"\n', "warn"),
     "old ubuntu": ('NAME="Ubuntu"\nVERSION_ID="24.04"\n', "fail"),
-    "fedora": ('NAME="Fedora Linux"\nVERSION_ID=44\n', "ok"),
-    "alma": ('NAME="AlmaLinux"\nVERSION_ID="10.1"\n', "ok"),
-    "tumbleweed": ('NAME="openSUSE Tumbleweed"\nVERSION_ID="20261001"\n', "ok"),
+    "fedora": ('NAME="Fedora Linux"\nVERSION_ID=44\n', "warn"),
+    "alma": ('NAME="AlmaLinux"\nVERSION_ID="10.1"\n', "warn"),
+    "rhel": ('NAME="Red Hat Enterprise Linux"\nVERSION_ID="10.1"\n', "warn"),
+    "rocky": ('NAME="Rocky Linux"\nVERSION_ID="10.1"\n', "warn"),
+    "tumbleweed": ('NAME="openSUSE Tumbleweed"\nVERSION_ID="20261001"\n', "warn"),
     "arch": ('NAME="Arch Linux"\n', "fail"),
+    "no os-release": ("", "fail"),
 }
+
+SUPPORT_POLICY = ("Debian is the preferred T-Pot platform. "
+                  "Raspberry Pi OS remains supported for T-Pot Mobile.")
+BEST_EFFORT = "best effort only: no equal test coverage or guaranteed distribution-specific fixes"
+
+
+@unittest.skipUnless(yaml, "PyYAML is not installed")
+class SupportPolicyPlaybookTest(unittest.TestCase):
+
+    def test_policy_is_reported_after_version_checks_and_before_host_preparation(self):
+        with open(os.path.join(REPO_DIR, "installer", "install", "tpot.yml"), encoding="utf-8") as handle:
+            plays = yaml.safe_load(handle)
+        tasks = plays[1]["tasks"]
+        names = [t["name"] for t in tasks]
+        policy = names.index("Show preferred host platforms (All)")
+        warning = names.index("Warn about best-effort distribution (All)")
+        self.assertLess(names.index("Check if supported distribution version (All)"), policy)
+        self.assertLess(policy, warning)
+        self.assertLess(warning, names.index("Count default routes (All)"))
+        self.assertEqual(tasks[policy]["debug"]["msg"], SUPPORT_POLICY)
+        self.assertNotIn("when", tasks[policy])
+        self.assertEqual(tasks[warning]["when"], 'ansible_facts.distribution not in ["Debian", "Raspbian"]')
+        self.assertEqual(tasks[warning]["debug"]["msg"],
+                         "WARNING: {{ ansible_facts.distribution }} is " + BEST_EFFORT + ".")
+        self.assertEqual(set(plays[1]["tags"]),
+                         {"AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat",
+                          "Rocky", "Ubuntu"})
 
 
 @unittest.skipUnless(yaml, "PyYAML is not installed")
@@ -204,7 +241,16 @@ class ChecksTest(unittest.TestCase):
                 with os.fdopen(handle, "w") as out:
                     out.write(text)
                 self.addCleanup(os.unlink, path)
-                self.assertEqual(installer.check_distro(installer.os_release(path)).state, state)
+                check = installer.check_distro(installer.os_release(path))
+                self.assertEqual(check.state, state)
+                if state == "warn":
+                    self.assertIn(BEST_EFFORT, check.detail)
+                    self.assertIn(SUPPORT_POLICY, check.detail)
+                elif state == "ok":
+                    self.assertIn(SUPPORT_POLICY, check.detail)
+                    self.assertNotIn("best effort", check.detail)
+                else:
+                    self.assertNotIn("best effort", check.detail)
 
     def test_root(self):
         self.assertEqual(installer.check_root(0).state, "fail")
@@ -399,6 +445,18 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
         await pilot.click("#ins-next")
         await pilot.pause(0.3)
         self.assertEqual(app.step, "review")
+
+    async def test_best_effort_warning_is_visible_and_does_not_block_installation(self):
+        check = installer.check_distro({"NAME": "Ubuntu", "VERSION_ID": "26.04"})
+        self.assertEqual(check.state, "warn")
+        app = self.make_app(checks=lambda: [check])
+        async with app.run_test(size=(100, 36)) as pilot:
+            await pilot.pause(0.4)
+            self.assertIn(BEST_EFFORT, str(app.query_one("#check-list").render()))
+            self.assertFalse(app.query_one("#ins-next").disabled)
+            await pilot.click("#ins-next")
+            await pilot.pause(0.2)
+            self.assertEqual(app.step, "edition")
 
     async def test_install_a_hive(self):
         app = self.make_app()

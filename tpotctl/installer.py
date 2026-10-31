@@ -27,7 +27,8 @@ UNINSTALL_SH = os.path.join(REPO_DIR, "uninstall.sh")
 SERVICE_FILE = "/etc/systemd/system/tpot.service"
 
 # keep in sync with mySUPPORTED_DISTRIBUTIONS / mySUPPORTED_VERSION of install.sh
-# (tpotctl/tests/test_installer.py compares them); "" is a rolling release
+# (tpotctl/tests/test_installer.py compares them); includes best-effort hosts,
+# "" is a rolling release
 SUPPORTED = {
     "AlmaLinux": "10",
     "Debian GNU/Linux": "13",
@@ -126,12 +127,18 @@ def os_release(path: str = "/etc/os-release") -> Dict[str, str]:
 def check_distro(release: Dict[str, str]) -> Check:
     name, version = release.get("NAME", ""), release.get("VERSION_ID", "")
     if name not in SUPPORTED:
-        return Check("Distribution", "fail", f"{name or 'unknown'} is not supported, see the T-Pot README")
+        return Check("Distribution", "fail", f"{name or 'unknown'} is not accepted by the installer; "
+                     "see the T-Pot README for host requirements and support tiers")
     wanted = SUPPORTED[name]
     current = version if name in FULL_VERSION else version.split(".")[0]
     if wanted and current != wanted:
-        return Check("Distribution", "fail", f"T-Pot supports {name} {wanted}, this system runs {current}")
-    return Check("Distribution", "ok", f"{name} {version}".strip())
+        return Check("Distribution", "fail", f"The installer requires {name} {wanted}, this system runs {current}")
+    policy = "Debian is the preferred T-Pot platform. Raspberry Pi OS remains supported for T-Pot Mobile."
+    detail = f"{name} {version}".strip()
+    if name not in ("Debian GNU/Linux", "Raspbian GNU/Linux"):
+        return Check("Distribution", "warn", f"{detail}; best effort only: no equal test coverage or guaranteed "
+                     f"distribution-specific fixes. {policy}")
+    return Check("Distribution", "ok", f"{detail}; {policy}")
 
 
 def check_root(euid: Optional[int] = None) -> Check:

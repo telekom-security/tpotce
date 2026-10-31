@@ -414,7 +414,10 @@ update. With --full the data is in it, with -s T-Pot starts
 again afterwards. tpot uninstall uses it." \
 	  --opt "-b <branch>" "Branch to update from, i.e. to test a branch before it is
 merged. The branch is checked out, so every following
-update stays on it until another branch is requested.
+update stays on it (the run says so) until another branch is
+requested, -b master goes back to the release. Before anything
+is stopped the run checks that the branch, the one given or
+the one ~/tpotce pulls from, still exists upstream.
 Default: the branch of ~/tpotce, environment: TPOT_BRANCH" \
 	  --opt "-r <url>" "Repository to update from, https URL. Replaces the URL of
 'origin' in ~/tpotce.
@@ -439,6 +442,7 @@ is not carried over. At a terminal the run asks (default: cancel),
 	  --example "./update.sh -y" "Update from the branch of ~/tpotce, T-Pot stays stopped afterwards" \
 	  --example "./update.sh -y -s --full" "Update with all of data/ in the backup and start T-Pot again" \
 	  --example "./update.sh -y -b dev" "Test the branch dev (it stays checked out)" \
+	  --example "./update.sh -y -b master" "Back to the release after a test" \
 	  --example "./update.sh -y --backup-only -s" "Only a backup, T-Pot runs again afterwards" \
 	  --example "./update.sh --check-data-loss" "List what an update would lose for good: '@@tpot loss <key> <text>'" \
 	  --note "restore.sh brings a backup back, tpot update hands every option on to update.sh." \
@@ -904,24 +908,73 @@ function fuCHECK_SOURCE () {
 	    echo
 	    exit 1
 	fi
+	# A typo in -b, a test branch deleted once it is merged or a repository out of reach would
+	# only fail at the pull, with T-Pot stopped and the backup written. So the source is checked
+	# before anything is stopped or overwritten, with or without -b: `ls-remote` asks the
+	# repository itself and leaves the checkout alone. Without -b / -r it is the branch the
+	# checkout pulls from (its upstream), the one `git pull` takes.
+	local myURL="${myTPOT_REPO_URL}" myREF="refs/heads/${myTPOT_BRANCH}" myREMOTE="" myRC=0
 	if [ -z "${myTPOT_SOURCE_GIVEN}" ];
 	  then
-	    echo
-	    return
+	    myREMOTE=$(git -C "$HOME/tpotce" config "branch.${myTPOT_BRANCH}.remote" 2>/dev/null)
+	    myREF=$(git -C "$HOME/tpotce" config "branch.${myTPOT_BRANCH}.merge" 2>/dev/null)
+	    if [ -z "${myREMOTE}" ] || [ -z "${myREF}" ];
+	      then
+	        fuUI_ERROR "The branch ${myTPOT_BRANCH} of ~/tpotce follows no branch upstream, so there is nothing to pull."
+	        fuUI_HINT "'git -C $HOME/tpotce branch --set-upstream-to=origin/${myTPOT_BRANCH}' sets it, '-b master' updates from the release instead."
+	        fuUI_HINT "Exiting, T-Pot is untouched."
+	        fuDID fail "The branch ${myTPOT_BRANCH} of ~/tpotce follows no branch upstream, nothing was changed."
+	        echo
+	        exit 1
+	    fi
+	    # "." is a local branch followed by another one, ls-remote asks the checkout itself then
+	    myURL="."
+	    [ "${myREMOTE}" = "." ] || myURL=$(fuNORMALIZE_REPO "$(git -C "$HOME/tpotce" remote get-url "${myREMOTE}" 2>/dev/null)")
 	fi
-	# A typo in a branch name must not take T-Pot down, so the requested source
-	# is checked before anything is stopped or overwritten. `ls-remote` asks the
-	# repository itself and leaves the local checkout alone.
-	if ! git ls-remote --heads "${myTPOT_REPO_URL}" "refs/heads/${myTPOT_BRANCH}" 2>/dev/null | grep -q .;
+	git -C "$HOME/tpotce" ls-remote --exit-code --heads "${myURL:-${myREMOTE}}" "${myREF}" >/dev/null 2>&1 || myRC=$?
+	if [ "${myRC}" -eq 2 ];
 	  then
-	    fuUI_ERROR "Branch ${myTPOT_BRANCH} does not exist in ${myTPOT_REPO_URL}."
-	    fuUI_HINT "Exiting."
+	    fuUI_ERROR "The branch ${myREF#refs/heads/} does not exist (any longer) in ${myURL}."
+	    fuUI_HINT "A test branch is usually deleted once it is merged: '-b master' updates from the release, '-b dev' from the development branch."
+	    fuUI_HINT "Exiting, T-Pot is untouched."
+	    fuDID fail "The branch ${myREF#refs/heads/} does not exist in ${myURL}, nothing was changed. './update.sh -y -b master' updates from the release."
 	    echo
 	    exit 1
-	  else
-	    fuUI_OK "Repository and branch are available."
+	elif [ "${myRC}" -ne 0 ];
+	  then
+	    fuUI_ERROR "Cannot reach ${myURL:-the upstream of ~/tpotce} (git ls-remote ended with ${myRC})."
+	    fuUI_HINT "Check the URL and the network. Exiting, T-Pot is untouched."
+	    fuDID fail "Cannot reach ${myURL:-the upstream of ~/tpotce}, nothing was changed."
+	    echo
+	    exit 1
 	fi
+	fuUI_OK "Repository and branch are available."
+	fuSOURCE_NOTICE "${myURL}" "${myREF#refs/heads/}"
 	echo
+}
+
+# Says so when the update does not come from the release (master of telekom-security/tpotce):
+# a branch stays checked out (fuSWITCH_SOURCE), so every later update.sh -y keeps pulling it until
+# -b master. Once in the summary: a restarted update.sh runs the check again and brings the item
+# of the run before along (fuDONE_IMPORT).
+myRELEASE_REPO="https://github.com/telekom-security/tpotce"
+function fuSOURCE_NOTICE () {   # $1 = repository URL, $2 = branch
+	local myTEXT="" myBACK="./update.sh -y -b master" myITEM=""
+	case "$1" in
+	  "${myRELEASE_REPO}"|git@github.com:telekom-security/tpotce|ssh://git@github.com/telekom-security/tpotce)
+	    [ "$2" != "master" ] || return 0
+	    myTEXT="This T-Pot updates from the branch $2, not from master (the release)." ;;
+	  *)
+	    myTEXT="This T-Pot updates from $1 at the branch $2, not from the release (master of ${myRELEASE_REPO})."
+	    myBACK="./update.sh -y -r ${myRELEASE_REPO} -b master" ;;
+	esac
+	fuUI_WARN "${myTEXT}"
+	fuUI_HINT "Every update stays on it, '${myBACK}' goes back to the release."
+	for myITEM in ${myDONE[@]+"${myDONE[@]}"};
+	  do
+	    [ "${myITEM}" != "warn:${myTEXT} Back to the release: ${myBACK}" ] || return 0
+	done
+	fuDID warn "${myTEXT} Back to the release: ${myBACK}"
 }
 
 # The template of an edition, i.e. STANDARD -> compose/standard.yml

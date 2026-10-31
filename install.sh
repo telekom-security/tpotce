@@ -1888,7 +1888,7 @@ if [ ${EUID} -eq 0 ];
     exit 1
 fi
 
-# Check if running on a supported distribution
+# Accepted distributions include best-effort hosts; support tiers are reported below.
 mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
 # no /etc/os-release (macOS): no distribution, the message below says which ones T-Pot runs on
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
@@ -1897,8 +1897,8 @@ if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
   then
     # the list in words: "a, b and c", from the array, so the message names every one of them
     myLIST=$(printf '%s, ' "${mySUPPORTED_DISTRIBUTIONS[@]:0:${#mySUPPORTED_DISTRIBUTIONS[@]}-1}")
-    fuUI_ERROR "Only the following distributions are supported: ${myLIST%, } and ${mySUPPORTED_DISTRIBUTIONS[${#mySUPPORTED_DISTRIBUTIONS[@]}-1]}."
-    fuUI_INFO "Please follow the T-Pot documentation on how to run T-Pot on macOS, Windows and other currently unsupported platforms."
+    fuUI_ERROR "This installer accepts only ${myLIST%, } and ${mySUPPORTED_DISTRIBUTIONS[${#mySUPPORTED_DISTRIBUTIONS[@]}-1]}."
+    fuUI_INFO "Debian is the preferred T-Pot platform. See the T-Pot README for host requirements and support tiers."
     echo
     mark_failed
     exit 1
@@ -1933,8 +1933,8 @@ esac
 
 if [ -n "${mySUPPORTED_VERSION}" ] && [ "${myCURRENT_VERSION}" != "${mySUPPORTED_VERSION}" ];
   then
-    fuUI_ERROR "T-Pot supports ${myCURRENT_DISTRIBUTION} ${mySUPPORTED_VERSION}, this system runs ${myCURRENT_VERSION}."
-    fuUI_INFO "Please install T-Pot on the current release of your distribution."
+    fuUI_ERROR "The installer requires ${myCURRENT_DISTRIBUTION} ${mySUPPORTED_VERSION}, this system runs ${myCURRENT_VERSION}."
+    fuUI_INFO "Please install the required OS version. See the T-Pot README for host requirements and support tiers."
     echo
     mark_failed
     exit 1
@@ -1947,6 +1947,14 @@ myUI_VERSION=$(install_version)
 [ -n "${myUI_VERSION}" ] || myUI_CHECKOUT="/dev/null"
 [ -z "${myMARKS}" ] && fuUI_BANNER "Installer" "This script will now install T-Pot and all of its dependencies." \
   "Source: ${myTPOT_REPO_URL} at ${myTPOT_BRANCH}" "${myCURRENT_DISTRIBUTION} ${myVERSION_ID}"
+
+fuUI_INFO "Debian is the preferred T-Pot platform. Raspberry Pi OS remains supported for T-Pot Mobile."
+case ${myCURRENT_DISTRIBUTION} in
+  "Debian GNU/Linux"|"Raspbian GNU/Linux") ;;
+  *)
+    fuUI_WARN "${myCURRENT_DISTRIBUTION} is best effort only: no equal test coverage or guaranteed distribution-specific fixes."
+    ;;
+esac
 
 # A person at a terminal gets the assistant: the installer only gets what it needs
 # to start (packages, the repository, the Python packages of tpot) and hands over.

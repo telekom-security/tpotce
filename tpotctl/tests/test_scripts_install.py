@@ -16,6 +16,7 @@ import unittest
 
 from tpotctl.tests import test_scripts as base
 from tpotctl.tests import test_ui as ui
+from tpotctl.tests.test_installer import BEST_EFFORT, OS_RELEASES, SUPPORT_POLICY
 
 from tpotctl import installer
 
@@ -154,7 +155,7 @@ class InstallShTest(Scripts):
         super().setUp()
         # the clone the playbook would make: the installer finds its playbook, nothing is cloned
         write(os.path.join(self.tpotce, "installer", "install", "tpot.yml"), "- hosts: all\n")
-        for edition in ("standard", "sensor"):
+        for edition in ("standard", "sensor", "mobile"):
             write(os.path.join(self.tpotce, "compose", f"{edition}.yml"), "services: {}\n")
         write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\nWEB_USER=\n")
         # install.sh as it runs from a download: no clone around it
@@ -166,6 +167,42 @@ class InstallShTest(Scripts):
 
     def test_help(self):
         self.assert_help("install.sh", self.run_script(self.script, "-h"))
+
+    def test_support_tiers_in_classic_and_assistant_engine_runs(self):
+        for name, (text, state) in OS_RELEASES.items():
+            for marks in ([], ["-M"]):
+                with self.subTest(distribution=name, marks=marks):
+                    write(os.path.join(self.home, "os-release"), text)
+                    write(os.path.join(self.home, "calls"), "")
+                    result = self.install("-s", "-t", "s", *marks)
+                    self.assertEqual(result.returncode, 1 if state == "fail" else 0, result.stdout)
+                    if state == "fail":
+                        self.assertNotIn("ansible-playbook", self.calls())
+                        self.assertNotIn("best effort", result.stdout)
+                    else:
+                        self.assertIn(SUPPORT_POLICY, result.stdout)
+                        self.assertIn("ansible-playbook", self.calls())
+                        self.assertLess(result.stdout.index(SUPPORT_POLICY),
+                                        result.stdout.index("PLAY [T-Pot]"))
+                        if state == "warn":
+                            self.assertIn("### [WARNING]", result.stdout)
+                            self.assertIn(BEST_EFFORT, result.stdout)
+                        else:
+                            self.assertNotIn("best effort", result.stdout)
+
+    def test_mobile_still_installs_with_both_debian_and_raspbian_identities(self):
+        mobile_compose = "services:\n  mobile: {}\n"
+        write(os.path.join(self.tpotce, "compose", "mobile.yml"), mobile_compose)
+        for name in ("raspbian", "pi with debian identity"):
+            with self.subTest(distribution=name):
+                write(os.path.join(self.home, "os-release"), OS_RELEASES[name][0])
+                result = self.install("-s", "-t", "m")
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertIn("Raspberry Pi OS remains supported for T-Pot Mobile", result.stdout)
+                self.assertNotIn("best effort", result.stdout)
+                self.assertIn("T-Pot mobile is installed (MOBILE)", result.stdout)
+                with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), mobile_compose)
 
     def test_an_exported_cdpath_changes_neither_the_source_nor_the_files(self):
         """r3-RB 5: started as co/install.sh from the folder above its clone with an exported CDPATH,
@@ -390,7 +427,7 @@ class InstallShTest(Scripts):
         write(os.path.join(self.home, "os-release"), 'NAME="Gentoo"\nVERSION_ID="2.17"\n')
         result = self.install("-s", "-M", "-t", "s")
         self.assertEqual(result.returncode, 1, result.stdout[-800:])
-        self.assertIn("Only the following distributions are supported", result.stdout)
+        self.assertIn("This installer accepts only", result.stdout)
         self.assertEqual(self.marks(result.stdout)[-2:], ["@@tpot fail checks", "@@tpot phase failed"])
 
     def test_the_comment_of_mark_failed_says_what_the_assistant_does(self):
@@ -408,7 +445,7 @@ class InstallShTest(Scripts):
                                 env=self.env(TPOT_GUM="off", TPOT_INSTALL_PACKAGES_DONE="1"), cwd=self.home,
                                 stdin=subprocess.DEVNULL, timeout=60)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("### [ERROR] - Only the following distributions are supported", result.stderr)
+        self.assertIn("### [ERROR] - This installer accepts only", result.stderr)
         self.assertEqual([line for line in result.stderr.splitlines() if not line.startswith("###")], [],
                          result.stderr)
 
@@ -574,7 +611,9 @@ class DistributionTest(Scripts):
                                         env=self.env(TPOT_GUM="off"), cwd=self.home, stdin=subprocess.DEVNULL,
                                         timeout=60)
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                self.assertIn(f"### [ERROR] - Only the following distributions are supported: {listed}.",
+                prefix = ("This installer accepts only" if script == "install.sh"
+                          else "Only the following distributions are supported:")
+                self.assertIn(f"### [ERROR] - {prefix} {listed}.",
                               result.stderr)
                 self.assertEqual([line for line in result.stderr.splitlines() if not line.startswith("###")], [])
                 self.assertNotIn("bad ", result.stdout + result.stderr)
@@ -606,7 +645,9 @@ class DistributionTest(Scripts):
                 result = self.run_merged(path, "-s", "-t", "s") if script == "install.sh" \
                     else self.run_merged(path, "-y")
                 self.assertEqual(result.returncode, 1, result.stdout)
-                self.assertIn(f"Only the following distributions are supported: {listed}.", result.stdout)
+                prefix = ("This installer accepts only" if script == "install.sh"
+                          else "Only the following distributions are supported:")
+                self.assertIn(f"{prefix} {listed}.", result.stdout)
                 for name in installer.SUPPORTED:
                     self.assertIn(name, result.stdout)
                 self.assertNotIn("ansible-playbook", self.calls())

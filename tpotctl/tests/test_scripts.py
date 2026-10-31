@@ -3766,14 +3766,82 @@ class UpdateRepairTest(Harness):
 
     def test_source_and_version_come_from_the_checkout_not_the_current_folder(self):
         self.clone_of_origin()
-        script = (f'source {REPO}/installer/lib/ui.sh; fuUI_INIT\n'
-                  + self.functions("fuNORMALIZE_REPO", "fuCHECK_SOURCE", "fuCHECK_VERSION")
-                  + f'myHERE="{REPO}" myTPOT_SOURCE_GIVEN="" myTPOT_BRANCH="" myTPOT_REPO_URL=""\n'
+        script = (f'source {REPO}/update.sh\n'
+                  'myTPOT_SOURCE_GIVEN="" myTPOT_BRANCH="" myTPOT_REPO_URL=""\n'
                   'fuCHECK_SOURCE; echo "branch=${myCURRENT_BRANCH} repo=${myCURRENT_REPO}"; fuCHECK_VERSION\n')
         result = self.bash(script, cwd=self.elsewhere)
         out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertNotIn("command not found", out)
         self.assertIn("branch=master", out)
         self.assertIn("is eligible for the update procedure", out)
+
+    def check_source(self, setup=""):
+        """fuCHECK_SOURCE twice in one run (as after a handover), the items of the summary at its end."""
+        script = (f'source {REPO}/installer/lib/ui.sh; fuUI_INIT\nmyDONE=()\n'
+                  + self.functions("fuNORMALIZE_REPO", "fuCHECK_SOURCE", "fuSOURCE_NOTICE", "fuDID")
+                  + f'eval "$(grep "^myRELEASE_REPO=" {REPO}/update.sh)"\n'
+                  + 'myTPOT_SOURCE_GIVEN="" myTPOT_BRANCH="" myTPOT_REPO_URL=""\n' + setup
+                  + '( trap \'printf "item=%s\\n" ${myDONE[@]+"${myDONE[@]}"}\' EXIT; fuCHECK_SOURCE; fuCHECK_SOURCE )\n'
+                  + 'echo "exit=$?"\n')
+        result = self.bash(script, cwd=self.elsewhere)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertNotIn("command not found", out)
+        return out
+
+    def test_a_branch_gone_upstream_stops_the_update_before_anything(self):
+        """A test branch deleted once it is merged: without -b the branch ~/tpotce pulls from is asked too,
+        the run ends before T-Pot is stopped, with the way back to the release."""
+        self.clone_of_origin()
+        self.git("checkout", "-q", "other")                                    # follows origin/other
+        self.git("branch", "-q", "-D", "other", repo=os.path.join(self.home, "origin"))
+        out = self.check_source()
+        self.assertIn("exit=1", out)
+        self.assertIn("The branch other does not exist (any longer) in", out)
+        self.assertIn("'-b master' updates from the release", out)
+        self.assertIn("item=fail:The branch other does not exist in", out)
+        # named with -b: the same
+        out = self.check_source('myTPOT_SOURCE_GIVEN=1 myTPOT_BRANCH=nope\n')
+        self.assertIn("exit=1", out)
+        self.assertIn("The branch nope does not exist (any longer) in", out)
+
+    def test_a_repository_out_of_reach_or_no_upstream_stops_the_update(self):
+        self.clone_of_origin()
+        missing = os.path.join(self.home, "nowhere")
+        out = self.check_source(f'myTPOT_SOURCE_GIVEN=1 myTPOT_REPO_URL={missing}\n')
+        self.assertIn("exit=1", out)
+        self.assertIn(f"Cannot reach {missing} (git ls-remote ended with", out)
+        self.assertNotIn("does not exist", out)
+        self.git("branch", "--unset-upstream")
+        out = self.check_source()
+        self.assertIn("exit=1", out)
+        self.assertIn("The branch master of ~/tpotce follows no branch upstream", out)
+        self.assertIn("branch --set-upstream-to=origin/master", out)
+
+    def test_a_source_other_than_the_release_is_named_once(self):
+        """A branch other than master, or another repository: said at the check and once in the summary,
+        also when a restarted update.sh checks again (the items of the run before are imported)."""
+        self.clone_of_origin()
+        origin = os.path.join(self.home, "origin")
+        self.git("checkout", "-q", "other")
+        out = self.check_source()
+        self.assertIn("exit=0", out)
+        self.assertIn("Repository and branch are available.", out)
+        text = (f"This T-Pot updates from {origin} at the branch other, not from the release (master of "
+                "https://github.com/telekom-security/tpotce). Back to the release: ./update.sh -y -r "
+                "https://github.com/telekom-security/tpotce -b master")
+        self.assertEqual(out.count(f"item=warn:{text}"), 1, out)
+        script = (f'source {REPO}/installer/lib/ui.sh; fuUI_INIT\nmyDONE=()\n'
+                  + self.functions("fuSOURCE_NOTICE", "fuDID")
+                  + f'eval "$(grep "^myRELEASE_REPO=" {REPO}/update.sh)"\n'
+                  'for s in "https://github.com/telekom-security/tpotce master" '
+                  '"git@github.com:telekom-security/tpotce master" "https://github.com/telekom-security/tpotce dev"; do\n'
+                  '  fuSOURCE_NOTICE $s\ndone\nprintf "item=%s\\n" ${myDONE[@]+"${myDONE[@]}"}\n')
+        out = self.bash(script).stdout
+        self.assertEqual(out.count("item="), 1, out)
+        self.assertIn("item=warn:This T-Pot updates from the branch dev, not from master (the release). "
+                      "Back to the release: ./update.sh -y -b master", out)
 
     def test_no_bare_git_or_file_read_in_update_sh(self):
         bad = []
