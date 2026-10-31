@@ -11,6 +11,7 @@ myDIR="$(CDPATH="" cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 myCONF="${myDIR}/iso.conf"
 myDEST="${HOME}/tpotce"
 myBACK="./update.sh -y -b master"
+myARGS=("$@")
 
 fuCONF () {
   # the value of $1 in iso.conf: KEY=VALUE lines, read and never sourced
@@ -205,6 +206,12 @@ if [ "$(id -un)" = "tpot" ];
     fuSTOP "The user tpot is reserved for the containers of T-Pot." \
       "Create another user with sudo (sudo adduser <name> && sudo usermod -aG sudo <name>)," \
       "log in as that user and run: bash ${myDIR}/start.sh"
+fi
+
+if [ -z "${TPOT_ISO_TERMINAL_TRIED:-}" ] && [ -t 0 ] && [ -t 1 ];
+  then
+    [ -r "${myDIR}/terminal.sh" ] || fuSTOP "${myDIR}/terminal.sh is missing."
+    TPOT_ISO_TERMINAL_TRIED=1 exec bash "${myDIR}/terminal.sh" -- bash "${myDIR}/start.sh" "${myARGS[@]}"
 fi
 
 if [ -n "${myBRANCH}${myREPO}" ];

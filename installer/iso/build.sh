@@ -56,7 +56,7 @@ myUPDATE_BACK="later on a branch again: ./update.sh -y -b master"
 # the Docker image of the build: Debian with the tools of the build, refreshed weekly
 myDOCKER_IMAGE="tpot-iso-build:${myDEBIAN_MAJOR}"
 # the files of the ISO in /tpot (late.sh puts them into the new system), iso.conf is made here
-myPAYLOAD="preseed.cfg late.sh profile.sh start.sh tpot.issue"
+myPAYLOAD="preseed.cfg early.sh late.sh profile.sh start.sh terminal.sh tpot.issue"
 # gum for macOS (ui.sh fetches the one of Linux only): the version of ui.sh (the test checks it),
 # the sha256 of the release archives of github.com/charmbracelet/gum
 myGUM_DARWIN_VERSION="2.0.2"
@@ -437,6 +437,8 @@ fuBUILD () {
       for myFILE in menu.cfg txt.cfg gtk.cfg stdmenu.cfg; do
         myEXTRACT+=(-extract "/isolinux/${myFILE}" "${myWORK}/orig/isolinux/${myFILE}")
       done
+    else
+      myEXTRACT+=(-extract /boot/grub/font.pf2 "${myWORK}/orig/boot/grub/font.pf2")
   fi
   mkdir -p "${myWORK}/orig/boot/grub" "${myWORK}/orig/isolinux" "${myWORK}/overlay/tpot"
   xorriso -osirrox on -indev "${mySRC}" "${myEXTRACT[@]}" || return 1

@@ -11,7 +11,7 @@ mySRC="${1:-/cdrom/tpot}"
 myTARGET="${2:-/target}"
 myDEST="${myTARGET}/usr/local/share/tpot-iso"
 
-for myFILE in install.sh start.sh iso.conf version profile.sh tpot.issue; do
+for myFILE in install.sh start.sh terminal.sh iso.conf version profile.sh tpot.issue; do
   if [ ! -f "${mySRC}/${myFILE}" ];
     then
       echo "T-Pot ISO: ${mySRC}/${myFILE} is missing, the T-Pot installer is not set up." >&2
@@ -19,11 +19,12 @@ for myFILE in install.sh start.sh iso.conf version profile.sh tpot.issue; do
   fi
 done
 
-mkdir -p "${myDEST}" "${myTARGET}/etc/profile.d" "${myTARGET}/etc/issue.d"
-for myFILE in install.sh start.sh; do
+mkdir -p "${myDEST}" "${myTARGET}/usr/local/bin" "${myTARGET}/etc/profile.d" "${myTARGET}/etc/issue.d"
+for myFILE in install.sh start.sh terminal.sh; do
   cp "${mySRC}/${myFILE}" "${myDEST}/${myFILE}"
   chmod 0755 "${myDEST}/${myFILE}"
 done
+ln -sf ../share/tpot-iso/terminal.sh "${myTARGET}/usr/local/bin/tpot-terminal"
 for myFILE in iso.conf version; do
   cp "${mySRC}/${myFILE}" "${myDEST}/${myFILE}"
   chmod 0644 "${myDEST}/${myFILE}"

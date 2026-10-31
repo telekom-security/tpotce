@@ -458,6 +458,35 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.2)
             self.assertEqual(app.step, "edition")
 
+    async def test_selected_edition_has_a_console_safe_background(self):
+        from unittest import mock
+        from rich.color import ColorSystem
+        from textual import constants
+        from tpotctl import theme
+
+        original = theme.color_system()
+        self.addCleanup(theme.build, original)
+        theme.build("16")
+        with mock.patch.object(constants, "COLOR_SYSTEM", "standard"):
+            app = self.make_app()
+            async with app.run_test(size=(110, 40)) as pilot:
+                await pilot.pause(0.4)
+                await pilot.click("#ins-next")
+                await pilot.pause(0.2)
+                options = app.query_one("#edition-list")
+                for title in ("Hive", "Sensor"):
+                    selected = [segment for y in range(options.size.height)
+                                for segment in options.render_line(y)
+                                if segment.text.strip() == title]
+                    self.assertEqual(len(selected), 1)
+                    style = selected[0].style
+                    assert style is not None and style.bgcolor is not None and style.color is not None
+                    # Linux VTs have only eight background colours: bright black becomes black.
+                    self.assertEqual(style.bgcolor.downgrade(ColorSystem.STANDARD).number, 5)
+                    self.assertEqual(style.color.downgrade(ColorSystem.STANDARD).number, 15)
+                    await pilot.press("down")
+                    await pilot.pause(0.1)
+
     async def test_install_a_hive(self):
         app = self.make_app()
         async with app.run_test(size=(140, 44)) as pilot:

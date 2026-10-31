@@ -739,6 +739,11 @@ Toast {
     padding: 0 1 1 1;
 }
 
+#edition-list > .option-list--option-highlighted {
+    background: $block-cursor-background;
+    color: $block-cursor-foreground;
+}
+
 #edition-note {
     height: auto;
     margin-top: 1;

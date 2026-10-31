@@ -186,6 +186,8 @@ def write(path, text, mode=0o644):
 def netinst_tree(folder, arch):
     """The boot files of a netinst as build.sh extracts them."""
     write(os.path.join(folder, "boot/grub/grub.cfg"), GRUB_AMD64 if arch == "amd64" else GRUB_ARM64)
+    if arch == "arm64":
+        write(os.path.join(folder, "boot/grub/font.pf2"), b"FILE\0\0\0\4PFF2")
     if arch == "amd64":
         for name, text in (("menu.cfg", MENU_CFG), ("txt.cfg", TXT_CFG), ("gtk.cfg", GTK_CFG),
                            ("stdmenu.cfg", STDMENU_CFG)):
@@ -241,7 +243,7 @@ class PreseedTest(unittest.TestCase):
         unsafe = ("partman", "grub-installer/", "passwd/user", "passwd/root-password", "passwd/username",
                   "user-setup/", "debian-installer/", "keyboard-configuration/", "console-setup/",
                   "localechooser/", "time/zone", "netcfg/choose_interface", "debconf/priority",
-                  "auto-install/", "preseed/early_command", "preseed/url", "preseed/include",
+                  "auto-install/", "preseed/url", "preseed/include",
                   "finish-install/", "cdrom-detect/")
         for question, _kind in self.answers:
             self.assertFalse(question.startswith(unsafe), question)
@@ -261,11 +263,102 @@ class PreseedTest(unittest.TestCase):
         tasks = [task.strip() for task in self.answers[("tasksel/first", "multiselect")].split(",")]
         self.assertEqual(tasks, ["standard", "ssh-server"])
         self.assertEqual(self.answers[("pkgsel/include", "string")].split(),
-                         ["ca-certificates", "curl", "git", "sudo"])
+                         ["ca-certificates", "console-setup", "curl", "fonts-dejavu-core", "git",
+                          "keyboard-configuration", "matchbox-window-manager", "sudo", "xauth", "xinit",
+                          "xserver-xorg-core", "xserver-xorg-input-libinput", "xserver-xorg-legacy",
+                          "xserver-xorg-video-fbdev", "xterm"])
+
+    def test_the_early_command_repairs_keyboard_detection_only(self):
+        self.assertEqual(self.answers[("preseed/early_command", "string")], "sh /cdrom/tpot/early.sh")
 
     def test_the_late_command_runs_late_sh_of_the_iso(self):
         self.assertEqual(self.answers[("preseed/late_command", "string")], "sh /cdrom/tpot/late.sh")
         self.assertEqual(isotree.PRESEED, "preseed/file=/cdrom/tpot/preseed.cfg")
+
+
+class EarlyTest(unittest.TestCase):
+    FILES = ("usr/share/console-setup/keyboard-configuration.config",
+             "var/lib/dpkg/info/console-setup-udeb.postinst",
+             "usr/lib/base-installer.d/20console-setup")
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.bin = os.path.join(self.tmp, "bin")
+        self.root = os.path.join(self.tmp, "root")
+        self.trace = os.path.join(self.tmp, "trace")
+        self.before = "#!/bin/sh\nkeyboard_present () {\nreturn 1\n}\nkeyboard_present\n"
+        for file in self.FILES:
+            write(os.path.join(self.root, file), self.before)
+        write(os.path.join(self.root, "usr/share/debconf/confmodule"),
+              'db_fget () { test "$*" = "keyboard-configuration/xkb-keymap seen"; RET="$SEEN"; }\n'
+              'db_settitle () { echo "title $*" >>"$TRACE"; }\n')
+        write(os.path.join(self.bin, "udevadm"),
+              '#!/bin/sh\nprintf "%s\\n" "$INPUT"\nexit "${UDEV_RC:-0}"\n', 0o755)
+        for command in ("logger", "udpkg"):
+            write(os.path.join(self.bin, command),
+                  f'#!/bin/sh\necho "{command} $*" >>"$TRACE"\nexit "${{{command.upper()}_RC:-0}}"\n',
+                  0o755)
+
+    def run_early(self, **env):
+        environ = {**os.environ, "PATH": self.bin + os.pathsep + os.environ["PATH"],
+                   "INPUT": "E: ID_INPUT_KEYBOARD=1", "SEEN": "false", "TRACE": self.trace, **env}
+        return subprocess.run([SH, os.path.join(ISO_DIR, "early.sh"), self.root],
+                              env=environ, capture_output=True, text=True, timeout=30)
+
+    def test_missed_keyboard_is_asked_and_all_target_hooks_are_repaired(self):
+        result = self.run_early()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with open(self.trace) as handle:
+            trace = handle.read()
+        self.assertIn("title debian-installer/console-setup-udeb/title", trace)
+        self.assertIn("udpkg --force-configure --configure console-setup-udeb", trace)
+        for file in self.FILES:
+            env = {**os.environ, "PATH": self.bin + os.pathsep + os.environ["PATH"],
+                   "INPUT": "E: ID_INPUT_KEYBOARD=1"}
+            detected = subprocess.run([SH, os.path.join(self.root, file)], env=env, timeout=30)
+            self.assertEqual(detected.returncode, 0, file)
+            not_keyboard = subprocess.run([SH, os.path.join(self.root, file)],
+                                          env={**env, "INPUT": "E: ID_INPUT_KEY=1"}, timeout=30)
+            self.assertEqual(not_keyboard.returncode, 1, file)
+        again = self.run_early(SEEN="true")
+        self.assertEqual(again.returncode, 0, again.stderr)
+        for file in self.FILES:
+            with open(os.path.join(self.root, file)) as handle:
+                self.assertEqual(handle.read().count("udevadm info --export-db"), 1)
+
+    def test_an_answered_layout_is_not_asked_again(self):
+        result = self.run_early(SEEN="true")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(os.path.exists(self.trace))
+
+    def test_headless_mouse_and_power_button_are_not_keyboards(self):
+        for devices in ("", "E: ID_INPUT_MOUSE=1", "E: ID_INPUT_KEY=1"):
+            result = self.run_early(INPUT=devices)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(os.path.exists(self.trace))
+            for file in self.FILES:
+                with open(os.path.join(self.root, file)) as handle:
+                    self.assertEqual(handle.read(), self.before)
+
+    def test_inspection_or_configuration_errors_are_not_hidden(self):
+        result = self.run_early(UDEV_RC="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Cannot inspect the input devices", result.stderr)
+        self.assertFalse(os.path.exists(self.trace))
+        result = self.run_early(UDPKG_RC="1")
+        self.assertNotEqual(result.returncode, 0)
+        with open(self.trace) as handle:
+            self.assertIn("udpkg --force-configure --configure console-setup-udeb", handle.read())
+
+    def test_changed_debian_scripts_stop_before_partial_patching(self):
+        write(os.path.join(self.root, self.FILES[-1]), "changed\n")
+        result = self.run_early()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Unrecognized Debian keyboard detection", result.stderr)
+        self.assertFalse(os.path.exists(self.trace))
+        with open(os.path.join(self.root, self.FILES[0])) as handle:
+            self.assertEqual(handle.read(), self.before)
 
 
 class LateTest(unittest.TestCase):
@@ -278,7 +371,7 @@ class LateTest(unittest.TestCase):
         self.target = os.path.join(self.tmp, "target")
         os.makedirs(self.target)
         # read-only, like the files in the ISO
-        for name in ("install.sh", "start.sh", "profile.sh"):
+        for name in ("install.sh", "start.sh", "terminal.sh", "profile.sh"):
             write(os.path.join(self.src, name), f"# {name}\n", 0o555)
         for name in ("iso.conf", "version", "tpot.issue", "preseed.cfg"):
             write(os.path.join(self.src, name), f"# {name}\n", 0o444)
@@ -291,12 +384,15 @@ class LateTest(unittest.TestCase):
         result = self.run_late()
         self.assertEqual(result.returncode, 0, result.stderr)
         expected = {"usr/local/share/tpot-iso/install.sh": 0o755, "usr/local/share/tpot-iso/start.sh": 0o755,
+                    "usr/local/share/tpot-iso/terminal.sh": 0o755, "usr/local/bin/tpot-terminal": 0o755,
                     "usr/local/share/tpot-iso/iso.conf": 0o644, "usr/local/share/tpot-iso/version": 0o644,
                     "etc/profile.d/tpot-iso.sh": 0o644, "etc/issue.d/tpot.issue": 0o644}
         for rel, mode in expected.items():
             self.assertEqual(stat.S_IMODE(os.stat(os.path.join(self.target, rel)).st_mode), mode, rel)
         with open(os.path.join(self.target, "etc/profile.d/tpot-iso.sh"), encoding="utf-8") as handle:
             self.assertEqual(handle.read(), "# profile.sh\n")
+        self.assertEqual(os.readlink(os.path.join(self.target, "usr/local/bin/tpot-terminal")),
+                         "../share/tpot-iso/terminal.sh")
         found = sorted(os.path.relpath(os.path.join(root, name), self.target)
                        for root, _dirs, names in os.walk(self.target) for name in names)
         self.assertEqual(found, sorted(expected))
@@ -332,6 +428,7 @@ class StartTest(unittest.TestCase):
         self.share = os.path.join(self.tmp, "share")
         os.makedirs(self.share)
         shutil.copy(os.path.join(ISO_DIR, "start.sh"), os.path.join(self.share, "start.sh"))
+        shutil.copy(os.path.join(ISO_DIR, "terminal.sh"), os.path.join(self.share, "terminal.sh"))
         write(os.path.join(self.share, "install.sh"), '#!/bin/sh\necho "INSTALL $*"\n', 0o755)
         self.bin = os.path.join(self.tmp, "bin")
         write(os.path.join(self.bin, "id"), ID_STUB, 0o755)
@@ -388,6 +485,15 @@ class StartTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("INSTALL -b master -r https://github.com/telekom-security/tpotce", result.stdout)
         self.assertIn("T-Pot from https://github.com/telekom-security/tpotce at master", result.stdout)
+
+    def test_interactive_terminal_handoff_keeps_arguments_and_does_not_recurse(self):
+        write(os.path.join(self.share, "terminal.sh"),
+              '#!/bin/sh\necho "TERMINAL:${TPOT_ISO_TERMINAL_TRIED}"\n'
+              '[ "$1" = -- ] || exit 2\nshift\nexec "$@"\n', 0o755)
+        code, out = self.at_terminal(args=("-b", "master", "-r", "https://github.com/telekom-security/tpotce"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("TERMINAL:1"), 1)
+        self.assertIn("INSTALL -b master -r https://github.com/telekom-security/tpotce", out)
 
     def test_a_branch_with_a_slash_and_a_commit(self):
         self.conf("TPOT_REPO_URL=https://github.com/fork/tpotce", "TPOT_BRANCH=feature/iso")
@@ -747,10 +853,34 @@ class IsotreeFilesTest(unittest.TestCase):
         with open(os.path.join(out, "boot/grub/theme/hl_c.png"), "rb") as handle:
             self.assertEqual(isotree.png_size(handle.read()), (20, 20))
 
-    def test_patch_tree_arm64_only_grub(self):
+    def test_patch_tree_arm64_graphics_with_text_fallback(self):
         orig, out = os.path.join(self.tmp, "orig"), os.path.join(self.tmp, "out")
         netinst_tree(orig, "arm64")
-        self.assertEqual(isotree.patch_tree("arm64", orig, out), ["boot/grub/grub.cfg"])
+        self.assertEqual(isotree.patch_tree("arm64", orig, out),
+                         ["boot/grub/grub.cfg", "boot/grub/tpot/hl_c.png",
+                          "boot/grub/tpot/splash.png", "boot/grub/tpot/theme.txt"])
+        with open(os.path.join(out, "boot/grub/grub.cfg")) as handle:
+            grub = handle.read()
+        self.assertIn("set tpot_font=/boot/grub/font.pf2", grub)
+        self.assertIn("if [ -f (memdisk)/fonts/unicode.pf2 ]; then\n"
+                      "  set tpot_font=(memdisk)/fonts/unicode.pf2\nfi\nif loadfont $tpot_font; then", grub)
+        self.assertIn("if terminal_output gfxterm; then\n    set theme=/boot/grub/tpot/theme.txt", grub)
+        self.assertIn("set menu_color_highlight=white/magenta", grub)
+        self.assertNotIn("set timeout=", grub)
+        self.assertNotIn("terminal_output console", grub)
+        self.assertIn(GRUB_ARM64[GRUB_ARM64.index("menuentry 'Install'"):], grub)
+        with open(os.path.join(out, "boot/grub/tpot/theme.txt")) as handle:
+            theme = handle.read()
+        self.assertIn('desktop-image: "/boot/grub/tpot/splash.png"', theme)
+        self.assertIn('item_font = "GNU Unifont Regular 16"', theme)
+        self.assertIn('selected_item_pixmap_style = "hl_*.png"', theme)
+
+    def test_arm64_needs_the_debian_grub_font(self):
+        orig, out = os.path.join(self.tmp, "orig"), os.path.join(self.tmp, "out")
+        netinst_tree(orig, "arm64")
+        os.remove(os.path.join(orig, "boot/grub/font.pf2"))
+        with self.assertRaisesRegex(isotree.PatchError, "font.pf2 is missing"):
+            isotree.patch_tree("arm64", orig, out)
 
     def test_the_cli_says_what_is_wrong(self):
         orig, out = os.path.join(self.tmp, "orig"), os.path.join(self.tmp, "out")
@@ -814,7 +944,7 @@ class BuildTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(ISO_DIR, name)), name)
         needed = re.search(r"^for myFILE in ([^;]+); do$", base.read("installer/iso/late.sh"), re.M).group(1).split()
         self.assertLessEqual(set(needed), set(payload) | {"install.sh", "version", "iso.conf"})
-        for name in ("late.sh", "start.sh", "build.sh"):
+        for name in ("early.sh", "late.sh", "start.sh", "terminal.sh", "build.sh"):
             self.assertTrue(os.access(os.path.join(ISO_DIR, name), os.X_OK), name)
 
     def test_build_and_start_accept_the_same_source(self):

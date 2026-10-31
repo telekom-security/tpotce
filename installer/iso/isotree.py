@@ -4,7 +4,7 @@
         the boot files of a Debian netinst (extracted to --orig at their paths in the ISO) with the
         entries "Install T-Pot" (the default) and "Install T-Pot (graphical installer)" in front of
         the ones of Debian, which stay: GRUB (UEFI, both architectures) and ISOLINUX (BIOS, amd64),
-        the T-Pot logo as the background (amd64). Writes the changed and new files to --out at
+        the T-Pot logo as the background. Writes the changed and new files to --out at
         their paths in the ISO and prints those paths.
     python3 installer/iso/isotree.py md5sum --orig FILE --out DIR
         md5sum.txt of the ISO (--orig) with the files of --out: their lines updated or added, as the
@@ -170,7 +170,66 @@ def patch_isolinux(files: Dict[str, str]) -> Dict[str, str]:
     return out
 
 
-# --- the GRUB theme (amd64)
+# --- the GRUB themes
+
+def patch_arm64_graphics(text: str) -> str:
+    """Debian arm64 ships the font and graphics modules, but starts a text menu."""
+    return _once(text, "set menu_color_normal=cyan/blue\nset menu_color_highlight=white/blue\n",
+                 """set menu_color_normal=white/black
+set menu_color_highlight=white/magenta
+
+set tpot_font=/boot/grub/font.pf2
+# Secure Boot permits the font embedded in Debian's signed GRUB, not an external font.
+if [ -f (memdisk)/fonts/unicode.pf2 ]; then
+  set tpot_font=(memdisk)/fonts/unicode.pf2
+fi
+if loadfont $tpot_font; then
+  insmod all_video
+  insmod gfxterm
+  insmod gfxmenu
+  insmod png
+  set gfxmode=800x600,auto
+  if terminal_output gfxterm; then
+    set theme=/boot/grub/tpot/theme.txt
+  fi
+fi
+""", "grub.cfg (arm64)")
+
+
+ARM64_THEME = """title-text: ""
+desktop-color: "black"
+desktop-image: "/boot/grub/tpot/splash.png"
+
++ label {
+  top = 165
+  left = 18%
+  text = "T-Pot installer on Debian (UEFI)"
+  font = "GNU Unifont Regular 16"
+  color = "#c0c0c0"
+}
+
++ boot_menu {
+  top = 200
+  left = 10%
+  width = 80%
+  height = 55%
+  item_font = "GNU Unifont Regular 16"
+  item_color = "#c0c0c0"
+  selected_item_color = "white"
+  selected_item_pixmap_style = "hl_*.png"
+  item_height = 24
+  item_spacing = 2
+}
+
++ label {
+  top = 94%
+  left = 10%
+  text = "Up/Down: select   Enter: boot   E: edit   C: command line"
+  font = "GNU Unifont Regular 16"
+  color = "#c0c0c0"
+}
+"""
+
 
 def patch_theme(text: str, name: str) -> Optional[str]:
     """A theme of /boot/grub/theme with the background (the light ones): the title off the logo, the
@@ -244,7 +303,15 @@ def patch_tree(arch: str, orig: str, out: str) -> List[str]:
     grub = os.path.join(orig, "boot", "grub", "grub.cfg")
     if not os.path.isfile(grub):
         raise PatchError("boot/grub/grub.cfg is missing")
-    written["boot/grub/grub.cfg"] = patch_grub(_read(grub)).encode()
+    grub_text = patch_grub(_read(grub))
+    if arch == "arm64":
+        if not os.path.isfile(os.path.join(orig, "boot/grub/font.pf2")):
+            raise PatchError("boot/grub/font.pf2 is missing")
+        grub_text = patch_arm64_graphics(grub_text)
+        written["boot/grub/tpot/theme.txt"] = ARM64_THEME.encode()
+        written["boot/grub/tpot/splash.png"] = splash_png()
+        written["boot/grub/tpot/hl_c.png"] = solid_png(20, 20)
+    written["boot/grub/grub.cfg"] = grub_text.encode()
     if arch == "amd64":
         isolinux = os.path.join(orig, "isolinux")
         files = {name: _read(os.path.join(isolinux, name))
