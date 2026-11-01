@@ -1,0 +1,5 @@
+// T-Pot (installer/install/auto-updates): unattended-upgrades runs, apt-daily-upgrade.timer.d/tpot.conf
+// makes it weekly and TPOT_AUTO_UPDATES=DISABLED in ~/tpotce/.env skips it (apt-daily-upgrade.service.d).
+// "1" is the interval in days apt.systemd.daily checks, the timer picks the day.
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";

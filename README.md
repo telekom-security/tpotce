@@ -83,6 +83,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 - [Maintenance](#maintenance)
   - [The T-Pot Scripts](#the-t-pot-scripts)
   - [General Updates](#general-updates)
+  - [Automatic Updates (Debian)](#automatic-updates-debian)
   - [Update Script](#update-script)
   - [Elastic Stack Upgrades](#elastic-stack-upgrades)
   - [Updating From an Older Release](#updating-from-an-older-release)
@@ -602,7 +603,7 @@ On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundatio
 ## Unattended Installation
 The installer can run without any interaction, i.e. for automated tests or cloud provisioning:
 ```
-./install.sh -s -t <type> [-u <webuser>] [-P <file> | -p <password>] [-B <file>] [-c <compose file>]
+./install.sh -s -t <type> [-u <webuser>] [-P <file> | -p <password>] [-B <file>] [-c <compose file>] [-U]
 ```
 | Option | Description |
 |---|---|
@@ -613,6 +614,7 @@ The installer can run without any interaction, i.e. for automated tests or cloud
 | `-p` | The web user password itself; it shows up in the process list and the shell history, so prefer `-P` |
 | `-B` | Read the `sudo` password from a file, so `-s` works without passwordless `sudo` |
 | `-c` | Install your own compose file (i.e. from `tpot customize`) instead of an edition, `-t` is then `h` (with a web UI) or `s` (without) |
+| `-U` | No [automatic updates](#automatic-updates-debian) on Debian: writes `TPOT_AUTO_UPDATES=DISABLED` into `~/tpotce/.env` |
 
 ⚠️ ***`-s` requires passwordless `sudo` for the user running the installer, or `-B`.*** Ansible would otherwise ask for the `BECOME password` and the run would stall, so the installer stops right away and tells you so. Grant it before you start (or hand the password over with `-B`):
 ```
@@ -1114,7 +1116,17 @@ Should an update fail, opening an issue or a discussion will help to improve thi
 <br><br>
 
 ## General Updates
-T-Pot security depends on the updates provided for the [supported Linux distro images](#choose-your-distro). Make sure to review the OS documentation and ensure updates are installed regularly by the OS. By default (`~/tpotce/.env`) `TPOT_PULL_POLICY=always` will ensure that at every T-Pot start docker will check for new docker images and download them before creating the containers.
+T-Pot security depends on the updates provided for the [supported Linux distro images](#choose-your-distro). Make sure to review the OS documentation and ensure updates are installed regularly by the OS. On Debian, T-Pot does this for you, see [Automatic Updates (Debian)](#automatic-updates-debian). By default (`~/tpotce/.env`) `TPOT_PULL_POLICY=always` will ensure that at every T-Pot start docker will check for new docker images and download them before creating the containers.
+<br><br>
+
+## Automatic Updates (Debian)
+On Debian (Raspberry Pi OS 64-bit included) the installer, the [T-Pot ISO](#t-pot-iso-preview) and `update.sh` set up two automatic updates; the nightly [Daily Reboot](#daily-reboot) puts them to use:
+- **Debian security updates** once a week: `unattended-upgrades` installs the updates of `Debian-Security` every Sunday between 06:00 and 07:00 (`apt-daily-upgrade.timer`, up to 60 minutes random delay, a missed run is made up at the next start). Point releases and other packages stay with you, as does the rest of `/etc/apt/apt.conf.d/50unattended-upgrades`, which T-Pot leaves as Debian ships it. On Raspberry Pi OS the kernel and firmware come from the Raspberry Pi archive and are not part of it, update them with `sudo apt full-upgrade`.
+- **Docker Engine** within its major release: `/etc/apt/preferences.d/tpot-docker.pref` pins Docker Engine to the major release T-Pot is tested with (also for your own `apt upgrade`), a new major release comes with a T-Pot release. In the Daily Reboot of Sunday, while T-Pot is stopped, `tpot-auto-updates docker` installs the newest patch or minor release within it, then checks the Docker daemon, `docker compose` and a container of the `tpotinit` image with a published port. If Docker does not work afterwards it goes back to the previous versions, and that update is not tried again until newer packages arrive. It skips the update while `tpot.service` runs, when `apt-get update` fails (it waits up to 10 minutes for a busy `apt`) or `dpkg` cannot finish an earlier install.
+
+What happened, the update of the Docker Engine included: `journalctl -t tpot-auto-updates`, the security updates: `/var/log/unattended-upgrades/`.
+
+Turn both off with `TPOT_AUTO_UPDATES=DISABLED` in `~/tpotce/.env` (`tpot env set TPOT_AUTO_UPDATES=DISABLED`, *Settings* of the T-Pot Manager, the install assistant on Debian, or `install.sh -U`). The host reads it on every run, T-Pot needs no restart. The pin of the Docker Engine stays either way, so your own updates stay within the tested major release. Raspbian (32-bit), Ubuntu and the other distributions get neither, keep their updates in mind. `uninstall.sh` removes all of it, `unattended-upgrades` only if T-Pot installed it.
 <br><br>
 
 ## Update Script
@@ -1151,6 +1163,8 @@ The update script will ...
  - keep your previous `docker-compose.yml` in the backup archive. If you made changes to it by hand
    (i.e. removing the `ewsposter` section) you need to add them again - the run tells you how to
    compare the two.
+ - set up or refresh the [automatic updates](#automatic-updates-debian) on Debian, also on an
+   installation of an earlier release; `TPOT_AUTO_UPDATES=DISABLED` keeps them off.
 
 The backup holds what git cannot bring back: `~/tpotce/.env`, your `docker-compose.yml`, a patch of
 your changes to tracked files, your untracked files, the commit to roll back to, and the files under
@@ -1397,6 +1411,7 @@ By default T-Pot will add a daily reboot including some cleaning up. You can adj
 #Ansible: T-Pot Daily Reboot
 42 2 * * * bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; /usr/sbin/shutdown -r +1 "T-Pot Daily Reboot"'
 ```
+On Debian the line also runs the update of the Docker Engine before the reboot (it does something on Sundays only, see [Automatic Updates (Debian)](#automatic-updates-debian)); keep `/usr/local/sbin/tpot-auto-updates docker /home/<user>/tpotce;` in front of `/usr/sbin/shutdown` if you change it. `update.sh` puts it back there if it is missing.
 
 ## Known Issues
 The following issues are known, simply follow the described steps to solve them.

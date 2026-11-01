@@ -1294,6 +1294,14 @@ class RunEnvRetentionTest(unittest.TestCase):
         self.assertIn("Restart T-Pot to apply it", text)
         self.assertIn("not applied by T-Pot on its own", text)
 
+    def test_the_automatic_updates_need_no_restart(self):
+        # restart: false in the schema, the host reads the key on its own
+        for value in ("DISABLED", "ENABLED"):
+            with self.subTest(value=value):
+                self.assertNotIn("Restart T-Pot to apply it", self.env_set(f"TPOT_AUTO_UPDATES={value}"))
+        text = self.env_set("TPOT_AUTO_UPDATES=DISABLED", "TPOT_ATTACKMAP_TEXT=DISABLED")
+        self.assertIn("Restart T-Pot to apply it", text)
+
 
 if __name__ == "__main__":
     unittest.main()

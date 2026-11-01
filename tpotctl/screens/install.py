@@ -30,6 +30,8 @@ from tpotctl.widgets.nav import (BINDINGS as NAV_BINDINGS, FIND, FIND_KEY, Arrow
 STEPS = [("check", "System check"), ("edition", "Edition"), ("user", "Web user"), ("settings", "Settings"),
          ("review", "Review"), ("install", "Install"), ("done", "Done")]
 FIRST_SETTINGS = ["TPOT_ATTACKMAP_TEXT_TIMEZONE", "TPOT_BLACKHOLE", "TPOT_CAPTURE_INTERFACE", "TPOT_PULL_POLICY"]
+# only where the playbook sets them up: Debian, Raspberry Pi OS 64-bit included (its ID is debian)
+DEBIAN_SETTINGS = ["TPOT_AUTO_UPDATES"]
 LLM_PREFIXES = ("BEELZEBUB_LLM_", "GALAH_LLM_")
 # the log install.sh writes in a phase (its marks, installer.Progress); None: that phase writes none,
 # its errors are only in its output (the log view of the assistant)
@@ -43,6 +45,8 @@ CHANGES = [
     "a user and group tpot, tpot.service, the tpot command, a daily reboot",
     "packages known to cause trouble with T-Pot are removed",
 ]
+AUTO_UPDATES_CHANGE = ("weekly security updates (Sunday morning), Docker Engine updates within its major "
+                       "release at the daily reboot")
 
 
 def mark(state: str) -> Text:
@@ -430,9 +434,10 @@ class InstallApp(ArrowNav, App):
             return
         self.draft = dict(self.env_settings.values)
         self.draft.setdefault("TPOT_TYPE", "SENSOR" if self.answers.edition.letter == "s" else "HIVE")
+        first = FIRST_SETTINGS + (DEBIAN_SETTINGS if self.on_debian() else [])
         rows = []
         for rule in self.env_settings.relevant(values=self.draft):
-            if rule.key in FIRST_SETTINGS or (rule.key.startswith(LLM_PREFIXES) and self.answers.edition.key == "llm"):
+            if rule.key in first or (rule.key.startswith(LLM_PREFIXES) and self.answers.edition.key == "llm"):
                 if rule.editable:
                     rows.append(SettingRow(rule, self.draft.get(rule.key, ""), ""))
         pane.mount(*rows)
@@ -483,6 +488,15 @@ class InstallApp(ArrowNav, App):
     def keep_settings(self) -> None:
         self.answers.settings = self.settings_changes()
 
+    @staticmethod
+    def on_debian() -> bool:
+        return installer.os_release().get("ID") == "debian"
+
+    def changes(self) -> List[str]:
+        """What the review says changes on this host."""
+        updates = getattr(self, "draft", {}).get("TPOT_AUTO_UPDATES", "").upper() != "DISABLED"
+        return CHANGES + ([AUTO_UPDATES_CHANGE] if updates and self.on_debian() else [])
+
     # -- 5 review ------------------------------------------------------------
 
     def enter_review(self) -> None:
@@ -498,7 +512,7 @@ class InstallApp(ArrowNav, App):
             text.append(f"  {title:<30}", style=theme.color("ash"))
             text.append(f"{value}\n", style=theme.color("glass"))
         text.append("\nThis host changes\n", style=f"bold {theme.color('magenta')}")
-        for change in CHANGES:
+        for change in self.changes():
             text.append(f"  {glyphs.g('bullet')} ", style=theme.color("magenta"))
             text.append(f"{change}\n", style=theme.color("glass"))
         text.append("\nThe installation takes 10 to 30 minutes, the host needs a reboot afterwards.",

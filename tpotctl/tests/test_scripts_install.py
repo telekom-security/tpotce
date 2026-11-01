@@ -511,6 +511,30 @@ class InstallShTest(Scripts):
                 with open(env, encoding="utf-8") as handle:
                     self.assertEqual(handle.read(), f"TPOT_TYPE=HIVE\nWEB_USER={entry}\n")
 
+    def test_U_turns_the_automatic_updates_off_before_the_playbook(self):
+        """-U writes TPOT_AUTO_UPDATES=DISABLED into .env before the playbook sets the updates up (a run
+        that fails later keeps it); an existing line changes in place. Without -U .env stays as it is."""
+        env = os.path.join(self.tpotce, ".env")
+        cases = [("TPOT_TYPE=HIVE\nWEB_USER=\n", "TPOT_TYPE=HIVE\nWEB_USER=\nTPOT_AUTO_UPDATES=DISABLED\n")]
+        # in place is sed -i of GNU sed; a BSD sed (macOS) does not take -i without a suffix
+        if subprocess.run(["sed", "--version"], capture_output=True).returncode == 0:
+            cases.append(("TPOT_AUTO_UPDATES=ENABLED\nWEB_USER=\n", "TPOT_AUTO_UPDATES=DISABLED\nWEB_USER=\n"))
+        for text, after in cases:
+            with self.subTest(text=text):
+                write(env, text)
+                result = self.install("-s", "-t", "s", "-U")
+                self.assertEqual(result.returncode, 0, result.stdout[-1500:])
+                with open(env, encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), after)
+                self.assertLess(result.stdout.index("TPOT_AUTO_UPDATES=DISABLED"), result.stdout.index("PLAY [T-Pot]"))
+        write(env, "TPOT_TYPE=HIVE\nWEB_USER=\n")
+        result = self.install("-s", "-t", "s")
+        self.assertEqual(result.returncode, 0, result.stdout[-1500:])
+        self.assertNotIn("TPOT_AUTO_UPDATES", result.stdout)
+        with open(env, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "TPOT_TYPE=HIVE\nWEB_USER=\n")
+        self.assertIn("-U", self.run_script(self.script, "-h").stdout)
+
     def test_a_port_conflict_ends_with_a_summary(self):
         write(os.path.join(self.bin, "ss"), "#!/bin/sh\necho 'LISTEN 0 100 0.0.0.0:25 0.0.0.0:*'\n", 0o755)
         result = self.install("-s", "-t", "s")

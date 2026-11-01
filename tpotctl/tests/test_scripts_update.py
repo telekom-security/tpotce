@@ -798,6 +798,112 @@ class SshdDropinTest(Scripts):
         self.assertIn("/run/sshd", function)
 
 
+class AutoUpdatesTest(Scripts):
+    """update.sh does not run the playbook: fuAUTO_UPDATES sets the automatic updates up on Debian (Raspberry
+    Pi OS 64-bit included, ID=debian) with the helper of the checkout, as root, under a spinner (sudo -v first),
+    on every update. Elsewhere it does nothing. A failure only warns. A fake helper writes what it is asked."""
+
+    def setUp(self):
+        super().setUp()
+        self.helper = os.path.join(self.tpotce, "installer", "install", "auto-updates", "tpot-auto-updates")
+        os.makedirs(os.path.dirname(self.helper))
+        with open(self.helper, "w", encoding="utf-8") as out:
+            out.write('#!/bin/sh\necho "helper $*" >> "$HOME/calls"\n'
+                      'case "$1" in\n'
+                      '  setup) [ -n "$FAKE_SETUP_OUT" ] && printf "%s\\n" "$FAKE_SETUP_OUT"; echo "apt chatter"\n'
+                      '         exit "${FAKE_SETUP_RC:-0}" ;;\n'
+                      '  check) [ -z "$FAKE_DISABLED" ] ;;\n'
+                      'esac\n')
+        self.stub("sudo", '#!/bin/sh\necho "sudo $*" >> "$HOME/calls"\n[ "$1" = -v ] && exit 0\nexec "$@"\n')
+        self.release = os.path.join(self.home, "os-release")
+        self.set_release('ID=debian\n')
+
+    def set_release(self, text):
+        with open(self.release, "w", encoding="utf-8") as out:
+            out.write(text)
+
+    def setup_run(self, **extra):
+        if os.path.exists(os.path.join(self.home, "calls")):
+            os.remove(os.path.join(self.home, "calls"))
+        call = ('fuLOG_START; fuAUTO_UPDATES; echo "went on"; '
+                'for myITEM in "${myDONE[@]}"; do echo "done ${myITEM}"; done')
+        return self.source_update(call, myTPOT_OS_RELEASE=self.release, **extra)
+
+    def log(self):
+        with open(os.path.join(self.home, "tpot_backups", "update.log"), encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_debian_sets_them_up_as_root_under_the_spinner(self):
+        for text in ('ID=debian\n', 'NAME="Debian GNU/Linux"\nID="debian"\n'):
+            with self.subTest(release=text):
+                self.set_release(text)
+                result = self.setup_run(FAKE_SETUP_OUT="changed: the cron job T-Pot Daily Reboot")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                calls = self.calls()
+                setup = f"sudo bash {self.helper} setup {self.home}/tpotce"
+                self.assertIn(setup, calls)
+                self.assertLess(calls.index("sudo -v"), calls.index(setup))
+                self.assertIn(f"helper check {self.home}/tpotce", calls)
+                self.assertNotIn("sudo bash " + self.helper + " check", calls)
+                self.assertNotIn("apt chatter", result.stdout)
+                self.assertIn("apt chatter", self.log())
+                self.assertIn("Security updates on Sundays", result.stdout)
+                done = [line for line in result.stdout.splitlines() if line.startswith("done ")]
+                self.assertEqual(len(done), 1, result.stdout)
+                self.assertTrue(done[0].startswith("done ok:Automatic updates:"), done)
+                self.assertIn("went on", result.stdout)
+
+    def test_without_a_change_it_only_says_so(self):
+        result = self.setup_run()
+        self.assertIn("The automatic updates are up to date.", result.stdout)
+        self.assertNotIn("done ", result.stdout)
+
+    def test_off_in_env_they_are_set_up_and_stay_off(self):
+        result = self.setup_run(FAKE_SETUP_OUT="changed: unattended-upgrades installed", FAKE_DISABLED="1")
+        self.assertIn("setup", self.calls())
+        self.assertIn("TPOT_AUTO_UPDATES=DISABLED in .env keeps them off", result.stdout)
+        done = [line for line in result.stdout.splitlines() if line.startswith("done ")]
+        self.assertEqual(len(done), 1, result.stdout)
+        self.assertTrue(done[0].startswith("done info:"), done)
+        self.assertIn("tpot settings", done[0])
+        result = self.setup_run(FAKE_DISABLED="1")
+        self.assertNotIn("done ", result.stdout)
+
+    def test_a_failed_setup_only_warns(self):
+        result = self.setup_run(FAKE_SETUP_OUT="unattended-upgrades could not be installed.", FAKE_SETUP_RC="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("could not be set up", result.stdout)
+        self.assertIn("went on", result.stdout)
+        warn = [line for line in result.stdout.splitlines() if line.startswith("done warn:")]
+        self.assertEqual(len(warn), 1, result.stdout)
+        self.assertIn("update.sh -y", warn[0])
+        self.assertNotIn("helper check", self.calls())
+
+    def test_elsewhere_nothing_happens(self):
+        for text in ('ID=fedora\n', 'ID=raspbian\nID_LIKE=debian\n', 'ID=ubuntu\nID_LIKE=debian\n', ''):
+            with self.subTest(release=text):
+                self.set_release(text)
+                result = self.setup_run(FAKE_SETUP_OUT="changed: x")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.calls(), "")
+                self.assertNotIn("automatic updates", result.stdout)
+                self.assertNotIn("done ", result.stdout)
+        with self.subTest(case="a checkout without the helper"):
+            self.set_release('ID=debian\n')
+            os.remove(self.helper)
+            result = self.setup_run()
+            self.assertEqual(self.calls(), "")
+
+    def test_update_sh_runs_it_after_the_sshd_drop_in_before_the_pull(self):
+        text = base.read("update.sh")
+        main = text[text.index("# Main section #"):]
+        self.assertLess(main.index("\nfuSSHD_DROPIN\n"), main.index("\nfuAUTO_UPDATES\n"))
+        self.assertLess(main.index("\nfuAUTO_UPDATES\n"), main.index("fuMARK phase pull"))
+        self.assertLess(main[main.index("--backup-only: the backup"):].index("exit 0"),
+                        main[main.index("--backup-only: the backup"):].index("\nfuAUTO_UPDATES\n"))
+        self.assertIn("/etc/os-release", re.search(r"function fuAUTO_UPDATES \(\) \{.*?\n\}", text, re.S).group(0))
+
+
 class SshdDocsTest(unittest.TestCase):
     """RC11 and K: the README on true colours over SSH (update.sh, sudo, e.g.), the names of the
     playbook tasks."""

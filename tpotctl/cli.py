@@ -919,7 +919,9 @@ def run_env(args) -> int:
         if changes.get("TPOT_KIBANA_OBJECTS") == "overwrite":
             # no question, as for a shorter retention: env set writes what it is told, the hint says what it does
             say.hint(f"TPOT_KIBANA_OBJECTS=overwrite: {KIBANA_OVERWRITE_EVERY_START}", stream=console.file)
-        if set(changes) - {"TPOT_ES_RETENTION"}:
+        # keys the host reads on its own (restart: false in the schema) need no restart of T-Pot either
+        if any(key != "TPOT_ES_RETENTION" and (key not in current.schema or current.schema[key].restart)
+               for key in changes):
             console.print(f"[{MAGENTA}]Restart T-Pot to apply it: tpot restart[/]")
         return 0
     # list

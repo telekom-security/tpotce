@@ -41,8 +41,9 @@ def block(text):
 
 
 class FreshInstallEnvTest(unittest.TestCase):
-    """A fresh install runs on the tracked .env of its clone: install.sh only writes WEB_USER into it,
-    and the playbook only clones. So the defaults of a new install are the values of that file."""
+    """A fresh install runs on the tracked .env of its clone: install.sh only writes WEB_USER into it (and with
+    -U TPOT_AUTO_UPDATES=DISABLED), and the playbook only clones. So the defaults of a new install are the values
+    of that file."""
 
     ENV = os.path.join(REPO_DIR, ".env")
 
@@ -53,17 +54,19 @@ class FreshInstallEnvTest(unittest.TestCase):
         start = max(i for i in range(end) if lines[i].startswith("# T-Pot Kibana Objects"))
         return lines[start:end + 1]
 
-    def test_install_sh_writes_only_the_web_user_into_env(self):
+    def test_install_sh_writes_only_the_web_user_and_the_update_switch_into_env(self):
         with open(INSTALL_SH, encoding="utf-8") as handle:
             text = handle.read()
         writes = [line.strip() for line in text.splitlines()
                   if "myTPOT_CONF_FILE" in line and not line.strip().startswith(("#", "myTPOT_CONF_FILE=",
                                                                                   "fuUI_INFO"))]
-        # the WEB_USER line in place, or (a .env without it) at the end on a line of its own
-        self.assertEqual(writes, ['if grep -q "^WEB_USER=" "${myTPOT_CONF_FILE}";',
-                                  'sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" "${myTPOT_CONF_FILE}"',
+        # env_set: the line in place, or (a .env without it) at the end on a line of its own
+        self.assertEqual(writes, ['if grep -q "^$1=" "${myTPOT_CONF_FILE}";',
+                                  'sed -i "s|^$1=.*|$1=$2|" "${myTPOT_CONF_FILE}"',
                                   '[ -z "$(tail -c 1 "${myTPOT_CONF_FILE}")" ] || echo >> "${myTPOT_CONF_FILE}"',
-                                  'echo "WEB_USER=${myWEB_USER_ENC_B64}" >> "${myTPOT_CONF_FILE}"'])
+                                  'echo "$1=$2" >> "${myTPOT_CONF_FILE}"'])
+        self.assertEqual(re.findall(r"^\s*env_set (\S+) (.*)$", text, re.M),
+                         [("TPOT_AUTO_UPDATES", "DISABLED"), ("WEB_USER", '"${myWEB_USER_ENC_B64}"')])
         self.assertNotIn("env.example", text)
         with open(os.path.join(REPO_DIR, "installer", "install", "tpot.yml"), encoding="utf-8") as handle:
             playbook = handle.read()
@@ -537,6 +540,45 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(command[command.index("-t") + 1], "s")
         self.assertNotIn("-B", command)
         self.assertNotIn("-u", command)
+
+    async def test_the_automatic_updates_only_on_debian(self):
+        """On Debian (Raspberry Pi OS 64-bit included, its ID is debian) the settings step offers the switch and
+        the review names the updates while they are on; turned off, .env says so before install.sh runs.
+        Elsewhere the playbook sets none up: no switch, nothing in the review."""
+        from unittest import mock
+        from textual.css.query import NoMatches
+        from tpotctl.envfile import EnvFile
+        for release, offered, turn_off in (({"ID": "debian"}, True, False), ({"ID": "debian"}, True, True),
+                                           ({"ID": "fedora"}, False, False)):
+            with self.subTest(release=release["ID"], turn_off=turn_off), \
+                    mock.patch.object(installer, "os_release", return_value=release):
+                app = self.make_app(sudo="passwordless")
+                async with app.run_test(size=(140, 44)) as pilot:
+                    await pilot.pause(0.4)
+                    await pilot.click("#ins-next")
+                    await pilot.pause(0.2)
+                    await pilot.press("down", "enter")             # Sensor
+                    await pilot.pause(0.3)
+                    self.assertEqual(app.step, "settings")
+                    if offered:
+                        switch = app.query_one("#set-TPOT_AUTO_UPDATES")
+                        self.assertTrue(switch.value)
+                        switch.value = not turn_off
+                        await pilot.pause(0.2)
+                    else:
+                        with self.assertRaises(NoMatches):
+                            app.query_one("#set-TPOT_AUTO_UPDATES")
+                    await pilot.click("#ins-next")
+                    await pilot.pause(0.2)
+                    self.assertEqual(app.step, "review")
+                    review = str(app.query_one("#review-text").render())
+                    self.assertEqual("weekly security updates" in review, offered and not turn_off, review)
+                    await pilot.click("#ins-next")
+                    await pilot.pause(1.0)
+                    self.assertEqual(app.step, "done")
+                self.assertNotIn("-U", FakeEngine.runs[0])
+                self.assertEqual(EnvFile(os.path.join(self.repo, ".env")).values()["TPOT_AUTO_UPDATES"],
+                                 "DISABLED" if turn_off else "ENABLED")
 
     async def test_a_schema_that_does_not_hold_together_is_named(self):
         from unittest import mock

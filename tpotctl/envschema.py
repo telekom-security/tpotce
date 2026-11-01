@@ -68,6 +68,7 @@ class Rule:
     llm: Dict[str, str] = field(default_factory=dict)
     unlock: str = ""
     offer: bool = False
+    restart: bool = True
     groups: Dict[str, List[str]] = field(default_factory=dict)
     legacy: Dict[str, str] = field(default_factory=dict)
 

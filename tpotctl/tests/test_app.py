@@ -1795,6 +1795,28 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Take over from Kibana", notes)
         self.assertNotIn("restart T-Pot", notes)
 
+    async def test_settings_only_the_automatic_updates_offer_no_restart(self):
+        """restart: false in the schema: the host reads TPOT_AUTO_UPDATES on its own, another key still asks."""
+        from tpotctl import settings
+        from tpotctl.tests.test_settings import make_checkout
+        for others, asks in (({}, False), ({"TPOT_ATTACKMAP_TEXT": False}, True)):
+            with self.subTest(others=others):
+                repo = make_checkout(self)
+                app = tapp.TpotApp(backend=self.settings_backend(repo), runner=Recorder())
+                async with app.run_test(size=(150, 50)) as pilot:
+                    await pilot.pause(0.3)
+                    app.goto("settings")
+                    await pilot.pause(0.4)
+                    for key, value in {"TPOT_AUTO_UPDATES": False, **others}.items():
+                        app.query_one(f"#set-{key}").value = value
+                    await pilot.pause(0.3)
+                    await pilot.click("#settings-save")
+                    await pilot.pause(0.4)
+                    self.assertEqual(isinstance(app.screen, ConfirmDialog), asks)
+                    notes = " ".join(str(note.message) for note in app._notifications)
+                self.assertEqual(settings.load(repo).values["TPOT_AUTO_UPDATES"], "DISABLED")
+                self.assertEqual("T-Pot needs no restart for it" in notes, not asks)
+
     async def test_settings_foreign_policy_off_host_names_kibana(self):
         from tpotctl import elastic
         repo = self.retention_checkout()

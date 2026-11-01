@@ -66,6 +66,51 @@
         state: absent
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
+- name: T-Pot - Remove automatic updates (Debian)
+  hosts: all
+  gather_facts: true
+  become: true
+  tags:
+    - "Debian"
+
+  tasks:
+    - name: Check if T-Pot installed unattended-upgrades (Debian)
+      # tpot-auto-updates setup leaves this marker, a system that had it before keeps it
+      stat:
+        path: /var/lib/tpot-auto-updates/unattended-upgrades
+      register: tpot_unattended_upgrades
+      when: ansible_facts.distribution in ["Debian"]
+
+    - name: Remove unattended-upgrades (Debian)
+      apt:
+        name: unattended-upgrades
+        state: absent
+        purge: yes
+      when: ansible_facts.distribution in ["Debian"] and tpot_unattended_upgrades.stat.exists
+
+    - name: Remove the automatic updates and the Docker Engine pin (Debian)
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/local/sbin/tpot-auto-updates
+        - /etc/apt/apt.conf.d/21tpot-auto-upgrades
+        - /etc/apt/apt.conf.d/52tpot-unattended-upgrades
+        - /etc/apt/preferences.d/tpot-docker.pref
+        - /etc/systemd/system/apt-daily-upgrade.timer.d/tpot.conf
+        - /etc/systemd/system/apt-daily-upgrade.service.d/tpot.conf
+        - /var/lib/tpot-auto-updates
+      when: ansible_facts.distribution in ["Debian"]
+
+    - name: Put apt-daily-upgrade.timer back on its own calendar (Debian)
+      # the drop-in folders go where nothing else is in them
+      shell: |
+        rmdir --ignore-fail-on-non-empty /etc/systemd/system/apt-daily-upgrade.timer.d /etc/systemd/system/apt-daily-upgrade.service.d 2>/dev/null
+        systemctl daemon-reload
+        systemctl try-restart apt-daily-upgrade.timer
+      changed_when: false
+      when: ansible_facts.distribution in ["Debian"]
+
 - name: Remove T-Pot systemd service
   hosts: all
   gather_facts: true

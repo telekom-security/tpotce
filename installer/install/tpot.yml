@@ -442,6 +442,30 @@
         - "Rocky"
 
 
+######################################
+# T-Pot - Automatic updates (Debian) #
+######################################
+
+- name: T-Pot - Automatic updates (Debian)
+  hosts: all
+  gather_facts: true
+  become: false
+  tags:
+    - "Debian"
+
+  tasks:
+    - name: Set up the weekly security updates and the Docker Engine pin (Debian)
+      # installer/install/auto-updates/tpot-auto-updates, update.sh runs the same:
+      # unattended-upgrades for the Debian security updates, the pin of the Docker
+      # Engine to its major release (here, so the install below takes it already)
+      # and the guarded Docker Engine update of the nightly reboot
+      become: true
+      command: "bash {{ ansible_facts.user_dir }}/tpotce/installer/install/auto-updates/tpot-auto-updates setup {{ ansible_facts.user_dir }}/tpotce"
+      register: tpot_auto_updates
+      changed_when: "'changed:' in tpot_auto_updates.stdout"
+      when: ansible_facts.distribution in ["Debian"]
+
+
 #################################
 # T-Pot - Install Docker Engine #
 #################################
@@ -1335,7 +1359,8 @@
 - name: T-Pot - Setup a randomized daily reboot
   hosts: all
   gather_facts: true
-  become: yes
+  # user_dir below is the home of the user, not of root
+  become: false
   tags:
     - "AlmaLinux"
     - "Debian"
@@ -1349,14 +1374,24 @@
   vars:
     random_minute: "{{ range(0, 60) | random }}"
     random_hour: "{{ range(0, 5) | random }}" # We want the reboot randomly happen at night
+    # the guarded Docker Engine update of tpot-auto-updates (Sundays) while T-Pot is stopped, where its
+    # play above installed it: Debian, Raspberry Pi OS 64-bit included (Ansible says Debian for a 32-bit
+    # Raspbian as well, the helper is not there). tpot-auto-updates setup writes the same step into a job.
+    auto_updates_step: "{{ '/usr/local/sbin/tpot-auto-updates docker ' ~ ansible_facts.user_dir ~ '/tpotce; ' if tpot_auto_updates_helper.stat.exists else '' }}"
 
   tasks:
+    - name: Look for the automatic updates (All)
+      stat:
+        path: /usr/local/sbin/tpot-auto-updates
+      register: tpot_auto_updates_helper
+
     - name: Setup a randomized daily reboot (All)
+      become: true
       cron:
         name: "T-Pot Daily Reboot"
         user: root
         minute: "{{ random_minute }}"
         hour: "{{ random_hour }}"
-        job: "bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; /usr/sbin/shutdown -r +1 \"T-Pot Daily Reboot\"'"
+        job: "bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; {{ auto_updates_step }}/usr/sbin/shutdown -r +1 \"T-Pot Daily Reboot\"'"
         state: present
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]

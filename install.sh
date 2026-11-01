@@ -5,7 +5,7 @@
 unset CDPATH
 
 print_help() {
-  fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>]"$'\n'"           [-n] [-M]" \
+  fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>]"$'\n'"           [-U] [-n] [-M]" \
     --about "Installs T-Pot on this host: the packages it needs, Docker Engine and the
 services of the edition, by the Ansible playbook installer/install/tpot.yml." \
     --about "Without -s, at a terminal, the installer gets what it needs to start and hands
@@ -35,6 +35,10 @@ of the local clone this script runs from, otherwise master" \
 playbook is derived from it. Default: the origin of the
 local clone this script runs from, otherwise
 https://github.com/telekom-security/tpotce" \
+    --opt "-U" "No automatic updates (Debian): neither the weekly security
+updates nor Docker Engine updates at the daily reboot.
+Writes TPOT_AUTO_UPDATES=DISABLED into .env, tpot settings
+turns them on again." \
     --opt "-n" "No assistant, ask in the terminal (as earlier releases did)" \
     --opt "-M" "Progress marks (@@tpot ...) for the assistant, which runs
 install.sh -s -M with its answers" \
@@ -1702,6 +1706,17 @@ read_password_file() {
   fi
 }
 
+env_set() {
+  # env_set <key> <value>: the line in .env in place, or (a .env without it) at the end on a line of its own
+  if grep -q "^$1=" "${myTPOT_CONF_FILE}";
+    then
+      sed -i "s|^$1=.*|$1=$2|" "${myTPOT_CONF_FILE}"
+    else
+      [ -z "$(tail -c 1 "${myTPOT_CONF_FILE}")" ] || echo >> "${myTPOT_CONF_FILE}"
+      echo "$1=$2" >> "${myTPOT_CONF_FILE}"
+  fi
+}
+
 password_weakness() {
   # empty when the password is fine; cracklib if it is there (not before the
   # packages), else at least 12 characters, as tpot users does
@@ -1770,6 +1785,7 @@ myBECOME_FILE=""
 myCUSTOM_COMPOSE=""
 myCLASSIC=""
 myMARKS=""
+myNO_AUTO_UPDATES=""
 # the phase the assistant is told about (mark_phase), installer.Progress starts with the checks
 myPHASE="checks"
 # Ansible become executable, empty means the Ansible default. See
@@ -1779,7 +1795,7 @@ myANSIBLE_BECOME_EXE=""
 myTPOT_BRANCH="${TPOT_BRANCH}"
 myTPOT_REPO_URL="${TPOT_REPO_URL}"
 
-while getopts ":sb:r:t:u:p:P:B:c:nMh" opt; do
+while getopts ":sb:r:t:u:p:P:B:c:UnMh" opt; do
   case "$opt" in
     s)
       myQST="y"
@@ -1810,6 +1826,9 @@ while getopts ":sb:r:t:u:p:P:B:c:nMh" opt; do
       ;;
     c)
       myCUSTOM_COMPOSE="${OPTARG}"
+      ;;
+    U)
+      myNO_AUTO_UPDATES="y"
       ;;
     n)
       myCLASSIC="y"
@@ -2071,6 +2090,14 @@ fi
 myANSIBLE_TPOT_PLAYBOOK="${HOME}/tpotce/installer/install/tpot.yml"
 echo
 
+# -U before the playbook sets the automatic updates up: they read .env every time they run
+if [ -n "${myNO_AUTO_UPDATES}" ];
+  then
+    fuUI_INFO "Turning the automatic updates off in ${myTPOT_CONF_FILE} (TPOT_AUTO_UPDATES=DISABLED)."
+    env_set TPOT_AUTO_UPDATES DISABLED
+    echo
+fi
+
 # Check type of sudo access. Applies to every distribution - making an
 # exception for one of them breaks unattended installation there.
 if ! sudo_password_required;
@@ -2167,14 +2194,7 @@ if [ "${myTPOT_TYPE}" == "HIVE" ];
     # nothing after this needs the password
     unset myWEB_PW myWEB_PW2
     myWEB_USER_ENC_B64=$(echo -n "${myWEB_USER_ENC}" | base64 -w0)
-    if grep -q "^WEB_USER=" "${myTPOT_CONF_FILE}";
-      then
-        sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" "${myTPOT_CONF_FILE}"
-      else
-        # a .env without the key: the line goes at the end (on a line of its own)
-        [ -z "$(tail -c 1 "${myTPOT_CONF_FILE}")" ] || echo >> "${myTPOT_CONF_FILE}"
-        echo "WEB_USER=${myWEB_USER_ENC_B64}" >> "${myTPOT_CONF_FILE}"
-    fi
+    env_set WEB_USER "${myWEB_USER_ENC_B64}"
     echo
 fi
 

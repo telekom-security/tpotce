@@ -1,0 +1,23 @@
+# T-Pot (installer/install/auto-updates): the Docker Engine stays on the major release T-Pot is
+# tested with. apt and the guarded update of the nightly reboot (tpot-auto-updates docker) take the
+# patches and minor releases within it, a new major release comes with a T-Pot release that changes
+# these lines. The first entry that matches a version counts.
+Package: docker-ce docker-ce-cli docker-ce-rootless-extras
+Pin: version 5:29.*
+Pin-Priority: 500
+
+Package: containerd.io
+Pin: version 2.*
+Pin-Priority: 500
+
+Package: docker-compose-plugin
+Pin: version 5.*
+Pin-Priority: 500
+
+Package: docker-buildx-plugin
+Pin: version 0.*
+Pin-Priority: 500
+
+Package: docker-ce docker-ce-cli docker-ce-rootless-extras containerd.io docker-compose-plugin docker-buildx-plugin
+Pin: origin download.docker.com
+Pin-Priority: -1

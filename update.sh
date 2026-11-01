@@ -4345,6 +4345,50 @@ function fuSSHD_DROPIN () {
 	echo
 }
 
+# The automatic updates on Debian (Raspberry Pi OS 64-bit included, its ID is debian), as the playbook of
+# this release sets them up for a new install (update.sh does not run it): the weekly security updates and
+# the guarded Docker Engine update at the daily reboot. Set up on every update, so a change of the release
+# reaches the host; without a change it only says so. TPOT_AUTO_UPDATES=DISABLED in .env keeps them from
+# running, set up they are anyway: tpot settings turns them on again without an update.
+function fuAUTO_UPDATES () {
+	local myHELPER="$HOME/tpotce/installer/install/auto-updates/tpot-auto-updates"
+	local myRELEASE="${myTPOT_OS_RELEASE:-/etc/os-release}" myOUT="" myRC=0
+	[ -f "${myHELPER}" ] || return 0
+	[ "$(sed -n 's/^ID=//p' "${myRELEASE}" 2>/dev/null | tr -d "\"'")" == "debian" ] || return 0
+	fuTMPDIR
+	myOUT="${myTMPDIR}/auto-updates.log"
+	# under the spinner sudo cannot ask
+	sudo -v
+	fuUI_SPIN "Setting up the automatic updates (Debian) ..." "${myOUT}" \
+	  sudo bash "${myHELPER}" setup "$HOME/tpotce" || myRC=$?
+	cat "${myOUT}" >> "${myLOG}" 2>/dev/null
+	if [ "${myRC}" -eq 130 ];
+	  then
+	    fuDID warn "Stopped while setting up the automatic updates, before the image pull: run update.sh -y again to finish."
+	    exit 130
+	fi
+	if [ "${myRC}" -ne 0 ];
+	  then
+	    fuUI_WARN "The automatic updates could not be set up (see above), T-Pot runs without them."
+	    fuDID warn "The automatic updates are not set up (see ${myLOG}): run update.sh -y again."
+	    echo
+	    return 0
+	fi
+	if ! bash "${myHELPER}" check "$HOME/tpotce";
+	  then
+	    fuUI_OK "The automatic updates are set up, TPOT_AUTO_UPDATES=DISABLED in .env keeps them off."
+	    grep -q "^changed:" "${myOUT}" \
+	      && fuDID info "The automatic updates are set up and off (TPOT_AUTO_UPDATES=DISABLED), tpot settings turns them on."
+	elif grep -q "^changed:" "${myOUT}";
+	  then
+	    fuUI_OK "Security updates on Sundays, Docker Engine updates within its major release at the daily reboot."
+	    fuDID ok "Automatic updates: security updates on Sundays, the Docker Engine within its major release (off: tpot settings, TPOT_AUTO_UPDATES)."
+	  else
+	    fuUI_OK "The automatic updates are up to date."
+	fi
+	echo
+}
+
 # The commit the update would go to, fetched without touching the checkout: the branch of -r /
 # TPOT_REPO_URL from that repository, the one of -b / TPOT_BRANCH from origin, otherwise the
 # upstream of the branch in use, the one `git pull` follows. Prints the ref, rc 1 if there is none.
@@ -4719,6 +4763,7 @@ fi
 fuCHECK_ELASTIC
 fuTPOT_SETUP
 fuSSHD_DROPIN
+fuAUTO_UPDATES
 fuMARK phase pull Pulling the images
 fuUPDATER
 

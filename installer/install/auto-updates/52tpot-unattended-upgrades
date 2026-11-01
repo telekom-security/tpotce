@@ -1,0 +1,10 @@
+// T-Pot (installer/install/auto-updates): the Debian security updates only. The point releases of
+// Debian stable stay with you, the Docker Engine with the guarded update of the nightly reboot
+// (tpot-auto-updates docker). 50unattended-upgrades stays as Debian ships it.
+#clear Unattended-Upgrade::Origins-Pattern;
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+        "origin=Debian,codename=${distro_codename},label=Debian-Security";
+};
+// the nightly reboot of T-Pot puts a new kernel or library to use
+Unattended-Upgrade::Automatic-Reboot "false";

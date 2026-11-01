@@ -1136,8 +1136,12 @@ class SettingsPane(Vertical):
                             title="Not applied" if waiting else "Settings", severity="warning", timeout=12)
         await self.reload()
         await self.app.settings_saved(self, set(saved))
-        only_retention = set(saved) == {"TPOT_ES_RETENTION"}
-        if applied and only_retention:
+        # keys the host reads on its own (restart: false in the schema) need no restart of T-Pot
+        restart = {key for key in saved if key not in self.current.schema or self.current.schema[key].restart}
+        only_retention = restart == {"TPOT_ES_RETENTION"}
+        if not restart:
+            self.app.notify("Saved, T-Pot needs no restart for it.", title="Settings")
+        elif applied and only_retention:
             # nothing else changed and the policy has it already: no restart needed
             self.app.notify(f"Saved, Elasticsearch keeps the events "
                             f"{tcli._retention_shown(saved['TPOT_ES_RETENTION'])}.", title="Settings")

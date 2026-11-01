@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+# T-Pot automatic updates, Debian only:
+#  - the Debian security updates once a week (Sundays, 06:00 - 07:00) through unattended-upgrades,
+#    the nightly reboot of T-Pot puts a new kernel or library to use
+#  - the Docker Engine within the major release T-Pot pins (tpot-docker.pref), in the nightly reboot
+#    of Sunday while T-Pot is stopped: checked afterwards, put back where Docker does not work
+# TPOT_AUTO_UPDATES=DISABLED in ~/tpotce/.env turns both off (tpot env, the Settings page, install.sh -U).
+#
+#   tpot-auto-updates setup  <tpotce>          install or refresh all of it, as root (playbook, update.sh)
+#   tpot-auto-updates check  <tpotce>          rc 0 where .env allows the updates (ExecCondition)
+#   tpot-auto-updates docker <tpotce> [--now]  the guarded Docker Engine update (cron job T-Pot Daily Reboot)
+#
+# The log: journalctl -t tpot-auto-updates
+
+myNAME="tpot-auto-updates"
+# the tests set it to a folder of their own, the paths below are in it
+myROOT="${myTPOT_AU_ROOT:-}"
+myBIN="/usr/local/sbin/tpot-auto-updates"
+mySTATE="${myROOT}/var/lib/tpot-auto-updates"
+myCRON_MARK="#Ansible: T-Pot Daily Reboot"
+myDOCKER_PACKAGES=(docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+                   docker-ce-rootless-extras)
+# no question, the configuration files keep your changes
+myAPT_OPTIONS=(-q -y -o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef
+               -o Dpkg::Options::=--force-confold)
+
+fuUSAGE () {
+  echo "Usage: ${myNAME} setup|check <tpotce folder>" >&2
+  echo "       ${myNAME} docker <tpotce folder> [--now]" >&2
+  exit 2
+}
+
+# into the journal, and onto the terminal of a run by hand
+fuLOG () {
+  logger -t "${myNAME}" -- "$*" 2>/dev/null
+  echo "$*"
+}
+
+# the output of a command into the journal, its rc stays
+fuRUN () {
+  "$@" 2>&1 | logger -t "${myNAME}" 2>/dev/null
+  return "${PIPESTATUS[0]}"
+}
+
+fuDEBIAN () {
+  [ "$(sed -n 's/^ID=//p' "${myROOT}/etc/os-release" 2>/dev/null | tr -d "\"'")" == "debian" ]
+}
+
+# fuENV_VALUE <.env> <key>: the value, without quotes and a comment after it
+fuENV_VALUE () {
+  sed -n "s/^[[:space:]]*$2[[:space:]]*=//p" "$1" 2>/dev/null | tail -n 1 | sed 's/[[:space:]]#.*$//' \
+    | tr -d " \t\r\"'"
+}
+
+# rc 1 only for TPOT_AUTO_UPDATES=DISABLED: an empty, missing or unknown value keeps the security updates
+fuENABLED () {
+  [ "$(fuENV_VALUE "$1/.env" TPOT_AUTO_UPDATES | tr '[:lower:]' '[:upper:]')" != "DISABLED" ]
+}
+
+# fuVERSION <package>: the installed version, rc 1 if it is not installed
+fuVERSION () {
+  local myLINE=""
+  myLINE=$(dpkg-query -W -f='${db:Status-Abbrev} ${Version}' "$1" 2>/dev/null) || return 1
+  case "${myLINE}" in
+    ii*) echo "${myLINE##* }" ;;
+    *) return 1 ;;
+  esac
+}
+
+# fuPUT <file> <target> <mode>: the file in place where it differs, says so
+fuPUT () {
+  if [ -f "$2" ] && cmp -s "$1" "$2"; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$2")" && install -m "$3" "$1" "$2" || return 1
+  echo "changed: $2"
+}
+
+# The step of the Docker Engine update in the cron job of the nightly reboot, right before the reboot.
+# An earlier step (another tpotce folder) is replaced, everything else in the crontab stays.
+fuCRON () {
+  local myOLD="" myNEW=""
+  myOLD=$(crontab -u root -l 2>/dev/null) || return 0
+  grep -qxF "${myCRON_MARK}" <<< "${myOLD}" || return 0
+  myNEW=$(awk -v mark="${myCRON_MARK}" -v step="${myBIN} docker $1; " '
+    after {
+      gsub(/\/usr\/local\/sbin\/tpot-auto-updates docker [^;]*; */, "")
+      i = index($0, "/usr/sbin/shutdown -r")
+      if (i) $0 = substr($0, 1, i - 1) step substr($0, i)
+    }
+    { after = ($0 == mark); print }' <<< "${myOLD}")
+  [ "${myNEW}" == "${myOLD}" ] && return 0
+  printf '%s\n' "${myNEW}" | crontab -u root - || return 1
+  echo "changed: the cron job T-Pot Daily Reboot"
+}
+
+fuSETUP () {
+  local myDIR="$1" mySRC="$1/installer/install/auto-updates" myTMP="" myRC=0
+  if ! fuDEBIAN; then
+    echo "Not Debian: the automatic updates are not set up."
+    return 0
+  fi
+  if [ -z "${myROOT}" ] && [ "$(id -u)" -ne 0 ]; then
+    echo "${myNAME} setup has to run as root." >&2
+    return 1
+  fi
+  [ -d "${mySRC}" ] || { echo "${mySRC} is missing." >&2; return 1; }
+  export DEBIAN_FRONTEND=noninteractive
+  if ! fuVERSION unattended-upgrades >/dev/null; then
+    apt-get -q -o DPkg::Lock::Timeout=600 update
+    if ! apt-get "${myAPT_OPTIONS[@]}" install --no-install-recommends unattended-upgrades; then
+      echo "unattended-upgrades could not be installed." >&2
+      return 1
+    fi
+    # the uninstall removes it again, it was not there before T-Pot
+    mkdir -p "${mySTATE}" && : > "${mySTATE}/unattended-upgrades"
+    echo "changed: unattended-upgrades installed"
+  fi
+  fuPUT "${mySRC}/tpot-auto-updates" "${myROOT}${myBIN}" 0755 || myRC=1
+  fuPUT "${mySRC}/21tpot-auto-upgrades" "${myROOT}/etc/apt/apt.conf.d/21tpot-auto-upgrades" 0644 || myRC=1
+  fuPUT "${mySRC}/52tpot-unattended-upgrades" "${myROOT}/etc/apt/apt.conf.d/52tpot-unattended-upgrades" 0644 \
+    || myRC=1
+  fuPUT "${mySRC}/tpot-docker.pref" "${myROOT}/etc/apt/preferences.d/tpot-docker.pref" 0644 || myRC=1
+  fuPUT "${mySRC}/apt-daily-upgrade.timer.conf" "${myROOT}/etc/systemd/system/apt-daily-upgrade.timer.d/tpot.conf" \
+    0644 || myRC=1
+  myTMP=$(mktemp) || return 1
+  printf '%s\n' "# T-Pot: TPOT_AUTO_UPDATES=DISABLED in ${myDIR}/.env skips the security updates" \
+                "[Service]" "ExecCondition=${myBIN} check ${myDIR}" > "${myTMP}"
+  fuPUT "${myTMP}" "${myROOT}/etc/systemd/system/apt-daily-upgrade.service.d/tpot.conf" 0644 || myRC=1
+  rm -f "${myTMP}"
+  systemctl daemon-reload || myRC=1
+  # the timer takes its new calendar with a restart
+  if systemctl is-enabled --quiet apt-daily-upgrade.timer; then
+    systemctl restart apt-daily-upgrade.timer || myRC=1
+  fi
+  fuCRON "${myDIR}" || myRC=1
+  return "${myRC}"
+}
+
+# Docker works: the daemon, compose and a container of the tpotinit image with a published port
+# (runc, the network and the firewall rules), the image is not pulled
+fuHEALTHY () {
+  local myI=0 myIMAGE=""
+  # a start limit hit earlier does not count against this check
+  systemctl reset-failed docker.service docker.socket containerd.service >/dev/null 2>&1
+  systemctl start docker.service >/dev/null 2>&1
+  until systemctl is-active --quiet docker.service && timeout 60 docker info >/dev/null 2>&1; do
+    myI=$((myI + 1))
+    if [ "${myI}" -gt 30 ]; then
+      fuLOG "docker.service is not up: $(systemctl is-active docker.service)"
+      return 1
+    fi
+    sleep 2
+  done
+  if ! timeout 60 docker compose version >/dev/null 2>&1; then
+    fuLOG "docker compose does not run."
+    return 1
+  fi
+  myIMAGE="$(fuENV_VALUE "$1/.env" TPOT_REPO)/tpotinit:$(fuENV_VALUE "$1/.env" TPOT_VERSION)"
+  if ! timeout 60 docker image inspect "${myIMAGE}" >/dev/null 2>&1; then
+    fuLOG "No local ${myIMAGE}, only the daemon and compose were checked."
+    return 0
+  fi
+  if ! fuRUN timeout 120 docker run --rm --pull never -p 127.0.0.1::64299 --entrypoint true "${myIMAGE}"; then
+    fuLOG "A container of ${myIMAGE} does not start."
+    return 1
+  fi
+}
+
+fuDOCKER () {
+  local myDIR="$1" myNOW="$2" myPKG="" myOLD="" myNEW="" mySET="" myWORKED=""
+  local myUPGRADE=() myBACK=()
+  fuDEBIAN || return 0
+  if ! fuENABLED "${myDIR}"; then
+    fuLOG "TPOT_AUTO_UPDATES is DISABLED in ${myDIR}/.env, the Docker Engine is not updated."
+    return 0
+  fi
+  # the nightly reboot runs every day, the update once a week
+  [ -n "${myNOW}" ] || [ "$(date +%u)" == "7" ] || return 0
+  if systemctl is-active --quiet tpot.service; then
+    fuLOG "tpot.service is running, the Docker Engine is not updated."
+    return 0
+  fi
+  mkdir -p "${mySTATE}"
+  exec 9> "${mySTATE}/lock"
+  if ! flock -n 9; then
+    fuLOG "Another ${myNAME} runs, this one ends."
+    return 0
+  fi
+  export DEBIAN_FRONTEND=noninteractive
+  if ! fuRUN apt-get -q -o DPkg::Lock::Timeout=600 update; then
+    fuLOG "apt-get update failed, the Docker Engine is not updated."
+    return 0
+  fi
+  if [ -n "$(dpkg --audit 2>/dev/null)" ]; then
+    fuLOG "dpkg has unfinished packages, finishing them first (dpkg --configure -a)."
+    if ! fuRUN dpkg --configure -a; then
+      fuLOG "dpkg --configure -a failed, the Docker Engine is not updated."
+      return 0
+    fi
+  fi
+  for myPKG in "${myDOCKER_PACKAGES[@]}"; do
+    myOLD=$(fuVERSION "${myPKG}") || continue
+    myNEW=$(apt-cache policy "${myPKG}" 2>/dev/null | awk '$1 == "Candidate:" { print $2 }')
+    case "${myNEW}" in
+      ""|"(none)") continue ;;
+    esac
+    dpkg --compare-versions "${myNEW}" gt "${myOLD}" || continue
+    myUPGRADE+=("${myPKG}=${myNEW}")
+    myBACK+=("${myPKG}=${myOLD}")
+  done
+  if [ "${#myUPGRADE[@]}" -eq 0 ]; then
+    fuLOG "The Docker Engine is up to date."
+    return 0
+  fi
+  mySET="${myUPGRADE[*]}"
+  if [ "$(cat "${mySTATE}/docker-failed" 2>/dev/null)" == "${mySET}" ]; then
+    fuLOG "Not updating the Docker Engine to ${mySET} again, it did not work last time. Newer packages are tried."
+    return 0
+  fi
+  fuHEALTHY "${myDIR}" && myWORKED="1"
+  fuLOG "Updating the Docker Engine: ${mySET} (from ${myBACK[*]})"
+  if fuRUN apt-get "${myAPT_OPTIONS[@]}" install --no-install-recommends "${myUPGRADE[@]}" && fuHEALTHY "${myDIR}"; then
+    rm -f "${mySTATE}/docker-failed"
+    fuLOG "The Docker Engine is updated and works."
+    return 0
+  fi
+  if [ -z "${myWORKED}" ]; then
+    fuLOG "The Docker Engine does not work, it did not before the update either: nothing to go back to."
+    return 0
+  fi
+  echo "${mySET}" > "${mySTATE}/docker-failed"
+  fuLOG "The Docker Engine does not work after the update, going back to ${myBACK[*]}"
+  systemctl reset-failed docker.service docker.socket containerd.service >/dev/null 2>&1
+  # the versions are explicit, apt installs them outside of the pin as well (after a new major release in it)
+  if fuRUN apt-get "${myAPT_OPTIONS[@]}" install --no-install-recommends --allow-downgrades "${myBACK[@]}" \
+       && fuHEALTHY "${myDIR}"; then
+    fuLOG "The Docker Engine is back on ${myBACK[*]} and works."
+  else
+    fuLOG "ERROR: The Docker Engine does not work, not even on ${myBACK[*]}. T-Pot does not start until it does, see journalctl -u docker -t ${myNAME}"
+  fi
+  return 0
+}
+
+fuMAIN () {
+  [ -n "$2" ] || fuUSAGE
+  case "$1" in
+    setup) fuSETUP "${2%/}" ;;
+    check) fuENABLED "${2%/}" ;;
+    docker)
+      case "$3" in
+        "") fuDOCKER "${2%/}" "" ;;
+        --now) fuDOCKER "${2%/}" "1" ;;
+        *) fuUSAGE ;;
+      esac ;;
+    *) fuUSAGE ;;
+  esac
+}
+
+# sourced by the tests, run otherwise
+if [ "${BASH_SOURCE[0]}" == "$0" ]; then
+  fuMAIN "$@"
+fi

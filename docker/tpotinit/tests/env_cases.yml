@@ -33,8 +33,14 @@ cases:
     set: {TPOT_TYPE: MOBILE, WEB_USER: ""}
     errors: [TPOT_TYPE]
   - name: toggles only take their own values
-    set: {TPOT_PERSISTENCE: "true", TPOT_BLACKHOLE: enabled, TPOT_ATTACKMAP_TEXT: ""}
-    errors: [TPOT_PERSISTENCE, TPOT_BLACKHOLE, TPOT_ATTACKMAP_TEXT]
+    set: {TPOT_PERSISTENCE: "true", TPOT_BLACKHOLE: enabled, TPOT_ATTACKMAP_TEXT: "", TPOT_AUTO_UPDATES: disabled}
+    errors: [TPOT_PERSISTENCE, TPOT_BLACKHOLE, TPOT_ATTACKMAP_TEXT, TPOT_AUTO_UPDATES]
+    warnings: [LS_WEB_USER]
+  - name: automatic updates empty, an .env from before them
+    set: {TPOT_AUTO_UPDATES: ""}
+    warnings: [LS_WEB_USER]
+  - name: automatic updates off
+    set: {TPOT_AUTO_UPDATES: DISABLED}
     warnings: [LS_WEB_USER]
   - name: persistence cycles not a number
     set: {TPOT_PERSISTENCE_CYCLES: abc}
