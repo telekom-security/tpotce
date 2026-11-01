@@ -412,7 +412,7 @@ if ! grep -qE '^TPOT_TYPE=["'\'']?HIVE(["'\''[:space:]#]|$)' "${myENV_FILE}";
 fi
 
 # Check if running on a supported distribution (the ones of install.sh)
-mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
+mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
 mySUPPORTED=""
 for myNAME in "${mySUPPORTED_DISTRIBUTIONS[@]}"; do

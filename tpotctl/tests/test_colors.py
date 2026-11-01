@@ -531,7 +531,7 @@ class SshdTest(unittest.TestCase):
         privsep = [i for i, t in enumerate(tasks) if (t.get("file") or {}).get("path") == "/run/sshd"]
         self.assertEqual(len(checks), 1)
         self.assertTrue(found[0] < privsep[0] < checks[0], (found, privsep, checks))
-        for name in ("AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"):
+        for name in ("AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"):
             self.assertIn(f'"{name}"', tasks[found[0]]["when"], name)
             self.assertIn(f'"{name}"', tasks[checks[0]]["when"], name)
 

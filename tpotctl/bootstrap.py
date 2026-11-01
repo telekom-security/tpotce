@@ -171,7 +171,7 @@ def os_release_ids(path: str = "/etc/os-release"):
     return ids
 
 
-APT_IDS = {"debian", "ubuntu", "raspbian"}
+APT_IDS = {"debian", "ubuntu"}
 
 
 def linux_hint(ids, package: str = "python3-venv") -> str:

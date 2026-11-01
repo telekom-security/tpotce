@@ -18,7 +18,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -31,19 +30,17 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
 
-    - name: Add python package (Debian, Raspbian, Ubuntu)
+    - name: Add python package (Debian, Ubuntu)
       raw: |
         apt update
         apt -y install python3
-      when: my_distribution.stdout | trim in ["Debian", "Raspbian", "Ubuntu"] and my_python3.stdout | trim == ""
+      when: my_distribution.stdout | trim in ["Debian", "Ubuntu"] and my_python3.stdout | trim == ""
       tags:
         - "Debian"
-        - "Raspbian"
         - "Ubuntu"
 
     - name: Add python package (Alma, Fedora, RHEL, Rocky)
@@ -77,7 +74,6 @@
     - "Debian"
     - "Fedora"
     - "openSUSE Tumbleweed"
-    - "Raspbian"
     - "RedHat"
     - "Rocky"
     - "Ubuntu"
@@ -97,7 +93,7 @@
 
     - name: Check if supported distribution (All)
       assert:
-        that: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+        that: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
         fail_msg: "This installer does not accept {{ ansible_facts.distribution }}. See the T-Pot README for host requirements and support tiers."
         success_msg: "T-Pot will now install on {{ ansible_facts.distribution }}."
 
@@ -114,7 +110,6 @@
           AlmaLinux: "10"
           Debian: "13"
           Fedora: "44"
-          Raspbian: "13"
           RedHat: "10"
           Rocky: "10"
           Ubuntu: "26.04"
@@ -129,7 +124,7 @@
     - name: Warn about best-effort distribution (All)
       debug:
         msg: "WARNING: {{ ansible_facts.distribution }} is best effort only: no equal test coverage or guaranteed distribution-specific fixes."
-      when: ansible_facts.distribution not in ["Debian", "Raspbian"]
+      when: ansible_facts.distribution != "Debian"
 
     - name: Count default routes (All)
       ansible.builtin.shell: ip route show default | wc -l
@@ -159,31 +154,29 @@
   tasks:
     - name: Syncing clocks (All)
       shell: "hwclock --hctosys"
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       ignore_errors: true
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
 
-    - name: Install cron without recommends (Debian, Raspbian, Ubuntu)
+    - name: Install cron without recommends (Debian, Ubuntu)
       ansible.builtin.apt:
         name: cron
         state: present
         install_recommends: no
         update_cache: yes
-      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
+      when: ansible_facts.distribution in ["Debian", "Ubuntu"]
       tags:
         - "Debian"
-        - "Raspbian"
         - "Ubuntu"
 
-    - name: Install recommended packages (Debian, Raspbian, Ubuntu)
+    - name: Install recommended packages (Debian, Ubuntu)
       package:
         name:
           - apache2-utils
@@ -205,10 +198,9 @@
           - wget
         state: latest
         update_cache: yes
-      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
+      when: ansible_facts.distribution in ["Debian", "Ubuntu"]
       tags:
         - "Debian"
-        - "Raspbian"
         - "Ubuntu"
 
     - name: Install grc from remote repo (AlmaLinux, Rocky)
@@ -339,7 +331,7 @@
   become: true
 
   tasks:
-    - name: Remove distribution based Docker packages and podman-docker (AlmaLinux, Debian, Fedora, Raspbian, RHEL, Rocky, Ubuntu)
+    - name: Remove distribution based Docker packages and podman-docker (AlmaLinux, Debian, Fedora, RHEL, Rocky, Ubuntu)
       package:
         name:
           - docker
@@ -351,29 +343,27 @@
           - podman
         state: absent
         update_cache: yes
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
 
-    - name: Remove the one line Docker Engine repository file (Debian, Raspbian, Ubuntu)
+    - name: Remove the one line Docker Engine repository file (Debian, Ubuntu)
       # installations that predate deb822_repository have docker.list, apt would
       # report "configured multiple times" next to the docker.sources below
       file:
         path: /etc/apt/sources.list.d/docker.list
         state: absent
-      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
+      when: ansible_facts.distribution in ["Debian", "Ubuntu"]
       tags:
         - "Debian"
-        - "Raspbian"
         - "Ubuntu"
 
-    - name: Add Docker Engine repository (Debian, Raspbian, Ubuntu)
+    - name: Add Docker Engine repository (Debian, Ubuntu)
       # deb822_repository fetches the key itself, detects the ASCII armor and
       # stores it as /etc/apt/keyrings/docker.asc, so the separate keyring
       # directory, download and `gpg --dearmor` steps are gone. apt_repository is
@@ -388,20 +378,18 @@
         signed_by: "https://download.docker.com/linux/{{ ansible_facts.distribution | lower }}/gpg"
         state: present
         enabled: true
-      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
+      when: ansible_facts.distribution in ["Debian", "Ubuntu"]
       tags:
         - "Debian"
-        - "Raspbian"
         - "Ubuntu"
 
-    - name: Update apt cache (Debian, Raspbian, Ubuntu)
+    - name: Update apt cache (Debian, Ubuntu)
       # deb822_repository has no update_cache of its own
       ansible.builtin.apt:
         update_cache: yes
-      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
+      when: ansible_facts.distribution in ["Debian", "Ubuntu"]
       tags:
         - "Debian"
-        - "Raspbian"
         - "Ubuntu"
 
     - name: Add Docker repository (Fedora)
@@ -492,7 +480,7 @@
       tags:
         - "openSUSE Tumbleweed"
 
-    - name: Install Docker Engine packages (AlmaLinux, Debian, Fedora, Raspbian, RHEL, Rocky, Ubuntu)
+    - name: Install Docker Engine packages (AlmaLinux, Debian, Fedora, RHEL, Rocky, Ubuntu)
       package:
         name:
           - docker-ce 
@@ -502,12 +490,11 @@
           - docker-compose-plugin 
         state: latest
         update_cache: yes
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -517,13 +504,12 @@
         name: docker
         state: stopped
         enabled: false
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -543,13 +529,12 @@
         name: tpot
         gid: 2000
         state: present
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -562,13 +547,12 @@
         shell: /bin/false
         home: /nonexistent
         group: tpot
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -579,13 +563,12 @@
         line: "vm.max_map_count=262144"
         state: present
         create: yes
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -598,13 +581,12 @@
         line: "net.ipv4.ip_forward=1"
         state: present
         create: yes
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -613,13 +595,12 @@
       # Docker is started further down in this run, the value has to be live by
       # then and not only after the reboot
       command: sysctl -w net.ipv4.ip_forward=1
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -655,13 +636,12 @@
           - "sshd_config"
           - "*.conf"
       register: my_sshd_config
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -672,28 +652,26 @@
         regexp: '^(Port (?!64295$)[0-9]+)'
         replace: '# \1'
       loop: "{{ my_sshd_config.files | default([]) | map(attribute='path') | sort }}"
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
 
-    - name: Change SSH Port to 64295 (AlmaLinux, Debian, Fedora, Raspbian, RHEL, Rocky, Ubuntu)
+    - name: Change SSH Port to 64295 (AlmaLinux, Debian, Fedora, RHEL, Rocky, Ubuntu)
       lineinfile:
         path: /etc/ssh/sshd_config
         line: "Port 64295"
         insertafter: EOF
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -712,13 +690,12 @@
       file:
         path: /etc/ssh/sshd_config.d
         state: directory
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -734,40 +711,37 @@
         owner: root
         group: root
         mode: "0644"
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
 
-    - name: Give sshd its privilege separation directory for the check (Debian, Raspbian, Ubuntu)
+    - name: Give sshd its privilege separation directory for the check (Debian, Ubuntu)
       # only a running ssh.service has /run/sshd there; Ubuntu stops ssh.socket above, Raspberry Pi OS
       # ships with SSH off, and sshd -t stops at "Missing privilege separation directory" without it
       file:
         path: /run/sshd
         state: directory
         mode: "0755"
-      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
+      when: ansible_facts.distribution in ["Debian", "Ubuntu"]
       tags:
         - "Debian"
-        - "Raspbian"
         - "Ubuntu"
 
     - name: Check the sshd configuration (All)
       command: /usr/sbin/sshd -t
       changed_when: false
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -878,13 +852,12 @@
       register: my_xt_addrtype
       changed_when: false
       failed_when: false
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -902,7 +875,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -921,7 +893,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -939,7 +910,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -954,7 +924,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -969,7 +938,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -990,7 +958,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1037,7 +1004,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1050,7 +1016,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1065,7 +1030,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1092,7 +1056,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1117,7 +1080,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1142,7 +1104,6 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1186,13 +1147,12 @@
         name: docker
         state: restarted
         enabled: true
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1202,13 +1162,12 @@
         name: "{{ 'ssh' if ansible_facts.distribution in ['Ubuntu'] else 'sshd' }}"
         state: restarted
         enabled: true
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1226,7 +1185,6 @@
     - "Debian"
     - "Fedora"
     - "openSUSE Tumbleweed"
-    - "Raspbian"
     - "RedHat"
     - "Rocky"
     - "Ubuntu"
@@ -1235,7 +1193,7 @@
     - name: Check for non-root user id (All)
       debug:
         msg: "Detected user: '{{ ansible_facts.user_id }}'"
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       failed_when: ansible_facts.user_id == "root"
 
     - name: Add aliases
@@ -1250,13 +1208,12 @@
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
         insertafter: EOF
         state: present
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
-        - "Raspbian"
         - "RedHat"
         - "Rocky"
         - "Ubuntu"
@@ -1264,7 +1221,7 @@
     - name: Report the T-Pot repository and branch (All)
       debug:
         msg: "Cloning {{ tpot_repo | default('https://github.com/telekom-security/tpotce', true) }} at {{ tpot_branch | default('master', true) }}."
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
 
     - name: Clone / Update T-Pot repository (All)
       # install.sh passes both as extra vars, a standalone playbook run without
@@ -1275,13 +1232,13 @@
         version: "{{ tpot_branch | default('master', true) }}"
         clone: yes
         update: no
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
 
     - name: Look for an existing /usr/local/bin/tpot (All)
       stat:
         path: /usr/local/bin/tpot
       register: my_tpot_link
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
 
     - name: Link the tpot command (All)
       # a file of your own at that place is left alone, only a link is (re)pointed
@@ -1290,7 +1247,7 @@
         src: '{{ ansible_facts.user_dir }}/tpotce/tpot'
         dest: /usr/local/bin/tpot
         state: link
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"] and (not my_tpot_link.stat.exists or my_tpot_link.stat.islnk)
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"] and (not my_tpot_link.stat.exists or my_tpot_link.stat.islnk)
 
     - name: Set up the Python packages of the T-Pot Manager (All)
       # a venv in ~/.local/share/tpotce, needs pypi.org once; tpot sets it up on first
@@ -1299,7 +1256,7 @@
       register: my_tpot_setup
       changed_when: false
       failed_when: false
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
 
     - name: Warn if the T-Pot Manager could not set up its Python packages (All)
       debug:
@@ -1314,7 +1271,7 @@
           - docker
           - tpot
         append: yes
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
 
 ########################################
 # T-Pot - Install service and cron job #
@@ -1329,7 +1286,6 @@
     - "Debian"
     - "Fedora"
     - "openSUSE Tumbleweed"
-    - "Raspbian"
     - "RedHat"
     - "Rocky"
     - "Ubuntu"
@@ -1344,7 +1300,7 @@
         group: root
         mode: '0755'
       notify: Reload systemd and enable service
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
 
   handlers:
     - name: Reload systemd and enable service
@@ -1354,7 +1310,7 @@
         daemon_reload: yes
         state: stopped
         enabled: yes
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
 
 - name: T-Pot - Setup a randomized daily reboot
   hosts: all
@@ -1366,7 +1322,6 @@
     - "Debian"
     - "Fedora"
     - "openSUSE Tumbleweed"
-    - "Raspbian"
     - "RedHat"
     - "Rocky"
     - "Ubuntu"
@@ -1375,8 +1330,8 @@
     random_minute: "{{ range(0, 60) | random }}"
     random_hour: "{{ range(0, 5) | random }}" # We want the reboot randomly happen at night
     # the guarded Docker Engine update of tpot-auto-updates (Sundays) while T-Pot is stopped, where its
-    # play above installed it: Debian, Raspberry Pi OS 64-bit included (Ansible says Debian for a 32-bit
-    # Raspbian as well, the helper is not there). tpot-auto-updates setup writes the same step into a job.
+    # play above installed it: Debian, Raspberry Pi OS (64-bit) included, the other distributions lack the
+    # helper. tpot-auto-updates setup writes the same step into a job.
     auto_updates_step: "{{ '/usr/local/sbin/tpot-auto-updates docker ' ~ ansible_facts.user_dir ~ '/tpotce; ' if tpot_auto_updates_helper.stat.exists else '' }}"
 
   tasks:
@@ -1394,4 +1349,4 @@
         hour: "{{ random_hour }}"
         job: "bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; {{ auto_updates_step }}/usr/sbin/shutdown -r +1 \"T-Pot Daily Reboot\"'"
         state: present
-      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]

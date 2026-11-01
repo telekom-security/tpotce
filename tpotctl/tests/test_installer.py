@@ -136,7 +136,8 @@ class ScriptsInSyncTest(unittest.TestCase):
 OS_RELEASES = {
     "debian": ('NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="13"\n', "ok"),
     "debian point release": ('NAME="Debian GNU/Linux"\nVERSION_ID="13.7"\n', "ok"),
-    "raspbian": ('NAME="Raspbian GNU/Linux"\nID=raspbian\nVERSION_ID="13"\n', "ok"),
+    # 32-bit Raspberry Pi OS (armhf), the 64-bit one says Debian GNU/Linux (the next one)
+    "raspbian": ('NAME="Raspbian GNU/Linux"\nID=raspbian\nVERSION_ID="13"\n', "fail"),
     "pi with debian identity": ('NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="13"\n'
                                'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\n', "ok"),
     "old debian": ('NAME="Debian GNU/Linux"\nVERSION_ID="12"\n', "fail"),
@@ -173,12 +174,20 @@ class SupportPolicyPlaybookTest(unittest.TestCase):
         self.assertLess(warning, names.index("Count default routes (All)"))
         self.assertEqual(tasks[policy]["debug"]["msg"], SUPPORT_POLICY)
         self.assertNotIn("when", tasks[policy])
-        self.assertEqual(tasks[warning]["when"], 'ansible_facts.distribution not in ["Debian", "Raspbian"]')
+        self.assertEqual(tasks[warning]["when"], 'ansible_facts.distribution != "Debian"')
         self.assertEqual(tasks[warning]["debug"]["msg"],
                          "WARNING: {{ ansible_facts.distribution }} is " + BEST_EFFORT + ".")
         self.assertEqual(set(plays[1]["tags"]),
-                         {"AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat",
-                          "Rocky", "Ubuntu"})
+                         {"AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"})
+
+    def test_no_32bit_raspbian(self):
+        """Raspbian GNU/Linux is the 32-bit Raspberry Pi OS: no tag, no distribution, no version of it."""
+        for parts in (("install", "tpot.yml"), ("remove", "tpot.yml")):
+            with open(os.path.join(REPO_DIR, "installer", *parts), encoding="utf-8") as handle:
+                self.assertNotIn("Raspbian", handle.read(), parts)
+        for script in ("install.sh", "uninstall.sh", "deploy.sh"):
+            with open(os.path.join(REPO_DIR, script), encoding="utf-8") as handle:
+                self.assertNotIn('"Raspbian GNU/Linux"', handle.read(), script)
 
 
 @unittest.skipUnless(yaml, "PyYAML is not installed")
@@ -201,7 +210,7 @@ class SshColortermTest(unittest.TestCase):
         task = found[0]
         # LC_TERMINAL is how iTerm2 says who it is (tpotctl/tests/test_colors.py SshdTest has the rest)
         self.assertEqual(task["lineinfile"]["line"], "AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION")
-        for name in ("AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"):
+        for name in ("AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"):
             self.assertTrue(f'"{name}"' in task["when"], name)
         tasks = self.tasks("installer", "install", "tpot.yml")
         checks = [i for i, t in enumerate(tasks) if str(t.get("command", "")) == "/usr/sbin/sshd -t"]
@@ -210,7 +219,7 @@ class SshColortermTest(unittest.TestCase):
         # Debian family (Ubuntu stops ssh.socket before, Raspberry Pi OS ships with SSH off)
         privsep = [i for i, t in enumerate(tasks) if (t.get("file") or {}).get("path") == "/run/sshd"]
         self.assertTrue(privsep and privsep[0] < checks[0], privsep)
-        for name in ("Debian", "Raspbian", "Ubuntu"):
+        for name in ("Debian", "Ubuntu"):
             self.assertTrue(f'"{name}"' in tasks[privsep[0]]["when"], name)
         directory = [t for t in tasks if (t.get("file") or {}).get("path") == "/etc/ssh/sshd_config.d"]
         self.assertEqual(len(directory), 1)
@@ -258,6 +267,22 @@ class ChecksTest(unittest.TestCase):
     def test_root(self):
         self.assertEqual(installer.check_root(0).state, "fail")
         self.assertEqual(installer.check_root(1000).state, "ok")
+
+    def test_architecture_64bit_only(self):
+        """As install.sh: the userland counts, a 32-bit Raspberry Pi OS on a Pi 4/5 boots an aarch64 kernel."""
+        for machine, bits, state in (("x86_64", 64, "ok"), ("aarch64", 64, "ok"), ("arm64", 64, "ok"),
+                                     ("aarch64", 32, "fail"), ("armv7l", 32, "fail"), ("i686", 32, "fail"),
+                                     ("x86_64", 32, "fail"), ("", 64, "fail")):
+            with self.subTest(machine=machine, bits=bits):
+                check = installer.check_arch(machine, bits)
+                self.assertEqual((check.title, check.state), ("Architecture", state))
+                if state == "fail":
+                    self.assertIn("64-bit", check.detail)
+                    self.assertIn("Raspberry Pi OS Lite (64-bit)", check.detail)
+        self.assertEqual(installer.check_arch().state, "ok")       # the test host
+        with open(INSTALL_SH, encoding="utf-8") as handle:
+            line = re.search(r'myMACHINE\}" =~ \^\(([^)]+)\)\$', handle.read()).group(1)
+        self.assertEqual(tuple(line.split("|")), installer.MACHINES_64)
 
     def test_ports_ignore_the_resolved_stub(self):
         stub = "UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:*\nUNCONN 0 0 127.0.0.54:53 0.0.0.0:*\n"

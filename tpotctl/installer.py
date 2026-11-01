@@ -9,8 +9,10 @@ the assistant ends.
 
 import contextlib
 import os
+import platform
 import re
 import shutil
+import struct
 import subprocess
 import tempfile
 import urllib.error
@@ -34,7 +36,6 @@ SUPPORTED = {
     "Debian GNU/Linux": "13",
     "Fedora Linux": "44",
     "openSUSE Tumbleweed": "",
-    "Raspbian GNU/Linux": "13",
     "Red Hat Enterprise Linux": "10",
     "Rocky Linux": "10",
     "Ubuntu": "26.04",
@@ -135,10 +136,25 @@ def check_distro(release: Dict[str, str]) -> Check:
         return Check("Distribution", "fail", f"The installer requires {name} {wanted}, this system runs {current}")
     policy = "Debian is the preferred T-Pot platform. Raspberry Pi OS remains supported for T-Pot Mobile."
     detail = f"{name} {version}".strip()
-    if name not in ("Debian GNU/Linux", "Raspbian GNU/Linux"):
+    if name != "Debian GNU/Linux":
         return Check("Distribution", "warn", f"{detail}; best effort only: no equal test coverage or guaranteed "
                      f"distribution-specific fixes. {policy}")
     return Check("Distribution", "ok", f"{detail}; {policy}")
+
+
+# as install.sh: the images of T-Pot are amd64 and arm64 only
+MACHINES_64 = ("x86_64", "amd64", "aarch64", "arm64")
+
+
+def check_arch(machine: Optional[str] = None, bits: Optional[int] = None) -> Check:
+    """A 64-bit system. The userland counts, not the kernel: a 32-bit Raspberry Pi OS boots a 64-bit
+    kernel on newer Pis (machine aarch64), the Python running here is 32-bit there."""
+    machine = platform.machine() if machine is None else machine
+    bits = struct.calcsize("P") * 8 if bits is None else bits
+    if machine in MACHINES_64 and bits == 64:
+        return Check("Architecture", "ok", machine)
+    return Check("Architecture", "fail", f"{machine or 'unknown'} with a {bits}-bit userland: T-Pot needs a 64-bit "
+                 "system (x86-64 or arm64). For T-Pot Mobile use Raspberry Pi OS Lite (64-bit)")
 
 
 def check_root(euid: Optional[int] = None) -> Check:
@@ -256,7 +272,7 @@ def installed() -> bool:
 
 
 def run_checks(run: Callable = subprocess.run, opener: Callable = urllib.request.urlopen) -> List[Check]:
-    checks = [check_distro(os_release()), check_root()]
+    checks = [check_arch(), check_distro(os_release()), check_root()]
     if installed():
         checks.append(Check("T-Pot", "fail", "is installed already, use tpot update"))
     checks.append(check_sudo(sudo_mode(run), is_sudo_rs(run) if shutil.which("sudo") else False))

@@ -495,7 +495,7 @@ Starting with T-Pot 24.04.2, the host support tiers are:
 - **Supported: Raspberry Pi OS Lite (64-bit, Debian 13 / Trixie)** for T-Pot Mobile. It is not part of the best-effort group.
 - **Best effort: AlmaLinux, Fedora, openSUSE Tumbleweed, Red Hat Enterprise Linux, Rocky Linux and Ubuntu**, at the versions listed below. Their installation paths remain available, but there is no equal test coverage or commitment to fix distribution-specific problems. Both the installer and the T-Pot Manager display a warning, not a new installation block.
 
-The version checks still apply to every tier; best effort does not make an unlisted distribution or OS version acceptable to the installer. Whether the 27.04 release removes other Linux distribution paths is **not decided**. No such support cut is made here. A [T-Pot ISO](#t-pot-iso-preview) based on Debian's netinst is available as a preview to build from source, not as a released download. Guided cross-host migration is planned, not an available migration path yet.
+The version checks still apply to every tier; best effort does not make an unlisted distribution or OS version acceptable to the installer. Every tier needs a **64-bit** system (x86-64 or arm64, 64-bit userland), the images of T-Pot are amd64 and arm64 only: the installer stops on a 32-bit system, also on a 32-bit Raspberry Pi OS that boots a 64-bit kernel. Whether the 27.04 release removes other Linux distribution paths is **not decided**. No such support cut is made here. A [T-Pot ISO](#t-pot-iso-preview) based on Debian's netinst is available as a preview to build from source, not as a released download. Guided cross-host migration is planned, not an available migration path yet.
 
 **Steps to Follow:**
 
@@ -592,7 +592,7 @@ Validation status of the preview: in QEMU, the amd64 ISO boots under BIOS, UEFI 
      * Add `mi` (for `micro`, a great alternative to `vi` and / or `nano`)
      * Display open ports on the host (compare with T-Pot [required](https://github.com/telekom-security/tpotce#required-ports) ports)
      * Add and enable `tpot.service` to `/etc/systemd/system` so T-Pot can automatically start and stop
-4. Follow the installer: at a terminal it gets what it needs to start (git, Ansible, the Python packages of `tpot`, a clone of the repository in `~/tpotce`) and hands over to the assistant `tpot install`. The assistant checks the host (distribution, sudo, ports, internet, RAM and disk), asks for the edition (or your own selection with the customizer), the web user and a few settings, shows what will change and then runs the installation with its progress. Everything is asked before anything changes; your `sudo` password is asked once and handed to Ansible in a file only you can read, removed afterwards.
+4. Follow the installer: at a terminal it gets what it needs to start (git, Ansible, the Python packages of `tpot`, a clone of the repository in `~/tpotce`) and hands over to the assistant `tpot install`. The assistant checks the host (64-bit system, distribution, sudo, ports, internet, RAM and disk), asks for the edition (or your own selection with the customizer), the web user and a few settings, shows what will change and then runs the installation with its progress. Everything is asked before anything changes; your `sudo` password is asked once and handed to Ansible in a file only you can read, removed afterwards.
 5. Reboot at the end of the assistant, or with `$ sudo reboot`
 
 Without the assistant, i.e. when its Python packages cannot be downloaded, the installer asks the same questions in the terminal and goes on as before: `./install.sh -n` does that on purpose. The look of the installer and the other scripts comes from [gum](https://github.com/charmbracelet/gum), a pinned release the scripts download and check against its sha256; without it (or with `TPOT_GUM=off`) they print plain text.
@@ -1040,7 +1040,7 @@ To create your customized docker compose file:
 5. Replace the docker compose file: `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
 6. Start T-Pot with `systemctl start tpot`.
 
-The full screen dialog comes from the venv of `tpot`. Only for the headless use and for `update.sh` the customizer is content with PyYAML of your distribution (`python3-yaml` on Debian / Raspbian / Ubuntu, `python3-pyyaml` on Fedora / AlmaLinux / Rocky / RHEL, `python3-PyYAML` on openSUSE), which the installer and `update.sh` bring along.
+The full screen dialog comes from the venv of `tpot`. Only for the headless use and for `update.sh` the customizer is content with PyYAML of your distribution (`python3-yaml` on Debian / Raspberry Pi OS / Ubuntu, `python3-pyyaml` on Fedora / AlmaLinux / Rocky / RHEL, `python3-PyYAML` on openSUSE), which the installer and `update.sh` bring along.
 
 Running the customizer again starts from your current configuration. Without a terminal, without the venv, or with `--text`, it asks the same as numbered lists. It also works without any dialog:
 ```
@@ -1126,7 +1126,7 @@ On Debian (Raspberry Pi OS 64-bit included) the installer, the [T-Pot ISO](#t-po
 
 What happened, the update of the Docker Engine included: `journalctl -t tpot-auto-updates`, the security updates: `/var/log/unattended-upgrades/`.
 
-Turn both off with `TPOT_AUTO_UPDATES=DISABLED` in `~/tpotce/.env` (`tpot env set TPOT_AUTO_UPDATES=DISABLED`, *Settings* of the T-Pot Manager, the install assistant on Debian, or `install.sh -U`). The host reads it on every run, T-Pot needs no restart. The pin of the Docker Engine stays either way, so your own updates stay within the tested major release. Raspbian (32-bit), Ubuntu and the other distributions get neither, keep their updates in mind. `uninstall.sh` removes all of it, `unattended-upgrades` only if T-Pot installed it.
+Turn both off with `TPOT_AUTO_UPDATES=DISABLED` in `~/tpotce/.env` (`tpot env set TPOT_AUTO_UPDATES=DISABLED`, *Settings* of the T-Pot Manager, the install assistant on Debian, or `install.sh -U`). The host reads it on every run, T-Pot needs no restart. The pin of the Docker Engine stays either way, so your own updates stay within the tested major release. Ubuntu and the other distributions get neither, keep their updates in mind. `uninstall.sh` removes all of it, `unattended-upgrades` only if T-Pot installed it.
 <br><br>
 
 ## Update Script

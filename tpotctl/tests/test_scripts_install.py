@@ -192,19 +192,55 @@ class InstallShTest(Scripts):
                         else:
                             self.assertNotIn("best effort", result.stdout)
 
-    def test_mobile_still_installs_with_both_debian_and_raspbian_identities(self):
+    def test_mobile_installs_on_raspberry_pi_os_64bit_and_not_on_32bit_raspbian(self):
+        """Raspberry Pi OS (64-bit) says Debian GNU/Linux, only the 32-bit one Raspbian GNU/Linux."""
         mobile_compose = "services:\n  mobile: {}\n"
         write(os.path.join(self.tpotce, "compose", "mobile.yml"), mobile_compose)
-        for name in ("raspbian", "pi with debian identity"):
-            with self.subTest(distribution=name):
-                write(os.path.join(self.home, "os-release"), OS_RELEASES[name][0])
-                result = self.install("-s", "-t", "m")
-                self.assertEqual(result.returncode, 0, result.stdout)
-                self.assertIn("Raspberry Pi OS remains supported for T-Pot Mobile", result.stdout)
-                self.assertNotIn("best effort", result.stdout)
-                self.assertIn("T-Pot mobile is installed (MOBILE)", result.stdout)
-                with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
-                    self.assertEqual(handle.read(), mobile_compose)
+        write(os.path.join(self.home, "os-release"), OS_RELEASES["pi with debian identity"][0])
+        result = self.install("-s", "-t", "m")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("Raspberry Pi OS remains supported for T-Pot Mobile", result.stdout)
+        self.assertNotIn("best effort", result.stdout)
+        self.assertIn("T-Pot mobile is installed (MOBILE)", result.stdout)
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), mobile_compose)
+        write(os.path.join(self.home, "os-release"), OS_RELEASES["raspbian"][0])
+        write(os.path.join(self.home, "calls"), "")
+        result = self.install("-s", "-t", "m")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("Only the following distributions are supported", result.stdout)
+        self.assertNotIn("Raspbian", result.stdout)
+        self.assertNotIn("ansible-playbook", self.calls())
+
+    def test_32bit_systems_stop_before_anything_happens(self):
+        """The userland counts, not the kernel: a 32-bit Raspberry Pi OS boots an aarch64 kernel on a Pi 4/5
+        (getconf LONG_BIT says 32 there). getconf without an answer counts as 64-bit."""
+        write(os.path.join(self.bin, "uname"),
+              '#!/bin/sh\ncase "$*" in\n  -m) echo "${FAKE_UNAME_M}"; exit 0 ;;\nesac\n'
+              f'exec {os.path.join(self.bin, "uname.real")} "$@"\n', 0o755)
+        write(os.path.join(self.bin, "uname.real"), UNAME, 0o755)
+        write(os.path.join(self.bin, "getconf"),
+              '#!/bin/sh\n[ -n "${FAKE_LONG_BIT}" ] || exit 1\necho "${FAKE_LONG_BIT}"\n', 0o755)
+        for machine, bits, ok in (("aarch64", "32", False), ("armv7l", "32", False), ("i686", "32", False),
+                                  ("x86_64", "32", False), ("riscv64", "64", False),
+                                  ("aarch64", "64", True), ("x86_64", "64", True), ("x86_64", "", True)):
+            for marks in ([], ["-M"]):
+                with self.subTest(machine=machine, bits=bits, marks=marks):
+                    write(os.path.join(self.home, "calls"), "")
+                    result = self.install("-s", "-t", "s", *marks, FAKE_UNAME_M=machine, FAKE_LONG_BIT=bits)
+                    if ok:
+                        self.assertEqual(result.returncode, 0, result.stdout[-800:])
+                        self.assertNotIn("64-bit system", result.stdout)
+                        continue
+                    self.assertEqual(result.returncode, 1, result.stdout[-800:])
+                    self.assertIn(f"T-Pot needs a 64-bit system (x86-64 or arm64), this one is {machine} "
+                                  f"with a {bits}-bit userland.", result.stdout)
+                    self.assertIn("For T-Pot Mobile use Raspberry Pi OS Lite (64-bit).", result.stdout)
+                    self.assertNotIn("Only the following distributions", result.stdout)
+                    self.assertEqual(self.calls(), "")
+                    if marks:
+                        self.assertEqual(self.marks(result.stdout)[-2:],
+                                         ["@@tpot fail checks", "@@tpot phase failed"])
 
     def test_an_exported_cdpath_changes_neither_the_source_nor_the_files(self):
         """r3-RB 5: started as co/install.sh from the folder above its clone with an exported CDPATH,

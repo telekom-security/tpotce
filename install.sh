@@ -1581,7 +1581,7 @@ install_packages() {
     "Fedora Linux")
       sudo dnf -y --refresh install ${myPACKAGES_FEDORA}
       ;;
-    "Debian GNU/Linux"|"Raspbian GNU/Linux"|"Ubuntu")
+    "Debian GNU/Linux"|"Ubuntu")
       sudo apt update && sudo NEEDRESTART_SUSPEND=1 apt install -y ${myPACKAGES_DEBIAN}
       ;;
     "openSUSE Tumbleweed")
@@ -1643,7 +1643,7 @@ get_packages() {
       fuUI_OK "The packages the installer needs are there."
       return
   fi
-  if [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Raspbian\ GNU/Linux|Ubuntu)$ ]] && ! command -v sudo >/dev/null;
+  if [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && ! command -v sudo >/dev/null;
     then
       install_sudo_debian
       return
@@ -1676,7 +1676,7 @@ check_ports () {
     then
       fuUI_ERROR "‘ss‘ was not found, so the check for conflicting services cannot run."
       fuUI_INFO "Install it and run the installer again:"
-      fuUI_HINT "Debian, Raspbian, Ubuntu:       sudo apt install iproute2" \
+      fuUI_HINT "Debian, Ubuntu:                 sudo apt install iproute2" \
                 "AlmaLinux, Fedora, RHEL, Rocky: sudo dnf install iproute" \
                 "openSUSE Tumbleweed:            sudo zypper install iproute2"
       install_failed "‘ss‘ is missing" "Install it (see above), then run the installer again"
@@ -1907,8 +1907,24 @@ if [ ${EUID} -eq 0 ];
     exit 1
 fi
 
-# Accepted distributions include best-effort hosts; support tiers are reported below.
-mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
+# Check for a 64-bit system: the images of T-Pot are amd64 and arm64 only. The userland counts,
+# not the kernel: a 32-bit Raspberry Pi OS boots a 64-bit kernel on newer Pis (uname -m says
+# aarch64 there, getconf LONG_BIT 32).
+myMACHINE=$(uname -m 2>/dev/null)
+myBITS=$(getconf LONG_BIT 2>/dev/null)
+if [[ ! "${myMACHINE}" =~ ^(x86_64|amd64|aarch64|arm64)$ ]] || [ "${myBITS:-64}" != "64" ];
+  then
+    fuUI_ERROR "T-Pot needs a 64-bit system (x86-64 or arm64), this one is ${myMACHINE:-unknown}${myBITS:+ with a ${myBITS}-bit userland}."
+    fuUI_INFO "32-bit systems are not supported. For T-Pot Mobile use Raspberry Pi OS Lite (64-bit)."
+    fuUI_INFO "See the T-Pot README for host requirements and support tiers."
+    echo
+    mark_failed
+    exit 1
+fi
+
+# Accepted distributions include best-effort hosts; support tiers are reported below. Raspberry Pi
+# OS (64-bit) is "Debian GNU/Linux", only its 32-bit variant calls itself Raspbian.
+mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
 # no /etc/os-release (macOS): no distribution, the message below says which ones T-Pot runs on
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
 
@@ -1936,7 +1952,7 @@ case ${myCURRENT_DISTRIBUTION} in
     mySUPPORTED_VERSION="44"
     myCURRENT_VERSION="${myVERSION_ID%%.*}"
     ;;
-  "Debian GNU/Linux"|"Raspbian GNU/Linux")
+  "Debian GNU/Linux")
     mySUPPORTED_VERSION="13"
     myCURRENT_VERSION="${myVERSION_ID%%.*}"
     ;;
@@ -1969,7 +1985,7 @@ myUI_VERSION=$(install_version)
 
 fuUI_INFO "Debian is the preferred T-Pot platform. Raspberry Pi OS remains supported for T-Pot Mobile."
 case ${myCURRENT_DISTRIBUTION} in
-  "Debian GNU/Linux"|"Raspbian GNU/Linux") ;;
+  "Debian GNU/Linux") ;;
   *)
     fuUI_WARN "${myCURRENT_DISTRIBUTION} is best effort only: no equal test coverage or guaranteed distribution-specific fixes."
     ;;
@@ -2059,7 +2075,7 @@ check_ports
 get_packages
 
 # Define tag for Ansible
-myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Raspbian GNU/Linux" "Rocky Linux" "Red Hat Enterprise Linux")
+myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Rocky Linux" "Red Hat Enterprise Linux")
 if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
   then
     # special case AGAIN, /etc/os-release doesn't match Ansible's tagging conventions

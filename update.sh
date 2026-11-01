@@ -4331,7 +4331,7 @@ function fuSSHD_DROPIN () {
 	    echo
 	    return 0
 	fi
-	# the unit the playbook restarts: ssh on Debian, Raspbian and Ubuntu, sshd elsewhere
+	# the unit the playbook restarts: ssh on Debian and Ubuntu, sshd elsewhere
 	for myUNIT in ssh sshd;
 	  do
 	    if systemctl is-active --quiet "${myUNIT}";

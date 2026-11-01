@@ -971,7 +971,7 @@ class BuildTest(unittest.TestCase):
 
     def test_the_debian_of_the_t_pot_installer(self):
         major = re.search(r'^myDEBIAN_MAJOR="(\d+)"$', base.read("installer/iso/build.sh"), re.M).group(1)
-        install = re.search(r'"Debian GNU/Linux"\|"Raspbian GNU/Linux"\)\n\s+mySUPPORTED_VERSION="(\d+)"',
+        install = re.search(r'"Debian GNU/Linux"\)\n\s+mySUPPORTED_VERSION="(\d+)"',
                             base.read("install.sh")).group(1)
         self.assertEqual(major, install)
 
