@@ -2182,7 +2182,9 @@ fi
 mark_phase pull
 if [ -n "${myMARKS}" ];
   then
-    fuMARK images "$(sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" config --images 2>/dev/null | wc -l)"
+    # config --images names an image once per service (conpot: nine times), the pull reports
+    # every image once
+    fuMARK images "$(sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" config --images 2>/dev/null | sort -u | wc -l)"
 fi
 # A spinner meanwhile, the output goes into its log; in the marks mode it passes through,
 # so the assistant counts the pulled images. The spinner runs it in the background, where

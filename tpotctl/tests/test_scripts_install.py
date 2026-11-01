@@ -42,8 +42,10 @@ STUBS = {
                         "echo 'TASK [Task two] ****'\n"
                         "if [ -n \"$FAKE_PLAYBOOK_RC\" ]; then echo 'fatal: [127.0.0.1]: FAILED! => {}'; "
                         "exit \"$FAKE_PLAYBOOK_RC\"; fi\necho 'changed: [127.0.0.1]'\n",
+    # config --images names an image once per service (cowrie twice here), the pull of Compose v5 reports
+    # every image once
     "docker": "#!/bin/sh\necho \"docker $*\" >> \"$HOME/calls\"\ncase \"$*\" in\n"
-              "  *'config --images'*) printf 'ghcr.io/t/cowrie:1\\nghcr.io/t/nginx:1\\n' ;;\n"
+              "  *'config --images'*) printf 'ghcr.io/t/cowrie:1\\nghcr.io/t/nginx:1\\nghcr.io/t/cowrie:1\\n' ;;\n"
               "  *' pull'*) if [ -n \"$FAKE_PULL_SLOW\" ]; then sleep 2; touch \"$HOME/marker\"; fi\n"
               "             echo ' cowrie Pulled' >&2; echo ' nginx Pulled' >&2; exit \"${FAKE_PULL_RC:-0}\" ;;\n"
               "esac\n",
