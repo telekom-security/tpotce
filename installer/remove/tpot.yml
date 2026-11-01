@@ -37,7 +37,7 @@
     - name: Check if supported distribution (All)
       assert:
         that: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
-        fail_msg: "T-Pot uninstall is not supported on this plattform: {{ ansible_facts.distribution }}."
+        fail_msg: "T-Pot uninstall is not supported on this platform: {{ ansible_facts.distribution }}."
         success_msg: "T-Pot will now be removed from {{ ansible_facts.distribution }}."
 
 #######################################

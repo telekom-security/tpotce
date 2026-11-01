@@ -2,7 +2,7 @@
 
 ![T-Pot](doc/tpotsocial.png)
 
-T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeypot plattform, supporting 20+ honeypots and countless visualization options using the Elastic Stack, animated live attack maps and lots of security tools to further improve the deception experience.
+T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeypot platform, supporting 20+ honeypots and countless visualization options using the Elastic Stack, animated live attack maps and lots of security tools to further improve the deception experience.
 <br><br>
 
 # TL;DR
@@ -632,7 +632,7 @@ According to the [User Types](#user-types) you can open the T-Pot Landing Page f
 ## Kibana Dashboard
 On the T-Pot Landing Page just click on `Kibana` and you will be forwarded to Kibana. You can select from a large variety of dashboards and visualizations all tailored to the T-Pot supported honeypots.
 
-![Dashbaord](doc/kibana_a.png)
+![Dashboard](doc/kibana_a.png)
 <br><br>
 
 ## Attack Map
