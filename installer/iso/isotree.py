@@ -3,9 +3,9 @@
     python3 installer/iso/isotree.py patch --arch ARCH --orig DIR --out DIR
         the boot files of a Debian netinst (extracted to --orig at their paths in the ISO) with the
         entries "Install T-Pot" (the default) and "Install T-Pot (graphical installer)" in front of
-        the ones of Debian, which stay: GRUB (UEFI, both architectures) and ISOLINUX (BIOS, amd64),
-        the T-Pot logo as the background. Writes the changed and new files to --out at
-        their paths in the ISO and prints those paths.
+        the ones of Debian, which stay: GRUB (UEFI, both architectures) and ISOLINUX (BIOS, amd64,
+        its timeout starts Install T-Pot), the T-Pot logo as the background. Writes the changed and
+        new files to --out at their paths in the ISO and prints those paths.
     python3 installer/iso/isotree.py md5sum --orig FILE --out DIR
         md5sum.txt of the ISO (--orig) with the files of --out: their lines updated or added, as the
         installer's check of the medium reads it. Writes DIR/md5sum.txt.
@@ -37,6 +37,9 @@ MAGENTA = (0xE2, 0x00, 0x74)
 TITLE = "Install T-Pot"
 TITLE_GUI = "Install T-Pot (graphical installer)"
 BIOS_TITLE = "T-Pot installer on Debian (BIOS mode)"
+# ISOLINUX counts down (# the seconds) the timeout of Debian's spkgtk.cfg, 30 seconds
+BIOS_AUTOBOOT = "Press a key, otherwise Install T-Pot starts in # second{,s}..."
+ISOLINUX_FILES = ("menu.cfg", "txt.cfg", "gtk.cfg", "stdmenu.cfg", "spkgtk.cfg")
 # the background: ISOLINUX shows it at 640 x 480, GRUB stretches it to 800 x 600; the logo stays above
 # the menus (ISOLINUX: menu vshift 8, GRUB: the theme's label at LABEL_TOP and the menu at 200)
 SPLASH_SIZE = (640, 480)
@@ -135,26 +138,52 @@ def _label(text: str, name: str, where: str) -> Tuple[str, str]:
     return kernel[0].strip(), append[0].strip()
 
 
+def _tpot_entry(txt_cfg: str) -> Tuple[str, str]:
+    """The kernel and append lines of Install T-Pot: Debian's Install (txt.cfg) with the preseed."""
+    kernel, append = _label(txt_cfg, "install", "txt.cfg")
+    return kernel, add_preseed(append, "txt.cfg")
+
+
 def tpot_cfg(txt_cfg: str, gtk_cfg: str) -> str:
     """isolinux/tpot.cfg: the T-Pot entries, made from Debian's Install (txt.cfg) and Graphical
     install (gtk.cfg)."""
-    kernel, append = _label(txt_cfg, "install", "txt.cfg")
+    kernel, append = _tpot_entry(txt_cfg)
     kernel_gui, append_gui = _label(gtk_cfg, "installgui", "gtk.cfg")
     return (f"default tpot\nlabel tpot\n\tmenu label Install ^T-Pot\n\tmenu default\n\t{kernel}\n"
-            f"\t{add_preseed(append, 'txt.cfg')}\n"
+            f"\t{append}\n"
             f"label tpotgui\n\tmenu label Install T-Pot (graphical installer)\n\t{kernel_gui}\n"
             f"\t{add_preseed(append_gui, 'gtk.cfg')}\n")
 
 
+def patch_timeout(spkgtk_cfg: str, txt_cfg: str) -> str:
+    """spkgtk.cfg: the timeout of the menu starts Install T-Pot instead of Debian's install with
+    speech synthesis, whose entry stays in the menu. Nothing is lost by it: the installer asks for
+    the language first and before it changes a disk."""
+    if not re.search(r"^timeout [1-9][0-9]*$", spkgtk_cfg, re.M):
+        raise PatchError("spkgtk.cfg: no timeout")
+    timeouts = re.findall(r"^ontimeout .*$", spkgtk_cfg, re.M)
+    if len(timeouts) != 1 or "speakup.synth=soft" not in timeouts[0]:
+        raise PatchError("spkgtk.cfg: expected one ontimeout to the speech synthesis")
+    kernel, append = _tpot_entry(txt_cfg)
+    # the same form as Debian's: the kernel and its command line, without the words kernel and append
+    text = _once(spkgtk_cfg, f"{timeouts[0]}\n",
+                 f"ontimeout {kernel.split(None, 1)[1]} {append.split(None, 1)[1]}\n", "spkgtk.cfg")
+    text = _once(text, "# timeout to speech-enabled install\n", "# timeout to Install T-Pot\n", "spkgtk.cfg")
+    return _once(text, "menu autoboot Press a key, otherwise speech synthesis will be started in # second{,s}...\n",
+                 f"menu autoboot {BIOS_AUTOBOOT}\n", "spkgtk.cfg")
+
+
 def patch_isolinux(files: Dict[str, str]) -> Dict[str, str]:
-    """menu.cfg, gtk.cfg and stdmenu.cfg (by name) changed, tpot.cfg new: T-Pot first and the
-    default, Debian's Graphical install no longer the default, the colours of T-Pot."""
-    for name in ("menu.cfg", "txt.cfg", "gtk.cfg", "stdmenu.cfg"):
+    """menu.cfg, gtk.cfg, stdmenu.cfg and spkgtk.cfg (by name) changed, tpot.cfg new: T-Pot first,
+    the default and what the timeout starts, Debian's Graphical install no longer the default, the
+    colours of T-Pot."""
+    for name in ISOLINUX_FILES:
         if name not in files:
             raise PatchError(f"isolinux/{name} is missing")
         if "T-Pot" in files[name]:
             raise PatchError(f"isolinux/{name}: already has T-Pot")
-    out = {"tpot.cfg": tpot_cfg(files["txt.cfg"], files["gtk.cfg"])}
+    out = {"tpot.cfg": tpot_cfg(files["txt.cfg"], files["gtk.cfg"]),
+           "spkgtk.cfg": patch_timeout(files["spkgtk.cfg"], files["txt.cfg"])}
     menu = _once(files["menu.cfg"], "\ninclude gtk.cfg\n", "\ninclude tpot.cfg\ninclude gtk.cfg\n", "menu.cfg")
     # the title starts with a BEL (^G) for the speech synthesis, it stays; no longer than Debian's
     # (the width of the menu)
@@ -315,7 +344,7 @@ def patch_tree(arch: str, orig: str, out: str) -> List[str]:
     if arch == "amd64":
         isolinux = os.path.join(orig, "isolinux")
         files = {name: _read(os.path.join(isolinux, name))
-                 for name in ("menu.cfg", "txt.cfg", "gtk.cfg", "stdmenu.cfg")
+                 for name in ISOLINUX_FILES
                  if os.path.isfile(os.path.join(isolinux, name))}
         for name, text in patch_isolinux(files).items():
             written[f"isolinux/{name}"] = text.encode()

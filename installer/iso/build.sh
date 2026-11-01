@@ -434,7 +434,7 @@ fuBUILD () {
   if [ "${myA}" = "amd64" ];
     then
       myEXTRACT+=(-extract /boot/grub/theme "${myWORK}/orig/boot/grub/theme")
-      for myFILE in menu.cfg txt.cfg gtk.cfg stdmenu.cfg; do
+      for myFILE in menu.cfg txt.cfg gtk.cfg stdmenu.cfg spkgtk.cfg; do
         myEXTRACT+=(-extract "/isolinux/${myFILE}" "${myWORK}/orig/isolinux/${myFILE}")
       done
     else

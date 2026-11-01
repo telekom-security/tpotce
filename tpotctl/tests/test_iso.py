@@ -114,6 +114,11 @@ TXT_CFG = "label install\n\tmenu label ^Install\n\tkernel /install.amd/vmlinuz\n
           "\tappend vga=788 initrd=/install.amd/initrd.gz --- quiet \n"
 GTK_CFG = "default installgui\nlabel installgui\n\tmenu label ^Graphical install\n\tmenu default\n" \
           "\tkernel /install.amd/vmlinuz\n\tappend vga=788 initrd=/install.amd/gtk/initrd.gz --- quiet \n"
+SPKGTK_CFG = "label installspk\n\tmenu label Install with ^speech synthesis\n\tkernel /install.amd/vmlinuz\n" \
+             "\tappend vga=788 initrd=/install.amd/gtk/initrd.gz speakup.synth=soft --- quiet \n" \
+             "# timeout to speech-enabled install\ntimeout 300\n" \
+             "ontimeout /install.amd/vmlinuz vga=788 initrd=/install.amd/gtk/initrd.gz speakup.synth=soft --- quiet \n" \
+             "menu autoboot Press a key, otherwise speech synthesis will be started in # second{,s}...\n"
 STDMENU_CFG = """menu background splash.png
 menu color title\t* #FFFFFFFF *
 menu color sel\t\t* #ffffffff #76a1d0ff *
@@ -190,7 +195,7 @@ def netinst_tree(folder, arch):
         write(os.path.join(folder, "boot/grub/font.pf2"), b"FILE\0\0\0\4PFF2")
     if arch == "amd64":
         for name, text in (("menu.cfg", MENU_CFG), ("txt.cfg", TXT_CFG), ("gtk.cfg", GTK_CFG),
-                           ("stdmenu.cfg", STDMENU_CFG)):
+                           ("stdmenu.cfg", STDMENU_CFG), ("spkgtk.cfg", SPKGTK_CFG)):
             write(os.path.join(folder, "isolinux", name), text)
         for name in ("1", "1-1"):
             write(os.path.join(folder, "boot/grub/theme", name), THEME)
@@ -760,13 +765,14 @@ class IsotreeIsolinuxTest(unittest.TestCase):
 
     @staticmethod
     def files(**changed):
-        files = {"menu.cfg": MENU_CFG, "txt.cfg": TXT_CFG, "gtk.cfg": GTK_CFG, "stdmenu.cfg": STDMENU_CFG}
+        files = {"menu.cfg": MENU_CFG, "txt.cfg": TXT_CFG, "gtk.cfg": GTK_CFG, "stdmenu.cfg": STDMENU_CFG,
+                 "spkgtk.cfg": SPKGTK_CFG}
         files.update(changed)
         return files
 
     def test_t_pot_first_and_the_default(self):
         out = isotree.patch_isolinux(self.files())
-        self.assertEqual(sorted(out), ["gtk.cfg", "menu.cfg", "stdmenu.cfg", "tpot.cfg"])
+        self.assertEqual(sorted(out), ["gtk.cfg", "menu.cfg", "spkgtk.cfg", "stdmenu.cfg", "tpot.cfg"])
         self.assertEqual(out["tpot.cfg"],
                          "default tpot\nlabel tpot\n\tmenu label Install ^T-Pot\n\tmenu default\n"
                          "\tkernel /install.amd/vmlinuz\n"
@@ -780,6 +786,23 @@ class IsotreeIsolinuxTest(unittest.TestCase):
         self.assertNotIn("76a1d0", out["stdmenu.cfg"])
         self.assertEqual(out["stdmenu.cfg"].count("#ffe20074"), 2)
 
+    def test_the_timeout_starts_install_t_pot(self):
+        out = isotree.patch_isolinux(self.files())
+        self.assertEqual(out["spkgtk.cfg"],
+                         "label installspk\n\tmenu label Install with ^speech synthesis\n"
+                         "\tkernel /install.amd/vmlinuz\n"
+                         "\tappend vga=788 initrd=/install.amd/gtk/initrd.gz speakup.synth=soft --- quiet \n"
+                         "# timeout to Install T-Pot\ntimeout 300\n"
+                         "ontimeout /install.amd/vmlinuz vga=788 initrd=/install.amd/initrd.gz "
+                         "preseed/file=/cdrom/tpot/preseed.cfg --- quiet\n"
+                         f"menu autoboot {isotree.BIOS_AUTOBOOT}\n")
+        # the same command line as the entry Install T-Pot
+        tpot = out["tpot.cfg"].split("label tpotgui\n")[0]
+        ontimeout = re.search(r"^ontimeout (\S+) (.*)$", out["spkgtk.cfg"], re.M)
+        self.assertIn(f"\tkernel {ontimeout.group(1)}\n\tappend {ontimeout.group(2)}\n", tpot)
+        # ISOLINUX puts the seconds for the #
+        self.assertEqual(isotree.BIOS_AUTOBOOT.count("#"), 1)
+
     def test_the_title_keeps_its_bel_and_fits_the_menu(self):
         out = isotree.patch_isolinux(self.files())
         self.assertIn(f"menu title \x07{isotree.BIOS_TITLE}\n", out["menu.cfg"])
@@ -792,7 +815,20 @@ class IsotreeIsolinuxTest(unittest.TestCase):
                 (self.files(**{"gtk.cfg": GTK_CFG.replace("default installgui\n", "")}), "default installgui"),
                 (self.files(**{"txt.cfg": TXT_CFG.replace("label install", "label text")}), "no label install"),
                 (self.files(**{"stdmenu.cfg": STDMENU_CFG.replace("#76a1d0ff", "#000000ff")}), "#76a1d0ff"),
-                ({"menu.cfg": MENU_CFG, "txt.cfg": TXT_CFG, "gtk.cfg": GTK_CFG}, "stdmenu.cfg is missing")):
+                ({"menu.cfg": MENU_CFG, "txt.cfg": TXT_CFG, "gtk.cfg": GTK_CFG, "spkgtk.cfg": SPKGTK_CFG},
+                 "stdmenu.cfg is missing"),
+                ({"menu.cfg": MENU_CFG, "txt.cfg": TXT_CFG, "gtk.cfg": GTK_CFG, "stdmenu.cfg": STDMENU_CFG},
+                 "spkgtk.cfg is missing"),
+                (self.files(**{"spkgtk.cfg": SPKGTK_CFG.replace("timeout 300\n", "")}), "no timeout"),
+                (self.files(**{"spkgtk.cfg": SPKGTK_CFG.replace("speakup.synth=soft --- quiet \nmenu",
+                                                                "--- quiet \nmenu")}),
+                 "one ontimeout to the speech synthesis"),
+                (self.files(**{"spkgtk.cfg": SPKGTK_CFG + "ontimeout installspk\n"}),
+                 "one ontimeout to the speech synthesis"),
+                (self.files(**{"spkgtk.cfg": SPKGTK_CFG.replace("will be started", "starts")}),
+                 "menu autoboot Press a key"),
+                (self.files(**{"spkgtk.cfg": SPKGTK_CFG.replace("# timeout to", "# time out to")}),
+                 "# timeout to speech-enabled install")):
             with self.assertRaises(isotree.PatchError) as caught:
                 isotree.patch_isolinux(files)
             self.assertIn(message, str(caught.exception))
@@ -848,7 +884,8 @@ class IsotreeFilesTest(unittest.TestCase):
         written = isotree.patch_tree("amd64", orig, out)
         self.assertEqual(written, ["boot/grub/grub.cfg", "boot/grub/theme/1", "boot/grub/theme/1-1",
                                    "boot/grub/theme/hl_c.png", "isolinux/gtk.cfg", "isolinux/menu.cfg",
-                                   "isolinux/splash.png", "isolinux/stdmenu.cfg", "isolinux/tpot.cfg"])
+                                   "isolinux/spkgtk.cfg", "isolinux/splash.png", "isolinux/stdmenu.cfg",
+                                   "isolinux/tpot.cfg"])
         self.assertEqual(sorted(isotree.tree_files(out)), written)
         with open(os.path.join(out, "boot/grub/theme/hl_c.png"), "rb") as handle:
             self.assertEqual(isotree.png_size(handle.read()), (20, 20))
