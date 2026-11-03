@@ -46,8 +46,14 @@ def run(argv):
     if on_host and not os.environ.get(bootstrap.GUARD) and argv[:1] in ([], ["setup"]):
         bootstrap.ensure_link(os.path.join(REPO_DIR, "tpot"))
     if argv[:1] == ["setup"]:
+        wheels = None
+        if "--wheels" in argv[1:]:
+            at = argv.index("--wheels", 1)
+            if at + 1 >= len(argv) or not os.path.isdir(argv[at + 1]):
+                fail("--wheels needs a folder with the wheels of tpotctl/requirements.txt")
+            wheels = argv[at + 1]
         try:
-            python = bootstrap.setup_venv(force="--force" in argv[1:])
+            python = bootstrap.setup_venv(force="--force" in argv[1:], wheels=wheels)
         except bootstrap.BootstrapError as err:
             fail(str(err), 1)
         say.ok(f"The Python packages of the T-Pot Manager are ready ({os.path.dirname(os.path.dirname(python))}).")

@@ -32,6 +32,9 @@ STUBS = {
            "  [ \"$a\" = /etc/os-release ] && a=\"$HOME/os-release\"\n  set -- \"$@\" \"$a\"\ndone\n"
            f"exec {AWK} \"$@\"\n",
     "ss": "#!/bin/sh\nexit 0\n",
+    # the packages of the host: none (dpkg-query fails), with FAKE_DPKG=ii all of them
+    "dpkg-query": "#!/bin/sh\n[ -n \"$FAKE_DPKG\" ] || exit 1\nshift 2\nfor p; do echo \"$FAKE_DPKG \"; done\n",
+    "apt": "#!/bin/sh\necho \"apt $*\" >> \"$HOME/calls\"\n",
     "grc": "#!/bin/sh\necho \"grc $*\" >> \"$HOME/calls\"\n",
     "shuf": "#!/bin/sh\necho honey\n",
     "htpasswd": "#!/bin/sh\nread -r pw\necho \"$4:\\$2y\\$05\\$hash\"\n",
@@ -617,6 +620,40 @@ class InstallShTest(Scripts):
         self.assertIn("It first installs git, Ansible and the Python packages it needs.", out)
         self.assertLess(out.index("It first installs git"), out.index("Aborting!"))
         self.assertIn('fuUI_CONFIRM "Start the T-Pot installer?" "Start" "Abort"', base.read("install.sh"))
+
+    def test_what_is_there_is_not_installed_again(self):
+        """The T-Pot ISO brings the packages, the clone and the venv: no apt run (Debian, Ubuntu), no info
+        line about a bootstrap, no clone; the assistant starts at once."""
+        result = self.run_merged(self.script, "-s", "-t", "s", FAKE_DPKG="ii")
+        self.assertEqual(result.returncode, 0, result.stdout[-1500:])
+        self.assertIn("The packages the installer needs are there.", result.stdout)
+        self.assertNotIn("apt ", self.calls())
+        write(os.path.join(self.home, "calls"), "")
+        sudo = os.path.join(self.bin, "sudo")
+        write(sudo, "#!/bin/sh\necho \"sudo $*\" >> \"$HOME/calls\"\n", 0o755)
+        self.run_merged(self.script, "-s", "-t", "s", FAKE_DPKG="un")
+        self.assertIn("NEEDRESTART_SUSPEND=1 apt install -y ", self.calls())
+        write(sudo, base.SUDO, 0o755)
+        write(os.path.join(self.home, "calls"), "")
+        # the assistant: a clone of the source, the venv, a tpot that only says what it was asked
+        os.remove(os.path.join(self.tpotce, ".env"))
+        base_git = ["git", "-C", self.tpotce, "-c", "user.name=T", "-c", "user.email=t@example.org"]
+        for args in (["init", "-q", "-b", "master"], ["remote", "add", "origin",
+                     "https://github.com/telekom-security/tpotce"], ["add", "-A"], ["commit", "-q", "-m", "iso"]):
+            subprocess.run(base_git + args, check=True, capture_output=True)
+        write(os.path.join(self.tpotce, "tpot"), '#!/bin/sh\necho "TPOT $*"\n', 0o755)
+        write(os.path.join(self.data, "tpotce", "venv", "bin", "python"), "#!/bin/sh\n", 0o755)
+        out = ui.plain(self.at_terminal(self.script, FAKE_DPKG="ii", FAKE_GUM_CONFIRM="0"))
+        self.assertNotIn("It first installs git", out)
+        self.assertIn("The packages the installer needs are there.", out)
+        self.assertIn(f"T-Pot from https://github.com/telekom-security/tpotce at master is in {self.tpotce}.", out)
+        self.assertNotIn("Getting T-Pot", out)
+        self.assertIn("TPOT install", out)
+        self.assertNotIn("apt ", self.calls())
+        # without the venv it says what comes first
+        os.remove(os.path.join(self.data, "tpotce", "venv", "bin", "python"))
+        out = ui.plain(self.at_terminal(self.script, FAKE_DPKG="ii"))
+        self.assertIn("It first installs git, Ansible and the Python packages it needs.", out)
 
     def test_the_version_of_the_logo(self):
         # an older clone in ~/tpotce says nothing about what this installer installs

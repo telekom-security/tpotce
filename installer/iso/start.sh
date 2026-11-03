@@ -3,7 +3,9 @@
 # install.sh of the ISO with the repository and the branch the ISO was built for (iso.conf), the
 # same installer as on a prepared Debian. At a terminal it asks first: Enter keeps that source, a
 # branch (and a repository) of your own is for a test. Another source is cloned into ~/tpotce and
-# its own install.sh runs, so a test gets the installer of its branch. The login hook
+# its own install.sh runs, so a test gets the installer of its branch; the T-Pot of the ISO that
+# prepare.sh put there is moved aside for it while untouched. The wheels of the ISO go to tpot setup
+# (TPOT_WHEELS) of either installer. The login hook
 # (/etc/profile.d/tpot-iso.sh) starts it at the first login, by hand:
 #   bash /usr/local/share/tpot-iso/start.sh [-b <branch>] [-r <repository>]
 
@@ -143,11 +145,28 @@ fuCLONE_AT () {
   [ -n "${myWANT}" ] && [ "${myWANT}" = "${myHEAD}" ]
 }
 
+fuISO_CLONE () {
+  # is ~/tpotce the T-Pot of the ISO as prepare.sh left it (origin, commit, nothing changed or added)?
+  local myCOMMIT
+  myCOMMIT=$(fuCONF TPOT_COMMIT) || return 1
+  [ -d "${myDEST}/.git" ] && [ -n "${myCOMMIT}" ] \
+    && [ "$(fuNORMALIZE_REPO "$(git -C "${myDEST}" remote get-url origin 2>/dev/null)")" = "${myISO_REPO}" ] \
+    && [ "$(git -C "${myDEST}" rev-parse HEAD 2>/dev/null)" = "${myCOMMIT}" ] \
+    && [ -z "$(git -C "${myDEST}" status --porcelain 2>/dev/null)" ]
+}
+
 fuCLONE () {
   # another source: cloned into ~/tpotce, or the clone there if it is that source, and its own
   # install.sh, the installer of the branch under test
-  local myAGAIN="bash ${myDIR}/start.sh -b ${myBRANCH} -r ${myREPO}"
+  local myAGAIN="bash ${myDIR}/start.sh -b ${myBRANCH} -r ${myREPO}" myASIDE=""
   command -v git >/dev/null || fuSTOP "git is missing, it gets T-Pot from ${myREPO}." "sudo apt-get install git, then: ${myAGAIN}"
+  if [ -e "${myDEST}" ] && ! { [ "$(fuNORMALIZE_REPO "$(git -C "${myDEST}" remote get-url origin 2>/dev/null)")" = "${myREPO}" ] \
+                               && fuCLONE_AT; } && fuISO_CLONE;
+    then
+      # the T-Pot of the ISO, untouched: aside while the other source is cloned, back if that fails
+      myASIDE="${myDEST}.iso-$$"
+      mv "${myDEST}" "${myASIDE}" || fuSTOP "${myDEST} cannot be moved aside." "Remove it (rm -rf ${myDEST}), then: ${myAGAIN}"
+  fi
   if [ -e "${myDEST}" ];
     then
       if [ "$(fuNORMALIZE_REPO "$(git -C "${myDEST}" remote get-url origin 2>/dev/null)")" != "${myREPO}" ] || ! fuCLONE_AT;
@@ -162,8 +181,10 @@ fuCLONE () {
          || ! git -C "${myDEST}" -c advice.detachedHead=false checkout -q "${myBRANCH}";
         then
           rm -rf "${myDEST}"
+          [ -z "${myASIDE}" ] || mv "${myASIDE}" "${myDEST}"
           fuSTOP "Could not clone ${myREPO} at ${myBRANCH}." "Check the network and the name, then: ${myAGAIN}"
       fi
+      [ -z "${myASIDE}" ] || rm -rf "${myASIDE}"
   fi
   [ -f "${myDEST}/install.sh" ] || fuSTOP "${myREPO} at ${myBRANCH} has no install.sh." "Remove ${myDEST} and pick another branch: bash ${myDIR}/start.sh"
   echo "T-Pot ISO: the T-Pot installer of ${myBRANCH} starts (T-Pot from ${myREPO} at ${myBRANCH})."
@@ -175,6 +196,8 @@ fuCLONE () {
 
 myISO_REPO="$(fuCONF TPOT_REPO_URL)"
 myISO_BRANCH="$(fuCONF TPOT_BRANCH)"
+# the wheels of the T-Pot Manager on the ISO: tpot setup takes them first, PyPI for the rest
+[ ! -d "${myDIR}/wheels" ] || export TPOT_WHEELS="${myDIR}/wheels"
 myBRANCH=""
 myREPO=""
 while getopts ":b:r:h" myOPT; do

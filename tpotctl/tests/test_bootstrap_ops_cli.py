@@ -155,6 +155,18 @@ class LauncherTest(unittest.TestCase):
         self.assertIn("Cancelled.", err)
         self.assertNotIn("\n\n", err)
 
+    def test_setup_takes_a_folder_of_wheels(self):
+        with tempfile.TemporaryDirectory() as wheels:
+            with mock.patch.object(bootstrap, "setup_venv", return_value="/venv/bin/python3") as setup:
+                code, err = self.launch("setup", "--wheels", wheels)
+            self.assertEqual(code, 0, err)
+            setup.assert_called_once_with(force=False, wheels=wheels)
+        with mock.patch.object(bootstrap, "setup_venv", side_effect=AssertionError("must not build")):
+            for argv in (("setup", "--wheels"), ("setup", "--wheels", "/nonexistent/wheels")):
+                code, err = self.launch(*argv)
+                self.assertEqual(code, 2, err)
+                self.assertIn("--wheels needs a folder", err)
+
     def test_the_exit_code_of_the_venv_child_comes_through(self):
         with mock.patch.object(bootstrap, "ensure", return_value="/venv/bin/python3"), \
                 mock.patch.object(bootstrap, "reexec", return_value=130):
@@ -1008,6 +1020,41 @@ class SetupForceTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.venv + ".new"))
         self.assertFalse(os.path.exists(self.venv + ".old"))
 
+    def pip_calls(self, wheels=None, offline_ok=True, environ=None):
+        """setup_venv(force=True) with a wheels folder: the pip commands it ran."""
+        calls = []
+
+        def call(command, **kwargs):
+            if command[1:3] == ["-m", "venv"]:
+                return self.fake_call()(command, **kwargs)
+            calls.append(command)
+            return 0 if offline_ok or "--no-index" not in command else 1
+        with mock.patch.object(bootstrap, "run_child", side_effect=call), \
+                mock.patch.object(bootstrap, "imports_ok", return_value=True), \
+                mock.patch.dict(os.environ, environ or {}):
+            bootstrap.setup_venv(force=True, quiet=True, wheels=wheels)
+        return calls
+
+    def test_the_wheels_of_the_iso_first_then_pypi(self):
+        """tpot setup --wheels (the T-Pot ISO): no index, the hashes all the same; PyPI only when they do not fit."""
+        import tempfile
+        wheels = tempfile.mkdtemp(dir=self.data)
+        calls = self.pip_calls(wheels)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("--require-hashes", calls[0])
+        self.assertEqual(calls[0][calls[0].index("--find-links") + 1], wheels)
+        self.assertIn("--no-index", calls[0])
+        calls = self.pip_calls(wheels, offline_ok=False)
+        self.assertEqual(len(calls), 2)
+        self.assertNotIn("--no-index", calls[1])
+        self.assertIn("--require-hashes", calls[1])
+        # TPOT_WHEELS without --wheels; a folder that is not there is PyPI at once
+        calls = self.pip_calls(environ={bootstrap.WHEELS_ENV: wheels})
+        self.assertIn("--no-index", calls[0])
+        calls = self.pip_calls(os.path.join(self.data, "none"))
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("--no-index", calls[0])
+
     def test_failed_rebuild_keeps_the_old_venv(self):
         with mock.patch.object(bootstrap, "run_child", side_effect=self.fake_call(pip_ok=False)), \
                 mock.patch.object(bootstrap, "imports_ok", return_value=True):
@@ -1096,6 +1143,7 @@ class SetupForceTest(unittest.TestCase):
     def test_launcher_and_cli_know_force(self):
         from tpotctl import cli
         self.assertTrue(cli.build_parser().parse_args(["setup", "--force"]).force)
+        self.assertEqual(cli.build_parser().parse_args(["setup", "--wheels", "/w"]).wheels, "/w")
         with open(os.path.join(bootstrap.REPO_DIR, "tpot"), encoding="utf-8") as handle:
             self.assertTrue('"--force" in argv' in handle.read())
 

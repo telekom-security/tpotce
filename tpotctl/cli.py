@@ -253,6 +253,9 @@ def build_parser() -> argparse.ArgumentParser:
     setup = sub.add_parser("setup", help="set up or refresh the Python packages of the T-Pot Manager")
     setup.add_argument("--force", action="store_true",
                        help="build the venv anew (next to the old one, swapped when it works)")
+    setup.add_argument("--wheels", metavar="DIR",
+                       help="install the wheels of this folder first, without the internet (the T-Pot ISO "
+                            "has them; default TPOT_WHEELS), PyPI only when they do not fit")
     return parser
 
 
@@ -1808,7 +1811,7 @@ def dispatch(argv: List[str]) -> int:
             from tpotctl.app import run_app
             return run_app()
         if args.command == "setup":
-            python = bootstrap.setup_venv(force=args.force)
+            python = bootstrap.setup_venv(force=args.force, wheels=args.wheels)
             say.ok(f"The Python packages of the T-Pot Manager are ready ({os.path.dirname(os.path.dirname(python))}).")
             return 0
         if args.command == "env":
