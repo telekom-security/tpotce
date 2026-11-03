@@ -48,7 +48,7 @@ class CandidatesTest(unittest.TestCase):
                                 "GALAH_LLM_SERVER_URL": "http://10.0.0.5:11434"},
                                addresses=["192.168.1.7"], gateways=["172.17.0.1", "192.168.1.1"])
         self.assertEqual(found[0], "http://10.0.0.5:11434")
-        for base in ("http://localhost:11434", "http://host.docker.internal:11434", "http://ollama.local:11434",
+        for base in ("http://localhost:11434", "http://ollama.local:11434",
                      "http://ollama:11434", "http://172.17.0.1:11434", "http://192.168.1.7:11434",
                      "http://192.168.1.1:11434"):
             self.assertIn(base, found)
@@ -93,25 +93,16 @@ class DiscoverTest(unittest.TestCase):
     def test_finds_the_ones_that_answer(self):
         answers = dict(ollama_at("http://192.168.1.9:11434"))
         answers.update(ollama_at("http://localhost:11434"))
-        found = llm.discover({}, addresses=["192.168.1.9"], gateways=[], opener=fake_opener(answers), linux=True)
+        found = llm.discover({}, addresses=["192.168.1.9"], gateways=[], opener=fake_opener(answers))
         self.assertEqual(sorted(f.url for f in found), ["http://192.168.1.9:11434", "http://localhost:11434"])
         # the ones the honeypots can reach first
         self.assertTrue(found[0].reachable_from_docker)
 
 
-class DockerDesktopTest(unittest.TestCase):
+class LoopbackTest(unittest.TestCase):
 
-    def test_loopback_is_host_docker_internal_off_linux(self):
-        answers = dict(ollama_at("http://localhost:11434"))
-        answers.update(ollama_at("http://127.0.0.1:11434"))
-        found = llm.discover({}, addresses=[], gateways=[], opener=fake_opener(answers), linux=False)
-        self.assertEqual([f.url for f in found], ["http://host.docker.internal:11434"])
-        self.assertTrue(found[0].reachable_from_docker)
-        self.assertIn("Docker Desktop", found[0].note)
-
-    def test_loopback_stays_unreachable_on_linux(self):
-        found = llm.discover({}, addresses=[], gateways=[], opener=fake_opener(ollama_at("http://localhost:11434")),
-                             linux=True)
+    def test_loopback_stays_unreachable(self):
+        found = llm.discover({}, addresses=[], gateways=[], opener=fake_opener(ollama_at("http://localhost:11434")))
         self.assertFalse(found[0].reachable_from_docker)
 
 

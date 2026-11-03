@@ -289,7 +289,7 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
         "") mySYSTEM="an unknown system" ;;
       esac
       echo "### [ERROR] - $1 does not run on ${mySYSTEM}." >&2
-      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM." >&2
       exit "${2:-1}"
     }
     fuUI_RESULT () {
@@ -363,7 +363,7 @@ myEDITION="${TPOT_UPDATE_EDITION}"
 myCOMPOSE_CUSTOMIZED="${TPOT_UPDATE_COMPOSE_CUSTOMIZED}"
 # set when the edition could not be put in place (fuRESTORE_EDITION), the summary does not claim it then
 myEDITION_MISSING=""
-myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
+myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE"
 
 # Services that are no longer part of T-Pot. Their images are not built for this
 # release, a docker-compose.yml of your own that still has them fails on the pull.
@@ -4606,12 +4606,22 @@ done
 # T-Pot is stopped already: 1200 s then, with a warning
 fuCHECK_STEP_WAIT || exit 1
 
-# A T-Pot host is Linux (WSL2 too): elsewhere nothing of this works, it stops before any
-# sudo, docker or git, with the way of the mac_win edition (as the T-Pot Manager says)
+# A T-Pot host is Linux: elsewhere nothing of this works, it stops before any sudo, docker or
+# git; a checkout on macOS (configurations, ISO, images) follows its branch with git pull
 ( fuUI_LINUX_ONLY update.sh ) || {
-  fuUI_HINT "On macOS and Windows (the mac_win edition): git pull in ~/tpotce, then tpot customize." >&2
+  fuUI_HINT "T-Pot runs on Linux only (Debian recommended). A checkout on macOS is updated with git pull." >&2
   exit 1
 }
+
+# WSL2 is Linux to uname -s, but no T-Pot host (tpotinit stops there, its kernel names Microsoft):
+# no update before anything changes, only the backup to take T-Pot along to a Linux host
+if [[ "$(uname -r 2>/dev/null)" =~ [Mm]icrosoft ]] && [ -z "${myBACKUP_ONLY}" ];
+  then
+    fuUI_ERROR "T-Pot no longer runs on WSL2, an update would not start there."
+    fuUI_HINT "Move it to a Linux host (Debian recommended)." \
+              "update.sh --backup-only writes the backup to restore there." >&2
+    exit 1
+fi
 
 # -b, -r, TPOT_BRANCH and TPOT_REPO_URL all name an update source explicitly
 [ -n "${myTPOT_BRANCH}${myTPOT_REPO_URL}" ] && myTPOT_SOURCE_GIVEN="1"

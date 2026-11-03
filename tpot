@@ -27,7 +27,10 @@ def main():
 
 
 def run(argv):
-    if hasattr(os, "geteuid") and os.geteuid() == 0:
+    # T-Pot runs on Linux; macOS prepares configurations for it, Windows is not supported
+    if os.name == "nt":
+        fail("The T-Pot Manager runs on Linux and macOS, not on Windows.")
+    if os.geteuid() == 0:
         fail("do not run tpot as root, it calls sudo itself where needed")
     # the colours chosen (TPOT_COLORS, prefs) reach Textual before anything imports it
     prefs.apply_color_system(os.environ)

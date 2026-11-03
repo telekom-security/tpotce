@@ -165,7 +165,7 @@ def candidates(env: Dict[str, str], addresses: Iterable[str], gateways: Iterable
                 out.append(base_url(env[key]))
         except LLMError:
             pass
-    out += [_base(name) for name in ("localhost", "127.0.0.1", "host.docker.internal", "ollama.local", "ollama")]
+    out += [_base(name) for name in ("localhost", "127.0.0.1", "ollama.local", "ollama")]
     out += [_base(address) for address in list(gateways) + list(addresses)]
     return list(dict.fromkeys(out))
 
@@ -193,13 +193,9 @@ def bridge_addresses(interfaces=None) -> List[str]:
             for a in i.addresses if ipaddress.ip_interface(a).version == 4]
 
 
-DESKTOP = f"http://host.docker.internal:{PORT}"
-
-
 def discover(env: Dict[str, str], addresses: Optional[List[str]] = None, gateways: Optional[List[str]] = None,
-             opener: Callable = urllib.request.urlopen, workers: int = 16, linux: Optional[bool] = None) -> List[Found]:
-    from tpotctl import netinfo, ops
-    linux = ops.linux_host() if linux is None else linux
+             opener: Callable = urllib.request.urlopen, workers: int = 16) -> List[Found]:
+    from tpotctl import netinfo
     if addresses is None:
         addresses = host_addresses()
     if gateways is None:
@@ -207,13 +203,6 @@ def discover(env: Dict[str, str], addresses: Optional[List[str]] = None, gateway
     bases = candidates(env, addresses, gateways)
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         found = [f for f in pool.map(lambda base: probe(base, opener), bases) if f is not None]
-    if not linux:
-        # Docker Desktop (macOS, Windows) hands host.docker.internal to the localhost of the host
-        local = [f for f in found if not f.reachable_from_docker]
-        found = [f for f in found if f.reachable_from_docker and f.url != DESKTOP]
-        if local:
-            found.insert(0, Found(DESKTOP, local[0].version, local[0].models, True,
-                                  "the Ollama of this host, Docker Desktop reaches it as host.docker.internal"))
     return sorted(found, key=lambda f: not f.reachable_from_docker)
 
 

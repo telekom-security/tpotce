@@ -1,5 +1,5 @@
-"""deploy.sh and genuser.sh without tpot: the steps they take when the T-Pot Manager cannot be set
-up (their fallback) and their help there.
+"""deploy.sh without tpot: the steps it takes when the T-Pot Manager cannot be set up (its
+fallback) and its help there.
 
 The harness of test_scripts.FallbackTest: a temporary HOME with a ~/tpotce (.env, installer/lib/ui.sh)
 and stubs for docker, ansible-playbook, htpasswd and shuf, an awk that reads $HOME/os-release instead
@@ -522,7 +522,7 @@ class DeployLookTest(Harness):
 
     def test_the_questions_fit_the_terminal(self):
         """Every literal of a question has 72 characters at most (${...} / $(...) count as 12)."""
-        for script in ("deploy.sh", "genuser.sh"):
+        for script in ("deploy.sh",):
             for match in re.finditer(r"\b(?:fuUI_(?:CONFIRM|INPUT|CHOOSE(?:_MANY)?)|fuASK_VALID)\s+\"((?:[^\"\\]|\\.)*)\"",
                                      body(script)):
                 text = re.sub(r"\$\{[^}]*\}|\$\([^)]*\)", "x" * 12, match.group(1))
@@ -564,11 +564,11 @@ def wrapper_options(script):
 
 
 class WrapperOptionsTest(Harness):
-    """RA11 and K: deploy.sh and genuser.sh check the options of the command of the T-Pot Manager they hand
+    """RA11 and K: deploy.sh checks the options of the command of the T-Pot Manager it hands
     over to: a wrong one is a usage error with exit 1 before the logo, as in the other T-Pot scripts;
     without tpot an option meant for it is an error naming that command, not left out silently."""
 
-    CASES = (("deploy.sh", ("sensors", "add")), ("genuser.sh", ("users", "add")))
+    CASES = (("deploy.sh", ("sensors", "add")),)
 
     def with_tpot(self):
         write(os.path.join(self.tpotce, "tpot"),
@@ -590,10 +590,7 @@ class WrapperOptionsTest(Harness):
                  ("deploy.sh", ["--ssh-port="], "--ssh-port takes a number, not an empty value."),
                  ("deploy.sh", ["--ssh-port", ""], "--ssh-port takes a number, not an empty value."),
                  ("deploy.sh", ["10.0.0.2"], "Unexpected argument 10.0.0.2."),
-                 ("deploy.sh", ["-x"], "Unknown option -x."),
-                 ("genuser.sh", ["--bogus"], "Unknown option --bogus."),
-                 ("genuser.sh", ["alice", "bob"], "Unexpected argument bob."),
-                 ("genuser.sh", ["--password"], "Unknown option --password."))
+                 ("deploy.sh", ["-x"], "Unknown option -x."))
         for script, args, text in cases:
             with self.subTest(script=script, args=args):
                 result = self.run_with(script, (), *args)
@@ -602,12 +599,6 @@ class WrapperOptionsTest(Harness):
                 self.assertIn(f"{script} -h shows the options.", result.stderr)
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(self.calls(), "")
-
-    def test_both_wrappers_name_an_empty_number_the_same_way(self):
-        """genuser.sh has no number option today, its parser is the one of deploy.sh (r2-RA 6)."""
-        for script in ("deploy.sh", "genuser.sh"):
-            with self.subTest(script=script):
-                self.assertTrue('takes a number, not ${myVALUE:-an empty value}.' in base.read(script), script)
 
     def test_no_logo_before_a_usage_error(self):
         self.with_tpot()
@@ -622,15 +613,13 @@ class WrapperOptionsTest(Harness):
                 self.assertIn("rc=1", out)
                 self.assertNotIn("telekom security", out)
                 self.assertNotIn("T-Pot Sensor deploy", out)
-                self.assertNotIn("T-Pot Web user", out)
                 self.assertEqual(self.calls(), "")
 
     def test_good_options_are_handed_over_unchanged(self):
         self.with_tpot()
         cases = (("deploy.sh", ["--host", "10.0.0.2", "--ssh-user=admin", "-y", "--no-become-pass", "--ssh-port",
                                 "2222", "--hive-address", "hive.example.org", "--yes"]),
-                 ("deploy.sh", []), ("genuser.sh", ["alice", "--password-stdin", "--allow-weak"]),
-                 ("genuser.sh", ["--", "-alice"]), ("genuser.sh", []))
+                 ("deploy.sh", []))
         for script, args in cases:
             with self.subTest(script=script, args=args):
                 result = self.run_with(script, (), *args)
@@ -640,13 +629,11 @@ class WrapperOptionsTest(Harness):
                 os.remove(os.path.join(self.home, "calls"))
 
     def test_without_tpot_options_for_it_are_a_usage_error(self):
-        """No tpot (cannot be set up): deploy.sh / genuser.sh ask as before, an option or a name for tpot is
+        """No tpot (cannot be set up): deploy.sh asks as before, an option or a name for tpot is
         not left out silently: an error naming the command, before any question, docker or Ansible."""
         for _ in self.both():
             for script, args, command in (("deploy.sh", ["--host", "10.0.0.2"], "tpot sensors add"),
-                                          ("deploy.sh", ["-y"], "tpot sensors add"),
-                                          ("genuser.sh", ["alice"], "tpot users add"),
-                                          ("genuser.sh", ["--password-stdin"], "tpot users add")):
+                                          ("deploy.sh", ["-y"], "tpot sensors add")):
                 with self.subTest(script=script, args=args):
                     result = self.run_with(script, ANSWERS, *args)
                     self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
@@ -659,7 +646,7 @@ class WrapperOptionsTest(Harness):
 
 
 class ReadmeTest(unittest.TestCase):
-    """The README says what tpot sensors add / deploy.sh take as addresses, and that the wrappers check
+    """The README says what tpot sensors add / deploy.sh take as addresses, and that deploy.sh checks
     the options of tpot like the other scripts (RA6, RA11)."""
 
     def test_the_hive_address_is_ipv4_or_a_host_name(self):
@@ -675,20 +662,18 @@ class ReadmeTest(unittest.TestCase):
         self.assertIn("IPv4 (A) record", section)
         self.assertIn("IPv6-only **Hive** cannot take sensors yet", section)
 
-    def test_a_wrong_option_of_the_wrappers(self):
+    def test_a_wrong_option_of_the_wrapper(self):
         readme = base.read("README.md")
         section = readme[readme.index("\n## The T-Pot Scripts\n"):]
         section = section[:section.index("\n## ", 1)]
-        self.assertIn("`genuser.sh` and `deploy.sh` check the options of the `tpot` command they hand over to",
-                      section)
+        self.assertIn("`deploy.sh` checks the options of the `tpot` command it hands over to", section)
 
 
 class FallbackHelpTest(Harness):
-    """N1: without tpot, -h / --help of deploy.sh and genuser.sh is a short help that names the
+    """N1: without tpot, -h / --help of deploy.sh is a short help that names the
     command of the T-Pot Manager; no question, no docker, no Ansible."""
 
-    CASES = (("deploy.sh", "tpot sensors add", "T-Pot Sensor deploy"),
-             ("genuser.sh", "tpot users add", "T-Pot Web user"))
+    CASES = (("deploy.sh", "tpot sensors add", "T-Pot Sensor deploy"),)
 
     def test_help_without_tpot(self):
         for _ in self.both():

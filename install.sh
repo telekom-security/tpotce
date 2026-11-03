@@ -859,7 +859,7 @@ fuUI_LINUX_ONLY () {
     "") mySYSTEM="an unknown system" ;;
   esac
   fuUI_ERROR "$1 does not run on ${mySYSTEM}."
-  fuUI_HINT "$1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+  fuUI_HINT "$1 runs on Linux: a T-Pot host, a build host or a VM." >&2
   exit "${2:-1}"
 }
 
@@ -1917,6 +1917,17 @@ if [[ ! "${myMACHINE}" =~ ^(x86_64|amd64|aarch64|arm64)$ ]] || [ "${myBITS:-64}"
     fuUI_ERROR "T-Pot needs a 64-bit system (x86-64 or arm64), this one is ${myMACHINE:-unknown}${myBITS:+ with a ${myBITS}-bit userland}."
     fuUI_INFO "32-bit systems are not supported. For T-Pot Mobile use Raspberry Pi OS Lite (64-bit)."
     fuUI_INFO "See the T-Pot README for host requirements and support tiers."
+    echo
+    mark_failed
+    exit 1
+fi
+
+# WSL2 is no T-Pot host: its Docker sits behind the network and the firewall of Windows, the
+# honeypots would not see the attackers. Its kernel says so (uname -r: ...-microsoft-standard-WSL2).
+if [[ "$(uname -r 2>/dev/null)" =~ [Mm]icrosoft ]];
+  then
+    fuUI_ERROR "T-Pot does not run on WSL2, it needs a Linux host of its own."
+    fuUI_INFO "Install Debian on a machine or in a VM, see the T-Pot README for host requirements."
     echo
     mark_failed
     exit 1

@@ -163,7 +163,7 @@ myUP="http://127.0.0.1:64298" myGET_CODE=200 myGET_BODY='{}' \
   fuSTUB_CHECK "200 without a policy writes nothing" \
   "# Warning: Elasticsearch answered without the ILM policy tpot, it is not checked." \
   "GET http://127.0.0.1:64298/_ilm/policy/tpot"
-# the published port, or the service name of the compose network (MAC_WIN: tpotinit is no host container)
+# the published port, or the service name of the compose network (tpotinit is no host container)
 export COMPOSE="${myDIR}/net.yml"
 myUP="http://elasticsearch:9200" myGET_CODE=404 myGET_BODY='{}' \
   fuSTUB_CHECK "Elasticsearch by its service name when tpotinit has no host network" \

@@ -314,7 +314,7 @@ class WiringTest(unittest.TestCase):
                          [], between)
 
     def test_tpotinit_reaches_elasticsearch_in_every_edition(self):
-        # host network: the published 127.0.0.1:64298; otherwise (MAC_WIN) the network of elasticsearch
+        # host network: the published 127.0.0.1:64298; otherwise the network of elasticsearch
         script = self.read("docker", "tpotinit", "dist", "bin", "es_retention.sh")
         self.assertIn('echo "http://127.0.0.1:64298"', script)
         self.assertIn('echo "http://elasticsearch:9200"', script)
@@ -369,7 +369,8 @@ class WiringTest(unittest.TestCase):
     def test_a_sigterm_during_the_wait_before_autoheal_ends_tpotinit_at_once(self):
         import signal
         import time
-        script = (self.cleanup_function() + 'PID=""\nTPOT_OSTYPE=test\nsleep 30 &\nmyILM_PID=$!\n'
+        # the firewall rules and blackhole routes of the host are left alone here
+        script = (self.cleanup_function().replace("/opt/tpot/bin/", "true ") + 'PID=""\nsleep 30 &\nmyILM_PID=$!\n'
                   'echo "ilm=${myILM_PID}"\ntrap cleanup SIGTERM\nsleep 60 & wait $!\necho "went on"\n')
         with tempfile.TemporaryDirectory() as tmp:
             log = os.path.join(tmp, "out")
@@ -1200,7 +1201,6 @@ class RunEnvRetentionTest(unittest.TestCase):
         state = state or elastic.Status(start, "", "unreachable", "Elasticsearch is not reachable (refused)")
         with mock.patch.object(settings, "load", lambda **kwargs: original(repo, **kwargs)), \
                 mock.patch("tpotctl.elastic.status", return_value=state) as status, \
-                mock.patch("tpotctl.ops.host_ostype", return_value="linux"), \
                 redirect_stdout(out), redirect_stderr(out):
             self.assertEqual(cli.main(["env", "set"] + list(assignments)), 0, out.getvalue())
         self.status_calls = status.call_count

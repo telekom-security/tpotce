@@ -65,7 +65,7 @@ class DionaeaRootsTest(unittest.TestCase):
             with self.subTest(file=path.relative_to(ROOT).as_posix()):
                 for key, value in LIMITS.items():
                     self.assertEqual(service.get(key), value, f"dionaea {key}")
-        self.assertGreaterEqual(found, 7)
+        self.assertGreaterEqual(found, 6)
 
     def test_tmp_is_a_tmpfs(self):
         found = 0
@@ -77,7 +77,7 @@ class DionaeaRootsTest(unittest.TestCase):
             with self.subTest(file=path.relative_to(ROOT).as_posix()):
                 self.assertTrue(service.get("read_only"))
                 self.assertIn(TMP, service.get("tmpfs") or [])
-        self.assertGreaterEqual(found, 7)
+        self.assertGreaterEqual(found, 6)
 
     def test_roots_are_read_only(self):
         found = 0
@@ -95,8 +95,8 @@ class DionaeaRootsTest(unittest.TestCase):
                 self.assertEqual(sorted(mounts), sorted(ROOTS), "the four roots must be mounted")
                 for name, read_only in sorted(mounts.items()):
                     self.assertTrue(read_only, f"roots/{name} is writable, it must end in :ro")
-        # catalogue, standard, sensor, mobile, mac_win, root file, own file
-        self.assertGreaterEqual(found, 7)
+        # catalogue, standard, sensor, mobile, root file, own file
+        self.assertGreaterEqual(found, 6)
 
     def test_storage_limits_come_from_env(self):
         """The three limits are mapped from .env with the defaults of the config files."""

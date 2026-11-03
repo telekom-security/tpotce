@@ -95,9 +95,6 @@ VTE_TRUECOLOR = 3600          # VTE 0.36
 
 # a TERM (lowercased) of a terminal without colours, as Rich sees it
 DUMB_TERMS = ("dumb", "unknown")
-# a console of Windows has no TERM and says what it can itself (Rich asks it): there the rule
-# only counts where it knows true colour (Windows Terminal, a choice of the user's)
-CONSOLE_KNOWS = os.name == "nt"
 _ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 
 
@@ -109,11 +106,10 @@ def ascii_lower(text: str) -> str:
 def dumb_terminal(environ) -> bool:
     """A terminal that shows no colours at all (gum at TERM=dumb leaves out bold too): TERM dumb or unknown
     in any case, or empty or none (bash makes an unset TERM dumb itself), as fuUI_DUMB of the scripts (the
-    cases are tests/color_cases.json). A console of Windows has no TERM and says what it can itself
-    (CONSOLE_KNOWS): no TERM is no dumb terminal there. NO_COLOR is none either (the colours go, bold
-    stays); the depth (terminal_colors) stays the one of the rule."""
+    cases are tests/color_cases.json). NO_COLOR is none (the colours go, bold stays); the depth
+    (terminal_colors) stays the one of the rule."""
     term = ascii_lower(environ.get("TERM") or "")
-    return term in DUMB_TERMS or (not term and not CONSOLE_KNOWS)
+    return term in DUMB_TERMS or not term
 
 
 def terminal_colors(environ) -> str:
@@ -173,8 +169,6 @@ def apply_color_system(environ) -> None:
     environ.pop(SET_MARK, None)
     chosen = load(environ=environ).colors
     colors = chosen if chosen != "auto" else terminal_colors(environ)
-    if CONSOLE_KNOWS and chosen == "auto" and colors != "truecolor":
-        return
     environ["TEXTUAL_COLOR_SYSTEM"] = environ[SET_MARK] = TEXTUAL_NAMES.get(colors, colors)
 
 
@@ -187,8 +181,7 @@ def console_color_system(stream=None, environ=None):
     the depth of the rule (detect_colors), so the tables of tpot status / ps / images have the colours
     of the Manager and the scripts (iTerm2 over SSH: truecolor); None at a dumb terminal (dumb_terminal:
     no colours, as Rich, say and the scripts there); "auto" when stream is no terminal (Rich then leaves
-    the colours out, or takes FORCE_COLOR) and for a console of Windows that the rule knows nothing of
-    (CONSOLE_KNOWS). NO_COLOR is Rich's own: it strips the colours of any depth."""
+    the colours out, or takes FORCE_COLOR). NO_COLOR is Rich's own: it strips the colours of any depth."""
     import sys
     env = os.environ if environ is None else environ
     out = sys.stdout if stream is None else stream
@@ -202,8 +195,6 @@ def console_color_system(stream=None, environ=None):
         return None
     chosen = load(environ=env).colors
     colors = chosen if chosen != "auto" else terminal_colors(env)
-    if CONSOLE_KNOWS and chosen == "auto" and colors != "truecolor":
-        return "auto"
     return RICH_NAMES[colors]
 
 

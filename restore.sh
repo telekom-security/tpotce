@@ -100,7 +100,7 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
         "") mySYSTEM="an unknown system" ;;
       esac
       echo "### [ERROR] - $1 does not run on ${mySYSTEM}." >&2
-      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM." >&2
       exit "${2:-1}"
     }
     fuUI_RESULT () {
@@ -1256,8 +1256,15 @@ while getopts ":lf:ycg:B:h" opt; do
   esac
 done
 
-# A T-Pot host is Linux (WSL2 too): elsewhere it stops before any sudo, docker or git
+# A T-Pot host is Linux: elsewhere it stops before any sudo, docker or git
 fuUI_LINUX_ONLY restore.sh
+
+# WSL2 is Linux to uname -s, but no T-Pot host (tpotinit stops there, its kernel names Microsoft)
+if [[ "$(uname -r 2>/dev/null)" =~ [Mm]icrosoft ]];
+  then
+    fuUI_ERROR "T-Pot does not run on WSL2, restore the backup on a Linux host (Debian recommended)."
+    exit 1
+fi
 
 # -g: only known groups
 for myGROUP in ${myGROUPS//,/ };

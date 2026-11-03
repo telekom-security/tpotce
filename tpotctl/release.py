@@ -96,7 +96,6 @@ PLACES = (
     Place(("CITATION.cff",), r"^version: " + V + r"\s*$", "CITATION.cff version (date-released is set by hand)"),
     Place(("docker/nginx/dist/html/index.html",), r'<span class="version">' + V + r"</span>",
           "the version on the landing page (static HTML)"),
-    Place(("genuserwin.ps1",), r"dtagdevsec/tpotinit:" + V, "the tpotinit image of the Windows web user script"),
     Place(("docker/p0f/dist/run.sh",), r"dtagdevsec/p0f:" + V, "the offline example in the header of run.sh"),
     Place(("docker/p0f/tools/build_os_confidence.py",), r'default="dtagdevsec/p0f:' + V + r'"',
           "the default image of the p0f confidence builder"),
@@ -128,7 +127,7 @@ EXCLUDED = (
 )
 
 # the scripts and modules that must read the version (fuUI_VERSION, the file `version`)
-SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh",
+SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "deploy.sh",
            "docker/_builder/builder.sh", "installer/lib/ui.sh",
            "tpotctl/*.py", "tpotctl/*/*.py")
 

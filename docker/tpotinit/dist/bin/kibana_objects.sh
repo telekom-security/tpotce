@@ -30,7 +30,7 @@ function fuKO_WAIT_LIMIT () {
 }
 
 # prints the one URL Kibana is reached by: TPOT_KIBANA_URL, else the service name when tpotinit is no
-# host container (MAC_WIN: it joins nginx_local), else the port Kibana publishes (as fuILM_CANDIDATES)
+# host container (it joins nginx_local), else the port Kibana publishes (as fuILM_CANDIDATES)
 function fuKO_URL () {
   local myFILE="${COMPOSE:-/tmp/tpot/docker-compose.yml}" myMODE
   if [[ -n "${TPOT_KIBANA_URL:-}" ]];

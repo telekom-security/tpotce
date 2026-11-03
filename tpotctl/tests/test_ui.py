@@ -1925,7 +1925,7 @@ class HelpersTest(unittest.TestCase):
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.stderr, f"### [ERROR] - update.sh does not run on {name}.\n"
                                                 "###   update.sh runs on Linux: a T-Pot host, a build host or a "
-                                                "VM, WSL2 on Windows.\n")
+                                                "VM.\n")
         result = self.run_ui('fuUI_LINUX_ONLY builder.sh 3; echo "goes on"', PATH=path, FAKE_UNAME_S="Darwin")
         self.assertEqual(result.returncode, 3)
         self.assertIn("builder.sh does not run on macOS.", result.stderr)
@@ -2058,8 +2058,8 @@ class OldBashTest(unittest.TestCase):
                 self.assertEqual(result.stdout, HELP_TEXT)
                 self.assertEqual(result.stderr, "### [ERROR] - Unknown option -Z.\n###   update.sh -h shows the options.\n"
                                                 "### [ERROR] - update.sh does not run on macOS.\n"
-                                                "###   update.sh runs on Linux: a T-Pot host, a build host or a VM, "
-                                                "WSL2 on Windows.\n")
+                                                "###   update.sh runs on Linux: a T-Pot host, a build host or a VM."
+                                                "\n")
 
 
 def script_fallback(path):
@@ -2091,7 +2091,7 @@ def functions(text):
     return out
 
 
-SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh",
+SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "deploy.sh",
            "docker/_builder/builder.sh",
            "docker/tpotinit/dist/bin/hptest.sh", "docker/tpotinit/dist/bin/attackmap_pipeline_test.sh")
 
@@ -2246,7 +2246,7 @@ class FallbackTest(unittest.TestCase):
                 if file.endswith(".sh") and "\n# >>> plain fallback" in read(os.path.join(top, file)):
                     found.add(os.path.relpath(os.path.join(top, file), REPO))
         generated = {os.path.relpath(path, REPO) for path in ui_logo.FALLBACK_FILES}
-        self.assertEqual(generated, {"update.sh", "restore.sh", "genuser.sh", "deploy.sh",
+        self.assertEqual(generated, {"update.sh", "restore.sh", "deploy.sh",
                                      "docker/_builder/builder.sh"})
         self.assertEqual(found, generated | set(ui_logo.FALLBACK_EXCLUDED))
         self.assertFalse(generated & set(ui_logo.FALLBACK_EXCLUDED))

@@ -1807,7 +1807,7 @@ class LockTest(unittest.TestCase):
                     pass
 
     def test_a_file_system_without_locks_runs_without_the_lock(self):
-        """Docker Desktop bind mounts (MAC_WIN) may have no flock: the run goes on, warned once."""
+        """A file system without flock (some network or FUSE mounts): the run goes on, warned once."""
         self.addCleanup(ko._UNLOCKED_WARNED.clear)
         for number in sorted(ko.NO_LOCKS):
             with self.subTest(errno=errno.errorcode.get(number, number)):

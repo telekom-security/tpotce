@@ -1,4 +1,4 @@
-"""install.sh, uninstall.sh, genuser.sh and deploy.sh look like the other T-Pot scripts: the T-Pot
+"""install.sh, uninstall.sh and deploy.sh look like the other T-Pot scripts: the T-Pot
 logo at a terminal (never in the marks mode), the help in one style, usage errors with a hint,
 spinners for the long steps and a summary at the end.
 
@@ -236,6 +236,26 @@ class InstallShTest(Scripts):
                     self.assertIn(f"T-Pot needs a 64-bit system (x86-64 or arm64), this one is {machine} "
                                   f"with a {bits}-bit userland.", result.stdout)
                     self.assertIn("For T-Pot Mobile use Raspberry Pi OS Lite (64-bit).", result.stdout)
+                    self.assertNotIn("Only the following distributions", result.stdout)
+                    self.assertEqual(self.calls(), "")
+                    if marks:
+                        self.assertEqual(self.marks(result.stdout)[-2:],
+                                         ["@@tpot fail checks", "@@tpot phase failed"])
+
+    def test_wsl2_stops_before_anything_happens(self):
+        """WSL2 is Linux to uname -s, its kernel release names Microsoft: no T-Pot host."""
+        for release, ok in (("5.15.153.1-microsoft-standard-WSL2", False), ("4.4.0-19041-Microsoft", False),
+                            ("6.12.48+deb13-amd64", True)):
+            for marks in ([], ["-M"]):
+                with self.subTest(release=release, marks=marks):
+                    write(os.path.join(self.home, "calls"), "")
+                    result = self.install("-s", "-t", "s", *marks, FAKE_UNAME_R=release)
+                    if ok:
+                        self.assertEqual(result.returncode, 0, result.stdout[-800:])
+                        self.assertNotIn("WSL2", result.stdout)
+                        continue
+                    self.assertEqual(result.returncode, 1, result.stdout[-800:])
+                    self.assertIn("T-Pot does not run on WSL2, it needs a Linux host of its own.", result.stdout)
                     self.assertNotIn("Only the following distributions", result.stdout)
                     self.assertEqual(self.calls(), "")
                     if marks:
@@ -853,7 +873,7 @@ def went_no_further(case):
 
 
 class HandoverTest(Scripts):
-    """genuser.sh and deploy.sh hand over to tpot; at a terminal the T-Pot logo comes first."""
+    """deploy.sh hands over to tpot; at a terminal the T-Pot logo comes first."""
 
     def setUp(self):
         super().setUp()
@@ -862,9 +882,8 @@ class HandoverTest(Scripts):
         write(os.path.join(self.tpotce, "tpot"),
               "#!/bin/sh\n[ \"$1\" = setup ] && exit 0\necho \"tpot $*\" >> \"$HOME/calls\"\n", 0o755)
 
-    # an argument each takes: the name of the web user, the address of the sensor
-    CASES = (("genuser.sh", "users add", "T-Pot Web user", ("alice",)),
-             ("deploy.sh", "sensors add", "T-Pot Sensor deploy", ("--host", "10.0.0.2")))
+    # an argument it takes: the address of the sensor
+    CASES = (("deploy.sh", "sensors add", "T-Pot Sensor deploy", ("--host", "10.0.0.2")),)
 
     def test_without_a_terminal_it_only_hands_over(self):
         for script, command, _title, args in self.CASES:

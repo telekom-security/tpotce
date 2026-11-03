@@ -16,14 +16,11 @@ import customizer_core as core  # noqa: E402
 # keys an edition may set differently from the catalog: the host ports it chose to
 # avoid clashes, its own startup order and networks
 ALLOWED = {"ports", "networks", "depends_on"}
-# Docker Desktop has no host networking for tpotinit and the NSM services and other mounts
-ALLOWED_MAC_WIN = ALLOWED | {"network_mode", "cap_add", "volumes"}
 # every honeypot that talks to no other container shares one network with ICC off,
 # the rest keep a network of their own
 SHARED = "honeypot_local"
 OWN_NETWORK = {"nginx_local", "ewsposter_local", "tpotinit_local", "suricata_local", "default"}
-META_KEYS = {"group", "description", "required", "requires", "conflicts", "hidden", "hive_only", "linux_only",
-             "edition"}
+META_KEYS = {"group", "description", "required", "requires", "conflicts", "hidden", "hive_only", "edition"}
 
 
 class CatalogTest(unittest.TestCase):
@@ -33,8 +30,14 @@ class CatalogTest(unittest.TestCase):
         cls.catalog = core.Catalog()
 
     def test_editions_found(self):
-        for edition in ("STANDARD", "SENSOR", "MINI", "MOBILE", "LLM", "TARPIT", "MAC_WIN"):
+        for edition in ("STANDARD", "SENSOR", "MINI", "MOBILE", "LLM", "TARPIT"):
             self.assertIn(edition, self.catalog.editions)
+
+    def test_no_docker_desktop_edition(self):
+        """T-Pot runs on Linux only: no MAC_WIN edition and no linux_only flag in the catalogue."""
+        self.assertNotIn("MAC_WIN", self.catalog.editions)
+        self.assertFalse(os.path.exists(os.path.join(core.COMPOSE_DIR, "mac_win.yml")))
+        self.assertNotIn("linux_only", open(core.CATALOG_FILE, encoding="utf-8").read())
 
     def test_every_service_has_metadata(self):
         groups = {g for g, _title in core.GROUPS}
@@ -63,7 +66,7 @@ class CatalogTest(unittest.TestCase):
 
     def test_editions_only_differ_in_allowed_keys(self):
         for edition, compose in self.catalog.editions.items():
-            allowed = ALLOWED_MAC_WIN if edition == "MAC_WIN" else ALLOWED
+            allowed = ALLOWED
             for name, definition in compose.services.items():
                 reference = dict(self.catalog.catalog.services[name])
                 reference.pop("x-tpot", None)

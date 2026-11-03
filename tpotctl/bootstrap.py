@@ -11,6 +11,7 @@ the one of the distribution when there is one.
 """
 
 import contextlib
+import fcntl
 import hashlib
 import os
 import re
@@ -108,8 +109,6 @@ def old_venv_dir() -> str:
 
 
 def venv_python(directory: str) -> str:
-    if os.name == "nt":
-        return os.path.join(directory, "Scripts", "python.exe")
     return os.path.join(directory, "bin", "python3")
 
 
@@ -153,8 +152,6 @@ def install_hint(package: str = "python3-venv") -> str:
     """What to install when this Python cannot create a venv."""
     if sys.platform == "darwin":
         return "Install Python from python.org or Homebrew (brew install python), both can create a venv."
-    if os.name == "nt":
-        return "Install Python from python.org, it can create a venv."
     return linux_hint(os_release_ids(), package)
 
 
@@ -199,7 +196,7 @@ def apt_get():
 
 def interactive() -> bool:
     """A person at a terminal: the question goes to stderr, the answer comes from stdin. stdout may be
-    redirected (tpot attackers > file, setup > /dev/null in genuser.sh) and must not swallow it."""
+    redirected (tpot attackers > file, setup > /dev/null in a script) and must not swallow it."""
     return sys.stdin.isatty() and sys.stderr.isatty()
 
 
@@ -355,10 +352,6 @@ def _clear_leftovers(directory: str) -> None:
     if not (os.path.exists(directory + ".new") or os.path.exists(directory + ".old")):
         return
     try:
-        import fcntl
-    except ImportError:             # Windows: left for the next build
-        return
-    try:
         with open(directory + ".lock", "w") as handle:
             try:
                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -376,11 +369,6 @@ def _clear_leftovers(directory: str) -> None:
 @contextlib.contextmanager
 def _build_lock(directory: str):
     os.makedirs(os.path.dirname(directory), exist_ok=True)
-    try:
-        import fcntl
-    except ImportError:          # Windows: the customizer only, no menu that rebuilds meanwhile
-        yield
-        return
     with open(directory + ".lock", "w") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:

@@ -19,12 +19,12 @@ from tpotctl.tests import test_ui as ui  # noqa: E402
 
 REPO = base.REPO
 # the scripts with questions: the logo at their start
-INTERACTIVE = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh",
+INTERACTIVE = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "deploy.sh",
                "docker/_builder/builder.sh")
 # without questions: the small wordmark only
 QUIET = ("docker/tpotinit/dist/bin/hptest.sh", "docker/tpotinit/dist/bin/attackmap_pipeline_test.sh")
-# their -h is the one of the T-Pot Manager command they hand over to (tpot users add / tpot sensors add)
-HANDED_OVER = ("genuser.sh", "deploy.sh")
+# its -h is the one of the T-Pot Manager command it hands over to (tpot sensors add)
+HANDED_OVER = ("deploy.sh",)
 LOGO = "telekom security"         # the credits of the logo, only the logo has them
 
 
@@ -170,7 +170,7 @@ class ScriptsLookAlikeTest(base.Harness):
 
     def test_help_never_shows_the_logo(self):
         """-h at a terminal of 120 x 49 with gum: the help, never the T-Pot logo (the decision of 8f),
-        in every script that shows it for a run. genuser.sh / deploy.sh in a ~/tpotce without tpot,
+        in every script that shows it for a run. deploy.sh in a ~/tpotce without tpot,
         the way of their own; a run of update.sh in the same place shows it (the test can see it)."""
         stub = os.path.join(self.bin, "uname")
         with open(stub, "w", encoding="utf-8") as out:
@@ -245,11 +245,11 @@ class ScriptsLookAlikeTest(base.Harness):
         self.assertIn("not for `-h`", section)
 
     def test_handed_over_help_is_the_managers(self):
-        """genuser.sh / deploy.sh -h: no banner of their own, the exec to tpot shows its help."""
+        """deploy.sh -h: no banner of its own, the exec to tpot shows its help."""
         for path in HANDED_OVER:
             with self.subTest(script=path):
                 text = body(path)
-                self.assertTrue(re.search(r'exec "\$\{?myTPOT\}?" (users|sensors) add "\$@"', text), path)
+                self.assertTrue(re.search(r'exec "\$\{?myTPOT\}?" sensors add "\$@"', text), path)
 
 
 class CdpathTest(base.Harness):
@@ -258,7 +258,7 @@ class CdpathTest(base.Harness):
     checkout (uninstall.sh stops, update.sh / restore.sh lose installer/lib/ui.sh, a relative -B / -c
     file names another one). The scripts clear it before their first cd."""
 
-    SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh")
+    SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "deploy.sh")
     CDPATH = ".:/nonexistent-tpot-cdpath"
 
     def test_the_scripts_find_their_checkout(self):

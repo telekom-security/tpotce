@@ -192,7 +192,7 @@ def _credentials(rule: Rule, value: str, out: List[Problem]) -> None:
             continue
         if rule.type == "htpasswd_list":
             out.append(Problem("error", rule.key, "an entry is not a htpasswd user (name:hash), please create it "
-                                                  "with genuser.sh."))
+                                                  "with tpot users add."))
         else:
             out.append(Problem("error", rule.key, "an entry is not base64 of name:password."))
 

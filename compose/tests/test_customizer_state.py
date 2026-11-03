@@ -25,7 +25,7 @@ class CustomizerStateTest(unittest.TestCase):
 
     def test_editions_use_the_installer_order(self):
         self.assertEqual(self.catalog.edition_names(),
-                         ["STANDARD", "SENSOR", "LLM", "MINI", "MOBILE", "TARPIT", "MAC_WIN"])
+                         ["STANDARD", "SENSOR", "LLM", "MINI", "MOBILE", "TARPIT"])
 
     def test_reverted_service_changes_are_clean(self):
         self.assertFalse(self.state.changed)

@@ -164,17 +164,12 @@ class RuleTest(unittest.TestCase):
 
     def test_a_dumb_terminal(self):
         """No colours show at a TERM dumb or unknown (any case), an empty TERM or none: bash makes an unset
-        TERM dumb itself, the scripts and say agree. A console of Windows has no TERM and is no dumb
-        terminal (it says what it can itself, CONSOLE_KNOWS); dumb or unknown are dumb there too."""
+        TERM dumb itself, the scripts and say agree."""
         for env, dumb in (({"TERM": "dumb"}, True), ({"TERM": "Unknown"}, True), ({"TERM": ""}, True), ({}, True),
                           ({"TERM": "xterm"}, False), ({"TERM": "dumb-ish"}, False), ({"TERM": " "}, False),
                           ({"TERM": "xterm", "NO_COLOR": "1"}, False)):
             with self.subTest(env=env):
                 self.assertEqual(prefs.dumb_terminal(env), dumb)
-        with mock.patch.object(prefs, "CONSOLE_KNOWS", True):
-            for env, dumb in (({}, False), ({"TERM": ""}, False), ({"TERM": "dumb"}, True), ({"TERM": "xterm"}, False)):
-                with self.subTest(env=env, console="Windows"):
-                    self.assertEqual(prefs.dumb_terminal(env), dumb)
 
     def test_reading_tpot_json_is_linear(self):
         """read_file runs at every start of the launcher and every message of say: a file of many spaces
@@ -370,23 +365,6 @@ class ApplyTest(unittest.TestCase):
         prefs.apply_color_system(env)
         self.assertEqual(self.told(env), {"TEXTUAL_COLOR_SYSTEM": "256", prefs.SET_MARK: "256"})
 
-    def test_windows_asks_its_console(self):
-        """A console of Windows has no TERM: Rich asks the console itself (true colour on Windows 10),
-        the rule only adds what it knows for sure (Windows Terminal)."""
-        with mock.patch.object(prefs, "CONSOLE_KNOWS", True):
-            env = self.environ()
-            prefs.apply_color_system(env)
-            self.assertEqual(self.told(env), {})
-            env = self.environ(WT_SESSION="0b7a3f5e")
-            prefs.apply_color_system(env)
-            self.assertEqual(self.told(env), {"TEXTUAL_COLOR_SYSTEM": "truecolor", prefs.SET_MARK: "truecolor"})
-            env = self.environ(TPOT_COLORS="256")
-            prefs.apply_color_system(env)
-            self.assertEqual(self.told(env), {"TEXTUAL_COLOR_SYSTEM": "256", prefs.SET_MARK: "256"})
-            env = self.environ(TEXTUAL_COLOR_SYSTEM="256", TPOT_COLORS_SET="256")     # a restart there
-            prefs.apply_color_system(env)
-            self.assertEqual(self.told(env), {})
-
 
 class Tty(io.StringIO):
     def isatty(self):
@@ -425,12 +403,6 @@ class ConsoleTest(unittest.TestCase):
         env = self.environ(TERM="xterm-256color", LC_TERMINAL="iTerm2")
         self.assertEqual(prefs.console_color_system(io.StringIO(), env), "auto")
         self.assertEqual(prefs.console_color_system(object(), env), "auto")
-
-    def test_windows_asks_its_console(self):
-        with mock.patch.object(prefs, "CONSOLE_KNOWS", True):
-            self.assertEqual(prefs.console_color_system(Tty(), self.environ()), "auto")
-            self.assertEqual(prefs.console_color_system(Tty(), self.environ(WT_SESSION="x")), "truecolor")
-            self.assertEqual(prefs.console_color_system(Tty(), self.environ(TPOT_COLORS="16")), "standard")
 
     def test_the_environment_of_the_process_by_default(self):
         with mock.patch.dict(os.environ, {"TERM": "xterm", "TPOT_COLORS": "256"}):

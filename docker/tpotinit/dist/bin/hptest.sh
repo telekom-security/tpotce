@@ -305,8 +305,8 @@ if [ -n "${myBECOME_FILE}" ];
     sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
 fi
 
-# the check of this host is tpot check honeypots of the T-Pot Manager where it runs (as genuser.sh
-# hands over to tpot users add); another host, --nmap and --tools-only stay here
+# the check of this host is tpot check honeypots of the T-Pot Manager where it runs; another host,
+# --nmap and --tools-only stay here
 myTPOT="${myTPOTCE}/tpot"
 function fuTPOT_READY {
 	[ -x "${myTPOT}" ] && "${myTPOT}" setup >/dev/null 2>&1

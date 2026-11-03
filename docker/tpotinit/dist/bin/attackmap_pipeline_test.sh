@@ -157,8 +157,8 @@ function fuCHECKTYPES { # the types this test knows (tpot check pipeline takes e
   done
 }
 
-# the test is tpot check pipeline of the T-Pot Manager where it runs (as genuser.sh hands over to
-# tpot users add); this script is its fallback, i.e. inside the tpotinit image
+# the test is tpot check pipeline of the T-Pot Manager where it runs; this script is its fallback,
+# i.e. inside the tpotinit image
 myTPOT="$myTPOTCE/tpot"
 function fuTPOT_READY {
   [ -x "$myTPOT" ] && "$myTPOT" setup >/dev/null 2>&1

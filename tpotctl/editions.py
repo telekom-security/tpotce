@@ -52,20 +52,15 @@ def role_of(key: str) -> str:
     return {"sensor": "SENSOR", "mobile": "MOBILE"}.get(key.lower(), "HIVE")
 
 
-def available(repo_dir: str = REPO_DIR, linux: Optional[bool] = None) -> List[Choice]:
-    linux = ops.linux_host() if linux is None else linux
+def available(repo_dir: str = REPO_DIR) -> List[Choice]:
+    """The editions of compose/, the same on every host: off a T-Pot host (macOS) a switch only
+    prepares the checkout, T-Pot runs on Linux."""
     found = []
-    if linux:
-        for edition in installer.EDITIONS:
-            path = os.path.join(repo_dir, "compose", f"{edition.key}.yml")
-            if os.path.isfile(path):
-                found.append(Choice(edition.key, edition.title, edition.description, role_of(edition.key),
-                                    edition.ram_gb, edition.disk_gb, path))
-    else:
-        path = os.path.join(repo_dir, "compose", "mac_win.yml")
+    for edition in installer.EDITIONS:
+        path = os.path.join(repo_dir, "compose", f"{edition.key}.yml")
         if os.path.isfile(path):
-            found.append(Choice("mac_win", "macOS / Windows", "T-Pot on Docker Desktop for macOS and Windows.",
-                                "HIVE", 16, 256, path))
+            found.append(Choice(edition.key, edition.title, edition.description, role_of(edition.key),
+                                edition.ram_gb, edition.disk_gb, path))
     return found
 
 
@@ -90,10 +85,9 @@ def _read(path: str) -> str:
 
 
 def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None, users_ok: bool = True,
-         backup_dir: str = BACKUP_DIR, linux: Optional[bool] = None,
-         host_ostype: Optional[str] = None) -> SwitchPlan:
+         backup_dir: str = BACKUP_DIR) -> SwitchPlan:
     env = ops.env_values(repo_dir) if env is None else env
-    choices = {choice.key: choice for choice in available(repo_dir, linux)}
+    choices = {choice.key: choice for choice in available(repo_dir)}
     choice = choices.get(target.lower())
     if choice is None:
         raise EditionError(f"there is no edition {target} here, choose one of {', '.join(choices) or 'none'}")
@@ -126,18 +120,6 @@ def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = 
         if env.get("TPOT_TYPE") == "SENSOR":
             result.env_changes["TPOT_TYPE"] = "HIVE"
         result.needs_web_user = choice.role == "HIVE" and not users_ok
-    # TPOT_OSTYPE goes with the edition: MAC_WIN runs on Docker Desktop, the others on Linux
-    host = ops.host_ostype() if host_ostype is None else host_ostype
-    os_now = env.get("TPOT_OSTYPE", "linux")
-    if choice.key == "mac_win":
-        if host != "linux" and os_now != host:
-            result.env_changes["TPOT_OSTYPE"] = host
-    elif host != "linux":
-        # i.e. WSL2 with systemd: tpotinit sees the kernel of Docker Desktop, linux would stop it
-        result.warnings.append(f"This host runs {ops.OSTYPE_TEXT[host]}: tpotinit only starts the MAC_WIN "
-                               f"edition there.")
-    elif os_now != "linux":
-        result.env_changes["TPOT_OSTYPE"] = "linux"
     return result
 
 
@@ -217,7 +199,7 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
             from tpotctl import settings
             _mark("env", "Changing .env")
             current = settings.load(repo_dir)
-            # the switch is the confirmed step, it stands for the unlock of a fixed key (TPOT_OSTYPE)
+            # the switch is the confirmed step, it stands for the unlock of a fixed key
             current.change(plan.env_changes, unlocked=[key for key in plan.env_changes if current.can_unlock(key)])
             say.ok(", ".join(f"{key}={value}" for key, value in plan.env_changes.items()) + " in .env.")
         if add_user is not None:
@@ -226,7 +208,7 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
     except Exception as err:      # SettingsError, UsersError, OSError: T-Pot is not started like that
         raise EditionError(f"{err}. T-Pot is stopped. {back}")
     if not linux:
-        say.info("Start it with: docker compose up -d")
+        say.info("This is no T-Pot host, nothing is started: T-Pot runs on Linux (Debian recommended).")
         return
     _mark("prune", "Removing the networks of the old edition")
     try:

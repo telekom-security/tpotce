@@ -46,6 +46,10 @@ def prepare(argv):
 
 
 if __name__ == "__main__":
+    # T-Pot runs on Linux; macOS builds configurations for it, Windows is not supported
+    if os.name == "nt":
+        say.error("The customizer runs on Linux and macOS, not on Windows.")
+        sys.exit(2)
     # the colours chosen (TPOT_COLORS, prefs) reach Textual before anything imports it
     prefs.apply_color_system(os.environ)
     _python, _argv = prepare(sys.argv[1:])

@@ -125,7 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
     users = sub.add_parser("users", help="users of the T-Pot web UI (default: list)")
     user_actions = users.add_subparsers(dest="users_command", metavar="ACTION")
     user_actions.add_parser("list", help="the web users, entries T-Pot would not start with are marked")
-    for name, text in (("add", "add a web user (was: genuser.sh)"), ("passwd", "change the password of a web user")):
+    for name, text in (("add", "add a web user"), ("passwd", "change the password of a web user")):
         action = user_actions.add_parser(name, help=text)
         action.add_argument("name", nargs="?", help="asked for if left out" if name == "add" else None)
         action.add_argument("--password-stdin", action="store_true", help="read the password from stdin")
@@ -847,8 +847,7 @@ def run_env(args) -> int:
     from rich.markup import escape
     from tpotctl import settings as tsettings
     command = args.env_command or "list"
-    # check and set compare TPOT_OSTYPE with the host, as tpotinit does on start
-    current = tsettings.load(host_ostype=ops.host_ostype()) if command in ("check", "set") else tsettings.load()
+    current = tsettings.load()
     console = _console()
     if command == "get":
         value = current.values.get(args.key)
@@ -1417,7 +1416,9 @@ def run_edition(args) -> int:
                     password = handle.readline().rstrip("\n")
             else:
                 password = read_password(args)
-        if not confirm(f"Switch to the {plan.target.title} edition? T-Pot stops meanwhile.", args.yes):
+        question = f"Switch to the {plan.target.title} edition? T-Pot stops meanwhile." if ops.linux_host() else \
+            f"Switch to the {plan.target.title} edition? Only the compose file and .env change, this is no T-Pot host."
+        if not confirm(question, args.yes):
             return 1
         # a SENSOR does not serve nginxpasswd: what it holds is kept in nginxpasswd.lost, as tpotinit does
         add_user = (lambda: tusers.load().add(args.web_user, password, keep=True)) if plan.needs_web_user else None
@@ -1764,7 +1765,7 @@ def run_customizer(args: List[str]) -> int:
 def run_install(classic: bool) -> int:
     from tpotctl import installer
     if not sys.platform.startswith("linux"):
-        raise ops.OpsError("tpot install installs T-Pot on Linux, see the README for macOS and Windows")
+        raise ops.OpsError("tpot install installs T-Pot on Linux (Debian recommended), see the README")
     if installer.installed():
         raise ops.OpsError("T-Pot is installed on this host already, update it with: tpot update")
     if classic:
