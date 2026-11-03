@@ -1,0 +1,39 @@
+# The T-Pot ISO (/etc/systemd/system/tpot-iso.service, put here by late.sh): starts the T-Pot
+# installer of the ISO after the boot on the console (tty8), without a login, as the user created
+# during the installation (tpot-iso.service.d/user.conf, written by prepare.sh), until T-Pot is
+# installed (tpot.service). start.sh opens its graphical terminal there (terminal.sh); Quit keeps
+# a plain Debian and asks again at the next boot. A login on the console or via SSH starts it too
+# (profile.sh); one installer runs at a time.
+#   sudo systemctl disable tpot-iso.service   stops starting it at the boot
+[Unit]
+Description=T-Pot installer of the T-Pot ISO
+After=systemd-user-sessions.service systemd-logind.service network-online.target
+Wants=network-online.target
+ConditionPathExists=!/etc/systemd/system/tpot.service
+ConditionPathExists=/etc/systemd/system/tpot-iso.service.d/user.conf
+ConditionPathExists=/usr/local/share/tpot-iso/iso.conf
+
+[Service]
+Type=simple
+# a session of its own on seat0 (pam_systemd), so that Xorg runs without root on that VT once
+# it is the active one
+PAMName=login
+TTYPath=/dev/tty8
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+UtmpIdentifier=tty8
+UtmpMode=user
+WorkingDirectory=~
+EnvironmentFile=-/etc/default/locale
+Environment=TPOT_ISO_CONSOLE=1
+ExecStartPre=+-/usr/bin/chvt 8
+ExecStart=/bin/bash /usr/local/share/tpot-iso/start.sh
+ExecStopPost=+-/usr/bin/chvt 1
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

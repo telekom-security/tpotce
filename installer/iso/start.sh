@@ -1,19 +1,53 @@
 #!/usr/bin/env bash
-# The T-Pot installer of a T-Pot ISO installation (/usr/local/share/tpot-iso/start.sh): runs the
-# install.sh of the ISO with the repository and the branch the ISO was built for (iso.conf), the
-# same installer as on a prepared Debian. At a terminal it asks first: Enter keeps that source, a
-# branch (and a repository) of your own is for a test. Another source is cloned into ~/tpotce and
-# its own install.sh runs, so a test gets the installer of its branch; the T-Pot of the ISO that
-# prepare.sh put there is moved aside for it while untouched. The wheels of the ISO go to tpot setup
-# (TPOT_WHEELS) of either installer. The login hook
-# (/etc/profile.d/tpot-iso.sh) starts it at the first login, by hand:
+# The T-Pot installer of a T-Pot ISO installation (/usr/local/share/tpot-iso/start.sh).
+# tpot-iso.service starts it after the boot on the console (tty8) as the user created during the
+# installation, the login hook (/etc/profile.d/tpot-iso.sh) at a login, by hand:
 #   bash /usr/local/share/tpot-iso/start.sh [-b <branch>] [-r <repository>]
+# On the console it runs in the graphical terminal of the ISO (terminal.sh: Xorg with one
+# fullscreen xterm, no desktop), on the text console where that does not start. At a terminal it
+# asks which T-Pot: the one of this ISO (its install.sh with the repository and the branch of
+# iso.conf, the same installer as on a prepared Debian), the newest of that branch (fetched into
+# ~/tpotce, its own install.sh) or another branch or repository for a test (cloned into ~/tpotce,
+# its own install.sh; the T-Pot of the ISO that prepare.sh put there is moved aside for it while
+# untouched). Without a terminal the one of the ISO. One installer at a time: a lock in /run/lock
+# that goes along to install.sh. The wheels of the ISO go to tpot setup (TPOT_WHEELS) of either
+# installer.
 
-myDIR="$(CDPATH="" cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+unset CDPATH
+myDIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 myCONF="${myDIR}/iso.conf"
 myDEST="${HOME}/tpotce"
 myBACK="./update.sh -y -b master"
+myLOCK="${TPOT_ISO_LOCK:-/run/lock/tpot-iso.lock}"
+myINSTALLED="${TPOT_ISO_INSTALLED:-/etc/systemd/system/tpot.service}"
+myLOG="${XDG_STATE_HOME:-${HOME}/.local/state}/tpot/start.log"
+myLATER="The T-Pot installer starts again after the next boot or at a login"
+myBUSY_HINT="Wait until it ends, or end it there first (on the console: sudo systemctl stop tpot-iso.service)."
 myARGS=("$@")
+# the run in the graphical terminal of the console (fuCONSOLE): it got this far
+if [ -n "${TPOT_ISO_RAN:-}" ]; then : > "${TPOT_ISO_RAN}" 2>/dev/null; unset TPOT_ISO_RAN; fi
+# the console of tpot-iso.service closes with it: what it says there waits for Enter (fuPAUSE)
+myPAUSE=""
+if [ -n "${TPOT_ISO_PAUSE:-}" ] || { [ -n "${TPOT_ISO_CONSOLE:-}" ] && [ -z "${TPOT_ISO_TERMINAL_TRIED:-}" ]; }; then myPAUSE=1; fi
+unset TPOT_ISO_PAUSE
+
+# the look of the T-Pot scripts: the ui.sh of this ISO, else the one of ~/tpotce
+myUI_VERSION=""
+[ ! -r "${myDIR}/version" ] || IFS= read -r myUI_VERSION < "${myDIR}/version"
+myUI=""
+for myFILE in "${myDIR}/ui.sh" "${myDEST}/installer/lib/ui.sh"; do
+  if [ -r "${myFILE}" ]; then myUI="${myFILE}"; break; fi
+done
+if [ -z "${myUI}" ];
+  then
+    echo "T-Pot ISO: ${myDIR}/ui.sh is missing, the T-Pot installer cannot start." >&2
+    echo "  Run it by hand: bash ${myDIR}/install.sh" >&2
+    exit 1
+fi
+# shellcheck source=../lib/ui.sh
+. "${myUI}"
+fuUI_INIT
+myVERSION="${myUI_VERSION:-$(fuUI_VERSION)}"
 
 fuCONF () {
   # the value of $1 in iso.conf: KEY=VALUE lines, read and never sourced
@@ -29,18 +63,38 @@ fuCONF () {
   return 1
 }
 
+fuPAUSE () {
+  local myIN
+  [ -n "${myPAUSE}" ] && [ -t 0 ] || return 0
+  printf '%s' "Enter closes the T-Pot installer. " >&2
+  read -r myIN || true
+}
+
 fuSTOP () {
-  echo "T-Pot ISO: $1" >&2
+  fuUI_ERROR "$1"
   shift
-  local myLINE
-  for myLINE in "$@"; do echo "  ${myLINE}" >&2; done
+  [ "$#" -eq 0 ] || fuUI_HINT "$@" >&2
+  fuPAUSE
   exit 1
 }
 
 fuUSAGE () {
-  echo "T-Pot ISO: $1" >&2
-  echo "  bash ${myDIR}/start.sh -h shows the options." >&2
+  fuUI_ERROR "$1"
+  fuUI_HINT "bash ${myDIR}/start.sh -h shows the options." >&2
   exit 2
+}
+
+fuLATER () {
+  # nothing installed: rc $1
+  echo
+  fuUI_INFO "Nothing installed. ${myLATER} (by hand: bash ${myDIR}/start.sh)."
+  exit "$1"
+}
+
+fuDONE () {
+  fuUI_OK "T-Pot is installed already (${myINSTALLED}), the T-Pot installer has nothing to do."
+  fuUI_HINT "The T-Pot Manager: tpot"
+  exit 0
 }
 
 fuVALID_REPO () {
@@ -58,18 +112,22 @@ fuNORMALIZE_REPO () {
   echo "${myURL%.git}"
 }
 
+fuTRIM () {
+  # fuTRIM <text>: the text without the spaces around it
+  local myV="$1"
+  myV="${myV#"${myV%%[![:space:]]*}"}"
+  printf '%s' "${myV%"${myV##*[![:space:]]}"}"
+}
+
 fuHELP () {
-  cat <<HELP
-Usage: bash ${myDIR}/start.sh [-b <branch>] [-r <repository>]
-
-Installs T-Pot on this Debian. Without an option it asks at a terminal; Enter installs the source
-of this ISO: ${myISO_REPO} at ${myISO_BRANCH}.
-
-  -b <branch>      another branch, e.g. to test it; it is cloned into ~/tpotce and its own
-                   install.sh runs. A tag or a commit works too, update.sh cannot update it.
-  -r <repository>  another repository (default: the one of this ISO)
-  -h               this help
-HELP
+  fuUI_HELP "ISO installer" "bash ${myDIR}/start.sh [-b <branch>] [-r <repository>]" \
+    --about "Installs T-Pot on this Debian. tpot-iso.service starts it after the boot on the console (tty8, Alt+F8), a login starts it too, until T-Pot is installed." \
+    --about "At a terminal it asks which T-Pot: the one of this ISO (${myISO_REPO} at ${myISO_BRANCH}), the newest of that branch, or another branch or repository to test it. Without a terminal it installs the one of this ISO." \
+    --opt "-b <branch>" "another branch, e.g. to test it; it is cloned into ~/tpotce and its own install.sh runs. A tag or a commit works too, update.sh cannot update it." \
+    --opt "-r <repository>" "another repository (default: the one of this ISO)" \
+    --opt "-h" "this help" \
+    --note "One T-Pot installer at a time: a second one says where the first runs." \
+    --note "No start after the boot: sudo systemctl disable tpot-iso.service"
 }
 
 fuISO_SOURCE () {
@@ -86,54 +144,216 @@ fuCHECK_SOURCE () {
   [ "${myRC}" -ne 0 ] || return 0
   if [ "${myRC}" -ne 2 ];
     then
-      echo "  ${myREPO} cannot be reached (git ls-remote ended with ${myRC})." >&2
+      fuUI_ERROR "${myREPO} cannot be reached (git ls-remote ended with ${myRC})."
       return 1
   fi
   if [[ "${myBRANCH}" =~ ^[0-9a-f]{40}$ ]] \
      || GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code --tags "${myREPO}" "refs/tags/${myBRANCH}" >/dev/null 2>&1;
     then
-      echo "  ${myBRANCH} is a tag or a commit, no branch: T-Pot is installed from it, but update.sh cannot update it (later on a branch again: ${myBACK})."
+      fuUI_WARN "${myBRANCH} is a tag or a commit, no branch: T-Pot is installed from it, but update.sh cannot update it (later on a branch again: ${myBACK})."
       return 2
   fi
-  echo "  ${myREPO} has no branch ${myBRANCH}." >&2
+  fuUI_ERROR "${myREPO} has no branch ${myBRANCH}."
   return 1
 }
 
-fuASK () {
-  # at a terminal: Enter keeps the source of the ISO, a branch of your own (and a repository) is
-  # for a test; asks again until the repository has it
-  local myIN myRC
-  echo "T-Pot ISO: T-Pot is installed from ${myISO_REPO} at ${myISO_BRANCH}, the source of this ISO."
-  echo "  Enter installs it. To test another branch, type its name (e.g. dev)."
-  echo "  Ctrl+C stops, the installer asks again at the next login."
-  while true; do
-    myBRANCH="${myISO_BRANCH}" myREPO="${myISO_REPO}"
-    read -r -p "  Branch [${myISO_BRANCH}]: " myIN || fuSTOP "Stopped, the installer asks again at the next login."
-    [ -n "${myIN}" ] || return 0
-    if ! fuVALID_BRANCH "${myIN}";
-      then
-        echo "  Not a branch, tag or commit: ${myIN}"
-        continue
-    fi
-    myBRANCH="${myIN}"
-    read -r -p "  Repository [${myISO_REPO}]: " myIN || fuSTOP "Stopped, the installer asks again at the next login."
-    [ -z "${myIN}" ] || myREPO=$(fuNORMALIZE_REPO "${myIN}")
-    if ! fuVALID_REPO "${myREPO}";
-      then
-        echo "  Not a repository URL: ${myREPO}"
-        continue
-    fi
-    fuISO_SOURCE && return 0
-    myRC=0
-    fuCHECK_SOURCE || myRC=$?
-    [ "${myRC}" -ne 0 ] || return 0
-    if [ "${myRC}" -eq 2 ];
-      then
-        read -r -p "  Install it anyway? (y/N): " myIN || fuSTOP "Stopped, the installer asks again at the next login."
-        case "${myIN}" in y|Y|yes|Yes|YES) return 0 ;; esac
-    fi
-    echo
+fuWHERE () {
+  # where this installer runs, for another one that finds it running
+  local myTTY
+  if [ -n "${TPOT_ISO_CONSOLE:-}" ];
+    then echo "on the console (tty8, Alt+F8)"
+  elif [ -n "${SSH_CONNECTION:-}" ];
+    then echo "in an SSH login from ${SSH_CONNECTION%% *}"
+  elif myTTY=$(tty 2>/dev/null);
+    then echo "on ${myTTY}"
+    else echo "without a terminal"
+  fi
+}
+
+fuBUSY () {
+  # 0 while another installer holds the lock, who and where in myHOLDER. A lock only a leftover of
+  # a finished one holds (a process that inherited it, i.e. an agent) does not count
+  local myPID="" myWHO=""
+  myHOLDER=""
+  command -v flock >/dev/null 2>&1 && [ -r "${myLOCK}" ] || return 1
+  flock -n 8 8<"${myLOCK}" 2>/dev/null && return 1
+  { IFS= read -r myPID; IFS= read -r myWHO; } < "${myLOCK}" 2>/dev/null
+  [[ "${myPID}" =~ ^[0-9]+$ ]] && fuUI_ALIVE "${myPID}" || return 1
+  myHOLDER="${myWHO:-process ${myPID}}"
+  return 0
+}
+
+fuLOCK () {
+  # one installer at a time: fd 9 goes along with exec to install.sh and the T-Pot installer, the
+  # lock ends with the last of them. Without flock or the file: no lock
+  command -v flock >/dev/null 2>&1 || return 0
+  { exec 9>>"${myLOCK}"; } 2>/dev/null || { exec 9<"${myLOCK}"; } 2>/dev/null || return 0
+  if ! flock -n 9 2>/dev/null;
+    then
+      exec 9>&-
+      ! fuBUSY || fuSTOP "The T-Pot installer runs already: ${myHOLDER}." "${myBUSY_HINT}"
+      fuUI_WARN "A finished T-Pot installer left its lock (${myLOCK}), this one goes on without it."
+      return 0
+  fi
+  if [ -w "${myLOCK}" ];
+    then
+      printf '%s\n%s\n' "$$" "$(id -un) $(fuWHERE) since $(date '+%H:%M')" > "${myLOCK}" 2>/dev/null
+      chmod 0644 "${myLOCK}" 2>/dev/null
+  fi
+  # one that ended while this one asked
+  [ ! -e "${myINSTALLED}" ] || fuDONE
+  return 0
+}
+
+fuCOLOR_TEST () {
+  # an SSH login: the terminal may have true colour without saying so (COLORTERM rarely comes
+  # along), one look at a bar tells. Yes goes to tpot.json of the T-Pot Manager too
+  local myI myN=48 myR myG myB myROW=""
+  [ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ] && [ -t 0 ] && [ -t 1 ] || return 0
+  [ -z "${TPOT_COLORS:-}" ] && [ -z "${NO_COLOR:-}" ] && ! fuUI_DUMB || return 0
+  case "$(fuUI_PREF colors)" in ""|auto) ;; *) return 0 ;; esac
+  [ "$(fuUI_COLORS)" != "truecolor" ] || return 0
+  if fuUI_TERM_SIZE && [ "${myUI_COLS}" -lt $((myN + 4)) ]; then myN=$((myUI_COLS - 4)); fi
+  [ "${myN}" -ge 8 ] || return 0
+  # magenta to petrol, the colours of the logo
+  for ((myI = 0; myI < myN; myI++)); do
+    myR=$((226 - 225 * myI / (myN - 1))) myG=$((68 * myI / (myN - 1))) myB=$((116 - 17 * myI / (myN - 1)))
+    myROW+=$'\033'"[48;2;${myR};${myG};${myB}m "
   done
+  myROW+=$'\033[0m'
+  echo
+  printf '  %s\n  %s\n\n' "${myROW}" "${myROW}"
+  if ! fuUI_CONFIRM --default no "Does the bar above run smoothly from magenta to dark blue, without steps?" "Smoothly" "With steps";
+    then
+      echo
+      return 0
+  fi
+  export TPOT_COLORS=truecolor COLORTERM=truecolor
+  fuUI_INIT
+  if [ -d "${myDEST}/tpotctl" ] && python3 - "${myDEST}" >/dev/null 2>&1 <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+from tpotctl import prefs
+chosen = prefs.load(environment=False)
+chosen.colors = "truecolor"
+sys.exit(0 if prefs.save(chosen) else 1)
+PY
+    then fuUI_OK "True colour, the T-Pot Manager keeps it (${XDG_CONFIG_HOME:-~/.config}/tpotce/tpot.json)."
+    else fuUI_OK "True colour for this run."
+  fi
+  echo
+}
+
+fuNEWEST_LOOKUP () {
+  # fuNEWEST_LOOKUP <file>: the newest commit of the branch of the ISO into the file, empty
+  # without one (no network); never fails, the spinner shows no error for it
+  local myOUT=""
+  local -a myLIMIT=()
+  ! command -v timeout >/dev/null 2>&1 || myLIMIT=(timeout 15)
+  myOUT=$(GIT_TERMINAL_PROMPT=0 ${myLIMIT[@]+"${myLIMIT[@]}"} git ls-remote --heads "${myISO_REPO}" \
+          "refs/heads/${myISO_BRANCH}" 2>/dev/null) || myOUT=""
+  myOUT="${myOUT%%[[:space:]]*}"
+  [[ "${myOUT}" =~ ^[0-9a-f]{40}$ ]] || myOUT=""
+  printf '%s\n' "${myOUT}" > "$1"
+  return 0
+}
+
+fuNEWEST_FETCH () {
+  # the T-Pot of the ISO in ~/tpotce (fuISO_CLONE) to the newest commit of its branch
+  GIT_TERMINAL_PROMPT=0 git -C "${myDEST}" fetch -q --depth 1 --no-tags origin \
+    "+refs/heads/${myISO_BRANCH}:refs/remotes/origin/${myISO_BRANCH}" \
+    && git -C "${myDEST}" reset -q --hard "refs/remotes/origin/${myISO_BRANCH}"
+}
+
+fuOTHER () {
+  # another branch (and repository) for a test: rc 0 installs it, 1 goes back to the choice
+  local myIN myRC=0
+  echo
+  myIN=$(fuUI_INPUT "Branch, tag or commit (empty: back)") || return 1
+  myIN=$(fuTRIM "${myIN}")
+  [ -n "${myIN}" ] || return 1
+  if ! fuVALID_BRANCH "${myIN}";
+    then
+      fuUI_WARN "Not a branch, tag or commit: ${myIN}"
+      return 1
+  fi
+  myBRANCH="${myIN}"
+  myIN=$(fuUI_INPUT "Repository (empty: ${myISO_REPO})") || return 1
+  myIN=$(fuTRIM "${myIN}")
+  myREPO="${myISO_REPO}"
+  [ -z "${myIN}" ] || myREPO=$(fuNORMALIZE_REPO "${myIN}")
+  if ! fuVALID_REPO "${myREPO}";
+    then
+      fuUI_WARN "Not a repository URL: ${myREPO}"
+      return 1
+  fi
+  fuISO_SOURCE && return 0
+  fuCHECK_SOURCE || myRC=$?
+  [ "${myRC}" -ne 0 ] || return 0
+  [ "${myRC}" -eq 2 ] || return 1
+  fuUI_CONFIRM --default no "Install it anyway?" "Install" "Back"
+}
+
+fuDIALOG () {
+  # at a terminal: which T-Pot. Sets myPICK (iso, newest, other), myBRANCH and myREPO
+  local myCOMMIT myNEWEST="" myFILE
+  local -a myITEMS=()
+  myCOMMIT=$(fuCONF TPOT_COMMIT) || myCOMMIT=""
+  [[ "${myCOMMIT}" =~ ^[0-9a-f]{40}$ ]] || myCOMMIT=""
+  myUI_LOGO=1
+  fuUI_BANNER "Installer" "T-Pot ${myVERSION} of this ISO: ${myISO_REPO} at ${myISO_BRANCH}" \
+    "Abort keeps a plain Debian. ${myLATER}."
+  # the newest of the branch: only for the T-Pot of the ISO as prepare.sh left it
+  if [ -n "${myCOMMIT}" ] && [[ ! "${myISO_BRANCH}" =~ ^[0-9a-f]{40}$ ]] && fuISO_CLONE \
+     && myFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-iso.XXXXXXXX");
+    then
+      fuUI_SPIN "Looking for a newer ${myISO_BRANCH} ..." "${myLOG}" fuNEWEST_LOOKUP "${myFILE}" || true
+      IFS= read -r myNEWEST < "${myFILE}" || true
+      rm -f "${myFILE}"
+      if [ -z "${myNEWEST}" ];
+        then fuUI_WARN "${myISO_REPO} cannot be reached now, the T-Pot installer needs the internet for the images of T-Pot."
+      elif [ "${myNEWEST}" = "${myCOMMIT}" ];
+        then fuUI_INFO "This ISO carries the newest ${myISO_BRANCH}."; myNEWEST=""
+      fi
+      echo
+  fi
+  while true; do
+    myITEMS=("T-Pot ${myVERSION} of this ISO (${myISO_BRANCH}${myCOMMIT:+ at ${myCOMMIT:0:7}}):iso")
+    [ -z "${myNEWEST}" ] || myITEMS+=("The newest ${myISO_BRANCH} (${myNEWEST:0:7}):newest")
+    myITEMS+=("Another branch or repository, to test it:other" "Quit, install later:quit")
+    myPICK=$(fuUI_CHOOSE --selected iso "Which T-Pot should be installed?" "${myITEMS[@]}") || myPICK=""
+    myBRANCH="${myISO_BRANCH}" myREPO="${myISO_REPO}"
+    case "${myPICK}" in
+      iso|newest) return 0 ;;
+      other) if fuOTHER; then return 0; fi; echo ;;
+      quit) fuLATER 0 ;;
+      *) fuLATER 1 ;;
+    esac
+  done
+}
+
+fuCONSOLE () {
+  # tpot-iso.service on tty8: the installer in the graphical terminal of the ISO; where that does
+  # not start, on the text console or later at a login
+  local myRAN myRC=0
+  if [ -r "${myDIR}/terminal.sh" ] && myRAN=$(mktemp -d "${TMPDIR:-/tmp}/tpot-iso.XXXXXXXX");
+    then
+      TPOT_ISO_TERMINAL_TRIED=1 TPOT_ISO_RAN="${myRAN}/ran" bash "${myDIR}/terminal.sh" -- \
+        bash "${myDIR}/start.sh" "${myARGS[@]}" || myRC=$?
+      if [ -e "${myRAN}/ran" ];
+        then
+          rm -rf "${myRAN}"
+          exit "${myRC}"
+      fi
+      rm -rf "${myRAN}"
+  fi
+  echo
+  fuUI_WARN "The graphical terminal of the ISO did not start (${XDG_STATE_HOME:-${HOME}/.local/state}/tpot/terminal.log)."
+  if fuUI_CONFIRM --default yes "Start the T-Pot installer here, on the text console?" "Start" "Later";
+    then TPOT_ISO_TERMINAL_TRIED=1 TPOT_ISO_PAUSE=1 exec bash "${myDIR}/start.sh" "${myARGS[@]}"
+  fi
+  fuUI_INFO "${myLATER}: log in here (Alt+F1) or over SSH."
+  exit 0
 }
 
 fuCLONE_AT () {
@@ -155,6 +375,11 @@ fuISO_CLONE () {
     && [ -z "$(git -C "${myDEST}" status --porcelain 2>/dev/null)" ]
 }
 
+fuGIT_CLONE () {
+  GIT_TERMINAL_PROMPT=0 git clone -q "${myREPO}" "${myDEST}" \
+    && git -C "${myDEST}" -c advice.detachedHead=false checkout -q "${myBRANCH}"
+}
+
 fuCLONE () {
   # another source: cloned into ~/tpotce, or the clone there if it is that source, and its own
   # install.sh, the installer of the branch under test
@@ -174,11 +399,9 @@ fuCLONE () {
           fuSTOP "${myDEST} exists already and is not ${myREPO} at ${myBRANCH}." \
             "Remove it (rm -rf ${myDEST}), then: ${myAGAIN}"
       fi
-      echo "T-Pot ISO: ${myDEST} is ${myREPO} at ${myBRANCH} already."
+      fuUI_INFO "${myDEST} is ${myREPO} at ${myBRANCH} already."
     else
-      echo "T-Pot ISO: cloning ${myREPO} at ${myBRANCH} into ${myDEST} ..."
-      if ! GIT_TERMINAL_PROMPT=0 git clone -q "${myREPO}" "${myDEST}" \
-         || ! git -C "${myDEST}" -c advice.detachedHead=false checkout -q "${myBRANCH}";
+      if ! fuUI_SPIN "Cloning ${myREPO} at ${myBRANCH} into ${myDEST} ..." "${myLOG}" fuGIT_CLONE;
         then
           rm -rf "${myDEST}"
           [ -z "${myASIDE}" ] || mv "${myASIDE}" "${myDEST}"
@@ -187,11 +410,15 @@ fuCLONE () {
       [ -z "${myASIDE}" ] || rm -rf "${myASIDE}"
   fi
   [ -f "${myDEST}/install.sh" ] || fuSTOP "${myREPO} at ${myBRANCH} has no install.sh." "Remove ${myDEST} and pick another branch: bash ${myDIR}/start.sh"
-  echo "T-Pot ISO: the T-Pot installer of ${myBRANCH} starts (T-Pot from ${myREPO} at ${myBRANCH})."
-  echo "  Abort keeps a plain Debian, the installer asks again at the next login."
-  echo "  Start it by hand: ${myAGAIN}"
+  fuSTART "${myDEST}"
+}
+
+fuSTART () {
+  # fuSTART <folder>: its install.sh, with the lock (fd 9)
+  fuUI_INFO "The T-Pot installer starts: T-Pot from ${myREPO} at ${myBRANCH}."
+  fuUI_HINT "Abort keeps a plain Debian. ${myLATER} (by hand: bash ${myDIR}/start.sh)."
   echo
-  exec bash "${myDEST}/install.sh" -b "${myBRANCH}" -r "${myREPO}"
+  exec bash "$1/install.sh" -b "${myBRANCH}" -r "${myREPO}"
 }
 
 myISO_REPO="$(fuCONF TPOT_REPO_URL)"
@@ -200,6 +427,8 @@ myISO_BRANCH="$(fuCONF TPOT_BRANCH)"
 [ ! -d "${myDIR}/wheels" ] || export TPOT_WHEELS="${myDIR}/wheels"
 myBRANCH=""
 myREPO=""
+myPICK=""
+myHOLDER=""
 while getopts ":b:r:h" myOPT; do
   case "${myOPT}" in
     b) myBRANCH="${OPTARG}" ;;
@@ -230,13 +459,20 @@ if [ "$(id -un)" = "tpot" ];
       "Create another user with sudo (sudo adduser <name> && sudo usermod -aG sudo <name>)," \
       "log in as that user and run: bash ${myDIR}/start.sh"
 fi
+[ ! -e "${myINSTALLED}" ] || fuDONE
+! fuBUSY || fuSTOP "The T-Pot installer runs already: ${myHOLDER}." "${myBUSY_HINT}"
 
+if [ -n "${TPOT_ISO_CONSOLE:-}" ] && [ -z "${TPOT_ISO_TERMINAL_TRIED:-}" ];
+  then fuCONSOLE
+fi
 if [ -z "${TPOT_ISO_TERMINAL_TRIED:-}" ] && [ -t 0 ] && [ -t 1 ];
   then
     [ -r "${myDIR}/terminal.sh" ] || fuSTOP "${myDIR}/terminal.sh is missing."
     TPOT_ISO_TERMINAL_TRIED=1 exec bash "${myDIR}/terminal.sh" -- bash "${myDIR}/start.sh" "${myARGS[@]}"
 fi
 
+mkdir -p "${myLOG%/*}" 2>/dev/null && : >> "${myLOG}" 2>/dev/null || myLOG="/dev/null"
+fuCOLOR_TEST
 if [ -n "${myBRANCH}${myREPO}" ];
   then
     # the options: a tag or a commit named with -b is meant, the warning is enough
@@ -252,14 +488,20 @@ if [ -n "${myBRANCH}${myREPO}" ];
     fi
 elif [ -t 0 ];
   then
-    fuASK
+    fuDIALOG
+    # install.sh asks no "Start the T-Pot installer?" after this choice
+    export TPOT_INSTALL_CONFIRMED=1
   else
     myBRANCH="${myISO_BRANCH}" myREPO="${myISO_REPO}"
 fi
 
+fuLOCK
+if [ "${myPICK}" = "newest" ];
+  then
+    if fuUI_SPIN "Fetching the newest ${myISO_BRANCH} into ${myDEST} ..." "${myLOG}" fuNEWEST_FETCH;
+      then fuSTART "${myDEST}"
+    fi
+    fuUI_CONFIRM --default yes "Install the T-Pot of this ISO instead?" "Install" "Quit" || fuLATER 1
+fi
 fuISO_SOURCE || fuCLONE
-echo "T-Pot ISO: the T-Pot installer starts (T-Pot from ${myREPO} at ${myBRANCH})."
-echo "  Abort keeps a plain Debian, the installer asks again at the next login."
-echo "  Start it by hand: bash ${myDIR}/start.sh"
-echo
-exec bash "${myDIR}/install.sh" -b "${myBRANCH}" -r "${myREPO}"
+fuSTART "${myDIR}"

@@ -10,6 +10,7 @@ folders with stubs (lsblk, findmnt, diskutil, df, dd, gpg, gh, curl), a stick is
 isotree.py runs on fixtures modelled on the files of the Debian 13 netinst.
 """
 
+import fcntl
 import hashlib
 import importlib.util
 import io
@@ -387,8 +388,9 @@ class LateTest(unittest.TestCase):
         # read-only, like the files in the ISO
         for name in ("install.sh", "start.sh", "terminal.sh", "prepare.sh", "profile.sh"):
             write(os.path.join(self.src, name), f"# {name}\n", 0o555)
-        for name in ("iso.conf", "version", "tpot.issue", "preseed.cfg", "tpotce.tar", "gum_2.0.2_Linux_x86_64.tar.gz",
-                     "wheels/textual-1.0-py3-none-any.whl", "wheels/rich-1.0-py3-none-any.whl"):
+        for name in ("iso.conf", "version", "ui.sh", "tpot.issue", "tpot-iso.service", "preseed.cfg", "tpotce.tar",
+                     "gum_2.0.2_Linux_x86_64.tar.gz", "wheels/textual-1.0-py3-none-any.whl",
+                     "wheels/rich-1.0-py3-none-any.whl"):
             write(os.path.join(self.src, name), f"# {name}\n", 0o444)
 
     def run_late(self, **env):
@@ -402,10 +404,12 @@ class LateTest(unittest.TestCase):
         share = "usr/local/share/tpot-iso/"
         expected = {share + "install.sh": 0o755, share + "start.sh": 0o755, share + "terminal.sh": 0o755,
                     share + "prepare.sh": 0o755, "usr/local/bin/tpot-terminal": 0o755,
-                    share + "iso.conf": 0o644, share + "version": 0o644, share + "tpotce.tar": 0o644,
+                    share + "iso.conf": 0o644, share + "version": 0o644, share + "ui.sh": 0o644,
+                    share + "tpotce.tar": 0o644,
                     share + "gum_2.0.2_Linux_x86_64.tar.gz": 0o644, share + "wheels/textual-1.0-py3-none-any.whl": 0o644,
                     share + "wheels/rich-1.0-py3-none-any.whl": 0o644,
-                    "etc/profile.d/tpot-iso.sh": 0o644, "etc/issue.d/tpot.issue": 0o644}
+                    "etc/profile.d/tpot-iso.sh": 0o644, "etc/issue.d/tpot.issue": 0o644,
+                    "etc/systemd/system/tpot-iso.service": 0o644}
         for rel, mode in expected.items():
             self.assertEqual(stat.S_IMODE(os.stat(os.path.join(self.target, rel)).st_mode), mode, rel)
         with open(os.path.join(self.target, "etc/profile.d/tpot-iso.sh"), encoding="utf-8") as handle:
@@ -419,6 +423,7 @@ class LateTest(unittest.TestCase):
         self.assertEqual(base.read(self.calls).splitlines(),
                          ["debconf-get passwd/username", "in-target bash /usr/local/share/tpot-iso/prepare.sh tester"])
         self.assertIn("T-Pot is ready in the home folder of tester", result.stdout)
+        self.assertIn("the T-Pot installer starts after the boot on the console (tty8), or at a login", result.stdout)
 
     def test_without_gum_and_wheels_and_when_prepare_sh_fails_debian_goes_on(self):
         shutil.rmtree(os.path.join(self.src, "wheels"))
@@ -432,11 +437,14 @@ class LateTest(unittest.TestCase):
 
     def test_a_missing_file_stops_before_anything_is_written(self):
         os.chmod(self.src, 0o755)
-        os.remove(os.path.join(self.src, "iso.conf"))
-        result = self.run_late()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("iso.conf is missing", result.stderr)
-        self.assertEqual(os.listdir(self.target), [])
+        for name in ("iso.conf", "ui.sh", "tpot-iso.service"):
+            with self.subTest(name=name):
+                os.rename(os.path.join(self.src, name), os.path.join(self.tmp, name))
+                result = self.run_late()
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"{name} is missing", result.stderr)
+                self.assertEqual(os.listdir(self.target), [])
+                os.rename(os.path.join(self.tmp, name), os.path.join(self.src, name))
 
 
 class PrepareTest(unittest.TestCase):
@@ -451,12 +459,16 @@ class PrepareTest(unittest.TestCase):
         self.home = os.path.join(self.tmp, "home", "tester")
         self.share = os.path.join(self.tmp, "share")
         self.sshd = os.path.join(self.tmp, "sshd_config.d")
+        self.systemd = os.path.join(self.tmp, "systemd")
         self.log = os.path.join(self.tmp, "tpot-iso.log")
         self.bin = os.path.join(self.tmp, "bin")
         self.calls = os.path.join(self.tmp, "calls")
         for folder in (self.home, self.share, self.sshd, os.path.join(self.share, "wheels")):
             os.makedirs(folder)
         write(os.path.join(self.share, "wheels", "rich-1.0-py3-none-any.whl"), "wheel")
+        # late.sh put the unit there
+        os.makedirs(self.systemd)
+        shutil.copy(os.path.join(ISO_DIR, "tpot-iso.service"), self.systemd)
         stub(self.bin, "runuser", 'echo "runuser $1 $2" >> "$CALLS"\n'
                                   'while [ "$#" -gt 0 ] && [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n')
         stub(self.bin, "getent", f'case "$1 $2" in\n'
@@ -520,7 +532,7 @@ class PrepareTest(unittest.TestCase):
     def run_prepare(self, *args, **env):
         environ = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}", "CALLS": self.calls,
                    "SSHD_DIR": self.sshd, "TPOT_ISO_SHARE": self.share, "TPOT_ISO_LOG": self.log,
-                   "TPOT_ISO_SSHD": self.sshd, **env}
+                   "TPOT_ISO_SSHD": self.sshd, "TPOT_ISO_SYSTEMD": self.systemd, **env}
         result = subprocess.run([BASH, os.path.join(ISO_DIR, "prepare.sh"), *args], capture_output=True,
                                 text=True, timeout=60, env=environ)
         self.assertEqual(result.stdout + result.stderr, "", "everything goes into the log")
@@ -554,6 +566,45 @@ class PrepareTest(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(self.share)), ["iso.conf", "wheels"])
         self.assertIn("T-Pot ISO: gum 2.0.2 is in", log)
         self.assertIn("T-Pot ISO: the T-Pot Manager is set up.", log)
+
+    def test_the_installer_starts_after_the_boot_as_the_user(self):
+        rc, log = self.run_prepare("tester")
+        self.assertEqual(rc, 0, log)
+        drop_in = os.path.join(self.systemd, "tpot-iso.service.d", "user.conf")
+        self.assertEqual(base.read(drop_in), "# the user of the T-Pot ISO (prepare.sh)\n[Service]\nUser=tester\n")
+        self.assertEqual(stat.S_IMODE(os.stat(drop_in).st_mode), 0o644)
+        # the link systemctl enable makes (WantedBy=multi-user.target)
+        link = os.path.join(self.systemd, "multi-user.target.wants", "tpot-iso.service")
+        self.assertEqual(os.readlink(link), os.path.join(self.systemd, "tpot-iso.service"))
+        self.assertIn("tpot-iso.service starts the T-Pot installer after the boot, as tester.", log)
+        # a T-Pot that cannot be made: the installer still starts after the boot and gets it then
+        shutil.rmtree(self.systemd)
+        os.makedirs(self.systemd)
+        shutil.copy(os.path.join(ISO_DIR, "tpot-iso.service"), self.systemd)
+        self.again()
+        self.conf("0" * 40)
+        rc, log = self.run_prepare("tester")
+        self.assertEqual(rc, 1)
+        self.assertTrue(os.path.islink(link))
+
+    def test_no_service_for_the_user_tpot_without_a_user_or_without_the_unit(self):
+        tpot_home = os.path.join(self.tmp, "home", "tpot")
+        os.makedirs(tpot_home)
+        stub(self.bin, "getent", f'case "$1 $2" in\n  "passwd tpot") echo "tpot:x:2000:2000::{tpot_home}:/bin/bash" ;;\n'
+                                 f'  *) exit 2 ;;\nesac\n')
+        rc, log = self.run_prepare("tpot")
+        self.assertIn("the user tpot is reserved for the containers, tpot-iso.service stays off.", log)
+        self.assertEqual(os.listdir(self.systemd), ["tpot-iso.service"])
+        rc, log = self.run_prepare("root")
+        self.assertEqual(rc, 1)
+        self.assertEqual(os.listdir(self.systemd), ["tpot-iso.service"])
+        os.remove(os.path.join(self.systemd, "tpot-iso.service"))
+        self.again()
+        stub(self.bin, "getent", f'echo "tester:x:1000:1000::{self.home}:/bin/bash"\n')
+        rc, log = self.run_prepare("tester")
+        self.assertEqual(rc, 0, log)
+        self.assertIn("no tpot-iso.service, the installer starts at a login.", log)
+        self.assertEqual(os.listdir(self.systemd), [])
 
     def test_without_an_argument_the_first_member_of_sudo(self):
         rc, log = self.run_prepare()
@@ -612,7 +663,7 @@ class PrepareTest(unittest.TestCase):
         write(os.path.join(self.home, "setup-fails"), "")
         rc, log = self.run_prepare("tester")
         self.assertEqual(rc, 0, log)
-        self.assertIn("tpot setup failed, the T-Pot installer runs it again at the first login", log)
+        self.assertIn("tpot setup failed, the T-Pot installer runs it again when it starts", log)
         self.again()
         shutil.rmtree(os.path.join(self.share, "wheels"))
         rc, log = self.run_prepare("tester")
@@ -644,11 +695,24 @@ esac
 """
 
 
+FLOCK_STUB = """#!/bin/sh
+# flock -n <fd>: the lock of the open file of that fd (macOS has no flock)
+[ "$1" = -n ] || exit 64
+exec python3 -c 'import fcntl, sys
+try:
+    fcntl.flock(int(sys.argv[1]), fcntl.LOCK_EX | fcntl.LOCK_NB)
+except OSError:
+    sys.exit(1)' "$2"
+"""
+
+
 class StartTest(unittest.TestCase):
     """start.sh runs the install.sh of the ISO with the repository and the branch of iso.conf, which
-    it reads and never sources; never as root, never as the user tpot of the containers. Another
-    branch (-b, -r or typed at a terminal) is cloned into ~/tpotce and its own install.sh runs; a tag
-    or a commit with a warning, a branch the repository does not have never."""
+    it reads and never sources; never as root, never as the user tpot of the containers. At a terminal
+    it asks which T-Pot: the one of the ISO, the newest of its branch, another branch (cloned into
+    ~/tpotce, its own install.sh; a tag or a commit with a warning, a branch the repository does not
+    have never) or none. tpot-iso.service runs it on the console in the graphical terminal of the ISO,
+    the text console where that does not start. One installer at a time (a lock)."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -657,24 +721,31 @@ class StartTest(unittest.TestCase):
         os.makedirs(self.share)
         shutil.copy(os.path.join(ISO_DIR, "start.sh"), os.path.join(self.share, "start.sh"))
         shutil.copy(os.path.join(ISO_DIR, "terminal.sh"), os.path.join(self.share, "terminal.sh"))
-        write(os.path.join(self.share, "install.sh"), '#!/bin/sh\necho "INSTALL $*"\n', 0o755)
+        shutil.copy(os.path.join(REPO, "installer/lib/ui.sh"), os.path.join(self.share, "ui.sh"))
+        write(os.path.join(self.share, "version"), "24.04.2\n")
+        write(os.path.join(self.share, "install.sh"),
+              '#!/bin/sh\necho "INSTALL $* confirmed=${TPOT_INSTALL_CONFIRMED-} colors=${TPOT_COLORS-}"\n', 0o755)
         self.bin = os.path.join(self.tmp, "bin")
         write(os.path.join(self.bin, "id"), ID_STUB, 0o755)
+        self.lock = os.path.join(self.tmp, "tpot-iso.lock")
+        self.installed = os.path.join(self.tmp, "tpot.service")
         self.conf("TPOT_REPO_URL=https://github.com/telekom-security/tpotce", "TPOT_BRANCH=master")
 
     def conf(self, *lines):
         write(os.path.join(self.share, "iso.conf"), "# The T-Pot ISO\n" + "\n".join(lines) + "\n")
 
     def environ(self, **env):
-        return {"PATH": f"{self.bin}:{os.environ['PATH']}", "HOME": self.tmp, "TERM": "dumb", **env}
+        return {"PATH": f"{self.bin}:{os.environ['PATH']}", "HOME": self.tmp, "TERM": "dumb", "TPOT_GUM": "off",
+                "TPOT_ISO_LOCK": self.lock, "TPOT_ISO_INSTALLED": self.installed, **env}
 
     def run_start(self, *args, **env):
         return subprocess.run([BASH, os.path.join(self.share, "start.sh"), *args], capture_output=True, text=True,
                               env=self.environ(**env), cwd=self.tmp, stdin=subprocess.DEVNULL, timeout=60)
 
-    def at_terminal(self, *answers, args=()):
-        code, out, _piped = ptyhelper.run([BASH, os.path.join(self.share, "start.sh"), *args], self.environ(),
-                                          cwd=self.tmp, answers=answers, timeout=60)
+    def at_terminal(self, *answers, args=(), **env):
+        # wide: no line of the plain texts is folded
+        code, out, _piped = ptyhelper.run([BASH, os.path.join(self.share, "start.sh"), *args], self.environ(**env),
+                                          cwd=self.tmp, size=(250, 50), answers=answers, timeout=60)
         return code, out.decode("utf-8", "replace").replace("\r\n", "\n")
 
     def git(self, *args, cwd=None):
@@ -708,11 +779,21 @@ class StartTest(unittest.TestCase):
     def clone(self):
         return os.path.join(self.tmp, "tpotce")
 
+    def iso_clone(self, url):
+        """~/tpotce as prepare.sh leaves it: the master of the ISO, its commit in iso.conf."""
+        self.git("clone", "-q", "-b", "master", url, self.clone())
+        commit = self.git("rev-parse", "HEAD", cwd=self.clone())
+        self.conf(f"TPOT_REPO_URL={url}", "TPOT_BRANCH=master", f"TPOT_COMMIT={commit}")
+        return commit
+
     def test_hands_over_to_install_sh_with_the_source_of_the_iso(self):
         result = self.run_start()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("INSTALL -b master -r https://github.com/telekom-security/tpotce", result.stdout)
-        self.assertIn("T-Pot from https://github.com/telekom-security/tpotce at master", result.stdout)
+        self.assertIn("The T-Pot installer starts: T-Pot from https://github.com/telekom-security/tpotce at master.",
+                      result.stdout)
+        # nobody chose: install.sh asks its own question
+        self.assertIn("confirmed= ", result.stdout)
 
     def test_interactive_terminal_handoff_keeps_arguments_and_does_not_recurse(self):
         write(os.path.join(self.share, "terminal.sh"),
@@ -754,16 +835,37 @@ class StartTest(unittest.TestCase):
         self.assertNotIn("INSTALL", result.stdout)
         self.assertIn("reserved for the containers", result.stderr)
 
+    def test_without_its_ui_sh_the_one_of_tpotce_or_a_plain_error(self):
+        os.remove(os.path.join(self.share, "ui.sh"))
+        write(os.path.join(self.clone(), "installer/lib/ui.sh"), base.read("installer/lib/ui.sh"))
+        result = self.run_start()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("INSTALL -b master", result.stdout)
+        shutil.rmtree(self.clone())
+        result = self.run_start()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("ui.sh is missing, the T-Pot installer cannot start", result.stderr)
+        self.assertNotIn("INSTALL", result.stdout)
+
     def test_without_a_terminal_it_takes_the_source_of_the_iso_without_asking(self):
         result = self.run_start()
-        self.assertNotIn("Branch [", result.stdout + result.stderr)
+        self.assertNotIn("Which T-Pot", result.stdout + result.stderr)
         self.assertFalse(os.path.exists(self.clone()))
+
+    def test_nothing_to_do_once_t_pot_is_installed(self):
+        write(self.installed, "[Unit]\n")
+        result = self.run_start()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("T-Pot is installed already", result.stdout)
+        self.assertNotIn("INSTALL", result.stdout)
 
     def test_the_help_names_the_source_of_the_iso_and_odd_options_are_refused(self):
         result = self.run_start("-h")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Enter installs the source\nof this ISO: https://github.com/telekom-security/tpotce at master",
-                      result.stdout)
+        text = " ".join(result.stdout.split())
+        self.assertIn("the one of this ISO (https://github.com/telekom-security/tpotce at master)", text)
+        self.assertIn("tpot-iso.service starts it after the boot on the console (tty8, Alt+F8)", text)
+        self.assertIn("sudo systemctl disable tpot-iso.service", text)
         for args, text in ((("-b", "--upload-pack=x"), "Not a branch, tag or commit: --upload-pack=x"),
                            (("-b", "dev", "-r", "-uhttps://x"), "Not a repository URL: -uhttps://x"),
                            (("-b", "a b"), "Not a branch, tag or commit: a b"),
@@ -781,7 +883,7 @@ class StartTest(unittest.TestCase):
         url = self.origin()
         result = self.run_start("-b", "dev")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(f"cloning {url} at dev into {self.clone()}", result.stdout)
+        self.assertIn(f"Cloning {url} at dev into {self.clone()}", result.stdout)
         self.assertIn(f"CLONE-dev -b dev -r {url}", result.stdout)
         self.assertNotIn("INSTALL", result.stdout)
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=self.clone()), "dev")
@@ -834,9 +936,7 @@ class StartTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("git"), "no git")
     def test_the_t_pot_of_the_iso_makes_way_for_another_source_while_untouched(self):
         url = self.origin()
-        self.git("clone", "-q", "-b", "master", url, self.clone())
-        commit = self.git("rev-parse", "HEAD", cwd=self.clone())
-        self.conf(f"TPOT_REPO_URL={url}", "TPOT_BRANCH=master", f"TPOT_COMMIT={commit}")
+        commit = self.iso_clone(url)
         result = self.run_start("-b", "dev")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"CLONE-dev -b dev -r {url}", result.stdout)
@@ -868,48 +968,206 @@ class StartTest(unittest.TestCase):
         self.assertIn(f"wheels={self.share}/wheels", result.stdout, result.stderr)
 
     @unittest.skipUnless(shutil.which("git"), "no git")
-    def test_at_a_terminal_enter_takes_the_source_of_the_iso(self):
+    def test_at_a_terminal_enter_takes_the_t_pot_of_the_iso(self):
         url = self.origin()
-        code, out = self.at_terminal(("Branch [master]: ", b"--x\n"), ("Branch [master]: ", b"\n"))
+        code, out = self.at_terminal(("enter = 1): ", b"\n"))
         self.assertEqual(code, 0, out)
-        self.assertIn(f"T-Pot is installed from {url} at master, the source of this ISO.", out)
-        self.assertIn("Not a branch, tag or commit: --x", out)
-        self.assertIn(f"INSTALL -b master -r {url}", out)
-        self.assertNotIn("Repository [", out)
+        self.assertIn(f"T-Pot 24.04.2 of this ISO: {url} at master", out)
+        self.assertIn("###   1) T-Pot 24.04.2 of this ISO (master)\n"
+                      "###   2) Another branch or repository, to test it\n"
+                      "###   3) Quit, install later\n", out)
+        # the choice was the question, install.sh asks no second one
+        self.assertIn(f"INSTALL -b master -r {url} confirmed=1", out)
         self.assertFalse(os.path.exists(self.clone()))
 
     @unittest.skipUnless(shutil.which("git"), "no git")
     def test_at_a_terminal_another_branch_asks_again_until_the_repository_has_it(self):
         url = self.origin()
-        code, out = self.at_terminal(("Branch [master]: ", b"nope\n"), (f"Repository [{url}]: ", b"\n"),
-                                     ("has no branch nope", b""),
-                                     ("Branch [master]: ", b"v1\n"), ("Repository [", b"\n"),
-                                     ("Install it anyway? (y/N): ", b"\n"),
-                                     ("Branch [master]: ", b"v1\n"), ("Repository [", b"\n"),
-                                     ("Install it anyway? (y/N): ", b"y\n"))
+        code, out = self.at_terminal(("enter = 1): ", b"2\n"), ("(empty: back) ", b"--x\n"),
+                                     ("enter = 1): ", b"2\n"), ("(empty: back) ", b"nope\n"),
+                                     (f"(empty: {url}) ", b"\n"), ("has no branch nope", b""),
+                                     ("enter = 1): ", b"2\n"), ("(empty: back) ", b"v1\n"), ("(empty: ", b"\n"),
+                                     ("Install it anyway? (y/N) ", b"\n"),
+                                     ("enter = 1): ", b"2\n"), ("(empty: back) ", b"v1\n"), ("(empty: ", b"\n"),
+                                     ("Install it anyway? (y/N) ", b"y\n"))
         self.assertEqual(code, 0, out)
+        self.assertIn("Not a branch, tag or commit: --x", out)
         self.assertEqual(out.count("Install it anyway?"), 2, out)
         self.assertIn(f"CLONE-v1 -b v1 -r {url}", out)
         shutil.rmtree(self.clone())
-        code, out = self.at_terminal(("Branch [master]: ", b"dev\n"), ("Repository [", b"\n"))
+        code, out = self.at_terminal(("enter = 1): ", b"2\n"), ("(empty: back) ", b"dev\n"), ("(empty: ", b"\n"))
         self.assertEqual(code, 0, out)
         self.assertIn(f"CLONE-dev -b dev -r {url}", out)
 
     @unittest.skipUnless(shutil.which("git"), "no git")
-    def test_at_a_terminal_another_repository_and_ctrl_d_stops(self):
+    def test_at_a_terminal_another_repository_back_quit_and_ctrl_d(self):
         self.origin()
         fork = "file://" + os.path.join(self.tmp, "fork")
         self.origin("fork")
         self.conf("TPOT_REPO_URL=https://github.com/telekom-security/tpotce", "TPOT_BRANCH=master")
-        code, out = self.at_terminal(("Branch [master]: ", b"dev\n"), ("Repository [", fork.encode() + b".git\n"))
+        code, out = self.at_terminal(("enter = 1): ", b"2\n"), ("(empty: back) ", b"dev\n"),
+                                     ("(empty: ", fork.encode() + b".git\n"))
         self.assertEqual(code, 0, out)
         self.assertIn(f"CLONE-dev -b dev -r {fork}", out)
         # without .git, as install.sh takes it
         self.assertEqual(self.git("remote", "get-url", "origin", cwd=self.clone()), fork)
-        code, out = self.at_terminal(("Branch [master]: ", b"\x04"))
-        self.assertEqual(code, 1, out)
-        self.assertIn("Stopped, the installer asks again at the next login.", out)
+        # an empty branch goes back, quit installs nothing
+        code, out = self.at_terminal(("enter = 1): ", b"2\n"), ("(empty: back) ", b"\n"), ("enter = 1): ", b"3\n"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("Which T-Pot should be installed?"), 2, out)
+        self.assertIn("Nothing installed. The T-Pot installer starts again after the next boot or at a login", out)
         self.assertNotIn("INSTALL", out)
+        self.assertNotIn("CLONE", out)
+        code, out = self.at_terminal(("enter = 1): ", b"\x04"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("Nothing installed.", out)
+        self.assertNotIn("INSTALL", out)
+
+    @unittest.skipUnless(shutil.which("git"), "no git")
+    def test_at_a_terminal_the_newest_of_the_branch(self):
+        url = self.origin()
+        commit = self.iso_clone(url)
+        # nothing newer: no choice for it
+        code, out = self.at_terminal(("enter = 1): ", b"3\n"))
+        self.assertEqual(code, 0, out)
+        self.assertIn("This ISO carries the newest master.", out)
+        self.assertIn(f"1) T-Pot 24.04.2 of this ISO (master at {commit[:7]})", out)
+        self.assertNotIn("The newest master", out)
+        # a newer master: fetched into ~/tpotce, its own install.sh
+        origin = os.path.join(self.tmp, "origin")
+        write(os.path.join(origin, "install.sh"), '#!/bin/sh\necho "CLONE-newest $*"\n', 0o755)
+        self.git("commit", "-q", "-am", "newest", cwd=origin)
+        newest = self.git("rev-parse", "HEAD", cwd=origin)
+        code, out = self.at_terminal(("enter = 1): ", b"2\n"))
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"###   2) The newest master ({newest[:7]})\n", out)
+        self.assertIn(f"Fetching the newest master into {self.clone()}", out)
+        self.assertIn(f"CLONE-newest -b master -r {url}\n", out)
+        self.assertEqual(self.git("rev-parse", "HEAD", cwd=self.clone()), newest)
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=self.clone()), "master")
+        self.assertEqual(self.git("status", "--porcelain", cwd=self.clone()), "")
+
+    @unittest.skipUnless(shutil.which("git"), "no git")
+    def test_at_a_terminal_a_failed_fetch_offers_the_t_pot_of_the_iso_and_no_network_no_choice(self):
+        url = self.origin()
+        self.iso_clone(url)
+        origin = os.path.join(self.tmp, "origin")
+        write(os.path.join(origin, "install.sh"), '#!/bin/sh\necho "CLONE-newest $*"\n', 0o755)
+        self.git("commit", "-q", "-am", "newest", cwd=origin)
+        stub(self.bin, "git", f'[ "$1 $3" != "-C fetch" ] || exit 128\nexec "{shutil.which("git")}" "$@"\n')
+        code, out = self.at_terminal(("enter = 1): ", b"2\n"), ("this ISO instead? (Y/n) ", b"\n"))
+        self.assertEqual(code, 0, out)
+        self.assertIn("Fetching the newest master", out)
+        self.assertIn(f"INSTALL -b master -r {url}", out)
+        self.assertNotIn("CLONE-newest", out)
+        os.remove(os.path.join(self.bin, "git"))
+        # no network: the T-Pot of the ISO, a warning
+        shutil.rmtree(origin)
+        code, out = self.at_terminal(("enter = 1): ", b"\n"))
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"{url} cannot be reached now", out)
+        self.assertNotIn("The newest master", out)
+        self.assertIn(f"INSTALL -b master -r {url}", out)
+
+    def test_one_installer_at_a_time(self):
+        stub(self.bin, "flock", FLOCK_STUB)
+        write(os.path.join(self.share, "install.sh"),
+              f'#!/bin/sh\nif flock -n 7 7<"{self.lock}"; then echo "INSTALL FREE"; else echo "INSTALL HELD"; fi\n',
+              0o755)
+        # the lock goes along to install.sh, who and where in the file
+        result = self.run_start()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("INSTALL HELD", result.stdout)
+        lines = base.read(self.lock).splitlines()
+        self.assertRegex(lines[0], r"^[0-9]+$")
+        self.assertRegex(lines[1], r"^tester without a terminal since [0-9]{2}:[0-9]{2}$")
+        self.assertEqual(stat.S_IMODE(os.stat(self.lock).st_mode), 0o644)
+        # another one runs: nothing
+        with open(self.lock, "w+") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            handle.write(f"{os.getpid()}\ntester on the console (tty8, Alt+F8) since 10:00\n")
+            handle.flush()
+            result = self.run_start()
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("The T-Pot installer runs already: tester on the console (tty8, Alt+F8) since 10:00.",
+                          result.stderr)
+            self.assertIn("sudo systemctl stop tpot-iso.service", result.stderr)
+            self.assertNotIn("INSTALL", result.stdout)
+            # a lock a finished one left (its process gone): this one goes on
+            gone = subprocess.Popen(["true"])
+            gone.wait()
+            handle.seek(0)
+            handle.truncate()
+            handle.write(f"{gone.pid}\ntester on tty1 since 10:00\n")
+            handle.flush()
+            result = self.run_start()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("A finished T-Pot installer left its lock", result.stdout)
+            self.assertIn("INSTALL", result.stdout)
+
+    def test_on_the_console_the_graphical_terminal_or_the_text_console(self):
+        # tpot-iso.service: terminal.sh runs start.sh in the graphical terminal
+        write(os.path.join(self.share, "terminal.sh"),
+              '#!/bin/sh\necho "TERMINAL:${TPOT_ISO_TERMINAL_TRIED}"\n'
+              '[ "$1" = -- ] || exit 2\nshift\nexec "$@"\n', 0o755)
+        result = self.run_start(TPOT_ISO_CONSOLE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count("TERMINAL:1"), 1)
+        self.assertIn("INSTALL -b master", result.stdout)
+        self.assertNotIn("did not start", result.stdout)
+        # its rc goes on
+        write(os.path.join(self.share, "install.sh"), '#!/bin/sh\necho INSTALL\nexit 3\n', 0o755)
+        self.assertEqual(self.run_start(TPOT_ISO_CONSOLE="1").returncode, 3)
+        write(os.path.join(self.share, "install.sh"), '#!/bin/sh\necho "INSTALL $* confirmed=${TPOT_INSTALL_CONFIRMED-}"\n',
+              0o755)
+        # X does not start: the text console, after a yes
+        write(os.path.join(self.share, "terminal.sh"), '#!/bin/sh\necho "TERMINAL:failed"\nexit 1\n', 0o755)
+        result = self.run_start(TPOT_ISO_CONSOLE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("The graphical terminal of the ISO did not start", result.stdout)
+        self.assertIn("log in here (Alt+F1) or over SSH", result.stdout)
+        self.assertNotIn("INSTALL", result.stdout)
+        code, out = self.at_terminal(("text console? (Y/n) ", b"\n"), ("enter = 1): ", b"\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("TERMINAL:failed"), 1)
+        self.assertIn("INSTALL -b master -r https://github.com/telekom-security/tpotce confirmed=1", out)
+        # an error there waits for enter: the console closes with it
+        code, out = self.at_terminal(("text console? (Y/n) ", b"\n"), ("enter = 1): ", b"2\n"),
+                                     ("(empty: back) ", b"dev\n"), ("(empty: ", b"file:///nonexistent/x\n"),
+                                     ("enter = 1): ", b"3\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Nothing installed.", out)
+        code, out = self.at_terminal(("Enter closes the T-Pot installer. ", b"\n"), TPOT_ISO_CONSOLE="1",
+                                     STUB_UID="0", STUB_USER="root")
+        self.assertEqual(code, 1, out)
+        self.assertIn("not as root", out)
+        self.assertIn("Enter closes the T-Pot installer.", out)
+
+    def test_over_ssh_one_look_at_a_bar_tells_true_colour(self):
+        os.makedirs(self.clone())
+        os.symlink(os.path.join(REPO, "tpotctl"), os.path.join(self.clone(), "tpotctl"))
+        ssh = dict(TERM="xterm-256color", SSH_CONNECTION="192.0.2.1 50000 192.0.2.2 22")
+        prefs_file = os.path.join(self.tmp, ".config", "tpotce", "tpot.json")
+        code, out = self.at_terminal(("(y/N) ", b"\n"), ("enter = 1): ", b"\n"), **ssh)
+        self.assertEqual(code, 0, out)
+        self.assertIn("\x1b[48;2;226;0;116m", out)
+        self.assertIn("confirmed=1 colors=\n", out)
+        self.assertFalse(os.path.exists(prefs_file))
+        code, out = self.at_terminal(("(y/N) ", b"y\n"), ("enter = 1): ", b"\n"), **ssh)
+        self.assertEqual(code, 0, out)
+        self.assertIn("True colour, the T-Pot Manager keeps it", out)
+        self.assertIn("colors=truecolor", out)
+        self.assertEqual(json.loads(base.read(prefs_file))["colors"], "truecolor")
+        # asked once: tpot.json says so now
+        code, out = self.at_terminal(("enter = 1): ", b"\n"), **ssh)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("Does the bar above", out)
+        # not on the console, not where the terminal says true colour
+        os.remove(prefs_file)
+        for env in (dict(TERM="xterm-256color"), dict(ssh, COLORTERM="truecolor"), dict(ssh, NO_COLOR="1")):
+            code, out = self.at_terminal(("enter = 1): ", b"\n"), **env)
+            self.assertEqual(code, 0, out)
+            self.assertNotIn("Does the bar above", out, env)
 
 
 class ProfileTest(unittest.TestCase):
@@ -1357,7 +1615,10 @@ class BuildTest(unittest.TestCase):
         for name in payload:
             self.assertTrue(os.path.isfile(os.path.join(ISO_DIR, name)), name)
         needed = re.search(r"^for myFILE in ([^;]+); do$", base.read("installer/iso/late.sh"), re.M).group(1).split()
-        self.assertLessEqual(set(needed), set(payload) | {"install.sh", "version", "iso.conf", "tpotce.tar"})
+        # build.sh writes iso.conf and tpotce.tar, takes install.sh, version and ui.sh of the checkout
+        self.assertLessEqual(set(needed), set(payload) | {"install.sh", "version", "iso.conf", "tpotce.tar", "ui.sh"})
+        self.assertIn('cp "${myREPO}/installer/lib/ui.sh" "${myWORK}/overlay/tpot/ui.sh"',
+                      base.read("installer/iso/build.sh"))
         for name in ("early.sh", "late.sh", "start.sh", "terminal.sh", "prepare.sh", "build.sh"):
             self.assertTrue(os.access(os.path.join(ISO_DIR, name), os.X_OK), name)
 

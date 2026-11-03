@@ -2029,7 +2029,10 @@ esac
 if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && [ "${TPOT_ASSISTANT:-on}" != "off" ];
   then
     ! bootstrap_needed || fuUI_INFO "It first installs git, Ansible and the Python packages it needs."
-    if ! fuUI_CONFIRM "Start the T-Pot installer?" "Start" "Abort";
+    # the start dialog of the T-Pot ISO (installer/iso/start.sh) asked already
+    if [ "${TPOT_INSTALL_CONFIRMED:-}" = "1" ];
+      then unset TPOT_INSTALL_CONFIRMED
+    elif ! fuUI_CONFIRM "Start the T-Pot installer?" "Start" "Abort";
       then
         echo
         fuUI_INFO "Aborting!"
@@ -2067,6 +2070,10 @@ if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && 
     myQST="y"
 fi
 
+if [ "${TPOT_INSTALL_CONFIRMED:-}" = "1" ]; then
+  unset TPOT_INSTALL_CONFIRMED
+  myQST="y"
+fi
 if [[ -z "$myQST" ]]; then
   if ! fuUI_CONFIRM "Install?";
     then

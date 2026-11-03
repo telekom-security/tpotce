@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # The T-Pot ISO at the end of the Debian installer (late.sh runs it in the new system, as root): the
 # T-Pot of the ISO goes into the home folder of the user Debian created, as the T-Pot installer would
-# leave it before its questions, so that it asks them at the first login without downloading:
+# leave it before its questions, so that it asks them after the first boot without downloading:
 #   ~/tpotce                             T-Pot (tpotce.tar: its .git, one commit as git clone leaves it)
 #   ~/.local/share/tpotce/bin/gum        gum, its sha256 checked against ui.sh of that T-Pot
 #   ~/.local/share/tpotce/venv           the T-Pot Manager (tpot setup with the wheels of the ISO)
 #   /etc/ssh/sshd_config.d/tpot.conf     the colours of an SSH login, the line the playbook writes
-# It never stops the Debian installer: what fails is left to the T-Pot installer at the first login
+#   /etc/systemd/system/tpot-iso.service.d/user.conf, multi-user.target.wants/tpot-iso.service
+#                                        the T-Pot installer after the boot on tty8, as that user
+# It never stops the Debian installer: what fails is left to the T-Pot installer when it starts
 # (which needs the internet for it then), the log is /var/log/tpot-iso.log. rc 1 when ~/tpotce
 # could not be made. Argument: the user (else the first member of the group sudo); for the tests
-# TPOT_ISO_SHARE, TPOT_ISO_LOG and TPOT_ISO_SSHD.
+# TPOT_ISO_SHARE, TPOT_ISO_LOG, TPOT_ISO_SSHD and TPOT_ISO_SYSTEMD.
 unset CDPATH
 mySHARE="${TPOT_ISO_SHARE:-/usr/local/share/tpot-iso}"
 myLOG="${TPOT_ISO_LOG:-/var/log/tpot-iso.log}"
 mySSHD="${TPOT_ISO_SSHD:-/etc/ssh/sshd_config.d}"
+mySYSTEMD="${TPOT_ISO_SYSTEMD:-/etc/systemd/system}"
 mySSHD_LINE="AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION"
 exec >> "${myLOG}" 2>&1 < /dev/null
 echo "T-Pot ISO: prepare.sh at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -48,6 +51,26 @@ fuSSHD () {
       echo "T-Pot ISO: sshd does not take ${mySSHD_LINE}, left out."
       rm -f "${mySSHD}/tpot.conf.tpot-iso"
     else mv -f "${mySSHD}/tpot.conf.tpot-iso" "${mySSHD}/tpot.conf"
+  fi
+}
+
+fuSERVICE () {
+  # tpot-iso.service (late.sh put it there) for the user: its drop-in and the link systemctl
+  # enable would make (no systemctl in the Debian installer); never for the user tpot, which
+  # start.sh refuses
+  local myDROPIN="${mySYSTEMD}/tpot-iso.service.d"
+  [ -f "${mySYSTEMD}/tpot-iso.service" ] || { echo "T-Pot ISO: no tpot-iso.service, the installer starts at a login."; return 0; }
+  if [ "${myUSER}" = "tpot" ];
+    then
+      echo "T-Pot ISO: the user tpot is reserved for the containers, tpot-iso.service stays off."
+      return 0
+  fi
+  if mkdir -p "${myDROPIN}" "${mySYSTEMD}/multi-user.target.wants" \
+     && printf '%s\n' "# the user of the T-Pot ISO (prepare.sh)" "[Service]" "User=${myUSER}" > "${myDROPIN}/user.conf" \
+     && chmod 0644 "${myDROPIN}/user.conf" \
+     && ln -sfn "${mySYSTEMD}/tpot-iso.service" "${mySYSTEMD}/multi-user.target.wants/tpot-iso.service";
+    then echo "T-Pot ISO: tpot-iso.service starts the T-Pot installer after the boot, as ${myUSER}."
+    else echo "T-Pot ISO: tpot-iso.service could not be enabled, the installer starts at a login."
   fi
 }
 
@@ -108,12 +131,12 @@ fuMANAGER () {
   # the venv of the T-Pot Manager from the wheels of the ISO (tpot setup goes to PyPI for the rest)
   if [ ! -d "${mySHARE}/wheels" ];
     then
-      echo "T-Pot ISO: the ISO carries no wheels, tpot setup comes at the first login."
+      echo "T-Pot ISO: the ISO carries no wheels, tpot setup comes when the installer starts."
       return 0
   fi
   if fuAS_USER '"${HOME}/tpotce/tpot" setup --wheels "$1"' "${mySHARE}/wheels";
     then echo "T-Pot ISO: the T-Pot Manager is set up."
-    else echo "T-Pot ISO: tpot setup failed, the T-Pot installer runs it again at the first login."
+    else echo "T-Pot ISO: tpot setup failed, the T-Pot installer runs it again when it starts."
   fi
 }
 
@@ -124,9 +147,10 @@ myHOME=""
 [ -z "${myUSER}" ] || myHOME=$(getent passwd "${myUSER}" 2>/dev/null | cut -d: -f6)
 if [ -z "${myUSER}" ] || [ "${myUSER}" = "root" ] || [ -z "${myHOME}" ] || [ ! -d "${myHOME}" ];
   then
-    echo "T-Pot ISO: no user with a home folder (${myUSER:-none}), T-Pot comes at the first login."
+    echo "T-Pot ISO: no user with a home folder (${myUSER:-none}), T-Pot comes at a login."
     exit 1
 fi
+fuSERVICE
 myRC=0
 if fuTPOT;
   then

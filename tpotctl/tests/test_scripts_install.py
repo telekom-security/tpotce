@@ -655,6 +655,29 @@ class InstallShTest(Scripts):
         out = ui.plain(self.at_terminal(self.script, FAKE_DPKG="ii"))
         self.assertIn("It first installs git, Ansible and the Python packages it needs.", out)
 
+    def test_the_start_dialog_of_the_iso_asked_already(self):
+        """installer/iso/start.sh asked which T-Pot (TPOT_INSTALL_CONFIRMED=1): no second question, in the
+        assistant or the classic mode; the variable goes no further."""
+        base_git = ["git", "-C", self.tpotce, "-c", "user.name=T", "-c", "user.email=t@example.org"]
+        os.remove(os.path.join(self.tpotce, ".env"))
+        for args in (["init", "-q", "-b", "master"], ["remote", "add", "origin",
+                     "https://github.com/telekom-security/tpotce"], ["add", "-A"], ["commit", "-q", "-m", "iso"]):
+            subprocess.run(base_git + args, check=True, capture_output=True)
+        write(os.path.join(self.tpotce, "tpot"), '#!/bin/sh\necho "TPOT $* confirmed=${TPOT_INSTALL_CONFIRMED-unset}"\n',
+              0o755)
+        write(os.path.join(self.data, "tpotce", "venv", "bin", "python"), "#!/bin/sh\n", 0o755)
+        calls = os.path.join(self.home, "gum.calls")
+        out = ui.plain(self.at_terminal(self.script, FAKE_DPKG="ii", TPOT_INSTALL_CONFIRMED="1"))
+        self.assertIn("TPOT install confirmed=unset", out)
+        self.assertNotIn("Aborting!", out)
+        self.assertFalse(os.path.exists(calls) and "confirm" in base.read(calls))
+        # without it: the question (the fake gum says no)
+        out = ui.plain(self.at_terminal(self.script, FAKE_DPKG="ii"))
+        self.assertIn("Aborting!", out)
+        self.assertIn("confirm", base.read(calls))
+        self.assertIn('if [ "${TPOT_INSTALL_CONFIRMED:-}" = "1" ]; then\n  unset TPOT_INSTALL_CONFIRMED\n  myQST="y"\n',
+                      base.read("install.sh"))
+
     def test_the_version_of_the_logo(self):
         # an older clone in ~/tpotce says nothing about what this installer installs
         write(os.path.join(self.tpotce, "version"), "99.9.9\n")

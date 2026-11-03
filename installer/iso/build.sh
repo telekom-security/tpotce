@@ -2,9 +2,9 @@
 # The T-Pot ISO (a preview): the Debian netinst T-Pot prefers as its host, with the T-Pot installer.
 # Its boot menus get "Install T-Pot" (the default) in front of Debian's own entries; the Debian
 # installer then asks for the disks, the user and its password as always (preseed.cfg answers only
-# what is safe on any machine, it erases no disk on its own), and at the first login of that user
-# the T-Pot installer starts (late.sh, profile.sh, start.sh): the same installer as on a prepared
-# Debian. The ISO carries T-Pot of the repository and the branch it was built for (a git repository
+# what is safe on any machine, it erases no disk on its own), and after the first boot the T-Pot
+# installer starts on the console as that user, without a login (late.sh, tpot-iso.service,
+# start.sh; a login starts it too, profile.sh): the same installer as on a prepared Debian. The ISO carries T-Pot of the repository and the branch it was built for (a git repository
 # of one commit, as git clone leaves it), the packages of the installer (preseed.cfg), gum and the
 # wheels of the T-Pot Manager: prepare.sh puts them into the new system, the installer needs the
 # internet for the images of T-Pot only.
@@ -59,7 +59,7 @@ myUPDATE_BACK="later on a branch again: ./update.sh -y -b master"
 # the Docker image of the build: Debian with the tools of the build, refreshed weekly
 myDOCKER_IMAGE="tpot-iso-build:${myDEBIAN_MAJOR}"
 # the files of the ISO in /tpot (late.sh puts them into the new system), iso.conf is made here
-myPAYLOAD="preseed.cfg early.sh late.sh prepare.sh profile.sh start.sh terminal.sh tpot.issue"
+myPAYLOAD="preseed.cfg early.sh late.sh prepare.sh profile.sh start.sh terminal.sh tpot.issue tpot-iso.service"
 # gum for macOS (ui.sh fetches the one of Linux only): the version of ui.sh (the test checks it),
 # the sha256 of the release archives of github.com/charmbracelet/gum
 myGUM_DARWIN_VERSION="2.0.2"
@@ -106,10 +106,10 @@ myBUILT=()
 
 fuHELP () {
   fuUI_HELP "ISO Builder (preview)" "installer/iso/build.sh [options]" \
-    --about "Builds the T-Pot ISO: the Debian ${myDEBIAN_MAJOR} netinst with \"Install T-Pot\" as the default of its boot menus. The Debian installer asks for the disks, the user and its password as always; at the first login of that user the T-Pot installer of the ISO starts. Debian's own entries stay and install a plain Debian." \
+    --about "Builds the T-Pot ISO: the Debian ${myDEBIAN_MAJOR} netinst with \"Install T-Pot\" as the default of its boot menus. The Debian installer asks for the disks, the user and its password as always; after the first boot the T-Pot installer of the ISO starts on the console, without a login. Debian's own entries stay and install a plain Debian." \
     --about "With no option at a terminal it asks: build an ISO, write one to a USB stick, build the ISOs of a release. The netinst is checked against Debian's signed SHA512SUMS, its boot loaders stay untouched (Secure Boot). Linux with xorriso, python3 with pip, gpg, curl and git, or Docker (macOS; git is needed there too)." \
     --opt "-a <arch>" "amd64, arm64 or both (default: the architecture of this machine, with -R both)" \
-    --opt "-b <branch>" "the branch of T-Pot the ISO carries and installs (default: TPOT_BRANCH, the branch of this checkout, master); a tag or a commit works too, but update.sh cannot update such a T-Pot. At its first login the ISO offers another one as well" \
+    --opt "-b <branch>" "the branch of T-Pot the ISO carries and installs (default: TPOT_BRANCH, the branch of this checkout, master); a tag or a commit works too, but update.sh cannot update such a T-Pot. When its installer starts the ISO offers another one as well" \
     --opt "-r <repo-url>" "the repository of that T-Pot, the one update.sh follows (default: TPOT_REPO_URL, the origin of this checkout, ${myUPSTREAM})" \
     --opt "-i <netinst>" "a Debian netinst on disk instead of the download (one architecture), checked against Debian's signed SHA512SUMS all the same" \
     --opt "-o <folder>" "where the ISOs go (default: installer/iso/out, with -R installer/iso/out/release-<version>); the downloads stay in installer/iso/out/cache (TPOT_ISO_CACHE)" \
@@ -625,6 +625,8 @@ fuBUILD () {
   for myFILE in ${myPAYLOAD}; do
     cp "${myDIR}/${myFILE}" "${myWORK}/overlay/tpot/${myFILE}" || return 1
   done
+  # the look of start.sh: ui.sh of this checkout, as start.sh itself
+  cp "${myREPO}/installer/lib/ui.sh" "${myWORK}/overlay/tpot/ui.sh" || return 1
   # T-Pot of the run (fuSNAPSHOT): its .git, install.sh and version; gum and the wheels for it
   [ -n "${mySNAPSHOT}" ] && [ -d "${mySNAPSHOT}/.git" ] || { echo "T-Pot for the ISO is missing (${mySNAPSHOT})" >&2; return 1; }
   cp "${mySNAPSHOT}/install.sh" "${mySNAPSHOT}/version" "${myWORK}/overlay/tpot/" || return 1
@@ -637,7 +639,8 @@ fuBUILD () {
     > "${myWORK}/overlay/tpot/iso.conf"
   chmod 0755 "${myWORK}/overlay/tpot/"*.sh
   chmod 0644 "${myWORK}/overlay/tpot/preseed.cfg" "${myWORK}/overlay/tpot/tpot.issue" \
-    "${myWORK}/overlay/tpot/iso.conf" "${myWORK}/overlay/tpot/version" "${myWORK}/overlay/tpot/tpotce.tar" \
+    "${myWORK}/overlay/tpot/tpot-iso.service" "${myWORK}/overlay/tpot/ui.sh" "${myWORK}/overlay/tpot/iso.conf" \
+    "${myWORK}/overlay/tpot/version" "${myWORK}/overlay/tpot/tpotce.tar" \
     "${myWORK}/overlay/tpot/"gum_*.tar.gz "${myWORK}/overlay/tpot/wheels/"*
   PYTHONDONTWRITEBYTECODE=1 python3 "${myDIR}/isotree.py" md5sum --orig "${myWORK}/orig/md5sum.txt" \
     --out "${myWORK}/overlay" || return 1
@@ -1161,7 +1164,7 @@ fuWRITE () {
   fi
   [ "$(uname -s 2>/dev/null)" != "Darwin" ] \
     || myITEMS+=("info:macOS may say it cannot read the stick: Ignore or Eject, macOS does not know the file systems of the ISO")
-  myITEMS+=("next:Boot from it (${myBOOT}), choose Install T-Pot; the T-Pot installer starts at the first login")
+  myITEMS+=("next:Boot from it (${myBOOT}), choose Install T-Pot; the T-Pot installer starts after the first boot")
   fuUI_SUMMARY "USB stick" "${myITEMS[@]}"
 }
 
@@ -1573,7 +1576,7 @@ fuRUN () {
   if [ -z "${myDEVICE}" ]; then
     myITEMS+=("next:Onto a USB stick: $(fuQ "${mySELF}") -w $(fuQ "${myOUT}/${myBUILT[0]}") (or the menu); Windows: Rufus (DD mode) or balenaEtcher")
   fi
-  myITEMS+=("next:Boot from it (${myBOOT}), choose Install T-Pot; the T-Pot installer starts at the first login")
+  myITEMS+=("next:Boot from it (${myBOOT}), choose Install T-Pot; the T-Pot installer starts after the first boot")
   fuUI_SUMMARY "T-Pot ISO" "${myITEMS[@]}"
 }
 
