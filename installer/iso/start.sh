@@ -3,8 +3,11 @@
 # tpot-iso.service starts it after the boot on the console (tty8) as the user created during the
 # installation, the login hook (/etc/profile.d/tpot-iso.sh) at a login, by hand:
 #   bash /usr/local/share/tpot-iso/start.sh [-b <branch>] [-r <repository>]
-# On the console it runs in the graphical terminal of the ISO (terminal.sh: Xorg with one
-# fullscreen xterm, no desktop), on the text console where that does not start. At a terminal it
+# On a screen of this machine (tty8, a login on a VT) it runs again in the graphical terminal of
+# the ISO (terminal.sh: Xorg with one fullscreen xterm, no desktop) and watches it (fuWATCH): X up
+# within 30 s, the key S there within 60 s. Where it cannot start (no graphics device, its packages
+# missing), does not start or its screen stays black it asks on the text console: the graphical
+# terminal again, the text console (kept until the next boot) or later. At a terminal it
 # asks which T-Pot: the one of this ISO (its install.sh with the repository and the branch of
 # iso.conf, the same installer as on a prepared Debian), the newest of that branch (fetched into
 # ~/tpotce, its own install.sh) or another branch or repository for a test (cloned into ~/tpotce,
@@ -24,8 +27,20 @@ myLOG="${XDG_STATE_HOME:-${HOME}/.local/state}/tpot/start.log"
 myLATER="The T-Pot installer starts again after the next boot or at a login"
 myBUSY_HINT="Wait until it ends, or end it there first (on the console: sudo systemctl stop tpot-iso.service)."
 myARGS=("$@")
-# the run in the graphical terminal of the console (fuCONSOLE): it got this far
+# the run in the graphical terminal of a screen (fuWATCH): it got this far (ran), the key S shows
+# that its screen is seen (fuWELCOME)
 if [ -n "${TPOT_ISO_RAN:-}" ]; then : > "${TPOT_ISO_RAN}" 2>/dev/null; unset TPOT_ISO_RAN; fi
+mySEEN="${TPOT_ISO_SEEN:-}"
+unset TPOT_ISO_SEEN
+# the watch (fuWATCH): X up within myX_WAIT s, the key S within myKEY_WAIT s; the graphics devices
+# in myDEV_DIR; the text console chosen in this boot (/run/lock is emptied at the boot)
+myX_WAIT="${TPOT_ISO_X_WAIT:-30}"
+myKEY_WAIT="${TPOT_ISO_KEY_WAIT:-60}"
+[[ "${myX_WAIT}" =~ ^[0-9]{1,4}$ ]] || myX_WAIT=30
+[[ "${myKEY_WAIT}" =~ ^[0-9]{1,4}$ ]] || myKEY_WAIT=60
+myX_WAIT=$((10#${myX_WAIT})) myKEY_WAIT=$((10#${myKEY_WAIT}))
+myDEV_DIR="${TPOT_ISO_DEV:-/dev}"
+myTEXT="${TPOT_ISO_TEXT:-/run/lock/tpot-iso.text}"
 # the console of tpot-iso.service closes with it: what it says there waits for Enter (fuPAUSE)
 myPAUSE=""
 if [ -n "${TPOT_ISO_PAUSE:-}" ] || { [ -n "${TPOT_ISO_CONSOLE:-}" ] && [ -z "${TPOT_ISO_TERMINAL_TRIED:-}" ]; }; then myPAUSE=1; fi
@@ -122,6 +137,7 @@ fuTRIM () {
 fuHELP () {
   fuUI_HELP "ISO installer" "bash ${myDIR}/start.sh [-b <branch>] [-r <repository>]" \
     --about "Installs T-Pot on this Debian. tpot-iso.service starts it after the boot on the console (tty8, Alt+F8), a login starts it too, until T-Pot is installed." \
+    --about "On a screen of this machine it opens the graphical terminal of the ISO and waits for the key S there; where that does not start or its screen stays black, it asks on the text console." \
     --about "At a terminal it asks which T-Pot: the one of this ISO (${myISO_REPO} at ${myISO_BRANCH}), the newest of that branch, or another branch or repository to test it. Without a terminal it installs the one of this ISO." \
     --opt "-b <branch>" "another branch, e.g. to test it; it is cloned into ~/tpotce and its own install.sh runs. A tag or a commit works too, update.sh cannot update it." \
     --opt "-r <repository>" "another repository (default: the one of this ISO)" \
@@ -332,27 +348,161 @@ fuDIALOG () {
   done
 }
 
-fuCONSOLE () {
-  # tpot-iso.service on tty8: the installer in the graphical terminal of the ISO; where that does
-  # not start, on the text console or later at a login
-  local myRAN myRC=0
-  if [ -r "${myDIR}/terminal.sh" ] && myRAN=$(mktemp -d "${TMPDIR:-/tmp}/tpot-iso.XXXXXXXX");
+fuVT () {
+  # a login on a VT of this machine, not over SSH, not inside X: the graphical terminal of the ISO
+  # can start there (terminal.sh: the same rule)
+  local myTTY
+  [ "${TPOT_TERMINAL:-auto}" != "off" ] || return 1
+  [ -z "${SSH_CONNECTION:-}${SSH_TTY:-}${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || return 1
+  myTTY=$(tty 2>/dev/null) || return 1
+  [[ "${myTTY}" =~ ^/dev/tty[1-9][0-9]*$ ]]
+}
+
+fuGRAPHICAL () {
+  # can the graphical terminal of the ISO start? rc 1 with the reason in myWHY: tools (its
+  # packages, the missing one in myMISSING), device (no /dev/dri/card*, no /dev/fb*; a render
+  # node is no screen), text (the text console chosen in this boot)
+  local myTOOL myDEV
+  for myTOOL in startx xauth Xorg xterm matchbox-window-manager; do
+    if ! command -v "${myTOOL}" >/dev/null 2>&1; then myWHY="tools" myMISSING="${myTOOL}"; return 1; fi
+  done
+  if [ ! -r "${myDIR}/terminal.sh" ]; then myWHY="tools" myMISSING="${myDIR}/terminal.sh"; return 1; fi
+  myWHY="device"
+  for myDEV in "${myDEV_DIR}"/dri/card* "${myDEV_DIR}"/fb*; do
+    if [ -e "${myDEV}" ]; then myWHY=""; break; fi
+  done
+  [ -z "${myWHY}" ] || return 1
+  if [ -e "${myTEXT}" ]; then myWHY="text"; return 1; fi
+  return 0
+}
+
+fuVT_TEXT () {
+  # a stopped Xorg may leave the VT in graphics mode with its keyboard off: text again (KDSETMODE
+  # KD_TEXT) and the keys of a UTF-8 console (KDSKBMODE K_UNICODE); not a VT: nothing
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 -c 'import array, fcntl
+def get(request):
+    value = array.array("i", [0])
+    fcntl.ioctl(0, request, value, True)
+    return value[0]
+try:
+    if get(0x4B3B) != 0:
+        fcntl.ioctl(0, 0x4B3A, 0)
+    if get(0x4B44) not in (1, 3):
+        fcntl.ioctl(0, 0x4B45, 3)
+except OSError:
+    pass' 2>/dev/null || true
+}
+
+fuX_RUN () {
+  # start.sh again in the graphical terminal of the ISO, watched: X up within myX_WAIT s (ran),
+  # the key S there within myKEY_WAIT s (seen, fuWELCOME); then this one ends with its rc. Else
+  # the terminal is stopped and myWHY says why: nox, nokey
+  local myRUN myJOB myRC myEND
+  if ! myRUN=$(mktemp -d "${TMPDIR:-/tmp}/tpot-iso.XXXXXXXX"); then myWHY="nox"; return 0; fi
+  # <&0: the keys of this terminal (bash gives a job without job control /dev/null instead)
+  { TPOT_ISO_TERMINAL_TRIED=1 TPOT_ISO_RAN="${myRUN}/ran" TPOT_ISO_SEEN="${myRUN}/seen" \
+      TPOT_ISO_KEY_WAIT="${myKEY_WAIT}" bash "${myDIR}/terminal.sh" -- bash "${myDIR}/start.sh" "${myARGS[@]}"
+    echo "$?" > "${myRUN}/rc"; } <&0 &
+  myJOB=$!
+  myEND=$((SECONDS + myX_WAIT))
+  while [ ! -e "${myRUN}/ran" ] && [ ! -e "${myRUN}/rc" ] && [ "${SECONDS}" -lt "${myEND}" ]; do sleep 0.5; done
+  myWHY="nox"
+  if [ -e "${myRUN}/ran" ];
     then
-      TPOT_ISO_TERMINAL_TRIED=1 TPOT_ISO_RAN="${myRAN}/ran" bash "${myDIR}/terminal.sh" -- \
-        bash "${myDIR}/start.sh" "${myARGS[@]}" || myRC=$?
-      if [ -e "${myRAN}/ran" ];
-        then
-          rm -rf "${myRAN}"
-          exit "${myRC}"
-      fi
-      rm -rf "${myRAN}"
+      # its own wait ends after myKEY_WAIT s, X takes a while to end
+      myEND=$((SECONDS + myKEY_WAIT + 15))
+      while [ ! -e "${myRUN}/seen" ] && [ ! -e "${myRUN}/rc" ] && [ "${SECONDS}" -lt "${myEND}" ]; do sleep 0.5; done
+      myWHY="nokey"
+      [ ! -e "${myRUN}/seen" ] || myWHY=""
   fi
+  if [ -n "${myWHY}" ] && [ ! -e "${myRUN}/rc" ];
+    then
+      fuUI_STOP "${myJOB}" || true
+      wait "${myJOB}" 2>/dev/null
+      fuVT_TEXT
+    else
+      wait "${myJOB}" 2>/dev/null
+  fi
+  if [ -z "${myWHY}" ];
+    then
+      IFS= read -r myRC < "${myRUN}/rc" 2>/dev/null || myRC=1
+      [[ "${myRC}" =~ ^[0-9]+$ ]] || myRC=1
+      rm -rf "${myRUN}"
+      exit "${myRC}"
+  fi
+  rm -rf "${myRUN}"
+  return 0
+}
+
+fuWATCH () {
+  # a screen of this machine (tpot-iso.service on tty8, a login on a VT): start.sh in the
+  # graphical terminal of the ISO where it can start (fuX_RUN); else, and when it did not start or
+  # its screen stayed black, a choice on the text console: the graphical terminal (again), the
+  # text console (kept for this boot, myTEXT) or later
+  local myWHY="" myMISSING="" myPICK myDEFAULT
+  if fuGRAPHICAL; then fuX_RUN; fi
+  while true; do
+    myDEFAULT="text"
+    echo
+    case "${myWHY}" in
+      tools) fuUI_WARN "The graphical terminal of the ISO is missing its packages (${myMISSING})." ;;
+      device) fuUI_WARN "No graphics device here (${myDEV_DIR}/dri, ${myDEV_DIR}/fb): the graphical terminal of the ISO cannot start." ;;
+      text) fuUI_INFO "The text console was chosen in this boot." ;;
+      nokey)
+        myDEFAULT="graphical"
+        fuUI_WARN "No key S within ${myKEY_WAIT} s in the graphical terminal of the ISO: did its screen stay black?" ;;
+      *) fuUI_WARN "The graphical terminal of the ISO did not start (${XDG_STATE_HOME:-${HOME}/.local/state}/tpot/terminal.log)." ;;
+    esac
+    myPICK=$(fuUI_CHOOSE --selected "${myDEFAULT}" "How should the T-Pot installer start?" \
+      "Graphical terminal:graphical" "Text console:text" "Later:later") || myPICK="later"
+    case "${myPICK}" in
+      graphical) fuX_RUN ;;
+      text)
+        : > "${myTEXT}" 2>/dev/null || true
+        if [ -n "${TPOT_ISO_CONSOLE:-}" ];
+          then TPOT_ISO_TERMINAL_TRIED=1 TPOT_ISO_PAUSE=1 exec bash "${myDIR}/start.sh" "${myARGS[@]}"
+          else TPOT_ISO_TERMINAL_TRIED=1 exec bash "${myDIR}/start.sh" "${myARGS[@]}"
+        fi ;;
+      *)
+        if [ -n "${TPOT_ISO_CONSOLE:-}" ];
+          then
+            fuUI_INFO "${myLATER}: log in here (Alt+F1) or over SSH."
+            exit 0
+        fi
+        fuLATER 0 ;;
+    esac
+  done
+}
+
+fuWELCOME () {
+  # in the graphical terminal of fuWATCH: the key S shows that its screen is seen (mySEEN), Enter
+  # does not count. Nothing within myKEY_WAIT s: rc 0 (terminal.sh then waits for no Enter),
+  # fuWATCH asks on the text console
+  local myKEY myRC myEND
+  [ -n "${mySEEN}" ] || return 0
+  myUI_LOGO=1
+  fuUI_BANNER "Installer" "T-Pot ${myVERSION} of this ISO: ${myISO_REPO} at ${myISO_BRANCH}"
+  myEND=$((SECONDS + myKEY_WAIT))
+  while [ "${SECONDS}" -lt "${myEND}" ]; do
+    printf '\r  Press S to start the T-Pot installer (%s s) ' "$((myEND - SECONDS))"
+    myRC=0
+    IFS= read -rsn1 -t 1 myKEY || myRC=$?
+    if [ "${myRC}" -eq 0 ];
+      then
+        case "${myKEY}" in
+          s|S)
+            : > "${mySEEN}" 2>/dev/null
+            echo
+            # the dialog on a clean screen, with the logo
+            if [ -n "${myUI_GUM}" ] && [ -t 1 ]; then printf '\033[H\033[2J\033[3J'; unset TPOT_LOGO_SHOWN; fi
+            return 0 ;;
+        esac
+    elif [ "${myRC}" -le 128 ];
+      then sleep 1
+    fi
+  done
   echo
-  fuUI_WARN "The graphical terminal of the ISO did not start (${XDG_STATE_HOME:-${HOME}/.local/state}/tpot/terminal.log)."
-  if fuUI_CONFIRM --default yes "Start the T-Pot installer here, on the text console?" "Start" "Later";
-    then TPOT_ISO_TERMINAL_TRIED=1 TPOT_ISO_PAUSE=1 exec bash "${myDIR}/start.sh" "${myARGS[@]}"
-  fi
-  fuUI_INFO "${myLATER}: log in here (Alt+F1) or over SSH."
   exit 0
 }
 
@@ -462,14 +612,10 @@ fi
 [ ! -e "${myINSTALLED}" ] || fuDONE
 ! fuBUSY || fuSTOP "The T-Pot installer runs already: ${myHOLDER}." "${myBUSY_HINT}"
 
-if [ -n "${TPOT_ISO_CONSOLE:-}" ] && [ -z "${TPOT_ISO_TERMINAL_TRIED:-}" ];
-  then fuCONSOLE
+if [ -z "${TPOT_ISO_TERMINAL_TRIED:-}" ] && { [ -n "${TPOT_ISO_CONSOLE:-}" ] || { [ -t 0 ] && [ -t 1 ] && fuVT; }; };
+  then fuWATCH
 fi
-if [ -z "${TPOT_ISO_TERMINAL_TRIED:-}" ] && [ -t 0 ] && [ -t 1 ];
-  then
-    [ -r "${myDIR}/terminal.sh" ] || fuSTOP "${myDIR}/terminal.sh is missing."
-    TPOT_ISO_TERMINAL_TRIED=1 exec bash "${myDIR}/terminal.sh" -- bash "${myDIR}/start.sh" "${myARGS[@]}"
-fi
+fuWELCOME
 
 mkdir -p "${myLOG%/*}" 2>/dev/null && : >> "${myLOG}" 2>/dev/null || myLOG="/dev/null"
 fuCOLOR_TEST

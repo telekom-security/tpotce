@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import unittest
 import zlib
 
@@ -706,13 +707,21 @@ except OSError:
 """
 
 
+X_TOOLS = ("startx", "xauth", "Xorg", "xterm", "matchbox-window-manager")
+# terminal.sh of the tests: start.sh at once, as if X had come up; X does not come up
+TERMINAL_WORKS = 'echo "TERMINAL:${TPOT_ISO_TERMINAL_TRIED}"\n[ "$1" = -- ] || exit 2\nshift\nexec "$@"\n'
+TERMINAL_FAILS = 'echo "TERMINAL:failed"\nexit 1\n'
+
+
 class StartTest(unittest.TestCase):
     """start.sh runs the install.sh of the ISO with the repository and the branch of iso.conf, which
     it reads and never sources; never as root, never as the user tpot of the containers. At a terminal
     it asks which T-Pot: the one of the ISO, the newest of its branch, another branch (cloned into
     ~/tpotce, its own install.sh; a tag or a commit with a warning, a branch the repository does not
-    have never) or none. tpot-iso.service runs it on the console in the graphical terminal of the ISO,
-    the text console where that does not start. One installer at a time (a lock)."""
+    have never) or none. On a screen of the machine (tpot-iso.service on tty8, a login on a VT) it runs
+    again in the graphical terminal of the ISO and watches it: X up within TPOT_ISO_X_WAIT, the key S
+    there within TPOT_ISO_KEY_WAIT, else it stops it and asks (graphical, text console, later). One
+    installer at a time (a lock)."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -729,6 +738,10 @@ class StartTest(unittest.TestCase):
         write(os.path.join(self.bin, "id"), ID_STUB, 0o755)
         self.lock = os.path.join(self.tmp, "tpot-iso.lock")
         self.installed = os.path.join(self.tmp, "tpot.service")
+        # no screen unless a test makes one
+        self.dev = os.path.join(self.tmp, "dev")
+        os.makedirs(self.dev)
+        self.text = os.path.join(self.tmp, "tpot-iso.text")
         self.conf("TPOT_REPO_URL=https://github.com/telekom-security/tpotce", "TPOT_BRANCH=master")
 
     def conf(self, *lines):
@@ -736,7 +749,8 @@ class StartTest(unittest.TestCase):
 
     def environ(self, **env):
         return {"PATH": f"{self.bin}:{os.environ['PATH']}", "HOME": self.tmp, "TERM": "dumb", "TPOT_GUM": "off",
-                "TPOT_ISO_LOCK": self.lock, "TPOT_ISO_INSTALLED": self.installed, **env}
+                "TPOT_ISO_LOCK": self.lock, "TPOT_ISO_INSTALLED": self.installed, "TPOT_ISO_DEV": self.dev,
+                "TPOT_ISO_TEXT": self.text, "TPOT_ISO_X_WAIT": "5", "TPOT_ISO_KEY_WAIT": "5", **env}
 
     def run_start(self, *args, **env):
         return subprocess.run([BASH, os.path.join(self.share, "start.sh"), *args], capture_output=True, text=True,
@@ -747,6 +761,25 @@ class StartTest(unittest.TestCase):
         code, out, _piped = ptyhelper.run([BASH, os.path.join(self.share, "start.sh"), *args], self.environ(**env),
                                           cwd=self.tmp, size=(250, 50), answers=answers, timeout=60)
         return code, out.decode("utf-8", "replace").replace("\r\n", "\n")
+
+    def screen(self):
+        """A screen: a graphics device and the tools of the graphical terminal."""
+        write(os.path.join(self.dev, "dri", "card0"), "")
+        for name in X_TOOLS:
+            stub(self.bin, name, "exit 0\n")
+
+    def terminal(self, body):
+        write(os.path.join(self.share, "terminal.sh"), "#!/bin/sh\n" + body, 0o755)
+
+    def gone(self, pidfile):
+        """Is the process of the pid in the file gone (a zombie counts as gone)?"""
+        pid = base.read(pidfile).strip()
+        for _ in range(50):
+            state = subprocess.run(["ps", "-o", "stat=", "-p", pid], capture_output=True, text=True).stdout.strip()
+            if not state or state.startswith("Z"):
+                return True
+            time.sleep(0.1)
+        return False
 
     def git(self, *args, cwd=None):
         environ = {**self.environ(), "GIT_AUTHOR_NAME": "T", "GIT_AUTHOR_EMAIL": "t@example.org",
@@ -796,11 +829,14 @@ class StartTest(unittest.TestCase):
         self.assertIn("confirmed= ", result.stdout)
 
     def test_interactive_terminal_handoff_keeps_arguments_and_does_not_recurse(self):
-        write(os.path.join(self.share, "terminal.sh"),
-              '#!/bin/sh\necho "TERMINAL:${TPOT_ISO_TERMINAL_TRIED}"\n'
-              '[ "$1" = -- ] || exit 2\nshift\nexec "$@"\n', 0o755)
-        code, out = self.at_terminal(args=("-b", "master", "-r", "https://github.com/telekom-security/tpotce"))
+        # a login on a VT of this machine: start.sh again in the graphical terminal, once
+        self.screen()
+        self.terminal(TERMINAL_WORKS)
+        stub(self.bin, "tty", "echo /dev/tty2\n")
+        code, out = self.at_terminal(("Press S to start", b"s"),
+                                     args=("-b", "master", "-r", "https://github.com/telekom-security/tpotce"))
         self.assertEqual(code, 0, out)
+        self.assertIn("Press S to start the T-Pot installer (5 s)", out)
         self.assertEqual(out.count("TERMINAL:1"), 1)
         self.assertIn("INSTALL -b master -r https://github.com/telekom-security/tpotce", out)
 
@@ -1105,43 +1141,136 @@ class StartTest(unittest.TestCase):
             self.assertIn("A finished T-Pot installer left its lock", result.stdout)
             self.assertIn("INSTALL", result.stdout)
 
-    def test_on_the_console_the_graphical_terminal_or_the_text_console(self):
-        # tpot-iso.service: terminal.sh runs start.sh in the graphical terminal
-        write(os.path.join(self.share, "terminal.sh"),
-              '#!/bin/sh\necho "TERMINAL:${TPOT_ISO_TERMINAL_TRIED}"\n'
-              '[ "$1" = -- ] || exit 2\nshift\nexec "$@"\n', 0o755)
-        result = self.run_start(TPOT_ISO_CONSOLE="1")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.count("TERMINAL:1"), 1)
-        self.assertIn("INSTALL -b master", result.stdout)
-        self.assertNotIn("did not start", result.stdout)
+    def test_on_the_console_the_graphical_terminal_once_its_screen_is_seen(self):
+        # tpot-iso.service: start.sh again in the graphical terminal; the key S there shows that its
+        # screen is seen, Enter does not count
+        self.screen()
+        self.terminal(TERMINAL_WORKS)
+        write(os.path.join(self.share, "install.sh"),
+              '#!/bin/sh\necho "INSTALL $* confirmed=${TPOT_INSTALL_CONFIRMED-} '
+              'leak=${TPOT_ISO_SEEN-}${TPOT_ISO_RAN-}"\n', 0o755)
+        code, out = self.at_terminal(("Press S to start the T-Pot installer (5 s)", b"\n"),
+                                     ("Press S to start", b"S"), ("enter = 1): ", b"\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("TERMINAL:1"), 1)
+        self.assertIn("INSTALL -b master -r https://github.com/telekom-security/tpotce confirmed=1 leak=\n", out)
+        self.assertNotIn("No key S", out)
         # its rc goes on
         write(os.path.join(self.share, "install.sh"), '#!/bin/sh\necho INSTALL\nexit 3\n', 0o755)
-        self.assertEqual(self.run_start(TPOT_ISO_CONSOLE="1").returncode, 3)
-        write(os.path.join(self.share, "install.sh"), '#!/bin/sh\necho "INSTALL $* confirmed=${TPOT_INSTALL_CONFIRMED-}"\n',
-              0o755)
-        # X does not start: the text console, after a yes
-        write(os.path.join(self.share, "terminal.sh"), '#!/bin/sh\necho "TERMINAL:failed"\nexit 1\n', 0o755)
-        result = self.run_start(TPOT_ISO_CONSOLE="1")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("The graphical terminal of the ISO did not start", result.stdout)
-        self.assertIn("log in here (Alt+F1) or over SSH", result.stdout)
-        self.assertNotIn("INSTALL", result.stdout)
-        code, out = self.at_terminal(("text console? (Y/n) ", b"\n"), ("enter = 1): ", b"\n"), TPOT_ISO_CONSOLE="1")
+        code, out = self.at_terminal(("Press S to start", b"s"), ("enter = 1): ", b"\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 3, out)
+        # nobody there (or a black screen): asked on the text console, the graphical terminal first
+        code, out = self.at_terminal(("enter = 1): ", b"3\n"), TPOT_ISO_CONSOLE="1", TPOT_ISO_KEY_WAIT="1")
         self.assertEqual(code, 0, out)
-        self.assertEqual(out.count("TERMINAL:failed"), 1)
-        self.assertIn("INSTALL -b master -r https://github.com/telekom-security/tpotce confirmed=1", out)
-        # an error there waits for enter: the console closes with it
-        code, out = self.at_terminal(("text console? (Y/n) ", b"\n"), ("enter = 1): ", b"2\n"),
-                                     ("(empty: back) ", b"dev\n"), ("(empty: ", b"file:///nonexistent/x\n"),
-                                     ("enter = 1): ", b"3\n"), TPOT_ISO_CONSOLE="1")
-        self.assertEqual(code, 0, out)
-        self.assertIn("Nothing installed.", out)
+        self.assertIn("No key S within 1 s in the graphical terminal of the ISO: did its screen stay black?", out)
+        self.assertIn("How should the T-Pot installer start?", out)
+        self.assertIn("Choice (1-3, enter = 1): ", out)
+        self.assertIn("log in here (Alt+F1) or over SSH", out)
+        self.assertNotIn("INSTALL", out)
+        self.assertFalse(os.path.exists(self.text))
+        # an error on the console waits for enter: the console closes with it
         code, out = self.at_terminal(("Enter closes the T-Pot installer. ", b"\n"), TPOT_ISO_CONSOLE="1",
                                      STUB_UID="0", STUB_USER="root")
         self.assertEqual(code, 1, out)
         self.assertIn("not as root", out)
-        self.assertIn("Enter closes the T-Pot installer.", out)
+        self.assertNotIn("TERMINAL:", out)
+
+    def test_on_the_console_the_text_console_where_x_does_not_start(self):
+        self.screen()
+        self.terminal(TERMINAL_FAILS)
+        # without a terminal: later
+        result = self.run_start(TPOT_ISO_CONSOLE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count("TERMINAL:failed"), 1)
+        self.assertIn("The graphical terminal of the ISO did not start", result.stdout)
+        self.assertIn("log in here (Alt+F1) or over SSH", result.stdout)
+        self.assertNotIn("INSTALL", result.stdout)
+        # the graphical terminal again, then later
+        code, out = self.at_terminal(("enter = 2): ", b"1\n"), ("enter = 2): ", b"3\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("TERMINAL:failed"), 2)
+        self.assertNotIn("INSTALL", out)
+        self.assertFalse(os.path.exists(self.text))
+        # the text console, kept for this boot
+        code, out = self.at_terminal(("enter = 2): ", b"\n"), ("enter = 1): ", b"\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("TERMINAL:failed"), 1)
+        self.assertIn("INSTALL -b master -r https://github.com/telekom-security/tpotce confirmed=1", out)
+        self.assertTrue(os.path.exists(self.text))
+        code, out = self.at_terminal(("enter = 2): ", b"3\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("The text console was chosen in this boot.", out)
+        self.assertNotIn("TERMINAL:", out)
+        self.assertIn("log in here (Alt+F1) or over SSH", out)
+
+    def test_a_hanging_or_black_graphical_terminal_is_stopped(self):
+        self.screen()
+        pidfile = os.path.join(self.tmp, "terminal.pid")
+        # X does not come up within TPOT_ISO_X_WAIT
+        self.terminal(f'echo $$ > "{pidfile}"\necho TERMINAL:hangs\nexec sleep 60\n')
+        started = time.time()
+        result = self.run_start(TPOT_ISO_CONSOLE="1", TPOT_ISO_X_WAIT="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertLess(time.time() - started, 20)
+        self.assertIn("The graphical terminal of the ISO did not start", result.stdout)
+        self.assertTrue(self.gone(pidfile))
+        # X up, start.sh in it, but no key S, not even the end of its wait: a black screen
+        self.terminal(f'echo $$ > "{pidfile}"\n: > "$TPOT_ISO_RAN"\nexec sleep 60\n')
+        code, out = self.at_terminal(("enter = 1): ", b"2\n"), ("enter = 1): ", b"\n"), TPOT_ISO_CONSOLE="1",
+                                     TPOT_ISO_KEY_WAIT="1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("did its screen stay black?", out)
+        self.assertTrue(self.gone(pidfile))
+        self.assertIn("INSTALL -b master", out)
+        self.assertTrue(os.path.exists(self.text))
+
+    def test_without_a_screen_the_text_console_at_once(self):
+        self.terminal(TERMINAL_WORKS)
+        for name in X_TOOLS:
+            stub(self.bin, name, "exit 0\n")
+        # no graphics device (/dev/dri/card*, /dev/fb*): X is not tried
+        code, out = self.at_terminal(("enter = 2): ", b"\n"), ("enter = 1): ", b"\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("No graphics device here", out)
+        self.assertNotIn("TERMINAL:", out)
+        self.assertIn("INSTALL -b master -r https://github.com/telekom-security/tpotce confirmed=1", out)
+        # a render node is no screen; the graphical terminal when asked for
+        write(os.path.join(self.dev, "dri", "renderD128"), "")
+        code, out = self.at_terminal(("enter = 2): ", b"1\n"), ("Press S to start", b"s"), ("enter = 1): ", b"\n"),
+                                     TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("TERMINAL:1"), 1)
+        self.assertIn("INSTALL -b master", out)
+        # the graphical terminal of the ISO incomplete
+        os.remove(self.text)
+        write(os.path.join(self.dev, "fb0"), "")
+        os.remove(os.path.join(self.share, "terminal.sh"))
+        code, out = self.at_terminal(("enter = 2): ", b"3\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("The graphical terminal of the ISO is missing its packages", out)
+        self.assertNotIn("INSTALL", out)
+
+    def test_a_login_on_a_vt_watches_the_graphical_terminal_others_keep_their_terminal(self):
+        self.screen()
+        self.terminal(TERMINAL_FAILS)
+        stub(self.bin, "tty", "echo /dev/tty2\n")
+        code, out = self.at_terminal(("enter = 2): ", b"3\n"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("TERMINAL:failed"), 1)
+        self.assertIn("The graphical terminal of the ISO did not start", out)
+        self.assertIn("Nothing installed.", out)
+        # SSH, TPOT_TERMINAL=off, inside X, a pty: the terminal as it is
+        for env in (dict(SSH_CONNECTION="192.0.2.1 50000 192.0.2.2 22"), dict(TPOT_TERMINAL="off"),
+                    dict(DISPLAY=":0")):
+            code, out = self.at_terminal(("enter = 1): ", b"\n"), **env)
+            self.assertEqual(code, 0, out)
+            self.assertNotIn("TERMINAL:", out, env)
+            self.assertIn("INSTALL -b master", out, env)
+        os.remove(os.path.join(self.bin, "tty"))
+        code, out = self.at_terminal(("enter = 1): ", b"\n"))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("TERMINAL:", out)
+        self.assertIn("INSTALL -b master", out)
 
     def test_over_ssh_one_look_at_a_bar_tells_true_colour(self):
         os.makedirs(self.clone())
@@ -1232,8 +1361,61 @@ class ProfileTest(unittest.TestCase):
         self.assertIn("guest may not use sudo", out)
 
     def test_the_hint_at_the_login_prompt(self):
+        issue = base.read("installer/iso/tpot.issue")
         # agetty reads backslash escapes: \4 is the IPv4 address, nothing else
-        self.assertEqual(re.findall(r"\\.", base.read("installer/iso/tpot.issue")), ["\\4"])
+        self.assertEqual(re.findall(r"\\.", issue), ["\\4"])
+        # true on a screen and on a serial console alike, which the installer does not start on
+        self.assertIn("on a screen", issue)
+        self.assertIn("Alt+F8", issue)
+        self.assertIn("Otherwise log in as the user created during the installation", issue)
+        for line in issue.splitlines():
+            self.assertLessEqual(len(line), 79, line)
+
+
+class ServiceConditionTest(unittest.TestCase):
+    """tpot-iso.service starts only where a screen can show it: a VT among the consoles of the kernel or a
+    graphics device (arm64 VMs write the kernel to their serial console and still have a screen). A serial
+    console alone skips it, not failed; a login there starts the installer on the text console."""
+
+    def condition(self, active, *devices):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        lines = [line.split("=", 1)[1] for line in base.read("installer/iso/tpot-iso.service").splitlines()
+                 if line.startswith("ExecCondition=")]
+        self.assertEqual(len(lines), 1)
+        # systemd: $$ is a $; no prefix, a - would let every result pass
+        argv = [word.replace("$$", "$") for word in shlex.split(lines[0])]
+        self.assertEqual(argv[:2], ["/bin/sh", "-c"])
+        self.assertIn("/sys/class/tty/console/active", argv[2])
+        argv[2] = argv[2].replace("/sys/class/tty/console/active", os.path.join(tmp, "active"))
+        argv[2] = argv[2].replace("/dev/", os.path.join(tmp, "dev") + "/")
+        if active is not None:
+            write(os.path.join(tmp, "active"), active + "\n")
+        for name in devices:
+            write(os.path.join(tmp, "dev", name), "")
+        return subprocess.run(argv, capture_output=True, timeout=30).returncode
+
+    def test_a_screen_starts_it(self):
+        self.assertEqual(self.condition("tty0"), 0)
+        self.assertEqual(self.condition("tty0 ttyS0"), 0)
+        self.assertEqual(self.condition("ttyS0 tty1"), 0)
+        # arm64 (SPCR, stdout-path): the kernel on the serial console, the screen a graphics device
+        self.assertEqual(self.condition("ttyAMA0", "dri/card0"), 0)
+        self.assertEqual(self.condition("ttyS0", "fb0"), 0)
+
+    def test_a_serial_console_alone_skips_it(self):
+        for active in ("ttyS0", "ttyAMA0", "hvc0", "ttyS0 ttyS1"):
+            code = self.condition(active)
+            # 1-254: skipped, not failed
+            self.assertTrue(1 <= code <= 254, (active, code))
+        # a render node is no screen
+        self.assertNotEqual(self.condition("ttyS0", "dri/renderD128"), 0)
+        self.assertTrue(1 <= self.condition(None) <= 254)
+
+    def test_before_it_takes_the_console(self):
+        unit = base.read("installer/iso/tpot-iso.service")
+        self.assertIn("ExecStartPre=+-/usr/bin/chvt 8", unit)
+        self.assertIn("ExecCondition=/bin/sh -c ", unit)
 
 
 class IsotreeGrubTest(unittest.TestCase):
