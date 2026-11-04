@@ -1502,6 +1502,40 @@ class IsotreeRequirementsTest(unittest.TestCase):
             self.assertIn("unknown marker extra", result.stderr)
 
 
+# the answer of api.ftp-master.debian.org/madison?package=python3&f=json&s=trixie (its suite by its alias)
+MADISON_TRIXIE = ('[{"python3":{"stable":{"3.13.5-1":{"component":"main","architectures":["amd64","arm64"],'
+                  '"source":"python3-defaults","source_version":"3.13.5-1"}}}}]')
+
+
+class IsotreeDebianPythonTest(unittest.TestCase):
+    """isotree.py debian-python: the python3 of a Debian release (X.Y) from the answer of madison of
+    Debian's archive, whatever it calls the suite."""
+
+    def test_the_python_of_a_release(self):
+        self.assertEqual(isotree.debian_python(MADISON_TRIXIE), "3.13")
+        self.assertEqual(isotree.debian_python('[{"python3":{"oldstable":{"3.11.2-1+b1":{}}}}]'), "3.11")
+        self.assertEqual(isotree.debian_python('[{"python3":{"stable":{"3.9.2-3":{}},"stable-pu":{"3.13.1-1":{}}}}]'),
+                         "3.13", "the highest, by number")
+
+    def test_an_answer_without_a_python3_stops_the_build(self):
+        for text in ("[]", "not json", '{"python3": 1}', '[{"python3":{"stable":{"2.7.18-3":{}}}}]',
+                     '[{"python2":{"stable":{"3.13.5-1":{}}}}]', '[{"python3":{"stable":{"3.x-1":{}}}}]'):
+            with self.subTest(text=text), self.assertRaises(isotree.PatchError):
+                isotree.debian_python(text)
+
+    def test_the_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "madison.json")
+            write(path, MADISON_TRIXIE)
+            command = [sys.executable, os.path.join(ISO_DIR, "isotree.py"), "debian-python", path]
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stdout), (0, "3.13\n"), result.stderr)
+            write(path, "[]")
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stdout), (1, ""))
+            self.assertIn("isotree.py: no python3 in the answer of Debian's archive", result.stderr)
+
+
 @unittest.skipUnless(shutil.which("git"), "no git")
 class IsotreeGitTarTest(unittest.TestCase):
     """isotree.py gittar: the .git of the snapshot as the tar prepare.sh unpacks, owned by root, in a
@@ -2461,10 +2495,109 @@ class BuildToolTest(unittest.TestCase):
         self.assertIn("rc=1", result.stdout)
         self.assertIn("pins no gum for x86_64", result.stderr)
 
+    def debian(self, libc6=("2.41-12+deb13u4",), name="Trixie", madison=MADISON_TRIXIE):
+        """xorriso and curl of a netinst of that Debian: its libc6 packages (per architecture, as
+        -find lists them, quoted), its .disk/info (read-only, as xorriso extracts it) and the answer of
+        Debian's archive for its python3; None leaves the part out (xorriso -find exits 5, curl 22)."""
+        for part in ("find", "info", "madison"):
+            if os.path.exists(os.path.join(self.stubs, part)):
+                os.remove(os.path.join(self.stubs, part))
+        if libc6 is not None:
+            write(os.path.join(self.stubs, "find"), "".join(
+                f"'/pool/main/g/glibc/libc6_{version}_ARCH.deb'\n" for version in libc6))
+        if name is not None:
+            write(os.path.join(self.stubs, "info"),
+                  f'Debian GNU/Linux 13.7.0 "{name}" - Official amd64 NETINST with firmware 20260912-09:36\n')
+        if madison is not None:
+            write(os.path.join(self.stubs, "madison"), madison)
+        stub(self.bin, "xorriso",
+             'echo "$*" >> "$STUBS/xorriso.calls"\n'
+             'case " $* " in\n'
+             '  *" -find "*) a=""; for x in "$@"; do case "$x" in libc6_*) a=${x#libc6_*_}; a=${a%.deb} ;; esac; done\n'
+             '    [ -f "$STUBS/find" ] || exit 5; sed "s/ARCH/$a/" "$STUBS/find" ;;\n'
+             '  *" -extract "*) while [ $# -gt 0 ]; do [ "$1" = -extract ] && { s=$2; d=$3; }; shift; done\n'
+             '    [ "$s" = /.disk/info ] && [ -f "$STUBS/info" ] || exit 5\n'
+             '    cp "$STUBS/info" "$d" && chmod 444 "$d" ;;\n'
+             'esac\n')
+        stub(self.bin, "curl", 'o=""; u=""\nwhile [ $# -gt 0 ]; do case "$1" in -o) o="$2"; shift ;; -*) ;; *) u="$1" ;; '
+                               'esac; shift; done\necho "$u" >> "$STUBS/curl.calls"\n'
+                               '[ -f "$STUBS/madison" ] || exit 22\ncp "$STUBS/madison" "$o"\n')
+
+    def test_the_glibc_and_the_codename_of_the_netinst(self):
+        """fuDEBIAN_GLIBC: X.Y of the one libc6 of that architecture in the pool of the netinst;
+        fuDEBIAN_CODENAME: the name in its .disk/info, in lowercase."""
+        run = (f'myWORK="{self.tmp}/work"; mkdir -p "$myWORK"\n'
+               f'fuDEBIAN_GLIBC "{self.tmp}/netinst.iso" "$ARCH"; echo "rc=$?"\n'
+               f'fuDEBIAN_CODENAME "{self.tmp}/netinst.iso"; echo "rc=$?"\n'
+               f'fuDEBIAN_CODENAME "{self.tmp}/netinst.iso"; echo "rc=$?"')
+        calls = os.path.join(self.stubs, "xorriso.calls")
+        for arch in ("amd64", "arm64"):
+            with self.subTest(arch=arch):
+                self.debian()
+                result = self.source(run, ARCH=arch, STUBS=self.stubs)
+                self.assertEqual(result.stdout, "2.41\nrc=0\ntrixie\nrc=0\ntrixie\nrc=0\n", result.stderr)
+                self.assertIn(f"-indev {self.tmp}/netinst.iso -find /pool/main/g/glibc -name libc6_*_{arch}.deb",
+                              base.read(calls))
+                os.remove(calls)
+        self.debian(libc6=("2.36-9+deb12u10",), name="Bookworm")
+        result = self.source(run, ARCH="amd64", STUBS=self.stubs)
+        self.assertEqual(result.stdout, "2.36\nrc=0\nbookworm\nrc=0\nbookworm\nrc=0\n", result.stderr)
+        for libc6, error in ((None, "carries no libc6 for amd64"), ((), "carries no libc6 for amd64"),
+                             (("2.41-12", "2.41-13"), "carries 2 libc6 for amd64"),
+                             (("2.16-1",), "glibc 2.16 of the netinst: older than 2.17"),
+                             (("2.x-1",), "glibc 2.x of the netinst: older than 2.17")):
+            with self.subTest(libc6=libc6):
+                self.debian(libc6=libc6)
+                result = self.source(run, ARCH="amd64", STUBS=self.stubs)
+                self.assertTrue(result.stdout.startswith("rc=1\n"), result.stdout)
+                self.assertIn(error, result.stderr)
+        for name, error in ((None, "has no .disk/info"), ("Trixie 2", "names no Debian release in its .disk/info"),
+                            ("", "names no Debian release in its .disk/info")):
+            with self.subTest(name=name):
+                self.debian(name=name)
+                result = self.source(run, ARCH="amd64", STUBS=self.stubs)
+                self.assertEqual(result.stdout, "2.41\nrc=0\nrc=1\nrc=1\n")
+                self.assertIn(error, result.stderr)
+
+    def test_the_python_of_the_debian_from_its_archive_once(self):
+        """fuDEBIAN_PYTHON: the python3 of the release from madison of Debian's archive, then from the
+        cache (a release of Debian keeps its python3); without both the build stops with a hint."""
+        cache = os.path.join(self.tmp, "cache")
+        run = (f'myCACHE="{cache}" myWORK="{self.tmp}/work"; mkdir -p "$myWORK"\n'
+               'fuDEBIAN_PYTHON "$NAME"; echo "rc=$?"')
+        calls = os.path.join(self.stubs, "curl.calls")
+        self.debian()
+        for _again in range(2):
+            result = self.source(run, NAME="trixie", STUBS=self.stubs)
+            self.assertEqual(result.stdout, "3.13\nrc=0\n", result.stderr)
+        self.assertEqual(base.read(calls).splitlines(),
+                         ["https://api.ftp-master.debian.org/madison?package=python3&f=json&s=trixie"],
+                         "asked once, then from the cache")
+        self.assertEqual(base.read(os.path.join(cache, "debian-trixie.python")), "3.13\n")
+        # a cache that is no python X.Y is asked again
+        write(os.path.join(cache, "debian-trixie.python"), "garbage\n")
+        result = self.source(run, NAME="trixie", STUBS=self.stubs)
+        self.assertEqual(result.stdout, "3.13\nrc=0\n", result.stderr)
+        self.assertEqual(len(base.read(calls).splitlines()), 2)
+        # no answer, an answer without a python3: no cache file, the hint
+        self.debian(madison=None)
+        result = self.source(run, NAME="forky", STUBS=self.stubs)
+        self.assertEqual(result.stdout, "rc=1\n")
+        self.assertIn("Debian's archive does not answer (api.ftp-master.debian.org, the python3 of forky)",
+                      result.stderr)
+        self.assertIn("https_proxy", result.stderr)
+        self.debian(madison="[]")
+        result = self.source(run, NAME="forky", STUBS=self.stubs)
+        self.assertEqual(result.stdout, "rc=1\n")
+        self.assertIn("no python3 in the answer of Debian's archive", result.stderr)
+        self.assertEqual(sorted(os.listdir(cache)), ["debian-trixie.python"])
+
     def test_the_wheels_for_the_iso(self):
-        """fuWHEELS: the requirements of the T-Pot Manager for the python3 of the Debian of the ISO (its
-        markers decided by isotree.py), pip download for that python and machine, every wheel there."""
+        """fuWHEELS: the requirements of the T-Pot Manager for the python3 and the glibc of the Debian of
+        the netinst (its markers decided by isotree.py), pip download for that python and machine,
+        every wheel there."""
         snap = os.path.join(self.tmp, "snap")
+        netinst = os.path.join(self.tmp, "netinst.iso")
         hashes = " \\\n    --hash=sha256:" + "1" * 64 + "\n"
         write(os.path.join(snap, "requirements.txt"),
               "rich==14.0.0" + hashes + "colorama==0.4.6 ; sys_platform == 'win32'" + hashes
@@ -2473,20 +2606,25 @@ class BuildToolTest(unittest.TestCase):
              'if [ "$1 $2" = "-m pip" ]; then\n'
              '  echo "$*" >> "$STUBS/pip.calls"\n  d=""; r=""\n'
              '  while [ $# -gt 0 ]; do case "$1" in --dest) d="$2"; shift ;; -r) r="$2"; shift ;; esac; shift; done\n'
+             '  [ -z "${PIP_FAIL:-}" ] || exit 1\n'
              '  [ -z "${PIP_FEWER:-}" ] || exit 0\n'
              '  sed -n "s/^\\([a-z]*\\)==\\([0-9.]*\\).*/\\1-\\2-py3-none-any.whl/p" "$r" | while read -r w; do : > "$d/$w"; done\n'
              '  exit 0\nfi\n'
              f'exec "{sys.executable}" "$@"\n')
         run = (f'myCACHE="{self.tmp}/cache" myWORK="{self.tmp}/work" mySNAPSHOT="{snap}"\nmkdir -p "$myWORK"\n'
-               f'fuWHEELS "$ARCH" "{self.tmp}/wheels-$ARCH"; echo "rc=$?"')
+               f'fuWHEELS "$ARCH" "{self.tmp}/wheels-$ARCH" "{netinst}"; echo "rc=$?"')
+        pip_calls = os.path.join(self.stubs, "pip.calls")
+        self.debian()
         for arch, machine in (("amd64", "x86_64"), ("arm64", "aarch64")):
             with self.subTest(arch=arch):
                 result = self.source(run, ARCH=arch, STUBS=self.stubs)
                 self.assertIn("rc=0", result.stdout, result.stderr)
+                self.assertIn("Debian trixie: python 3.13, glibc 2.41", result.stdout)
                 self.assertIn(f"2 wheels for python 3.13 on {machine}", result.stdout)
                 self.assertEqual(sorted(os.listdir(os.path.join(self.tmp, f"wheels-{arch}"))),
                                  ["rich-14.0.0-py3-none-any.whl", "textual-3.2.0-py3-none-any.whl"])
-                call = base.read(os.path.join(self.stubs, "pip.calls")).splitlines()[-1]
+                self.assertEqual(base.read(os.path.join(self.tmp, "work", "wheels.debian")), "3.13 2.41\n")
+                call = base.read(pip_calls).splitlines()[-1]
                 for part in ("download", "--only-binary :all: --no-deps --require-hashes", "--implementation cp",
                              "--python-version 3.13 --abi cp313", f"--platform manylinux_2_41_{machine} ",
                              f"--platform manylinux_2_17_{machine} --platform manylinux2014_{machine} ",
@@ -2494,17 +2632,62 @@ class BuildToolTest(unittest.TestCase):
                     self.assertIn(part, call)
                 self.assertNotIn("manylinux_2_16", call)
                 self.assertNotIn("colorama", base.read(os.path.join(self.tmp, "work", "requirements.txt")))
+        # another Debian: its python3 and glibc, nothing of this one
+        shutil.rmtree(os.path.join(self.tmp, "cache"))
+        self.debian(libc6=("2.36-9+deb12u10",), name="Bookworm",
+                    madison='[{"python3":{"oldstable":{"3.11.2-1+b1":{}}}}]')
+        result = self.source(run, ARCH="amd64", STUBS=self.stubs)
+        self.assertIn("rc=0", result.stdout, result.stderr)
+        self.assertIn("Debian bookworm: python 3.11, glibc 2.36", result.stdout)
+        call = base.read(pip_calls).splitlines()[-1]
+        self.assertIn("--python-version 3.11 --abi cp311 --platform manylinux_2_36_x86_64 ", call)
+        self.assertNotIn("manylinux_2_37", call)
+        # a requirement without a wheel for them: what is missing and what to do
+        self.debian()
+        hint = "raise it in tpotctl/requirements.in and compile tpotctl/requirements.txt again"
         result = self.source(run, ARCH="amd64", STUBS=self.stubs, PIP_FEWER="1")
         self.assertIn("rc=1", result.stdout)
-        self.assertIn("0 wheels for 2 requirements of python 3.13 on x86_64", result.stderr)
-        result = self.source('myDEBIAN_MAJOR=99\n' + run, ARCH="amd64", STUBS=self.stubs)
+        self.assertIn("0 wheels for 2 requirements of python 3.13 on x86_64 (glibc 2.41)", result.stderr)
+        self.assertIn(hint, result.stderr)
+        result = self.source(run, ARCH="amd64", STUBS=self.stubs, PIP_FAIL="1")
         self.assertIn("rc=1", result.stdout)
-        self.assertIn("no python3 known for Debian 99 (fuDEBIAN_PYTHON)", result.stderr)
+        self.assertIn("pip download failed for python 3.13 on x86_64 (glibc 2.41)", result.stderr)
+        self.assertIn(hint, result.stderr)
+        # a netinst without its libc6: nothing downloaded
+        os.remove(pip_calls)
+        self.debian(libc6=None)
+        result = self.source(run, ARCH="amd64", STUBS=self.stubs)
+        self.assertIn("rc=1", result.stdout)
+        self.assertIn("carries no libc6 for amd64", result.stderr)
+        self.assertFalse(os.path.exists(pip_calls))
 
-    def test_the_python_of_the_debian_of_the_iso(self):
-        result = self.source('fuDEBIAN_PYTHON "${myDEBIAN_MAJOR}"')
-        self.assertEqual(result.returncode, 0, "fuDEBIAN_PYTHON needs a line for myDEBIAN_MAJOR")
-        self.assertRegex(result.stdout, r"^3\.\d+ 2\.\d+\n$")
+    def test_the_build_image_is_the_debian_of_the_iso(self):
+        """fuDOCKER_IMAGE: the slim image of myDEBIAN_MAJOR, never a codename of its own."""
+        stub(self.bin, "docker", '[ "$1" != build ] || cat > "$STUBS/Dockerfile"\n')
+        for major in ("", "14"):
+            with self.subTest(major=major):
+                result = self.source((f"myDEBIAN_MAJOR={major}\n" if major else "") + "fuDOCKER_IMAGE",
+                                     STUBS=self.stubs)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                first = base.read(os.path.join(self.stubs, "Dockerfile")).splitlines()[0]
+                expected = major or re.search(r'^myDEBIAN_MAJOR="(\d+)"$', base.read(BUILD), re.M).group(1)
+                self.assertEqual(first, f"FROM debian:{expected}-slim")
+
+    def test_the_buildinfo_names_the_python_and_the_glibc_of_the_wheels(self):
+        out = os.path.join(self.tmp, "out")
+        os.makedirs(out)
+        stub(self.bin, "xorriso", "echo xorriso 1.5.6\n")
+        run = ('fuNETINST () { printf "%s\\n" "/n/debian-13.7.0-amd64-netinst.iso" "debian-13.7.0-amd64-netinst.iso"'
+               ' "abc" "https://cd/SHA512SUMS" "" > "${myWORK}/netinst"; }\n'
+               'fuBUILD () { echo iso > "${myWORK}/new.iso"; echo "3.13 2.41" > "${myWORK}/wheels.debian"; }\n'
+               'fuCHECK_ISO () { :; }\nfuCOMMIT () { echo abc; }\n'
+               f'myOUT="{out}" myLOG="{out}/build.log" myPREFIX=tpot-master mySNAPSHOT="{self.tmp}/snap"\n'
+               'myBRANCH=master myREPO_URL=https://github.com/telekom-security/tpotce\n'
+               'fuBUILD_ONE amd64')
+        result = self.source(run)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        info = base.read(os.path.join(out, "tpot-master-debian-13.7.0-amd64.iso.buildinfo"))
+        self.assertIn("\nwheels_python: 3.13\nwheels_glibc: 2.41\n", info)
 
     def test_a_build_here_needs_pip(self):
         for name in ("xorriso", "gpg", "curl"):

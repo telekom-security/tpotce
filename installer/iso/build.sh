@@ -6,7 +6,8 @@
 # installer starts on the console as that user, without a login (late.sh, tpot-iso.service,
 # start.sh; a login starts it too, profile.sh): the same installer as on a prepared Debian. The ISO carries T-Pot of the repository and the branch it was built for (a git repository
 # of one commit, as git clone leaves it), the packages of the installer (preseed.cfg), gum and the
-# wheels of the T-Pot Manager: prepare.sh puts them into the new system, the installer needs the
+# wheels of the T-Pot Manager (for the glibc of the netinst and the python3 Debian's archive names
+# for its release): prepare.sh puts them into the new system, the installer needs the
 # internet for the images of T-Pot only.
 #
 # The netinst is Debian's own, checked against its SHA512SUMS signed by the Debian CD signing key
@@ -129,7 +130,7 @@ fuHELP () {
     --example "installer/iso/build.sh -w installer/iso/out/tpot-master-debian-${myDEBIAN_MAJOR}.x.y-amd64.iso" "writes an ISO, the stick is picked from a list" \
     --example "installer/iso/build.sh -R -s <gpg-key> -U <tag>" "the ISOs of a release for both architectures, signed and uploaded" \
     --note "The ISO asks before it installs anything and never erases a disk on its own. It holds no password or key." \
-    --note "The ISO carries T-Pot (one commit as git clone leaves it: the last commit of this checkout when -b and -r are its branch and origin, uncommitted changes are not in it; else the one of the repository), gum and the wheels of the T-Pot Manager for the Python of Debian ${myDEBIAN_MAJOR}: the installer of the ISO needs the internet for the images of T-Pot only." \
+    --note "The ISO carries T-Pot (one commit as git clone leaves it: the last commit of this checkout when -b and -r are its branch and origin, uncommitted changes are not in it; else the one of the repository), gum and the wheels of the T-Pot Manager for the Python and the glibc of its Debian (the glibc from the netinst, the Python from Debian's archive, asked once per release and kept in the cache): the installer of the ISO needs the internet for the images of T-Pot only." \
     --note "USB sticks: only removable or USB drives are listed and written to, never the disk of the system, of the home folder or of the ISOs; the stick is read back and checked. Windows: Rufus (DD mode) or balenaEtcher." \
     --note "Each run asks Debian for its signed SHA512SUMS: a new point release replaces the netinst in the cache, a broken download is fetched again. The Docker image is refreshed weekly." \
     --note "Exit codes: 0 done, 1 failed, 2 wrong options, 130 cancelled."
@@ -517,13 +518,64 @@ fuNETINST () {
   printf '%s\n%s\n%s\n%s\n%s\n' "${myFILE}" "${myNAME}" "${mySUM}" "${myURL}/SHA512SUMS" "${myNOTE}" > "${myWORK}/netinst"
 }
 
+fuDEBIAN_GLIBC () {
+  # fuDEBIAN_GLIBC <netinst> <arch>: X.Y of the glibc of its Debian, from the one libc6 of that
+  # architecture in its pool (libc6_2.41-12+deb13u4_arm64.deb: 2.41); the wheels of the ISO are for it
+  local myDEBS myN myV
+  myDEBS=$(xorriso -indev "$1" -find /pool/main/g/glibc -name "libc6_*_$2.deb" 2>/dev/null \
+    | sed -n "s|^'/pool/main/g/glibc/libc6_\\([^_/']*\\)_$2\\.deb'\$|\\1|p")
+  myN=$(printf '%s' "${myDEBS}" | grep -c .)
+  if [ "${myN}" != "1" ];
+    then
+      [ "${myN}" = "0" ] && echo "$1 carries no libc6 for $2 (/pool/main/g/glibc)" >&2 \
+        || echo "$1 carries ${myN} libc6 for $2 (/pool/main/g/glibc), one is expected" >&2
+      return 1
+  fi
+  myV="${myDEBS%%-*}"
+  [[ "${myV}" =~ ^2\.[0-9]+ ]] && myV="${BASH_REMATCH[0]}"
+  if [[ ! "${myV}" =~ ^2\.[0-9]+$ ]] || [ "${myV#2.}" -lt 17 ];
+    then
+      echo "glibc ${myV} of the netinst: older than 2.17 or no version, no wheels for it" >&2
+      return 1
+  fi
+  echo "${myV}"
+}
+
+fuDEBIAN_CODENAME () {
+  # fuDEBIAN_CODENAME <netinst>: the codename of its Debian (trixie), from its .disk/info
+  # (Debian GNU/Linux 13.7.0 "Trixie" - Official ...)
+  local myINFO="${myWORK}/disk-info" myNAME
+  rm -f "${myINFO}"
+  if ! xorriso -osirrox on -indev "$1" -extract /.disk/info "${myINFO}" >/dev/null 2>&1 || [ ! -f "${myINFO}" ];
+    then
+      echo "$1 has no .disk/info" >&2
+      return 1
+  fi
+  myNAME=$(sed -n 's/^Debian GNU\/Linux [0-9.]* "\([A-Za-z]*\)" .*/\1/p' "${myINFO}" | head -n 1 | tr 'A-Z' 'a-z')
+  rm -f "${myINFO}"
+  if [[ ! "${myNAME}" =~ ^[a-z]+$ ]];
+    then
+      echo "$1 names no Debian release in its .disk/info" >&2
+      return 1
+  fi
+  echo "${myNAME}"
+}
+
 fuDEBIAN_PYTHON () {
-  # fuDEBIAN_PYTHON <major>: the python3 and the glibc of that Debian ("3.13 2.41"), the wheels of the
-  # ISO are for them; a new Debian needs its line (the test checks the one of myDEBIAN_MAJOR)
-  case "$1" in
-    13) echo "3.13 2.41" ;;
-    *) return 1 ;;
-  esac
+  # fuDEBIAN_PYTHON <codename>: X.Y of the python3 of that Debian, from the cache (a release of
+  # Debian keeps its python3), else from madison of Debian's archive, then kept in the cache
+  local myFILE="${myCACHE}/debian-$1.python" myPY=""
+  [ ! -f "${myFILE}" ] || myPY=$(head -n 1 "${myFILE}")
+  if [[ "${myPY}" =~ ^3\.[0-9]+$ ]]; then echo "${myPY}"; return 0; fi
+  if ! fuFETCH "https://api.ftp-master.debian.org/madison?package=python3&f=json&s=$1" "${myWORK}/madison.json";
+    then
+      echo "Debian's archive does not answer (api.ftp-master.debian.org, the python3 of $1): the network, a proxy (https_proxy)?" >&2
+      return 1
+  fi
+  myPY=$(PYTHONDONTWRITEBYTECODE=1 python3 "${myDIR}/isotree.py" debian-python "${myWORK}/madison.json") || return 1
+  mkdir -p "${myCACHE}" && printf '%s\n' "${myPY}" > "${myFILE}.part" && mv -f "${myFILE}.part" "${myFILE}" \
+    || echo "cannot keep the python3 of $1 in ${myCACHE}" >&2
+  echo "${myPY}"
 }
 
 fuPIN () {
@@ -570,18 +622,23 @@ fuGUM_LINUX () {
 }
 
 fuWHEELS () {
-  # fuWHEELS <arch> <folder>: the wheels of the T-Pot Manager (requirements.txt of the T-Pot of the
-  # ISO, with its hashes) for the python3 of Debian ${myDEBIAN_MAJOR} on that architecture, into the
-  # folder: tpot setup of the new system takes them from there (prepare.sh)
-  local myM myPY="" myGLIBC="" myN myWANT myGOT
+  # fuWHEELS <arch> <folder> <netinst>: the wheels of the T-Pot Manager (requirements.txt of the T-Pot
+  # of the ISO, with its hashes) for the python3 and the glibc of the Debian of the netinst on that
+  # architecture, into the folder: tpot setup of the new system takes them from there (prepare.sh);
+  # the python3 and the glibc into ${myWORK}/wheels.debian for the .buildinfo
+  local myM myPY myGLIBC myNAME myN myWANT myGOT
+  local myHINT="a requirement without a wheel for them: raise it in tpotctl/requirements.in and compile tpotctl/requirements.txt again"
   local -a myPLATFORMS=()
   case "$1" in
     amd64) myM="x86_64" ;;
     arm64) myM="aarch64" ;;
     *) return 1 ;;
   esac
-  read -r myPY myGLIBC <<< "$(fuDEBIAN_PYTHON "${myDEBIAN_MAJOR}")"
-  [ -n "${myGLIBC}" ] || { echo "no python3 known for Debian ${myDEBIAN_MAJOR} (fuDEBIAN_PYTHON)" >&2; return 1; }
+  myGLIBC=$(fuDEBIAN_GLIBC "$3" "$1") || return 1
+  myNAME=$(fuDEBIAN_CODENAME "$3") || return 1
+  myPY=$(fuDEBIAN_PYTHON "${myNAME}") || return 1
+  echo "Debian ${myNAME}: python ${myPY}, glibc ${myGLIBC}"
+  printf '%s %s\n' "${myPY}" "${myGLIBC}" > "${myWORK}/wheels.debian" || return 1
   # every manylinux tag that glibc runs, the newest first
   for (( myN = ${myGLIBC#*.}; myN >= 17; myN-- )); do myPLATFORMS+=(--platform "manylinux_2_${myN}_${myM}"); done
   myPLATFORMS+=(--platform "manylinux2014_${myM}")
@@ -589,14 +646,18 @@ fuWHEELS () {
     "${mySNAPSHOT}/requirements.txt" > "${myWORK}/requirements.txt" || return 1
   # an empty folder: every wheel in it is one of these requirements
   rm -rf "$2" && mkdir -p "$2" || return 1
-  python3 -m pip download --quiet --disable-pip-version-check --no-input --cache-dir "${myCACHE}/pip" \
+  if ! python3 -m pip download --quiet --disable-pip-version-check --no-input --cache-dir "${myCACHE}/pip" \
     --dest "$2" --only-binary :all: --no-deps --require-hashes --implementation cp --python-version "${myPY}" \
-    --abi "cp${myPY/./}" "${myPLATFORMS[@]}" -r "${myWORK}/requirements.txt" || return 1
+    --abi "cp${myPY/./}" "${myPLATFORMS[@]}" -r "${myWORK}/requirements.txt";
+    then
+      echo "pip download failed for python ${myPY} on ${myM} (glibc ${myGLIBC}): the network, or ${myHINT}" >&2
+      return 1
+  fi
   myWANT=$(grep -c '==' "${myWORK}/requirements.txt")
   myGOT=$(find "$2" -maxdepth 1 -name '*.whl' | wc -l)
   if [ "${myGOT// /}" != "${myWANT}" ];
     then
-      echo "${myGOT// /} wheels for ${myWANT} requirements of python ${myPY} on ${myM}" >&2
+      echo "${myGOT// /} wheels for ${myWANT} requirements of python ${myPY} on ${myM} (glibc ${myGLIBC}): ${myHINT}" >&2
       return 1
   fi
   echo "${myWANT} wheels for python ${myPY} on ${myM}"
@@ -633,7 +694,7 @@ fuBUILD () {
   PYTHONDONTWRITEBYTECODE=1 python3 "${myDIR}/isotree.py" gittar --dir "${mySNAPSHOT}" \
     "${myWORK}/overlay/tpot/tpotce.tar" || return 1
   fuGUM_LINUX "${myA}" "${myWORK}/overlay/tpot" || return 1
-  fuWHEELS "${myA}" "${myWORK}/overlay/tpot/wheels" || return 1
+  fuWHEELS "${myA}" "${myWORK}/overlay/tpot/wheels" "${mySRC}" || return 1
   printf '%s\n' "# The T-Pot ISO: the T-Pot it carries (start.sh reads it, never sources it)" \
     "TPOT_REPO_URL=${myREPO_URL}" "TPOT_BRANCH=${myBRANCH}" "TPOT_COMMIT=$(cat "${mySNAPSHOT}/commit")" \
     > "${myWORK}/overlay/tpot/iso.conf"
@@ -708,7 +769,7 @@ fuBUILD_ONE () {
   # fuBUILD_ONE <arch>: the ISO of one architecture here (Linux with the tools, the container of
   # fuDOCKER_ONE): checked netinst, ISO, its boot records, .sha256, .sha512, .buildinfo; its name
   # and the note of the cache into ${myOUT}/.last-<arch> for the run
-  local myA="$1" mySRC_ISO myNAME mySRC_SUM mySUMS_URL myNOTE myVER myISO my256 my512
+  local myA="$1" mySRC_ISO myNAME mySRC_SUM mySUMS_URL myNOTE myVER myISO my256 my512 myPY="" myGLIBC=""
   # work-<pid of the run>-<arch>: fuEXIT of the run finds the one of a container it stopped
   myWORK=$(mktemp -d "${myOUT}/work-${TPOT_ISO_RUN:-$$}-${myA}.XXXXXX") \
     || { fuUI_ERROR "Cannot create a work folder in ${myOUT}."; return 1; }
@@ -730,6 +791,7 @@ fuBUILD_ONE () {
   fuUI_SPIN "Writing its checksums ..." "${myLOG}" fuCHECKSUMS "${myOUT}/${myISO}" || return $?
   my256=$(fuSUM_FILE "${myOUT}/${myISO}" 256)
   my512=$(fuSUM_FILE "${myOUT}/${myISO}" 512)
+  [ ! -f "${myWORK}/wheels.debian" ] || read -r myPY myGLIBC < "${myWORK}/wheels.debian"
   {
     echo "iso: ${myISO}"
     echo "sha256: ${my256}"
@@ -740,7 +802,8 @@ fuBUILD_ONE () {
     echo "tpot_version: $(cat "${mySNAPSHOT}/version" 2>/dev/null)"
     echo "tpot_source_commit: $(fuCOMMIT)"
     echo "gum: $(fuPIN "${mySNAPSHOT}/ui.sh" myUI_GUM_VERSION)"
-    echo "wheels_python: $(fuDEBIAN_PYTHON "${myDEBIAN_MAJOR}" | awk '{ print $1 }')"
+    echo "wheels_python: ${myPY}"
+    echo "wheels_glibc: ${myGLIBC}"
     echo "debian_netinst: ${myNAME}"
     echo "debian_netinst_sha512: ${mySRC_SUM}"
     echo "debian_sha512sums: ${mySUMS_URL}"
@@ -791,8 +854,9 @@ fuHOW () {
 
 fuDOCKER_IMAGE () {
   # the Dockerfile on stdin (fuUI_SPIN gives a step /dev/null as its stdin); --pull and the week
-  # (REFRESH) in its RUN line: a new Debian base image and new packages at least once a week
-  printf '%s\n' "FROM debian:trixie-slim" "ARG REFRESH" \
+  # (REFRESH) in its RUN line: a new Debian base image and new packages at least once a week; the
+  # Debian of the ISO, so its python3 runs the build
+  printf '%s\n' "FROM debian:${myDEBIAN_MAJOR}-slim" "ARG REFRESH" \
     "RUN echo \"refresh \${REFRESH}\" && apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gpg python3 python3-pip xorriso && rm -rf /var/lib/apt/lists/*" \
     | docker build --pull --build-arg "REFRESH=$(date +%G-%V)" -t "${myDOCKER_IMAGE}" -
 }

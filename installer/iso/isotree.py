@@ -16,6 +16,10 @@
         decided for that python, the requirements that apply without them (their hashes stay), one
         per line, to stdout. pip download decides markers for the python it runs with, never the one
         of --python-version; a marker this does not know stops the build.
+    python3 installer/iso/isotree.py debian-python FILE
+        the python3 (X.Y) of a Debian release from the answer of madison of Debian's archive
+        (api.ftp-master.debian.org/madison?package=python3&f=json&s=<codename>) in FILE, to stdout;
+        the highest if it names several, an answer without one stops the build.
     python3 installer/iso/isotree.py gittar --dir DIR FILE
         DIR/.git as the tar prepare.sh unpacks into ~/tpotce: owned by root, in a fixed order, files,
         folders and links only, without the extended attributes of the file system it was made on
@@ -28,6 +32,7 @@ the boot loaders and their signatures (Secure Boot) stay untouched.
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import struct
@@ -561,6 +566,26 @@ def tree_files(folder: str) -> Dict[str, bytes]:
     return found
 
 
+def debian_python(text: str) -> str:
+    """X.Y of python3 in an answer of madison (see the docstring of the module), whatever its suites
+    are called there (it answers a codename with its alias, trixie as stable)."""
+    try:
+        answer = json.loads(text)
+    except ValueError:
+        answer = None
+    found = []
+    for entry in answer if isinstance(answer, list) else []:
+        suites = entry.get("python3") if isinstance(entry, dict) else None
+        for versions in suites.values() if isinstance(suites, dict) else []:
+            for version in versions if isinstance(versions, dict) else []:
+                match = re.match(r"(?:\d+:)?3\.(\d+)[.~+-]", version + "-")
+                if match:
+                    found.append(int(match.group(1)))
+    if not found:
+        raise PatchError("no python3 in the answer of Debian's archive")
+    return f"3.{max(found)}"
+
+
 def git_tar(folder: str, out: str) -> int:
     """folder/.git into the tar out (see the docstring of the module); the number of entries."""
     top = os.path.join(folder, ".git")
@@ -609,6 +634,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     requirements.add_argument("--python", required=True)
     requirements.add_argument("--machine", required=True)
     requirements.add_argument("file")
+    python = sub.add_parser("debian-python")
+    python.add_argument("file")
     gittar = sub.add_parser("gittar")
     gittar.add_argument("--dir", required=True)
     gittar.add_argument("file")
@@ -619,6 +646,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 print(rel)
         elif args.command == "requirements":
             sys.stdout.write(requirements_for(_read(args.file), marker_env(args.python, args.machine)))
+        elif args.command == "debian-python":
+            print(debian_python(_read(args.file)))
         elif args.command == "gittar":
             git_tar(args.dir, args.file)
         elif args.command == "md5sum":
