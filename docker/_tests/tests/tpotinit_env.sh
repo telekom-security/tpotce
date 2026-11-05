@@ -69,10 +69,14 @@ load_example() {
   done < /work/env.example
 }
 
-fuSET() { export "$1=${2#x}"; }
-
 case_env() {   # $1 = index
-  eval "$(yq -r "(.base // {}) * (.cases[$1].set // {}) | to_entries | .[] | \"fuSET \" + .key + \" \" + (\"x\" + (.value | tostring) | @sh)" "${CASES}")"
+  local entries key encoded value
+  entries="$(yq -r "(.base // {}) * (.cases[$1].set // {}) | to_entries | .[] | [.key, (.value | tostring | @base64)] | @tsv" "${CASES}")" || return 1
+  while IFS=$'\t' read -r key encoded; do
+    [[ -n "${key}" ]] || continue
+    value="$(printf '%s' "${encoded}" | base64 -d && printf '.')" || return 1
+    export "${key}=${value%.}" || return 1
+  done <<<"${entries}"
 }
 
 case_compose() {   # $1 = index, $2 = file

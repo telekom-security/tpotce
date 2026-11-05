@@ -21,7 +21,7 @@ except ImportError:
     textual = None
 
 if textual:
-    from tpotctl import app as tapp, cli, ops
+    from tpotctl import app as tapp, cli, elastic, ops
     from tpotctl.screens.customizer import CustomizerScreen, PortsDialog, core
     from tpotctl.screens.dialogs import ChoiceDialog, ConfirmDialog
 
@@ -118,23 +118,24 @@ if textual:
             warnings = ["Kibana stops."] if key == "sensor" else []
             return editions.SwitchPlan(choice, "STANDARD", "/x/keep.yml", warnings)
 
-        def retention_status(self):
+        def retention_status(self, retention=elastic.EVENTS):
             from tpotctl import elastic
-            return getattr(self, "_retention", elastic.Status("90", "90", "managed"))
+            return getattr(self, "_retention", elastic.Status("90", "90", "managed", retention=retention))
 
-        def retention_plan(self, value, force=False):
+        def retention_plan(self, value, force=False, retention=elastic.EVENTS):
             from tpotctl import elastic
             self.calls.append(("plan", value, force))
             doomed = [elastic.Index("logstash-2026.08.01", 0, 1200, 5 * 2 ** 20)] if elastic.shortens("90", value) else []
             action = "update" if value != "90" else "keep"
             return getattr(self, "_plan", elastic.Plan(elastic.Decision(action, {} if action == "update" else None,
                                                                          "90", True), doomed, True,
-                                                       shortening=action == "update" and elastic.shortens("90", value)))
+                                                       shortening=action == "update" and elastic.shortens("90", value),
+                                                       retention=retention))
 
         def apply_retention(self, plan):
             self.calls.append(("apply", plan.decision.action))
 
-        def set_retention(self, value):
+        def set_retention(self, value, retention=elastic.EVENTS):
             self.calls.append(("set", value))
 
         def check_data_loss(self, args):
@@ -1205,8 +1206,8 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         release = threading.Event()
 
         class Slow(FakeBackend):
-            def retention_plan(self, value, force=False):
-                plan = super().retention_plan(value, force)
+            def retention_plan(self, value, force=False, retention=elastic.EVENTS):
+                plan = super().retention_plan(value, force, retention)
                 release.wait(5)
                 return plan
 
@@ -1270,10 +1271,10 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         class Slow(FakeBackend):
             reads = 0
 
-            def retention_status(self):
+            def retention_status(self, retention=elastic.EVENTS):
                 Slow.reads += 1
                 release.wait(5)
-                return super().retention_status()
+                return super().retention_status(retention)
 
         backend = Slow()
         app = tapp.TpotApp(backend=backend, runner=Recorder())
@@ -1362,10 +1363,10 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         class Slow(FakeBackend):
             reads = 0
 
-            def retention_status(self):
+            def retention_status(self, retention=elastic.EVENTS):
                 Slow.reads += 1
                 release.wait(5)
-                return super().retention_status()
+                return super().retention_status(retention)
 
         backend = Slow()
         app = tapp.TpotApp(backend=backend, runner=Recorder())
@@ -1396,13 +1397,13 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         class Racing(FakeBackend):
             answers = []            # (wait for gate, status) for the next reads
 
-            def retention_status(self):
+            def retention_status(self, retention=elastic.EVENTS):
                 if Racing.answers:
                     wait, state = Racing.answers.pop(0)
                     if wait:
                         gate.wait(5)
                     return state
-                return super().retention_status()
+                return super().retention_status(retention)
 
         backend = Racing()
         app = tapp.TpotApp(backend=backend, runner=Recorder())
@@ -1472,7 +1473,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
                 release = threading.Event()
 
                 class Slow(FakeBackend):
-                    def retention_plan(self, value, force=False):
+                    def retention_plan(self, value, force=False, retention=elastic.EVENTS):
                         self.calls.append(("plan", value, force))
                         release.wait(5)
                         return elastic.Plan(elastic.Decision("update", {}, "120", False),
@@ -1521,7 +1522,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             def settings(self):
                 return settings.load(repo)
 
-            def retention_plan(self, value, force=False):
+            def retention_plan(self, value, force=False, retention=elastic.EVENTS):
                 self.calls.append(("plan", value, force))
                 release.wait(5)
                 return elastic.Plan(elastic.Decision("update", {}, "90", True),
@@ -1639,6 +1640,171 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(app.screen, ConfirmDialog)
         self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")
 
+    def sensor_retention_backend(self):
+        from tpotctl import elastic, settings
+        from tpotctl.tests.test_elastic import FakeES, MANAGED_90
+        repo = self.retention_checkout()
+        settings.load(repo).change({"TPOT_SENSOR_STATUS_RETENTION": "90"})
+        routes = {}
+        for name, pattern in (("tpot", "logstash-*"), ("tpot-sensor-status", "tpot-sensor-heartbeat-*")):
+            routes[("GET", "/_ilm/policy/" + name)] = (200, {name: {"policy": MANAGED_90}})
+            routes[("PUT", "/_ilm/policy/" + name)] = (200, {"acknowledged": True})
+            routes[("GET", "/_cat/indices/" + pattern)] = (200, [])
+        es = FakeES(routes)
+        call = elastic._call
+        patch = mock.patch.object(elastic, "_call", side_effect=lambda method, path, url, opener, body=None:
+                                  call(method, path, url, es, body))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+        class Backend(FakeBackend):
+            retention_status = tapp.Backend.retention_status
+            retention_plan = tapp.Backend.retention_plan
+            apply_retention = tapp.Backend.apply_retention
+            set_retention = tapp.Backend.set_retention
+
+            def settings(self):
+                return settings.load(repo)
+
+        return Backend(), repo, es
+
+    async def test_sensor_history_scope_changes_only_its_own_retention(self):
+        from tpotctl import settings
+        backend, repo, es = self.sensor_retention_backend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            self.assertEqual(len(app.query("#elastic-scope")), 1, "retention scope selector is missing")
+            app.query_one("#elastic-scope").value = "TPOT_SENSOR_STATUS_RETENTION"
+            await pilot.pause(0.3)
+            self.assertIn("TPOT_SENSOR_STATUS_RETENTION", str(app.query_one("#elastic-status").render()))
+            app.query_one("#elastic-value").value = "30"
+            app.query_one("#elastic-set").press()
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIn("sensor heartbeat history", app.screen.title_text)
+            await pilot.click("#no")
+            await pilot.pause(0.2)
+            self.assertEqual(settings.load(repo).values["TPOT_SENSOR_STATUS_RETENTION"], "90")
+            app.query_one("#elastic-set").press()
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+        values = settings.load(repo).values
+        self.assertEqual((values["TPOT_ES_RETENTION"], values["TPOT_SENSOR_STATUS_RETENTION"]), ("90", "30"))
+        self.assertEqual([path for method, path, body in es.requests if method == "PUT"],
+                         ["/_ilm/policy/tpot-sensor-status"])
+
+    async def test_two_retention_changes_wait_for_both_answers_before_saving(self):
+        from tpotctl import settings
+        backend, repo, es = self.sensor_retention_backend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("settings")
+            await pilot.pause(0.4)
+            for key in ("TPOT_ES_RETENTION", "TPOT_SENSOR_STATUS_RETENTION"):
+                app.query_one("#set-" + key).value = "30"
+            await pilot.pause(0.2)
+            app.query_one("#settings-save").press()
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            await pilot.click("#yes")
+            await pilot.pause(0.3)
+            values = settings.load(repo).values
+            self.assertEqual((values["TPOT_ES_RETENTION"], values["TPOT_SENSOR_STATUS_RETENTION"]), ("90", "90"))
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIn("sensor heartbeat history", app.screen.title_text)
+            await pilot.click("#no")
+            await pilot.pause(0.2)
+            self.assertFalse(app.query_one("#settings").saving)
+            self.assertEqual([request for request in es.requests if request[0] == "PUT"], [])
+            values = settings.load(repo).values
+            self.assertEqual((values["TPOT_ES_RETENTION"], values["TPOT_SENSOR_STATUS_RETENTION"]), ("90", "90"))
+            app.query_one("#settings-save").press()
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+        values = settings.load(repo).values
+        self.assertEqual((values["TPOT_ES_RETENTION"], values["TPOT_SENSOR_STATUS_RETENTION"]), ("30", "30"))
+        self.assertEqual([path for method, path, body in es.requests if method == "PUT"],
+                         ["/_ilm/policy/tpot", "/_ilm/policy/tpot-sensor-status"])
+
+    async def test_retention_scope_discards_the_previous_scopes_delayed_reply(self):
+        import asyncio
+        import threading
+        backend, _repo, _es = self.sensor_retention_backend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        started = {scope.key: threading.Event() for scope in elastic.RETENTIONS}
+        release = {scope.key: threading.Event() for scope in elastic.RETENTIONS}
+        original = backend.retention_status
+
+        def delayed(retention=elastic.EVENTS):
+            started[retention.key].set()
+            release[retention.key].wait(5)
+            return original(retention)
+
+        try:
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.4)
+                backend.retention_status = delayed
+                pane = app.query_one("#elastic", tapp.ElasticPane)
+                pane.load()
+                self.assertTrue(await asyncio.to_thread(started[elastic.EVENTS.key].wait, 2))
+                app.query_one("#elastic-scope").value = elastic.SENSOR_HISTORY.key
+                await pilot.pause(0.1)
+                release[elastic.EVENTS.key].set()
+                self.assertTrue(await asyncio.to_thread(started[elastic.SENSOR_HISTORY.key].wait, 2))
+                self.assertIsNone(pane.status)
+                self.assertNotIn("TPOT_ES_RETENTION", str(app.query_one("#elastic-status").render()))
+                release[elastic.SENSOR_HISTORY.key].set()
+                await pilot.pause(0.3)
+                self.assertEqual(pane.status.retention, elastic.SENSOR_HISTORY)
+        finally:
+            for gate in release.values():
+                gate.set()
+
+    async def test_retention_scope_is_locked_while_its_setting_is_written(self):
+        import asyncio
+        import threading
+        from tpotctl import settings
+        backend, repo, _es = self.sensor_retention_backend()
+        started, release = threading.Event(), threading.Event()
+        original = backend.set_retention
+
+        def delayed(value, retention=elastic.EVENTS):
+            started.set()
+            release.wait(5)
+            original(value, retention)
+
+        backend.set_retention = delayed
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        try:
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.4)
+                app.goto("elastic")
+                scope = app.query_one("#elastic-scope")
+                scope.value = elastic.SENSOR_HISTORY.key
+                await pilot.pause(0.3)
+                app.query_one("#elastic-value").value = "365"
+                app.query_one("#elastic-set").press()
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                self.assertTrue(scope.disabled)
+                scope.value = elastic.EVENTS.key
+                await pilot.pause(0.1)
+                self.assertEqual(scope.value, elastic.SENSOR_HISTORY.key)
+                release.set()
+                await pilot.pause(0.4)
+                self.assertFalse(scope.disabled)
+                values = settings.load(repo).values
+                self.assertEqual((values[elastic.EVENTS.key], values[elastic.SENSOR_HISTORY.key]), ("90", "365"))
+        finally:
+            release.set()
+
     def retention_checkout(self):
         """A checkout of env.example with TPOT_ES_RETENTION=90, the Settings page reads its .env."""
         from tpotctl.tests.test_settings import make_checkout
@@ -1730,7 +1896,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
                 repo = self.retention_checkout()
                 backend = self.settings_backend(repo)
 
-                def failing(value, force=False, error=error):
+                def failing(value, force=False, retention=elastic.EVENTS, error=error):
                     raise error
 
                 backend.retention_plan = failing
@@ -1848,10 +2014,10 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         seen = []
 
         class Slow(type(self.settings_backend(repo))):
-            def retention_plan(self, value, force=False):
+            def retention_plan(self, value, force=False, retention=elastic.EVENTS):
                 seen.append(value)
                 release.wait(5)
-                return super().retention_plan(value, force)
+                return super().retention_plan(value, force, retention)
 
         backend = Slow()
         app = tapp.TpotApp(backend=backend, runner=Recorder())
@@ -2946,9 +3112,9 @@ class KibanaObjectsPageTest(unittest.IsolatedAsyncioTestCase):
 
         class Real(FakeBackend):
             # what Backend.set_retention / set_kibana_mode do: load .env, change one key
-            def set_retention(self, value):
+            def set_retention(self, value, retention=elastic.EVENTS):
                 self.calls.append(("set", value))
-                env.load().change({"TPOT_ES_RETENTION": value})
+                env.load().change({retention.key: value})
 
             def set_kibana_mode(self, value):
                 self.calls.append(("kibana-mode", value))

@@ -1,0 +1,29 @@
+{
+  "index_patterns": ["tpot-sensor-status"],
+  "priority": 100,
+  "version": 1,
+  "_meta": {"managed": true, "description": "T-Pot current sensor status (no expiry)"},
+  "template": {
+    "settings": {"index.number_of_shards": 1, "index.number_of_replicas": 0},
+    "mappings": {
+      "dynamic": false,
+      "date_detection": false,
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "type": {"type": "keyword"},
+        "t-pot_sensor": {"type": "keyword"},
+        "t-pot_hostname": {"type": "keyword"},
+        "t-pot_ip_ext": {"type": "keyword"},
+        "t-pot_ip_int": {"type": "keyword"},
+        "heartbeat": {
+          "properties": {
+            "version": {"type": "keyword"},
+            "sequence": {"type": "long"},
+            "started_at": {"type": "date"},
+            "received_at": {"type": "date"}
+          }
+        }
+      }
+    }
+  }
+}

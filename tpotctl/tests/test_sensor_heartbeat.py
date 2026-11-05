@@ -16,6 +16,11 @@ UPDATEIP = ROOT / "docker/tpotinit/dist/bin/updateip.sh"
 
 
 class MetadataTest(unittest.TestCase):
+    def test_template_copies_match_across_build_contexts(self):
+        for name in ("tpot-sensor-status.json", "tpot-sensor-heartbeat.json"):
+            self.assertEqual((LOGSTASH / name).read_bytes(),
+                             (ROOT / "docker/tpotinit/dist/etc/ilm" / name).read_bytes())
+
     def test_tpotinit_exports_the_running_version_with_existing_metadata(self):
         text = UPDATEIP.read_text()
         version = re.search(r"^myVERSION=.*$", text, re.M).group()

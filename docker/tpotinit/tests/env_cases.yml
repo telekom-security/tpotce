@@ -89,6 +89,48 @@ cases:
     services: [tpotinit]
     set: {TPOT_ES_RETENTION: "abc"}
     warnings: [LS_WEB_USER]
+  - name: sensor history retention lower limit
+    services: [elasticsearch]
+    set: {TPOT_SENSOR_STATUS_RETENTION: "1"}
+    warnings: [LS_WEB_USER]
+  - name: sensor history retention upper limit
+    services: [elasticsearch]
+    set: {TPOT_SENSOR_STATUS_RETENTION: "3650"}
+    warnings: [LS_WEB_USER]
+  - name: sensor history retention off
+    services: [elasticsearch]
+    set: {TPOT_SENSOR_STATUS_RETENTION: "off"}
+    warnings: [LS_WEB_USER]
+  - name: sensor history retention empty keeps policy
+    services: [elasticsearch]
+    set: {TPOT_SENSOR_STATUS_RETENTION: ""}
+    warnings: [LS_WEB_USER]
+  - name: sensor history retention zero
+    services: [elasticsearch]
+    set: {TPOT_SENSOR_STATUS_RETENTION: "0"}
+    errors: [TPOT_SENSOR_STATUS_RETENTION]
+    warnings: [LS_WEB_USER]
+  - name: sensor history retention above limit
+    services: [elasticsearch]
+    set: {TPOT_SENSOR_STATUS_RETENTION: "3651"}
+    errors: [TPOT_SENSOR_STATUS_RETENTION]
+    warnings: [LS_WEB_USER]
+  - name: sensor history retention invalid unit
+    services: [elasticsearch]
+    set: {TPOT_SENSOR_STATUS_RETENTION: "30d"}
+    errors: [TPOT_SENSOR_STATUS_RETENTION]
+    warnings: [LS_WEB_USER]
+  - name: sensor history retention does not apply without elasticsearch
+    services: [tpotinit]
+    set: {TPOT_SENSOR_STATUS_RETENTION: "invalid"}
+    warnings: [LS_WEB_USER]
+  - name: sensor history retention does not apply on a sensor
+    services: [elasticsearch]
+    set:
+      TPOT_TYPE: SENSOR
+      TPOT_SENSOR_STATUS_RETENTION: "invalid"
+      TPOT_HIVE_IP: 192.0.2.1
+      TPOT_HIVE_USER: c2Vuc29yOnBhc3N3b3Jk
   - name: kibana objects keep
     services: [kibana]
     set: {TPOT_KIBANA_OBJECTS: keep}

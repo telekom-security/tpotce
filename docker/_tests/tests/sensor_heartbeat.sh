@@ -7,17 +7,19 @@ source "${SCRIPT_DIR}/../lib/common.sh"
 TEST_NAME="sensor_heartbeat"
 LOGSTASH_DIR="${DOCKER_ROOT}/elk/logstash"
 IMAGE=""
+INIT_IMAGE=""
 
 usage() {
   cat <<EOF
-Usage: $0 [--image IMAGE] [--timeout SEC] [--bind-ip IP] [--keep-artifacts]
+Usage: $0 [--image IMAGE] [--tpotinit-image IMAGE] [--timeout SEC] [--bind-ip IP] [--keep-artifacts]
 
 Test the HIVE's actual HTTP input and Elasticsearch outputs in an isolated
 Docker network. Verify authenticated identity, status replacement, sampling,
 sensor/receive clocks, malformed frames and unchanged normal-event routing.
 Uses local official images at the versions of the Dockerfiles; never builds
 or pulls. No ports are published; requests run inside the isolated network.
---image overrides Logstash. The temporary Elasticsearch data is removed.
+--image overrides Logstash; --tpotinit-image provides bash/jq for the ILM job.
+The temporary Elasticsearch data is removed.
 --bind-ip is accepted for runner compatibility.
 EOF
 }
@@ -25,6 +27,7 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --image) IMAGE="${2:?--image needs a value}"; shift 2 ;;
+    --tpotinit-image) INIT_IMAGE="${2:?--tpotinit-image needs a value}"; shift 2 ;;
     --timeout) TEST_TIMEOUT="${2:?--timeout needs a value}"; shift 2 ;;
     --bind-ip) TEST_BIND_IP="${2:?--bind-ip needs a value}"; shift 2 ;;
     --keep-artifacts) TEST_KEEP_ARTIFACTS=true; shift ;;
@@ -39,8 +42,10 @@ LS_VERSION="$(sed -n 's/^ARG LS_VER=//p' "${LOGSTASH_DIR}/Dockerfile" | head -n 
 ES_VERSION="$(sed -n 's/^ARG ES_VER=//p' "${DOCKER_ROOT}/elk/elasticsearch/Dockerfile" | head -n 1)"
 IMAGE="${IMAGE:-docker.elastic.co/logstash/logstash:${LS_VERSION}}"
 ES_IMAGE="docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION}"
+INIT_IMAGE="${INIT_IMAGE:-$(test_read_compose_image tpotinit "")}"
 test_require_image "${IMAGE}" "docker pull ${IMAGE}"
 test_require_image "${ES_IMAGE}" "docker pull ${ES_IMAGE}"
+test_require_image "${INIT_IMAGE}" "cd docker/tpotinit && docker compose build"
 test_prepare_harness "${TEST_NAME}"
 test_enable_cleanup
 
@@ -63,6 +68,17 @@ services:
     volumes:
       - "${LOGSTASH_DIR}/dist:/usr/share/logstash/pipeline:ro"
       - "${LOGSTASH_DIR}/dist/tpot-template.json:/usr/share/logstash/config/tpot-template.json:ro"
+  tpotinit:
+    image: "${INIT_IMAGE}"
+    profiles: ["setup"]
+    entrypoint: ["/bin/bash", "/opt/tpot/bin/es_retention.sh"]
+    environment:
+      TPOT_ES_URL: "http://elasticsearch:9200"
+      TPOT_ES_RETENTION: "7"
+      TPOT_SENSOR_STATUS_RETENTION: "30"
+    volumes:
+      - "${DOCKER_ROOT}/tpotinit/dist/bin/es_retention.sh:/opt/tpot/bin/es_retention.sh:ro"
+      - "${DOCKER_ROOT}/tpotinit/dist/etc/ilm:/opt/tpot/etc/ilm:ro"
 networks:
   default:
     internal: true
@@ -234,6 +250,55 @@ def older_processed():
 wait_for(older_processed, "older receipt did not traverse the real ES outputs")
 assert request(es + "/tpot-sensor-status/_doc/sensor-a")["_source"]["heartbeat"]["version"] == "newer-receipt"
 print("Out-of-order receipt cannot replace newer sensor status")
+
+for index in ("tpot-sensor-status", "tpot-sensor-heartbeat-" + day):
+    aggregations = request(es + "/" + index + "/_search", {
+        "size": 0, "aggs": {"sensors": {"terms": {"field": "t-pot_sensor"}},
+                           "versions": {"terms": {"field": "heartbeat.version"}}}})
+    assert aggregations["aggregations"]["sensors"]["buckets"], aggregations
+    settings = request(es + "/" + index + "/_settings?flat_settings=true")[index]["settings"]
+    if index == "tpot-sensor-status":
+        assert "index.lifecycle.name" not in settings, settings
+    else:
+        assert settings.get("index.lifecycle.name") == "tpot-sensor-status", settings
+print("Aggregatable identity/version mappings and history-only lifecycle assignment OK")
+
+dated = copy.deepcopy(base)
+dated["heartbeat"].update(version="2026-01-01", sequence=20)
+send(dated, "2026-01-01")
+wait_for(lambda: request(es + "/tpot-sensor-status/_doc/2026-01-01")["_source"]["heartbeat"]["version"] ==
+         "2026-01-01", "date-like sensor names and tags must remain strings")
+
+request(es + "/tpot-sensor-heartbeat-unmanaged", {"settings": {"index.lifecycle.name": ""}}, method="PUT")
+template_path = es + "/_index_template/tpot-sensor-status"
+foreign = request(template_path)["index_templates"][0]["index_template"]
+foreign["_meta"] = {"owner": "test-user"}
+request(template_path, {key: foreign[key] for key in ("index_patterns", "template", "priority", "version", "_meta")},
+        method="PUT")
+foreign = request(template_path)["index_templates"][0]["index_template"]
+request(es + "/_index_template/tpot-sensor-heartbeat", method="DELETE")
+
+def run_retention(value="30"):
+    done = subprocess.run(
+        ["docker", "compose", "-f", compose, "-p", project, "run", "--rm", "-T", "--no-deps",
+         "-e", "TPOT_SENSOR_STATUS_RETENTION=" + value, "tpotinit"],
+        capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stdout + done.stderr
+    return done.stdout + done.stderr
+
+output = run_retention()
+assert request(es + "/_ilm/policy/tpot-sensor-status")["tpot-sensor-status"]["policy"]["phases"]["delete"]["min_age"] == "30d"
+assert request(es + "/_ilm/policy/tpot")["tpot"]["policy"]["phases"]["delete"]["min_age"] == "7d"
+assert request(es + "/_index_template/tpot-sensor-heartbeat")["index_templates"]
+assert request(template_path)["index_templates"][0]["index_template"] == foreign
+assert not request(es + "/tpot-sensor-heartbeat-unmanaged/_ilm/explain")["indices"]["tpot-sensor-heartbeat-unmanaged"]["managed"]
+assert "Warning:" not in output, output
+output = run_retention("7")
+assert "tpot elastic retention --sensor-history --force" in output, output
+assert request(es + "/_ilm/policy/tpot-sensor-status")["tpot-sensor-status"]["policy"]["phases"]["delete"]["min_age"] == "30d"
+assert request(template_path)["index_templates"][0]["index_template"] == foreign
+print("tpotinit creates missing templates/policies; foreign templates and unmanaged history stay intact")
+print("A restart cannot shorten sensor history retention without confirmation")
 PY
 docker logs "${TEST_CONTAINER_NAME}" > "${TEST_TMP_ROOT}/logstash.log" 2>&1
 REJECTED="$(grep -c -F 'Rejected sensor heartbeat' "${TEST_TMP_ROOT}/logstash.log" || true)"

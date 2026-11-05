@@ -186,12 +186,17 @@ HTTP output with a file; the HIVE routing is tested separately. Known
 pre-existing fixture failures are printed explicitly, never silently skipped.
 
 `./docker/_tests/run.sh sensor_heartbeat` tests the HIVE's real HTTP input and
-Elasticsearch outputs with the local official images pinned by the Dockerfiles.
+Elasticsearch outputs with the local official images pinned by the Dockerfiles,
+plus a local tpotinit image for its retention job. The standalone test accepts
+`--tpotinit-image IMAGE` to override that tool image.
 It verifies authenticated sensor names, separate sensor/receive timestamps, one
 current status per sensor, every fifth heartbeat in history, malformed-message
 rejections, unchanged normal-event routing and protection against out-of-order
-status writes. Both containers use a temporary internal network without published
-ports; the test sends HTTP requests with the Elasticsearch image's curl.
+status writes, keyword mappings (including date-like names/tags) and lifecycle
+assignment only to history. It runs the actual tpotinit job to check policy and
+missing-template creation, preservation of existing templates and unmanaged indices,
+and refusal to shorten history retention on restart. The containers use a temporary
+internal network without published ports; HTTP requests use the Elasticsearch image's curl.
 
 The Conpot test starts all nine deployed templates in one Docker network on
 dynamic loopback ports (`--<key>-port` pins one, see `--help`). The probes

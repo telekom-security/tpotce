@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from tpotctl import bootstrap, menu, ops, say
 from tpotctl.bootstrap import REPO_DIR
+from tpotctl.elastic import EVENTS, RETENTIONS, Retention
 
 MAGENTA = "#E20074"
 HEALTH_STYLE = {"healthy": "green", "unhealthy": "red", "starting": "yellow"}
@@ -87,10 +88,13 @@ def build_parser() -> argparse.ArgumentParser:
     elastic = sub.add_parser("elastic", help="how long Elasticsearch keeps the events, and T-Pot's Kibana objects "
                                              "(default: status)")
     elastic_actions = elastic.add_subparsers(dest="elastic_command", metavar="ACTION")
-    elastic_actions.add_parser("status", help="TPOT_ES_RETENTION and what the ILM policy tpot does, "
+    elastic_actions.add_parser("status", help="event and sensor history retention and their ILM policies, "
                                               "TPOT_KIBANA_OBJECTS and what an import would bring")
     retention = elastic_actions.add_parser("retention", help="show or set TPOT_ES_RETENTION and apply it now")
     retention.add_argument("value", nargs="?", help="days (1-3650) or off; left out: show it")
+    retention.add_argument("--sensor-history", action="store_true",
+                           help="use TPOT_SENSOR_STATUS_RETENTION for heartbeat history instead of attack events; "
+                                "current sensor status never expires")
     retention.add_argument("--adopt", action="store_true",
                            help="keep the policy: its retention goes into .env, T-Pot manages it from then on")
     retention.add_argument("--force", action="store_true",
@@ -377,11 +381,11 @@ def print_status() -> int:
     return 0
 
 
-def retention_value_problem(value: str) -> str:
-    """"" if value is a valid TPOT_ES_RETENTION, else the message of the schema."""
+def retention_value_problem(value: str, retention: Retention = EVENTS) -> str:
+    """"" if value is valid for the retention setting, else the message of the schema."""
     from tpotctl import envschema
-    rule = envschema.load_schema()["TPOT_ES_RETENTION"]
-    problems = envschema.check(rule, {"TPOT_ES_RETENTION": value}, {}, check_host=False)
+    rule = envschema.load_schema()[retention.key]
+    problems = envschema.check(rule, {retention.key: value}, {}, check_host=False)
     return problems[0].text if problems else ""
 
 
@@ -401,11 +405,11 @@ def _indices(count: int) -> str:
     return f"{count} index" if count == 1 else f"{count} indices"
 
 
-def _retention_not_applied(new: str, old: str, err, console) -> int:
-    """.env holds the new value but the ILM policy tpot was not written: say so, and how to undo it."""
-    say.warn(f"TPOT_ES_RETENTION={new} is set in .env, but the ILM policy tpot was not changed ({err}). "
+def _retention_not_applied(new: str, old: str, err, console, retention: Retention = EVENTS) -> int:
+    """.env holds the new value but the ILM policy was not written: say so, and how to undo it."""
+    say.warn(f"{retention.key}={new} is set in .env, but the ILM policy {retention.policy} was not changed ({err}). "
              "T-Pot applies the value on its next start.", console.file)
-    say.hint(f"To undo it: tpot env set TPOT_ES_RETENTION={old}", stream=console.file)
+    say.hint(f"To undo it: tpot env set {retention.key}={old}", stream=console.file)
     return 1
 
 
@@ -458,41 +462,43 @@ def _retention_preview(chosen, new: str, console) -> None:
 
 
 def _retention_status(state, console, shown) -> None:
-    console.print(f"TPOT_ES_RETENTION  {shown(state.value)}", markup=False)
+    retention = state.retention
+    console.print(f"{retention.key}  {shown(state.value)}", markup=False)
     if state.state == "unreachable":
         say.warn(state.problem, console.file)
         return
-    console.print(f"ILM policy tpot    {shown(state.current) if state.state != 'missing' else 'missing'}"
+    console.print(f"ILM policy {retention.policy}    {shown(state.current) if state.state != 'missing' else 'missing'}"
                   f"  ({state.state})", markup=False)
     if state.state == "foreign" and state.adopts:
         say.warn("The policy was changed in Kibana, T-Pot takes it over on its next start (same duration).",
                  console.file)
     elif state.state == "foreign":
         say.warn("The policy was changed outside of T-Pot, T-Pot leaves it as it is. "
-                 "tpot elastic retention --adopt keeps it (its retention goes into .env), "
-                 "tpot elastic retention --force applies .env to it.", console.file)
+                 f"{retention.command} --adopt keeps it (its retention goes into .env), "
+                 f"{retention.command} --force applies .env to it.", console.file)
     elif state.pending:
-        say.warn(f"TPOT_ES_RETENTION={state.value} waits: T-Pot does not shorten the ILM policy tpot "
-                 f"({shown(state.current)}) on its own; 'tpot elastic retention --force' applies it (asks first), "
-                 "'tpot elastic retention --adopt' keeps the policy.", console.file)
+        say.warn(f"{retention.key}={state.value} waits: T-Pot does not shorten the ILM policy {retention.policy} "
+                 f"({shown(state.current)}) on its own; '{retention.command} --force' applies it (asks first), "
+                 f"'{retention.command} --adopt' keeps the policy.", console.file)
     elif state.state == "missing" and state.value not in ("", "off"):
         say.warn(f"T-Pot creates the policy on its next start: for {state.value} days if no older events exist, "
                  "otherwise forever (nothing is deleted) and the value waits.", console.file)
 
 
-def _foreign_kept(new: str, current: str, settings, console) -> int:
+def _foreign_kept(new: str, current: str, settings, console, retention: Retention = EVENTS) -> int:
     """VALUE on a policy changed outside of T-Pot, as the Elastic and the Settings page do it: .env takes the
     value, the policy stays as it is until --force applies the value or --adopt keeps the policy."""
-    settings.change({"TPOT_ES_RETENTION": new})
-    say.warn(f"TPOT_ES_RETENTION={new} is set in .env. The ILM policy tpot was changed outside of T-Pot "
+    settings.change({retention.key: new})
+    say.warn(f"{retention.key}={new} is set in .env. The ILM policy {retention.policy} was changed outside of T-Pot "
              f"(retention: {_retention_shown(current) if current else 'not in days'}), T-Pot leaves it as it is: "
-             "'tpot elastic retention --force' applies the value to it (it asks first), "
-             "'tpot elastic retention --adopt' keeps the policy.", console.file)
+             f"'{retention.command} --force' applies the value to it (it asks first), "
+             f"'{retention.command} --adopt' keeps the policy.", console.file)
     return 0
 
 
-UNKNOWN_POLICY = ("T-Pot applies it on its next start if the ILM policy tpot keeps the events less long; "
-                  "a shorter value waits for 'tpot elastic retention --force' (it asks first).")
+def _unknown_policy(retention: Retention = EVENTS) -> str:
+    return (f"T-Pot applies it on its next start if the ILM policy {retention.policy} keeps the events less long; "
+            f"a shorter value waits for '{retention.command} --force' (it asks first).")
 
 
 def _shortens_env(old: str, new: str) -> bool:
@@ -755,9 +761,10 @@ def _run_kibana(args, values, console) -> int:
 
 def run_elastic(args) -> int:
     from tpotctl import elastic, settings as tsettings
+    retention = elastic.SENSOR_HISTORY if getattr(args, "sensor_history", False) else EVENTS
     if getattr(args, "adopt", False) and getattr(args, "value", None):
-        error("--adopt takes the value of the ILM policy tpot, it takes no VALUE: "
-              "tpot elastic retention --adopt, or tpot elastic retention VALUE")
+        error(f"--adopt takes the value of the ILM policy {retention.policy}, it takes no VALUE: "
+              f"{retention.command} --adopt, or {retention.command} VALUE")
         return 2
     if getattr(args, "prune", False) and getattr(args, "mode", None):
         error("--prune removes old objects and imports nothing, it takes no --mode: "
@@ -768,7 +775,7 @@ def run_elastic(args) -> int:
     if current.values.get("TPOT_TYPE", "HIVE") == "SENSOR":
         error("A SENSOR has no Elasticsearch, its events go to its HIVE.")
         return 1
-    value = current.values.get("TPOT_ES_RETENTION", "")
+    value = current.values.get(retention.key, "")
     console = _console()
     if getattr(args, "elastic_command", None) in KIBANA_COMMANDS:
         return _run_kibana(args, current.values, console)
@@ -776,68 +783,71 @@ def run_elastic(args) -> int:
     if (getattr(args, "elastic_command", None) == "retention" and args.force and not args.value
             and not args.adopt):
         if not value:
-            error("TPOT_ES_RETENTION is empty, set a value: tpot elastic retention DAYS")
+            error(f"{retention.key} is empty, set a value: {retention.command} DAYS")
             return 1
         args.value = value          # the value of .env, applied now; writing it again changes nothing
         from_env = True
-    state = elastic.status(value)
     shown = _retention_shown
     if getattr(args, "elastic_command", None) in (None, "status"):
-        _retention_status(state, console, shown)
+        states = [elastic.status(current.values.get(scope.key, ""), retention=scope) for scope in RETENTIONS]
+        for state in states:
+            _retention_status(state, console, shown)
         _kibana_status(current.values, console)
-        return 1 if state.state == "unreachable" else 0
+        return 1 if any(state.state == "unreachable" for state in states) else 0
+    state = elastic.status(value, retention=retention)
     if not args.value and not args.adopt:
         _retention_status(state, console, shown)
         return 1 if state.state == "unreachable" else 0
     if args.adopt:
         if state.state not in ("foreign", "managed"):
-            error(state.problem or "There is no ILM policy tpot to keep.")
+            error(state.problem or f"There is no ILM policy {retention.policy} to keep.")
             return 1
         if not state.current:
-            error("The retention of the policy is no whole number of days, set one: tpot elastic retention DAYS")
+            error(f"The retention of the policy is no whole number of days, set one: {retention.command} DAYS")
             return 1
-        new, chosen = state.current, elastic.plan(state.current, force=True)
+        new, chosen = state.current, elastic.plan(state.current, force=True, retention=retention)
     else:
-        problem = retention_value_problem(args.value)
+        problem = retention_value_problem(args.value, retention)
         if problem:
-            error(f"TPOT_ES_RETENTION: {problem}")
+            error(f"{retention.key}: {problem}")
             return 2
-        new, chosen = args.value, elastic.plan(args.value, force=args.force)
+        new, chosen = args.value, elastic.plan(args.value, force=args.force, retention=retention)
     if not chosen.reachable:
         # the status above may have read the policy before Elasticsearch went away: a foreign policy stays
         # foreign, only .env is written
         if (state.state == "foreign" and not args.force and not args.adopt
                 and not (state.current and state.current == new)):
-            return _foreign_kept(new, state.current, current, console)
+            return _foreign_kept(new, state.current, current, console, retention)
         # nothing can be shown or applied: only .env changes, and a shorter value waits for the user's yes
-        current.change({"TPOT_ES_RETENTION": new})
+        current.change({retention.key: new})
         if from_env or _shortens_env(value, new):
-            say.warn(f"TPOT_ES_RETENTION={new} is set in .env, but Elasticsearch is not reachable: T-Pot does not "
-                     "shorten the ILM policy tpot on its own, the value waits. Once Elasticsearch runs, "
-                     "'tpot elastic retention --force' applies it (asks first).", console.file)
+            say.warn(f"{retention.key}={new} is set in .env, but Elasticsearch is not reachable: T-Pot does not "
+                     f"shorten the ILM policy {retention.policy} on its own, the value waits. Once Elasticsearch runs, "
+                     f"'{retention.command} --force' applies it (asks first).", console.file)
         else:       # the policy is unknown: only a value that keeps the events less long than it is applied
-            say.ok(f"TPOT_ES_RETENTION={new} is set.", console.file)
-            say.hint(UNKNOWN_POLICY, stream=console.file)
+            say.ok(f"{retention.key}={new} is set.", console.file)
+            say.hint(_unknown_policy(retention), stream=console.file)
         if chosen.problem:
             say.hint(f"Why: {chosen.problem}.", stream=console.file)
         return 0
     if chosen.decision.action == "foreign":
-        return _foreign_kept(new, chosen.decision.current, current, console)
+        return _foreign_kept(new, chosen.decision.current, current, console, retention)
     if chosen.shortening:
         _retention_preview(chosen, new, console)
-        if not confirm_data_loss(f"Keep the Elasticsearch events {shown(new)}?",
+        if not confirm_data_loss(f"Keep the {retention.label} {shown(new)}?",
                                  getattr(args, "accept_data_loss", False)):
             say.info("Nothing was changed.", console.file)
             return 1
-    current.change({"TPOT_ES_RETENTION": new})
+    current.change({retention.key: new})
     try:
         elastic.apply(chosen)
     except elastic.ElasticError as err:
-        return _retention_not_applied(new, value, err, console)
+        return _retention_not_applied(new, value, err, console, retention)
     if args.adopt:
-        say.ok(f"TPOT_ES_RETENTION={new}, the retention of the ILM policy tpot, T-Pot manages it now.", console.file)
+        say.ok(f"{retention.key}={new}, the retention of the ILM policy {retention.policy}, T-Pot manages it now.",
+               console.file)
     else:
-        say.ok(f"TPOT_ES_RETENTION={new}, the ILM policy tpot keeps the events {shown(new)}.", console.file)
+        say.ok(f"{retention.key}={new}, the ILM policy {retention.policy} keeps the events {shown(new)}.", console.file)
     return 0
 
 
@@ -879,7 +889,7 @@ def run_env(args) -> int:
                 return 2
             changes[key.strip()] = value
         unlocked = [key for key in changes if current.can_unlock(key)] if args.unlock else []
-        old_retention = current.values.get("TPOT_ES_RETENTION", "")
+        old_retentions = {scope.key: current.values.get(scope.key, "") for scope in RETENTIONS}
         for key in unlocked:
             say.warn(f"{key} is unlocked: {current.schema[key].unlock}", console.file)
         try:
@@ -890,14 +900,16 @@ def run_env(args) -> int:
         print_problems(remaining, console)
         for key in changes:
             say.ok(f"{key} is set.", console.file)
-        if "TPOT_ES_RETENTION" in changes:
+        for retention in RETENTIONS:
+            if retention.key not in changes:
+                continue
             from tpotctl import elastic
-            new = changes["TPOT_ES_RETENTION"]
+            new, old_retention = changes[retention.key], old_retentions[retention.key]
             waits, foreign, asked = False, None, False
             if new and (not old_retention or elastic.shortens(old_retention, new)):
                 # only a value shorter than .env had, or an unset .env, needs the policy: it says whether the
                 # next start applies the value (a longer value than .env had is applied on the next start)
-                state = elastic.status(new)
+                state = elastic.status(new, retention=retention)
                 asked = state.state != "unreachable"
                 if state.state == "foreign":
                     foreign = None if state.adopts else state       # the same duration: taken over, no waiting
@@ -906,25 +918,25 @@ def run_env(args) -> int:
                 else:               # missing, or Elasticsearch does not answer: the value in .env is all we know
                     waits = _shortens_env(old_retention, new)
             if not new:
-                say.hint("TPOT_ES_RETENTION is empty: T-Pot leaves the ILM policy as it is.", stream=console.file)
+                say.hint(f"{retention.key} is empty: T-Pot leaves the ILM policy as it is.", stream=console.file)
             elif foreign is not None:
                 keeps = _retention_shown(foreign.current) if foreign.current else "not in days"
-                say.hint(f"TPOT_ES_RETENTION={new} is set, but the ILM policy tpot was changed outside of T-Pot "
-                         f"and keeps its own retention ({keeps}). tpot elastic retention --adopt keeps it, "
-                         "tpot elastic retention --force applies .env to it.", stream=console.file)
+                say.hint(f"{retention.key}={new} is set, but the ILM policy {retention.policy} was changed outside of T-Pot "
+                         f"and keeps its own retention ({keeps}). {retention.command} --adopt keeps it, "
+                         f"{retention.command} --force applies .env to it.", stream=console.file)
             elif waits:
-                say.hint(f"TPOT_ES_RETENTION={new} is not applied by T-Pot on its own; "
-                         "tpot elastic retention --force applies it (asks first).", stream=console.file)
+                say.hint(f"{retention.key}={new} is not applied by T-Pot on its own; "
+                         f"{retention.command} --force applies it (asks first).", stream=console.file)
             elif asked:
-                console.print(f"[{MAGENTA}]T-Pot applies TPOT_ES_RETENTION on its next start; "
-                              f"tpot elastic retention --force applies it now.[/]")
+                console.print(f"[{MAGENTA}]T-Pot applies {retention.key} on its next start; "
+                              f"{retention.command} --force applies it now.[/]")
             else:               # the policy was not read, or Elasticsearch did not answer: it is unknown
-                say.hint(f"TPOT_ES_RETENTION={new} is set. {UNKNOWN_POLICY}", stream=console.file)
+                say.hint(f"{retention.key}={new} is set. {_unknown_policy(retention)}", stream=console.file)
         if changes.get("TPOT_KIBANA_OBJECTS") == "overwrite":
             # no question, as for a shorter retention: env set writes what it is told, the hint says what it does
             say.hint(f"TPOT_KIBANA_OBJECTS=overwrite: {KIBANA_OVERWRITE_EVERY_START}", stream=console.file)
         # keys the host reads on its own (restart: false in the schema) need no restart of T-Pot either
-        if any(key != "TPOT_ES_RETENTION" and (key not in current.schema or current.schema[key].restart)
+        if any(key not in old_retentions and (key not in current.schema or current.schema[key].restart)
                for key in changes):
             console.print(f"[{MAGENTA}]Restart T-Pot to apply it: tpot restart[/]")
         return 0

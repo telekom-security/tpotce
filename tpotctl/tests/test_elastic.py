@@ -512,6 +512,83 @@ def unreadable_plan(value="30"):
     return elastic.plan(value, opener=es, now=NOW)
 
 
+class SensorRetentionTest(unittest.TestCase):
+    def scope(self):
+        self.assertTrue(hasattr(elastic, "SENSOR_HISTORY"), "sensor retention scope is missing")
+        return elastic.SENSOR_HISTORY
+
+    def es(self, policy=MANAGED_90):
+        return FakeES({
+            ("GET", "/_ilm/policy/tpot-sensor-status"):
+                (200, {"tpot-sensor-status": {"policy": policy}}) if policy else (404, {}),
+            ("PUT", "/_ilm/policy/tpot-sensor-status"): (200, {"acknowledged": True}),
+            ("GET", "/_cat/indices/tpot-sensor-heartbeat-*"): (200, [
+                {"index": "tpot-sensor-heartbeat-old", "creation.date": str(int((NOW - 60 * DAY) * 1000)),
+                 "docs.count": "1200", "store.size": "5000"},
+                {"index": "tpot-sensor-heartbeat-new", "creation.date": str(int((NOW - 2 * DAY) * 1000)),
+                 "docs.count": "30", "store.size": "100"},
+            ]),
+        })
+
+    def test_shortening_plans_and_writes_only_sensor_history_policy(self):
+        scope, es = self.scope(), self.es()
+        chosen = elastic.plan("30", opener=es, now=NOW, retention=scope)
+        self.assertTrue(chosen.reachable, chosen.problem)
+        self.assertTrue(chosen.shortening)
+        self.assertEqual([index.name for index in chosen.doomed], ["tpot-sensor-heartbeat-old"])
+        self.assertFalse(any(method == "PUT" for method, path, data in es.requests))
+        elastic.apply(chosen, opener=es)
+        method, path, body = es.requests[-1]
+        self.assertEqual((method, path), ("PUT", "/_ilm/policy/tpot-sensor-status"))
+        policy = json.loads(body)["policy"]
+        self.assertEqual(policy["phases"]["delete"]["min_age"], "30d")
+        self.assertIn("TPOT_SENSOR_STATUS_RETENTION", policy["_meta"]["description"])
+        self.assertFalse(any("logstash-" in path or path == "/_ilm/policy/tpot"
+                             for method, path, data in es.requests))
+
+    def test_sensor_history_uses_the_same_shared_safety_decisions(self):
+        scope = self.scope()
+        for case in load_cases()["cases"]:
+            with self.subTest(case=case["name"]):
+                oldest = NOW - case["oldest_days"] * DAY if "oldest_days" in case else None
+                decision = elastic.decide(case["value"], case["policy"], force=case.get("force", False),
+                                          shorten=case.get("shorten", False), oldest=oldest, now=NOW,
+                                          retention=scope)
+                self.assertEqual(decision.action, case["action"])
+                self.assertEqual(decision.held, case.get("held", ""))
+                self.assertEqual(decision.current, case["current"])
+                self.assertEqual(decision.managed, case["managed"])
+
+    def test_status_reports_pending_foreign_and_missing_sensor_policy(self):
+        scope = self.scope()
+        state = elastic.status("30", opener=self.es(), retention=scope)
+        self.assertEqual((state.state, state.current, state.pending), ("managed", "90", True))
+        foreign = dict(MANAGED_90, _meta={})
+        state = elastic.status("30", opener=self.es(foreign), retention=scope)
+        self.assertEqual(state.state, "foreign")
+        self.assertEqual(elastic.status("30", opener=self.es(None), retention=scope).state, "missing")
+
+    def test_foreign_sensor_policy_is_not_replaced_without_force(self):
+        es = self.es(dict(MANAGED_90, _meta={}))
+        chosen = elastic.plan("30", opener=es, retention=self.scope())
+        self.assertEqual(chosen.decision.action, "foreign")
+        with self.assertRaisesRegex(elastic.ElasticError, "tpot-sensor-status"):
+            elastic.apply(chosen, opener=es)
+        self.assertFalse(any(method == "PUT" for method, path, data in es.requests))
+
+    def test_missing_policy_with_old_history_creates_off_and_holds_thirty_days(self):
+        decision = elastic.decide("30", None, oldest=NOW - 60 * DAY, now=NOW, retention=self.scope())
+        self.assertEqual((decision.action, decision.held), ("create", "30"))
+        self.assertNotIn("delete", decision.policy["phases"])
+        self.assertIn("TPOT_SENSOR_STATUS_RETENTION", decision.policy["_meta"]["description"])
+
+    def test_response_for_attack_policy_is_not_a_missing_sensor_policy(self):
+        es = FakeES({("GET", "/_ilm/policy/tpot-sensor-status"): (200, {"tpot": {"policy": MANAGED_90}})})
+        state = elastic.status("30", opener=es, retention=self.scope())
+        self.assertEqual(state.state, "unreachable")
+        self.assertIn("tpot-sensor-status", state.problem)
+
+
 class AccessTest(unittest.TestCase):
 
     def es(self, policy=MANAGED_90):
@@ -784,6 +861,113 @@ class FakeSettings:
         return []
 
 
+class SensorRetentionCliTest(unittest.TestCase):
+    def setUp(self):
+        self.load_settings = settings.load
+        self.settings = FakeSettings({"TPOT_TYPE": "HIVE", "TPOT_ES_RETENTION": "90",
+                                      "TPOT_SENSOR_STATUS_RETENTION": "90"})
+        self.settings.schema = envschema.load_schema()
+        self.es = FakeES({
+            ("GET", "/_ilm/policy/tpot"): (200, {"tpot": {"policy": MANAGED_90}}),
+            ("GET", "/_ilm/policy/tpot-sensor-status"): (200, {"tpot-sensor-status": {"policy": MANAGED_90}}),
+            ("PUT", "/_ilm/policy/tpot-sensor-status"): (200, {"acknowledged": True}),
+            ("GET", "/_cat/indices/tpot-sensor-heartbeat-*"): (200, [
+                {"index": "tpot-sensor-heartbeat-old", "creation.date": "1", "docs.count": "10",
+                 "store.size": "100", "status": "open"}]),
+        })
+        self.out = io.StringIO()
+        call = elastic._call
+        for patch in (
+            mock.patch("tpotctl.settings.load", return_value=self.settings),
+            mock.patch("tpotctl.ops.require_linux_host"),
+            mock.patch("tpotctl.cli._console", return_value=Console(file=self.out, width=220)),
+            mock.patch("tpotctl.cli._kibana_status"),
+            mock.patch("tpotctl.elastic._call", side_effect=lambda method, path, url, opener, body=None:
+                       call(method, path, url, self.es, body)),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def run_cli(self, argv):
+        try:
+            args = cli.build_parser().parse_args(argv)
+        except SystemExit as err:
+            self.fail(f"Sensor history CLI option is not accepted: {err}")
+        return cli.run_env(args) if args.command == "env" else cli.run_elastic(args)
+
+    def puts(self):
+        return [(path, json.loads(body)) for method, path, body in self.es.requests if method == "PUT"]
+
+    def test_only_history_policy_and_setting_change(self):
+        self.assertEqual(self.run_cli(["elastic", "retention", "--sensor-history", "365"]), 0)
+        self.assertEqual(self.settings.changes, [{"TPOT_SENSOR_STATUS_RETENTION": "365"}])
+        self.assertEqual([path for path, body in self.puts()], ["/_ilm/policy/tpot-sensor-status"])
+        self.assertEqual(self.puts()[0][1]["policy"]["phases"]["delete"]["min_age"], "365d")
+        self.assertFalse(any(path == "/_ilm/policy/tpot" for method, path, body in self.es.requests))
+
+    def test_shortening_needs_its_own_confirmation_not_yes(self):
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: False)), redirect_stderr(self.out):
+            with self.assertRaises(SystemExit) as caught:
+                self.run_cli(["elastic", "retention", "--sensor-history", "30", "-y"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("sensor heartbeat history", self.out.getvalue())
+        self.assertEqual((self.settings.changes, self.puts()), ([], []))
+
+    def test_declining_changes_neither_setting_nor_policy(self):
+        with mock.patch("tpotctl.cli.confirm_data_loss", return_value=False) as question:
+            self.assertEqual(self.run_cli(["elastic", "retention", "--sensor-history", "30"]), 1)
+        self.assertIn("sensor heartbeat history", question.call_args.args[0])
+        self.assertEqual((self.settings.changes, self.puts()), ([], []))
+
+    def test_explicit_data_loss_acceptance_applies_history_only(self):
+        self.assertEqual(self.run_cli(["elastic", "retention", "--sensor-history", "30",
+                                      "--accept-data-loss"]), 0)
+        self.assertEqual(self.settings.changes, [{"TPOT_SENSOR_STATUS_RETENTION": "30"}])
+        self.assertEqual([path for path, body in self.puts()], ["/_ilm/policy/tpot-sensor-status"])
+        self.assertIn("tpot-sensor-heartbeat-old", self.out.getvalue())
+
+    def test_foreign_history_policy_is_preserved_with_scoped_recovery_command(self):
+        self.es.routes[("GET", "/_ilm/policy/tpot-sensor-status")] = (
+            200, {"tpot-sensor-status": {"policy": dict(MANAGED_90, _meta={})}})
+        self.assertEqual(self.run_cli(["elastic", "retention", "--sensor-history", "30"]), 0)
+        self.assertEqual(self.settings.changes, [{"TPOT_SENSOR_STATUS_RETENTION": "30"}])
+        self.assertEqual(self.puts(), [])
+        self.assertIn("tpot elastic retention --sensor-history --force", self.out.getvalue())
+
+    def test_status_displays_both_policies(self):
+        self.assertEqual(self.run_cli(["elastic", "status"]), 0)
+        text = self.out.getvalue()
+        for part in ("TPOT_ES_RETENTION", "TPOT_SENSOR_STATUS_RETENTION", "ILM policy tpot-sensor-status"):
+            self.assertIn(part, text)
+        self.assertEqual(self.puts(), [])
+
+    def test_env_set_warns_for_each_retention_without_asking_or_applying(self):
+        with mock.patch("tpotctl.cli.confirm_data_loss") as question:
+            self.assertEqual(self.run_cli(["env", "set", "TPOT_ES_RETENTION=30",
+                                          "TPOT_SENSOR_STATUS_RETENTION=30"]), 0)
+        question.assert_not_called()
+        self.assertEqual(self.puts(), [])
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30",
+                                                  "TPOT_SENSOR_STATUS_RETENTION": "30"}])
+        text = self.out.getvalue()
+        self.assertIn("tpot elastic retention --force", text)
+        self.assertIn("tpot elastic retention --sensor-history --force", text)
+
+    def test_stale_sources_block_writing_either_retention(self):
+        for options in ([], ["--sensor-history"]):
+            with self.subTest(options=options):
+                repo = make_checkout(self)
+                current = self.load_settings(repo)
+                with open(os.path.join(repo, "env.example"), "a", encoding="utf-8") as handle:
+                    handle.write("\n# changed source\n")
+                with mock.patch("tpotctl.settings.load", return_value=current):
+                    with self.assertRaisesRegex(settings.SettingsError, "Run tpot update first"):
+                        self.run_cli(["elastic", "retention", "365"] + options)
+                values = self.load_settings(repo).values
+                self.assertEqual((values["TPOT_ES_RETENTION"], values["TPOT_SENSOR_STATUS_RETENTION"]), ("30", "30"))
+                self.assertEqual(self.puts(), [])
+
+
 class RunElasticTest(unittest.TestCase):
     """The decisions of `tpot elastic retention`: what is asked, what is written, what is applied."""
 
@@ -804,7 +988,8 @@ class RunElasticTest(unittest.TestCase):
             self.asked.append((prompt, None))
             return "y" if confirm else "n"
 
-        def plan_of(value, force=False):
+        def plan_of(value, force=False, retention=elastic.EVENTS):
+            self.assertEqual(retention, elastic.EVENTS)
             self.planned.append((value, force))
             return plan
 
