@@ -86,8 +86,9 @@ EOF
 
 test_info "Starting isolated Logstash and Elasticsearch"
 test_compose up -d >/dev/null
-python3 - "${TEST_HARNESS_COMPOSE}" "${TEST_PROJECT_NAME}" "${TEST_TIMEOUT}" <<'PY'
+python3 - "${TEST_HARNESS_COMPOSE}" "${TEST_PROJECT_NAME}" "${TEST_TIMEOUT}" "${DOCKER_ROOT}/.." <<'PY'
 import copy
+import io
 import json
 import sys
 import time
@@ -95,7 +96,9 @@ import subprocess
 import urllib.error
 from datetime import datetime, timedelta, timezone
 
-compose, project, timeout = sys.argv[1:]
+compose, project, timeout, root = sys.argv[1:]
+sys.path.insert(0, root)
+from tpotctl import sensors
 http = "http://logstash:64305"
 es = "http://127.0.0.1:9200"
 timeout = max(180, int(timeout))
@@ -104,11 +107,12 @@ def request(url, data=None, method=None, headers=None):
     command = ["docker", "compose", "-f", compose, "-p", project, "exec", "-T", "elasticsearch",
                "curl", "--noproxy", "*", "-sS", "--max-time", "10", "-w", "\n%{http_code}",
                "-X", method or ("POST" if data is not None else "GET")]
-    for key, value in {"Content-Type": "application/json", **(headers or {})}.items():
+    for key, value in {"content-type": "application/json",
+                       **{key.lower(): value for key, value in (headers or {}).items()}}.items():
         command += ["-H", f"{key}: {value}"]
     if data is not None:
         command += ["--data-binary", "@-"]
-    done = subprocess.run(command + [url], input=None if data is None else json.dumps(data),
+    done = subprocess.run(command + [url], input=data if data is None or isinstance(data, str) else json.dumps(data),
                           capture_output=True, text=True, timeout=20)
     if done.returncode:
         raise ConnectionError(done.stderr)
@@ -299,6 +303,43 @@ assert request(es + "/_ilm/policy/tpot-sensor-status")["tpot-sensor-status"]["po
 assert request(template_path)["index_templates"][0]["index_template"] == foreign
 print("tpotinit creates missing templates/policies; foreign templates and unmanaged history stay intact")
 print("A restart cannot shorten sensor history retention without confirmation")
+
+def manager_open(req, timeout):
+    try:
+        answer = request(req.full_url, json.loads(req.data) if req.data is not None else None,
+                         req.get_method(), dict(req.header_items()))
+    except urllib.error.HTTPError as err:
+        raise urllib.error.HTTPError(req.full_url, err.code, str(err.reason), {},
+                                     io.BytesIO(str(err.reason).encode())) from err
+    return io.BytesIO(json.dumps(answer).encode())
+
+bulk = []
+for number in range(1001):
+    name = f"batch-sensor-{number:04d}"
+    document = copy.deepcopy(saved)
+    document["t-pot_sensor"] = name
+    bulk.extend([json.dumps({"index": {"_index": "tpot-sensor-status", "_id": name}}), json.dumps(document)])
+assert not request(es + "/_bulk?refresh=true", "\n".join(bulk) + "\n")["errors"]
+observed = sensors.fetch_status(url=es, opener=manager_open)
+assert not observed.problem, observed.problem
+assert len(observed.heartbeats) == 1004, len(observed.heartbeats)
+assert observed.heartbeats["sensor-a"].version == "newer-receipt"
+assert utc(observed.heartbeats["sensor-a"].sensor_at) == sensor_time
+assert "sensor-a" in observed.sensors
+received = observed.heartbeats["sensor-a"].received_at
+for age, state in ((179.999, "online"), (180, "offline")):
+    row = sensors.observe(sensors.Sensor("sensor-a"), observed, "hive-release", now=received + age)
+    assert row.state == state and row.behind, row
+def history_documents():
+    return {(hit["_index"], hit["_id"]): hit["_source"] for hit in search("tpot-sensor-heartbeat-*")}
+
+history_before = history_documents()
+sensors.delete_status("sensor-a", url=es, opener=manager_open)
+sensors.delete_status("sensor-a", url=es, opener=manager_open)
+refresh()
+assert all(hit["_id"] != "sensor-a" for hit in search("tpot-sensor-status"))
+assert history_documents() == history_before
+print("Manager reads 1004 real status documents, separates clocks/events and removes status without history")
 PY
 docker logs "${TEST_CONTAINER_NAME}" > "${TEST_TMP_ROOT}/logstash.log" 2>&1
 REJECTED="$(grep -c -F 'Rejected sensor heartbeat' "${TEST_TMP_ROOT}/logstash.log" || true)"

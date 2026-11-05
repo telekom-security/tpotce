@@ -77,6 +77,20 @@ The T-Pot logo has one source. The pixels and palette of the ANSI template are `
 
 - **Sensor heartbeat retention**: `tpotctl/elastic.py` shares its safety rules through `Retention` (`EVENTS` / `SENSOR_HISTORY`); `Plan` and `Status` retain their scope. `TPOT_SENSOR_STATUS_RETENTION` controls only `tpot-sensor-heartbeat-*` through policy `tpot-sensor-status` (default 30 days), not the current-status index `tpot-sensor-status`. CLI: `tpot elastic retention --sensor-history`; Elastic page: *Attack events / Sensor history*. Settings plans both changes and asks every shortening question before its single write. The shared `es_retention.sh` job handles both policies and creates missing templates. Templates in `docker/tpotinit/dist/etc/ilm/tpot-sensor-*.json` have byte-identical copies in `docker/elk/logstash/dist/`: Logstash installs them before accepting events to avoid a startup race. Neither path overwrites an existing template; existing unmanaged indices are never enrolled automatically. `test_sensor_heartbeat.py` checks the copies; `docker/_tests/tests/sensor_heartbeat.sh` checks the mappings and actual ILM job against Elasticsearch.
 
+### Sensor heartbeat status
+
+`tpotctl/sensors.py` keeps attack `Seen` and `Heartbeat` separate; `observe` is the shared CLI/UI decision:
+online only below 180 seconds since HIVE receipt, offline from that threshold, no heartbeat unknown, access
+and takeover first. `observations`/`table_rows` drive both six-column tables; `behind` is any known tag mismatch
+against the HIVE runtime configuration. `Sensor.version_checked_at` dates the version read by SSH before
+deployment/reboot; undated legacy cache values are unverified (the old add path stored the HIVE's version).
+Status search paginates the `t-pot_sensor` keyword in batches of 1000, separately from attack aggregation.
+API/format errors are displayed; removing access also deletes only the status document and reports partial
+failure explicitly. In the UI, `SensorsPane` polls every 30 seconds and repaints ages every two with `sync_rows`,
+feeding Status-page counts without another request. Reads are serialized; stale results cannot persist
+hostnames or resurrect removed registry entries. Metadata writes occur only after the UI-thread freshness
+check. `sensor_heartbeat` smoke exercises the Manager against actual Elasticsearch documents and pagination.
+
 ## Conventions
 
 - Commit messages use conventional prefixes (`feat:`, `fix:`, `refactor:`).

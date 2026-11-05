@@ -497,6 +497,25 @@ class StatusPane(Vertical):
         if getattr(self, "shown", None):
             self.show(*self.shown)
 
+    def show_sensors(self, observed, problem: str = "", available: bool = True) -> None:
+        info = Text()
+        if available:
+            active = [item for sensor, _label, item in observed if sensor.access]
+            online = sum(item.state == "online" for item in active)
+            offline = sum(item.state == "offline" for item in active)
+            behind = sum(item.behind for item in active)
+            unknown = sum(item.state == "unknown" for item in active)
+            info.append(f"Sensors: {online} online, {offline} offline, {behind} behind")
+            if unknown:
+                info.append(f" ({unknown} unknown)", style=theme.color("warn"))
+        else:
+            info.append("Sensors: unknown", style=theme.color("warn"))
+        if problem:
+            info.append(f"\n{problem}", style=theme.color("warn"))
+        self.sensor_summary = info
+        if getattr(self, "shown", None):
+            self.show(*self.shown)
+
     def show(self, state: Optional[ops.Status], containers: List[ops.Container], problem: str,
              machine=None, stamp=None) -> None:
         self.shown = (state, containers, problem, machine)
@@ -514,6 +533,9 @@ class StatusPane(Vertical):
             info.append(f"   the T-Pot service (tpot.service) is {state.service}", style=theme.color("error"))
         if problem:
             info.append(f"   {problem}", style=theme.color("error"))
+        if getattr(self, "sensor_summary", None) is not None:
+            info.append("\n")
+            info.append(self.sensor_summary)
         self.query_one("#status-info", Static).update(info)
         # every 2 s: only what changed, so the table neither jumps to the top nor flickers
         self.query_one(NavDataTable).sync_rows(container_rows(containers))
@@ -1496,7 +1518,7 @@ class SensorsPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="sensors-info", classes="info")
-        yield NavDataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
+        yield NavDataTable(id="sensors-table", cursor_type="row", zebra_stripes=True, fixed_columns=1)
         with Horizontal(classes="actions"):
             yield Button("Deploy a sensor", id="sensor-add", variant="primary")
             yield Button("Edit", id="sensor-edit")
@@ -1509,66 +1531,83 @@ class SensorsPane(Vertical):
             yield Button("Take over", id="sensor-import")
 
     def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("Sensor", "Host", "Hostname", "Last seen", "State")
+        from tpotctl.sensors import COLUMNS
+        table = self.query_one(DataTable)
+        table.add_column(COLUMNS[0], width=24)
+        table.add_columns(*COLUMNS[1:])
         self.registry = None
         self.found = []
+        self.reading = self.reload_pending = False
+        self.shown = None
         self.query_one("#sensors-import-actions", Horizontal).display = False
         self.load()
+        self.set_interval(30.0, lambda: self.load(force=False))
+        self.set_interval(2.0, self.repaint)
 
     def stale(self) -> bool:
         return self.app.backend.config_stamp() != getattr(self, "stamp", None)
 
-    def load(self) -> None:
+    def load(self, force: bool = True) -> None:
         """The sensors anew; the stamp is noted here, on the UI thread, so that a refresh right after
         does not start a second read (a thread worker cannot be stopped once it runs)."""
         self.stamp = self.app.backend.config_stamp()
-        self.fetch()
+        if self.reading:
+            self.reload_pending = self.reload_pending or force
+            return
+        self.reading = True
+        self.fetch(self.stamp)
 
     @work(thread=True, exclusive=True, group="sensors")
-    def fetch(self) -> None:
+    def fetch(self, stamp) -> None:
         from tpotctl import sensors as tsensors
         try:
             registry = self.app.backend.sensors()
             status = self.app.backend.sensor_status()
-            tsensors.link_hostnames(registry, status)
             found = registry.file_only()
             problem = ""
         except tsensors.SensorsError as err:
             registry, status, found, problem = None, None, [], str(err)
-        self.app.call_from_thread(self.show, registry, status, problem, found)
+        self.app.call_from_thread(self.finish_fetch, stamp, registry, status, problem, found)
+
+    def finish_fetch(self, stamp, registry, status, problem, found) -> None:
+        from tpotctl import sensors as tsensors
+        self.reading = False
+        if self.reload_pending or stamp != self.app.backend.config_stamp():
+            self.reload_pending = False
+            self.load()
+            return
+        if registry is not None:
+            try:
+                # Only a current snapshot may write metadata; a delayed read must not undo a removal.
+                tsensors.link_hostnames(registry, status)
+            except tsensors.SensorsError as err:
+                problem = str(err)
+        self.show(registry, status, problem, found)
+
+    def repaint(self) -> None:
+        if self.shown is not None:
+            self.show(*self.shown)
 
     def show(self, registry, status, problem: str, found=()) -> None:
+        from tpotctl import sensors as tsensors
+        self.shown = (registry, status, problem, found)
         self.registry = registry
         self.found = list(found)
-        table = self.query_one(DataTable)
-        table.clear()
+        table = self.query_one(NavDataTable)
         info = Text()
         self.query_one("#sensors-import-actions", Horizontal).display = bool(self.found)
         self.query_one("#sensor-import", Button).label = take_over_label(len(self.found), "sensor")
         if registry is None:
+            table.sync_rows([])
             info.append(problem, style=theme.color("error"))
             self.query_one("#sensors-info", Static).update(info)
+            for pane in self.app.query(StatusPane):
+                pane.show_sensors([], problem, available=False)
             return
-        takeable = {entry.name: entry for entry in self.found}
-        for sensor in registry.sensors():
-            seen = status.sensors.get(sensor.name)
-            if not sensor.access and sensor.name in takeable:
-                state = Text(f"{glyphs.g('warn')} no access, in {takeable[sensor.name].source}",
-                             style=theme.color("warn"))
-            elif not sensor.access:
-                state = Text(f"{glyphs.g('fail')} no access", style=theme.color("error"))
-            elif seen:
-                state = Text(f"{glyphs.g('running')} sending", style=theme.color("ok"))
-            else:
-                state = Text(f"{glyphs.g('stopped')} " + ("unknown" if status.problem else "nothing in 7 days"),
-                             style=theme.color("warn"))
-            table.add_row(sensor.name + ("" if sensor.source == "deployed" else f" ({sensor.source})"),
-                          sensor.host or "-", (seen.hostname if seen else sensor.hostname) or "-",
-                          seen.last[:19].replace("T", " ") if seen else "-", state, key=sensor.name)
-        for name, entry in takeable.items():
-            if name not in registry.records:
-                table.add_row(name, "-", "-", "-", Text(f"{glyphs.g('warn')} no access, in {entry.source}",
-                                                        style=theme.color("warn")), key=name)
+        observed = list(tsensors.observations(registry, status, self.found))
+        table.sync_rows(tsensors.table_rows(observed))
+        for pane in self.app.query(StatusPane):
+            pane.show_sensors(observed, "\n".join(p for p in (problem, status.problem) if p))
         if self.found:
             info.append(f"{glyphs.g('warn')} {take_over_hint(self.found, 'sensor', 'LS_WEB_USER')}",
                         style=f"bold {theme.color('warn')}")
@@ -1577,6 +1616,8 @@ class SensorsPane(Vertical):
                         style=theme.color("mist"))
         if registry.migrated:
             info.append(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. ", style=theme.color("magenta"))
+        if problem:
+            info.append(f"\n{problem}", style=theme.color("error"))
         if status.problem:
             info.append(f"\n{status.problem}", style=theme.color("warn"))
         for hostname, seen in sorted(status.unlinked.items()):
@@ -1667,9 +1708,20 @@ class SensorsPane(Vertical):
         except SensorsError as err:
             self.app.notify(str(err), title="Not removed", severity="error", timeout=10)
             return
-        self.app.notify(f"{name} is removed, {note}.", title="Sensors")
         self.load()
         self.app.config_maybe_changed()         # LS_WEB_USER
+        self.remove_status(name, note)
+
+    @work(thread=True, group="sensor-removal")
+    def remove_status(self, name: str, note: str) -> None:
+        from tpotctl import sensors as tsensors
+        try:
+            tsensors.delete_status(name)
+        except tsensors.SensorsError as err:
+            self.app.call_from_thread(self.app.notify, f"{name}: access removed, but {err}. History is unchanged.",
+                                      title="Removal incomplete", severity="error", timeout=10)
+            return
+        self.app.call_from_thread(self.app.notify, f"{name} is removed, {note}.", title="Sensors")
 
 
 

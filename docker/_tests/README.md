@@ -195,7 +195,10 @@ rejections, unchanged normal-event routing and protection against out-of-order
 status writes, keyword mappings (including date-like names/tags) and lifecycle
 assignment only to history. It runs the actual tpotinit job to check policy and
 missing-template creation, preservation of existing templates and unmanaged indices,
-and refusal to shorten history retention on restart. The containers use a temporary
+and refusal to shorten history retention on restart. The Manager reads more than 1000
+real status documents through pagination, keeps attacks and both clocks separate,
+and deletes only the selected status document while leaving history intact.
+The containers use a temporary
 internal network without published ports; HTTP requests use the Elasticsearch image's curl.
 
 The Conpot test starts all nine deployed templates in one Docker network on

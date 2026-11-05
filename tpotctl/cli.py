@@ -1132,29 +1132,12 @@ def sensors_table(registry, status, days: int, found=()):
     """found: the sensors of lswebpasswd / lswebpasswd.lost that can be taken over (Registry.file_only)."""
     from rich import box
     from rich.table import Table
-    from rich.text import Text
+    from tpotctl import sensors as tsensors
     table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
-    for column in ("Sensor", "Host", "Hostname", "Last seen", "State"):
+    for column in tsensors.COLUMNS:
         table.add_column(column, overflow="fold")
-    takeable = {entry.name: entry for entry in found}
-    for sensor in registry.sensors():
-        seen = status.sensors.get(sensor.name)
-        if not sensor.access and sensor.name in takeable:
-            state = Text("to take over", style="yellow")
-        elif not sensor.access:
-            state = Text("no access (LS_WEB_USER)", style="red")
-        elif seen:
-            state = Text("sending", style="green")
-        elif status.problem:
-            state = Text("unknown", style="yellow")
-        else:
-            state = Text(f"nothing in {days} days", style="yellow")
-        source = "" if sensor.source == "deployed" else f" ({sensor.source})"
-        table.add_row(sensor.name + source, sensor.host or "-", (seen.hostname if seen else sensor.hostname) or "-",
-                      seen.last[:19].replace("T", " ") if seen else "-", state)
-    for name, entry in takeable.items():
-        if name not in registry.records:
-            table.add_row(f"{name} ({entry.source})", "-", "-", "-", Text("to take over", style="yellow"))
+    for _key, cells in tsensors.table_rows(tsensors.observations(registry, status, found)):
+        table.add_row(*cells)
     return table
 
 
@@ -1194,7 +1177,7 @@ def run_sensors(args) -> int:
         registry.check_writable()           # before the question: the access could not be written
         if not confirm(f"Revoke the access of {args.name}? It cannot send to this HIVE any more.", args.yes):
             return 1
-        note = registry.revoke(args.name)
+        note = tsensors.remove(registry, args.name)
         say.ok(f"{args.name} is removed, {note}. Nothing was done on the sensor itself.", console.file)
         return 0
     if command == "set":
@@ -1335,6 +1318,13 @@ def run_sensor_add(args, registry, console) -> int:
     # break off nothing halfway (no window between the grant and what takes it back); the playbook gets
     # it from the terminal as well and decides.
     import subprocess
+    from datetime import datetime, timezone
+    version, checked_at = "", ""
+    try:
+        version = tsensors.read_version(host, user, port)
+        checked_at = datetime.now(timezone.utc).isoformat()
+    except tsensors.SensorsError as err:
+        say.warn(f"{err}. Its version stays unknown until a heartbeat reports it.", console.file)
     name = tsensors.new_name(set(registry.records))
     password = tsensors.new_password()
     interrupts: List[int] = []
@@ -1366,7 +1356,7 @@ def run_sensor_add(args, registry, console) -> int:
         try:
             registry.record(tsensors.Sensor(name=name, host=host, ssh_user=user, ssh_port=port, hive_address=hive,
                                             added=time.strftime("%Y-%m-%d %H:%M"),
-                                            version=ops.env_values().get("TPOT_VERSION", ""), source="deployed"))
+                                            version=version, version_checked_at=checked_at, source="deployed"))
         except Exception as err:            # noqa: BLE001 - the sensor works, say what is missing
             say.warn(f"{name} could not be noted ({err}), its access stays. Add where it is with: "
                      f"tpot sensors set {name} --host {host} --ssh-user {user} --ssh-port {port} "

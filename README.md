@@ -736,14 +736,39 @@ A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the *
 
 | Command | Does |
 |---|---|
-| `tpot sensors` | lists the sensors with their access, address, hostname and when they were last seen |
+| `tpot sensors` | lists sensors with their host, version, last heartbeat, last attack event and state |
 | `tpot sensors add` | deploys a sensor over SSH (`./deploy.sh` does the same) |
-| `tpot sensors remove NAME` | revokes the access of a sensor |
+| `tpot sensors remove NAME` | revokes access and deletes the current heartbeat status, retaining history |
 | `tpot sensors set NAME --host … --ssh-user …` | adds where a sensor is, i.e. for sensors of earlier releases |
 | `tpot sensors cert` | shows the addresses the certificate of the **Hive** covers, `--renew` issues it anew, `--distribute` copies it to the sensors |
 | `tpot sensors import` | gives the sensors of `lswebpasswd` / `lswebpasswd.lost` that `LS_WEB_USER` does not name their access back |
 
 The **Hive** keeps a list of its sensors in `~/tpotce/data/sensors.json` (names, addresses, SSH user, date and version, no passwords). Sensors deployed with an earlier release are taken over from `LS_WEB_USER` the first time `tpot sensors` runs, add their addresses with `tpot sensors set` to manage them as well.
+
+### Sensor Heartbeats
+The *Sensors* page and `tpot sensors list` show **Sensor | Host | Version | Heartbeat | Last event | State**.
+Logstash on a sensor sends a heartbeat every minute, even without attacks. **Online** means the Hive received
+one less than 180 seconds ago; exactly 180 seconds is **offline**. The offline time starts at that threshold.
+No heartbeat means **unknown**, not offline, even if attack events are present. **No access** and **to take over**
+take precedence. Online confirms the Logstash-to-Hive connection, **not** that every honeypot is healthy.
+
+Reachability uses the Hive's receive time, not the sensor's clock; a backlog can therefore appear online when
+delivery resumes. Table timestamps are UTC. *Last event* is independent, using the last seven days by default
+(`tpot sensors list --days N`). The Manager refreshes the data every 30 seconds and ages the display every two
+seconds without moving the selected row. The *Status* page summarizes online, offline and behind sensors, and
+also names any unknown ones or retrieval errors.
+On narrow terminals, scroll the table horizontally; the sensor column stays fixed and abbreviates long names.
+
+A heartbeat's version takes precedence over the registry cache. Without a heartbeat, a version read by
+`sensors add` over SSH is marked **checked DATE**. Old cache values have no check date and are marked
+**not checked**: older Managers copied the Hive's version there. A known version different from the Hive's
+configured runtime version is yellow and marked **behind** (including newer or custom tags).
+An older sensor without `~/tpotce/version` can still be deployed; the read failure is reported and its version
+stays unknown until a heartbeat supplies it. Updated Logstash and tpotinit images are needed for heartbeats.
+
+Removing a sensor deletes only its current document in `tpot-sensor-status`, not heartbeat history or attack
+events. A failed status deletion is reported as a partial removal; access stays revoked. Heartbeat history has
+its own [retention](#log-persistence).
 
 ### Planning and Certificates
 The **Sensor** checks the **Hive** against a copy of its certificate (`~/tpotce/data/hive.crt` on the **Sensor**), so the certificate has to cover the address the **Sensor** connects to. **T-Pot Init** only creates a self-signed certificate for one IP of the **Hive** host, which suits simple setups. A **Hive** reachable on more than one address (i.e. RFC 1918 and a public NAT IP) or a domain name needs these as SANs (Subject Alternative Name), otherwise Logstash on the **Sensor** cannot validate the connection. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).
