@@ -90,6 +90,8 @@ failure explicitly. In the UI, `SensorsPane` polls every 30 seconds and repaints
 feeding Status-page counts without another request. Reads are serialized; stale results cannot persist
 hostnames or resurrect removed registry entries. Metadata writes occur only after the UI-thread freshness
 check. `sensor_heartbeat` smoke exercises the Manager against actual Elasticsearch documents and pagination.
+Optional null hostname/IP metadata is removed by ingestion and treated as absent when reading older status
+documents; it must not invalidate other sensors' status.
 
 `python3 -m tpotctl.sensor_dashboard` generates only the `tpot-sensors-*` Kibana objects and updates the
 export ZIP; unrelated NDJSON lines stay byte-identical (`--check` validates both). The status data view has

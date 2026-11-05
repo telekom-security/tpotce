@@ -1452,7 +1452,7 @@ fuSMOKE_PLAN () {
   # mySMOKE_NAMES / mySMOKE_ARGS (one string each), the images they need into
   # mySMOKE_IMAGES (once each) and what has none into mySMOKE_NOTES. A test has the name
   # of its image, tpotinit has tpotinit_env, tpotinit_ilm, tpotinit_kibana,
-  # tpotinit_modes and tpotinit_users, logstash has logstash_fixtures; Elasticsearch,
+  # tpotinit_modes and tpotinit_users, logstash has logstash_fixtures and logstash_sensor; Elasticsearch,
   # Kibana and the Attack Map have none
   local myI myT myHAS
   local -a myTESTS
@@ -1460,7 +1460,7 @@ fuSMOKE_PLAN () {
   for myI in "$@"; do
     case "${myI}" in
       elasticsearch|kibana|map) continue ;;
-      logstash) myTESTS=(logstash_fixtures) ;;
+      logstash) myTESTS=(logstash_fixtures logstash_sensor) ;;
       tpotinit) myTESTS=(tpotinit_env tpotinit_ilm tpotinit_kibana tpotinit_modes tpotinit_users) ;;
       *) myTESTS=("${myI}") ;;
     esac

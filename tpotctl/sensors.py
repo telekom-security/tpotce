@@ -667,6 +667,7 @@ def _heartbeat(hit: dict) -> Heartbeat:
         _timestamp(source["@timestamp"])
         _timestamp(data["started_at"])
         metadata = [source.get(key, "") for key in ("t-pot_hostname", "t-pot_ip_ext", "t-pot_ip_int")]
+        metadata = ["" if value is None else value for value in metadata]
         if any(not isinstance(value, str) or len(value) > 253 for value in metadata):
             raise ValueError("invalid metadata")
         return Heartbeat(_timestamp(data["received_at"]), version, data["started_at"],

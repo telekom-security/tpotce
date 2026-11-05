@@ -51,7 +51,9 @@ def filter(event)
   event.to_hash.keys.each { |key| event.remove(key) unless @fields.include?(key) }
   %w[t-pot_hostname t-pot_ip_ext t-pot_ip_int].each do |key|
     value = event.get(key)
-    if !value.nil? && (!value.is_a?(String) || value.length > 253)
+    if value.nil?
+      event.remove(key)
+    elsif !value.is_a?(String) || value.length > 253
       logger.warn("Ignored malformed sensor heartbeat metadata", :sensor => name, :field => key)
       event.remove(key)
     end

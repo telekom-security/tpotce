@@ -70,6 +70,15 @@ if textual:
             return events.Sources([events.Source("203.0.113.7", 912, "Netherlands", "mass scanner"),
                                    events.Source("198.51.100.2", 40)])
 
+        def sensors(self):
+            from tpotctl import sensors
+            return mock.Mock(spec=sensors.Registry, records={}, migrated=[], env={"TPOT_VERSION": "24.04.2"},
+                             **{"sensors.return_value": [], "file_only.return_value": []})
+
+        def sensor_status(self, days=7):
+            from tpotctl import sensors
+            return sensors.Status()
+
         def host_address(self):
             return "192.0.2.5"
 
@@ -341,6 +350,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(sum(f"Honeypot{n}" in attacks for n in range(5)), 3)
             self.assertIn("last attack", attacks)
             self.assertIn("24 hours", str(app.query_one("#attacks-block").border_subtitle))
+            self.assertIn("Sensors: 0 online, 0 offline, 0 behind", str(app.query_one("#status-info").render()))
             self.assertGreaterEqual(app.query_one("#containers").content_region.height, 10)
 
     async def test_a_stopped_tpot_shows_its_services_not_started(self):

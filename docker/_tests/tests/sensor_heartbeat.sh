@@ -201,9 +201,13 @@ print("Identity, sensor/HIVE clocks, one status, 1:5 history and normal events O
 
 legacy = copy.deepcopy(base)
 legacy["heartbeat"]["version"] = ""
+legacy.update({"t-pot_hostname": None, "t-pot_ip_ext": None, "t-pot_ip_int": None})
 send(legacy, "sensor-b")
 wait_for(lambda: request(es + "/tpot-sensor-status/_doc/sensor-b")["_source"]["heartbeat"]["version"] == "",
          "old tpotinit must retain reachability with an unknown version")
+legacy_status = request(es + "/tpot-sensor-status/_doc/sensor-b")["_source"]
+assert not {"t-pot_hostname", "t-pot_ip_ext", "t-pot_ip_int"}.intersection(legacy_status), legacy_status
+print("Optional null metadata is removed at ingestion")
 
 bad = []
 for field, values in (
@@ -318,6 +322,8 @@ for number in range(1001):
     name = f"batch-sensor-{number:04d}"
     document = copy.deepcopy(saved)
     document["t-pot_sensor"] = name
+    if number == 0:
+        document.update({"t-pot_hostname": None, "t-pot_ip_ext": None, "t-pot_ip_int": None})
     bulk.extend([json.dumps({"index": {"_index": "tpot-sensor-status", "_id": name}}), json.dumps(document)])
 assert not request(es + "/_bulk?refresh=true", "\n".join(bulk) + "\n")["errors"]
 observed = sensors.fetch_status(url=es, opener=manager_open)
@@ -326,6 +332,9 @@ assert len(observed.heartbeats) == 1004, len(observed.heartbeats)
 assert observed.heartbeats["sensor-a"].version == "newer-receipt"
 assert utc(observed.heartbeats["sensor-a"].sensor_at) == sensor_time
 assert "sensor-a" in observed.sensors
+assert observed.heartbeats["batch-sensor-0000"].hostname == ""
+assert observed.heartbeats["batch-sensor-0000"].ip_ext == ""
+assert observed.heartbeats["batch-sensor-0000"].ip_int == ""
 received = observed.heartbeats["sensor-a"].received_at
 for age, state in ((179.999, "online"), (180, "offline")):
     row = sensors.observe(sensors.Sensor("sensor-a"), observed, "hive-release", now=received + age)

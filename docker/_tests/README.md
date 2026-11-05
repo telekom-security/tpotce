@@ -184,6 +184,8 @@ heartbeat and the next one after 60 seconds, checking sequence numbers,
 version and Logstash process-start metadata. This test replaces only the
 HTTP output with a file; the HIVE routing is tested separately. Known
 pre-existing fixture failures are printed explicitly, never silently skipped.
+The image builder's `-T` runs both `logstash_fixtures` and `logstash_sensor`
+against the Logstash image it just built.
 
 `./docker/_tests/run.sh sensor_heartbeat` tests the HIVE's real HTTP input and
 Elasticsearch outputs with the local official images pinned by the Dockerfiles,
@@ -197,6 +199,7 @@ assignment only to history. It runs the actual tpotinit job to check policy and
 missing-template creation, preservation of existing templates and unmanaged indices,
 and refusal to shorten history retention on restart. The Manager reads more than 1000
 real status documents through pagination, keeps attacks and both clocks separate,
+normalizes optional null metadata at ingestion and when reading legacy documents,
 and deletes only the selected status document while leaving history intact.
 The containers use a temporary
 internal network without published ports; HTTP requests use the Elasticsearch image's curl.
@@ -208,6 +211,10 @@ distinct process starts rather than sample counts, and Kibana import plus real d
 It uses a disposable internal network with no published ports and ignores local Compose environment files.
 Startup has a minimum allowance of 240 seconds. The browser check is separate: open *T-Pot Sensors*, verify
 all five views, and choose a one-minute range; old status rows must remain while old history disappears.
+
+`sensor_heartbeat` and `sensor_dashboard` are cross-service source integration tests, not image-builder
+smokes: run them separately with the pinned upstream images available locally. The builder's `-T`
+does not pull those additional images or run these two tests.
 
 The Conpot test starts all nine deployed templates in one Docker network on
 dynamic loopback ports (`--<key>-port` pins one, see `--help`). The probes

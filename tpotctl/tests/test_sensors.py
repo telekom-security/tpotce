@@ -325,6 +325,16 @@ class HeartbeatApiTest(unittest.TestCase):
         self.assertIn("events unavailable", status.problem)
         self.assertIn("sensor-one", status.heartbeats)
 
+    def test_nullable_heartbeat_metadata_does_not_hide_other_sensors(self):
+        nullable = self.hit("sensor-two")
+        nullable["_source"].update({"t-pot_hostname": None, "t-pot_ip_ext": None, "t-pot_ip_int": None})
+        status = self.fetch(self.answer([self.hit(), nullable]))
+        self.assertEqual(status.problem, "")
+        self.assertEqual(set(status.heartbeats), {"sensor-one", "sensor-two"})
+        heartbeat = status.heartbeats["sensor-two"]
+        self.assertEqual((heartbeat.hostname, heartbeat.ip_ext, heartbeat.ip_int), ("", "", ""))
+        self.assertEqual(status.heartbeats["sensor-one"].hostname, "edge")
+
     def test_missing_index_is_requested_as_optional_and_has_no_heartbeats(self):
         requests = []
         def opener(request, timeout):
@@ -364,6 +374,9 @@ class HeartbeatApiTest(unittest.TestCase):
             lambda hit: hit["_source"]["heartbeat"].update(version=5),
             lambda hit: hit["_source"]["heartbeat"].update(sequence=True),
             lambda hit: hit["_source"].update(heartbeat=None),
+            lambda hit: hit["_source"].update({"t-pot_ip_ext": []}),
+            lambda hit: hit["_source"].update({"t-pot_ip_ext": False}),
+            lambda hit: hit["_source"].update({"t-pot_ip_ext": 0}),
         )
         for mutate in mutations:
             hit = self.hit()
