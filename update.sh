@@ -3,6 +3,7 @@
 # an exported CDPATH turns a cd into a search that prints the folder it found ($(cd ... && pwd)
 # gives two lines): every cd of this script means the folder it names
 unset CDPATH
+export TPOT_UPDATE_ACTIVE=1
 
 # Some global vars
 myCOMPOSEFILE="~/tpotce/docker-compose.yml"
@@ -349,10 +350,9 @@ myTPOT_BRANCH="${TPOT_BRANCH}"
 myTPOT_REPO_URL="${TPOT_REPO_URL}"
 myTPOT_SOURCE_GIVEN=""
 
-# The installed T-Pot edition. It only exists as the marker comment at the top of
-# docker-compose.yml (fuEDITION_LINE), a tracked file, so the update overwrites it with the
-# STANDARD edition. Everything needed to put it back is read before the update and
-# handed over to a restarted update.sh through the environment, see fuSELFUPDATE.
+# The installed T-Pot edition is recorded in the marker at the top of the runtime
+# docker-compose.yml (fuEDITION_LINE). Everything needed to put it back is read before
+# the update and handed over to a restarted update.sh through the environment, see fuSELFUPDATE.
 # A restarted update.sh inherits what the first pass already did, so it neither
 # stops T-Pot again nor writes a second backup - and it restores from the FIRST
 # archive, the only one taken before the checkout was reset.
@@ -1009,6 +1009,12 @@ function fuCUSTOM_CHECKSUM () {   # $1 = compose file
 # docker-compose.yml, which is tracked by git, so the `git reset --hard` in
 # fuSELFUPDATE puts the STANDARD edition back. The edition is read here, before
 # anything is stopped, backed up or overwritten.
+function fuSAME_COMPOSE () {
+	[ -f "$1" ] && [ -r "$1" ] && [ -f "$2" ] && [ -r "$2" ] || return 1
+	cmp -s <(sed -E '/^# T-Pot sources sha256: [0-9a-f]{64}[[:space:]]?$/d' "$1") \
+	       <(sed -E '/^# T-Pot sources sha256: [0-9a-f]{64}[[:space:]]?$/d' "$2")
+}
+
 function fuCHECK_EDITION () {
 	local myCOMPOSE=""
 	local myKNOWN=""
@@ -1033,8 +1039,7 @@ function fuCHECK_EDITION () {
 	    echo
 	    return
 	fi
-	# Only the tracked ./docker-compose.yml is overwritten by the update, a compose
-	# file under a different name is untracked and stays as it is.
+	# A compose file configured under a different name is left as it is.
 	myCOMPOSE=$(grep -E "^TPOT_DOCKER_COMPOSE=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d "=" -f2-)
 	myCOMPOSE="${myCOMPOSE:-./docker-compose.yml}"
 	if [ "$(basename "${myCOMPOSE}")" != "docker-compose.yml" ];
@@ -1081,7 +1086,7 @@ function fuCHECK_EDITION () {
 	  else
 	    # A compose file that differs from its own template was edited by the user.
 	    # The update cannot merge that, so it has to be handed back manually.
-	    if ! cmp -s "$HOME/tpotce/docker-compose.yml" "$(fuEDITION_TEMPLATE)";
+	    if ! fuSAME_COMPOSE "$HOME/tpotce/docker-compose.yml" "$(fuEDITION_TEMPLATE)";
 	      then
 	        myCOMPOSE_CUSTOMIZED="1"
 	    fi
@@ -3994,7 +3999,7 @@ function fuRESTORE_UNKNOWN () {
 	    myTEMPLATE="${myTMPDIR}/old_template.yml"
 	    if [ -z "${myCOMMIT}" ] \
 	       || ! git -C "$HOME/tpotce" show "${myCOMMIT}:compose/$(echo "${myEDITION}" | tr '[:upper:]' '[:lower:]').yml" > "${myTEMPLATE}" 2>/dev/null \
-	       || ! cmp -s "${myTEMPLATE}" "${myTMPDIR}/docker-compose.yml";
+	       || ! fuSAME_COMPOSE "${myTEMPLATE}" "${myTMPDIR}/docker-compose.yml";
 	      then
 	        myCOMPOSE_CUSTOMIZED="1"
 	    fi
@@ -4199,6 +4204,7 @@ function fuTPOT_SETUP () {
 # checkout) or without PyYAML, the file is put back unchanged.
 function fuRESTORE_CUSTOM () {
 	local myCUSTOMIZER="$HOME/tpotce/compose/customizer.py" myLINE=""
+	myCOMPOSE_KEPT=""
 	if ! fuCOMPOSE_FROM_ARCHIVE;
 	  then
 	    fuUI_ERROR "Could not take docker-compose.yml from ${myARCHIVE}. Put it back by hand with:"
@@ -4238,10 +4244,80 @@ function fuRESTORE_CUSTOM () {
 	    myEDITION_MISSING="1"
 	    return
 	fi
+	myCOMPOSE_KEPT="1"
 	fuUI_OK "Your docker-compose.yml is restored from the backup."
 	fuUI_WARN "The changes of this release were not applied to it. Run the customizer again to build it anew:"
 	fuUI_HINT "  cd $HOME/tpotce/compose && python3 customizer.py"
 	fuDID warn "Your custom docker-compose.yml is put back as it was, the changes of this release are not in it: run compose/customizer.py again."
+}
+
+function fuSTAMP_RUNTIME_ENV () {
+	[ -z "${myOLDER_CHECKOUT}" ] || return 0
+	local myENV="$HOME/tpotce/.env"
+	if [ ! -f "${myENV}" ];
+	  then
+	    if ! install -m 600 "$HOME/tpotce/env.example" "${myENV}";
+	      then
+	        fuUI_ERROR "The .env is missing and could not be created from env.example."
+	        fuDID fail "The .env is missing and could not be created from env.example."
+	        return 1
+	    fi
+	fi
+	if ! python3 "$HOME/tpotce/tpotctl/generated.py" stamp-env --file "${myENV}" --root "$HOME/tpotce";
+	  then
+	    fuUI_ERROR "The .env could not be stamped or secured."
+	    fuUI_HINT "Check ${myENV}, then run update.sh again."
+	    fuDID fail "The .env could not be stamped or secured."
+	    return 1
+	fi
+	fuDID ok "The .env is private and its release sources are stamped."
+}
+
+function fuINSTALL_GIT_HOOKS () {
+	[ -z "${myOLDER_CHECKOUT}" ] || return 0
+	if ! python3 "$HOME/tpotce/tpotctl/git_hooks.py" install --root "$HOME/tpotce";
+	  then
+	    fuUI_WARN "The T-Pot Git freshness hooks could not be installed; other Git hooks were left alone."
+	    fuDID warn "The T-Pot Git freshness hooks could not be installed; other Git hooks were left alone."
+	    return 1
+	fi
+	return 0
+}
+
+function fuSTAMP_RUNTIME_COMPOSE () {
+	[ -z "${myOLDER_CHECKOUT}" ] || return 0
+	if [ -n "${myCOMPOSE_KEPT}" ];
+	  then
+	    fuDID warn "The compose file was not rebuilt; its previous source fingerprint is kept."
+	    return 0
+	fi
+	local myFILE="$HOME/tpotce/docker-compose.yml" myCONFIG="" myKIND=""
+	myCONFIG=$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_DOCKER_COMPOSE)
+	if [ -n "${myCONFIG}" ] && [ "$(basename "${myCONFIG}")" != "docker-compose.yml" ];
+	  then
+	    fuDID warn "The configured compose file ${myCONFIG} is kept as-is; release sources are not applied to it automatically."
+	    return 0
+	fi
+	[ -f "${myFILE}" ] || return 0
+	myKIND=$(fuCOMPOSE_KIND "${myFILE}")
+	case "${myKIND}" in
+	  OWN)
+	    fuUI_WARN "docker-compose.yml is self-managed; release compatibility is not checked."
+	    fuDID warn "docker-compose.yml is self-managed; release compatibility is not checked."
+	    return 0 ;;
+	  V1)
+	    fuUI_WARN "Your docker-compose.yml needs to be rebuilt by the current customizer before its sources can be stamped."
+	    fuDID warn "The old customizer file has no current source fingerprint; regenerate it with the customizer."
+	    return 0 ;;
+	esac
+	if ! python3 "$HOME/tpotce/tpotctl/generated.py" stamp-compose --file "${myFILE}" --root "$HOME/tpotce";
+	  then
+	    fuUI_ERROR "docker-compose.yml could not be stamped for this release."
+	    fuUI_HINT "Check ${myFILE}, then run update.sh again."
+	    fuDID fail "docker-compose.yml could not be stamped for this release."
+	    return 1
+	fi
+	fuDID ok "docker-compose.yml is stamped for this release."
 }
 
 # A docker-compose.yml restored from the backup can still hold services of the
@@ -4736,16 +4812,19 @@ fuBACKUP
 fuMARK phase selfupdate Updating the checkout
 # --adapt-compose also when the answer at the terminal was "adapt" (fuADOPT_CHOICE): the restarted script does not ask again
 fuSELFUPDATE "$@" ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"} ${myADAPT_COMPOSE:+--adapt-compose}
+fuINSTALL_GIT_HOOKS || true
 # The config and the edition have to be back in place before the images are
 # pulled, `docker compose pull` reads both.
 fuMARK phase restore Putting your configuration back
 fuRESTORE
+fuSTAMP_RUNTIME_ENV || exit 1
 # PyYAML and the venv module before the compose file is adapted (fuRESTORE_EDITION): installed also when
 # the run is refused later on (a cancel of the compose file, the Elasticsearch checks), the release needs
 # them either way
 fuCUSTOMIZER_DEPS
 fuRESTORE_EDITION
 fuREMOVE_DROPPED_SERVICES
+fuSTAMP_RUNTIME_COMPOSE || exit 1
 
 # Everything below belongs to the release of the checkout - the image tag .env now
 # carries, and the cleanup that removes every other tag. On an older checkout that

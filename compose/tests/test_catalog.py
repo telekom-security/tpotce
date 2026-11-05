@@ -37,7 +37,8 @@ class CatalogTest(unittest.TestCase):
         """T-Pot runs on Linux only: no MAC_WIN edition and no linux_only flag in the catalogue."""
         self.assertNotIn("MAC_WIN", self.catalog.editions)
         self.assertFalse(os.path.exists(os.path.join(core.COMPOSE_DIR, "mac_win.yml")))
-        self.assertNotIn("linux_only", open(core.CATALOG_FILE, encoding="utf-8").read())
+        with open(core.CATALOG_FILE, encoding="utf-8") as handle:
+            self.assertNotIn("linux_only", handle.read())
 
     def test_every_service_has_metadata(self):
         groups = {g for g, _title in core.GROUPS}
@@ -150,11 +151,6 @@ class CatalogTest(unittest.TestCase):
         for compose in self.catalog.editions.values():
             with open(compose.path, encoding="utf-8") as handle:
                 self.assertNotIn("x-tpot", handle.read(), compose.path)
-
-    def test_root_compose_is_standard(self):
-        with open(os.path.join(core.REPO_DIR, "docker-compose.yml"), encoding="utf-8") as root, \
-                open(self.catalog.editions["STANDARD"].path, encoding="utf-8") as standard:
-            self.assertEqual(root.read(), standard.read())
 
     def test_catalog_ports_parse(self):
         for compose in [self.catalog.catalog] + list(self.catalog.editions.values()):

@@ -635,8 +635,8 @@ function fuSTART_TPOT () {
 	myTPOT_STOPPED=""
 }
 
-# The rollback comes first: a `git reset --hard` puts .env and docker-compose.yml
-# back to the state of the commit, so it would overwrite anything done after it.
+# Roll back before restoring the configuration: a reset can replace tracked files
+# such as .env and, on older checkouts, docker-compose.yml.
 function fuDO_GIT () {
 	local myCOMMIT=""
 	[ -z "${myDO_GIT}" ] && return
@@ -709,12 +709,10 @@ function fuDO_CONFIG () {
 	fi
 }
 
-# tracked.patch covers every change to tracked files, so .env and
-# docker-compose.yml as well. It describes them against the commit, which is why it
-# runs right after the rollback and still before the single-file copies - on a tree
-# where .env already holds the changed content it no longer applies. The copies
-# afterwards write the same content once more, which costs nothing and covers the
-# case where only the configuration was picked.
+# tracked.patch covers changes to tracked files (including .env while it is tracked).
+# The runtime docker-compose.yml is restored separately from the archive. The patch
+# describes changes against the commit, so it runs right after rollback and before
+# the single-file copies.
 function fuDO_PATCH () {
 	[ -z "${myDO_PATCH}" ] && return
 	fuMARK phase patch Applying your changes to tracked files

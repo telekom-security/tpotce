@@ -362,6 +362,8 @@ class CliTest(unittest.TestCase):
 
     def setUp(self):
         self.repo = checkout(self)
+        from tpotctl.tests import current_configuration
+        current_configuration(self, self.repo)
         original = self.Registry = sensors.Registry
         self.patches = [
             mock.patch.object(sensors, "Registry", lambda repo_dir=None, hasher=fake_hash:

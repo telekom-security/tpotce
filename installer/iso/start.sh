@@ -522,7 +522,7 @@ fuISO_CLONE () {
   [ -d "${myDEST}/.git" ] && [ -n "${myCOMMIT}" ] \
     && [ "$(fuNORMALIZE_REPO "$(git -C "${myDEST}" remote get-url origin 2>/dev/null)")" = "${myISO_REPO}" ] \
     && [ "$(git -C "${myDEST}" rev-parse HEAD 2>/dev/null)" = "${myCOMMIT}" ] \
-    && [ -z "$(git -C "${myDEST}" status --porcelain 2>/dev/null)" ]
+    && [ -z "$(git -C "${myDEST}" status --porcelain -- . ':(exclude).env' ':(exclude)docker-compose.yml' 2>/dev/null)" ]
 }
 
 fuGIT_CLONE () {
@@ -557,7 +557,7 @@ fuCLONE () {
           [ -z "${myASIDE}" ] || mv "${myASIDE}" "${myDEST}"
           fuSTOP "Could not clone ${myREPO} at ${myBRANCH}." "Check the network and the name, then: ${myAGAIN}"
       fi
-      [ -z "${myASIDE}" ] || rm -rf "${myASIDE}"
+      [ -z "${myASIDE}" ] || fuUI_HINT "Previous ISO checkout kept at ${myASIDE}, including its local files."
   fi
   [ -f "${myDEST}/install.sh" ] || fuSTOP "${myREPO} at ${myBRANCH} has no install.sh." "Remove ${myDEST} and pick another branch: bash ${myDIR}/start.sh"
   fuSTART "${myDEST}"

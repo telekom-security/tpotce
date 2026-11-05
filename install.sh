@@ -2149,6 +2149,31 @@ if [ ! -f "${HOME}/tpotce/installer/install/tpot.yml" ];
     fi
 fi
 myANSIBLE_TPOT_PLAYBOOK="${HOME}/tpotce/installer/install/tpot.yml"
+myHOOKS_WARNING=""
+if [ ! -f "${HOME}/tpotce/tpotctl/git_hooks.py" ];
+  then
+    myHOOKS_WARNING="This checkout has no T-Pot Git freshness hooks."
+elif ! python3 "${HOME}/tpotce/tpotctl/git_hooks.py" install --root "${HOME}/tpotce";
+  then
+    myHOOKS_WARNING="The T-Pot Git freshness hooks could not be installed; other Git hooks were left alone."
+fi
+[ -z "${myHOOKS_WARNING}" ] || fuUI_WARN "${myHOOKS_WARNING}"
+if [ ! -f "${myTPOT_CONF_FILE}" ];
+  then
+    install -m 600 "${HOME}/tpotce/env.example" "${myTPOT_CONF_FILE}" \
+      || install_failed "The T-Pot config file could not be created" "Check ${HOME}/tpotce/env.example and run the installer again"
+fi
+if [ -f "${HOME}/tpotce/tpotctl/generated.py" ];
+  then
+    if ! python3 "${HOME}/tpotce/tpotctl/generated.py" stamp-env --file "${myTPOT_CONF_FILE}" --root "${HOME}/tpotce";
+      then
+        install_failed "The T-Pot config file could not be secured" "Check ${myTPOT_CONF_FILE} and run the installer again"
+    fi
+  else
+    chmod 600 "${myTPOT_CONF_FILE}" \
+      || install_failed "The T-Pot config file could not be secured" "Check ${myTPOT_CONF_FILE} and run the installer again"
+    fuUI_WARN "This checkout predates generated configuration; source fingerprints are not available."
+fi
 echo
 
 # -U before the playbook sets the automatic updates up: they read .env every time they run
@@ -2244,6 +2269,11 @@ if [ -n "${myCUSTOM_COMPOSE}" ];
     fuUI_INFO "Installing T-Pot ${myEDITION}."
     cp "${HOME}/tpotce/compose/${myEDITION}.yml" "${HOME}/tpotce/docker-compose.yml"
 fi
+if [ -f "${HOME}/tpotce/tpotctl/generated.py" ] \
+   && ! python3 "${HOME}/tpotce/tpotctl/generated.py" stamp-compose --file "${HOME}/tpotce/docker-compose.yml" --root "${HOME}/tpotce";
+  then
+    install_failed "The T-Pot compose file could not be stamped" "Check ${HOME}/tpotce/docker-compose.yml and run the installer again"
+fi
 
 if [ "${myTPOT_TYPE}" == "HIVE" ];
   # If T-Pot Type is HIVE write the WebUI username and password
@@ -2324,6 +2354,7 @@ if [ -n "${myCUSTOM_COMPOSE}" ];
 fi
 [ "${myTPOT_TYPE}" = "HIVE" ] && mySUMMARY+=("ok:The web user ${myWEB_USER} is set up")
 [ -n "${myPULL_FAILED}" ] && mySUMMARY+=("warn:Not all images could be pulled, T-Pot tries again when it starts")
+[ -n "${myHOOKS_WARNING}" ] && mySUMMARY+=("warn:${myHOOKS_WARNING}")
 mySUMMARY+=("${myTPOT_ITEM}")
 [ -n "${myINFO}" ] && mySUMMARY+=("info:${myINFO}")
 mySUMMARY+=("next:Reboot, then re-connect via SSH on tcp/64295")

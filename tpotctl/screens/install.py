@@ -421,8 +421,10 @@ class InstallApp(ArrowNav, App):
                                                               f"{self.answers.edition.key}.yml")
         env_path = os.path.join(self.repo_dir, ".env")
         try:
-            self.env_settings = Settings(env_path, EnvFile(env_path), envschema.load_schema(),
-                                     envschema.compose_services(compose))
+            source = env_path if os.path.lexists(env_path) else os.path.join(self.repo_dir, "env.example")
+            env = EnvFile(source)
+            env.path = env_path
+            self.env_settings = Settings(env_path, env, envschema.load_schema(), envschema.compose_services(compose))
         except envschema.SchemaError as err:
             self.env_settings = None
             self.notify(f"{envschema.SCHEMA_PATH} does not hold together ({err}), the settings stay as they are.",
@@ -553,10 +555,10 @@ class InstallApp(ArrowNav, App):
         self.really_install()
 
     def really_install(self) -> None:
-        if self.answers.settings and getattr(self, "env_settings", None):
+        if getattr(self, "env_settings", None):
             from tpotctl.settings import SettingsError
             try:
-                self.env_settings.change(self.answers.settings)
+                self.env_settings.change(self.answers.settings, installing=True)
             except SettingsError as err:
                 self.notify(str(err), title="Settings not written", severity="error", timeout=10)
                 return

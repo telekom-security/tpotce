@@ -1200,11 +1200,14 @@ def compose_check(path: str, repo_dir: str = REPO_DIR) -> Optional[str]:
     if not shutil.which("docker"):
         return None
     env_file = os.path.join(repo_dir, ".env")
+    options = []
     if not os.path.exists(env_file):
         env_file = os.path.join(repo_dir, "env.example")
+        options = ["--no-env-resolution"]
     try:
         proc = subprocess.run(
-            ["docker", "compose", "--project-directory", repo_dir, "--env-file", env_file, "-f", path, "config", "-q"],
+            ["docker", "compose", "--project-directory", repo_dir, "--env-file", env_file, "-f", path,
+             "config", "-q"] + options,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -1218,6 +1221,11 @@ def compose_check(path: str, repo_dir: str = REPO_DIR) -> Optional[str]:
 
 def write_output(text: str, path: str, repo_dir: str = REPO_DIR) -> None:
     """Write atomically, only after docker compose accepted the file."""
+    from tpotctl import generated
+    try:
+        text = generated.stamp_text(text, generated.configuration_fingerprint(text, repo_dir, "compose"))
+    except generated.GeneratedError as err:
+        raise CustomizerError(str(err)) from err
     directory = os.path.dirname(os.path.abspath(path))
     handle, temp = tempfile.mkstemp(prefix=".customizer-", suffix=".yml", dir=directory)
     try:

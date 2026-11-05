@@ -164,6 +164,10 @@ class HptestTest(unittest.TestCase):
 
 class ChecksCliTest(unittest.TestCase):
 
+    def setUp(self):
+        from tpotctl.tests import current_configuration
+        self.repo = current_configuration(self)
+
     def run_cli(self, *argv):
         from tpotctl import cli
         out, err = io.StringIO(), io.StringIO()
@@ -528,7 +532,8 @@ class ChecksCliTest(unittest.TestCase):
                 "from unittest import mock\n"
                 "from tpotctl.tests import isolate\n"
                 "isolate()\n"
-                "from tpotctl import cli\n"
+                "from tpotctl import cli, ops\n"
+                "check_current = ops.require_config_current\n"
                 "from tpotctl.checks import run as trun, stages\n"
                 "time.sleep(0.5)\n"           # the parent closes the pipe meanwhile
                 "row = stages.Row('cowrie')\n"
@@ -541,6 +546,7 @@ class ChecksCliTest(unittest.TestCase):
                 "    def print(self, what):\n"
                 "        print('table', flush=True)\n"
                 "patches = [mock.patch.object(trun, 'Check', return_value=check), "
+                f"mock.patch.object(ops, 'require_config_current', lambda: check_current({self.repo!r})), "
                 "mock.patch('tpotctl.ops.linux_host', return_value=True)]\n"
                 "if sys.argv[1] == 'plain':\n"
                 "    patches.append(mock.patch('tpotctl.cli._console', return_value=Plain()))\n"

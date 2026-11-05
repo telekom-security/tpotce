@@ -184,7 +184,7 @@ def adopt(catalog, args):
         return 0
     output = args.output or os.path.join(core.REPO_DIR, "docker-compose-custom.yml")
     try:
-        core.write_output(text, output)        # a temp file and os.replace: all or nothing
+        core.write_output(text, output)  # a temp file and os.replace
     except (OSError, core.CustomizerError) as err:
         say.error(f"{output} is not written: {' '.join(str(err).split())}")
         return 2

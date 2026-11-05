@@ -18,7 +18,7 @@ from tpotctl.tests import test_scripts as base
 from tpotctl.tests import test_ui as ui
 from tpotctl.tests.test_installer import BEST_EFFORT, OS_RELEASES, SUPPORT_POLICY
 
-from tpotctl import installer
+from tpotctl import generated, installer
 
 REPO = base.REPO
 UNAME = base.UNAME               # Linux, FAKE_UNAME_S says otherwise
@@ -161,7 +161,12 @@ class InstallShTest(Scripts):
         # the clone the playbook would make: the installer finds its playbook, nothing is cloned
         write(os.path.join(self.tpotce, "installer", "install", "tpot.yml"), "- hosts: all\n")
         for edition in ("standard", "sensor", "mobile"):
-            write(os.path.join(self.tpotce, "compose", f"{edition}.yml"), "services: {}\n")
+            write(os.path.join(self.tpotce, "compose", f"{edition}.yml"),
+                  f"# T-Pot: {edition.upper()}\nservices: {{}}\n")
+        os.makedirs(os.path.join(self.tpotce, "tpotctl"), exist_ok=True)
+        shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.tpotce, "env.example"))
+        for name in ("generated.py", "git_hooks.py"):
+            shutil.copy(os.path.join(REPO, "tpotctl", name), os.path.join(self.tpotce, "tpotctl", name))
         write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\nWEB_USER=\n")
         # install.sh as it runs from a download: no clone around it
         self.script = os.path.join(self.home, "src", "install.sh")
@@ -170,8 +175,49 @@ class InstallShTest(Scripts):
     def install(self, *args, **env):
         return self.run_merged(self.script, *args, TPOT_INSTALL_PACKAGES_DONE="1", **env)
 
+    def expected_env(self, text):
+        fingerprint = generated.configuration_fingerprint(text, self.tpotce, "env")
+        return generated.stamp_text(text, fingerprint)
+
     def test_help(self):
         self.assert_help("install.sh", self.run_script(self.script, "-h"))
+
+    def test_missing_freshness_hooks_are_named_in_the_final_summary(self):
+        result = self.install("-s", "-t", "s")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        summary = result.stdout[result.stdout.rindex("T-Pot is installed"):]
+        self.assertIn("Git freshness hooks could not be installed", summary)
+
+    def test_installing_a_checkout_without_generated_configuration_helpers(self):
+        for name in ("generated.py", "git_hooks.py"):
+            os.unlink(os.path.join(self.tpotce, "tpotctl", name))
+        path = os.path.join(self.tpotce, ".env")
+        for existing in (True, False):
+            with self.subTest(existing=existing):
+                write(os.path.join(self.home, "calls"), "")
+                write(path, "TPOT_TYPE=HIVE\nWEB_USER=\nLOCAL_VALUE=keep\n", 0o644)
+                if not existing:
+                    os.unlink(path)
+                result = self.install("-s", "-t", "s")
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertIn("ansible-playbook", self.calls())
+                self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+                with open(path, encoding="utf-8") as handle:
+                    text = handle.read()
+                if existing:
+                    self.assertIn("LOCAL_VALUE=keep", text)
+                self.assertNotIn("T-Pot sources sha256:", text)
+                self.assertIn("source fingerprints are not available", result.stdout)
+                self.assertNotIn("can't open file", result.stdout)
+                with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), "# T-Pot: SENSOR\nservices: {}\n")
+
+    def test_a_failing_present_stamp_helper_is_not_treated_as_an_old_checkout(self):
+        write(os.path.join(self.tpotce, "tpotctl", "generated.py"), "raise SystemExit(1)\n")
+        result = self.install("-s", "-t", "s")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertNotIn("ansible-playbook", self.calls())
+        self.assertIn("config file could not be secured", result.stdout)
 
     def test_support_tiers_in_classic_and_assistant_engine_runs(self):
         for name, (text, state) in OS_RELEASES.items():
@@ -197,7 +243,7 @@ class InstallShTest(Scripts):
 
     def test_mobile_installs_on_raspberry_pi_os_64bit_and_not_on_32bit_raspbian(self):
         """Raspberry Pi OS (64-bit) says Debian GNU/Linux, only the 32-bit one Raspbian GNU/Linux."""
-        mobile_compose = "services:\n  mobile: {}\n"
+        mobile_compose = "# T-Pot: MOBILE\nservices:\n  mobile: {}\n"
         write(os.path.join(self.tpotce, "compose", "mobile.yml"), mobile_compose)
         write(os.path.join(self.home, "os-release"), OS_RELEASES["pi with debian identity"][0])
         result = self.install("-s", "-t", "m")
@@ -206,7 +252,9 @@ class InstallShTest(Scripts):
         self.assertNotIn("best effort", result.stdout)
         self.assertIn("T-Pot mobile is installed (MOBILE)", result.stdout)
         with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
-            self.assertEqual(handle.read(), mobile_compose)
+            compose = handle.read()
+        fingerprint = generated.configuration_fingerprint(mobile_compose, self.tpotce, "compose")
+        self.assertEqual(compose, generated.stamp_text(mobile_compose, fingerprint))
         write(os.path.join(self.home, "os-release"), OS_RELEASES["raspbian"][0])
         write(os.path.join(self.home, "calls"), "")
         result = self.install("-s", "-t", "m")
@@ -568,7 +616,8 @@ class InstallShTest(Scripts):
                 result = self.install("-s", "-t", "h", "-u", "admin", "-p", "Secret-pw-4711")
                 self.assertEqual(result.returncode, 0, result.stdout[-1500:])
                 with open(env, encoding="utf-8") as handle:
-                    self.assertEqual(handle.read(), f"TPOT_TYPE=HIVE\nWEB_USER={entry}\n")
+                    expected = f"TPOT_TYPE=HIVE\nWEB_USER={entry}\n"
+                    self.assertEqual(handle.read(), self.expected_env(expected))
 
     def test_U_turns_the_automatic_updates_off_before_the_playbook(self):
         """-U writes TPOT_AUTO_UPDATES=DISABLED into .env before the playbook sets the updates up (a run
@@ -584,14 +633,14 @@ class InstallShTest(Scripts):
                 result = self.install("-s", "-t", "s", "-U")
                 self.assertEqual(result.returncode, 0, result.stdout[-1500:])
                 with open(env, encoding="utf-8") as handle:
-                    self.assertEqual(handle.read(), after)
+                    self.assertEqual(handle.read(), self.expected_env(after))
                 self.assertLess(result.stdout.index("TPOT_AUTO_UPDATES=DISABLED"), result.stdout.index("PLAY [T-Pot]"))
         write(env, "TPOT_TYPE=HIVE\nWEB_USER=\n")
         result = self.install("-s", "-t", "s")
         self.assertEqual(result.returncode, 0, result.stdout[-1500:])
         self.assertNotIn("TPOT_AUTO_UPDATES", result.stdout)
         with open(env, encoding="utf-8") as handle:
-            self.assertEqual(handle.read(), "TPOT_TYPE=HIVE\nWEB_USER=\n")
+            self.assertEqual(handle.read(), self.expected_env("TPOT_TYPE=HIVE\nWEB_USER=\n"))
         self.assertIn("-U", self.run_script(self.script, "-h").stdout)
 
     def test_a_port_conflict_ends_with_a_summary(self):

@@ -7,6 +7,7 @@ tpotinit have to pass (docker/_tests/tests/tpotinit_env.sh).
 import os
 import re
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -32,17 +33,14 @@ def example_values():
     return EnvFile(ENV_EXAMPLE).values()
 
 
-class ShippedEnvTest(unittest.TestCase):
+class RuntimeConfigTest(unittest.TestCase):
 
-    def test_the_shipped_env_is_env_example(self):
-        """install.sh takes the .env of the checkout as the config of a new
-        install, so it is the same file as env.example: a key added to one only would be missing
-        on every new T-Pot."""
-        with open(ENV_EXAMPLE, "rb") as handle:
-            example = handle.read()
-        with open(os.path.join(REPO_DIR, ".env"), "rb") as handle:
-            shipped = handle.read()
-        self.assertEqual(shipped, example, ".env differs from env.example: cp env.example .env")
+    def test_root_compose_is_not_tracked(self):
+        """The selected edition is created per installation, not shipped by Git."""
+        result = subprocess.run(
+            ["git", "-C", REPO_DIR, "ls-files", "--error-unmatch", "--", "docker-compose.yml"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0, "docker-compose.yml must not be tracked")
 
 
 @unittest.skipUnless(yaml, "PyYAML is not installed")

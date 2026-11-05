@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Set
 
-from tpotctl import envschema, ops
+from tpotctl import envschema, generated, ops
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.envfile import EnvError, EnvFile
 
@@ -62,6 +62,13 @@ class Settings:
         values = self.values if values is None else values
         found = envschema.validate(values, self.services, self.schema)
         found += self.passwd_problems(values, found)
+        state = generated.configuration_status(os.path.dirname(os.path.abspath(self.path)),
+                                               values.get("TPOT_DOCKER_COMPOSE", ""))
+        found += [envschema.Problem("warning", "TPOT_DOCKER_COMPOSE", text) for text in state.warnings]
+        if values.get("TPOT_DOCKER_COMPOSE", "") != self.values.get("TPOT_DOCKER_COMPOSE", ""):
+            found += [envschema.Problem("error", "TPOT_DOCKER_COMPOSE",
+                      f"{name} is missing, unreadable or out of date with this checkout. "
+                      "Apply the current sources before selecting this compose file.") for name in state.drift]
         if offered:
             defaults = {key: rule.default for key, rule in self.schema.items()}
             for rule in self.schema.values():
@@ -117,9 +124,11 @@ class Settings:
         rule = self.schema.get(key)
         return rule is not None and not rule.editable and bool(rule.unlock) and key not in MANAGED_BY
 
-    def change(self, changes: Dict[str, str], unlocked: Iterable[str] = ()) -> List[envschema.Problem]:
+    def change(self, changes: Dict[str, str], unlocked: Iterable[str] = (), *,
+               installing: bool = False) -> List[envschema.Problem]:
         """Write the changes, give back the warnings that remain; SettingsError if not written.
-        A fixed key is only written if it is in unlocked (and can be unlocked)."""
+        A fixed key is only written if it is in unlocked (and can be unlocked).
+        Only the installation assistant writes before install.sh prepares the runtime compose file."""
         unlocked = set(unlocked)
         for key in changes:
             rule = self.schema.get(key)
@@ -134,14 +143,19 @@ class Settings:
         errors = self.blocking(problems, changes)
         if errors:
             raise SettingsError("; ".join(f"{p.key}: {p.text}" for p in errors))
+        if not installing:
+            try:
+                ops.require_config_current(os.path.dirname(os.path.abspath(self.path)))
+            except ops.ConfigDriftError as err:
+                raise SettingsError(str(err)) from err
         try:
             for key, value in changes.items():
                 if self.values.get(key) != value:
                     self.env.set(key, value, system=self.schema[key].section == "system")
-            self.env.save()
+            self.env.save(create=installing)
         except EnvError as err:
             raise SettingsError(str(err))
-        return [p for p in problems if p.key in changes]
+        return [p for p in problems if p.key in changes or p.key == "TPOT_DOCKER_COMPOSE"]
 
 
 def load(repo_dir: str = REPO_DIR, schema_path: str = envschema.SCHEMA_PATH) -> Settings:

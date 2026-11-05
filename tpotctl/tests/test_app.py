@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from tpotctl.tests import isolate  # noqa: E402
@@ -31,6 +32,9 @@ if textual:
 
         def linux_host(self):
             return self.host
+
+        def config_stamp(self):
+            return ()
 
         def status(self):
             self.calls.append("status")
@@ -255,7 +259,29 @@ if textual:
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
+class BackendConfigFreshnessTest(unittest.TestCase):
+
+    def test_kibana_mutations_stop_before_loading_runtime_paths_when_config_is_stale(self):
+        from tpotctl import kibana_objects as ko
+        backend = tapp.Backend()
+        actions = (lambda: backend.kibana_update(False),
+                   lambda: backend.kibana_prune(set()),
+                   lambda: backend.kibana_restore("/backup.ndjson"))
+        with mock.patch("tpotctl.ops.require_config_current",
+                        side_effect=ops.ConfigDriftError("Run tpot update first.")), \
+                mock.patch("tpotctl.ops.kibana_dirs") as dirs:
+            for action in actions:
+                with self.subTest(action=action), self.assertRaisesRegex(ko.KibanaError, "Run tpot update first"):
+                    action()
+        dirs.assert_not_called()
+
+
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
 class MenuTest(unittest.IsolatedAsyncioTestCase):
+
+    def setUp(self):
+        from tpotctl.tests import current_configuration
+        current_configuration(self)
 
     async def test_theme_and_panes(self):
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
@@ -1933,13 +1959,14 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runner.commands, [])
 
     def test_readme_matrix_names_every_command_and_where(self):
-        import re
+        import argparse
         with open(os.path.join(cli.REPO_DIR, "README.md"), encoding="utf-8") as handle:
             readme = handle.read()
         start = readme.index("## The T-Pot Manager (tpot)")
         section = readme[start:readme.index("\n## ", start + 10)]
         self.assertIn("| Command | Menu | Where | Does |", section)
-        names = re.findall(r"^    (\w+)\s", cli.build_parser().format_help(), re.M)
+        sub = next(a for a in cli.build_parser()._actions if isinstance(a, argparse._SubParsersAction))
+        names = sub.choices
         self.assertGreater(len(names), 15)
         for name in names:
             self.assertTrue(f"`tpot {name}" in section or f"`{name}`" in section, name)

@@ -10,9 +10,27 @@
     remote_cert_path: "~/tpotce/data/hive.crt"
     remote_sensor_yml_path: "~/tpotce/compose/sensor.yml"
     remote_docker_compose_path: "~/tpotce/docker-compose.yml"
+    remote_generated_path: "~/tpotce/tpotctl/generated.py"
     env_file_path: "~/tpotce/.env"
 
   tasks:
+    - name: Check the runtime configuration exists on the sensor
+      ansible.builtin.stat:
+        path: "{{ env_file_path }}"
+      register: my_sensor_env
+
+    - name: Refuse to create an incomplete sensor configuration
+      ansible.builtin.assert:
+        that:
+          - my_sensor_env.stat.exists
+          - my_sensor_env.stat.isreg
+        fail_msg: "The sensor has no complete ~/tpotce/.env. Install or update T-Pot on the sensor first."
+
+    - name: Look for generated configuration support on the sensor
+      ansible.builtin.stat:
+        path: "{{ remote_generated_path }}"
+      register: my_sensor_generated
+
     - name: Ensure the destination directory exists
       ansible.builtin.file:
         path: "{{ remote_cert_path | dirname }}"
@@ -59,6 +77,23 @@
       ansible.builtin.command:
         cmd: "cp {{ remote_sensor_yml_path }} {{ remote_docker_compose_path }}"
 
+    - name: Stamp the generated compose file on the sensor
+      ansible.builtin.command:
+        argv:
+          - python3
+          - "{{ remote_generated_path }}"
+          - stamp-compose
+          - --file
+          - "{{ remote_docker_compose_path }}"
+          - --root
+          - "~/tpotce"
+      when: my_sensor_generated.stat.isreg | default(false)
+
+    - name: Explain compatibility with an older sensor
+      ansible.builtin.debug:
+        msg: "This sensor predates generated configuration; update T-Pot on it to enable source fingerprints."
+      when: not (my_sensor_generated.stat.isreg | default(false))
+
     - name: Update T-POT_HIVE_USER in .env
       ansible.builtin.lineinfile:
         path: "{{ env_file_path }}"
@@ -76,21 +111,18 @@
         path: "{{ env_file_path }}"
         regexp: '^TPOT_TYPE='
         line: 'TPOT_TYPE=SENSOR'
-        create: yes
 
     - name: Ensure WEB_USER is empty in .env
       ansible.builtin.lineinfile:
         path: "{{ env_file_path }}"
         regexp: '^WEB_USER='
         line: 'WEB_USER='
-        create: yes
 
     - name: Ensure LS_WEB_USER is empty in .env
       ansible.builtin.lineinfile:
         path: "{{ env_file_path }}"
         regexp: '^LS_WEB_USER='
         line: 'LS_WEB_USER='
-        create: yes
 
     - name: Reboot the sensor
       become: yes

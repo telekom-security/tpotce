@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
-from tpotctl import bootstrap, installer, ops, say
+from tpotctl import bootstrap, generated, installer, ops, say
 from tpotctl.bootstrap import REPO_DIR
 
 BACKUP_DIR = os.path.join(os.path.expanduser("~"), "tpot_backups")
@@ -95,7 +95,7 @@ def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = 
     in_use = ops.compose_path(repo_dir)
     edition_file = os.path.join(repo_dir, "compose", f"{name.lower()}.yml")
     known = name.lower() in choices or os.path.isfile(edition_file)
-    unchanged = known and _read(in_use) == _read(edition_file)
+    unchanged = known and generated.without_stamp(_read(in_use)) == generated.without_stamp(_read(edition_file))
     if name.lower() == choice.key and unchanged:
         raise EditionError(f"the {choice.title} edition runs here already")
     stamp = time.strftime("%Y%m%d%H%M%S")
@@ -188,7 +188,11 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
     if interrupts:
         _go_back(plan, linux, sudo, run, before)
     _mark("swap", f"Switching to the {plan.target.title} edition")
-    shutil.copyfile(plan.target.path, in_use)
+    try:
+        shutil.copyfile(plan.target.path, in_use)
+        generated.stamp_file(in_use, repo_dir, "compose")
+    except (OSError, generated.GeneratedError) as err:
+        raise EditionError(f"{err}. T-Pot is stopped; the edition could not be prepared.") from err
     say.ok(f"docker-compose.yml is the {plan.target.title} edition now.")
     back = f"Back to the edition before: cp {plan.keep_copy} {in_use}" if plan.keep_copy else \
         "Nothing to go back to, there was no docker-compose.yml before."

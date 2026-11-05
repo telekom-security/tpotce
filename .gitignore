@@ -8,6 +8,7 @@ __pycache__/
 .idea
 install_tpot.log
 .env
+/docker-compose.yml
 AGENTS.md
 UPDATE_SH_FIXES.md
 docker/_builder/log/
