@@ -178,6 +178,13 @@ line as `@timestamp` and a GeoIP location. It takes the T-Pot Logstash image
 when it is built here, otherwise the official image of its `LS_VER`; an image
 without the Listbot dictionaries gets small stand-ins for them.
 
+`./docker/_tests/run.sh logstash_sensor` runs the same fixtures through the
+SENSOR pipeline (`http_output.conf`). It also measures the immediate first
+heartbeat and the next one after 60 seconds, checking sequence numbers,
+version and Logstash process-start metadata. This test replaces only the
+HTTP output with a file; the HIVE routing is tested separately. Known
+pre-existing fixture failures are printed explicitly, never silently skipped.
+
 The Conpot test starts all nine deployed templates in one Docker network on
 dynamic loopback ports (`--<key>-port` pins one, see `--help`). The probes
 compare each answer with the rendered template and the stored identity and

@@ -12,6 +12,7 @@ LOGSTASH_DIR="${DOCKER_ROOT}/elk/logstash"
 DEFAULT_IMAGE="ghcr.io/telekom-security/logstash:24.04.2"
 IMAGE=""
 IMAGE_GIVEN="false"
+SENSOR="false"
 # the test addresses of the checks (attackmap_pipeline_test.sh), GeoIP knows them
 TEST_SRC_IP="8.8.8.8"
 TEST_EXT_IP="208.67.222.222"
@@ -43,6 +44,7 @@ image of its Dockerfile (LS_VER). An image without the Listbot dictionaries
 (/etc/listbot, the official one) gets small stand-ins for them.
 
 Options:
+  --sensor          Test the SENSOR pipeline, including the immediate and one-minute heartbeats.
   --image IMAGE      Image to use. Default: docker/elk/logstash/docker-compose.yml,
                      else docker.elastic.co/logstash/logstash:<LS_VER>.
   --timeout SEC      Least time to wait for the events (Logstash gets ${STARTUP_SECONDS} s at least).
@@ -62,6 +64,7 @@ parse_args() {
       --bind-ip) [[ $# -ge 2 ]] || test_die "--bind-ip requires an argument"; TEST_BIND_IP="$2"; shift 2 ;;
       --bind-ip=*) TEST_BIND_IP="${1#*=}"; shift ;;
       --keep-artifacts) TEST_KEEP_ARTIFACTS="true"; shift ;;
+      --sensor) SENSOR="true"; TEST_NAME="logstash_sensor"; shift ;;
       -h|--help) usage; exit 0 ;;
       *) test_die "Unknown option: $1" ;;
     esac
@@ -100,7 +103,7 @@ image_has_listbot() {
 prepare_files() {
   mkdir -p "${TEST_TMP_ROOT}/data" "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/out" "${TEST_TMP_ROOT}/listbot"
   chmod 0777 "${TEST_TMP_ROOT}/out"
-  PYTHONPATH="${REPO_ROOT}" python3 - "${REPO_ROOT}" "${TEST_TMP_ROOT}" "${TEST_SRC_IP}" <<'PY'
+  PYTHONPATH="${REPO_ROOT}" python3 - "${REPO_ROOT}" "${TEST_TMP_ROOT}" "${TEST_SRC_IP}" "${SENSOR}" <<'PY'
 import json
 import os
 import secrets
@@ -110,6 +113,7 @@ from datetime import datetime, timedelta, timezone
 from tpotctl.checks import fixtures, stages
 
 repo, root, src_ip = sys.argv[1], sys.argv[2], sys.argv[3]
+pipeline_name = "http_output.conf" if sys.argv[4] == "true" else "logstash.conf"
 data = os.path.join(root, "data")
 # an hour ago: an event that keeps the time Logstash read it at shows up
 ts = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(microsecond=123456)
@@ -140,7 +144,7 @@ with open(os.path.join(root, "manifest.json"), "w", encoding="utf-8") as handle:
 
 # logstash.conf with its inputs and filters as they are: every file input reads from the start
 # and keeps no sincedb, the output section becomes one file of JSON lines
-with open(os.path.join(repo, "docker", "elk", "logstash", "dist", "logstash.conf"), encoding="utf-8") as handle:
+with open(os.path.join(repo, "docker", "elk", "logstash", "dist", pipeline_name), encoding="utf-8") as handle:
     conf = handle.read()
 head, marker_text, _ = conf.partition("\n# Output section\n")
 if not marker_text:
@@ -181,6 +185,9 @@ services:
       - MY_EXTIP=${TEST_EXT_IP}
       - MY_INTIP=172.20.0.1
       - MY_HOSTNAME=tpot-fixtures
+      - MY_VERSION=test-release
+      - TPOT_LOGSTASH_START=2000-01-01T00:00:00Z
+      - TZ=UTC
       - XPACK_GEOIP_DOWNLOADER_ENABLED=false
       - LS_JAVA_OPTS=-Xms512m -Xmx512m
     # the entrypoint of the image (env2yaml for the settings above, then logstash with these options)
@@ -195,7 +202,7 @@ EOF
 
 # waits until every fixture has come out of the pipeline, or Logstash stopped, or the time is up
 wait_for_events() {
-  local expected seconds deadline got state
+  local expected seconds deadline got state beats
   expected="$(python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "${TEST_TMP_ROOT}/manifest.json")"
   seconds=$(( TEST_TIMEOUT > STARTUP_SECONDS ? TEST_TIMEOUT : STARTUP_SECONDS ))
   deadline=$(( SECONDS + seconds ))
@@ -203,8 +210,14 @@ wait_for_events() {
     got=0
     [[ -f "${TEST_TMP_ROOT}/out/events.json" ]] && got="$(grep -c . "${TEST_TMP_ROOT}/out/events.json" || true)"
     if (( got >= expected )); then
-      sleep 5   # a fixture Logstash splits into more events shows up as well
-      return 0
+      beats=0
+      if [[ "${SENSOR}" == "true" ]]; then
+        beats="$(grep -c '"type":"TPotSensorHeartbeat"' "${TEST_TMP_ROOT}/out/events.json" || true)"
+      fi
+      if [[ "${SENSOR}" != "true" ]] || (( beats >= 2 )); then
+        sleep 5   # a fixture Logstash splits into more events shows up as well
+        return 0
+      fi
     fi
     state="$(docker inspect -f '{{.State.Status}}' "${TEST_CONTAINER_NAME}" 2>/dev/null || true)"
     [[ "${state}" == "exited" || "${state}" == "dead" ]] && { test_info "Logstash stopped"; return 1; }
@@ -215,10 +228,12 @@ wait_for_events() {
 }
 
 check_events() {
-  python3 - "${TEST_TMP_ROOT}/manifest.json" "${TEST_TMP_ROOT}/out/events.json" <<'PY'
+  docker logs "${TEST_CONTAINER_NAME}" > "${TEST_TMP_ROOT}/out/logstash.log" 2>&1
+  python3 - "${TEST_TMP_ROOT}/manifest.json" "${TEST_TMP_ROOT}/out/events.json" "${SENSOR}" "${TEST_TMP_ROOT}/out/logstash.log" <<'PY'
 import json
 import re
 import sys
+from datetime import datetime, timezone
 
 with open(sys.argv[1], encoding="utf-8") as handle:
     manifest = json.load(handle)
@@ -228,6 +243,29 @@ try:
         events = [json.loads(line) for line in handle if line.strip()]
 except FileNotFoundError:
     pass
+
+if sys.argv[3] == "true":
+    beats = [event for event in events if event.get("type") == "TPotSensorHeartbeat"]
+    events = [event for event in events if event.get("type") != "TPotSensorHeartbeat"]
+    assert len(beats) >= 2, f"expected two sensor heartbeats, received {len(beats)}"
+    beats.sort(key=lambda event: event["@timestamp"])
+    def stamp(value):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    with open(sys.argv[4], encoding="utf-8") as handle:
+        started = re.search(r"^\[([0-9T:.,-]+)\].*Pipeline started", handle.read(), re.M)
+    assert started, "Logstash did not report its pipeline start"
+    pipeline_start = stamp(started[1].replace(",", ".")).replace(tzinfo=timezone.utc)
+    delay = (stamp(beats[0]["@timestamp"]) - pipeline_start).total_seconds()
+    assert -5 <= delay <= 10, f"first heartbeat not immediate: {delay}s after pipeline start"
+    interval = (stamp(beats[1]["@timestamp"]) - stamp(beats[0]["@timestamp"])).total_seconds()
+    assert 59 <= interval <= 75, f"heartbeat interval is not one minute: {interval}s"
+    for number, event in enumerate(beats[:2], 1):
+        assert event["heartbeat"] == {
+            "version": "test-release", "started_at": "2000-01-01T00:00:00Z", "sequence": number,
+        }, event
+        assert event["t-pot_hostname"] == "tpot-fixtures", event
+        assert not any("failure" in tag for tag in event.get("tags", [])), event
+    print(f"Sensor heartbeats: first after {delay}s, interval {interval}s, metadata correct")
 
 # An event belongs to the fixture whose token or marker port it carries, or else to the file it
 # came from. The file input names the file in [path] only where the event has no path of its own
@@ -250,6 +288,11 @@ COLUMN = re.compile(r"column\d+")
 ES_DATE = re.compile(r"^\d{4}(-\d{2}(-\d{2}(T\d{2}(:\d{2}(:\d{2}([.,]\d{1,9})?)?)?(Z|[+-]\d{2}(:?\d{2})?)?)?)?)?$")
 # failures known and waiting for a decision: honeypot -> (the start of its problem, why)
 KNOWN = {}
+if sys.argv[3] == "true":
+    KNOWN["elasticpot"] = (
+        "timestamp '",
+        "pre-existing SENSOR filter leaves ElasticPot's +00:00Z suffix (OPEN-ITEMS.md)",
+    )
 failed = known = 0
 for name, want in sorted(manifest.items()):
     found = by_name.get(name, [])
@@ -338,7 +381,7 @@ main() {
 
   test_info "Checking the events"
   check_events || test_die "Logstash did not read every fixture cleanly"
-  test_ok "Logstash read every fixture cleanly"
+  test_ok "Logstash fixture checks passed (any known exceptions are listed above)"
 }
 
 main "$@"
