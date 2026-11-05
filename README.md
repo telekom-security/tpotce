@@ -770,6 +770,17 @@ Removing a sensor deletes only its current document in `tpot-sensor-status`, not
 events. A failed status deletion is reported as a partial removal; access stays revoked. Heartbeat history has
 its own [retention](#log-persistence).
 
+Kibana's **T-Pot Sensors** dashboard has current status, a heartbeat timeline, versions over time,
+observed Logstash process starts and attack events per sensor. Its status table is independent of the
+time picker, so an old offline sensor does not disappear. It includes only sensors that have sent
+heartbeats; use the Manager for sensors with no heartbeat or no access.
+The charts show their top 20 series. Heartbeat history contains every fifth heartbeat and uses the
+sensor's clock; process starts use the Logstash start time and count distinct starts, not samples.
+Short-lived processes without a fifth heartbeat cannot appear in that history. Attack charts still use
+`logstash-*`; heartbeats never enter those indices.
+With `TPOT_KIBANA_OBJECTS=keep`, add the dashboard explicitly with `tpot elastic import --mode add`
+or the *Elastic* page. This adds missing objects without overwriting yours.
+
 ### Planning and Certificates
 The **Sensor** checks the **Hive** against a copy of its certificate (`~/tpotce/data/hive.crt` on the **Sensor**), so the certificate has to cover the address the **Sensor** connects to. **T-Pot Init** only creates a self-signed certificate for one IP of the **Hive** host, which suits simple setups. A **Hive** reachable on more than one address (i.e. RFC 1918 and a public NAT IP) or a domain name needs these as SANs (Subject Alternative Name), otherwise Logstash on the **Sensor** cannot validate the connection. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).
 

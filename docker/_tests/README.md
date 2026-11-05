@@ -201,6 +201,14 @@ and deletes only the selected status document while leaving history intact.
 The containers use a temporary
 internal network without published ports; HTTP requests use the Elasticsearch image's curl.
 
+`./docker/_tests/run.sh sensor_dashboard` uses local Elasticsearch and Kibana images at the Dockerfile
+versions (the standalone test's `--image` overrides Kibana). It verifies the shipped dashboard's Painless
+runtime fields against current, stale and missing receipt times, version series including unknown versions,
+distinct process starts rather than sample counts, and Kibana import plus real data-view field discovery.
+It uses a disposable internal network with no published ports and ignores local Compose environment files.
+Startup has a minimum allowance of 240 seconds. The browser check is separate: open *T-Pot Sensors*, verify
+all five views, and choose a one-minute range; old status rows must remain while old history disappears.
+
 The Conpot test starts all nine deployed templates in one Docker network on
 dynamic loopback ports (`--<key>-port` pins one, see `--help`). The probes
 compare each answer with the rendered template and the stored identity and

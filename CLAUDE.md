@@ -91,6 +91,15 @@ feeding Status-page counts without another request. Reads are serialized; stale 
 hostnames or resurrect removed registry entries. Metadata writes occur only after the UI-thread freshness
 check. `sensor_heartbeat` smoke exercises the Manager against actual Elasticsearch documents and pagination.
 
+`python3 -m tpotctl.sensor_dashboard` generates only the `tpot-sensors-*` Kibana objects and updates the
+export ZIP; unrelated NDJSON lines stay byte-identical (`--check` validates both). The status data view has
+no time field, its `heartbeat.state` runtime field compares ES time with HIVE receipt; timeline and version
+series use sensor time, a separate data view for process starts uses `heartbeat.started_at` and distinct
+counts. Charts show their top 20 series. This is not a registry view: never-seen/no-access sensors are only
+known to the Manager. `sensor_dashboard` smoke compiles the runtime scripts in ES, verifies the aggregations,
+imports the saved objects in Kibana and resolves real fields. Regenerate the hash manifest after committing
+object changes (the manifest's source is committed history, not the working tree).
+
 ## Conventions
 
 - Commit messages use conventional prefixes (`feat:`, `fix:`, `refactor:`).
