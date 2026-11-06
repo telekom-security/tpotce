@@ -613,9 +613,14 @@ The installer can run without any interaction, i.e. for automated tests or cloud
 | `-u` | Web user name, required for `h`, `l`, `i` and `t` |
 | `-P` | Read the web user password from a file (`-` for stdin), required for `h`, `l`, `i` and `t` (or `-p`) |
 | `-p` | The web user password itself; it shows up in the process list and the shell history, so prefer `-P` |
-| `-B` | Read the `sudo` password from a file, so `-s` works without passwordless `sudo` |
+| `-B` | Read the `sudo` password from your private file (`chmod 600`), or `-` for stdin, so `-s` works without passwordless `sudo` |
 | `-c` | Install your own compose file (i.e. from `tpot customize`) instead of an edition, `-t` is then `h` (with a web UI) or `s` (without) |
 | `-U` | No [automatic updates](#automatic-updates-debian) on Debian: writes `TPOT_AUTO_UPDATES=DISABLED` into `~/tpotce/.env` |
+
+Password files for `-B` must belong to you, be regular files (not links), have mode `0600` or `0400`,
+and contain one nonempty UTF-8 line. A password from stdin is kept in a private temporary file and
+removed on success, failure or cancellation. A file you supplied is only read: remove it afterwards
+when no longer needed. Only one of `-P` and `-B` can read stdin.
 
 ⚠️ ***`-s` requires passwordless `sudo` for the user running the installer, or `-B`.*** Ansible would otherwise ask for the `BECOME password` and the run would stall, so the installer stops right away and tells you so. Grant it before you start (or hand the password over with `-B`):
 ```

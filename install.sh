@@ -25,8 +25,9 @@ With -c only h (a HIVE) or s (a SENSOR)." \
     --opt "-p <password>" "Web interface password (required for h/l/i/t)" \
     --opt "-P <file>" "Read the web interface password from a file, - for stdin.
 Unlike -p it does not show up in the process list." \
-    --opt "-B <file>" "Read the sudo password from a file, so -s also works without
-passwordless sudo. The file is only read." \
+    --opt "-B <file>" "Read the sudo password from your private file (chmod 600),
+or use - for stdin. A temporary stdin file is removed afterwards.
+Your own file is only read; remove it after the installation." \
     --opt "-c <file>" "Install this compose file (i.e. from tpot customize) instead
 of an edition." \
     --opt "-b <branch>" "Branch, tag or commit to install from. Default: the branch
@@ -1727,6 +1728,59 @@ read_password_file() {
   fi
 }
 
+private_password_file() {
+  # This also runs before Python is installed; only base-system tools are used.
+  local myFILE="$1" mySTAT myUID mySIZE myRC myPASSWORD_LINE myPASSWORD_EXTRA myTRACE=""
+  case $- in *x*) set +x; myTRACE="y" ;; esac
+  export -n myPASSWORD_LINE myPASSWORD_EXTRA
+  [ -f "${myFILE}" ] && [ ! -L "${myFILE}" ] && [ -r "${myFILE}" ] \
+    || usage_error "Cannot read the sudo password from ${myFILE}; use your own regular file with chmod 600."
+  myUID=$(id -u)
+  mySTAT=$(stat -c '%a:%u:%h' -- "${myFILE}" 2>/dev/null) \
+    || mySTAT=$(stat -f '%OLp:%u:%l' "${myFILE}" 2>/dev/null) \
+    || usage_error "Cannot check password file permissions."
+  [[ "${mySTAT}" = "600:${myUID}:1" || "${mySTAT}" = "400:${myUID}:1" ]] \
+    || usage_error "Use your own private password file: chmod 600 ${myFILE}"
+  mySIZE=$(wc -c < "${myFILE}")
+  [ "${mySIZE}" -gt 0 ] && [ "${mySIZE}" -le 65536 ] \
+    || usage_error "The password file must contain one nonempty line (at most 65536 bytes)."
+  [ "$(LC_ALL=C tr -d '\000' < "${myFILE}" | wc -c)" -eq "${mySIZE}" ] \
+    || usage_error "The password file must not contain NUL bytes."
+  iconv -f UTF-8 -t UTF-8 "${myFILE}" >/dev/null 2>&1 \
+    || usage_error "The password file must be UTF-8; the system iconv tool is required."
+  {
+    IFS= read -r myPASSWORD_LINE
+    myRC=$?
+    [ "${myRC}" -ne 0 ] || myPASSWORD_LINE="${myPASSWORD_LINE%$'\r'}"
+    [ -n "${myPASSWORD_LINE}" ] && [[ "${myPASSWORD_LINE}" != *$'\r'* ]] \
+      || usage_error "The password file must contain exactly one nonempty line."
+    if IFS= read -r myPASSWORD_EXTRA || [ -n "${myPASSWORD_EXTRA}" ];
+      then usage_error "The password file must contain exactly one nonempty line."
+    fi
+  } < "${myFILE}"
+  [ -z "${myTRACE}" ] || set -x
+  return 0
+}
+
+cleanup_password_files() {
+  local myFILE myRC=0
+  trap '' INT TERM HUP
+  if [ -n "${myPASSWORD_PID}" ]; then
+    if kill -0 "${myPASSWORD_PID}" 2>/dev/null; then
+      kill -TERM "${myPASSWORD_PID}" || { fuUI_ERROR "Could not stop the password reader."; myRC=1; }
+    fi
+    # Cancellation is expected to give this child a nonzero status.
+    wait "${myPASSWORD_PID}" 2>/dev/null
+  fi
+  for myFILE in "${myPASSWORD_FILES[@]}"; do
+    if ! rm -f -- "${myFILE}"; then
+      fuUI_ERROR "Could not remove the temporary password file ${myFILE}. Remove it manually."
+      myRC=1
+    fi
+  done
+  return "${myRC}"
+}
+
 env_set() {
   # env_set <key> <value>: the line in .env in place, or (a .env without it) at the end on a line of its own
   if grep -q "^$1=" "${myTPOT_CONF_FILE}";
@@ -1803,6 +1857,9 @@ unset myWEB_PW myWEB_PW2
 myWEB_PW=""
 myWEB_PW_FILE=""
 myBECOME_FILE=""
+myPASSWORD_FILES=()
+myPASSWORD_PID=""
+myBECOME_OWN_FILE=""
 myCUSTOM_COMPOSE=""
 myCLASSIC=""
 myMARKS=""
@@ -1870,6 +1927,24 @@ while getopts ":sb:r:t:u:p:P:B:c:UnMh" opt; do
   esac
 done
 
+trap 'myEXIT=$?; cleanup_password_files || myEXIT=1; exit "${myEXIT}"' EXIT
+trap 'exit 130' INT TERM HUP
+
+[ "${myWEB_PW_FILE}" != "-" ] || [ "${myBECOME_FILE}" != "-" ] \
+  || usage_error "Only one password can be read from stdin; use a file for the other one."
+if [ "${myBECOME_FILE}" = "-" ]; then
+  myBECOME_FILE=$(mktemp "${TMPDIR:-/tmp}/tpot-install-password.XXXXXXXX") \
+    || usage_error "Cannot create a private file for the sudo password."
+  myPASSWORD_FILES+=("${myBECOME_FILE}")
+  chmod 600 "${myBECOME_FILE}" || usage_error "Cannot protect the temporary sudo password file."
+  cat > "${myBECOME_FILE}" <&0 &
+  myPASSWORD_PID=$!
+  wait "${myPASSWORD_PID}" || usage_error "Cannot read the sudo password from stdin."
+  myPASSWORD_PID=""
+elif [ -n "${myBECOME_FILE}" ]; then
+  myBECOME_OWN_FILE="${myBECOME_FILE}"
+fi
+
 [ -n "${myWEB_PW_FILE}" ] && read_password_file "${myWEB_PW_FILE}"
 
 # -s requires -t
@@ -1891,11 +1966,14 @@ fi
 
 if [ -n "${myBECOME_FILE}" ];
   then
-    [ -r "${myBECOME_FILE}" ] || usage_error "Cannot read the sudo password from ${myBECOME_FILE}."
+    private_password_file "${myBECOME_FILE}"
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
     # every sudo of this script refreshes the timestamp from the file first, so none
     # of them prompts and pipes into sudo (tee) keep working
-    sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
+    sudo () {
+      command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1 || return
+      command sudo "$@"
+    }
 fi
 
 resolve_tpot_source
@@ -2063,7 +2141,8 @@ if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && 
       then
         echo
         export TPOT_BRANCH="${myTPOT_BRANCH}" TPOT_REPO_URL="${myTPOT_REPO_URL}" TPOT_INSTALL_PACKAGES_DONE=1
-        exec "${HOME}/tpotce/tpot" install
+        "${HOME}/tpotce/tpot" install
+        exit $?
     fi
     fuUI_WARN "The assistant cannot start (see ${myLOG}), the installer asks in the terminal instead."
     export TPOT_INSTALL_PACKAGES_DONE=1
@@ -2186,16 +2265,17 @@ fi
 
 # Check type of sudo access. Applies to every distribution - making an
 # exception for one of them breaks unattended installation there.
-if ! sudo_password_required;
-  then
-    myANSIBLE_BECOME_OPTION="--become"
-    fuUI_INFO "Passwordless ‘sudo‘ available, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-    echo
-elif [ -n "${myBECOME_FILE}" ];
+if [ -n "${myBECOME_FILE}" ];
   then
     sudo_rs_become_exe
-    myANSIBLE_BECOME_OPTION="--become --become-password-file ${myBECOME_FILE}"
-    fuUI_INFO "‘sudo‘ requires a password, Ansible reads it from ${myBECOME_FILE}."
+    # Ansible strips spaces from files but preserves them when its password comes from stdin.
+    myANSIBLE_BECOME_OPTION=(--become --become-password-file -)
+    fuUI_INFO "Ansible reads the sudo password from ${myBECOME_FILE}."
+    echo
+elif ! sudo_password_required;
+  then
+    myANSIBLE_BECOME_OPTION=(--become)
+    fuUI_INFO "Passwordless ‘sudo‘ available, setting ansible become option to ${myANSIBLE_BECOME_OPTION[*]}."
     echo
   else
     # -s promises an unattended run, and --ask-become-pass would prompt. On the
@@ -2205,8 +2285,8 @@ elif [ -n "${myBECOME_FILE}" ];
         abort_unattended
     fi
     sudo_rs_become_exe
-    myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
-    fuUI_INFO "‘sudo‘ requires a password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    myANSIBLE_BECOME_OPTION=(--become --ask-become-pass)
+    fuUI_INFO "‘sudo‘ requires a password, setting ansible become option to ${myANSIBLE_BECOME_OPTION[*]}."
     fuUI_INFO "Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
     echo
 fi
@@ -2231,8 +2311,15 @@ mark_phase playbook
 # silently working until then, and it keeps the deprecation warnings out of the
 # log. PYTHON_INTERPRETER=auto_silent keeps the interpreter discovery hint out,
 # the discovery itself is unchanged.
-ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
-ANSIBLE_LOG_PATH=${HOME}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION} ${myANSIBLE_BECOME_EXE} ${myANSIBLE_EXTRA_VARS}
+myANSIBLE_COMMAND=(ansible-playbook "${myANSIBLE_TPOT_PLAYBOOK}" -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}"
+                   "${myANSIBLE_BECOME_OPTION[@]}" ${myANSIBLE_BECOME_EXE} ${myANSIBLE_EXTRA_VARS})
+if [ -n "${myBECOME_FILE}" ]; then
+  ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
+    ANSIBLE_LOG_PATH="${HOME}/install_tpot.log" "${myANSIBLE_COMMAND[@]}" < "${myBECOME_FILE}"
+else
+  ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
+    ANSIBLE_LOG_PATH="${HOME}/install_tpot.log" "${myANSIBLE_COMMAND[@]}"
+fi
 
 # Something went wrong
 if [ ! $? -eq 0 ];
@@ -2355,6 +2442,7 @@ fi
 [ "${myTPOT_TYPE}" = "HIVE" ] && mySUMMARY+=("ok:The web user ${myWEB_USER} is set up")
 [ -n "${myPULL_FAILED}" ] && mySUMMARY+=("warn:Not all images could be pulled, T-Pot tries again when it starts")
 [ -n "${myHOOKS_WARNING}" ] && mySUMMARY+=("warn:${myHOOKS_WARNING}")
+[ -n "${myBECOME_OWN_FILE}" ] && mySUMMARY+=("next:Remove the password file ${myBECOME_OWN_FILE} when it is no longer needed")
 mySUMMARY+=("${myTPOT_ITEM}")
 [ -n "${myINFO}" ] && mySUMMARY+=("info:${myINFO}")
 mySUMMARY+=("next:Reboot, then re-connect via SSH on tcp/64295")

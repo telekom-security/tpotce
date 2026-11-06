@@ -65,10 +65,15 @@ def command(action: str, inventory: str, *, become_file: str = "", user_password
         variables["tpot_user_password_file"] = os.path.abspath(user_password_file)
     if result_file:
         variables["tpot_sudo_result_file"] = os.path.abspath(result_file)
+    if become_file:
+        variables["tpot_become_password_file"] = os.path.abspath(become_file)
+        # Ansible's CLI strips all whitespace from a password file, not just its newline.
+        variables["ansible_become_password"] = (
+            "{{ lookup('file', tpot_become_password_file, lstrip=false, rstrip=false)"
+            " | regex_replace('\\r?\\n$', '') }}"
+        )
     args = ["ansible-playbook", os.path.join(repo_dir, "installer", "install", "sudo_mode.yml"),
             "-i", inventory, "-e", json.dumps(variables)]
-    if become_file:
-        args += ["--become-password-file", os.path.abspath(become_file)]
     return args
 
 

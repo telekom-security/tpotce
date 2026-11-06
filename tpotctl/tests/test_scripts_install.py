@@ -7,9 +7,12 @@ gum, and the os-release of a Debian 13 (an awk that reads $HOME/os-release inste
 nothing touches the host, the real checkout, its .env or ~/.config/tpotce, nothing calls docker.
 """
 
+import hashlib
+import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import time
 import unittest
@@ -181,6 +184,114 @@ class InstallShTest(Scripts):
 
     def test_help(self):
         self.assert_help("install.sh", self.run_script(self.script, "-h"))
+
+    def sudo_from_file(self):
+        write(os.path.join(self.bin, "sudo"), '#!/bin/sh\n'
+              '[ "$*" != "-n -k true" ] || exit 1\n' + base.SUDO.split("\n", 1)[1], 0o755)
+        script = STUBS["ansible-playbook"]
+        capture = '''python3 - "$@" 3<&0 <<'PY'
+import hashlib, json, os, stat, sys
+args = sys.argv[1:]
+if "--become-password-file" in args:
+    path = args[args.index("--become-password-file") + 1]
+    with os.fdopen(os.dup(3), "rb") if path == "-" else open(path, "rb") as stream:
+        digest = hashlib.sha256(stream.read()).hexdigest()
+        info = os.fstat(stream.fileno())
+    temporary = [os.path.join(os.environ["HOME"], name) for name in os.listdir(os.environ["HOME"])
+                 if name.startswith("tpot-install-password.")]
+    with open(os.path.join(os.environ["HOME"], "become-observed.json"), "w") as stream:
+        json.dump(dict(path=path, mode=stat.S_IMODE(info.st_mode), inode=info.st_ino,
+                       digest=digest, temporary=temporary), stream)
+PY
+'''
+        write(os.path.join(self.bin, "ansible-playbook"), script.replace("#!/bin/sh\n", "#!/bin/sh\n" + capture), 0o755)
+
+    def test_readable_sudo_password_file_is_refused_before_installation(self):
+        path = os.path.join(self.home, "sudo-pw")
+        write(path, "test password\n", 0o644)
+        result = self.install("-s", "-t", "s", "-B", path)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("chmod 600", result.stdout)
+        self.assertNotIn("ansible-playbook", self.calls())
+        self.assertNotIn("apt ", self.calls())
+
+    def test_sudo_password_path_with_spaces_reaches_ansible_unchanged(self):
+        self.sudo_from_file()
+        path = os.path.join(self.home, "sudo password")
+        write(path, "a test password\n", 0o600)
+        result = self.install("-s", "-t", "s", "-B", path)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(os.path.exists(os.path.join(self.home, "become-observed.json")), result.stdout)
+        with open(os.path.join(self.home, "become-observed.json")) as stream:
+            observed = json.load(stream)
+        self.assertEqual(observed["path"], "-")
+        self.assertEqual(observed["inode"], os.stat(path).st_ino)
+        self.assertEqual(observed["digest"], hashlib.sha256(b"a test password\n").hexdigest())
+        self.assertTrue(os.path.exists(path))
+        self.assertIn("Remove the password file", result.stdout)
+
+    def test_become_file_is_available_if_passwordless_sudo_changes_during_install(self):
+        self.sudo_from_file()
+        write(os.path.join(self.bin, "sudo"), base.SUDO, 0o755)
+        path = os.path.join(self.home, "sudo-pw")
+        write(path, "a test password\n", 0o600)
+        result = self.install("-s", "-t", "s", "-B", path)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(os.path.exists(os.path.join(self.home, "become-observed.json")),
+                        "Ansible must receive -B even when sudo initially needs no password.")
+
+    def test_sudo_password_stdin_is_private_and_removed_after_success_or_failure(self):
+        self.sudo_from_file()
+        password = "a synthetic password\n"
+        for playbook_rc in ("0", "1"):
+            with self.subTest(playbook_rc=playbook_rc):
+                result = subprocess.run(["bash", self.script, "-s", "-t", "s", "-B", "-"],
+                                        input=password, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        cwd=self.home, timeout=60,
+                                        env=self.env(TPOT_GUM="off", TPOT_INSTALL_PACKAGES_DONE="1", TMPDIR=self.home,
+                                                     FAKE_PLAYBOOK_RC=playbook_rc if playbook_rc != "0" else ""))
+                self.assertEqual(result.returncode, int(playbook_rc), result.stdout)
+                self.assertTrue(os.path.exists(os.path.join(self.home, "become-observed.json")), result.stdout)
+                with open(os.path.join(self.home, "become-observed.json")) as stream:
+                    observed = json.load(stream)
+                self.assertEqual(observed["mode"], 0o600)
+                self.assertEqual(observed["digest"], hashlib.sha256(password.encode()).hexdigest())
+                self.assertEqual(len(observed["temporary"]), 1)
+                self.assertFalse(os.path.exists(observed["temporary"][0]))
+                self.assertNotIn(password.strip(), result.stdout + self.calls())
+
+    def test_term_while_reading_stdin_removes_the_private_file(self):
+        write(os.path.join(self.bin, "cat"), '#!/bin/sh\ntouch "$HOME/cat-ready"\nexec /bin/cat "$@"\n', 0o755)
+        proc = subprocess.Popen(["bash", self.script, "-s", "-t", "s", "-B", "-"],
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, start_new_session=True, cwd=self.home,
+                                env=self.env(TPOT_GUM="off", TMPDIR=self.home))
+        try:
+            until = time.monotonic() + 5
+            while not os.path.exists(os.path.join(self.home, "cat-ready")) and time.monotonic() < until:
+                time.sleep(0.01)
+            self.assertTrue(os.path.exists(os.path.join(self.home, "cat-ready")))
+            proc.send_signal(signal.SIGTERM)
+            try:
+                result = proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.fail("The installer did not cancel while its stdin reader was waiting.")
+            self.assertEqual(result, 130)
+            self.assertFalse([name for name in os.listdir(self.home) if name.startswith("tpot-install-password.")])
+        finally:
+            if proc.poll() is None:
+                os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate(timeout=5)
+
+    def test_private_password_does_not_leak_through_shell_tracing(self):
+        path = os.path.join(self.home, "sudo-pw")
+        write(path, "trace-must-not-show-this\n", 0o600)
+        result = subprocess.run(["bash", "-x", self.script, "-s", "-t", "s", "-B", path],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                stdin=subprocess.DEVNULL, cwd=self.home, timeout=60,
+                                env=self.env(TPOT_GUM="off", TPOT_INSTALL_PACKAGES_DONE="1"))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("trace-must-not-show-this", result.stdout)
 
     def test_missing_freshness_hooks_are_named_in_the_final_summary(self):
         result = self.install("-s", "-t", "s")

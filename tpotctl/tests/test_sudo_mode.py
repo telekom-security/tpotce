@@ -120,8 +120,9 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual(command[:4], ["ansible-playbook", "/tmp/a checkout/installer/install/sudo_mode.yml",
                                       "-i", "/tmp/sensors inventory"])
         self.assertNotIn("Distant-Otters!swim-47", " ".join(command))
-        self.assertEqual(command[command.index("--become-password-file") + 1], str(secret))
         variables = json.loads(command[command.index("-e") + 1])
+        self.assertEqual(variables["tpot_become_password_file"], str(secret))
+        self.assertNotIn("--become-password-file", command)
         self.assertEqual(variables["tpot_sudo_action"], "secure")
         self.assertEqual(variables["tpot_user_password_file"], str(secret))
         self.assertEqual(variables["tpot_sudo_result_file"], "/tmp/results")
@@ -180,7 +181,7 @@ class LinuxModeTest(unittest.TestCase):
     """Real accounts and policy files, only inside the dedicated disposable container."""
 
     user = "tpot_test_sudo"
-    password = "Distant-Otters!swim-47"
+    password = "  Distant-\u00d6tters!swim-47  "
     foreign = Path("/etc/sudoers.d/tpot-test-foreign")
 
     def run_command(self, *args, input=None, check=True):
@@ -421,6 +422,13 @@ tpot_sudo.apply("tpot_test_sudo", "secure")
         self.assertFalse(list(Path("/etc/sudoers.d").glob(".tpot-*")))
 
     def test_normal_controller_uses_the_password_file_for_become(self):
+        self.normal_controller_become()
+
+    def test_controller_can_authenticate_an_existing_whitespace_only_password(self):
+        self.password = "    "
+        self.normal_controller_become()
+
+    def normal_controller_become(self):
         from tpotctl import sudo_mode
         self.set_password()
         self.run_command("usermod", "-aG", "sudo", self.user)
@@ -434,18 +442,24 @@ tpot_sudo.apply("tpot_test_sudo", "secure")
             inventory = Path(directory, "inventory")
             inventory.write_text("localhost ansible_connection=local ansible_python_interpreter=/usr/bin/python3\n")
             play = Path(tpot_sudo.__file__).parent.parent / "sudo_mode.yml"
-            proc = self.run_command("runuser", "-u", self.user, "--", "ansible-playbook", str(play),
-                                    "-i", str(inventory), "--become-password-file", str(secret),
-                                    "-e", json.dumps(dict(tpot_sudo_action="convenient",
-                                                         tpot_sudo_result_file=str(output))),
-                                    "-vvv", check=False)
+            script = """
+import subprocess, sys
+from tpotctl import sudo_mode
+command = sudo_mode.command("convenient", sys.argv[1], become_file=sys.argv[2],
+                            result_file=sys.argv[3], repo_dir=sys.argv[4])
+raise SystemExit(subprocess.call(command + ["-vvv"]))
+"""
+            proc = self.run_command("runuser", "-u", self.user, "--", "python3", "-",
+                                    str(inventory), str(secret), str(output), str(play.parents[2]),
+                                    input=script, check=False)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             result = sudo_mode.read_results(str(output))["localhost"]
             self.assertEqual(result.user, self.user)
             self.assertEqual(result.own_rule, "owned")
             self.assertFalse(result.password_required)
             self.assertEqual(output.stat().st_uid, self.uid)
-            self.assertNotIn(self.password, proc.stdout + proc.stderr + output.read_text())
+            if self.password.strip():
+                self.assertNotIn(self.password, proc.stdout + proc.stderr + output.read_text())
             self.assertEqual(self.probe().returncode, 0)
 
     def test_play_changes_and_reports_without_exposing_the_password(self):
