@@ -428,7 +428,7 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
     def factories():
         from rich.text import Text
         from tpotctl import sensors
-        from tpotctl.screens import customizer, dialogs, pickers, restore, task, uninstall
+        from tpotctl.screens import customizer, dialogs, pickers, restore, sudo, task, uninstall
         from tpotctl.screens.customizer import State, core
         from tpotctl.tests.test_app import sample_check as check
         times = [("UTC", Text("UTC"), False), ("Europe/Berlin", Text("Europe/Berlin"), False)]
@@ -444,6 +444,7 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
             "user": lambda: dialogs.UserDialog("Add a web user"),
             "sensor": lambda: dialogs.SensorDialog(),
             "sensor-edit": lambda: dialogs.SensorEditDialog(sensors.Sensor("s1", host="192.0.2.9", ssh_user="t")),
+            "sudo": lambda: sudo.SudoDialog("this host", lambda: True),
             "picker": lambda: pickers.Picker("Choose a time zone", lambda: times, current="UTC",
                                              detect=lambda: "UTC"),
             "many": lambda: pickers.ManyPicker("Cowrie personas", ["a", "b", "c", "d"],

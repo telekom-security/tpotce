@@ -669,6 +669,10 @@ The effective state is reported even when a foreign rule still permits passwordl
 If a sudo group was added, existing local sessions need a new login; SSH connections managed by
 the play are refreshed automatically. Failed targets are reported separately and make the command
 fail; successful targets can still change. These operations remain available during configuration drift.
+In the Manager, use **Settings > Host > Change...** or select a sensor and choose **Sudo mode...**.
+The dialog collects passwords before starting the task. The Host line uses only a passwordless
+check: if that fails, it reports **unknown**, not an unverified secure state. Detailed checks and
+changes run only on request; the Sensors table does not poll SSH for sudo access.
 <br><br>
 
 ## Testing a Branch

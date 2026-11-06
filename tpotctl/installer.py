@@ -293,7 +293,7 @@ def user_password_usable(run: Callable = subprocess.run) -> bool:
     """Inspect the current account without reading shadow or requiring sudo."""
     try:
         proc = run(["passwd", "-S"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-    except OSError as err:
+    except (OSError, UnicodeError) as err:
         raise OSError("Cannot verify the user password state with passwd -S.") from err
     fields = proc.stdout.split()
     if proc.returncode or len(fields) < 2 or fields[1] not in ("P", "L", "NP"):

@@ -234,6 +234,12 @@ class SshColortermTest(unittest.TestCase):
 
 class ChecksTest(unittest.TestCase):
 
+    def test_undecodable_account_output_is_an_explicit_verification_error(self):
+        def run(*args, **kwargs):
+            raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid byte")
+        with self.assertRaisesRegex(OSError, "password state"):
+            installer.user_password_usable(run=run)
+
     def test_password_state_is_read_without_sudo_and_unknown_is_an_error(self):
         for state, expected in (("P", True), ("L", False), ("NP", False)):
             with self.subTest(state=state):
