@@ -56,7 +56,7 @@ finally:
 # <<< write in place <<<
 printf '[MAIN]\nip = %s\n' "$myEXTIP" | python3 -c "${myWRITE_IN_PLACE}" /data/ews/conf/ews.ip \
   || echo "# Warning: /data/ews/conf/ews.ip is a link or no regular file, it was not written."
-printf 'HONEY_UUID=%s\nMY_EXTIP=%s\nMY_INTIP=%s\nMY_HOSTNAME=%s\n' "$myUUID" "$myEXTIP" "$myLOCALIP" "$HOSTNAME" \
+printf 'HONEY_UUID=%s\nMY_EXTIP=%s\nMY_INTIP=%s\nMY_HOSTNAME=%s\nMY_VERSION=%s\n' "$myUUID" "$myEXTIP" "$myLOCALIP" "$HOSTNAME" "$myVERSION" \
   | python3 -c "${myWRITE_IN_PLACE}" /data/tpot/etc/compose/elk_environment \
   || echo "# Warning: /data/tpot/etc/compose/elk_environment is a link or no regular file, it was not written."
 

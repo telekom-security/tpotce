@@ -75,6 +75,33 @@ The T-Pot logo has one source. The pixels and palette of the ANSI template are `
 - **nginx** (`docker/nginx/`) is the single web entry point (port 64297) proxying Kibana, CyberChef, Elasticvue, Attack Map, and the sensor ingest endpoint. Its landing page (`dist/html/`: `index.html`, `assets/css/tpot.css`, `assets/js/*.js`, plain JS without a build) asks Elasticsearch through `/es/` with the queries of `assets/queries.json` (not under a `data/` folder: `.gitignore` drops those), written by `python3 -m tpotctl.landing` (`RANGES` 24 h / 1 h / 1 min; run it after changing a query, `--check` in the tests). Rules (`tpotctl/tests/test_landing.py`): no inline script, style or `style=` (the CSP of `tpotweb.conf` `location /`, set with `more_set_headers` so the `add_header` of the server block stay), every script and the stylesheet with its `integrity` (`openssl dgst -sha384 -binary FILE | openssl base64 -A` after each change), JS in ASCII only, values from Elasticsearch come from attackers and go in by `textContent` after the checks of `pulse.js` (a source with a value that does not fit is left out), colours are the tokens of `theme.py`, graphs are canvases drawn in device pixels and small marks are moved onto whole device pixels by `TPot.snap`. `error.html` is seen before the login: neutral (no T-Pot, no nginx), only `$status` by SSI, its style allowed by its hash, and it sets `WWW-Authenticate` again for a 401. Smoke test: `./docker/_tests/run.sh nginx`.
 - **Installer**: `install.sh` bootstraps prerequisites and runs the Ansible playbook `installer/install/tpot.yml` (supports multiple distros); `installer/remove/` mirrors it for uninstall; the sshd drop-in `/etc/ssh/sshd_config.d/tpot.conf` (checked with `sshd -t`) accepts `COLORTERM LC_TERMINAL LC_TERMINAL_VERSION` (`update.sh` `fuSSHD_DROPIN` brings the old one-line drop-in of an earlier T-Pot along, only that exact file, checked with `sshd -t`, put back if the check fails; through sudo where the folder is 0700 root (AlmaLinux, Fedora, RHEL, Rocky), a summary warning if even sudo cannot look); `install.sh` hands the web password to htpasswd on stdin only, it is never exported; every failure of `install.sh` ends with `@@tpot fail <phase>` and `@@tpot phase failed` (the assistant names the log of that step, or the output where a step writes none).
 
+- **Sensor heartbeat retention**: `tpotctl/elastic.py` shares its safety rules through `Retention` (`EVENTS` / `SENSOR_HISTORY`); `Plan` and `Status` retain their scope. `TPOT_SENSOR_STATUS_RETENTION` controls only `tpot-sensor-heartbeat-*` through policy `tpot-sensor-status` (default 30 days), not the current-status index `tpot-sensor-status`. CLI: `tpot elastic retention --sensor-history`; Elastic page: *Attack events / Sensor history*. Settings plans both changes and asks every shortening question before its single write. The shared `es_retention.sh` job handles both policies and creates missing templates. Templates in `docker/tpotinit/dist/etc/ilm/tpot-sensor-*.json` have byte-identical copies in `docker/elk/logstash/dist/`: Logstash installs them before accepting events to avoid a startup race. Neither path overwrites an existing template; existing unmanaged indices are never enrolled automatically. `test_sensor_heartbeat.py` checks the copies; `docker/_tests/tests/sensor_heartbeat.sh` checks the mappings and actual ILM job against Elasticsearch.
+
+### Sensor heartbeat status
+
+`tpotctl/sensors.py` keeps attack `Seen` and `Heartbeat` separate; `observe` is the shared CLI/UI decision:
+online only below 180 seconds since HIVE receipt, offline from that threshold, no heartbeat unknown, access
+and takeover first. `observations`/`table_rows` drive both six-column tables; `behind` is any known tag mismatch
+against the HIVE runtime configuration. `Sensor.version_checked_at` dates the version read by SSH before
+deployment/reboot; undated legacy cache values are unverified (the old add path stored the HIVE's version).
+Status search paginates the `t-pot_sensor` keyword in batches of 1000, separately from attack aggregation.
+API/format errors are displayed; removing access also deletes only the status document and reports partial
+failure explicitly. In the UI, `SensorsPane` polls every 30 seconds and repaints ages every two with `sync_rows`,
+feeding Status-page counts without another request. Reads are serialized; stale results cannot persist
+hostnames or resurrect removed registry entries. Metadata writes occur only after the UI-thread freshness
+check. `sensor_heartbeat` smoke exercises the Manager against actual Elasticsearch documents and pagination.
+Optional null hostname/IP metadata is removed by ingestion and treated as absent when reading older status
+documents; it must not invalidate other sensors' status.
+
+`python3 -m tpotctl.sensor_dashboard` generates only the `tpot-sensors-*` Kibana objects and updates the
+export ZIP; unrelated NDJSON lines stay byte-identical (`--check` validates both). The status data view has
+no time field, its `heartbeat.state` runtime field compares ES time with HIVE receipt; timeline and version
+series use sensor time, a separate data view for process starts uses `heartbeat.started_at` and distinct
+counts. Charts show their top 20 series. This is not a registry view: never-seen/no-access sensors are only
+known to the Manager. `sensor_dashboard` smoke compiles the runtime scripts in ES, verifies the aggregations,
+imports the saved objects in Kibana and resolves real fields. Regenerate the hash manifest after committing
+object changes (the manifest's source is committed history, not the working tree).
+
 ## Conventions
 
 - Commit messages use conventional prefixes (`feat:`, `fix:`, `refactor:`).

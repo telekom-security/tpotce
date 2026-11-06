@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The ILM policy tpot from TPOT_ES_RETENTION, applied by entrypoint.sh on every start of a HIVE.
+# Event and sensor-history ILM policies, applied by entrypoint.sh on every start of a HIVE.
 #
 # T-Pot marks the policy it writes with _meta.tpot_retention, a string (a number or null is no
 # marker of T-Pot). A policy whose marker does not match its delete phase (or that has none and is
@@ -55,7 +55,7 @@ def build($v):
                         | if has("delete") then . else . + {"delete": {"delete_searchable_snapshot": true}} end)
           | .min_age = ($v + "d")) end)
   | ._meta = (part("_meta") + {"managed": true, "tpot_retention": $v,
-                                 "description": "T-Pot ILM policy, its retention is TPOT_ES_RETENTION in .env"});
+                                 "description": ("T-Pot ILM policy, its retention is " + $key + " in .env")});
 def decide($v; $force; $shorten; $oldest; $now):
   if . == null then
     (if $v == "" then "off" else $v end) as $w
@@ -73,16 +73,18 @@ def decide($v; $force; $shorten; $oldest; $now):
 
 # stdin: the policy (or null), prints the TPOT_ES_RETENTION it stands for
 function fuILM_VALUE_OF () {
-  jq -r "${myILM_JQ} value_of"
+  jq -r --arg key TPOT_ES_RETENTION "${myILM_JQ} value_of"
 }
 
 # $1 = TPOT_ES_RETENTION, $2 = true to apply it to a foreign policy (--force),
 # $3 = true when the user confirmed a shorter value (tpotinit never sets it),
-# $4 = epoch seconds of the oldest index (empty: no index), $5 = now (default: the clock);
+# $4 = epoch seconds of the oldest index (empty: no index), $5 = now (default: the clock),
+# $6 = retention setting (default: TPOT_ES_RETENTION);
 # stdin: the policy or null. Prints {action, policy, current, managed, held}
 function fuILM_DECIDE () {
   jq -c --arg v "$1" --argjson force "${2:-false}" --argjson shorten "${3:-false}" \
         --argjson oldest "${4:-null}" --argjson now "${5:-$(date +%s)}" \
+        --arg key "${6:-TPOT_ES_RETENTION}" \
         "${myILM_JQ} decide(\$v; \$force; \$shorten; \$oldest; \$now)"
 }
 
@@ -123,11 +125,11 @@ function fuILM_FIND_ES () {
   done
 }
 
-# prints the creation date (epoch seconds) of the oldest logstash-* index: nothing when there is none,
+# prints the creation date (epoch seconds) of the oldest index of $1 (default logstash-*): none when empty,
 # 0 when the list does not come (unknown counts as older events, so no value is applied that deletes them)
 function fuILM_OLDEST () {
   local myLIST myOLDEST
-  if ! myLIST="$(curl -s -f --max-time 10 "${myILM_ES}/_cat/indices/logstash-*?format=json&h=creation.date" 2>/dev/null)" \
+  if ! myLIST="$(curl -s -f --max-time 10 "${myILM_ES}/_cat/indices/${1:-logstash-*}?format=json&h=creation.date" 2>/dev/null)" \
      || ! myOLDEST="$(jq -r 'if type != "array" then error("no list") else [.[]."creation.date" | tonumber] | min // empty | . / 1000 | floor end' <<<"${myLIST}" 2>/dev/null)";
     then
       echo 0
@@ -138,35 +140,37 @@ function fuILM_OLDEST () {
 
 function fuILM_MAIN () {
   local myCODE myBODY myDECISION myACTION myCURRENT myHELD myOLDEST
+  local myVALUE="${1-${TPOT_ES_RETENTION:-}}" myKEY="${2:-TPOT_ES_RETENTION}" myPOLICY="${3:-tpot}"
+  local myPATTERN="${4:-logstash-*}" myCOMMAND="${5:-tpot elastic retention}"
   # the pattern of env.schema.yml (or empty): tpotinit validates .env before it starts this, a value that
   # gets here anyway (1 to 3650 days, or off) is not worked with
-  if [[ ! "${TPOT_ES_RETENTION:-}" =~ ^([1-9][0-9]{0,2}|[1-2][0-9]{3}|3[0-5][0-9]{2}|36[0-4][0-9]|3650|off)?$ ]];
+  if [[ ! "${myVALUE}" =~ ^([1-9][0-9]{0,2}|[1-2][0-9]{3}|3[0-5][0-9]{2}|36[0-4][0-9]|3650|off)?$ ]];
     then
-      echo "# Warning: TPOT_ES_RETENTION=${TPOT_ES_RETENTION} is no number of days from 1 to 3650 and not off, the ILM policy tpot is not checked."
+      echo "# Warning: ${myKEY}=${myVALUE} is no number of days from 1 to 3650 and not off, the ILM policy ${myPOLICY} is not checked."
       return 0
   fi
   if ! fuILM_FIND_ES;
     then
-      echo "# Warning: Elasticsearch did not answer within ${myILM_WAIT} s, the ILM policy tpot is not checked."
+      echo "# Warning: Elasticsearch did not answer within ${myILM_WAIT} s, the ILM policy ${myPOLICY} is not checked."
       return 0
   fi
   myBODY="$(mktemp)"
-  myCODE="$(curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' "${myILM_ES}/_ilm/policy/tpot")"
+  myCODE="$(curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' "${myILM_ES}/_ilm/policy/${myPOLICY}")"
   case "${myCODE}" in
-    200) if ! jq -e '.tpot.policy | type == "object"' "${myBODY}" >/dev/null 2>&1;
+    200) if ! jq -e --arg policy "${myPOLICY}" '.[$policy].policy | type == "object"' "${myBODY}" >/dev/null 2>&1;
            then
-             echo "# Warning: Elasticsearch answered without the ILM policy tpot, it is not checked."
+             echo "# Warning: Elasticsearch answered without the ILM policy ${myPOLICY}, it is not checked."
              rm -f "${myBODY}"; return 0
          fi
-         myDECISION="$(jq '.tpot.policy' "${myBODY}" | fuILM_DECIDE "${TPOT_ES_RETENTION:-}" 2>/dev/null)" ;;
+         myDECISION="$(jq --arg policy "${myPOLICY}" '.[$policy].policy' "${myBODY}" | fuILM_DECIDE "${myVALUE}" false false "" "" "${myKEY}" 2>/dev/null)" ;;
     404) myOLDEST=""
          # only a value that deletes needs to know how old the events are
-         if [[ -n "${TPOT_ES_RETENTION:-}" && "${TPOT_ES_RETENTION}" != "off" ]];
+         if [[ -n "${myVALUE}" && "${myVALUE}" != "off" ]];
            then
-             myOLDEST="$(fuILM_OLDEST)"
+             myOLDEST="$(fuILM_OLDEST "${myPATTERN}")"
          fi
-         myDECISION="$(echo null | fuILM_DECIDE "${TPOT_ES_RETENTION:-}" false false "${myOLDEST}" 2>/dev/null)" ;;
-    *)   echo "# Warning: Elasticsearch did not answer (HTTP ${myCODE}), the ILM policy tpot is not checked."
+         myDECISION="$(echo null | fuILM_DECIDE "${myVALUE}" false false "${myOLDEST}" "" "${myKEY}" 2>/dev/null)" ;;
+    *)   echo "# Warning: Elasticsearch did not answer (HTTP ${myCODE}), the ILM policy ${myPOLICY} is not checked."
          rm -f "${myBODY}"; return 0 ;;
   esac
   rm -f "${myBODY}"
@@ -175,38 +179,65 @@ function fuILM_MAIN () {
   myHELD="$(jq -r '.held // ""' <<<"${myDECISION}")"
   case "${myACTION}" in
     create|update|keep|foreign|pending) ;;
-    *) echo "# Warning: the ILM policy tpot could not be checked (no decision)."
+    *) echo "# Warning: the ILM policy ${myPOLICY} could not be checked (no decision)."
        return 0 ;;
   esac
   case "${myACTION}" in
     create|update)
       if jq -c '{policy: .policy}' <<<"${myDECISION}" \
-         | curl -s -f --max-time 10 -o /dev/null -X PUT "${myILM_ES}/_ilm/policy/tpot" -H 'Content-Type: application/json' -d @-;
+         | curl -s -f --max-time 10 -o /dev/null -X PUT "${myILM_ES}/_ilm/policy/${myPOLICY}" -H 'Content-Type: application/json' -d @-;
         then
           if [[ -n "${myHELD}" ]];
             then
-              echo "# ILM policy tpot: created, events are kept forever: TPOT_ES_RETENTION=${myHELD} would delete events older than ${myHELD} days right away."
-              echo "#          T-Pot does not delete events on its own, apply it with 'tpot elastic retention --force' (it asks first)."
+              echo "# ILM policy ${myPOLICY}: created, events are kept forever: ${myKEY}=${myHELD} would delete events older than ${myHELD} days right away."
+              echo "#          T-Pot does not delete events on its own, apply it with '${myCOMMAND} --force' (it asks first)."
             else
-              echo "# ILM policy tpot: ${myACTION}d, events are kept $(jq -r '.policy._meta.tpot_retention' <<<"${myDECISION}" | sed 's/^off$/forever/; s/^\([0-9]*\)$/for \1 days/')."
+              echo "# ILM policy ${myPOLICY}: ${myACTION}d, events are kept $(jq -r '.policy._meta.tpot_retention' <<<"${myDECISION}" | sed 's/^off$/forever/; s/^\([0-9]*\)$/for \1 days/')."
           fi
         else
-          echo "# Warning: the ILM policy tpot could not be written."
+          echo "# Warning: the ILM policy ${myPOLICY} could not be written."
       fi ;;
     keep)
-      echo "# ILM policy tpot: as set (${myCURRENT:-not derivable})." ;;
+      echo "# ILM policy ${myPOLICY}: as set (${myCURRENT:-not derivable})." ;;
     pending)
       case "${myCURRENT}" in
         ""|off) myCURRENT="forever" ;;
         *)      myCURRENT="${myCURRENT} days" ;;
       esac
-      echo "# TPOT_ES_RETENTION=${myHELD} is shorter than the ILM policy tpot (${myCURRENT}). T-Pot does not delete events on its own:"
-      echo "#          apply it with 'tpot elastic retention --force' (it asks first), or keep the policy with 'tpot elastic retention --adopt'." ;;
+      echo "# ${myKEY}=${myHELD} is shorter than the ILM policy ${myPOLICY} (${myCURRENT}). T-Pot does not delete events on its own:"
+      echo "#          apply it with '${myCOMMAND} --force' (it asks first), or keep the policy with '${myCOMMAND} --adopt'." ;;
     foreign)
-      echo "# Warning: the ILM policy tpot was changed outside of T-Pot (retention: ${myCURRENT:-not in days}), T-Pot leaves it as it is."
-      echo "#          TPOT_ES_RETENTION=${TPOT_ES_RETENTION} is not applied; 'tpot elastic status' shows both,"
-      echo "#          'tpot elastic retention --adopt' keeps the policy, 'tpot elastic retention --force' applies .env to it." ;;
+      echo "# Warning: the ILM policy ${myPOLICY} was changed outside of T-Pot (retention: ${myCURRENT:-not in days}), T-Pot leaves it as it is."
+      echo "#          ${myKEY}=${myVALUE} is not applied; 'tpot elastic status' shows both,"
+      echo "#          '${myCOMMAND} --adopt' keeps the policy, '${myCOMMAND} --force' applies .env to it." ;;
   esac
+}
+
+# Logstash installs the same templates before accepting events; this job also repairs a missing one.
+# Never attach policies to existing unmanaged indices or replace an existing (possibly edited) template.
+function fuILM_TEMPLATES () {
+  local myNAME myCODE myBODY myFILE
+  myBODY="$(mktemp)" || { echo "# Warning: no temporary file for the sensor index templates."; return 1; }
+  for myNAME in tpot-sensor-status tpot-sensor-heartbeat; do
+    myFILE="/opt/tpot/etc/ilm/${myNAME}.json"
+    myCODE="$(curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' "${myILM_ES}/_index_template/${myNAME}")"
+    case "${myCODE}" in
+      200)
+        if jq -e --arg name "${myNAME}" '.index_templates | any(.name == $name)' "${myBODY}" >/dev/null 2>&1;
+          then echo "# Index template ${myNAME}: kept (never overwritten)."
+          else echo "# Warning: Elasticsearch answered without the index template ${myNAME}; nothing was written."
+        fi ;;
+      404)
+        myCODE="$(curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' -X PUT \
+          "${myILM_ES}/_index_template/${myNAME}?create=true" -H 'Content-Type: application/json' -d "@${myFILE}")"
+        if [[ "${myCODE}" == 200 ]];
+          then echo "# Index template ${myNAME}: created."
+          else echo "# Warning: index template ${myNAME} could not be created (HTTP ${myCODE}): $(cat "${myBODY}")."
+        fi ;;
+      *) echo "# Warning: index template ${myNAME} could not be checked (HTTP ${myCODE}); nothing was written." ;;
+    esac
+  done
+  rm -f "${myBODY}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
@@ -215,4 +246,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   trap '[[ -z "${myBODY:-}" ]] || rm -f "${myBODY}"; kill $(jobs -p) 2>/dev/null
         echo "# tpotinit stops, the check of the ILM policy tpot ends here."; exit 143' TERM
   fuILM_MAIN
+  fuILM_MAIN "${TPOT_SENSOR_STATUS_RETENTION:-}" TPOT_SENSOR_STATUS_RETENTION \
+    tpot-sensor-status 'tpot-sensor-heartbeat-*' 'tpot elastic retention --sensor-history'
+  [[ -z "${myILM_ES}" ]] || fuILM_TEMPLATES
 fi

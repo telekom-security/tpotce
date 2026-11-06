@@ -736,14 +736,50 @@ A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the *
 
 | Command | Does |
 |---|---|
-| `tpot sensors` | lists the sensors with their access, address, hostname and when they were last seen |
+| `tpot sensors` | lists sensors with their host, version, last heartbeat, last attack event and state |
 | `tpot sensors add` | deploys a sensor over SSH (`./deploy.sh` does the same) |
-| `tpot sensors remove NAME` | revokes the access of a sensor |
+| `tpot sensors remove NAME` | revokes access and deletes the current heartbeat status, retaining history |
 | `tpot sensors set NAME --host … --ssh-user …` | adds where a sensor is, i.e. for sensors of earlier releases |
 | `tpot sensors cert` | shows the addresses the certificate of the **Hive** covers, `--renew` issues it anew, `--distribute` copies it to the sensors |
 | `tpot sensors import` | gives the sensors of `lswebpasswd` / `lswebpasswd.lost` that `LS_WEB_USER` does not name their access back |
 
 The **Hive** keeps a list of its sensors in `~/tpotce/data/sensors.json` (names, addresses, SSH user, date and version, no passwords). Sensors deployed with an earlier release are taken over from `LS_WEB_USER` the first time `tpot sensors` runs, add their addresses with `tpot sensors set` to manage them as well.
+
+### Sensor Heartbeats
+The *Sensors* page and `tpot sensors list` show **Sensor | Host | Version | Heartbeat | Last event | State**.
+Logstash on a sensor sends a heartbeat every minute, even without attacks. **Online** means the Hive received
+one less than 180 seconds ago; exactly 180 seconds is **offline**. The offline time starts at that threshold.
+No heartbeat means **unknown**, not offline, even if attack events are present. **No access** and **to take over**
+take precedence. Online confirms the Logstash-to-Hive connection, **not** that every honeypot is healthy.
+
+Reachability uses the Hive's receive time, not the sensor's clock; a backlog can therefore appear online when
+delivery resumes. Table timestamps are UTC. *Last event* is independent, using the last seven days by default
+(`tpot sensors list --days N`). The Manager refreshes the data every 30 seconds and ages the display every two
+seconds without moving the selected row. The *Status* page summarizes online, offline and behind sensors, and
+also names any unknown ones or retrieval errors.
+On narrow terminals, scroll the table horizontally; the sensor column stays fixed and abbreviates long names.
+
+A heartbeat's version takes precedence over the registry cache. Without a heartbeat, a version read by
+`sensors add` over SSH is marked **checked DATE**. Old cache values have no check date and are marked
+**not checked**: older Managers copied the Hive's version there. A known version different from the Hive's
+configured runtime version is yellow and marked **behind** (including newer or custom tags).
+An older sensor without `~/tpotce/version` can still be deployed; the read failure is reported and its version
+stays unknown until a heartbeat supplies it. Updated Logstash and tpotinit images are needed for heartbeats.
+
+Removing a sensor deletes only its current document in `tpot-sensor-status`, not heartbeat history or attack
+events. A failed status deletion is reported as a partial removal; access stays revoked. Heartbeat history has
+its own [retention](#log-persistence).
+
+Kibana's **T-Pot Sensors** dashboard has current status, a heartbeat timeline, versions over time,
+observed Logstash process starts and attack events per sensor. Its status table is independent of the
+time picker, so an old offline sensor does not disappear. It includes only sensors that have sent
+heartbeats; use the Manager for sensors with no heartbeat or no access.
+The charts show their top 20 series. Heartbeat history contains every fifth heartbeat and uses the
+sensor's clock; process starts use the Logstash start time and count distinct starts, not samples.
+Short-lived processes without a fifth heartbeat cannot appear in that history. Attack charts still use
+`logstash-*`; heartbeats never enter those indices.
+With `TPOT_KIBANA_OBJECTS=keep`, add the dashboard explicitly with `tpot elastic import --mode add`
+or the *Elastic* page. This adds missing objects without overwriting yours.
 
 ### Planning and Certificates
 The **Sensor** checks the **Hive** against a copy of its certificate (`~/tpotce/data/hive.crt` on the **Sensor**), so the certificate has to cover the address the **Sensor** connects to. **T-Pot Init** only creates a self-signed certificate for one IP of the **Hive** host, which suits simple setups. A **Hive** reachable on more than one address (i.e. RFC 1918 and a public NAT IP) or a domain name needs these as SANs (Subject Alternative Name), otherwise Logstash on the **Sensor** cannot validate the connection. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).
@@ -933,7 +969,7 @@ header instead of letting its path squeeze out the form.
 | `tpot sensors [list\|add\|remove\|set\|cert\|import]` | *Sensors* (`set` is *Edit*, `import` is *Take over*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
 | `tpot users [list\|add\|passwd\|remove\|import]` | *Web users* (`import` is *Take over*) | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | **Data & maintenance** | | | |
-| `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--adopt] [--force] [--accept-data-loss]` | *Elastic* | T-Pot host, HIVE | how long Elasticsearch keeps the events (`TPOT_ES_RETENTION`, the ILM policy `tpot`); a shorter time always asks first (also with `-y`; without a terminal `--accept-data-loss`), T-Pot never shortens it on its own, and lists the indices it deletes; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value), `DAYS` alone writes only `.env` then and says so (exit 0), as the pages do; where Elasticsearch cannot be read it says why and writes only `.env`. `status` also shows `TPOT_KIBANA_OBJECTS` and what an import would bring (new, to update, the same, yours), or why Kibana cannot be read |
+| `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--sensor-history] [--adopt] [--force] [--accept-data-loss]` | *Elastic* | T-Pot host, HIVE | event retention (`TPOT_ES_RETENTION`, policy `tpot`), or with `--sensor-history` heartbeat history (`TPOT_SENSOR_STATUS_RETENTION`, policy `tpot-sensor-status`); a shorter time always asks first (also with `-y`; without a terminal `--accept-data-loss`), T-Pot never shortens it on its own, and lists the indices it deletes; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value), `DAYS` alone writes only `.env` then and says so (exit 0), as the pages do; where Elasticsearch cannot be read it says why and writes only `.env`. `status` shows both retentions, `TPOT_KIBANA_OBJECTS` and what an import would bring (new, to update, the same, yours), or why Kibana cannot be read |
 | `tpot elastic export [FILE]` / `tpot elastic import [--mode add\|update\|overwrite] [--dry-run] [-y]` / `tpot elastic import --prune [--dry-run] [-y]` / `tpot elastic restore FILE [-y]` | *Elastic* | T-Pot host, HIVE (with Kibana) | T-Pot's [Kibana objects](#kibana-objects): `export` saves every object into `~/tpot_backups` (or into the new `FILE`); `import` brings T-Pot's objects in as the mode does (default `update`: the missing and the unchanged ones, yours stay), `--dry-run` only shows what it would do, `overwrite` lists the objects of yours it replaces and asks first (`-y` confirms, without a terminal it needs `-y`, exit 2); `import --prune` imports nothing, it lists the unchanged objects of earlier releases that this one no longer ships and removes them after an export and its question (default no, `-y` confirms, without a terminal it needs `-y`, exit 2; with `--mode` exit 2); `restore` checks the file, asks and imports every object of it, the advanced settings too; `restore` and `import` with `update` or `overwrite` export first and import nothing if that fails (`add` replaces nothing and makes no export); exit 1 on an error or an object Kibana refused, "This edition runs no Kibana." where it has none |
 | `tpot install [--classic]` | `ctrl+f` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
 | `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` (naming the size of the Elasticsearch data when the archive holds it) |
@@ -1485,6 +1521,10 @@ All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will b
 Elasticsearch keeps its events for the number of days set for `TPOT_ES_RETENTION=<1-3650|off>` in `~/tpotce/.env`, it defaults to 30. This offers a good balance between storage and speed. T-Pot sets the Index Lifecycle Policy `tpot` accordingly on every start of a HIVE, `off` keeps the events forever (mind the disk). An empty value leaves an existing policy alone.
 <br>
 T-Pot never shortens the retention by itself. Change it on the *Elastic* page of the T-Pot Manager or with `tpot elastic retention DAYS`; a shorter time lists the indices it deletes and asks first, `-y` does not confirm it and without a terminal only `--accept-data-loss` does. The Settings page does the same when you save a shorter retention.
+<br>
+Sensor heartbeat history has its own retention: `TPOT_SENSOR_STATUS_RETENTION=<1-3650|off>` (default 30 days, HIVE only). Choose *Sensor history* on the *Elastic* page or add `--sensor-history` to `tpot elastic retention`; the same safeguards, `--adopt`, `--force` and separate data-loss confirmation apply. Its policy `tpot-sensor-status` applies only to `tpot-sensor-heartbeat-*`, never to the single current-status document per sensor in `tpot-sensor-status` or to attack events in `logstash-*`. `tpot elastic status` shows both policies. When both retentions are shortened on the Settings page, **all** deletion questions must be accepted before any setting or policy is written; declining either saves nothing.
+<br>
+The heartbeat templates are installed before Logstash accepts events, and tpotinit also creates them if missing. Existing templates are kept, not overwritten; existing unmanaged history indices are not enrolled into deletion automatically. `off` retains history indefinitely; empty leaves an existing policy unchanged, as for event retention.
 <br>
 A shorter value that gets into `.env` any other way (by hand, `tpot env set`, `restore.sh`) waits: T-Pot warns about it on every start and keeps the policy as it is until `tpot elastic retention --force` or the *Elastic* page applies it, both ask first. If the policy is missing and `TPOT_ES_RETENTION` is empty, T-Pot creates it to keep everything (`off`). If the value would delete older events that exist, the policy is created to keep everything as well and the value waits.
 <br>

@@ -31,9 +31,12 @@ import string
 import subprocess
 import tempfile
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass, field
-from typing import Callable, Dict, List
+from datetime import datetime, timezone
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple
 
 from tpotctl import users
 from tpotctl.bootstrap import REPO_DIR
@@ -41,6 +44,10 @@ from tpotctl.envfile import EnvError, EnvFile
 
 SSH_PORT = 64295
 ES_URL = "http://127.0.0.1:64298"
+HEARTBEAT_TIMEOUT = 180
+SENSOR_NAME = re.compile(r"[A-Za-z0-9_.-]{1,512}")
+VERSION_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+-]{0,127}")
+COLUMNS = ("Sensor", "Host", "Version", "Heartbeat", "Last event", "State")
 WORDS = (os.path.join("installer", "install", "a.txt"), os.path.join("installer", "install", "n.txt"))
 # the same as tpotinit uses for the first certificate (entrypoint.sh)
 CERT_SUBJECT = "/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd"
@@ -62,6 +69,7 @@ class Sensor:
     hostname: str = ""         # t-pot_hostname of its events
     source: str = "migrated"   # deployed | migrated | imported (from lswebpasswd / lswebpasswd.lost)
     access: bool = True        # has an entry in LS_WEB_USER
+    version_checked_at: str = ""
 
 
 @dataclass
@@ -73,10 +81,95 @@ class Seen:
 
 
 @dataclass
+class Heartbeat:
+    received_at: float
+    version: str = ""
+    started_at: str = ""
+    sensor_at: str = ""
+    hostname: str = ""
+    ip_ext: str = ""
+    ip_int: str = ""
+    sequence: int = 0
+
+
+@dataclass
 class Status:
     sensors: Dict[str, Seen] = field(default_factory=dict)
     unlinked: Dict[str, Seen] = field(default_factory=dict)   # hostnames of events without t-pot_sensor
     problem: str = ""
+    heartbeats: Dict[str, Heartbeat] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Observation:
+    host: str
+    version: str
+    cached: bool
+    checked_at: str
+    behind: bool
+    heartbeat: Optional[Heartbeat]
+    last_event: str
+    state: str
+
+
+def observe(sensor: Sensor, status: Status, hive_version: str, *, takeable: bool = False,
+            now: Optional[float] = None) -> Observation:
+    heartbeat = status.heartbeats.get(sensor.name)
+    seen = status.sensors.get(sensor.name, Seen())
+    version = heartbeat.version if heartbeat else sensor.version
+    checked_at = "" if heartbeat else sensor.version_checked_at
+    # Old registries cached the HIVE's version, not a version read from the sensor.
+    verified = heartbeat is not None or bool(checked_at)
+    behind = bool(verified and version and hive_version and version != hive_version)
+    if takeable:
+        state = "to take over"
+    elif not sensor.access:
+        state = "no access"
+    elif heartbeat is None:
+        state = "unknown"
+    else:
+        age = (time.time() if now is None else now) - heartbeat.received_at
+        state = "online" if age < HEARTBEAT_TIMEOUT else "offline"
+    host = sensor.host or (heartbeat.hostname if heartbeat else "") or seen.hostname or sensor.hostname
+    return Observation(host, version, heartbeat is None, checked_at, behind, heartbeat, seen.last, state)
+
+
+def observations(registry: "Registry", status: Status, found=(),
+                 now: Optional[float] = None) -> Iterator[Tuple[Sensor, str, Observation]]:
+    takeable = {entry.name: entry for entry in found}
+    all_sensors = registry.sensors() + [
+        Sensor(entry.name, source=entry.source, access=False) for entry in found if entry.name not in registry.records]
+    now = time.time() if now is None else now
+    for sensor in all_sensors:
+        label = sensor.name + ("" if sensor.source == "deployed" else f" ({sensor.source})")
+        yield sensor, label, observe(sensor, status, registry.env.get("TPOT_VERSION") or "",
+                                     takeable=not sensor.access and sensor.name in takeable, now=now)
+
+
+def _time_text(stamp: float) -> str:
+    return datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def table_rows(observed: Iterable[Tuple[Sensor, str, Observation]]):
+    from rich.text import Text
+    from tpotctl import glyphs, theme
+    styles = {"online": ("running", "ok"), "offline": ("stopped", "error"), "unknown": ("warn", "warn"),
+              "no access": ("fail", "error"), "to take over": ("warn", "warn")}
+    for sensor, label, item in observed:
+        version = item.version or "unknown"
+        if item.version and item.cached:
+            version += f" (checked {item.checked_at[:10]})" if item.checked_at else " (not checked)"
+        if item.behind:
+            version += " (behind)"
+        version = Text(version, style=theme.color("warn") if item.behind or not item.version else "")
+        heartbeat = _time_text(item.heartbeat.received_at) if item.heartbeat else "-"
+        icon, color = styles[item.state]
+        state = item.state
+        if item.state == "offline" and item.heartbeat is not None:
+            state += " since " + _time_text(item.heartbeat.received_at + HEARTBEAT_TIMEOUT)
+        yield sensor.name, (label, item.host or "-", version, heartbeat,
+                            _time_text(_timestamp(item.last_event)) if item.last_event else "-",
+                            Text(f"{glyphs.g(icon)} {state}", style=theme.color(color)))
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +280,10 @@ class Registry:
             with open(self.path, encoding="utf-8") as handle:
                 for item in (json.load(handle).get("sensors") or []):
                     sensor = Sensor(**{k: v for k, v in item.items() if k in Sensor.__dataclass_fields__})
+                    if not isinstance(sensor.version_checked_at, str):
+                        raise ValueError("version_checked_at must be text")
+                    if sensor.version_checked_at:
+                        _timestamp(sensor.version_checked_at)
                     self.records[sensor.name] = sensor
         except FileNotFoundError:
             pass
@@ -359,6 +456,18 @@ def check_ssh(host: str, user: str, run: Callable = subprocess.run, port: int = 
     return "unreachable"
 
 
+def read_version(host: str, user: str, port: int = SSH_PORT, run: Callable = subprocess.run) -> str:
+    try:
+        proc = run(ssh_command(host, user, 'cat -- "$HOME/tpotce/version"', port=port),
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+    except (OSError, UnicodeError, subprocess.TimeoutExpired) as err:
+        raise SensorsError(f"the version of {host} could not be read ({err})") from err
+    version = proc.stdout.strip()
+    if proc.returncode or not VERSION_TAG.fullmatch(version):
+        raise SensorsError(f"the version of {host} could not be read from ~/tpotce/version")
+    return version
+
+
 def copy_id_command(host: str, user: str, port: int = SSH_PORT) -> List[str]:
     return ["ssh-copy-id", "-p", str(check_port(port)), f"{check_user(user)}@{check_address(host)}"]
 
@@ -496,30 +605,148 @@ def status_query(days: int) -> dict:
 def _seen(bucket: dict) -> Seen:
     hits = (((bucket.get("latest") or {}).get("hits") or {}).get("hits") or [{}])
     source = hits[0].get("_source", {}) if hits else {}
-    return Seen(source.get("@timestamp", ""), source.get("t-pot_hostname", ""), source.get("t-pot_ip_ext", ""),
-                source.get("t-pot_ip_int", ""))
+    values = [source.get(key, "") for key in ("@timestamp", "t-pot_hostname", "t-pot_ip_ext", "t-pot_ip_int")]
+    values = ["" if value is None else value for value in values]
+    if any(not isinstance(value, str) for value in values):
+        raise ValueError("invalid events fields")
+    if values[0]:
+        _timestamp(values[0])
+    return Seen(*values)
 
 
 def parse_status(answer: dict, own_hostname: str = "") -> Status:
-    aggs = answer.get("aggregations") or {}
+    if not isinstance(answer, dict) or not isinstance(answer.get("aggregations"), dict):
+        raise ValueError("invalid events response")
+    aggs = answer["aggregations"]
     status = Status()
-    for bucket in (aggs.get("sensors") or {}).get("buckets", []):
-        status.sensors[bucket["key"]] = _seen(bucket)
-    for bucket in ((aggs.get("unlinked") or {}).get("hosts") or {}).get("buckets", []):
-        if bucket["key"] != own_hostname:
-            status.unlinked[bucket["key"]] = _seen(bucket)
+    try:
+        for bucket in (aggs.get("sensors") or {}).get("buckets", []):
+            status.sensors[bucket["key"]] = _seen(bucket)
+        for bucket in ((aggs.get("unlinked") or {}).get("hosts") or {}).get("buckets", []):
+            if bucket["key"] != own_hostname:
+                status.unlinked[bucket["key"]] = _seen(bucket)
+    except (AttributeError, KeyError, TypeError) as err:
+        raise ValueError("invalid events response") from err
     return status
 
 
-def fetch_status(days: int = 7, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Status:
-    request = urllib.request.Request(f"{url}/logstash-*/_search", data=json.dumps(status_query(days)).encode(),
+def _timestamp(value: str) -> float:
+    if not isinstance(value, str):
+        raise ValueError("timestamp must be text")
+    moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if moment.tzinfo is None:
+        raise ValueError("timestamp must include its timezone")
+    return moment.timestamp()
+
+
+def _search(url: str, query: dict, opener: Callable) -> dict:
+    request = urllib.request.Request(url, data=json.dumps(query).encode(),
                                      headers={"Content-Type": "application/json"}, method="POST")
+    with opener(request, timeout=10) as response:
+        answer = json.loads(response.read().decode("utf-8"))
+    if not isinstance(answer, dict) or answer.get("timed_out"):
+        raise ValueError("invalid or timed-out search response")
+    shards = answer.get("_shards", {})
+    if not isinstance(shards, dict) or shards.get("failed", 0):
+        raise ValueError("search has failed shards")
+    return answer
+
+
+def _heartbeat(hit: dict) -> Heartbeat:
     try:
-        with opener(request, timeout=10) as response:
-            answer = json.loads(response.read().decode("utf-8"))
+        source = hit["_source"]
+        name = source["t-pot_sensor"]
+        if not isinstance(name, str) or not SENSOR_NAME.fullmatch(name) or hit["_id"] != name:
+            raise ValueError("invalid sensor identity")
+        data = source["heartbeat"]
+        version, sequence = data["version"], data["sequence"]
+        if not isinstance(version, str) or (version and not VERSION_TAG.fullmatch(version)):
+            raise ValueError("invalid version")
+        if type(sequence) is not int or not 1 <= sequence <= 9223372036854775807:
+            raise ValueError("invalid sequence")
+        _timestamp(source["@timestamp"])
+        _timestamp(data["started_at"])
+        metadata = [source.get(key, "") for key in ("t-pot_hostname", "t-pot_ip_ext", "t-pot_ip_int")]
+        metadata = ["" if value is None else value for value in metadata]
+        if any(not isinstance(value, str) or len(value) > 253 for value in metadata):
+            raise ValueError("invalid metadata")
+        return Heartbeat(_timestamp(data["received_at"]), version, data["started_at"],
+                         source["@timestamp"], *metadata, sequence)
+    except (KeyError, TypeError) as err:
+        raise ValueError("invalid heartbeat document") from err
+
+
+def _heartbeats(url: str, opener: Callable) -> Dict[str, Heartbeat]:
+    query = {"size": 1000, "sort": [{"t-pot_sensor": "asc"}], "track_total_hits": False}
+    result: Dict[str, Heartbeat] = {}
+    while True:
+        answer = _search(f"{url}/tpot-sensor-status/_search?ignore_unavailable=true", query, opener)
+        hits = answer.get("hits")
+        if not isinstance(hits, dict) or not isinstance(hits.get("hits"), list):
+            raise ValueError("invalid heartbeat search response")
+        page = hits["hits"]
+        for hit in page:
+            heartbeat = _heartbeat(hit)
+            name = hit["_id"]
+            if name in result:
+                raise ValueError("duplicate heartbeat document during pagination")
+            result[name] = heartbeat
+        if len(page) < query["size"]:
+            return result
+        after = page[-1].get("sort")
+        if after != [page[-1]["_id"]] or (query.get("search_after") and after <= query["search_after"]):
+            raise ValueError("invalid heartbeat pagination")
+        query["search_after"] = after
+
+
+def fetch_status(days: int = 7, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Status:
+    status, problems = Status(), []
+    try:
+        answer = _search(f"{url}/logstash-*/_search", status_query(days), opener)
+        status = parse_status(answer, socket.gethostname())
     except (OSError, ValueError) as err:
-        return Status(problem=f"Elasticsearch on {url} cannot be asked ({err})")
-    return parse_status(answer, socket.gethostname())
+        problems.append(f"Elasticsearch events on {url} cannot be asked ({err})")
+    try:
+        status.heartbeats = _heartbeats(url, opener)
+    except (OSError, ValueError) as err:
+        problems.append(f"Sensor heartbeats on {url} cannot be asked ({err})")
+    status.problem = "\n".join(problems)
+    return status
+
+
+def delete_status(name: str, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> None:
+    if not SENSOR_NAME.fullmatch(name):
+        raise SensorsError("invalid sensor name for heartbeat removal")
+    identity = urllib.parse.quote(name, safe="").replace(".", "%2E")
+    request = urllib.request.Request(f"{url}/tpot-sensor-status/_doc/{identity}", method="DELETE")
+    try:
+        try:
+            response = opener(request, timeout=10)
+        except urllib.error.HTTPError as err:
+            with err:
+                body = json.loads(err.read().decode("utf-8"))
+            if err.code == 404 and isinstance(body, dict):
+                if body.get("result") == "not_found" or (
+                    isinstance(body.get("error"), dict) and
+                    body["error"].get("type") == "index_not_found_exception"
+                ):
+                    return
+            raise
+        with response:
+            body = json.loads(response.read().decode("utf-8"))
+        if not isinstance(body, dict) or body.get("result") not in ("deleted", "not_found"):
+            raise ValueError("invalid deletion response")
+    except (OSError, ValueError) as err:
+        raise SensorsError(f"heartbeat status could not be removed ({err})") from err
+
+
+def remove(registry: Registry, name: str, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> str:
+    note = registry.revoke(name)
+    try:
+        delete_status(name, url, opener)
+    except SensorsError as err:
+        raise SensorsError(f"{name}: access and registry entry removed, but {err}. History is unchanged.") from err
+    return note
 
 
 def link_hostnames(registry: Registry, status: Status) -> None:

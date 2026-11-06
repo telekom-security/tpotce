@@ -11,6 +11,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
+from datetime import datetime, timezone
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
@@ -184,6 +186,295 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(query["aggs"]["sensors"]["terms"]["field"], "t-pot_sensor.keyword")
         failing = mock.Mock(side_effect=OSError("connection refused"))
         self.assertIn("cannot be asked", sensors.fetch_status(opener=failing).problem)
+
+
+class HeartbeatTest(unittest.TestCase):
+    NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc).timestamp()
+
+    def heartbeat(self, age=0, version="new-release"):
+        self.assertTrue(hasattr(sensors, "Heartbeat"), "heartbeat model is missing")
+        return sensors.Heartbeat(received_at=self.NOW - age, version=version,
+                                 sensor_at="2020-01-01T00:00:00Z", started_at="2019-01-01T00:00:00Z")
+
+    def observed(self, heartbeat=None, sensor=None, takeable=False):
+        self.assertTrue(hasattr(sensors, "observe"), "shared sensor state calculation is missing")
+        status = sensors.Status(sensors={"sensor-one": sensors.Seen("2026-11-01T12:00:00Z")})
+        if heartbeat:
+            status.heartbeats["sensor-one"] = heartbeat
+        return sensors.observe(sensor or sensors.Sensor("sensor-one"), status, "new-release",
+                               takeable=takeable, now=self.NOW)
+
+    def test_online_uses_receipt_time_and_exactly_180_seconds_is_offline(self):
+        for age, want in ((0, "online"), (179.999, "online"), (180, "offline"), (900, "offline")):
+            with self.subTest(age=age):
+                observed = self.observed(self.heartbeat(age))
+                self.assertEqual(observed.state, want)
+                self.assertEqual(observed.last_event, "2026-11-01T12:00:00Z")
+
+    def test_attacks_without_heartbeat_do_not_imply_online(self):
+        self.assertEqual(self.observed().state, "unknown")
+
+    def test_access_and_takeover_have_priority_over_heartbeat(self):
+        sensor = sensors.Sensor("sensor-one", access=False)
+        self.assertEqual(self.observed(self.heartbeat(), sensor).state, "no access")
+        self.assertEqual(self.observed(self.heartbeat(), sensor, takeable=True).state, "to take over")
+
+    def test_heartbeat_wins_over_cache_and_missing_heartbeat_version_stays_unknown(self):
+        sensor = sensors.Sensor("sensor-one", version="cached")
+        observed = self.observed(self.heartbeat(version="old-release"), sensor)
+        self.assertEqual(observed.version, "old-release")
+        self.assertTrue(observed.behind)
+        self.assertFalse(observed.cached)
+        unknown = self.observed(self.heartbeat(version=""), sensor)
+        self.assertEqual(unknown.version, "")
+        self.assertFalse(unknown.behind)
+        self.assertEqual(unknown.state, "online")
+
+    def test_verified_cache_keeps_its_date_without_claiming_online(self):
+        self.assertIn("version_checked_at", sensors.Sensor.__dataclass_fields__)
+        sensor = sensors.Sensor("sensor-one", version="old-release", version_checked_at="2026-10-01T10:00:00Z")
+        observed = self.observed(sensor=sensor)
+        self.assertEqual((observed.state, observed.version, observed.checked_at),
+                         ("unknown", "old-release", "2026-10-01T10:00:00Z"))
+        self.assertTrue(observed.cached)
+        self.assertTrue(observed.behind)
+
+    def test_legacy_cache_without_check_date_is_not_a_verified_version(self):
+        observed = self.observed(sensor=sensors.Sensor("sensor-one", version="old-hive-version"))
+        self.assertEqual(observed.version, "old-hive-version")
+        self.assertEqual(observed.checked_at, "")
+        self.assertTrue(observed.cached)
+        self.assertFalse(observed.behind)
+
+    def test_host_falls_back_to_observed_hostname_but_ssh_address_wins(self):
+        heartbeat = self.heartbeat()
+        heartbeat.hostname = "observed-host"
+        self.assertEqual(self.observed(heartbeat).host, "observed-host")
+        self.assertEqual(self.observed(heartbeat, sensors.Sensor("sensor-one", host="ssh-alias")).host, "ssh-alias")
+
+    def test_cache_date_round_trip_and_legacy_registry_compatibility(self):
+        repo = checkout(self)
+        registry = sensors.Registry(repo)
+        sensor = registry.get("sensor-old-otter")
+        self.assertTrue(hasattr(sensor, "version_checked_at"))
+        self.assertEqual(sensor.version_checked_at, "")
+        sensor.version, sensor.version_checked_at = "sensor-release", "2026-11-01T12:00:00Z"
+        registry.record(sensor)
+        again = sensors.Registry(repo).get(sensor.name)
+        self.assertEqual((again.version, again.version_checked_at), ("sensor-release", "2026-11-01T12:00:00Z"))
+
+    def test_invalid_cache_dates_are_reported_before_rendering(self):
+        repo = checkout(self)
+        registry = sensors.Registry(repo)
+        for value in (7, "2026-11-01", "not a date"):
+            with self.subTest(value=value):
+                registry.get("sensor-old-otter").version_checked_at = value
+                registry.save()
+                with self.assertRaises(sensors.SensorsError):
+                    sensors.Registry(repo)
+
+
+class HeartbeatApiTest(unittest.TestCase):
+    @staticmethod
+    def hit(name="sensor-one"):
+        return {"_id": name, "sort": [name], "_source": {
+            "type": "TPotSensorHeartbeat", "t-pot_sensor": name, "t-pot_hostname": "edge",
+            "@timestamp": "2020-01-01T10:00:00Z",
+            "heartbeat": {"version": "old-release", "sequence": 1,
+                          "started_at": "2020-01-01T09:00:00Z", "received_at": "2026-11-01T12:00:00Z"}}}
+
+    @staticmethod
+    def answer(hits):
+        return {"timed_out": False, "_shards": {"failed": 0}, "hits": {"hits": hits}}
+
+    @staticmethod
+    def events():
+        return {"aggregations": {"sensors": {"buckets": [
+            {"key": "sensor-one", "latest": {"hits": {"hits": [
+                {"_source": {"@timestamp": "2026-11-01T12:00:00Z", "t-pot_hostname": "edge"}}]}}}]},
+            "unlinked": {"hosts": {"buckets": []}}}}
+
+    def fetch(self, heartbeat, events=None):
+        def opener(request, timeout):
+            data = self.events() if "/logstash-*/" in request.full_url else heartbeat
+            if events is not None and "/logstash-*/" in request.full_url:
+                data = events
+            if isinstance(data, Exception):
+                raise data
+            return io.BytesIO(json.dumps(data).encode())
+        return sensors.fetch_status(url="http://es.test", opener=opener)
+
+    def test_receipt_time_and_sensor_time_are_kept_separate(self):
+        status = self.fetch(self.answer([self.hit()]))
+        self.assertEqual(status.problem, "")
+        self.assertIn("sensor-one", status.heartbeats)
+        heartbeat = status.heartbeats["sensor-one"]
+        self.assertEqual(heartbeat.received_at, 1793534400)
+        self.assertEqual((heartbeat.sensor_at, heartbeat.version, heartbeat.hostname),
+                         ("2020-01-01T10:00:00Z", "old-release", "edge"))
+        self.assertEqual(status.sensors["sensor-one"].last, "2026-11-01T12:00:00Z")
+
+    def test_failed_heartbeat_is_visible_without_losing_attack_events(self):
+        status = self.fetch(OSError("heartbeat unavailable"))
+        self.assertIn("heartbeat unavailable", status.problem)
+        self.assertIn("sensor-one", status.sensors)
+        self.assertEqual(status.heartbeats, {})
+
+    def test_failed_events_do_not_hide_a_working_heartbeat(self):
+        status = self.fetch(self.answer([self.hit()]), events=OSError("events unavailable"))
+        self.assertIn("events unavailable", status.problem)
+        self.assertIn("sensor-one", status.heartbeats)
+
+    def test_nullable_heartbeat_metadata_does_not_hide_other_sensors(self):
+        nullable = self.hit("sensor-two")
+        nullable["_source"].update({"t-pot_hostname": None, "t-pot_ip_ext": None, "t-pot_ip_int": None})
+        status = self.fetch(self.answer([self.hit(), nullable]))
+        self.assertEqual(status.problem, "")
+        self.assertEqual(set(status.heartbeats), {"sensor-one", "sensor-two"})
+        heartbeat = status.heartbeats["sensor-two"]
+        self.assertEqual((heartbeat.hostname, heartbeat.ip_ext, heartbeat.ip_int), ("", "", ""))
+        self.assertEqual(status.heartbeats["sensor-one"].hostname, "edge")
+
+    def test_missing_index_is_requested_as_optional_and_has_no_heartbeats(self):
+        requests = []
+        def opener(request, timeout):
+            requests.append(request.full_url)
+            return io.BytesIO(json.dumps(self.events() if "/logstash-*/" in request.full_url
+                                         else self.answer([])).encode())
+        status = sensors.fetch_status(url="http://es.test", opener=opener)
+        self.assertEqual(status.problem, "")
+        self.assertEqual(status.heartbeats, {})
+        self.assertTrue(any("/tpot-sensor-status/_search?ignore_unavailable=true" in url for url in requests))
+
+    def test_paginate_beyond_one_thousand_without_searching_history(self):
+        requests = []
+        hits = [self.hit(f"sensor-{i:04d}") for i in range(1001)]
+        def opener(request, timeout):
+            query = json.loads(request.data)
+            requests.append((request.full_url, query))
+            if "/logstash-*/" in request.full_url:
+                return io.BytesIO(json.dumps(self.events()).encode())
+            self.assertEqual(request.full_url, "http://es.test/tpot-sensor-status/_search?ignore_unavailable=true")
+            self.assertEqual(query["sort"], [{"t-pot_sensor": "asc"}])
+            self.assertEqual(query["size"], 1000)
+            after = query.get("search_after")
+            self.assertIn(after, (None, ["sensor-0999"]))
+            return io.BytesIO(json.dumps(self.answer(hits[:1000] if after is None else hits[1000:])).encode())
+        status = sensors.fetch_status(url="http://es.test", opener=opener)
+        self.assertEqual(status.problem, "")
+        self.assertEqual(len(status.heartbeats), 1001)
+        self.assertIn("sensor-1000", status.heartbeats)
+        self.assertEqual(len(requests), 3)
+
+    def test_malformed_heartbeat_is_not_silently_presented_as_missing(self):
+        mutations = (
+            lambda hit: hit.update(_id="other"),
+            lambda hit: hit["_source"]["heartbeat"].update(received_at="2026-11-01T12:00:00"),
+            lambda hit: hit["_source"]["heartbeat"].update(received_at="not a date"),
+            lambda hit: hit["_source"]["heartbeat"].update(version=5),
+            lambda hit: hit["_source"]["heartbeat"].update(sequence=True),
+            lambda hit: hit["_source"].update(heartbeat=None),
+            lambda hit: hit["_source"].update({"t-pot_ip_ext": []}),
+            lambda hit: hit["_source"].update({"t-pot_ip_ext": False}),
+            lambda hit: hit["_source"].update({"t-pot_ip_ext": 0}),
+        )
+        for mutate in mutations:
+            hit = self.hit()
+            mutate(hit)
+            with self.subTest(hit=hit):
+                status = self.fetch(self.answer([hit]))
+                self.assertIn("heartbeat", status.problem.lower())
+                self.assertEqual(status.heartbeats, {})
+                self.assertIn("sensor-one", status.sensors)
+        for answer in ([], {}, {"hits": None}, dict(self.answer([]), timed_out=True),
+                       dict(self.answer([]), _shards={"failed": 1})):
+            with self.subTest(answer=answer):
+                self.assertTrue(self.fetch(answer).problem)
+
+    def test_invalid_events_response_is_reported_and_heartbeat_still_available(self):
+        for answer in ([], {"aggregations": []}, {"aggregations": {"sensors": {"buckets": [None]}}}):
+            with self.subTest(answer=answer):
+                status = self.fetch(self.answer([self.hit()]), events=answer)
+                self.assertIn("events", status.problem.lower())
+                self.assertIn("sensor-one", status.heartbeats)
+
+    def test_invalid_event_fields_report_a_problem_instead_of_crashing_a_table(self):
+        answer = self.events()
+        answer["aggregations"]["sensors"]["buckets"][0]["latest"]["hits"]["hits"][0]["_source"]["@timestamp"] = []
+        status = self.fetch(self.answer([self.hit()]), events=answer)
+        self.assertIn("events", status.problem.lower())
+        self.assertIn("sensor-one", status.heartbeats)
+
+    def test_nullable_legacy_metadata_is_missing_not_a_failed_event_query(self):
+        answer = self.events()
+        answer["aggregations"]["sensors"]["buckets"][0]["latest"]["hits"]["hits"][0]["_source"].update(
+            {"t-pot_hostname": None, "t-pot_ip_ext": None, "t-pot_ip_int": None})
+        status = self.fetch(self.answer([self.hit()]), events=answer)
+        self.assertEqual(status.problem, "")
+        self.assertEqual(status.sensors["sensor-one"].hostname, "")
+
+    def test_remove_deletes_only_the_named_status_after_revoking_access(self):
+        self.assertTrue(hasattr(sensors, "remove"))
+        repo = checkout(self)
+        registry = sensors.Registry(repo)
+        requests = []
+        def opener(request, timeout):
+            self.assertNotIn("sensor-old-otter", sensors.Registry(repo).records)
+            requests.append((request.method, request.full_url))
+            return io.BytesIO(b'{"result":"deleted"}')
+        sensors.remove(registry, "sensor-old-otter", url="http://es.test", opener=opener)
+        self.assertEqual(requests, [("DELETE", "http://es.test/tpot-sensor-status/_doc/sensor-old-otter")])
+
+    def test_failed_status_cleanup_reports_partial_removal_not_success(self):
+        self.assertTrue(hasattr(sensors, "remove"))
+        repo = checkout(self)
+        def opener(request, timeout):
+            raise OSError("connection refused")
+        with self.assertRaisesRegex(sensors.SensorsError, "access.*removed.*heartbeat"):
+            sensors.remove(sensors.Registry(repo), "sensor-old-otter", opener=opener)
+        self.assertNotIn("sensor-old-otter", sensors.Registry(repo).records)
+
+    def test_status_already_absent_is_ok_but_other_404_is_not(self):
+        self.assertTrue(hasattr(sensors, "delete_status"))
+        for payload, okay in (({"result": "not_found"}, True),
+                              ({"error": {"type": "index_not_found_exception"}}, True),
+                              ({"error": "wrong endpoint"}, False)):
+            def opener(request, timeout):
+                raise urllib.error.HTTPError(request.full_url, 404, "Not found", {},
+                                             io.BytesIO(json.dumps(payload).encode()))
+            with self.subTest(payload=payload):
+                if okay:
+                    sensors.delete_status("sensor-one", opener=opener)
+                else:
+                    with self.assertRaises(sensors.SensorsError):
+                        sensors.delete_status("sensor-one", opener=opener)
+
+
+class VersionReadTest(unittest.TestCase):
+    def test_reads_sensor_checkout_over_its_ssh_port(self):
+        self.assertTrue(hasattr(sensors, "read_version"))
+        commands = []
+        def run(command, **kwargs):
+            commands.append(command)
+            self.assertEqual(kwargs["timeout"], 15)
+            return subprocess.CompletedProcess(command, 0, stdout="sensor-release\n", stderr="")
+        self.assertEqual(sensors.read_version("edge", "debian", port=2222, run=run), "sensor-release")
+        self.assertEqual(commands[0][:3], ["ssh", "-p", "2222"])
+        self.assertEqual(commands[0][-2:], ["debian@edge", 'cat -- "$HOME/tpotce/version"'])
+
+    def test_failed_missing_or_invalid_version_is_explicit(self):
+        self.assertTrue(hasattr(sensors, "read_version"))
+        for code, output in ((1, ""), (0, ""), (0, "release\ninjected"), (0, "../bad")):
+            with self.subTest(code=code, output=output):
+                def run(command, **kwargs):
+                    return subprocess.CompletedProcess(command, code, stdout=output, stderr="unavailable")
+                with self.assertRaises(sensors.SensorsError):
+                    sensors.read_version("edge", "debian", run=run)
+        with self.assertRaises(sensors.SensorsError):
+            sensors.read_version("edge", "debian", run=mock.Mock(side_effect=subprocess.TimeoutExpired("ssh", 15)))
+        with self.assertRaises(sensors.SensorsError):
+            sensors.read_version("edge", "debian", run=mock.Mock(
+                side_effect=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid byte")))
 
 
 class RegistryTest(unittest.TestCase):
@@ -370,6 +661,8 @@ class CliTest(unittest.TestCase):
                               original(repo_dir or self.repo, hasher=hasher)),
             mock.patch.object(sensors, "fetch_status", lambda days=7: sensors.Status(
                 sensors={"sensor-old-otter": sensors.Seen("2026-10-04T10:00:00Z", "edge1", "1.2.3.4")})),
+            mock.patch.object(sensors, "read_version", return_value="sensor-release", create=True),
+            mock.patch.object(sensors, "delete_status", return_value=None),
             mock.patch("tpotctl.cli.os.geteuid", return_value=1000, create=True),
         ]
         for patch in self.patches:
@@ -458,6 +751,57 @@ class CliTest(unittest.TestCase):
         self.assertEqual(self.run_cli("sensors", "remove", "sensor-old-lynx")[0], 2)         # no --yes, cannot ask
         self.assertEqual(self.run_cli("sensors", "remove", "sensor-old-lynx", "--yes")[0], 0)
         self.assertEqual([u.name for u in sensors.Registry(self.repo).entries()], ["sensor-old-otter"])
+
+    def test_list_displays_heartbeat_separately_and_dates_the_cached_version(self):
+        registry = sensors.Registry(self.repo)
+        sensor = registry.get("sensor-old-lynx")
+        sensor.version, sensor.version_checked_at = "cached-release", "2026-10-01T10:00:00Z"
+        registry.record(sensor)
+        status = sensors.Status(
+            sensors={"sensor-old-otter": sensors.Seen("2026-11-01T11:59:00Z")},
+            heartbeats={"sensor-old-otter": sensors.Heartbeat(HeartbeatTest.NOW, "heartbeat-release")})
+        with mock.patch.object(sensors, "fetch_status", return_value=status), \
+                mock.patch("time.time", return_value=HeartbeatTest.NOW), mock.patch.dict(os.environ, COLUMNS="220"):
+            code, text = self.run_cli("sensors", "list")
+        self.assertEqual(code, 0, text)
+        for word in ("Version", "Heartbeat", "Last event", "heartbeat-release", "behind", "online", "unknown",
+                     "cached-release", "checked 2026-10-01", "2026-11-01 11:59:00"):
+            self.assertIn(word, text)
+        self.assertNotIn("sending", text)
+
+    def test_last_event_is_displayed_in_utc(self):
+        status = sensors.Status(sensors={"sensor-old-otter": sensors.Seen("2026-11-01T12:00:00+02:00")})
+        with mock.patch.object(sensors, "fetch_status", return_value=status), mock.patch.dict(os.environ, COLUMNS="220"):
+            code, text = self.run_cli("sensors", "list")
+        self.assertEqual(code, 0, text)
+        self.assertIn("2026-11-01 10:00:00", text)
+
+    def test_remove_reports_cleanup_failure_and_keeps_access_revoked(self):
+        with mock.patch.object(sensors, "delete_status", side_effect=sensors.SensorsError("heartbeat unavailable")):
+            code, text = self.run_cli("sensors", "remove", "sensor-old-lynx", "-y")
+        self.assertEqual(code, 1, text)
+        self.assertIn("access and registry entry removed", text)
+        self.assertIn("heartbeat unavailable", text)
+        self.assertNotIn("sensor-old-lynx", sensors.Registry(self.repo).records)
+
+    def test_add_caches_the_sensor_version_with_a_check_date(self):
+        code, text, children = self.add_with(0)
+        self.assertEqual(code, 0, text)
+        added = [sensor for sensor in sensors.Registry(self.repo).sensors() if sensor.source == "deployed"]
+        self.assertEqual(len(added), 1)
+        self.assertEqual(added[0].version, "sensor-release")
+        self.assertTrue(added[0].version_checked_at)
+        self.assertLess(abs(datetime.now(timezone.utc).timestamp() -
+                            datetime.fromisoformat(added[0].version_checked_at).timestamp()), 10)
+        self.assertEqual(len(children), 1)
+
+    def test_missing_sensor_version_warns_but_does_not_invent_the_hive_version(self):
+        with mock.patch.object(sensors, "read_version", side_effect=sensors.SensorsError("version unavailable")):
+            code, text, _ = self.add_with(0)
+        self.assertEqual(code, 0, text)
+        self.assertIn("version unavailable", text)
+        added = [sensor for sensor in sensors.Registry(self.repo).sensors() if sensor.source == "deployed"]
+        self.assertEqual((added[0].version, added[0].version_checked_at), ("", ""))
 
     def test_ctrl_c_at_the_question_of_remove(self):
         with mock.patch("builtins.input", side_effect=KeyboardInterrupt):
@@ -661,22 +1005,18 @@ class CliTest(unittest.TestCase):
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
 
     def test_a_deployed_sensor_keeps_its_access_if_it_cannot_be_noted(self):
-        """The sensor works and sends: a registry that cannot be written (or a .env that cannot be read for
-        the version) only costs its details, the access stays and the password is shown."""
-        from tpotctl import ops
-        for target, name in ((self.Registry, "record"), (ops, "env_values")):
-            with self.subTest(failing=name):
-                before = {u.name for u in sensors.Registry(self.repo).entries()}
-                failure = sensors.SensorsError("cannot write data/sensors.json")
-                with mock.patch.object(target, name, side_effect=failure):
-                    code, text, _children = self.add_with(0)
-                self.assertEqual(code, 0, text)
-                self.assertIn("shown only now: Pw-of-the-sensor-1234", text)
-                self.assertIn("cannot write data/sensors.json", text)
-                self.assertIn("tpot sensors set", text)
-                self.assertNotIn("taken back", text)
-                added = {u.name for u in sensors.Registry(self.repo).entries()} - before
-                self.assertEqual(len(added), 1, text)
+        """A registry write failure only costs details; access stays and the password is shown."""
+        before = {u.name for u in sensors.Registry(self.repo).entries()}
+        failure = sensors.SensorsError("cannot write data/sensors.json")
+        with mock.patch.object(self.Registry, "record", side_effect=failure):
+            code, text, _children = self.add_with(0)
+        self.assertEqual(code, 0, text)
+        self.assertIn("shown only now: Pw-of-the-sensor-1234", text)
+        self.assertIn("cannot write data/sensors.json", text)
+        self.assertIn("tpot sensors set", text)
+        self.assertNotIn("taken back", text)
+        added = {u.name for u in sensors.Registry(self.repo).entries()} - before
+        self.assertEqual(len(added), 1, text)
 
     def test_no_key_login_without_a_terminal_cannot_ask(self):
         """ssh-copy-id asks for the password of the sensor: without a terminal exit code 2."""
@@ -771,6 +1111,112 @@ class CliTest(unittest.TestCase):
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
 class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
+
+    def setUp(self):
+        patch = mock.patch.object(sensors, "delete_status", return_value=None)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def heartbeat_backend(self):
+        from tpotctl.tests.test_app import FakeBackend
+        from tpotctl import ops
+        repo = checkout(self)
+
+        class Backend(FakeBackend):
+            status_value = sensors.Status(
+                sensors={"sensor-old-lynx": sensors.Seen("2026-11-01T11:00:00Z")},
+                heartbeats={"sensor-old-otter": sensors.Heartbeat(HeartbeatTest.NOW, "old-release")})
+
+            def sensors(self):
+                return sensors.Registry(repo, hasher=fake_hash)
+
+            def sensor_status(self, days=7):
+                return self.status_value
+
+            def config_stamp(self):
+                return ops.config_stamp(repo)
+
+        return repo, Backend()
+
+    async def test_heartbeat_table_counts_and_cursor_survive_refresh_at_80_columns(self):
+        from tpotctl import app as tapp, theme
+        repo, backend = self.heartbeat_backend()
+        sensors.Registry(repo).record(sensors.Sensor("sensor-" + "long" * 70))
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        with mock.patch("tpotctl.sensors.time.time", return_value=HeartbeatTest.NOW) as now:
+            async with app.run_test(size=(80, 24)) as pilot:
+                await pilot.pause(0.5)
+                app.goto("sensors")
+                await pilot.pause(0.4)
+                table = app.query_one("#sensors-table")
+                self.assertEqual([str(c.label) for c in table.ordered_columns],
+                                 ["Sensor", "Host", "Version", "Heartbeat", "Last event", "State"])
+                self.assertLess(table.ordered_columns[0].get_render_width(table), table.scrollable_content_region.width)
+                otter = table.get_row("sensor-old-otter")
+                self.assertIn("behind", otter[2].plain)
+                self.assertEqual(otter[2].style, theme.color("warn"))
+                self.assertIn("online", otter[5].plain)
+                self.assertIn("unknown", table.get_row("sensor-old-lynx")[5].plain)
+                self.assertIn("Sensors: 1 online, 0 offline, 1 behind", str(app.query_one("#status-info").render()))
+                table.move_cursor(row=1)
+                table.scroll_to(x=table.max_scroll_x, animate=False)
+                await pilot.pause()
+                horizontal = table.scroll_x
+                self.assertGreater(horizontal, 0)
+                now.return_value = HeartbeatTest.NOW + 180
+                await pilot.pause(2.2)
+                self.assertEqual(table.cursor_row, 1)
+                self.assertEqual(table.scroll_x, horizontal)
+                self.assertIn("offline since", table.get_row("sensor-old-otter")[5].plain)
+                self.assertIn("Sensors: 0 online, 1 offline, 1 behind", str(app.query_one("#status-info").render()))
+
+    async def test_heartbeat_errors_and_partial_removal_are_visible(self):
+        from tpotctl import app as tapp
+        repo, backend = self.heartbeat_backend()
+        backend.status_value = sensors.Status(problem="heartbeat endpoint unavailable")
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        notes = []
+        app.notify = lambda message, **kwargs: notes.append(str(message))
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause(0.6)
+            app.goto("sensors")
+            await pilot.pause(0.3)
+            self.assertIn("heartbeat endpoint unavailable", str(app.query_one("#sensors-info").render()))
+            self.assertIn("heartbeat endpoint unavailable", str(app.query_one("#status-info").render()))
+            with mock.patch.object(sensors, "delete_status", side_effect=sensors.SensorsError("heartbeat refused")):
+                app.query_one("#sensors").revoke("sensor-old-otter")
+                await pilot.pause(0.5)
+            self.assertNotIn("sensor-old-otter", sensors.Registry(repo).records)
+            self.assertTrue(any("heartbeat refused" in note and "access" in note for note in notes), notes)
+
+    async def test_delayed_status_read_cannot_restore_removed_registry_entry(self):
+        import threading
+        from tpotctl import app as tapp
+        repo, backend = self.heartbeat_backend()
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        started, release = threading.Event(), threading.Event()
+        async with app.run_test(size=(100, 35)) as pilot:
+            await pilot.pause(0.5)
+            app.goto("sensors")
+            await pilot.pause(0.3)
+            def delayed(days=7):
+                started.set()
+                if not release.wait(5):
+                    raise AssertionError("test did not release the status read")
+                return sensors.Status(sensors={"sensor-old-otter": sensors.Seen(
+                    "2026-11-01T12:00:00Z", "changed-hostname")})
+            backend.sensor_status = delayed
+            pane = app.query_one("#sensors")
+            pane.load()
+            try:
+                await pilot.pause(0.2)
+                self.assertTrue(started.is_set())
+                pane.revoke("sensor-old-otter")
+            finally:
+                release.set()
+            await pilot.pause(0.6)
+            self.assertNotIn("sensor-old-otter", sensors.Registry(repo).records)
+            self.assertEqual(app.query_one("#sensors-table").row_count, 1)
 
     async def test_list_deploy_remove(self):
         from tpotctl import app as tapp, ops

@@ -82,6 +82,11 @@ for (( i = 0; i < count; i++ )); do
   oldest=""; [[ -z "${days}" ]] || oldest=$(( 1800000000 - days * 86400 ))
   policy="$(yq -o=json -I=0 "explode(.) | .cases[$i].policy" "${CASES}")"   # explode: the &legacy anchor
   out="$(fuILM_DECIDE "${value}" "${force}" "${shorten}" "${oldest}" 1800000000 <<<"${policy}")"
+  sensor_out="$(fuILM_DECIDE "${value}" "${force}" "${shorten}" "${oldest}" 1800000000 TPOT_SENSOR_STATUS_RETENTION <<<"${policy}")"
+  if [[ "$(jq -cS 'del(.policy._meta.description)' <<<"${out}")" != "$(jq -cS 'del(.policy._meta.description)' <<<"${sensor_out}")" ]] \
+      || ! jq -e '.policy == null or (.policy._meta.description | contains("TPOT_SENSOR_STATUS_RETENTION"))' <<<"${sensor_out}" >/dev/null; then
+    echo "FAIL ${name}: sensor scope must use the same decision and name its own retention key"; failed=1
+  fi
   want_action="$(yq -r ".cases[$i].action" "${CASES}")"
   got="$(jq -r '.action' <<<"${out}")"
   want="${want_action}"
@@ -148,7 +153,7 @@ curl() {
 fuSTUB_CHECK () {   # $1 = name, $2 = text the output must have, $3 = the calls expected; env: the stub's, myRET
   local myOUT
   : > "${myCALLS}"; : > "${myPUT}"
-  myOUT="$(TPOT_ES_RETENTION="${myRET:-7}" myILM_WAIT=0 fuILM_MAIN 2>&1)"
+  myOUT="$(TPOT_ES_RETENTION="${myRET:-7}" myILM_WAIT=0 fuILM_MAIN "${@:4}" 2>&1)"
   if [[ "${myOUT}" == *"$2"* && "${myOUT}" != *"jq: error"* && "$(cat "${myCALLS}")" == "$3" ]]
     then echo "ok   $1"
     else echo "FAIL $1: [${myOUT}] calls=[$(cat "${myCALLS}")]"; failed=1
@@ -252,6 +257,45 @@ for myGOOD in 1 3650; do
 GET http://127.0.0.1:64298/${myCAT}
 PUT http://127.0.0.1:64298/_ilm/policy/tpot"
 done
+mySENSOR_ARGS=(30 TPOT_SENSOR_STATUS_RETENTION tpot-sensor-status "tpot-sensor-heartbeat-*" "tpot elastic retention --sensor-history")
+myUP="http://not-the-hive:9200" myGET_CODE=404 myGET_BODY='{}' \
+  fuSTUB_CHECK "unreachable Elasticsearch names the sensor policy being checked" \
+  "the ILM policy tpot-sensor-status is not checked" "" "${mySENSOR_ARGS[@]}"
+myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myCAT_BODY='[]' \
+  fuSTUB_CHECK "sensor scope creates only its own policy" \
+  "# ILM policy tpot-sensor-status: created, events are kept for 30 days." \
+  "GET http://127.0.0.1:64298/_ilm/policy/tpot-sensor-status
+GET http://127.0.0.1:64298/_cat/indices/tpot-sensor-heartbeat-*?format=json&h=creation.date
+PUT http://127.0.0.1:64298/_ilm/policy/tpot-sensor-status" "${mySENSOR_ARGS[@]}"
+fuPUT_CHECK "sensor policy names its setting" '.policy.phases.delete.min_age == "30d" and (.policy._meta.description | contains("TPOT_SENSOR_STATUS_RETENTION"))'
+myUP="http://127.0.0.1:64298" myGET_CODE=200 \
+  myGET_BODY='{"tpot-sensor-status":{"policy":{"phases":{"hot":{"actions":{}},"delete":{"min_age":"90d","actions":{"delete":{}}}},"_meta":{"tpot_retention":"90"}}}}' \
+  fuSTUB_CHECK "sensor scope refuses shortening on startup" \
+  "tpot elastic retention --sensor-history --force" \
+  "GET http://127.0.0.1:64298/_ilm/policy/tpot-sensor-status" "${mySENSOR_ARGS[@]}"
+myUP="http://127.0.0.1:64298" myGET_CODE=200 \
+  myGET_BODY='{"tpot-sensor-status":{"policy":{"phases":{"delete":{"min_age":"90d","actions":{"delete":{}}}}}}}' \
+  fuSTUB_CHECK "sensor scope preserves a foreign policy" \
+  "TPOT_SENSOR_STATUS_RETENTION=30 is not applied" \
+  "GET http://127.0.0.1:64298/_ilm/policy/tpot-sensor-status" "${mySENSOR_ARGS[@]}"
+myUP="http://127.0.0.1:64298" myGET_CODE=200 \
+  myGET_BODY='{"tpot":{"policy":{"phases":{"hot":{"actions":{}}}}}}' \
+  fuSTUB_CHECK "an attack policy response cannot replace sensor history policy" \
+  "answered without the ILM policy tpot-sensor-status" \
+  "GET http://127.0.0.1:64298/_ilm/policy/tpot-sensor-status" "${mySENSOR_ARGS[@]}"
+myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' \
+  myCAT_BODY="[{\"creation.date\":\"${myOLD}\"}]" \
+  fuSTUB_CHECK "sensor history older than retention is held on first policy creation" \
+  "TPOT_SENSOR_STATUS_RETENTION=30 would delete" \
+  "GET http://127.0.0.1:64298/_ilm/policy/tpot-sensor-status
+GET http://127.0.0.1:64298/_cat/indices/tpot-sensor-heartbeat-*?format=json&h=creation.date
+PUT http://127.0.0.1:64298/_ilm/policy/tpot-sensor-status" "${mySENSOR_ARGS[@]}"
+fuPUT_CHECK "old sensor history is not deleted on startup" '.policy.phases.delete == null and .policy._meta.tpot_retention == "off"'
+myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' \
+  fuSTUB_CHECK "invalid sensor retention produces no request" \
+  "TPOT_SENSOR_STATUS_RETENTION=0 is no number" "" \
+  0 TPOT_SENSOR_STATUS_RETENTION tpot-sensor-status "tpot-sensor-heartbeat-*" "tpot elastic retention --sensor-history"
+
 # jq failing on a policy it cannot read: its stderr does not reach the log, the warning of the script does
 jq() {
   if [[ "$*" == *"decide("* ]]; then echo "jq: error (at <stdin>:1): odd" >&2; return 5; fi

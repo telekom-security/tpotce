@@ -2222,12 +2222,25 @@ class KibanaObjectsMigrationTest(Scripts):
         self.assertLess(body.index("fuMERGE_ENV_KEYS "), body.index('fuMIGRATE_KIBANA_OBJECTS "$HOME/tpotce/.env" '
                                                                     '"${myTMPDIR}/env"'))
 
-    def hint(self, env_text):
+    def hint(self, env_text, kibana=True):
         env = os.path.join(self.home, "hint.env")
         with open(env, "w", encoding="utf-8") as out:
             out.write(env_text)
-        result = self.source_update(f"fuKIBANA_OBJECTS_HINT {shlex.quote(env)}\n")
+        result = self.source_update(f"fuCOMPOSE_HAS () {{ return {0 if kibana else 1}; }}\n"
+                                    f"fuKIBANA_OBJECTS_HINT {shlex.quote(env)}\n")
         return " ".join((result.stdout + result.stderr).split())
+
+    def test_keep_offers_adding_the_sensor_dashboard_only_where_kibana_runs(self):
+        for value in ("keep", ""):
+            with self.subTest(value=value):
+                text = self.hint(f"TPOT_TYPE=HIVE\nTPOT_KIBANA_OBJECTS={value}\n")
+                self.assertIn("T-Pot Sensors", text)
+                self.assertIn("tpot elastic import --mode add", text)
+        for text, kibana in (("TPOT_TYPE=SENSOR\nTPOT_KIBANA_OBJECTS=keep\n", True),
+                             ("TPOT_TYPE=HIVE\nTPOT_KIBANA_OBJECTS=keep\n", False),
+                             ("TPOT_TYPE=HIVE\nTPOT_KIBANA_OBJECTS=update\n", True)):
+            with self.subTest(text=text, kibana=kibana):
+                self.assertNotIn("tpot elastic import --mode add", self.hint(text, kibana=kibana))
 
     def test_the_hint_at_the_end_names_the_value_in_env(self):
         tail = "; 'tpot elastic import --dry-run' shows what an update would bring."

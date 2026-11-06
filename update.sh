@@ -3104,8 +3104,9 @@ function fuUPDATER () {
 # The end of a run: what the TPOT_KIBANA_OBJECTS of .env (after fuMIGRATE_KIBANA_OBJECTS) does with
 # the newer Kibana objects of a release. $1 = .env
 function fuKIBANA_OBJECTS_HINT () {
-	local myMODE="" myWHAT=""
+	local myMODE="" myWHAT="" myTYPE=""
 	myMODE=$(fuENV_VALUE "$1" TPOT_KIBANA_OBJECTS)
+	myTYPE=$(fuENV_VALUE "$1" TPOT_TYPE)
 	case "${myMODE}" in
 	  "")        myWHAT="With TPOT_KIBANA_OBJECTS empty (keep) nothing changes" ;;
 	  keep)      myWHAT="With TPOT_KIBANA_OBJECTS=keep nothing changes" ;;
@@ -3115,6 +3116,10 @@ function fuKIBANA_OBJECTS_HINT () {
 	  *)         myWHAT="TPOT_KIBANA_OBJECTS=${myMODE} is no mode of T-Pot, choose keep, add, update or overwrite" ;;
 	esac
 	fuUI_INFO "Some updates ship newer Kibana objects. ${myWHAT}; 'tpot elastic import --dry-run' shows what an update would bring."
+	if [ "${myMODE:-keep}" = "keep" ] && [ "${myTYPE}" != "SENSOR" ] && fuCOMPOSE_HAS kibana;
+	  then
+	    fuUI_HINT "To add the T-Pot Sensors dashboard without overwriting existing objects: tpot elastic import --mode add"
+	fi
 }
 
 function fuRESTORE () {

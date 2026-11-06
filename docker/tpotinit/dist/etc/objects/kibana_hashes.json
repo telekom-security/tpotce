@@ -169,10 +169,22 @@
    "160069383b842386f9d6e30bbc88ebd0c656dcf52dfc4635765a6b8f5d600d34",
    "c82e417051e579b5a9b35e712ca9e86e29a8fe22d0342100655e0d206c2ff374"
   ],
+  "dashboard:tpot-sensors-dashboard": [
+   "f3b0d1b629858c921ce9580ad038066aee60819ea1bb34de7c15408e6bffe071"
+  ],
   "index-pattern:logstash-*": [
    "4c2f8a587b020570d30ab62b8b389705f53d89e9daf74e0617e647503696363e",
    "8a93760e7d180021649950104c7d3093a98a1769fe3b070cef1f195c6a624fbf",
    "fb95c279fc5052af4a93ba302fda61f29ba7e3a1deb06188ccd4b0304b5afc5e"
+  ],
+  "index-pattern:tpot-sensors-history-view": [
+   "140fd796ea369b9841b6328781127def4be51a52b0276b424e9b09ecdf7b64e6"
+  ],
+  "index-pattern:tpot-sensors-starts-view": [
+   "37eefebfa46ddddbcc6409e3cbd9d2f25f3675bb8a1158101af456fbf9bbfcef"
+  ],
+  "index-pattern:tpot-sensors-status-view": [
+   "12188299336dd85f780dfd335362a84a256bc7546bc374c4073f676a1457a9a7"
   ],
   "lens:019074f3-7b20-4ef4-a2d2-ec3979c09aae": [
    "a8f81982e7b73ec25838acb4babc9a630a50e456569a16f58570a72805c111d9"
@@ -1055,6 +1067,18 @@
   "lens:fec8aeab-83ac-42e3-81a8-36eac44a056f": [
    "1b4c5e81bb7ea5359e6bcb7e5376648c77919fd9b039c5e78b34d2ae59768fc7"
   ],
+  "lens:tpot-sensors-attacks": [
+   "8df050ce6f92c73bc9d12196fb4052ca742ae38a5d68a172f8e27c82074085c9"
+  ],
+  "lens:tpot-sensors-starts": [
+   "bf954d5b4b1dde17e3c8673ecd6c016ce7b6f02d3e7c998f7ffb7228c825159a"
+  ],
+  "lens:tpot-sensors-timeline": [
+   "a3b9ab26de1711b60ab101e2d0d1bd7d2c374fe62f25845352fe10cb302fac9a"
+  ],
+  "lens:tpot-sensors-versions": [
+   "308e5d80e5b39239542b4a25494252a84c758fd8f0d6a5b67c203d38bbb29fd1"
+  ],
   "map:5c377b80-8f48-11ec-98cd-292aebe8beaf": [
    "29a5dee4e0b998e25f138a1c268e3c90c4bd6bd5d750a558d79607ba55814978",
    "a7745396d0271109a3ce57f92766bebe1a7740a6a06e2788438c3ddd6564f386"
@@ -1189,6 +1213,9 @@
   ],
   "search:f0ea3d80-7300-11ec-9e1e-29d5d4b58b2b": [
    "467ee0336afc40080a9acdf70df57f45ebb0ba46fb5625525f32743e6b1c2db3"
+  ],
+  "search:tpot-sensors-status": [
+   "fbdaba3c039f2342248a4ba7a6e204c9e0a99f47a368a0ed51b414582970e6e3"
   ],
   "tag:0185bb20-8ebc-11ec-82b5-d375cfa90394": [
    "ac9ddbebae189bde2114405ee5bcd6e00187f6580c89d8fb8f800b54221e7caa"
@@ -1795,6 +1822,9 @@
   ],
   "visualization:fa827d40-3bc3-11ec-9045-3f14f09dc487": [
    "527be26dba27387e1db9d379e262cb8c4459f4991e136c5f2f099e5b18375c63"
+  ],
+  "visualization:tpot-sensors-about": [
+   "32581b754d34d7f8155236a6c0f5035f70027efe03841289f2c12c7aae008267"
   ]
  },
  "rules": 2

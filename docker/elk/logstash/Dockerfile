@@ -11,6 +11,8 @@ COPY dist/pipelines.yml /usr/share/logstash/config/pipelines.yml
 COPY dist/pipelines_sensor.yml /usr/share/logstash/config/pipelines_sensor.yml
 COPY dist/tpot-template.json /usr/share/logstash/config/tpot-template.json
 COPY dist/*.conf /usr/share/logstash/pipeline/
+COPY dist/sensor_heartbeat.rb /usr/share/logstash/pipeline/
+COPY dist/tpot-sensor-*.json /usr/share/logstash/pipeline/
 
 RUN microdnf install -y \
         bzip2 \

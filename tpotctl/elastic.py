@@ -1,4 +1,4 @@
-"""The retention of the Elasticsearch events: the ILM policy tpot and TPOT_ES_RETENTION.
+"""Retention of Elasticsearch events and sensor heartbeat history.
 
 T-Pot marks the policy it writes with _meta.tpot_retention, a string (a number or null is no
 marker of T-Pot). A policy whose marker no longer matches its delete phase was changed in Kibana:
@@ -25,8 +25,31 @@ POLICY = "tpot"
 ES_URL = "http://127.0.0.1:64298"        # as in tpotctl.events
 MAX_DAYS = 3650
 LEGACY_DESCRIPTION = "T-Pot ILM policy with a retention of 30 days"
-DESCRIPTION = "T-Pot ILM policy, its retention is TPOT_ES_RETENTION in .env"
 DELETE_ACTIONS = {"delete": {"delete_searchable_snapshot": True}}
+
+
+@dataclass(frozen=True)
+class Retention:
+    key: str
+    policy: str
+    index_pattern: str
+    label: str
+    option: str = ""
+
+    @property
+    def description(self) -> str:
+        return f"T-Pot ILM policy, its retention is {self.key} in .env"
+
+    @property
+    def command(self) -> str:
+        return "tpot elastic retention" + (f" {self.option}" if self.option else "")
+
+
+EVENTS = Retention("TPOT_ES_RETENTION", POLICY, "logstash-*", "Elasticsearch events")
+SENSOR_HISTORY = Retention("TPOT_SENSOR_STATUS_RETENTION", "tpot-sensor-status",
+                           "tpot-sensor-heartbeat-*", "sensor heartbeat history", "--sensor-history")
+RETENTIONS = (EVENTS, SENSOR_HISTORY)
+DESCRIPTION = EVENTS.description
 
 
 @dataclass
@@ -96,7 +119,7 @@ def is_managed(policy: dict) -> bool:
             and _min_age(policy) == "30d" and _deletes(policy))
 
 
-def build(value: str, base: Optional[dict]) -> dict:
+def build(value: str, base: Optional[dict], retention: Retention = EVENTS) -> dict:
     """base with the delete phase of value and the marker; every other part of base stays."""
     # an empty or no object base gets the default hot phase, as in es_retention.sh
     policy = (copy.deepcopy(base) if isinstance(base, dict) and base
@@ -116,21 +139,22 @@ def build(value: str, base: Optional[dict]) -> dict:
         delete["min_age"] = f"{value}d"
         phases["delete"] = delete
     meta = dict(_part(policy, "_meta"))
-    meta.update({"managed": True, "tpot_retention": value, "description": DESCRIPTION})
+    meta.update({"managed": True, "tpot_retention": value, "description": retention.description})
     policy["_meta"] = meta
     return policy
 
 
 def decide(value: str, policy: Optional[dict], force: bool = False, shorten: bool = False,
-           oldest: Optional[float] = None, now: Optional[float] = None) -> Decision:
+           oldest: Optional[float] = None, now: Optional[float] = None,
+           retention: Retention = EVENTS) -> Decision:
     """What T-Pot does with the policy for TPOT_ES_RETENTION=value. Without shorten (tpotinit, and every
     caller before the user said yes) nothing is written that deletes events the policy keeps now."""
     if policy is None:
         wanted = value or "off"
         if (wanted != "off" and not shorten and oldest is not None
                 and oldest < (time.time() if now is None else now) - int(wanted) * 86400):
-            return Decision("create", build("off", None), "", True, held=wanted)
-        return Decision("create", build(wanted, None), "", True)
+            return Decision("create", build("off", None, retention), "", True, held=wanted)
+        return Decision("create", build(wanted, None, retention), "", True)
     current, managed = value_of(policy), is_managed(policy)
     if not value:
         return Decision("keep", None, current, managed)
@@ -142,7 +166,7 @@ def decide(value: str, policy: Optional[dict], force: bool = False, shorten: boo
         return Decision("keep", None, current, True)
     if not shorten and shortens(current or "off", value):
         return Decision("pending", None, current, managed, held=value)
-    return Decision("update", build(value, policy), current, managed)
+    return Decision("update", build(value, policy, retention), current, managed)
 
 
 def _days(value: str) -> float:
@@ -173,27 +197,30 @@ def _unreachable(err) -> str:
     return f"Elasticsearch is not reachable ({getattr(err, 'reason', err)})"
 
 
-def get_policy(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Optional[dict]:
+def get_policy(url: str = ES_URL, opener: Callable = urllib.request.urlopen,
+               retention: Retention = EVENTS) -> Optional[dict]:
+    name = retention.policy
     try:
-        answer = _call("GET", f"/_ilm/policy/{POLICY}", url, opener)
+        answer = _call("GET", f"/_ilm/policy/{name}", url, opener)
     except urllib.error.HTTPError as err:
         if err.code == 404:
             return None
-        raise ElasticError(f"Elasticsearch answered {err.code} for the ILM policy {POLICY}")
+        raise ElasticError(f"Elasticsearch answered {err.code} for the ILM policy {name}")
     except _FAILS as err:
         raise ElasticError(_unreachable(err))
     # a 200 without the policy is no missing policy (creating one would replace it): as tpotinit
-    if not (isinstance(answer, dict) and isinstance(answer.get(POLICY), dict)
-            and isinstance(answer[POLICY].get("policy"), dict)):
-        raise ElasticError(f"Elasticsearch answered without the ILM policy {POLICY}")
-    return answer[POLICY]["policy"]
+    if not (isinstance(answer, dict) and isinstance(answer.get(name), dict)
+            and isinstance(answer[name].get("policy"), dict)):
+        raise ElasticError(f"Elasticsearch answered without the ILM policy {name}")
+    return answer[name]["policy"]
 
 
-def put_policy(policy: dict, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> None:
+def put_policy(policy: dict, url: str = ES_URL, opener: Callable = urllib.request.urlopen,
+               retention: Retention = EVENTS) -> None:
     try:
-        _call("PUT", f"/_ilm/policy/{POLICY}", url, opener, {"policy": policy})
+        _call("PUT", f"/_ilm/policy/{retention.policy}", url, opener, {"policy": policy})
     except _FAILS as err:
-        raise ElasticError(f"the ILM policy {POLICY} could not be written ({getattr(err, 'reason', err)})")
+        raise ElasticError(f"the ILM policy {retention.policy} could not be written ({getattr(err, 'reason', err)})")
 
 
 @dataclass
@@ -222,9 +249,10 @@ def _number(row: dict, key: str, nullable: bool) -> Optional[int]:
     return int(value)
 
 
-def indices(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> List[Index]:
+def indices(url: str = ES_URL, opener: Callable = urllib.request.urlopen,
+            retention: Retention = EVENTS) -> List[Index]:
     try:
-        rows = _call("GET", "/_cat/indices/logstash-*?format=json&bytes=b&h=index,status,creation.date,docs.count,"
+        rows = _call("GET", f"/_cat/indices/{retention.index_pattern}?format=json&bytes=b&h=index,status,creation.date,docs.count,"
                             "store.size", url, opener)
     except _FAILS as err:
         raise ElasticError(_unreachable(err))
@@ -263,19 +291,21 @@ class Status:
     problem: str = ""
     adopts: bool = False    # foreign, and its duration is the value: T-Pot takes it over on its next start
     pending: bool = False   # managed, and the value is shorter: it waits for the user's yes
+    retention: Retention = EVENTS
 
 
-def status(value: str, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Status:
+def status(value: str, url: str = ES_URL, opener: Callable = urllib.request.urlopen,
+           retention: Retention = EVENTS) -> Status:
     try:
-        policy = get_policy(url, opener)
+        policy = get_policy(url, opener, retention)
     except ElasticError as err:
-        return Status(value, "", "unreachable", str(err))
+        return Status(value, "", "unreachable", str(err), retention=retention)
     if policy is None:
-        return Status(value, "", "missing")
+        return Status(value, "", "missing", retention=retention)
     current = value_of(policy)
     if is_managed(policy):
-        return Status(value, current, "managed", pending=shortens(current, value))
-    return Status(value, current, "foreign", adopts=bool(current) and current == value)
+        return Status(value, current, "managed", pending=shortens(current, value), retention=retention)
+    return Status(value, current, "foreign", adopts=bool(current) and current == value, retention=retention)
 
 
 @dataclass
@@ -285,39 +315,41 @@ class Plan:
     reachable: bool
     shortening: bool = False    # applying it deletes events the policy keeps now: the user must say yes
     problem: str = ""           # why it is not reachable: no answer, or one T-Pot cannot read
+    retention: Retention = EVENTS
 
 
 def plan(value: str, force: bool = False, url: str = ES_URL, opener: Callable = urllib.request.urlopen,
-         now: Optional[float] = None) -> Plan:
+         now: Optional[float] = None, retention: Retention = EVENTS) -> Plan:
     """What setting value does once the user confirmed: the decision, whether it shortens, the indices it
     deletes right away. A caller applies a shortening plan only after the user's yes."""
     try:
-        policy = get_policy(url, opener)
+        policy = get_policy(url, opener, retention)
     except ElasticError as err:
-        return Plan(Decision("keep", None, "", False), [], False, problem=str(err))
-    decision = decide(value, policy, force, shorten=True, now=now)
+        return Plan(Decision("keep", None, "", False), [], False, problem=str(err), retention=retention)
+    decision = decide(value, policy, force, shorten=True, now=now, retention=retention)
     # a marker-only update or an adoption keeps the same duration, a policy that is not in days
     # counts as keeping the events forever
     shortening = decision.action in ("create", "update") and shortens(decision.current or "off", value)
     gone: List[Index] = []
     if shortening:
         try:
-            gone = doomed(indices(url, opener), value, time.time() if now is None else now)
+            gone = doomed(indices(url, opener, retention), value, time.time() if now is None else now)
         except ElasticError as err:
-            return Plan(decision, [], False, shortening, str(err))
-    return Plan(decision, gone, True, shortening)
+            return Plan(decision, [], False, shortening, str(err), retention)
+    return Plan(decision, gone, True, shortening, retention=retention)
 
 
 def apply(chosen: Plan, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> None:
+    retention = chosen.retention
     if not chosen.reachable:
         raise ElasticError("Elasticsearch is not reachable; T-Pot applies a longer retention on its next start, a "
-                           "shorter one waits for 'tpot elastic retention --force'")
+                           f"shorter one waits for '{retention.command} --force'")
     if chosen.decision.action == "foreign":
-        raise ElasticError(f"the ILM policy {POLICY} was changed outside of T-Pot (retention: "
-                           f"{chosen.decision.current or 'not in days'}); 'tpot elastic retention --adopt' "
-                           "keeps it, 'tpot elastic retention --force' applies .env to it")
+        raise ElasticError(f"the ILM policy {retention.policy} was changed outside of T-Pot (retention: "
+                           f"{chosen.decision.current or 'not in days'}); '{retention.command} --adopt' "
+                           f"keeps it, '{retention.command} --force' applies .env to it")
     if chosen.decision.action in ("create", "update"):
-        put_policy(chosen.decision.policy, url, opener)
+        put_policy(chosen.decision.policy, url, opener, retention)
 
 
 def main(argv) -> int:

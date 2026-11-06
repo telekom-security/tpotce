@@ -178,6 +178,44 @@ line as `@timestamp` and a GeoIP location. It takes the T-Pot Logstash image
 when it is built here, otherwise the official image of its `LS_VER`; an image
 without the Listbot dictionaries gets small stand-ins for them.
 
+`./docker/_tests/run.sh logstash_sensor` runs the same fixtures through the
+SENSOR pipeline (`http_output.conf`). It also measures the immediate first
+heartbeat and the next one after 60 seconds, checking sequence numbers,
+version and Logstash process-start metadata. This test replaces only the
+HTTP output with a file; the HIVE routing is tested separately. Known
+pre-existing fixture failures are printed explicitly, never silently skipped.
+The image builder's `-T` runs both `logstash_fixtures` and `logstash_sensor`
+against the Logstash image it just built.
+
+`./docker/_tests/run.sh sensor_heartbeat` tests the HIVE's real HTTP input and
+Elasticsearch outputs with the local official images pinned by the Dockerfiles,
+plus a local tpotinit image for its retention job. The standalone test accepts
+`--tpotinit-image IMAGE` to override that tool image.
+It verifies authenticated sensor names, separate sensor/receive timestamps, one
+current status per sensor, every fifth heartbeat in history, malformed-message
+rejections, unchanged normal-event routing and protection against out-of-order
+status writes, keyword mappings (including date-like names/tags) and lifecycle
+assignment only to history. It runs the actual tpotinit job to check policy and
+missing-template creation, preservation of existing templates and unmanaged indices,
+and refusal to shorten history retention on restart. The Manager reads more than 1000
+real status documents through pagination, keeps attacks and both clocks separate,
+normalizes optional null metadata at ingestion and when reading legacy documents,
+and deletes only the selected status document while leaving history intact.
+The containers use a temporary
+internal network without published ports; HTTP requests use the Elasticsearch image's curl.
+
+`./docker/_tests/run.sh sensor_dashboard` uses local Elasticsearch and Kibana images at the Dockerfile
+versions (the standalone test's `--image` overrides Kibana). It verifies the shipped dashboard's Painless
+runtime fields against current, stale and missing receipt times, version series including unknown versions,
+distinct process starts rather than sample counts, and Kibana import plus real data-view field discovery.
+It uses a disposable internal network with no published ports and ignores local Compose environment files.
+Startup has a minimum allowance of 240 seconds. The browser check is separate: open *T-Pot Sensors*, verify
+all five views, and choose a one-minute range; old status rows must remain while old history disappears.
+
+`sensor_heartbeat` and `sensor_dashboard` are cross-service source integration tests, not image-builder
+smokes: run them separately with the pinned upstream images available locally. The builder's `-T`
+does not pull those additional images or run these two tests.
+
 The Conpot test starts all nine deployed templates in one Docker network on
 dynamic loopback ports (`--<key>-port` pins one, see `--help`). The probes
 compare each answer with the rendered template and the stored identity and

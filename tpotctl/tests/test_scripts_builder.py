@@ -1129,7 +1129,7 @@ class SmokeTest(BuilderHarness):
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
         for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes", "tpotinit_users",
-                     "logstash_fixtures", "nginx", "glutton", "redis"):
+                     "logstash_fixtures", "logstash_sensor", "nginx", "glutton", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
 
@@ -1144,10 +1144,10 @@ class SmokeTest(BuilderHarness):
         self.assertEqual([line[2:] for line in lines if line.startswith("N ")],
                          ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
                           "tpotinit_users",
-                          "logstash_fixtures", "nginx", "glutton", "redis"])
+                          "logstash_fixtures", "logstash_sensor", "nginx", "glutton", "redis"])
         self.assertEqual([line[2:] for line in lines if line.startswith("A ")],
                          ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 5
-                         + ["--image hub/logstash:1.0", "--image hub/nginx:1.0",
+                         + ["--image hub/logstash:1.0"] * 2 + ["--image hub/nginx:1.0",
                             "--image hub/glutton:1.0 --init-image hub/tpotinit:1.0",
                             "--image hub/redis:1.0"])
         self.assertEqual([line[2:] for line in lines if line.startswith("I ")],
@@ -1207,7 +1207,10 @@ class SmokeTest(BuilderHarness):
             self.assertTrue(os.path.exists(os.path.join(REPO, "docker", "_tests", "tests", name + ".sh")), name)
 
     # smoke tests of docker/_tests that belong to no image of the build, with the reason
-    IMAGELESS = {}
+    IMAGELESS = {
+        "sensor_heartbeat": "Cross-service source integration against pinned upstream images and an ILM tool image",
+        "sensor_dashboard": "Saved-object integration against pinned upstream Elasticsearch and Kibana images",
+    }
 
     def test_every_test_of_the_repo_is_in_the_plan(self):
         """Each docker/_tests/tests/*.sh runs after the build of its image (-T), or is named in IMAGELESS:
@@ -1223,6 +1226,15 @@ class SmokeTest(BuilderHarness):
         self.assertEqual(sorted(present - planned - set(self.IMAGELESS)), [])
         self.assertEqual(sorted(set(self.IMAGELESS) - present), [])
         self.assertEqual(sorted(set(self.IMAGELESS) & planned), [])
+
+    def test_sensor_pipeline_runs_on_the_built_logstash_image(self):
+        rc, out = self.builder("-i", "logstash", "-a", "host", "-T", "-t", "sensor-test",
+                               "--docker-repo", "hub", TPOT_BUILDER_TESTS_DIR=self.tests,
+                               STUB_TEST_FAIL="logstash_sensor")
+        self.assertEqual(rc, 4, out)
+        tests = [line for line in self.calls() if line.startswith("test ")]
+        self.assertEqual(tests, ["test logstash_fixtures --image hub/logstash:sensor-test",
+                                 "test logstash_sensor --image hub/logstash:sensor-test"])
 
     def test_smoke_tests_after_build(self):
         rc, out = self.builder("-i", "cowrie,tpotinit", "-T", "--docker-repo", "hub", STUB_TEST_FAIL="tpotinit_env",

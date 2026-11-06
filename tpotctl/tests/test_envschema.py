@@ -136,7 +136,20 @@ class SchemaTest(unittest.TestCase):
         self.assertEqual(rule.scope, "HIVE")
         self.assertEqual(rule.services, ["kibana"])
         order = list(example_values())
-        self.assertEqual(order.index("TPOT_KIBANA_OBJECTS"), order.index("TPOT_ES_RETENTION") + 1)
+        self.assertEqual(order.index("TPOT_KIBANA_OBJECTS"), order.index("TPOT_SENSOR_STATUS_RETENTION") + 1)
+
+    def test_sensor_history_retention_defaults_and_boundaries(self):
+        key = "TPOT_SENSOR_STATUS_RETENTION"
+        self.assertIn(key, self.schema)
+        rule = self.schema[key]
+        self.assertEqual(example_values()[key], "30")
+        self.assertEqual(rule.default, "30")
+        self.assertEqual(rule.scope, "HIVE")
+        for value, valid in (("1", True), ("30", True), ("3650", True), ("off", True), ("", True),
+                             ("0", False), ("3651", False), ("30d", False), ("-1", False)):
+            with self.subTest(value=value):
+                problems = self.envschema.check(rule, {key: value}, {}, check_host=False)
+                self.assertEqual(not problems, valid)
 
     def test_kibana_objects_names_every_mode_with_its_pros_and_cons(self):
         with open(ENV_EXAMPLE, encoding="utf-8") as handle:

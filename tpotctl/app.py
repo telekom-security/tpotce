@@ -27,6 +27,7 @@ from tpotctl.widgets import nav
 from tpotctl.widgets.nav import DialogTitle, NavDataTable, NavInput, NavModal, NavOptionList, NavScroll
 from tpotctl import glyphs, logo, menu, ops, prefs, theme
 from tpotctl.bootstrap import REPO_DIR
+from tpotctl.elastic import EVENTS, RETENTIONS, Retention
 from tpotctl.commands import TpotCommands
 from tpotctl.screens.dialogs import ConfirmDialog, QuitDialog, SensorDialog, UserDialog
 from tpotctl.theme import apply as apply_theme
@@ -126,21 +127,20 @@ class Backend:
             users_ok = False
         return editions.plan(key, users_ok=users_ok)
 
-    def retention_status(self):
-        from tpotctl import elastic, settings as tsettings
-        return elastic.status(tsettings.load().values.get("TPOT_ES_RETENTION", ""))
-
-    def retention_plan(self, value: str, force: bool = False):
+    def retention_status(self, retention: Retention = EVENTS):
         from tpotctl import elastic
-        return elastic.plan(value, force=force)
+        return elastic.status(self.settings().values.get(retention.key, ""), retention=retention)
+
+    def retention_plan(self, value: str, force: bool = False, retention: Retention = EVENTS):
+        from tpotctl import elastic
+        return elastic.plan(value, force=force, retention=retention)
 
     def apply_retention(self, plan) -> None:
         from tpotctl import elastic
         elastic.apply(plan)
 
-    def set_retention(self, value: str) -> None:
-        from tpotctl import settings as tsettings
-        tsettings.load().change({"TPOT_ES_RETENTION": value})
+    def set_retention(self, value: str, retention: Retention = EVENTS) -> None:
+        self.settings().change({retention.key: value})
 
     # the Kibana objects (tpotctl.kibana_objects, as tpot elastic export / import / restore do it); each may
     # wait up to a minute for another import (kibana_objects.BUSY), the page calls them in a worker
@@ -497,6 +497,25 @@ class StatusPane(Vertical):
         if getattr(self, "shown", None):
             self.show(*self.shown)
 
+    def show_sensors(self, observed, problem: str = "", available: bool = True) -> None:
+        info = Text()
+        if available:
+            active = [item for sensor, _label, item in observed if sensor.access]
+            online = sum(item.state == "online" for item in active)
+            offline = sum(item.state == "offline" for item in active)
+            behind = sum(item.behind for item in active)
+            unknown = sum(item.state == "unknown" for item in active)
+            info.append(f"Sensors: {online} online, {offline} offline, {behind} behind")
+            if unknown:
+                info.append(f" ({unknown} unknown)", style=theme.color("warn"))
+        else:
+            info.append("Sensors: unknown", style=theme.color("warn"))
+        if problem:
+            info.append(f"\n{problem}", style=theme.color("warn"))
+        self.sensor_summary = info
+        if getattr(self, "shown", None):
+            self.show(*self.shown)
+
     def show(self, state: Optional[ops.Status], containers: List[ops.Container], problem: str,
              machine=None, stamp=None) -> None:
         self.shown = (state, containers, problem, machine)
@@ -514,6 +533,9 @@ class StatusPane(Vertical):
             info.append(f"   the T-Pot service (tpot.service) is {state.service}", style=theme.color("error"))
         if problem:
             info.append(f"   {problem}", style=theme.color("error"))
+        if getattr(self, "sensor_summary", None) is not None:
+            info.append("\n")
+            info.append(self.sensor_summary)
         self.query_one("#status-info", Static).update(info)
         # every 2 s: only what changed, so the table neither jumps to the top nor flickers
         self.query_one(NavDataTable).sync_rows(container_rows(containers))
@@ -1018,7 +1040,7 @@ class SettingsPane(Vertical):
 
     async def save_checked(self, saved: Dict[str, str]) -> None:
         """The save after the question of overwrite (if any): a changed retention plans first."""
-        if "TPOT_ES_RETENTION" in saved and self.current.values.get("TPOT_TYPE", "HIVE") != "SENSOR":
+        if any(scope.key in saved for scope in RETENTIONS) and self.current.values.get("TPOT_TYPE", "HIVE") != "SENSOR":
             # Elasticsearch may take seconds: in a worker, Save disabled meanwhile
             self.saving = True
             self.query_one(f"#{self.PREFIX}-save", Button).disabled = True
@@ -1027,59 +1049,68 @@ class SettingsPane(Vertical):
         await self.save_confirmed(saved)
 
     async def save_retention(self, saved: Dict[str, str]) -> None:
-        """A changed TPOT_ES_RETENTION: a shorter retention asks first, before anything is written, whether
+        """Changed retentions: every shorter retention asks first, before anything is written, whether
         indices go right away or not (as tpot elastic; a policy kept longer than .env says counts too). Off
         a T-Pot host as well (an Elasticsearch on 127.0.0.1:64298 answers there too). An Elasticsearch that
         does not answer: only .env is written, a shorter value waits, T-Pot never shortens on its own.
         Save stays disabled until the save is done: after a yes, until the apply and the reload are."""
         import asyncio
         from tpotctl import cli as tcli
-        new = saved["TPOT_ES_RETENTION"]
         asked = False
         try:
             try:
-                chosen = await asyncio.to_thread(self.app.backend.retention_plan, new, False)
+                plans = []
+                for retention in RETENTIONS:
+                    if retention.key in saved:
+                        plans.append(await asyncio.to_thread(self.app.backend.retention_plan,
+                                                             saved[retention.key], False, retention))
             except Exception as err:        # whatever Elasticsearch answers, the worker must not end the Manager
                 # the whole save is dropped, the other changes of the page as well
                 self.app.notify(f"Nothing was saved: the check of the ILM policy failed ({err}).",
                                 title="Not saved", severity="error", timeout=10)
                 return
-            if chosen.reachable and chosen.shortening:
+            questions = [plan for plan in plans if plan.reachable and plan.shortening]
+            if questions:
                 if another_screen(self.app, "Save"):      # nothing written, Save is free again (finally)
                     return
 
-                def answered(yes) -> None:
-                    if yes:
-                        self.run_worker(self.save_after_yes(saved, chosen), group=f"{self.PREFIX}-save")
-                    else:
-                        self.save_done()
+                def ask_next(index=0) -> None:
+                    if index == len(questions):
+                        self.run_worker(self.save_after_yes(saved, plans), group=f"{self.PREFIX}-save")
+                        return
+                    chosen = questions[index]
+                    new = saved[chosen.retention.key]
+                    self.app.push_screen(
+                        ConfirmDialog(f"Keep the {chosen.retention.label} {tcli._retention_shown(new)}?",
+                                      shortening_text(chosen.doomed, new), yes="Delete and save", no="Back"),
+                        lambda yes: ask_next(index + 1) if yes else self.save_done())
 
-                self.app.push_screen(ConfirmDialog(f"Keep the Elasticsearch events {tcli._retention_shown(new)}?",
-                                                   shortening_text(chosen.doomed, new),
-                                                   yes="Delete and save", no="Back"), answered)
                 asked = True
+                ask_next()
                 return
-            await self.save_confirmed(saved, chosen)
+            await self.save_confirmed(saved, plans)
         finally:
             if not asked:           # the answer to the question ends the save
                 self.save_done()
 
-    async def save_after_yes(self, saved: Dict[str, str], chosen) -> None:
+    async def save_after_yes(self, saved: Dict[str, str], plans) -> None:
         try:
-            await self.save_confirmed(saved, chosen)
+            await self.save_confirmed(saved, plans)
         except Exception as err:        # noqa: BLE001 - whatever breaks, the worker must not end the Manager
-            new = saved.get("TPOT_ES_RETENTION", "")
-            try:                        # did .env take the value before the error?
-                written = self.app.backend.settings().values.get("TPOT_ES_RETENTION") == new
-            except Exception:           # noqa: BLE001 - unknown: nothing is claimed
-                written = False
             waits = ""
-            if written:
-                how = ("Apply .env to the policy on the Elastic page, or tpot elastic retention --force"
-                       if self.app.backend.linux_host() else f"change the ILM policy tpot in {KIBANA_ILM}")
-                # the error may come after the apply as well (the reload): the policy is not known
-                waits = (f" TPOT_ES_RETENTION={new} is in .env, the ILM policy tpot may not have taken it: if the "
-                         f"policy still keeps the old value, the value waits until it is applied ({how}).")
+            for chosen in plans:
+                retention = chosen.retention
+                new = saved[retention.key]
+                try:                        # did .env take the value before the error?
+                    written = self.app.backend.settings().values.get(retention.key) == new
+                except Exception:           # noqa: BLE001 - unknown: nothing is claimed
+                    written = False
+                if written:
+                    how = (f"Apply .env to the policy on the Elastic page, or {retention.command} --force"
+                           if self.app.backend.linux_host() else f"change the ILM policy {retention.policy} in {KIBANA_ILM}")
+                    # the error may come after the apply as well (the reload): the policy is not known
+                    waits += (f" {retention.key}={new} is in .env, the ILM policy {retention.policy} may not have taken it: "
+                              f"if the policy still keeps the old value, the value waits until it is applied ({how}).")
             self.app.notify(f"The save stopped with an error ({err}).{waits} Nothing more was written.",
                             title="Not saved", severity="error", timeout=12)
         finally:
@@ -1095,54 +1126,58 @@ class SettingsPane(Vertical):
             if self.is_attached and not self.app._closing and not self._closing:
                 raise
 
-    async def save_confirmed(self, saved: Dict[str, str], chosen=None) -> None:
-        """Write the changes; chosen: the plan of a changed TPOT_ES_RETENTION, applied to the ILM policy
-        tpot right away where it can be (a shorter one only after the user's yes)."""
+    async def save_confirmed(self, saved: Dict[str, str], plans=None) -> None:
+        """Write once, after all shortening questions, then apply the independently confirmed policies."""
         import asyncio
         from tpotctl import cli as tcli, elastic
         from tpotctl.settings import SettingsError
-        old = self.current.values.get("TPOT_ES_RETENTION", "")
+        old = {scope.key: self.current.values.get(scope.key, "") for scope in RETENTIONS}
         try:
             self.current.change(saved, unlocked=self.unlocked)
         except SettingsError as err:
             self.app.notify(str(err), title="Not saved", severity="error", timeout=10)
             return
         host = self.app.backend.linux_host()
-        # what applies a waiting value: the Elastic page on a T-Pot host, Kibana elsewhere
-        later = ("Once Elasticsearch runs, Apply .env to the policy on the Elastic page applies it (it asks first)."
-                 if host else f"Once Elasticsearch runs, change the ILM policy tpot in {KIBANA_ILM}.")
-        applied = waiting = foreign = False
-        if chosen is not None and chosen.reachable and chosen.decision.action in ("create", "update", "keep"):
-            try:
-                await asyncio.to_thread(self.app.backend.apply_retention, chosen)
-                applied = True
-            except elastic.ElasticError as err:
-                then = (f"T-Pot does not shorten it on its own, the value waits. {later}" if chosen.shortening
-                        else "T-Pot applies it on its next start.")
-                self.app.notify(f"TPOT_ES_RETENTION is saved, but the ILM policy tpot was not changed ({err}). "
-                                f"{then}", title="Not applied", severity="warning", timeout=12)
-        elif chosen is not None and chosen.decision.action == "foreign":
-            foreign = True
-            where = (f"On the Elastic page, {FOREIGN_BUTTONS}" if host else f"Its retention is changed in {KIBANA_ILM}.")
-            self.app.notify(foreign_kept(saved["TPOT_ES_RETENTION"], where), title="Not applied", severity="warning",
-                            timeout=12)
-        elif chosen is not None and not chosen.reachable:
-            new = saved["TPOT_ES_RETENTION"]
-            waiting = chosen.shortening or tcli._shortens_env(old, new)
-            self.app.notify(because(retention_waits(new, later) if waiting else retention_unknown(new, host),
-                                    chosen.problem),
-                            title="Not applied" if waiting else "Settings", severity="warning", timeout=12)
+        applied, waiting, foreign = set(), set(), set()
+        for chosen in plans or []:
+            retention = chosen.retention
+            new = saved[retention.key]
+            later = ("Once Elasticsearch runs, Apply .env to the policy on the Elastic page applies it (it asks first)."
+                     if host else f"Once Elasticsearch runs, change the ILM policy {retention.policy} in {KIBANA_ILM}.")
+            if chosen.reachable and chosen.decision.action in ("create", "update", "keep"):
+                try:
+                    await asyncio.to_thread(self.app.backend.apply_retention, chosen)
+                    applied.add(retention.key)
+                except elastic.ElasticError as err:
+                    then = (f"T-Pot does not shorten it on its own, the value waits. {later}" if chosen.shortening
+                            else "T-Pot applies it on its next start.")
+                    self.app.notify(f"{retention.key} is saved, but the ILM policy {retention.policy} was not changed "
+                                    f"({err}). {then}", title="Not applied", severity="warning", timeout=12)
+            elif chosen.decision.action == "foreign":
+                foreign.add(retention.key)
+                where = (f"On the Elastic page, {FOREIGN_BUTTONS}" if host else f"Its retention is changed in {KIBANA_ILM}.")
+                self.app.notify(foreign_kept(new, where, retention), title="Not applied", severity="warning", timeout=12)
+            elif not chosen.reachable:
+                waits = chosen.shortening or tcli._shortens_env(old[retention.key], new)
+                if waits:
+                    waiting.add(retention.key)
+                self.app.notify(because(retention_waits(new, later, retention) if waits else
+                                        retention_unknown(new, host, retention), chosen.problem),
+                                title="Not applied" if waits else "Settings", severity="warning", timeout=12)
         await self.reload()
         await self.app.settings_saved(self, set(saved))
         # keys the host reads on its own (restart: false in the schema) need no restart of T-Pot
         restart = {key for key in saved if key not in self.current.schema or self.current.schema[key].restart}
-        only_retention = restart == {"TPOT_ES_RETENTION"}
+        only_retention = bool(restart) and restart <= set(old)
         if not restart:
             self.app.notify("Saved, T-Pot needs no restart for it.", title="Settings")
-        elif applied and only_retention:
+        elif only_retention and restart <= applied:
             # nothing else changed and the policy has it already: no restart needed
-            self.app.notify(f"Saved, Elasticsearch keeps the events "
-                            f"{tcli._retention_shown(saved['TPOT_ES_RETENTION'])}.", title="Settings")
+            if applied == {EVENTS.key}:
+                self.app.notify(f"Saved, Elasticsearch keeps the events "
+                                f"{tcli._retention_shown(saved[EVENTS.key])}.", title="Settings")
+            else:
+                self.app.notify("Saved, the retention policies are applied.", title="Settings")
         elif (waiting or foreign) and only_retention:
             return                  # a restart would not apply it either, the notice above says what does
         elif host:
@@ -1483,7 +1518,7 @@ class SensorsPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="sensors-info", classes="info")
-        yield NavDataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
+        yield NavDataTable(id="sensors-table", cursor_type="row", zebra_stripes=True, fixed_columns=1)
         with Horizontal(classes="actions"):
             yield Button("Deploy a sensor", id="sensor-add", variant="primary")
             yield Button("Edit", id="sensor-edit")
@@ -1496,66 +1531,83 @@ class SensorsPane(Vertical):
             yield Button("Take over", id="sensor-import")
 
     def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("Sensor", "Host", "Hostname", "Last seen", "State")
+        from tpotctl.sensors import COLUMNS
+        table = self.query_one(DataTable)
+        table.add_column(COLUMNS[0], width=24)
+        table.add_columns(*COLUMNS[1:])
         self.registry = None
         self.found = []
+        self.reading = self.reload_pending = False
+        self.shown = None
         self.query_one("#sensors-import-actions", Horizontal).display = False
         self.load()
+        self.set_interval(30.0, lambda: self.load(force=False))
+        self.set_interval(2.0, self.repaint)
 
     def stale(self) -> bool:
         return self.app.backend.config_stamp() != getattr(self, "stamp", None)
 
-    def load(self) -> None:
+    def load(self, force: bool = True) -> None:
         """The sensors anew; the stamp is noted here, on the UI thread, so that a refresh right after
         does not start a second read (a thread worker cannot be stopped once it runs)."""
         self.stamp = self.app.backend.config_stamp()
-        self.fetch()
+        if self.reading:
+            self.reload_pending = self.reload_pending or force
+            return
+        self.reading = True
+        self.fetch(self.stamp)
 
     @work(thread=True, exclusive=True, group="sensors")
-    def fetch(self) -> None:
+    def fetch(self, stamp) -> None:
         from tpotctl import sensors as tsensors
         try:
             registry = self.app.backend.sensors()
             status = self.app.backend.sensor_status()
-            tsensors.link_hostnames(registry, status)
             found = registry.file_only()
             problem = ""
         except tsensors.SensorsError as err:
             registry, status, found, problem = None, None, [], str(err)
-        self.app.call_from_thread(self.show, registry, status, problem, found)
+        self.app.call_from_thread(self.finish_fetch, stamp, registry, status, problem, found)
+
+    def finish_fetch(self, stamp, registry, status, problem, found) -> None:
+        from tpotctl import sensors as tsensors
+        self.reading = False
+        if self.reload_pending or stamp != self.app.backend.config_stamp():
+            self.reload_pending = False
+            self.load()
+            return
+        if registry is not None:
+            try:
+                # Only a current snapshot may write metadata; a delayed read must not undo a removal.
+                tsensors.link_hostnames(registry, status)
+            except tsensors.SensorsError as err:
+                problem = str(err)
+        self.show(registry, status, problem, found)
+
+    def repaint(self) -> None:
+        if self.shown is not None:
+            self.show(*self.shown)
 
     def show(self, registry, status, problem: str, found=()) -> None:
+        from tpotctl import sensors as tsensors
+        self.shown = (registry, status, problem, found)
         self.registry = registry
         self.found = list(found)
-        table = self.query_one(DataTable)
-        table.clear()
+        table = self.query_one(NavDataTable)
         info = Text()
         self.query_one("#sensors-import-actions", Horizontal).display = bool(self.found)
         self.query_one("#sensor-import", Button).label = take_over_label(len(self.found), "sensor")
         if registry is None:
+            table.sync_rows([])
             info.append(problem, style=theme.color("error"))
             self.query_one("#sensors-info", Static).update(info)
+            for pane in self.app.query(StatusPane):
+                pane.show_sensors([], problem, available=False)
             return
-        takeable = {entry.name: entry for entry in self.found}
-        for sensor in registry.sensors():
-            seen = status.sensors.get(sensor.name)
-            if not sensor.access and sensor.name in takeable:
-                state = Text(f"{glyphs.g('warn')} no access, in {takeable[sensor.name].source}",
-                             style=theme.color("warn"))
-            elif not sensor.access:
-                state = Text(f"{glyphs.g('fail')} no access", style=theme.color("error"))
-            elif seen:
-                state = Text(f"{glyphs.g('running')} sending", style=theme.color("ok"))
-            else:
-                state = Text(f"{glyphs.g('stopped')} " + ("unknown" if status.problem else "nothing in 7 days"),
-                             style=theme.color("warn"))
-            table.add_row(sensor.name + ("" if sensor.source == "deployed" else f" ({sensor.source})"),
-                          sensor.host or "-", (seen.hostname if seen else sensor.hostname) or "-",
-                          seen.last[:19].replace("T", " ") if seen else "-", state, key=sensor.name)
-        for name, entry in takeable.items():
-            if name not in registry.records:
-                table.add_row(name, "-", "-", "-", Text(f"{glyphs.g('warn')} no access, in {entry.source}",
-                                                        style=theme.color("warn")), key=name)
+        observed = list(tsensors.observations(registry, status, self.found))
+        table.sync_rows(tsensors.table_rows(observed))
+        for pane in self.app.query(StatusPane):
+            pane.show_sensors(observed, "\n".join(p for p in (problem, status.problem) if p))
         if self.found:
             info.append(f"{glyphs.g('warn')} {take_over_hint(self.found, 'sensor', 'LS_WEB_USER')}",
                         style=f"bold {theme.color('warn')}")
@@ -1564,6 +1616,8 @@ class SensorsPane(Vertical):
                         style=theme.color("mist"))
         if registry.migrated:
             info.append(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. ", style=theme.color("magenta"))
+        if problem:
+            info.append(f"\n{problem}", style=theme.color("error"))
         if status.problem:
             info.append(f"\n{status.problem}", style=theme.color("warn"))
         for hostname, seen in sorted(status.unlinked.items()):
@@ -1654,9 +1708,20 @@ class SensorsPane(Vertical):
         except SensorsError as err:
             self.app.notify(str(err), title="Not removed", severity="error", timeout=10)
             return
-        self.app.notify(f"{name} is removed, {note}.", title="Sensors")
         self.load()
         self.app.config_maybe_changed()         # LS_WEB_USER
+        self.remove_status(name, note)
+
+    @work(thread=True, group="sensor-removal")
+    def remove_status(self, name: str, note: str) -> None:
+        from tpotctl import sensors as tsensors
+        try:
+            tsensors.delete_status(name)
+        except tsensors.SensorsError as err:
+            self.app.call_from_thread(self.app.notify, f"{name}: access removed, but {err}. History is unchanged.",
+                                      title="Removal incomplete", severity="error", timeout=10)
+            return
+        self.app.call_from_thread(self.app.notify, f"{name} is removed, {note}.", title="Sensors")
 
 
 
@@ -2123,10 +2188,11 @@ class ChecksPane(Vertical):
 
 
 class ElasticPane(Vertical):
-    """How long Elasticsearch keeps the events (TPOT_ES_RETENTION and the ILM policy tpot), and T-Pot's
+    """Event and sensor-history retention (separate settings and policies), and T-Pot's
     Kibana objects: the mode TPOT_KIBANA_OBJECTS, Export, Update, Overwrite all, Remove old T-Pot objects
     and Restore."""
 
+    retention = EVENTS
     status = None           # the elastic.Status the page shows, None before the first read or after an error
     busy = False            # a Set, Apply or Take over is under way: its buttons are disabled
     reading = False         # a read of the status is under way: a load meanwhile starts none
@@ -2149,6 +2215,8 @@ class ElasticPane(Vertical):
         from tpotctl.widgets.nav import NavScroll
         # the two parts do not fit into 24 rows: the page scrolls to the widget with the focus
         with NavScroll(id="elastic-scroll"):
+            yield TpotSelect([("Attack events", RETENTIONS[0].key), ("Sensor history", RETENTIONS[1].key)],
+                             value=EVENTS.key, allow_blank=False, id="elastic-scope", compact=True)
             yield Static("", id="elastic-info", classes="info")
             yield Static("", id="elastic-status")
             with Horizontal(classes="actions"):
@@ -2185,11 +2253,15 @@ class ElasticPane(Vertical):
         one read at a time, a load while one runs reads once more after it (.env may have changed)."""
         text = Text()
         text.append("Retention", style=f"bold {theme.color('glass')}")
-        text.append("  how many days Elasticsearch keeps the events (TPOT_ES_RETENTION, the ILM policy tpot), or "
-                    "off to keep them all. A shorter time always asks first and lists the indices it deletes. T-Pot "
+        what = "events" if self.retention == EVENTS else self.retention.label
+        text.append(f"  how many days Elasticsearch keeps the {what} ({self.retention.key}, the ILM policy "
+                    f"{self.retention.policy}), or off to keep them all. A shorter time always asks first and lists "
+                    "the indices it deletes. T-Pot "
                     "never shortens the policy on its own. A policy changed in Kibana stays as it is until you keep "
                     "it (Take over from Kibana) or apply .env to it (Apply .env to the policy).",
                     style=theme.color("mist"))
+        if self.retention != EVENTS:
+            text.append(" The current status of each sensor never expires.", style=theme.color("mist"))
         from textual.css.query import NoMatches
         try:
             self.query_one("#elastic-info", Static).update(text)
@@ -2237,24 +2309,25 @@ class ElasticPane(Vertical):
         from tpotctl.settings import SettingsError
         self.shows += 1
         mine = self.shows
+        retention = self.retention
         try:
-            state = await asyncio.to_thread(self.app.backend.retention_status)
+            state = await asyncio.to_thread(self.app.backend.retention_status, retention)
         except (SettingsError, OSError) as err:     # .env cannot be read
-            if mine < self.shown:
+            if mine < self.shown or retention != self.retention:
                 return
             self.shown = mine
             self.status = None
             self.query_one("#elastic-status", Static).update(Text(str(err), style=theme.color("error")))
             self.buttons()
             return
-        if mine < self.shown:
+        if mine < self.shown or retention != self.retention:
             return
         self.shown = mine
         previous, self.status = self.status, state
         text = Text()
-        text.append("TPOT_ES_RETENTION  ", style=theme.color("mist"))
+        text.append(f"{retention.key}  ", style=theme.color("mist"))
         text.append(f"{shown(state.value)}\n", style=f"bold {theme.color('glass')}")
-        text.append("ILM policy tpot    ", style=theme.color("mist"))
+        text.append(f"ILM policy {retention.policy}    ", style=theme.color("mist"))
         note = ""
         if state.state == "unreachable":
             text.append(state.problem, style=theme.color("wax"))
@@ -2275,7 +2348,7 @@ class ElasticPane(Vertical):
             text.append(f"{shown(state.current)} · set by T-Pot", style=theme.color("glass"))
         if state.pending:
             # a shorter value in .env (tpot env set, a restore, an unreachable Elasticsearch): T-Pot waits
-            note = (f"TPOT_ES_RETENTION={state.value} waits: T-Pot does not shorten the ILM policy tpot "
+            note = (f"{retention.key}={state.value} waits: T-Pot does not shorten the ILM policy {retention.policy} "
                     f"({shown(state.current)}) on its own; Apply .env to the policy applies it (asks first), "
                     f"Set {state.current} keeps the policy.")
         if note:
@@ -2286,14 +2359,14 @@ class ElasticPane(Vertical):
         if not field.value or (previous is not None and field.value == previous.value):
             field.value = state.value           # not typed in: the value of .env as it is now
 
-    async def write_env(self, change, value: str) -> None:
+    async def write_env(self, change, value: str, *args) -> None:
         """A write of .env of this page (Set of the retention, Save of the mode), one at a time: each loads
         .env and writes the text it loaded with its change, two at once would lose one of them."""
         import asyncio
         if getattr(self, "_env_lock", None) is None:
             self._env_lock = asyncio.Lock()
         async with self._env_lock:
-            await asyncio.to_thread(change, value)
+            await asyncio.to_thread(change, value, *args)
 
     # -- the Kibana objects ---------------------------------------------------------------------------
 
@@ -2380,6 +2453,19 @@ class ElasticPane(Vertical):
             ready and self.query_one("#kibana-exports", DataTable).row_count > 0)
 
     def on_select_changed(self, event) -> None:
+        if event.select.id == "elastic-scope":
+            event.stop()
+            if event.value == self.retention.key:
+                return
+            if self.busy:
+                event.select.value = self.retention.key
+                return
+            self.retention = next(scope for scope in RETENTIONS if scope.key == event.value)
+            self.status = None
+            self.query_one("#elastic-value", Input).value = ""
+            self.query_one("#elastic-status", Static).update("")
+            self.buttons()
+            self.load()
         if event.select.id == "kibana-mode":
             event.stop()
             self.kibana_help()
@@ -2608,6 +2694,7 @@ class ElasticPane(Vertical):
     def buttons(self) -> None:
         """Set, Take over and Apply as of the status read last; all three disabled while a change runs."""
         state = self.status
+        self.query_one("#elastic-scope").disabled = self.busy
         self.query_one("#elastic-set", Button).disabled = self.busy
         self.query_one("#elastic-adopt", Button).disabled = self.busy or not (
             state is not None and state.state == "foreign" and state.current)
@@ -2631,7 +2718,7 @@ class ElasticPane(Vertical):
             return
         if event.button.id == "elastic-set":
             value = self.query_one("#elastic-value", Input).value.strip()
-            if not value:           # never TPOT_ES_RETENTION= from an empty field
+            if not value:           # never clear retention from an empty field
                 self.app.notify("Enter days (1-3650) or off.", title="Not set", severity="warning", timeout=8)
                 return
             self.start(self.change(value, force=False))
@@ -2669,18 +2756,20 @@ class ElasticPane(Vertical):
         from tpotctl.cli import _retention_shown as shown
         if another_screen(self.app, button):
             return
-        self.app.push_screen(ConfirmDialog(f"Keep the events {shown(value)}?", shortening_text(chosen.doomed, value),
+        what = "events" if chosen.retention == EVENTS else chosen.retention.label
+        self.app.push_screen(ConfirmDialog(f"Keep the {what} {shown(value)}?", shortening_text(chosen.doomed, value),
                                            yes="Delete and set", no="Back"),
                              lambda yes: self.start(self.write(value, chosen)) if yes else None)
 
     async def change(self, value: str, force: bool) -> None:
         import asyncio
         from tpotctl import cli
-        problem = cli.retention_value_problem(value)
+        retention = self.retention
+        problem = cli.retention_value_problem(value, retention)
         if problem:
-            self.app.notify(f"TPOT_ES_RETENTION: {problem}", title="Not set", severity="error", timeout=8)
+            self.app.notify(f"{retention.key}: {problem}", title="Not set", severity="error", timeout=8)
             return
-        chosen = await asyncio.to_thread(self.app.backend.retention_plan, value, force)
+        chosen = await asyncio.to_thread(self.app.backend.retention_plan, value, force, retention)
         old = self.status.value if self.status else ""
         if not chosen.reachable:
             # nothing can be shown or applied: only .env changes, a shorter value waits for a yes here;
@@ -2703,8 +2792,9 @@ class ElasticPane(Vertical):
         from tpotctl import elastic
         from tpotctl.cli import _retention_shown as shown, _shortens_env
         from tpotctl.settings import SettingsError
+        retention = chosen.retention if chosen is not None else self.retention
         if chosen is None:
-            chosen = await asyncio.to_thread(self.app.backend.retention_plan, value, True)
+            chosen = await asyncio.to_thread(self.app.backend.retention_plan, value, True, retention)
             if chosen.reachable and chosen.shortening:
                 self.ask(value, chosen, "Take over from Kibana")
                 return
@@ -2712,31 +2802,31 @@ class ElasticPane(Vertical):
         if waits is None:
             waits = _shortens_env(old, value)
         try:
-            await self.write_env(self.app.backend.set_retention, value)
+            await self.write_env(self.app.backend.set_retention, value, retention)
         except (SettingsError, OSError) as err:
             self.app.notify(str(err), title="Not set", severity="error", timeout=10)
             return
-        self.app.config_maybe_changed()             # the Settings page shows TPOT_ES_RETENTION too
+        self.app.config_maybe_changed()             # the Settings page shows both retention keys too
         try:
             if chosen.reachable and chosen.decision.action == "foreign":
-                self.app.notify(foreign_kept(value, FOREIGN_BUTTONS),
+                self.app.notify(foreign_kept(value, FOREIGN_BUTTONS, retention),
                                 title="Not applied", severity="warning", timeout=12)
             elif chosen.reachable:
                 await asyncio.to_thread(self.app.backend.apply_retention, chosen)
-                self.app.notify(f"The ILM policy tpot keeps the events {shown(value)}.", title="Elastic")
+                self.app.notify(f"The ILM policy {retention.policy} keeps the events {shown(value)}.", title="Elastic")
             elif waits or chosen.shortening:
                 self.app.notify(because(retention_waits(value, "Once Elasticsearch runs, Apply .env to the policy "
-                                                               "applies it here (it asks first)."),
+                                                               "applies it here (it asks first).", retention),
                                         chosen.problem),
                                 title="Not applied", severity="warning", timeout=12)
             else:
-                self.app.notify(because(retention_unknown(value), chosen.problem), title="Elastic",
+                self.app.notify(because(retention_unknown(value, retention=retention), chosen.problem), title="Elastic",
                                 severity="warning", timeout=12)
         except elastic.ElasticError as err:
             undo = f" To undo it, set {old} again." if old and old != value else ""
             later = ("T-Pot does not shorten it on its own: Apply .env to the policy applies it (it asks first)."
                      if chosen.shortening else "T-Pot applies it on its next start.")
-            self.app.notify(f"TPOT_ES_RETENTION={value} is set in .env, but the ILM policy tpot was not changed "
+            self.app.notify(f"{retention.key}={value} is set in .env, but the ILM policy {retention.policy} was not changed "
                             f"({err}). {later}{undo}", title="Not applied", severity="warning", timeout=12)
         self.query_one("#elastic-value", Input).value = ""
         await self.show()
@@ -2748,10 +2838,10 @@ DOOMED_SHOWN = 12
 KIBANA_ILM = "Kibana, Stack Management › Index Lifecycle Policies"
 
 
-def retention_waits(value: str, later: str) -> str:
-    """A shorter TPOT_ES_RETENTION written while Elasticsearch does not answer: it waits for a yes."""
-    return (f"TPOT_ES_RETENTION={value} is set in .env, but Elasticsearch is not reachable: T-Pot does not shorten "
-            f"the ILM policy tpot on its own, the value waits. {later}")
+def retention_waits(value: str, later: str, retention: Retention = EVENTS) -> str:
+    """A shorter retention written while Elasticsearch does not answer: it waits for a yes."""
+    return (f"{retention.key}={value} is set in .env, but Elasticsearch is not reachable: T-Pot does not shorten "
+            f"the ILM policy {retention.policy} on its own, the value waits. {later}")
 
 
 # what the two buttons of the Elastic page do with a policy changed in Kibana; each asks first where it shortens
@@ -2833,10 +2923,10 @@ def mode_effect(mode: str, chosen, given_up=None) -> str:
             f"{kept}{replaced}.")
 
 
-def foreign_kept(value: str, where: str) -> str:
-    """TPOT_ES_RETENTION written while the ILM policy tpot was changed in Kibana: the policy stays as it is
+def foreign_kept(value: str, where: str, retention: Retention = EVENTS) -> str:
+    """A retention written while its ILM policy was changed in Kibana: the policy stays as it is
     until it is taken over or .env is applied to it (where says how)."""
-    return (f"TPOT_ES_RETENTION={value} is set in .env. The ILM policy tpot was changed in Kibana, T-Pot leaves it "
+    return (f"{retention.key}={value} is set in .env. The ILM policy {retention.policy} was changed in Kibana, T-Pot leaves it "
             f"as it is: {where}")
 
 
@@ -2845,14 +2935,14 @@ def because(text: str, problem: str) -> str:
     return f"{text} Why: {problem}." if problem else text
 
 
-def retention_unknown(value: str, host: bool = True) -> str:
-    """A TPOT_ES_RETENTION that is not shorter than .env, written while Elasticsearch does not answer (as
+def retention_unknown(value: str, host: bool = True, retention: Retention = EVENTS) -> str:
+    """A retention that is not shorter than .env, written while Elasticsearch does not answer (as
     tpot elastic says it): the policy is unknown, it may still keep the events longer. Off the T-Pot host
     there is no tpot elastic: the text says where it runs."""
-    then = ("a shorter value waits for 'tpot elastic retention --force' (it asks first)." if host else
-            "a shorter value waits: apply it on the T-Pot host with 'tpot elastic retention --force' (it asks "
+    then = (f"a shorter value waits for '{retention.command} --force' (it asks first)." if host else
+            f"a shorter value waits: apply it on the T-Pot host with '{retention.command} --force' (it asks "
             "first).")
-    return (f"TPOT_ES_RETENTION={value} is set. T-Pot applies it on its next start if the ILM policy tpot keeps "
+    return (f"{retention.key}={value} is set. T-Pot applies it on its next start if the ILM policy {retention.policy} keeps "
             f"the events less long; {then}")
 
 
@@ -3623,7 +3713,7 @@ class TpotApp(App):
         for pane in self.query(SettingsPane):
             if pane is not source:
                 await self.reload_keeping(pane, saved_keys, "the value just saved replaces")
-        if "TPOT_ES_RETENTION" in saved_keys:
+        if any(retention.key in saved_keys for retention in RETENTIONS):
             for pane in self.query(ElasticPane):
                 pane.load()
 

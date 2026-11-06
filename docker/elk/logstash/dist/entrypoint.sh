@@ -2,7 +2,7 @@
 
 # Let's ensure normal operation on exit or if interrupted ...
 function fuCLEANUP {
-  exit 0
+  exit "$?"
 }
 trap fuCLEANUP EXIT
 
@@ -142,5 +142,18 @@ echo
 ARCH=$(arch)
 if [ "$ARCH" = "aarch64" ]; then
   export _JAVA_OPTIONS="-XX:UseSVE=0";
+fi
+
+if [ "$TPOT_TYPE" = "SENSOR" ]; then
+  if [ -z "${MY_VERSION:-}" ]; then
+    echo "Warning: sensor heartbeat version is unknown; update tpotinit to provide it in elk_environment." >&2
+    export MY_VERSION=""
+  fi
+  # A pipeline reload must keep the process start, rather than report a restart.
+  TPOT_LOGSTASH_START=$(date -u +%Y-%m-%dT%H:%M:%SZ) || {
+    echo "Cannot determine the Logstash start time." >&2
+    exit 1
+  }
+  export TPOT_LOGSTASH_START
 fi
 exec /usr/share/logstash/bin/logstash --config.reload.automatic
