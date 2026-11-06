@@ -581,6 +581,40 @@ PY
 	fi
 }
 
+# The fleet runner owns this inherited descriptor, outside the checkout and its backup.
+function fuBACKUP_REPORT () {   # no archive: validate before the update changes anything
+	[ -n "${TPOT_UPDATE_BACKUP_FD}" ] || return 0
+	if ! python3 - "${TPOT_UPDATE_BACKUP_FD}" "${1:-}" <<'PY'
+import json
+import os
+import stat
+import sys
+
+try:
+    value, archive = sys.argv[1:]
+    if not value.isascii() or not value.isdecimal() or not 3 <= int(value) <= 1023 or int(value) == 7:
+        raise ValueError("expected an inherited descriptor other than stdin/stdout/stderr or the update lock")
+    fd = int(value)
+    info = os.fstat(fd)
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+            or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600):
+        raise ValueError("expected an owned private regular single-link file")
+    os.write(fd, b"")
+    if archive:
+        with os.fdopen(os.dup(fd), "a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"archive": archive}) + "\n")
+            stream.flush()
+    os.fsync(fd)
+except (OSError, ValueError) as err:
+    print("Cannot write the backup report: " + str(err), file=sys.stderr)
+    sys.exit(1)
+PY
+	  then
+	    fuUI_ERROR "The backup report is unavailable; the update cannot continue."
+	    return 1
+	fi
+}
+
 # One item of the summary at the end, i.e. fuDID ok "The images are pulled."
 function fuDID () {   # $1 = ok | fail | warn | next | info, $2 = text
 	# one line each: a newline in the text becomes a space, so an item never splits in two
@@ -2230,6 +2264,7 @@ function fuARCHIVE_HAS_ES_DATA () {   # $1 = the data folder
 function fuARCHIVE_RENAMED () {   # $1 = the name before, $2 = the new name
 	local myI=""
 	myARCHIVE="$2"
+	[ -z "${TPOT_UPDATE_BACKUP_FD}" ] || fuBACKUP_REPORT "${myARCHIVE}" || exit 1
 	# hints of this run printed before name the archive by its old name
 	fuUI_HINT "The backup of this run is $2 now (it was $1): the commands above that name $1 take $2."
 	for myI in "${!myDONE[@]}";
@@ -2840,6 +2875,7 @@ function fuBACKUP () {
 	# while the run still reported success.
 	if [ -n "${myPREPARED}" ];
 	  then
+	    [ -z "${TPOT_UPDATE_BACKUP_FD}" ] || fuBACKUP_REPORT "${myARCHIVE}" || exit 1
 	    fuUI_OK "Keeping the backup from before the restart: ${myARCHIVE}"
 	    # the first pass named it already, unless it was an update.sh that hands over no items
 	    [ -n "${TPOT_UPDATE_DONE}" ] || fuDID ok "The backup is ${myARCHIVE}."
@@ -2968,6 +3004,7 @@ function fuBACKUP () {
 	    echo
 	    exit 1
 	fi
+	[ -z "${TPOT_UPDATE_BACKUP_FD}" ] || fuBACKUP_REPORT "${myARCHIVE}" || exit 1
 	fuUI_OK "The archive holds $(tar tf "${myARCHIVE}" | wc -l) entries, $(du -h "${myARCHIVE}" | cut -f1)."
 	fuDID ok "The backup is ${myARCHIVE}."
 	fuROTATE
@@ -4833,6 +4870,7 @@ if [ "${myCONFIRMED}" != "y" ]; then
   echo
   exit
 fi
+fuBACKUP_REPORT || exit 1
 fuUPDATE_LOCK || exit 1
 # From here on every way out ends with the summary (fuEND)
 myRUNNING="1"

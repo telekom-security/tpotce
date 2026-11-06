@@ -7,6 +7,7 @@ Every run has a temporary HOME with stubs for sudo, systemctl, docker and curl: 
 network, the real docker or the .env / ~/.config/tpotce of the user running the tests.
 """
 
+import json
 import os
 from pathlib import Path
 import re
@@ -3083,6 +3084,92 @@ class ComposeAdoptTest(Scripts):
         self.assertTrue(self.compose().startswith("# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\n"),
                         self.compose()[:200])
         self.assertIn("rebuilt for this release", out)
+
+
+class BackupReportTest(Scripts):
+
+    def setUp(self):
+        super().setUp()
+        self.report = Path(self.home, "archive.jsonl")
+        self.report.touch(mode=0o600)
+        self.archive = str(Path(self.home, "tpot_backups", "test_tpot_backup.tar"))
+        subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "init", "-q", self.tpotce], check=True)
+        Path(self.tpotce, "version").write_text("1\n", encoding="utf-8")
+        subprocess.run(["git", "-C", self.tpotce, "add", "version"], check=True)
+        subprocess.run(["git", "-C", self.tpotce, "-c", "core.hooksPath=/dev/null",
+                        "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                        "commit", "-qm", "fixture"], check=True)
+        self.stub("tar", '#!/bin/sh\ncase "$1" in\n'
+                        'cf) [ ! -e "$HOME/tar-fails" ] || exit 2; : > "$2" ;;\n'
+                        'tf) echo MANIFEST ;;\nesac\n')
+
+    def with_report(self, call):
+        return self.source_update(
+            'exec 8>>"$HOME/archive.jsonl"\nexport TPOT_UPDATE_BACKUP_FD=8\n' + call)
+
+    def records(self):
+        return [json.loads(line) for line in self.report.read_text(encoding="utf-8").splitlines()]
+
+    def backup(self, suffix=""):
+        return self.with_report(
+            f"fuARCHIVE_NAME () {{ printf '%s\\n' {shlex.quote(self.archive)}; }}\n"
+            "fuROTATE () { :; }\nfuBACKUP\n" + suffix)
+
+    def test_completed_backup_is_recorded_before_later_failure(self):
+        result = self.backup("exit 23\n")
+        self.assertEqual(result.returncode, 23, result.stdout + result.stderr)
+        self.assertTrue(Path(self.archive).is_file())
+        self.assertEqual(self.records(), [{"archive": self.archive}])
+        self.assertNotIn('{"archive":', result.stdout)
+
+    def test_failed_tar_is_not_reported_as_a_rollback_point(self):
+        Path(self.home, "tar-fails").touch()
+        result = self.backup()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.records(), [])
+
+    def test_rename_and_exec_handover_keep_the_actual_backup(self):
+        renamed = self.archive.replace(".tar", "_full.tar")
+        child = (f"source {shlex.quote(UPDATE_SH)}\n"
+                 f"myPREPARED=1 myARCHIVE={shlex.quote(renamed)}\nfuBACKUP")
+        result = self.backup(
+            f"mv -- {shlex.quote(self.archive)} {shlex.quote(renamed)}\n"
+            f"fuARCHIVE_RENAMED {shlex.quote(self.archive)} {shlex.quote(renamed)}\n"
+            f"exec bash -c {shlex.quote(child)}\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.records(), [{"archive": self.archive}, {"archive": renamed}, {"archive": renamed}])
+
+    def test_closed_or_reserved_fd_stops_before_sudo_and_logs(self):
+        for fd in ("8", "7", "1", "invalid"):
+            with self.subTest(fd=fd):
+                result = self.run_plain(UPDATE_SH, "-y", TPOT_UPDATE_BACKUP_FD=fd)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("backup report", (result.stdout + result.stderr).lower())
+                self.assertEqual(self.calls(), "")
+                self.assertFalse(Path(self.home, "tpot_backups", "update.log").exists())
+
+    def test_public_or_hardlinked_report_is_not_changed(self):
+        for kind in ("public", "hardlink"):
+            with self.subTest(kind=kind):
+                self.report.chmod(0o644 if kind == "public" else 0o600)
+                if kind == "hardlink":
+                    os.link(self.report, Path(self.home, "second-link"))
+                result = self.with_report('fuBACKUP_REPORT "/not-a-backup"\n')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("backup report", (result.stdout + result.stderr).lower())
+                self.assertEqual(self.records(), [])
+                self.assertEqual(self.report.stat().st_mode & 0o777, 0o644 if kind == "public" else 0o600)
+
+    def test_broken_report_after_backup_stops_the_update(self):
+        result = self.with_report(
+            'fuROTATE () { echo rotated; }\nexec 8>&-\n'
+            f"fuARCHIVE_NAME () {{ printf '%s\\n' {shlex.quote(self.archive)}; }}\n"
+            "fuBACKUP\necho went-on\n")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("went-on", result.stdout)
+        self.assertNotIn("rotated", result.stdout)
+        self.assertIn("backup report", (result.stdout + result.stderr).lower())
+        self.assertTrue(Path(self.archive).is_file())
 
 
 class UpdateLockTest(Scripts):
