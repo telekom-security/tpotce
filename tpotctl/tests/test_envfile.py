@@ -41,6 +41,21 @@ def positional_re_calls(path):
 
 class EnvFileTest(unittest.TestCase):
 
+    def test_installation_can_create_a_private_file_from_previewed_defaults(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = os.path.join(folder, "env.example")
+            with open(source, "w", encoding="utf-8") as out:
+                out.write("TPOT_BLACKHOLE=false\n")
+            env = envfile.EnvFile(source)
+            env.path = os.path.join(folder, ".env")
+            env.set("TPOT_BLACKHOLE", "true")
+            with self.assertRaises(envfile.EnvError):
+                env.save()
+            env.save(create=True)
+            self.assertEqual(os.stat(env.path).st_mode & 0o777, 0o600)
+            self.assertEqual(envfile.EnvFile(env.path).get("TPOT_BLACKHOLE"), "true")
+            self.assertEqual(envfile.EnvFile(source).get("TPOT_BLACKHOLE"), "false")
+
     def test_an_unquoted_value_ends_at_a_comment_without_a_warning(self):
         folder = tempfile.mkdtemp(prefix="tpot-envfile-")
         self.addCleanup(lambda: __import__("shutil").rmtree(folder, True))

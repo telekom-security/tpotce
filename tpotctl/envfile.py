@@ -111,11 +111,15 @@ class EnvFile:
     def text(self) -> str:
         return "\n".join(self.lines) + ("\n" if self.trailing_newline else "")
 
-    def save(self) -> None:
-        """Atomically, with the owner and mode of the old file (it holds credentials)."""
+    def save(self, *, create: bool = False) -> None:
+        """Atomically preserve owner and mode; an installation may create a private file."""
         path = os.path.realpath(self.path)   # a linked .env is written where it really is
         try:
             stat = os.stat(path)
+        except FileNotFoundError as err:
+            if not create:
+                raise EnvError(f"cannot read {self.path}: {err}") from err
+            stat = None
         except OSError as err:
             raise EnvError(f"cannot read {self.path}: {err}")
         directory = os.path.dirname(path)
@@ -123,13 +127,16 @@ class EnvFile:
         try:
             with os.fdopen(handle, "w", encoding="utf-8") as out:
                 out.write(self.text())
-            os.chmod(temp, stat.st_mode & 0o7777)
-            if hasattr(os, "chown") and (stat.st_uid, stat.st_gid) != (os.getuid(), os.getgid()):
+            os.chmod(temp, stat.st_mode & 0o7777 if stat is not None else 0o600)
+            if stat is not None and hasattr(os, "chown") and (stat.st_uid, stat.st_gid) != (os.getuid(), os.getgid()):
                 try:
                     os.chown(temp, stat.st_uid, stat.st_gid)
                 except PermissionError:
                     raise EnvError(f"{self.path} belongs to another user, change it as that user")
-            os.replace(temp, path)
+            if stat is None:
+                os.link(temp, path)
+            else:
+                os.replace(temp, path)
         except OSError as err:
             raise EnvError(f"cannot write {self.path}: {err}")
         finally:

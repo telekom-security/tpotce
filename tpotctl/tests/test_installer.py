@@ -41,11 +41,9 @@ def block(text):
 
 
 class FreshInstallEnvTest(unittest.TestCase):
-    """A fresh install runs on the tracked .env of its clone: install.sh only writes WEB_USER into it (and with
-    -U TPOT_AUTO_UPDATES=DISABLED), and the playbook only clones. So the defaults of a new install are the values
-    of that file."""
+    """A fresh install creates a private .env from env.example before writing installer settings."""
 
-    ENV = os.path.join(REPO_DIR, ".env")
+    ENV = os.path.join(REPO_DIR, "env.example")
 
     def kibana_block(self, path):
         with open(path, encoding="utf-8") as handle:
@@ -57,7 +55,8 @@ class FreshInstallEnvTest(unittest.TestCase):
     def test_install_sh_writes_only_the_web_user_and_the_update_switch_into_env(self):
         with open(INSTALL_SH, encoding="utf-8") as handle:
             text = handle.read()
-        writes = [line.strip() for line in text.splitlines()
+        setter = text[text.index("env_set() {"):text.index("\n}", text.index("env_set() {"))]
+        writes = [line.strip() for line in setter.splitlines()
                   if "myTPOT_CONF_FILE" in line and not line.strip().startswith(("#", "myTPOT_CONF_FILE=",
                                                                                   "fuUI_INFO"))]
         # env_set: the line in place, or (a .env without it) at the end on a line of its own
@@ -67,14 +66,16 @@ class FreshInstallEnvTest(unittest.TestCase):
                                   'echo "$1=$2" >> "${myTPOT_CONF_FILE}"'])
         self.assertEqual(re.findall(r"^\s*env_set (\S+) (.*)$", text, re.M),
                          [("TPOT_AUTO_UPDATES", "DISABLED"), ("WEB_USER", '"${myWEB_USER_ENC_B64}"')])
-        self.assertNotIn("env.example", text)
+        self.assertIn('python3 "${HOME}/tpotce/tpotctl/git_hooks.py" install', text)
+        self.assertIn('python3 "${HOME}/tpotce/tpotctl/generated.py" stamp-env', text)
+        self.assertIn('python3 "${HOME}/tpotce/tpotctl/generated.py" stamp-compose', text)
         with open(os.path.join(REPO_DIR, "installer", "install", "tpot.yml"), encoding="utf-8") as handle:
             playbook = handle.read()
         self.assertNotIn("tpotce/.env", playbook)
         self.assertNotIn("env.example", playbook)
 
     def test_a_fresh_install_chooses_update_for_the_kibana_objects(self):
-        # the tracked .env, after the one change install.sh makes to it
+        # env.example, after the one change install.sh makes to a fresh .env
         with tempfile.TemporaryDirectory() as tmp:
             env = os.path.join(tmp, ".env")
             shutil.copy(self.ENV, env)
@@ -402,10 +403,10 @@ class EngineTest(unittest.TestCase):
 
 
 def make_checkout(test):
-    """A checkout to install from: env.example as .env, the compose folder."""
+    """A fresh checkout: sources only, no runtime configuration yet."""
     tmp = tempfile.TemporaryDirectory()
     test.addCleanup(tmp.cleanup)
-    shutil.copy(os.path.join(REPO_DIR, "env.example"), os.path.join(tmp.name, ".env"))
+    shutil.copy(os.path.join(REPO_DIR, "env.example"), os.path.join(tmp.name, "env.example"))
     shutil.copytree(os.path.join(REPO_DIR, "compose"), os.path.join(tmp.name, "compose"),
                     ignore=shutil.ignore_patterns("tests", "__pycache__"))
     return tmp.name
@@ -543,6 +544,23 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.reboots, [["sudo", "-S", "-p", "", "reboot"]])
         from tpotctl.envfile import EnvFile
         self.assertEqual(EnvFile(os.path.join(self.repo, ".env")).values()["TPOT_BLACKHOLE"], "ENABLED")
+
+    async def test_fresh_checkout_offers_settings_without_creating_files_until_confirmed(self):
+        app = self.make_app(sudo="passwordless")
+        env_path = os.path.join(self.repo, ".env")
+        compose_path = os.path.join(self.repo, "docker-compose.yml")
+        self.assertFalse(os.path.exists(env_path))
+        self.assertFalse(os.path.exists(compose_path))
+        async with app.run_test(size=(140, 44)) as pilot:
+            await self.walk_to_review(app, pilot)
+            self.assertFalse(os.path.exists(env_path))
+            self.assertFalse(os.path.exists(compose_path))
+            await pilot.click("#ins-next")
+            await pilot.pause(1.0)
+            self.assertEqual(app.step, "done")
+        from tpotctl.envfile import EnvFile
+        self.assertEqual(EnvFile(env_path).values()["TPOT_BLACKHOLE"], "ENABLED")
+        self.assertEqual(os.stat(env_path).st_mode & 0o777, 0o600)
 
     async def test_sensor_skips_the_web_user(self):
         app = self.make_app(sudo="passwordless")

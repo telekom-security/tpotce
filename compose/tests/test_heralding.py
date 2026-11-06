@@ -42,7 +42,7 @@ class HeraldingTest(unittest.TestCase):
     def test_new_services_only_on_free_ports(self):
         new = set(self.config) - set(self.legacy)
         self.assertTrue(new)
-        paths = [ROOT / "docker-compose.yml", *sorted((ROOT / "compose").glob("*.yml")),
+        paths = [*sorted((ROOT / "compose").glob("*.yml")),
                  ROOT / "docker/heralding/docker-compose.yml"]
         for path in paths:
             services = yaml.safe_load(path.read_text()).get("services") or {}

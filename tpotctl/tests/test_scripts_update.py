@@ -22,6 +22,7 @@ import unittest
 from tpotctl.tests import ptyhelper
 from tpotctl.tests import test_scripts as base
 from tpotctl.tests import test_ui as ui
+from tpotctl import generated
 
 REPO = base.REPO
 UPDATE_SH = os.path.join(REPO, "update.sh")
@@ -96,6 +97,73 @@ class Scripts(base.Harness):
             return ""
         with open(path, encoding="utf-8") as handle:
             return handle.read()
+
+    def test_runtime_config_stamp_secures_env_and_marks_supported_compose(self):
+        os.makedirs(os.path.join(self.tpotce, "tpotctl"))
+        os.makedirs(os.path.join(self.tpotce, "compose"), exist_ok=True)
+        shutil.copy(os.path.join(REPO, "tpotctl", "generated.py"),
+                    os.path.join(self.tpotce, "tpotctl", "generated.py"))
+        with open(os.path.join(self.tpotce, "env.example"), "w", encoding="utf-8") as out:
+            out.write("TPOT_VERSION=1\n")
+        with open(os.path.join(self.tpotce, "compose", "standard.yml"), "w", encoding="utf-8") as out:
+            out.write("# T-Pot: STANDARD\nservices: {}\n")
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), "w", encoding="utf-8") as out:
+            out.write("# T-Pot: STANDARD\nservices: {}\n")
+        env_path = os.path.join(self.tpotce, ".env")
+        if os.path.exists(env_path):
+            os.remove(env_path)
+
+        result = self.source_update("myDONE=(); fuSTAMP_RUNTIME_ENV && fuSTAMP_RUNTIME_COMPOSE")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with open(os.path.join(self.tpotce, ".env"), encoding="utf-8") as source:
+            env = source.read()
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as source:
+            compose = source.read()
+        self.assertIn("TPOT_VERSION=1\n", env)
+        self.assertEqual(os.stat(os.path.join(self.tpotce, ".env")).st_mode & 0o777, 0o600)
+        self.assertTrue(generated.configuration_is_current(env, self.tpotce, "env"))
+        self.assertTrue(generated.configuration_is_current(compose, self.tpotce, "compose"))
+
+
+class GeneratedRuntimeTest(Scripts):
+
+    def test_downgrade_does_not_require_helpers_from_the_newer_release(self):
+        for filename, text in ((".env", "TPOT_VERSION=old\n"),
+                               ("docker-compose.yml", "# T-Pot: STANDARD\nservices: {}\n")):
+            with open(os.path.join(self.tpotce, filename), "w", encoding="utf-8") as out:
+                out.write(text)
+        result = self.source_update(
+            "myOLDER_CHECKOUT=1; fuINSTALL_GIT_HOOKS && fuSTAMP_RUNTIME_ENV && fuSTAMP_RUNTIME_COMPOSE")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        with open(os.path.join(self.tpotce, ".env"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "TPOT_VERSION=old\n")
+
+    def test_a_preserved_custom_file_keeps_its_old_source_stamp(self):
+        os.makedirs(os.path.join(self.tpotce, "compose"))
+        os.makedirs(os.path.join(self.tpotce, "tpotctl"))
+        shutil.copy(os.path.join(REPO, "tpotctl", "generated.py"), os.path.join(self.tpotce, "tpotctl"))
+        for name in ("standard.yml", "tpot_services.yml"):
+            with open(os.path.join(self.tpotce, "compose", name), "w", encoding="utf-8") as out:
+                out.write("services: {}\n")
+        path = os.path.join(self.tpotce, "docker-compose.yml")
+        text = ("# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\n"
+                "# customizer: add=\n# customizer: remove=\n# customizer: port=\nservices: {}\n")
+        old = generated.stamp_text(text, generated.configuration_fingerprint(text, self.tpotce, "compose"))
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(old)
+        archive = os.path.join(self.home, "backup.tar")
+        with tarfile.open(archive, "w") as tar:
+            tar.add(path, arcname="docker-compose.yml")
+        with open(os.path.join(self.tpotce, "compose", "standard.yml"), "a", encoding="utf-8") as out:
+            out.write("# new release\n")
+        result = self.source_update(
+            f"myARCHIVE={shlex.quote(archive)}; myCOMPOSE_CUSTOMIZED=1; "
+            "fuRESTORE_CUSTOM; fuSTAMP_RUNTIME_COMPOSE")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with open(path, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), old, "an unreconstructed file cannot claim newer release sources")
 
 
 class LogoTest(Scripts):
@@ -414,6 +482,20 @@ class SummaryTest(Scripts):
         tail = result.stdout[result.stdout.index("### T-Pot is updated"):]
         self.assertIn("### [WARNING] - Your docker-compose.yml had been modified, the STANDARD edition of this "
                       "release replaces it", tail)
+
+    def test_an_edition_source_stamp_is_not_a_manual_change(self):
+        template = "# T-Pot: STANDARD\nservices: {}\n"
+        os.makedirs(os.path.join(self.tpotce, "compose"))
+        with open(os.path.join(self.tpotce, "compose", "standard.yml"), "w", encoding="utf-8") as out:
+            out.write(template)
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=HIVE\n")
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), "w", encoding="utf-8") as out:
+            out.write("# T-Pot: STANDARD\n# T-Pot sources sha256: " + "a" * 64 + "\nservices: {}\n")
+        result = self.source_update('fuCHECK_EDITION; printf "CHANGED:%s\\n" "${myCOMPOSE_CUSTOMIZED}"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CHANGED:\n", result.stdout)
+        self.assertNotIn("(customized)", result.stdout)
 
     def test_a_restarted_update_keeps_the_items_of_the_first_pass(self):
         first = "ok:The backup is /b/x.tar.\nwarn:Kibana did not answer within 120s, it is NOT in the backup.\n"
@@ -2176,7 +2258,7 @@ class KibanaObjectsMigrationTest(Scripts):
         of the new checkout (which brings update) and restarted into this one without a handover.
         fuOLD_UPDATER_CONFIG puts the .env of that archive back, this run's backup takes it, and fuRESTORE
         ends with keep."""
-        shutil.copy(os.path.join(REPO, ".env"), os.path.join(self.tpotce, ".env"))
+        shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.tpotce, ".env"))
         shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.tpotce, "env.example"))
         with open(os.path.join(self.tpotce, "version"), "w", encoding="utf-8") as out:
             out.write("24.04.2\n")
@@ -2971,7 +3053,7 @@ class ComposeAdoptTest(Scripts):
         if not os.path.exists(os.path.join(venv, "bin", "python3")):
             self.skipTest("no venv of the T-Pot Manager")
         shutil.rmtree(os.path.join(self.tpotce, "compose"))
-        os.symlink(os.path.join(REPO, "compose"), os.path.join(self.tpotce, "compose"))
+        shutil.copytree(os.path.join(REPO, "compose"), os.path.join(self.tpotce, "compose"))
         os.symlink(os.path.join(REPO, "tpotctl"), os.path.join(self.tpotce, "tpotctl"))
         shutil.rmtree(os.path.join(self.home, "data", "tpotce", "venv"))
         os.symlink(venv, os.path.join(self.home, "data", "tpotce", "venv"))

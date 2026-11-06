@@ -647,6 +647,21 @@ class RestoreRetentionTest(RestoreScriptHarness):
             self.assertIn(f"TPOT_ES_RETENTION={archived}\n", handle.read())      # .env is restored as before
         return result.stdout + result.stderr
 
+    def test_config_restore_preserves_source_fingerprints(self):
+        env = f"# T-Pot sources sha256: {'a' * 64}\nTPOT_TYPE=HIVE\nTPOT_ES_RETENTION=30\n"
+        compose = f"# T-Pot: STANDARD\n# T-Pot sources sha256: {'b' * 64}\nservices: {{}}\n"
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=HIVE\nTPOT_ES_RETENTION=365\n")
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "env": env, "docker-compose.yml": compose})
+
+        result = self.bash(f"myARCHIVE='{archive}' myDO_CONFIG=1\nfuTMPDIR; fuTOC\nfuDO_CONFIG\n")
+
+        with open(os.path.join(self.tpotce, ".env"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), env)
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), compose)
+        self.assertIn("Wrote", result.stdout + result.stderr)
+
     def test_config_with_a_shorter_retention_says_it_waits(self):
         out = self.config("365", "30")
         hints = [line for line in out.splitlines() if line.startswith("HINT: ")]
@@ -2366,7 +2381,7 @@ class DataLossTest(Harness):
         origin = self.target()
         fork = os.path.join(self.home, "fork")
         subprocess.run(["git", "clone", "-q", "--bare", origin, fork], check=True)
-        subprocess.run(["git", "-C", fork, "update-ref", "refs/heads/master", "HEAD~1"], check=True)
+        subprocess.run(["git", "--git-dir", fork, "update-ref", "refs/heads/master", "HEAD~1"], check=True)
         out, lines = self.check(extra=f"myTPOT_REPO_URL={fork} myTPOT_SOURCE_GIVEN=1\n")
         self.assertEqual(lines, [], out)
         self.assertIn("rc=0", out)
@@ -3590,7 +3605,7 @@ class UpdateRepairTest(Harness):
 
     EDITIONS = f'eval "$(grep "^myEDITIONS=" {REPO}/update.sh)"\n'
     EDITION_FUNCTIONS = ("fuEDITION_TEMPLATE", "fuEDITION_LINE", "fuCUSTOM_FILE", "fuCUSTOM_CHECKSUM",
-                         "fuCHECK_EDITION", "fuCOMPOSE_FROM_ARCHIVE", "fuRESTORE_EDITION")
+                         "fuSAME_COMPOSE", "fuCHECK_EDITION", "fuCOMPOSE_FROM_ARCHIVE", "fuRESTORE_EDITION")
     TEMPLATE = "# T-Pot: STANDARD\nservices:\n  tpotinit:\n    image: new\n"
 
     def check_edition(self, compose, then="", before=""):

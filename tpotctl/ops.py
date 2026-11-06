@@ -17,6 +17,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.envfile import read_values
+from tpotctl import generated
 
 SERVICE = "tpot"
 WEB_PORT = 64297       # nginx, the one web entry point of a HIVE
@@ -26,6 +27,10 @@ _EDITION_RE = re.compile(r"^# T-Pot:\s*(\S.*?)\s*$")
 
 class OpsError(Exception):
     """Something tpot cannot do here."""
+
+
+class ConfigDriftError(OpsError):
+    """A runtime configuration file is not stamped for the checked-out sources."""
 
 
 def linux_host() -> bool:
@@ -72,6 +77,19 @@ def config_stamp(repo_dir: str = REPO_DIR) -> Tuple:
         except OSError:
             stamp.append(None)
     return tuple(stamp)
+
+
+def config_drift(repo_dir: str = REPO_DIR) -> List[str]:
+    """The runtime configuration files that are missing, unstamped or behind this checkout."""
+    return generated.configuration_drift(repo_dir)
+
+
+def require_config_current(repo_dir: str = REPO_DIR) -> None:
+    """Stop a write that combines this checkout with an out-of-date runtime configuration."""
+    drift = config_drift(repo_dir)
+    if drift:
+        files = " and ".join(dict.fromkeys(drift))
+        raise ConfigDriftError(f"{files} is out of date with this checkout. Run tpot update first.")
 
 
 def compose_path(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> str:

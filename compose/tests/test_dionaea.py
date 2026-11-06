@@ -31,7 +31,7 @@ LIMIT_ENV = {
 
 
 def compose_files():
-    return [ROOT / "docker-compose.yml", *sorted((ROOT / "compose").glob("*.yml")),
+    return [*sorted((ROOT / "compose").glob("*.yml")),
             ROOT / "docker/dionaea/docker-compose.yml"]
 
 
@@ -65,7 +65,7 @@ class DionaeaRootsTest(unittest.TestCase):
             with self.subTest(file=path.relative_to(ROOT).as_posix()):
                 for key, value in LIMITS.items():
                     self.assertEqual(service.get(key), value, f"dionaea {key}")
-        self.assertGreaterEqual(found, 6)
+        self.assertGreaterEqual(found, 5)
 
     def test_tmp_is_a_tmpfs(self):
         found = 0
@@ -77,7 +77,7 @@ class DionaeaRootsTest(unittest.TestCase):
             with self.subTest(file=path.relative_to(ROOT).as_posix()):
                 self.assertTrue(service.get("read_only"))
                 self.assertIn(TMP, service.get("tmpfs") or [])
-        self.assertGreaterEqual(found, 6)
+        self.assertGreaterEqual(found, 5)
 
     def test_roots_are_read_only(self):
         found = 0
@@ -95,8 +95,8 @@ class DionaeaRootsTest(unittest.TestCase):
                 self.assertEqual(sorted(mounts), sorted(ROOTS), "the four roots must be mounted")
                 for name, read_only in sorted(mounts.items()):
                     self.assertTrue(read_only, f"roots/{name} is writable, it must end in :ro")
-        # catalogue, standard, sensor, mobile, root file, own file
-        self.assertGreaterEqual(found, 6)
+        # catalogue, editions that include dionaea, and its standalone file
+        self.assertGreaterEqual(found, 5)
 
     def test_storage_limits_come_from_env(self):
         """The three limits are mapped from .env with the defaults of the config files."""

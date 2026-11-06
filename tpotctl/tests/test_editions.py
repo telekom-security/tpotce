@@ -13,7 +13,7 @@ from tpotctl.tests import isolate
 
 isolate()
 
-from tpotctl import editions  # noqa: E402
+from tpotctl import editions, generated  # noqa: E402
 
 try:
     import rich  # noqa: F401
@@ -53,10 +53,13 @@ class EditionsTest(unittest.TestCase):
         for name in ("standard", "sensor", "mini", "llm", "tarpit", "mobile"):
             shutil.copy(os.path.join(REPO, "compose", f"{name}.yml"), os.path.join(self.repo, "compose"))
         shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.repo, ".env"))
+        shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.repo, "env.example"))
+        generated.stamp_file(os.path.join(self.repo, ".env"), self.repo, "env")
         self.use("standard")
 
     def use(self, edition):
         shutil.copy(os.path.join(self.repo, "compose", f"{edition}.yml"), self.compose())
+        generated.stamp_file(self.compose(), self.repo, "compose")
 
     def compose(self):
         return os.path.join(self.repo, "docker-compose.yml")
@@ -137,6 +140,10 @@ class EditionsTest(unittest.TestCase):
 
     # the switch -------------------------------------------------------------
 
+    def test_switch_leaves_configuration_current(self):
+        editions.switch(self.plan("mini"), self.repo, run=Calls(), linux=True)
+        self.assertEqual(generated.configuration_drift(self.repo), [])
+
     def test_no_os_type_goes_into_env(self):
         self.assertNotIn("TPOT_OSTYPE", self.plan("mini").env_changes)
 
@@ -147,7 +154,8 @@ class EditionsTest(unittest.TestCase):
         self.assertEqual(steps[0], ["sudo", "systemctl", "stop", "tpot"])
         self.assertIn(["sudo", "docker", "network", "prune", "-f"], calls.commands)
         self.assertEqual(calls.commands[-1], ["sudo", "systemctl", "start", "tpot"])
-        self.assertEqual(self.read(self.compose()), self.read(os.path.join(self.repo, "compose", "mini.yml")))
+        self.assertEqual(generated.without_stamp(self.read(self.compose())),
+                         self.read(os.path.join(self.repo, "compose", "mini.yml")))
 
     def test_a_failed_stop_changes_nothing(self):
         before = self.read(self.compose())
@@ -220,7 +228,8 @@ class EditionsTest(unittest.TestCase):
             editions.switch(plan, self.repo, run=Calls(), linux=True)
         self.assertNotIn("is kept as", out.getvalue())
         self.assertFalse(os.path.exists(self.backups))
-        self.assertEqual(self.read(self.compose()), self.read(os.path.join(self.repo, "compose", "mini.yml")))
+        self.assertEqual(generated.without_stamp(self.read(self.compose())),
+                         self.read(os.path.join(self.repo, "compose", "mini.yml")))
 
     def test_become_file_refreshes_sudo_first(self):
         become = os.path.join(self.repo, "become")
@@ -239,7 +248,8 @@ class EditionsTest(unittest.TestCase):
             editions.switch(self.plan("mini"), self.repo, run=calls, linux=False)
         self.assertEqual(calls.commands, [])              # no systemctl, no sudo off a T-Pot host
         self.assertIn("nothing is started", out.getvalue())
-        self.assertEqual(self.read(self.compose()), self.read(os.path.join(self.repo, "compose", "mini.yml")))
+        self.assertEqual(generated.without_stamp(self.read(self.compose())),
+                         self.read(os.path.join(self.repo, "compose", "mini.yml")))
 
     def test_marks_with_tpot_marks(self):
         out = io.StringIO()
@@ -389,7 +399,7 @@ class EditionsTest(unittest.TestCase):
                 self.use("standard")
                 commands, raised, text = self.switch_with_ctrl_c(during, code)
                 self.assertIsNone(raised, text)
-                self.assertEqual(self.read(self.compose()), mini)
+                self.assertEqual(generated.without_stamp(self.read(self.compose())), mini)
                 self.assertEqual(commands[-1], ["sudo", "systemctl", "start", "tpot"])
                 self.assertIn("the switch is finished", text)
                 self.assertIn("T-Pot runs the Mini edition", text)
@@ -402,7 +412,7 @@ class EditionsTest(unittest.TestCase):
         self.assertNotIn("T-Pot runs the", text)
         self.assertIn("T-Pot is stopped", text)
         self.assertIn("tpot start", text)
-        self.assertEqual(self.read(self.compose()), mini)
+        self.assertEqual(generated.without_stamp(self.read(self.compose())), mini)
 
     def test_ctrl_c_while_starting_says_to_look(self):
         """systemctl start stops waiting on ctrl+c, the start goes on in systemd: no success yet, a hint."""
@@ -419,6 +429,10 @@ class EditionsTest(unittest.TestCase):
 
 
 class EditionCliTest(unittest.TestCase):
+
+    def setUp(self):
+        from tpotctl.tests import current_configuration
+        current_configuration(self)
 
     def test_set_refuses_without_yes_off_a_terminal(self):
         from tpotctl import cli

@@ -252,11 +252,12 @@ class SchemaWidgetsTest(unittest.TestCase):
 
 
 def make_llm_checkout(test):
+    from tpotctl.tests import current_configuration
     tmp = tempfile.TemporaryDirectory()
     test.addCleanup(tmp.cleanup)
     shutil.copy(os.path.join(REPO_DIR, "env.example"), os.path.join(tmp.name, ".env"))
     shutil.copy(os.path.join(REPO_DIR, "compose", "llm.yml"), os.path.join(tmp.name, "docker-compose.yml"))
-    return tmp.name
+    return current_configuration(test, tmp.name)
 
 
 class SettingsHelpersBase(unittest.IsolatedAsyncioTestCase):
@@ -420,7 +421,7 @@ class SettingsHelpersTest(SettingsHelpersBase):
             self.app.goto_setting("GALAH_LLM_MODEL")
             await pilot.pause(0.3)
             # pressed, not clicked: under load the row may still scroll into view
-            self.app.query_one("#pick-GALAH_LLM_MODEL").press()
+            pane.query_one("#pick-GALAH_LLM_MODEL").press()
             for _wait in range(30):           # the models load in a thread, slower under load
                 await pilot.pause(0.1)
                 if getattr(self.app.screen, "shown", None):
@@ -454,8 +455,11 @@ class SettingsHelpersTest(SettingsHelpersBase):
                              ("BEELZEBUB_LLM_HOST", "http://10.0.0.5:11434/api/chat")):
                 self.app.goto_setting(key)
                 await pilot.pause(0.3)
-                await pilot.click(f"#pick-{key}")
-                await pilot.pause(0.5)
+                pane.query_one(f"#pick-{key}").press()
+                for _wait in range(30):
+                    await pilot.pause(0.1)
+                    if getattr(self.app.screen, "shown", None):
+                        break
                 self.assertEqual([i[0] for i in self.app.screen.shown], [url])     # localhost hidden
                 await pilot.press("enter")
                 await pilot.pause(0.3)
@@ -1233,9 +1237,12 @@ class RefreshTriggersTest(SettingsHelpersBase):
             env.save()
             sidebar = self.app.query_one("#sidebar")
             sidebar.focus()
-            for _ in range(2):                      # down to Settings with the menu
+            for _ in range(len(self.app.panes)):
+                if self.app.query_one("ContentSwitcher").current == "settings":
+                    break
                 await pilot.press("down")
             await pilot.pause(0.6)
+            self.assertEqual(self.app.query_one("ContentSwitcher").current, "settings")
             self.assertNotIn("WEB_USER", str(pane.query_one("#settings-status").render()))
 
 

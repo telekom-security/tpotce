@@ -28,6 +28,7 @@ except ImportError:
     rich = None
 
 from tpotctl.bootstrap import REPO_DIR  # noqa: E402
+from tpotctl import generated  # noqa: E402
 
 WEB_USER = "dHNlYzokYXByMSRYUnE2SC5rbiRVRjZQM1VVQmJVNWJUQmNmSGRuUFQxCgo="
 
@@ -40,6 +41,11 @@ def make_checkout(test):
     with open(os.path.join(tmp.name, ".env"), "w", encoding="utf-8") as handle:
         handle.write(text)
     shutil.copy(os.path.join(REPO_DIR, "compose", "standard.yml"), os.path.join(tmp.name, "docker-compose.yml"))
+    shutil.copy(os.path.join(REPO_DIR, "env.example"), os.path.join(tmp.name, "env.example"))
+    shutil.copytree(os.path.join(REPO_DIR, "compose"), os.path.join(tmp.name, "compose"),
+                    ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    generated.stamp_file(os.path.join(tmp.name, ".env"), tmp.name, kind="env")
+    generated.stamp_file(os.path.join(tmp.name, "docker-compose.yml"), tmp.name, kind="compose")
     return tmp.name
 
 
@@ -86,6 +92,70 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(warnings, [])
         values = self.load().values
         self.assertEqual((values["TPOT_BLACKHOLE"], values["TPOT_PERSISTENCE_CYCLES"]), ("ENABLED", "60"))
+
+    def test_self_managed_compose_allows_saving_but_warns_in_validation_and_result(self):
+        path = os.path.join(self.repo, "docker-compose.yml")
+        with open(path, "w", encoding="utf-8") as out:
+            out.write("services: {nginx: {image: example/test:1}}\n")
+        current = self.load()
+        warnings = [p for p in current.problems() if p.key == "TPOT_DOCKER_COMPOSE"]
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].level, "warning")
+        self.assertIn("self-managed", warnings[0].text)
+        result = current.change({"TPOT_BLACKHOLE": "ENABLED"})
+        self.assertIn(warnings[0], result)
+        self.assertEqual(self.load().values["TPOT_BLACKHOLE"], "ENABLED")
+        with open(os.path.join(self.repo, "env.example"), "a", encoding="utf-8") as out:
+            out.write("# release changed\n")
+        with self.assertRaisesRegex(self.settings.SettingsError, "Run tpot update first"):
+            self.load().change({"TPOT_BLACKHOLE": "DISABLED"})
+
+    def test_change_refuses_configuration_behind_the_checkout(self):
+        env_path = os.path.join(self.repo, ".env")
+        with open(env_path, encoding="utf-8") as handle:
+            before = handle.read()
+        with open(os.path.join(self.repo, "compose", "standard.yml"), "a", encoding="utf-8") as handle:
+            handle.write("# newer release source\n")
+        with self.assertRaisesRegex(self.settings.SettingsError, "Run tpot update first"):
+            self.load().change({"TPOT_BLACKHOLE": "ENABLED"})
+        with open(env_path, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), before)
+
+    def test_compose_selection_refuses_missing_or_stale_generated_files_before_saving(self):
+        key = "TPOT_DOCKER_COMPOSE"
+        cases = {
+            "missing.yml": None,
+            "unstamped.yml": "# T-Pot: STANDARD\nservices: {}\n",
+            "broken.yml": "# T-Pot: CUSTOM\n# customizer: base=STANDARD\nservices: {}\n",
+            "stale.yml": "# T-Pot: STANDARD\n# T-Pot sources sha256: " + "0" * 64 + "\nservices: {}\n",
+        }
+        for name, text in cases.items():
+            with self.subTest(name=name):
+                if text is not None:
+                    with open(os.path.join(self.repo, name), "w", encoding="utf-8") as out:
+                        out.write(text)
+                current = self.load()
+                before = current.values
+                draft = dict(before, TPOT_DOCKER_COMPOSE="./" + name)
+                problems = current.problems(draft)
+                self.assertTrue(any(p.key == key and p.level == "error" and name in p.text
+                                    for p in problems), problems)
+                with self.assertRaisesRegex(self.settings.SettingsError, name):
+                    current.change({key: "./" + name}, unlocked=[key])
+                self.assertEqual(current.values, before)
+                self.assertEqual(self.load().values, before)
+
+    def test_compose_selection_accepts_current_generated_and_self_managed_files(self):
+        key = "TPOT_DOCKER_COMPOSE"
+        shutil.copy(os.path.join(self.repo, "docker-compose.yml"), os.path.join(self.repo, "current.yml"))
+        with open(os.path.join(self.repo, "own.yml"), "w", encoding="utf-8") as out:
+            out.write("services: {nginx: {image: example/test:1}}\n")
+        for name, warning in (("current.yml", False), ("own.yml", True), ("docker-compose.yml", False)):
+            with self.subTest(name=name):
+                result = self.load().change({key: "./" + name}, unlocked=[key])
+                self.assertEqual(self.load().values[key], "./" + name)
+                self.assertEqual(any(p.key == key and "self-managed" in p.text for p in result), warning)
+                self.assertEqual(generated.configuration_drift(self.repo), [])
 
     def test_change_refuses_invalid_fixed_and_unknown_keys(self):
         for changes in ({"TPOT_PERSISTENCE": "true"}, {"WEB_USER": WEB_USER}, {"TPOT_VERSION": "1"},
@@ -243,6 +313,20 @@ class UnlockTest(unittest.TestCase):
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
 class SettingsPaneTest(unittest.IsolatedAsyncioTestCase):
 
+    async def test_self_managed_warning_is_visible_without_opening_advanced_settings(self):
+        from tpotctl import app as tapp
+        repo = make_checkout(self)
+        with open(os.path.join(repo, "docker-compose.yml"), "w", encoding="utf-8") as out:
+            out.write("services: {nginx: {image: example/test:1}}\n")
+
+        app = tapp.TpotApp(backend=standard_backend(repo), runner=lambda command, cwd=None: 0)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("settings")
+            await pilot.pause(0.4)
+            self.assertIn("self-managed", str(app.query_one("#settings-status").render()))
+            self.assertIn("release compatibility is not checked", str(app.query_one("#settings-status").render()))
+
     async def test_unlock_a_fixed_key(self):
         from tpotctl import app as tapp, events, ops, settings
         from tpotctl.screens.dialogs import ConfirmDialog
@@ -254,6 +338,9 @@ class SettingsPaneTest(unittest.IsolatedAsyncioTestCase):
 
             def tpot_type(self):
                 return "HIVE"
+
+            def config_stamp(self):
+                return ops.config_stamp(repo)
 
             def status(self):
                 return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "n/a", repo)
@@ -295,6 +382,12 @@ class SettingsPaneTest(unittest.IsolatedAsyncioTestCase):
         class Backend(tapp.Backend):
             def linux_host(self):
                 return True
+
+            def tpot_type(self):
+                return "HIVE"
+
+            def config_stamp(self):
+                return ops.config_stamp(repo)
 
             def status(self):
                 return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", repo)

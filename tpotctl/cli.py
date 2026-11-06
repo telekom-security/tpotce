@@ -738,6 +738,8 @@ def _kibana_restore(args, values, console) -> int:
 
 def _run_kibana(args, values, console) -> int:
     from tpotctl import kibana_objects as ko
+    if args.elastic_command != "export":
+        ops.require_config_current()
     if "kibana" not in ops.compose_names():
         error("This edition runs no Kibana.")
         return 1
@@ -1147,9 +1149,11 @@ def sensors_table(registry, status, days: int, found=()):
 def run_sensors(args) -> int:
     from rich.text import Text
     from tpotctl import sensors as tsensors
+    command = args.sensors_command or "list"
+    if command == "add" or (command == "cert" and args.distribute is not None):
+        ops.require_config_current()
     registry = tsensors.Registry()
     console = _console()
-    command = args.sensors_command or "list"
     if registry.migrated:
         console.print(Text(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. Add where they are "
                            f"with: tpot sensors set NAME --host ... --ssh-user ...", style=MAGENTA))
@@ -1397,6 +1401,7 @@ def run_edition(args) -> int:
         console.print(table)
         console.print(f"In use: {name}{' from ' + base if base else ''}. Switch with: tpot edition set EDITION")
         return 0
+    ops.require_config_current()
     if not args.yes and not sys.stdin.isatty():
         error("add --yes to switch the edition without a terminal")
         return 2
@@ -1557,6 +1562,8 @@ def runs_text(count: int) -> str:
 def run_check_cleanup(args) -> int:
     """tpot check cleanup: the cleanups of earlier checks that did not run through."""
     ops.require_linux_host("check cleanup")
+    if not args.dry_run:
+        ops.require_config_current()
     from tpotctl import system
     from tpotctl.checks import CheckError, run as trun
     from tpotctl.checks.ewshold import EwsHold, LockBusy
@@ -1636,6 +1643,8 @@ def run_check(args) -> int:
     from tpotctl import prefs
     from tpotctl.checks import CheckError, run as trun
     options = check_options(args)
+    if not options.dry_run:
+        ops.require_config_current()
     try:
         check = trun.Check(options)
         if options.geo_only and check.sensor:
@@ -1761,6 +1770,8 @@ def run_script(name: str, args: List[str]) -> int:
 
 
 def run_customizer(args: List[str]) -> int:
+    if "--setup" not in args and "--dry-run" not in args:
+        ops.require_config_current()
     os.execv(sys.executable, [sys.executable, CUSTOMIZER] + list(args))
     return 0    # not reached
 

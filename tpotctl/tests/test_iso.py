@@ -797,7 +797,10 @@ class StartTest(unittest.TestCase):
         self.git("init", "-q", "-b", "master", cwd=repo)
         for label in ("v1", "master"):
             write(os.path.join(repo, "install.sh"), f'#!/bin/sh\necho "CLONE-{label} $*"\n', 0o755)
-            self.git("add", "install.sh", cwd=repo)
+            if label == "v1":
+                write(os.path.join(repo, ".env"), "TPOT_VERSION=24.04.1\n")
+                write(os.path.join(repo, "docker-compose.yml"), "services: {}\n")
+            self.git("add", "-A", cwd=repo)
             self.git("commit", "-q", "-m", label, cwd=repo)
             if label == "v1":
                 self.git("tag", "v1", cwd=repo)
@@ -973,11 +976,21 @@ class StartTest(unittest.TestCase):
     def test_the_t_pot_of_the_iso_makes_way_for_another_source_while_untouched(self):
         url = self.origin()
         commit = self.iso_clone(url)
+        write(os.path.join(self.clone(), ".env"), "TPOT_VERSION=local\n")
+        os.chmod(os.path.join(self.clone(), ".env"), 0o600)
+        write(os.path.join(self.clone(), "docker-compose.yml"), "services: {user: {}}\n")
         result = self.run_start("-b", "dev")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"CLONE-dev -b dev -r {url}", result.stdout)
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=self.clone()), "dev")
-        self.assertEqual([name for name in os.listdir(self.tmp) if name.startswith("tpotce.")], [])
+        kept = [name for name in os.listdir(self.tmp) if name.startswith("tpotce.")]
+        self.assertEqual(len(kept), 1, "the previous checkout must be kept, including local runtime files")
+        previous = os.path.join(self.tmp, kept[0])
+        self.assertIn(previous, result.stdout)
+        self.assertEqual(base.read(os.path.join(previous, ".env")), "TPOT_VERSION=local\n")
+        self.assertEqual(os.stat(os.path.join(previous, ".env")).st_mode & 0o777, 0o600)
+        self.assertEqual(base.read(os.path.join(previous, "docker-compose.yml")), "services: {user: {}}\n")
+        shutil.rmtree(previous)
         # a clone that fails puts it back
         shutil.rmtree(self.clone())
         self.git("clone", "-q", "-b", "master", url, self.clone())

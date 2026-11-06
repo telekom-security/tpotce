@@ -12,7 +12,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Optional, Set
+from typing import Callable, Dict, Iterable, List, Optional, Set, Type
 
 from rich.text import Text
 from textual import work
@@ -159,6 +159,7 @@ class Backend:
         """A one-off import as the mode update or overwrite does it (the mode in .env stays): (plan, result,
         export path). confirmed: the objects of yours the question named, for overwrite."""
         from tpotctl import kibana_objects as ko
+        self.require_current_config(ko.KibanaError)
         data, objects = ops.kibana_dirs()
         return ko.run_apply("overwrite" if overwrite else "update", data, objects, ops.kibana_export_dir(),
                             confirmed=confirmed)
@@ -172,6 +173,7 @@ class Backend:
     def kibana_prune(self, confirmed):
         """kibana_objects.Prune of a removal of the old objects the question named (`confirmed`, type:id)."""
         from tpotctl import kibana_objects as ko
+        self.require_current_config(ko.KibanaError)
         data, objects = ops.kibana_dirs()
         return ko.run_prune(data, objects, ops.kibana_export_dir(), confirmed)
 
@@ -188,7 +190,15 @@ class Backend:
     def kibana_restore(self, path: str):
         """(export path, result) of a restore of `path`."""
         from tpotctl import kibana_objects as ko
+        self.require_current_config(ko.KibanaError)
         return ko.run_restore(path, ops.kibana_dirs()[0], ops.kibana_export_dir())
+
+    @staticmethod
+    def require_current_config(error_type: Type[Exception]) -> None:
+        try:
+            ops.require_config_current()
+        except ops.ConfigDriftError as err:
+            raise error_type(str(err)) from err
 
     def kibana_exports(self):
         """The exports of the T-Pot Manager and of tpotinit (ops.KibanaExport), newest first."""
@@ -876,6 +886,9 @@ class SettingsPane(Vertical):
             status.append(f"  {', '.join(changes)}", style=theme.color("mist"))
         else:
             status.append(self.current.path.replace(os.path.expanduser("~"), "~", 1), style=theme.color("mist"))
+        for problem in problems:
+            if problem.key == "TPOT_DOCKER_COMPOSE" and problem.level == "warning":
+                status.append(f"\n{glyphs.g('warn')} {problem.text}", style=theme.color("warn"))
         others = list(dict.fromkeys(p.key for p in problems if p.level == "error" and p.key not in changes))
         if others:
             names = ", ".join(others[:4]) + (", ..." if len(others) > 4 else "")
@@ -3700,7 +3713,11 @@ class TpotApp(App):
         from tpotctl import editions
         from tpotctl.screens.task import Task
         try:
+            ops.require_config_current()
             plan = self.backend.edition_plan(key)
+        except ops.ConfigDriftError as err:
+            self.notify(str(err), title="Edition", severity="error", timeout=10)
+            return
         except editions.EditionError as err:
             self.notify(str(err), title="Edition", severity="error", timeout=8)
             return
@@ -3744,6 +3761,11 @@ class TpotApp(App):
 
     def action_customize(self) -> None:
         from tpotctl.screens.customizer import CustomizerScreen, core
+        try:
+            ops.require_config_current()
+        except ops.ConfigDriftError as err:
+            self.notify(str(err), title="Customizer", severity="error", timeout=10)
+            return
         catalog = core.Catalog()
         edition, selection = core.current_edition()
         if not (selection and selection.base in catalog.editions):
@@ -3756,11 +3778,12 @@ class TpotApp(App):
         if selection is None:
             return
         try:
+            ops.require_config_current()
             result = core.resolve(catalog, selection, core.DEFAULT_MAX_NETWORKS, strict=True)
             if result.errors:
                 raise core.CustomizerError(result.errors[0].text)
             core.write_output(core.render(catalog, result), CUSTOM_OUTPUT)
-        except (core.CustomizerError, OSError) as err:
+        except (core.CustomizerError, ops.ConfigDriftError, OSError) as err:
             self.notify(str(err), title="Not written", severity="error", timeout=10)
             return
         if not self.backend.linux_host():

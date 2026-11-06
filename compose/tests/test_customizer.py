@@ -4,16 +4,19 @@ Run from the repository root: python3 -m unittest discover compose/tests
 """
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import yaml  # noqa: E402
 
 import customizer_core as core  # noqa: E402
+from tpotctl import generated  # noqa: E402
 
 CUSTOMIZER = os.path.join(core.COMPOSE_DIR, "customizer.py")
 
@@ -43,6 +46,32 @@ class CoreTest(unittest.TestCase):
                 for name, definition in compose.services.items():
                     self.assertEqual(data["services"][name], definition, name)
                 self.assertEqual(data.get("networks"), compose.data.get("networks"))
+
+    def test_shared_writer_stamps_ui_output_without_breaking_rebuild(self):
+        text = core.render(self.catalog, self.resolve("STANDARD", remove=["cowrie"]))
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(core.shutil, "which", return_value=None):
+            path = os.path.join(tmp, "custom.yml")
+            core.write_output(text, path)
+            with open(path, encoding="utf-8") as handle:
+                written = handle.read()
+        self.assertTrue(generated.configuration_is_current(written, core.REPO_DIR, "compose"))
+        self.assertTrue(core.checksum_ok(written))
+        self.assertEqual(core.parse_header(written).remove, ["cowrie"])
+
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose is not installed")
+    def test_compose_validation_before_runtime_env_exists(self):
+        with tempfile.TemporaryDirectory() as repo:
+            with open(os.path.join(repo, "env.example"), "w", encoding="utf-8") as out:
+                out.write("TAG=1\n")
+            path = os.path.join(repo, "custom.yml")
+            text = 'services:\n  demo:\n    image: "example/test:${TAG}"\n    env_file: .env\n'
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(text)
+            self.assertIsNone(core.compose_check(path, repo))
+            self.assertFalse(os.path.exists(os.path.join(repo, ".env")))
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(text + "    not_a_service_option: true\n")
+            self.assertIsNotNone(core.compose_check(path, repo))
 
     # resolution -------------------------------------------------------------
 
@@ -375,6 +404,8 @@ class AdoptTest(unittest.TestCase):
         cls.catalog = core.Catalog()
 
     def run_cli(self, *args, path="/usr/bin:/bin"):           # no docker: no compose check
+        if "--adopt" in args and "--tpot-type" not in args:
+            args += ("--tpot-type", "HIVE")
         proc = subprocess.run([sys.executable, CUSTOMIZER] + list(args), stdin=subprocess.DEVNULL,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
                               env=dict(os.environ, PATH=path))
@@ -747,6 +778,9 @@ class CliTest(unittest.TestCase):
             self.assertEqual(code, 0, text)
             with open(out, encoding="utf-8") as handle:
                 first = handle.read()
+            self.assertTrue(generated.configuration_is_current(first, core.REPO_DIR, "compose"))
+            edited = first.replace("\n  citrixhoneypot:\n", "\n  citrixhoneypot: # local note\n")
+            self.assertTrue(generated.configuration_is_current(edited, core.REPO_DIR, "compose"))
             code, text = self.run_cli("--rebuild", out)
             self.assertEqual(code, 0, text)
             with open(out, encoding="utf-8") as handle:

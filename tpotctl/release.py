@@ -24,9 +24,6 @@ from pathlib import Path
 from typing import List, NamedTuple, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
-# the unit of an installed T-Pot names the compose file of its checkout
-SERVICE_FILE = Path("/etc/systemd/system/tpot.service")
-
 # the number a place carries: digits first, then word characters, dashes and inner dots
 # (a dot that ends a sentence is not part of it)
 V = r"([0-9][\w-]*(?:\.[\w-]+)*)"
@@ -82,7 +79,6 @@ SMOKE_HELP = tuple(f"docker/_tests/tests/{name}.sh" for name in
 
 PLACES = (
     Place(("env.example",), r"^TPOT_VERSION=" + V + r"\s*$", "TPOT_VERSION of the defaults (image tag)"),
-    Place((".env",), r"^TPOT_VERSION=" + V + r"\s*$", "TPOT_VERSION of the tracked .env, same as env.example"),
     Place(("docker/_builder/.env",), r"^TPOT_VERSION=" + V + r"\s*$", "the tag the builder builds and pushes"),
     Place(("docker/*/docker-compose.yml", "docker/*/*/docker-compose.yml"),
           r'^\s*image:\s*"?' + IMAGE + r'"?\s*$', "image tags of the standalone compose file of each service",
@@ -338,24 +334,6 @@ def _counting_sigint(interrupts: List[int]):
             signal.signal(signal.SIGINT, previous)
 
 
-def installed_t_pot(root, service_file=SERVICE_FILE) -> bool:
-    """Whether the checkout `root` is the one of a T-Pot installed on this host: the unit
-    `service_file` names its docker-compose.yml, or it has a data folder (TPOT_DATA_PATH,
-    ./data by default). Then its `.env` is the configuration T-Pot starts with."""
-    root = Path(root)
-    if root.joinpath("data").is_dir():
-        return True
-    try:
-        unit = Path(service_file).read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return False
-    compose = (root.resolve() / "docker-compose.yml")
-    for name in re.findall(r"""[^\s"'=]*docker-compose\.yml(?![^\s"'])""", unit):
-        if Path(name).is_absolute() and Path(name).resolve() == compose:
-            return True
-    return False
-
-
 def _excluded(root):
     """[(set of paths, compiled pattern or None)] of EXCLUDED."""
     return [(set(files_of(ex, root)), re.compile(ex.pattern) if ex.pattern else None) for ex in EXCLUDED]
@@ -390,7 +368,8 @@ def unlisted(root=ROOT, version=None) -> List[str]:
     coded number, `path:line: text`. Needs a git checkout (tracked files only)."""
     root = Path(root)
     version = version or read_version(root)
-    done = subprocess.run(["git", "-C", str(root), "grep", "-I", "-l", "-F", "-e", version],
+    done = subprocess.run(["git", "-C", str(root), "grep", "-I", "-l", "-F", "-e", version,
+                           "--", ".", ":(exclude).env"],
                           capture_output=True, text=True, timeout=60)
     if done.returncode not in (0, 1):
         raise ReleaseError("git grep failed: " + done.stderr.strip())
@@ -441,7 +420,6 @@ def main(argv=None) -> int:
     two.add_argument("version", help="the new release number, X.Y.Z")
     two.add_argument("--root", default=str(ROOT), help="the checkout (default: this one)")
     # the unit that tells an installed T-Pot, for the tests (they never read the host's)
-    two.add_argument("--service-file", default=str(SERVICE_FILE), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     root = Path(args.root)
     try:
@@ -460,9 +438,6 @@ def main(argv=None) -> int:
         print(f"version {args.version}: {len(changed)} file(s) written")
         for rel in changed:
             print("  " + rel)
-        if ".env" in changed and installed_t_pot(root, args.service_file):
-            print("note: .env is the configuration of the T-Pot installed here: its next start pulls"
-                  f" the images {args.version} (TPOT_VERSION)", file=sys.stderr)
         return 0
     except (ReleaseError, OSError, UnicodeDecodeError) as error:
         print(f"release: {error}", file=sys.stderr)

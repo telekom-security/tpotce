@@ -15,6 +15,8 @@ address of this HIVE and the SSH user on the SENSOR.
 import os
 import re
 import subprocess
+import sys
+import tempfile
 import unittest
 
 from tpotctl.tests import isolate
@@ -65,6 +67,34 @@ def tpotinit_takes(values):
 
 
 class SensorAddressTest(unittest.TestCase):
+
+    @unittest.skipUnless(yaml, "PyYAML is not installed, run with the venv of tpot")
+    def test_deployment_stamps_the_remote_compose_after_copying_it(self):
+        from tpotctl import generated
+        with open(os.path.join(REPO_DIR, "installer", "install", "deploy.yml"), encoding="utf-8") as handle:
+            tasks = yaml.safe_load(handle)[0]["tasks"]
+        stamps = [(i, task["ansible.builtin.command"]["argv"]) for i, task in enumerate(tasks)
+                  if "stamp-compose" in task.get("ansible.builtin.command", {}).get("argv", [])]
+        self.assertEqual(len(stamps), 1, "deployment must stamp the compose file it replaces")
+        index, argv = stamps[0]
+        copy_index = next(i for i, task in enumerate(tasks)
+                          if task.get("ansible.builtin.command", {}).get("cmd", "").startswith("cp "))
+        self.assertGreater(index, copy_index)
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "compose"))
+            text = "# T-Pot: SENSOR\nservices: {}\n"
+            path = os.path.join(root, "docker-compose.yml")
+            for filename in (path, os.path.join(root, "compose", "sensor.yml")):
+                with open(filename, "w", encoding="utf-8") as out:
+                    out.write(text)
+            command = [arg.replace("{{ remote_generated_path }}", generated.__file__)
+                       .replace("{{ remote_docker_compose_path }}", path).replace("~/tpotce", root)
+                       for arg in argv]
+            command[0] = sys.executable
+            result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with open(path, encoding="utf-8") as handle:
+                self.assertTrue(generated.configuration_is_current(handle.read(), root, "compose"))
 
     def test_ip_addresses_and_host_names(self):
         for good in ("10.0.0.2", "255.255.255.255", "fd00::2", "::1", "fe80::1", "::ffff:192.0.2.1",
@@ -149,6 +179,11 @@ class HiveAddressTest(unittest.TestCase):
 
     def test_the_playbook_and_the_registry_take_the_hive_check(self):
         """deploy.yml writes TPOT_HIVE_IP from deploy_env; tpot sensors set / Edit keep it the same way."""
+        with open(os.path.join(REPO_DIR, "installer", "install", "deploy.yml"), encoding="utf-8") as handle:
+            playbook = handle.read()
+        self.assertIn("Check the runtime configuration exists on the sensor", playbook)
+        self.assertIn("my_sensor_env.stat.isreg", playbook)
+        self.assertNotIn("create: yes", playbook)
         self.assertEqual(sensors.deploy_env("dXNlcg==", "10.0.0.1", repo_dir="/x")["myTPOT_HIVE_IP"], "10.0.0.1")
         for wrong in ("fd00::1", "sensor_1"):
             with self.subTest(address=wrong):

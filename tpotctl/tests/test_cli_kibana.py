@@ -56,6 +56,7 @@ class KibanaCliTest(unittest.TestCase):
 
         stdin = mock.Mock(isatty=lambda: terminal)
         with mock.patch("tpotctl.ops.require_linux_host"), \
+                mock.patch("tpotctl.ops.require_config_current"), \
                 mock.patch("tpotctl.settings.load", return_value=FakeSettings(settings)), \
                 mock.patch("tpotctl.ops.compose_names", return_value=list(self.compose)), \
                 mock.patch("tpotctl.ops.kibana_dirs", return_value=(self.site.data, self.site.objects)), \

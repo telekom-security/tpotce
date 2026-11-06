@@ -548,6 +548,8 @@ class CliTest(unittest.TestCase):
             self.assertEqual([(c.name, c.state) for c in tapp.Backend().containers()], [("cowrie", ops.ABSENT)])
 
     def test_customize_passes_everything_on(self):
+        from tpotctl.tests import current_configuration
+        current_configuration(self)
         with mock.patch.object(cli.os, "execv") as execv:
             cli.main(["customize", "--base", "mini", "--add", "wordpot"])
         execv.assert_called_once_with(sys.executable, [sys.executable, cli.CUSTOMIZER, "--base", "mini",

@@ -31,10 +31,7 @@ NEW = "99.1.0"
 
 
 def run(*args, cwd=None):
-    """The command line of the tool, as a person runs it (set-version without the unit of the
-    host: the tests never read /etc/systemd/system/tpot.service)."""
-    if args and args[0] == "set-version":
-        args = (*args, "--service-file", os.devnull)
+    """The command line of the release tool."""
     return subprocess.run([sys.executable, "-m", "tpotctl.release", *args], cwd=str(ROOT),
                           capture_output=True, text=True, timeout=60)
 
@@ -106,6 +103,9 @@ def copy_of_the_places(target):
 
 class CheckTest(unittest.TestCase):
 
+    def test_runtime_env_is_not_a_release_place(self):
+        self.assertFalse(any(".env" in place.paths for place in release.PLACES))
+
     def test_every_place_has_the_version(self):
         self.assertEqual(release.check(ROOT), [])
         result = run("check")
@@ -149,7 +149,6 @@ class SetVersionTest(unittest.TestCase):
         old = release.read_version(ROOT)
         with tempfile.TemporaryDirectory() as tmp:
             paths = copy_of_the_places(tmp)
-            os.chmod(os.path.join(tmp, ".env"), 0o600)
             before = {rel: Path(tmp, rel).read_bytes() for rel in paths}
             modes = {rel: stat.S_IMODE(os.stat(os.path.join(tmp, rel)).st_mode) for rel in paths}
             expected = set()    # (path, line number) of every line that carries the version at a place
@@ -266,7 +265,8 @@ class SetVersionTest(unittest.TestCase):
             real_open = open
 
             def opener(file, mode="r", *args, **kwargs):
-                if "+" in mode and Path(file).name == ".env":    # the first target: replace a later one
+                if "+" in mode and Path(file).name == "CITATION.cff":
+                    # the first release place: replace a later one
                     spare = Path(tmp, "spare")
                     spare.write_bytes(swapped)
                     os.replace(str(spare), str(target))
@@ -285,7 +285,6 @@ class SetVersionTest(unittest.TestCase):
         flaky = FlakyOpen(lambda number, call: number == 3 and call == 1)
         with tempfile.TemporaryDirectory() as tmp:
             paths = copy_of_the_places(tmp)
-            os.chmod(os.path.join(tmp, ".env"), 0o600)
             before = contents(tmp, paths)
             with mock.patch("tpotctl.release.open", flaky, create=True):
                 with self.assertRaises(release.ReleaseError) as caught:
@@ -299,7 +298,6 @@ class SetVersionTest(unittest.TestCase):
             self.assertIn(third, str(error))
             self.assertIn("No space left", str(error))
             self.assertEqual(contents(tmp, paths), before)
-            self.assertEqual(stat.S_IMODE(os.stat(os.path.join(tmp, ".env")).st_mode), 0o600)
 
     def test_a_failed_restore_is_reported(self):
         # handle 1 is written and cannot be put back, handle 2 is written and put back, handle 3 fails
@@ -380,66 +378,21 @@ class SetVersionTest(unittest.TestCase):
 
 
 class InstalledTest(unittest.TestCase):
-    """The note of set-version for a .env that is the configuration of an installed T-Pot."""
+    """Release tooling does not rewrite generated runtime configuration."""
 
-    def unit(self, folder, root):
-        path = Path(folder, "tpot.service")
-        compose = Path(root, "docker-compose.yml")
-        path.write_text("[Service]\n"
-                        f"ExecStartPre=-/usr/bin/docker compose -f {compose} down -v\n"
-                        f"ExecStart=/usr/bin/docker compose -f {compose} up\n"
-                        f"ExecStop=/usr/bin/docker compose -f {compose} down -v\n")
-        return path
-
-    def test_with_a_data_folder(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "data").mkdir()
-            self.assertTrue(release.installed_t_pot(Path(tmp), service_file=Path(tmp, "no-such.service")))
-
-    def test_with_a_unit_that_names_this_root(self):
-        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as etc:
-            self.assertTrue(release.installed_t_pot(Path(tmp), service_file=self.unit(etc, tmp)))
-            # the root as the unit names it, the checkout as given (a link, a relative path)
-            link = Path(etc, "link")
-            link.symlink_to(tmp)
-            self.assertTrue(release.installed_t_pot(link, service_file=self.unit(etc, tmp)))
-            self.assertTrue(release.installed_t_pot(Path(tmp), service_file=self.unit(etc, link)))
-
-    def test_without_both(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "data").write_text("a file, not the data folder\n")
-            self.assertFalse(release.installed_t_pot(Path(tmp), service_file=Path(tmp, "no-such.service")))
-
-    def test_with_a_unit_for_another_root(self):
-        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as etc:
-            for other in (tmp + "2", "/opt" + tmp, str(Path(tmp, "tpotce"))):
-                with self.subTest(other=other):
-                    self.assertFalse(release.installed_t_pot(Path(tmp), service_file=self.unit(etc, other)))
-
-    def test_set_version_says_it_for_the_env_of_an_installed_t_pot(self):
-        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as etc:
-            copy_of_the_places(tmp)
-            unit = self.unit(etc, tmp)
-            rc, out, err = main_in_process("set-version", NEW, "--root", tmp, "--service-file", str(unit))
-            self.assertEqual(rc, 0, out + err)
-            self.assertIn("  .env\n", out)
-            self.assertIn("note: .env is the configuration of the T-Pot installed here: its next start pulls"
-                          f" the images {NEW} (TPOT_VERSION)", err)
-            # .env not changed (the same version again): no note
-            rc, out, err = main_in_process("set-version", NEW, "--root", tmp, "--service-file", str(unit))
-            self.assertEqual(rc, 0, out + err)
-            self.assertNotIn(".env", out)
-            self.assertNotIn("note:", out + err)
-
-    def test_set_version_says_nothing_for_a_checkout(self):
+    def test_set_version_does_not_change_runtime_env(self):
         with tempfile.TemporaryDirectory() as tmp:
             copy_of_the_places(tmp)
-            rc, out, err = main_in_process("set-version", NEW, "--root", tmp,
-                                           "--service-file", str(Path(tmp, "no-such.service")))
+            env = Path(tmp, ".env")
+            env.write_text("TPOT_VERSION=local\n")
+            rc, out, err = main_in_process("set-version", NEW, "--root", tmp)
             self.assertEqual(rc, 0, out + err)
-            self.assertIn("  .env\n", out)
+            self.assertNotIn("  .env", out.splitlines())
+            self.assertEqual(env.read_text(), "TPOT_VERSION=local\n")
+            rc, out, err = main_in_process("set-version", NEW, "--root", tmp)
+            self.assertEqual(rc, 0, out + err)
+            self.assertNotIn("  .env", out.splitlines())
             self.assertNotIn("note:", out + err)
-
 
 def git_checkout():
     try:
@@ -467,6 +420,17 @@ class HardCodedTest(unittest.TestCase):
             subprocess.run(["git", "init", "-q", tmp], check=True, timeout=30)
             subprocess.run(["git", "-C", tmp, "add", "version", "env.example", "new.sh"], check=True, timeout=30)
             self.assertEqual(release.unlisted(Path(tmp)), ["new.sh:1: myVERSION=\"" + version + "\""])
+
+    def test_runtime_env_is_not_scanned_for_release_versions(self):
+        version = release.read_version(ROOT)
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "version").write_text(version + "\n")
+            Path(tmp, "env.example").write_text("TPOT_VERSION=" + version + "\n")
+            Path(tmp, ".env").write_text("TPOT_VERSION=" + version + "\n")
+            subprocess.run(["git", "init", "-q", tmp], check=True, timeout=30)
+            subprocess.run(["git", "-C", tmp, "add", "version", "env.example", ".env"], check=True, timeout=30)
+
+            self.assertEqual(release.unlisted(Path(tmp)), [])
 
     def test_scripts_read_the_version_centrally(self):
         found = release.literals_in_scripts(ROOT)
