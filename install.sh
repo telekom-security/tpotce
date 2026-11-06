@@ -5,7 +5,7 @@
 unset CDPATH
 
 print_help() {
-  fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>]"$'\n'"           [-U] [-n] [-M]" \
+  fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>]"$'\n'"           [-U] [-n] [-M] [--sudo-nopasswd] [--user <name>]"$'\n'"           [--user-password-file <file>]" \
     --about "Installs T-Pot on this host: the packages it needs, Docker Engine and the
 services of the edition, by the Ansible playbook installer/install/tpot.yml." \
     --about "Without -s, at a terminal, the installer gets what it needs to start and hands
@@ -28,6 +28,14 @@ Unlike -p it does not show up in the process list." \
     --opt "-B <file>" "Read the sudo password from your private file (chmod 600),
 or use - for stdin. A temporary stdin file is removed afterwards.
 Your own file is only read; remove it after the installation." \
+    --opt "--sudo-nopasswd" "Keep sudo passwordless with the T-Pot rule. Without this option,
+an unattended installation selects the more secure mode.
+Foreign passwordless rules are never removed." \
+    --opt "--user <name>" "As root, continue as this existing regular user.
+Save install.sh locally first; the Manager does not run as root." \
+    --opt "--user-password-file <file>" "Private file (chmod 600) with a new account password, needed
+for secure unattended installation when the account has no
+usable password. It also applies to SSH password logins." \
     --opt "-c <file>" "Install this compose file (i.e. from tpot customize) instead
 of an edition." \
     --opt "-b <branch>" "Branch, tag or commit to install from. Default: the branch
@@ -48,7 +56,7 @@ install.sh -s -M with its answers" \
     --example "./install.sh -s -t h -u admin -P ~/webpw.txt" "A HIVE without questions, the web password from a file" \
     --example "./install.sh -s -t s -B ~/sudopw.txt" "A SENSOR without questions, sudo needs a password" \
     --example "./install.sh -b dev -r https://github.com/<you>/tpotce" "Test a branch of a fork (see the README, Testing a Branch)" \
-    --note "Run it as a regular user with sudo, not as root." \
+    --note "Run it as a regular user with sudo, or as root with --user <name>." \
     --note "The environment variables TPOT_BRANCH and TPOT_REPO_URL work like -b and -r,
 the options win." \
     --note "Logs: ~/install_tpot_prepare.log (packages, clone), ~/install_tpot.log
@@ -1607,34 +1615,6 @@ install_packages() {
   esac
 }
 
-install_sudo_debian() {
-  # Debian without sudo: install it with the root password, add the user. Not in
-  # the background, su asks for the password in the terminal.
-  fuUI_WARN "‘sudo‘ is not installed. To continue you need to provide the ‘root‘ password"
-  fuUI_INFO "or press CTRL-C to manually install ‘sudo‘ and add your user to the sudoers."
-  echo
-  # Ansible cannot be handed a become password by -s, so an unattended
-  # run needs a passwordless rule for the user we are about to add.
-  if [ "${myUNATTENDED}" = "y" ] && [ -z "${myBECOME_FILE}" ];
-    then
-      mySUDOERS_RULE="${myUSER} ALL=(ALL) NOPASSWD:ALL"
-      fuUI_INFO "‘-s‘ was given, so ${myUSER} will get passwordless sudo."
-      fuUI_INFO "Remove /etc/sudoers.d/${myUSER} after the installation to undo it."
-      echo
-    else
-      mySUDOERS_RULE="${myUSER} ALL=(ALL:ALL) ALL"
-  fi
-  su -c "apt -y update && \
-         NEEDRESTART_SUSPEND=1 apt -y install sudo ${myPACKAGES_DEBIAN} && \
-         /usr/sbin/usermod -aG sudo ${myUSER} && \
-         echo '${mySUDOERS_RULE}' | tee /etc/sudoers.d/${myUSER} >/dev/null && \
-         chmod 440 /etc/sudoers.d/${myUSER}" || install_failed "sudo could not be installed" \
-           "Install sudo, add ${myUSER} to the sudoers, then run the installer again"
-  fuUI_INFO "We need sudo for Ansible, please enter the sudo password ..."
-  sudo true && fuUI_OK "sudo works. Note that Ansible needs it without a password prompt, see below."
-  echo
-}
-
 packages_installed() {
   # Debian and Ubuntu: are all of them there already (the T-Pot ISO brings them)? Then no apt run.
   [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && command -v sudo >/dev/null \
@@ -1659,10 +1639,10 @@ get_packages() {
       fuUI_OK "The packages the installer needs are there."
       return
   fi
-  if [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && ! command -v sudo >/dev/null;
+  if ! command -v sudo >/dev/null;
     then
-      install_sudo_debian
-      return
+      install_failed "sudo is not installed; no personal sudo rule was created" \
+        "Save install.sh, log in as root, then run: bash /path/to/install.sh --user ${myUSER}"
   fi
   if packages_installed;
     then
@@ -1762,9 +1742,274 @@ private_password_file() {
   return 0
 }
 
+root_directory() {
+  local myMODE
+  [ -d "$1" ] && [ ! -L "$1" ] && [ "$(stat -c '%u:%g' -- "$1")" = "0:0" ] || return 1
+  myMODE=$(stat -c '%a' -- "$1") || return 1
+  (( (8#${myMODE} & 0022) == 0 ))
+}
+
+root_file() {
+  [ -f "$1" ] && [ ! -L "$1" ] && [ "$(stat -c '%u:%g:%a:%h' -- "$1")" = "0:0:$2:1" ]
+}
+
+root_install_rule() {
+  printf '# Managed by T-Pot: sudo mode\n#%s ALL=(ALL:ALL) NOPASSWD: ALL\n' "$1"
+}
+
+root_install_rule_owned() {
+  local myUID
+  root_file /etc/sudoers.d/tpot-install 440 || return 1
+  myUID=$(sed -n '2s/^#\([1-9][0-9]*\) ALL=(ALL:ALL) NOPASSWD: ALL$/\1/p' /etc/sudoers.d/tpot-install)
+  [ -n "${myUID}" ] && cmp -s /etc/sudoers.d/tpot-install <(root_install_rule "${myUID}")
+}
+
+root_boot_cleanup() {
+  printf '# Managed by T-Pot: installer cleanup\nr /etc/sudoers.d/tpot-install - - - -\n'
+}
+
+root_core_lock() {
+  if ! root_directory /run/lock; then
+    [ -d /run/lock ] && [ ! -L /run/lock ] \
+      && [ "$(stat -c '%u:%g:%a' /run/lock)" = "0:0:1777" ] || return 1
+  fi
+  if [ ! -e /run/lock/tpot-sudo.lock ]; then
+    (umask 077; set -C; : > /run/lock/tpot-sudo.lock) || return 1
+  fi
+  root_file /run/lock/tpot-sudo.lock 600 || return 1
+  exec 8<> /run/lock/tpot-sudo.lock || return 1
+  flock -w 60 8
+}
+
+root_remove_install_rule() {
+  local myBACKUP myRC=0
+  myBACKUP=$(mktemp /etc/sudoers.d/.tpot-install.XXXXXXXX) || return 1
+  # Do not deliver a cancellation between withdrawing the rule and checking the policy.
+  [ -n "${myROOT_CLEANING}" ] || trap 'myROOT_SIGNAL=y' INT TERM HUP
+  if mv -- /etc/sudoers.d/tpot-install "${myBACKUP}"; then
+    if visudo -c >/dev/null; then
+      rm -- "${myBACKUP}" || myRC=1
+    else
+      myRC=1
+      mv -- "${myBACKUP}" /etc/sudoers.d/tpot-install \
+        && visudo -c >/dev/null \
+        || fuUI_ERROR "Cannot restore the installer rule; recover ${myBACKUP} as root."
+      fuUI_ERROR "Removing the temporary rule breaks sudo. The rule was kept; repair the policy as root."
+    fi
+  else
+    rm -- "${myBACKUP}"
+    myRC=1
+  fi
+  if [ -z "${myROOT_CLEANING}" ]; then
+    trap 'exit 130' INT TERM HUP
+    [ -z "${myROOT_SIGNAL}" ] || exit 130
+  fi
+  return "${myRC}"
+}
+
+root_cleanup() {
+  local myRC=0 myP myI myALIVE myLOCKED=""
+  local -a myPIDS=()
+  [ -n "${myROOT_ACTIVE}" ] || return 0
+  myROOT_CLEANING=y
+  if [ -n "${myROOT_CHILD}" ]; then
+    while IFS= read -r myP; do myPIDS+=("${myP}"); done < <(fuUI_TREE "${myROOT_CHILD}")
+    for myP in "${myPIDS[@]}"; do kill -TERM "${myP}" 2>/dev/null; done
+    wait "${myROOT_CHILD}" 2>/dev/null
+    for ((myI=0; myI<50; myI++)); do
+      myALIVE=""
+      for myP in "${myPIDS[@]}"; do
+        kill -0 "${myP}" 2>/dev/null && myALIVE=y
+      done
+      [ -n "${myALIVE}" ] || break
+      sleep 0.1
+    done
+    for myP in "${myPIDS[@]}"; do
+      kill -0 "${myP}" 2>/dev/null && kill -KILL "${myP}" 2>/dev/null
+    done
+  fi
+  if root_core_lock; then myLOCKED=y
+  else
+    fuUI_ERROR "Cannot lock sudo cleanup. The temporary rule was kept; remove /etc/sudoers.d/tpot-install as root."
+    myRC=1
+  fi
+  if [ -n "${myLOCKED}" ] && [ -n "${myROOT_GRANT}" ] \
+    && [ -e /etc/sudoers.d/tpot-install -o -L /etc/sudoers.d/tpot-install ]; then
+    if root_install_rule_owned; then
+      root_remove_install_rule || myRC=1
+    else
+      fuUI_ERROR "The temporary sudo rule changed; the foreign file was kept."
+      myRC=1
+    fi
+  fi
+  if [ -n "${myLOCKED}" ] && [ -n "${myROOT_BOOT}" ] \
+    && [ -e /etc/tmpfiles.d/tpot-install.conf -o -L /etc/tmpfiles.d/tpot-install.conf ]; then
+    if root_file /etc/tmpfiles.d/tpot-install.conf 644 \
+      && cmp -s /etc/tmpfiles.d/tpot-install.conf <(root_boot_cleanup); then
+      rm -- /etc/tmpfiles.d/tpot-install.conf || myRC=1
+    else
+      fuUI_ERROR "The boot cleanup file changed; the foreign file was kept."
+      myRC=1
+    fi
+  fi
+  exec 8>&-
+  [ -z "${myROOT_RULE_TEMP}" ] || rm -f -- "${myROOT_RULE_TEMP}" || myRC=1
+  [ -z "${myROOT_BOOT_TEMP}" ] || rm -f -- "${myROOT_BOOT_TEMP}" || myRC=1
+  # The parent directory stays root-owned: the child cannot replace these paths.
+  if [ -n "${myROOT_STAGE}" ]; then
+    if root_directory /run/tpot-install && root_directory "${myROOT_STAGE}"; then
+      for myP in install.sh become user-password web-password compose; do
+        rm -f -- "${myROOT_STAGE}/${myP}" || myRC=1
+      done
+      rmdir -- "${myROOT_STAGE}" || myRC=1
+    else
+      fuUI_ERROR "The handover directory changed; its files were kept."
+      myRC=1
+    fi
+  fi
+  [ "${myRC}" -eq 0 ] || fuUI_ERROR "Installer cleanup failed. Inspect ${myROOT_STAGE} and /etc/sudoers.d/tpot-install as root."
+  return "${myRC}"
+}
+
+root_handover() {
+  local myENTRY myNAME myX myUID myGID myGECOS myHOME mySHELL myMIN mySTATE myGROUP myRC myTRACE=""
+  local -a myCHILD_ARGS=()
+  [ "${BASH_SOURCE[0]}" != environment ] && [ -f "${BASH_SOURCE[0]}" ] && [ -r "${BASH_SOURCE[0]}" ] \
+    || usage_error "Save install.sh to a file before using --user; the same script must run as the selected user."
+  [[ "${myROOT_USER}" =~ ^[A-Za-z_][A-Za-z0-9_.-]*[$]?$ ]] \
+    || usage_error "--user must name an existing normal user."
+  myENTRY=$(getent passwd "${myROOT_USER}") || usage_error "--user must name an existing normal user."
+  IFS=: read -r myNAME myX myUID myGID myGECOS myHOME mySHELL <<< "${myENTRY}"
+  myMIN=$(awk '$1 == "UID_MIN" {print $2}' /etc/login.defs)
+  [[ "${myMIN}" =~ ^[1-9][0-9]*$ && "${myUID}" =~ ^[1-9][0-9]*$ ]] \
+    && [ "${myUID}" -ge "${myMIN}" ] && [ "${myNAME}" = "${myROOT_USER}" ] \
+    && [ "${myNAME}" != tpot ] && [ -x "${mySHELL}" ] \
+    && [[ "${mySHELL}" != */nologin && "${mySHELL}" != */false ]] \
+    || usage_error "--user must name a normal login user, not root or a service account."
+  [ -d "${myHOME}" ] && [ ! -L "${myHOME}" ] && [ "$(stat -c %u -- "${myHOME}")" = "${myUID}" ] \
+    || usage_error "The selected user's home must be an existing directory owned by that user."
+  mySTATE=$(passwd -S "${myNAME}") || usage_error "Cannot check the selected user's password."
+  read -r myX mySTATE myX <<< "${mySTATE}"
+  if [ "${myUNATTENDED}" = y ] && [ "${mySUDO_MODE}" != convenient ] \
+    && [ "${mySTATE}" != P ] && [ -z "${myUSER_PASSWORD_FILE}" ]; then
+    usage_error "This user has no usable password. Provide --user-password-file for secure unattended installation."
+  fi
+  for myX in /etc /run; do
+    root_directory "${myX}" || usage_error "Unsafe root directory: ${myX}"
+  done
+  if ! command -v sudo >/dev/null; then
+    case "${myCURRENT_DISTRIBUTION}" in
+      "Debian GNU/Linux"|"Ubuntu") apt-get update && apt-get install -y sudo ;;
+      "openSUSE Tumbleweed") zypper --non-interactive install sudo ;;
+      *) dnf -y install sudo ;;
+    esac || install_failed "sudo could not be installed" "Install sudo as root, then try again."
+  fi
+  for myX in runuser flock visudo ps systemd-tmpfiles; do
+    command -v "${myX}" >/dev/null || usage_error "The root installer requires ${myX}."
+  done
+  for myX in /run/tpot-install /etc/sudoers.d /etc/tmpfiles.d; do
+    if [ ! -e "${myX}" ] && [ ! -L "${myX}" ]; then
+      mkdir -m 755 -- "${myX}" || usage_error "Cannot create ${myX}."
+    fi
+    root_directory "${myX}" || usage_error "Unsafe root directory: ${myX}"
+  done
+  if [ ! -e /run/tpot-install/lock ]; then
+    (umask 077; set -C; : > /run/tpot-install/lock) || usage_error "Cannot create the installer lock."
+  fi
+  root_file /run/tpot-install/lock 600 || usage_error "Unsafe installer lock."
+  exec 9<> /run/tpot-install/lock || usage_error "Cannot open the installer lock."
+  flock -n 9 || usage_error "Another root installation is active."
+  root_core_lock || usage_error "Cannot lock sudo mode changes."
+  myROOT_ACTIVE=y
+  if [ -e /etc/tmpfiles.d/tpot-install.conf ] || [ -L /etc/tmpfiles.d/tpot-install.conf ]; then
+    root_file /etc/tmpfiles.d/tpot-install.conf 644 \
+      && cmp -s /etc/tmpfiles.d/tpot-install.conf <(root_boot_cleanup) \
+      || usage_error "A foreign file occupies /etc/tmpfiles.d/tpot-install.conf; it was not changed."
+    myROOT_BOOT=y
+  fi
+  if [ -e /etc/sudoers.d/tpot-install ] || [ -L /etc/sudoers.d/tpot-install ]; then
+    root_install_rule_owned || usage_error "A foreign file occupies /etc/sudoers.d/tpot-install; it was not changed."
+    root_remove_install_rule || usage_error "Cannot remove the stale installer rule."
+  fi
+  visudo -c >/dev/null || usage_error "The existing sudo policy is invalid; no temporary access was granted."
+  myROOT_STAGE=$(mktemp -d /run/tpot-install/run.XXXXXXXX) || usage_error "Cannot stage the root handover."
+  chmod 711 "${myROOT_STAGE}" || exit 1
+  cp -- "${BASH_SOURCE[0]}" "${myROOT_STAGE}/install.sh" \
+    && chown "${myUID}:${myGID}" "${myROOT_STAGE}/install.sh" \
+    && chmod 400 "${myROOT_STAGE}/install.sh" || exit 1
+  myROOT_BOOT_TEMP=$(mktemp /etc/tmpfiles.d/.tpot-install.XXXXXXXX) || exit 1
+  root_boot_cleanup > "${myROOT_BOOT_TEMP}" && chmod 644 "${myROOT_BOOT_TEMP}" \
+    && sync -f "${myROOT_BOOT_TEMP}" || exit 1
+  myROOT_BOOT=y
+  mv -- "${myROOT_BOOT_TEMP}" /etc/tmpfiles.d/tpot-install.conf \
+    && sync -f /etc/tmpfiles.d || exit 1
+  myROOT_BOOT_TEMP=""
+  myROOT_RULE_TEMP=$(mktemp /etc/sudoers.d/.tpot-install.XXXXXXXX) || exit 1
+  root_install_rule "${myUID}" > "${myROOT_RULE_TEMP}" && chmod 440 "${myROOT_RULE_TEMP}" \
+    && sync -f "${myROOT_RULE_TEMP}" || exit 1
+  visudo -cf "${myROOT_RULE_TEMP}" >/dev/null || exit 1
+  myROOT_GRANT=y
+  mv -- "${myROOT_RULE_TEMP}" /etc/sudoers.d/tpot-install || exit 1
+  myROOT_RULE_TEMP=""
+  visudo -c >/dev/null || exit 1
+  exec 8>&-
+  myGROUP=""
+  for myX in sudo wheel; do
+    if getent group "${myX}" >/dev/null; then myGROUP="${myX}"; break; fi
+  done
+  # A locked account gets its password and group together in the common play, in that order.
+  if [ "${mySTATE}" = P ]; then
+    [ -n "${myGROUP}" ] || usage_error "No sudo or wheel group is available."
+    usermod -aG "${myGROUP}" "${myNAME}" || usage_error "Cannot add the user to ${myGROUP}."
+  fi
+  myCHILD_ARGS=(-b "${myTPOT_BRANCH}" -r "${myTPOT_REPO_URL}")
+  [ -z "${myUNATTENDED}" ] || myCHILD_ARGS+=(-s)
+  [ -z "${myTPOT_TYPE}" ] || myCHILD_ARGS+=(-t "${myTPOT_TYPE}")
+  [ -z "${myWEB_USER}" ] || myCHILD_ARGS+=(-u "${myWEB_USER}")
+  [ -z "${myCLASSIC}" ] || myCHILD_ARGS+=(-n)
+  [ -z "${myMARKS}" ] || myCHILD_ARGS+=(-M)
+  [ -z "${myNO_AUTO_UPDATES}" ] || myCHILD_ARGS+=(-U)
+  [ "${mySUDO_MODE}" != convenient ] || myCHILD_ARGS+=(--sudo-nopasswd)
+  for myX in become user-password compose; do
+    local mySOURCE="" myOPTION=""
+    case "${myX}" in
+      become) mySOURCE="${myBECOME_FILE}"; myOPTION=-B ;;
+      user-password) mySOURCE="${myUSER_PASSWORD_FILE}"; myOPTION=--user-password-file ;;
+      compose) mySOURCE="${myCUSTOM_COMPOSE}"; myOPTION=-c ;;
+    esac
+    [ -n "${mySOURCE}" ] || continue
+    cp -- "${mySOURCE}" "${myROOT_STAGE}/${myX}" \
+      && chown "${myUID}:${myGID}" "${myROOT_STAGE}/${myX}" \
+      && chmod 400 "${myROOT_STAGE}/${myX}" || exit 1
+    myCHILD_ARGS+=("${myOPTION}" "${myROOT_STAGE}/${myX}")
+  done
+  case $- in *x*) set +x; myTRACE=y ;; esac
+  if [ -n "${myWEB_PW}" ]; then
+    printf '%s\n' "${myWEB_PW}" > "${myROOT_STAGE}/web-password" \
+      && chown "${myUID}:${myGID}" "${myROOT_STAGE}/web-password" \
+      && chmod 400 "${myROOT_STAGE}/web-password" || exit 1
+    myCHILD_ARGS+=(-P "${myROOT_STAGE}/web-password")
+  fi
+  [ -z "${myTRACE}" ] || set -x
+  # Explicit stdin keeps terminal questions attached despite the asynchronous wait.
+  (
+    cd "${myHOME}" || exit 1
+    exec runuser -u "${myNAME}" -- env -u XDG_DATA_HOME -u XDG_CONFIG_HOME -u XDG_CACHE_HOME \
+      -u XDG_STATE_HOME -u XDG_RUNTIME_DIR -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND \
+      -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV HOME="${myHOME}" USER="${myNAME}" LOGNAME="${myNAME}" \
+      bash "${myROOT_STAGE}/install.sh" "${myCHILD_ARGS[@]}"
+  ) <&0 &
+  myROOT_CHILD=$!
+  wait "${myROOT_CHILD}"
+  myRC=$?
+  myROOT_CHILD=""
+  return "${myRC}"
+}
+
 cleanup_password_files() {
   local myFILE myRC=0
   trap '' INT TERM HUP
+  root_cleanup || myRC=1
   if [ -n "${myPASSWORD_PID}" ]; then
     if kill -0 "${myPASSWORD_PID}" 2>/dev/null; then
       kill -TERM "${myPASSWORD_PID}" || { fuUI_ERROR "Could not stop the password reader."; myRC=1; }
@@ -1779,6 +2024,33 @@ cleanup_password_files() {
     fi
   done
   return "${myRC}"
+}
+
+run_ansible() {
+  if [ -n "${myBECOME_FILE}" ]; then
+    ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
+      ANSIBLE_LOG_PATH="${HOME}/install_tpot.log" "$@" < "${myBECOME_FILE}"
+  else
+    ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
+      ANSIBLE_LOG_PATH="${HOME}/install_tpot.log" "$@"
+  fi
+}
+
+install_sudo_mode() {
+  local myPLAY="${HOME}/tpotce/installer/install/sudo_mode.yml" myVARS
+  local -a myCOMMAND=(ansible-playbook "${myPLAY}" -i 127.0.0.1, -c local
+                      "${myANSIBLE_BECOME_OPTION[@]}" ${myANSIBLE_BECOME_EXE}
+                      -e "tpot_sudo_action=${mySUDO_MODE}" -e "tpot_sudo_prepare=$1")
+  [ -f "${myPLAY}" ] || {
+    fuUI_ERROR "This checkout has no shared sudo-mode play. Use its matching installer or a checkout with sudo-mode support."
+    return 1
+  }
+  if [ -n "${myUSER_PASSWORD_FILE}" ]; then
+    myVARS=$(python3 -c 'import json, sys; print(json.dumps({"tpot_user_password_file": sys.argv[1]}))' \
+      "${myUSER_PASSWORD_FILE}") || return 1
+    myCOMMAND+=(-e "${myVARS}")
+  fi
+  run_ansible "${myCOMMAND[@]}"
 }
 
 env_set() {
@@ -1860,6 +2132,18 @@ myBECOME_FILE=""
 myPASSWORD_FILES=()
 myPASSWORD_PID=""
 myBECOME_OWN_FILE=""
+myROOT_USER=""
+myROOT_STAGE=""
+myROOT_ACTIVE=""
+myROOT_CLEANING=""
+myROOT_SIGNAL=""
+myROOT_RULE_TEMP=""
+myROOT_BOOT_TEMP=""
+myROOT_CHILD=""
+myROOT_GRANT=""
+myROOT_BOOT=""
+myUSER_PASSWORD_FILE=""
+mySUDO_MODE="secure"
 myCUSTOM_COMPOSE=""
 myCLASSIC=""
 myMARKS=""
@@ -1873,8 +2157,29 @@ myANSIBLE_BECOME_EXE=""
 myTPOT_BRANCH="${TPOT_BRANCH}"
 myTPOT_REPO_URL="${TPOT_REPO_URL}"
 
-while getopts ":sb:r:t:u:p:P:B:c:UnMh" opt; do
+myARGS=("$@")
+while getopts ":sb:r:t:u:p:P:B:c:UnMh-:" opt; do
   case "$opt" in
+    -)
+      case "${OPTARG}" in
+        sudo-nopasswd) mySUDO_MODE="convenient" ;;
+        user|user-password-file|user=*|user-password-file=*)
+          myKEY="${OPTARG%%=*}"
+          case "${OPTARG}" in
+            *=*) myVALUE="${OPTARG#*=}" ;;
+            *)
+              [ "${OPTIND}" -le "${#myARGS[@]}" ] || usage_error "--${myKEY} requires an argument."
+              myVALUE="${myARGS[OPTIND-1]}"
+              OPTIND=$((OPTIND + 1))
+              ;;
+          esac
+          [ -n "${myVALUE}" ] || usage_error "--${myKEY} requires an argument."
+          if [ "${myKEY}" = user ]; then myROOT_USER="${myVALUE}"
+            else myUSER_PASSWORD_FILE="${myVALUE}"; fi
+          ;;
+        *) usage_error "Unknown option --${OPTARG}." ;;
+      esac
+      ;;
     s)
       myQST="y"
       myUNATTENDED="y"
@@ -1975,6 +2280,10 @@ if [ -n "${myBECOME_FILE}" ];
       command sudo "$@"
     }
 fi
+if [ -n "${myUSER_PASSWORD_FILE}" ]; then
+  private_password_file "${myUSER_PASSWORD_FILE}"
+  myUSER_PASSWORD_FILE=$(cd "$(dirname "${myUSER_PASSWORD_FILE}")" && pwd)/$(basename "${myUSER_PASSWORD_FILE}")
+fi
 
 resolve_tpot_source
 
@@ -2000,10 +2309,14 @@ fuUI_INIT
 # Check if running with root privileges
 if [ ${EUID} -eq 0 ];
   then
-    fuUI_ERROR "This script should not be run as root. Please run it as a regular user."
-    echo
-    mark_failed
-    exit 1
+    if [ -z "${myROOT_USER}" ]; then
+      fuUI_ERROR "This script should not be run as root. Use --user <name> to continue as an existing regular user."
+      echo
+      mark_failed
+      exit 1
+    fi
+  elif [ -n "${myROOT_USER}" ]; then
+    usage_error "--user is only for a root start; the Manager runs as a regular user."
 fi
 
 # Check for a 64-bit system: the images of T-Pot are amd64 and arm64 only. The userland counts,
@@ -2083,6 +2396,11 @@ if [ -n "${mySUPPORTED_VERSION}" ] && [ "${myCURRENT_VERSION}" != "${mySUPPORTED
     echo
     mark_failed
     exit 1
+fi
+
+if [ -n "${myROOT_USER}" ]; then
+  root_handover
+  exit $?
 fi
 
 # Begin of Installer: the T-Pot logo above the banner, at a terminal only (fuUI_LOGO_ON,
@@ -2292,9 +2610,15 @@ elif ! sudo_password_required;
 fi
 
 # Run Ansible Playbook
+rm -f -- "${HOME}/install_tpot.log"
+mark_phase sudo_prepare
+fuUI_INFO "Checking the requested sudo mode before changing the host ..."
+if ! install_sudo_mode true; then
+  install_failed "The sudo mode prerequisites could not be prepared" \
+    "Review ${HOME}/install_tpot.log and the output above; no host playbook was run."
+fi
 fuUI_INFO "Now running T-Pot Ansible Installation Playbook ..."
 echo
-rm ${HOME}/install_tpot.log > /dev/null 2>&1
 # neither a repository URL nor a git reference contains a space, so the
 # unquoted expansion below splits into exactly four arguments
 myANSIBLE_EXTRA_VARS="-e tpot_repo=${myTPOT_REPO_URL} -e tpot_branch=${myTPOT_BRANCH}"
@@ -2313,13 +2637,7 @@ mark_phase playbook
 # the discovery itself is unchanged.
 myANSIBLE_COMMAND=(ansible-playbook "${myANSIBLE_TPOT_PLAYBOOK}" -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}"
                    "${myANSIBLE_BECOME_OPTION[@]}" ${myANSIBLE_BECOME_EXE} ${myANSIBLE_EXTRA_VARS})
-if [ -n "${myBECOME_FILE}" ]; then
-  ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
-    ANSIBLE_LOG_PATH="${HOME}/install_tpot.log" "${myANSIBLE_COMMAND[@]}" < "${myBECOME_FILE}"
-else
-  ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
-    ANSIBLE_LOG_PATH="${HOME}/install_tpot.log" "${myANSIBLE_COMMAND[@]}"
-fi
+run_ansible "${myANSIBLE_COMMAND[@]}"
 
 # Something went wrong
 if [ ! $? -eq 0 ];
@@ -2431,6 +2749,16 @@ if [ -n "${myTPOT_FOUND}" ] && [ "$(readlink -f "${myTPOT_FOUND}")" = "$(readlin
     myTPOT_ITEM="warn:The command tpot is ${myTPOT_FOUND}, not this T-Pot Manager. Run ${HOME}/tpotce/tpot, or link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
   else
     myTPOT_ITEM="warn:The command tpot is not in your PATH, link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
+fi
+
+mark_phase sudo
+if ! install_sudo_mode false; then
+  mark_failed
+  fuUI_SUMMARY "The installation needs attention" \
+    "fail:The requested sudo mode could not be applied." \
+    "info:The services are installed; verify the sudo state before disconnecting." \
+    "next:Review ${HOME}/install_tpot.log and the output above."
+  exit 1
 fi
 
 # Done: what is installed and what comes next

@@ -338,13 +338,15 @@ def engine_env() -> Dict[str, str]:
     return env
 
 
-PHASES = ["checks", "packages", "playbook", "compose", "user", "pull", "done"]
+PHASES = ["checks", "packages", "sudo_prepare", "playbook", "compose", "user", "pull", "sudo", "done"]
 PHASE_TITLES = {"checks": "Checking the host", "packages": "Installing the packages", "playbook": "Setting up the host",
                 "compose": "Choosing the edition", "user": "Creating the web user", "pull": "Pulling the images",
+                "sudo_prepare": "Preparing sudo access", "sudo": "Applying the sudo mode",
                 "done": "Done", "failed": "Failed"}
 # where a phase starts on the whole bar, the playbook and the pull fill most of it
-SPANS = {"checks": (0.0, 0.02), "packages": (0.02, 0.05), "playbook": (0.05, 0.78), "compose": (0.78, 0.79),
-         "user": (0.79, 0.80), "pull": (0.80, 0.99), "done": (1.0, 1.0)}
+SPANS = {"checks": (0.0, 0.02), "packages": (0.02, 0.05), "sudo_prepare": (0.05, 0.05),
+         "playbook": (0.05, 0.78), "compose": (0.78, 0.79),
+         "user": (0.79, 0.80), "pull": (0.80, 0.99), "sudo": (0.99, 1.0), "done": (1.0, 1.0)}
 
 _TASK = re.compile(r"^TASK \[(.*)\]")
 _FAILED = re.compile(r"^(fatal|failed): \[")
@@ -390,7 +392,8 @@ class Progress:
             return
         match = _TASK.match(line)
         if match:
-            self.tasks_done += 1
+            if self.phase == "playbook":
+                self.tasks_done += 1
             self.task = match.group(1).rstrip("*").strip()
             return
         if _FAILED.match(line) and "...ignoring" not in line:

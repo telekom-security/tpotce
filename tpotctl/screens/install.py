@@ -36,6 +36,7 @@ LLM_PREFIXES = ("BEELZEBUB_LLM_", "GALAH_LLM_")
 # the log install.sh writes in a phase (its marks, installer.Progress); None: that phase writes none,
 # its errors are only in its output (the log view of the assistant)
 PHASE_LOGS = {"checks": None, "packages": "~/install_tpot_prepare.log", "playbook": "~/install_tpot.log",
+              "sudo_prepare": "~/install_tpot.log", "sudo": "~/install_tpot.log",
               "compose": None, "user": None, "pull": "~/install_tpot_pull.log"}
 PLAYBOOK_LOG = "~/install_tpot.log"
 CHANGES = [

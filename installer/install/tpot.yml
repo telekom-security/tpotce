@@ -1350,3 +1350,10 @@
         job: "bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; {{ auto_updates_step }}/usr/sbin/shutdown -r +1 \"T-Pot Daily Reboot\"'"
         state: present
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky", "Ubuntu"]
+
+# install.sh calls this play separately after its last privileged operation.
+- name: T-Pot - Apply the sudo mode explicitly
+  ansible.builtin.import_playbook: sudo_mode.yml
+  vars:
+    tpot_sudo_action: secure
+  tags: [never, tpot_sudo]

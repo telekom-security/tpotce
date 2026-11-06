@@ -6,9 +6,11 @@ import os
 from pathlib import Path
 import pwd
 import re
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 from installer.install.library import tpot_sudo
@@ -485,6 +487,35 @@ raise SystemExit(subprocess.call(command + ["-vvv"]))
             self.assertNotIn(self.password, proc.stdout + proc.stderr + output.read_text())
             self.assertEqual(self.probe(self.password).returncode, 0)
 
+    def test_install_prepare_sets_password_and_group_without_revoking_access(self):
+        self.grant()
+        with tempfile.TemporaryDirectory() as directory:
+            secret = Path(directory, "secret")
+            secret.write_text(self.password + "\n")
+            secret.chmod(0o600)
+            play = Path(tpot_sudo.__file__).parent.parent / "sudo_mode.yml"
+            variables = dict(tpot_sudo_user=self.user, tpot_sudo_action="secure", tpot_sudo_prepare=True,
+                             tpot_user_password_file=str(secret), ansible_python_interpreter="/usr/bin/python3")
+            proc = self.run_command("ansible-playbook", str(play), "-i", "localhost,", "-c", "local",
+                                    "-e", json.dumps(variables), check=False)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertTrue(Path(OWN).exists(), "Preparation must not revoke access needed by the installer.")
+        self.assertIn("sudo", self.groups())
+        self.assertIn(" P ", self.run_command("passwd", "-S", self.user).stdout)
+        self.assertEqual(self.probe().returncode, 0)
+        tpot_sudo.apply(self.user, "secure")
+        self.assertFalse(Path(OWN).exists())
+        self.assertEqual(self.probe(self.password).returncode, 0)
+
+    def test_install_tag_selects_the_shared_sudo_play_not_host_changes(self):
+        play = Path(tpot_sudo.__file__).parent.parent / "tpot.yml"
+        proc = self.run_command("ansible-playbook", str(play), "-i", "localhost,", "-c", "local",
+                                "--tags", "tpot_sudo", "--list-tasks", check=False)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("Check or change the sudo mode", proc.stdout)
+        self.assertNotIn("Install cron without recommends", proc.stdout)
+        self.assertNotIn("Setup a randomized daily reboot (All)", proc.stdout)
+
     def test_play_rejects_readable_password_file_before_changing_account(self):
         with tempfile.TemporaryDirectory() as directory:
             secret = Path(directory, "secret")
@@ -539,3 +570,173 @@ raise SystemExit(subprocess.call(command + ["-vvv"]))
             self.assertTrue(record.get("changes"))
             self.assertNotIn(self.password, proc.stdout + proc.stderr + output.read_text())
             self.assertTrue(Path(OWN).exists())
+
+    def root_installer(self, code=0, extra=""):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        os.chmod(directory.name, 0o755)
+        script = Path(directory.name, "install.sh")
+        source = Path(__file__).parent / "install.sh"
+        if not source.exists():
+            source = Path(tpot_sudo.__file__).parents[3] / "install.sh"
+        prefix = source.read_text().split("# Begin of Installer:", 1)[0]
+        script.write_text(prefix + """
+id -u > "$HOME/root-child-uid"
+sudo -n -k true || exit 81
+[ -f /etc/sudoers.d/tpot-install ] || exit 82
+""" + extra + f"\nexit {code}\n")
+        script.chmod(0o755)
+        return script
+
+    def test_root_handover_runs_as_the_user_and_cleans_its_temporary_rule(self):
+        self.set_password()
+        script = self.root_installer()
+        proc = self.run_command("bash", str(script), "--user", self.user, "-s", "-t", "s", check=False)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        marker = Path(pwd.getpwnam(self.user).pw_dir, "root-child-uid")
+        self.assertEqual(marker.read_text().strip(), str(self.uid))
+        self.assertFalse(Path(TEMP).exists())
+        self.assertFalse(Path("/etc/tmpfiles.d/tpot-install.conf").exists())
+        self.assertFalse(Path(OWN).exists())
+        self.assertIn("sudo", self.groups())
+
+    def test_root_handover_preserves_child_failure_and_removes_temporary_grant(self):
+        self.set_password()
+        script = self.root_installer(code=7)
+        proc = self.run_command("bash", str(script), "--user", self.user, "-s", "-t", "s", check=False)
+        self.assertEqual(proc.returncode, 7, proc.stdout + proc.stderr)
+        self.assertFalse(Path(TEMP).exists())
+        self.assertFalse(Path(OWN).exists())
+
+    def test_root_inline_start_requests_a_saved_script_before_changing_access(self):
+        self.set_password()
+        script = self.root_installer()
+        groups = self.groups()
+        proc = self.run_command("bash", "-c", script.read_text(), "install-from-curl",
+                                "--user", self.user, "-s", "-t", "s", check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("Save install.sh", proc.stdout + proc.stderr)
+        self.assertEqual(self.groups(), groups)
+        self.assertFalse(Path(TEMP).exists())
+
+    def test_root_unattended_locked_user_stops_before_account_or_rule_changes(self):
+        before = self.groups()
+        script = self.root_installer()
+        proc = self.run_command("bash", str(script), "--user", self.user, "-s", "-t", "s", check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("user-password-file", proc.stdout + proc.stderr)
+        self.assertEqual(self.groups(), before)
+        self.assertFalse(Path(TEMP).exists())
+        self.assertFalse(Path(OWN).exists())
+
+    def test_root_handover_does_not_overwrite_a_foreign_temporary_rule(self):
+        self.set_password()
+        text = "root ALL=(ALL:ALL) ALL\n"
+        Path(TEMP).write_text(text)
+        Path(TEMP).chmod(0o440)
+        script = self.root_installer()
+        proc = self.run_command("bash", str(script), "--user", self.user, "-s", "-t", "s", check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("foreign", (proc.stdout + proc.stderr).lower())
+        self.assertEqual(Path(TEMP).read_text(), text)
+
+    def test_root_cleanup_keeps_the_rule_if_removing_it_breaks_sudo(self):
+        self.set_password()
+        script = self.root_installer(extra="""
+printf '\\n@include /etc/sudoers.d/tpot-install\\n' | sudo -n tee -a /etc/sudoers >/dev/null
+""")
+        proc = self.run_command("bash", str(script), "--user", self.user, "-s", "-t", "s", check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertTrue(Path(TEMP).exists(), proc.stdout + proc.stderr)
+        self.assertEqual(self.run_command("visudo", "-c", check=False).returncode, 0)
+        self.assertFalse(Path("/etc/tmpfiles.d/tpot-install.conf").exists())
+
+    def start_root_child(self):
+        script = self.root_installer(extra="""
+sleep 60 &
+printf '%s\\n' "$!" > "$HOME/root-sleep-pid"
+wait
+""")
+        proc = subprocess.Popen(["bash", str(script), "--user", self.user, "-s", "-t", "s"],
+                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True)
+        self.addCleanup(self.stop_root_child, proc)
+        marker = Path(pwd.getpwnam(self.user).pw_dir, "root-sleep-pid")
+        deadline = time.monotonic() + 5
+        while not marker.exists() and proc.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertTrue(marker.exists(), "Root handover did not start the waiting child.")
+        return proc, int(marker.read_text())
+
+    def stop_root_child(self, proc):
+        if proc.poll() is None:
+            proc.terminate()
+        proc.communicate(timeout=15)
+
+    def test_root_term_stops_the_child_and_cleans_temporary_access(self):
+        self.set_password()
+        proc, sleeper = self.start_root_child()
+        self.assertTrue(Path("/etc/tmpfiles.d/tpot-install.conf").exists())
+        proc.send_signal(signal.SIGTERM)
+        output, _ = proc.communicate(timeout=15)
+        self.assertEqual(proc.returncode, 130, output)
+        self.assertFalse(Path(TEMP).exists())
+        self.assertFalse(Path("/etc/tmpfiles.d/tpot-install.conf").exists())
+        state = Path(f"/proc/{sleeper}/stat")
+        if state.exists():
+            self.assertEqual(state.read_text().split(") ", 1)[1][0], "Z")
+
+    def test_a_second_root_installer_does_not_remove_the_active_grant(self):
+        self.set_password()
+        proc, _ = self.start_root_child()
+        before = Path(TEMP).read_bytes()
+        second = self.run_command("bash", str(self.root_installer()), "--user", self.user, "-s", "-t", "s",
+                                  check=False)
+        self.assertNotEqual(second.returncode, 0)
+        self.assertIn("active", second.stdout + second.stderr)
+        self.assertEqual(Path(TEMP).read_bytes(), before)
+        self.assertIsNone(proc.poll())
+
+    def test_root_boot_cleanup_removes_only_the_temporary_rule(self):
+        self.set_password()
+        self.grant()
+        before = Path(OWN).read_bytes()
+        self.start_root_child()
+        self.run_command("systemd-tmpfiles", "--remove", "/etc/tmpfiles.d/tpot-install.conf")
+        self.assertFalse(Path(TEMP).exists())
+        self.assertEqual(Path(OWN).read_bytes(), before)
+
+    def test_root_copies_private_inputs_without_exposing_them_to_other_users(self):
+        self.set_password()
+        script = self.root_installer(extra="""
+for file in "${BASH_SOURCE[0]}" "$myBECOME_FILE" "$myUSER_PASSWORD_FILE" "$myWEB_PW_FILE"; do
+  [ "$(stat -c '%a:%u:%h' "$file")" = "400:$(id -u):1" ] || exit 83
+done
+cmp "$myBECOME_FILE" "$myUSER_PASSWORD_FILE" || exit 84
+printf '%s\\n' "$myBECOME_FILE" > "$HOME/root-copied-password"
+""")
+        with tempfile.TemporaryDirectory() as directory:
+            secret = Path(directory, "private password")
+            secret.write_text(self.password + "\n")
+            secret.chmod(0o600)
+            proc = self.run_command("bash", str(script), "--user", self.user, "-s", "-t", "h", "-u", "webadmin",
+                                    "-P", str(secret), "-B", str(secret), "--user-password-file", str(secret),
+                                    check=False)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertEqual(secret.read_text(), self.password + "\n")
+        copied = Path(pwd.getpwnam(self.user).pw_dir, "root-copied-password").read_text().strip()
+        self.assertFalse(Path(copied).exists())
+        self.assertNotIn(self.password, proc.stdout + proc.stderr)
+
+    def test_root_child_uses_the_selected_users_directories_not_roots(self):
+        self.set_password()
+        script = self.root_installer(extra="""
+case "${XDG_DATA_HOME:-$HOME/.local/share}" in "$HOME"/*) ;; *) exit 85 ;; esac
+case "${XDG_CONFIG_HOME:-$HOME/.config}" in "$HOME"/*) ;; *) exit 86 ;; esac
+[ "$PWD" = "$HOME" ] || exit 87
+""")
+        proc = subprocess.run(["bash", str(script), "--user", self.user, "-s", "-t", "s"],
+                              cwd="/root", env=dict(os.environ, XDG_DATA_HOME="/root/data",
+                                                   XDG_CONFIG_HOME="/root/config"),
+                              text=True, capture_output=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)

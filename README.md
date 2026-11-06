@@ -604,7 +604,7 @@ On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundatio
 ## Unattended Installation
 The installer can run without any interaction, i.e. for automated tests or cloud provisioning:
 ```
-./install.sh -s -t <type> [-u <webuser>] [-P <file> | -p <password>] [-B <file>] [-c <compose file>] [-U]
+./install.sh -s -t <type> [-u <webuser>] [-P <file> | -p <password>] [-B <file>] [-c <compose file>] [-U] [--sudo-nopasswd]
 ```
 | Option | Description |
 |---|---|
@@ -616,18 +616,33 @@ The installer can run without any interaction, i.e. for automated tests or cloud
 | `-B` | Read the `sudo` password from your private file (`chmod 600`), or `-` for stdin, so `-s` works without passwordless `sudo` |
 | `-c` | Install your own compose file (i.e. from `tpot customize`) instead of an edition, `-t` is then `h` (with a web UI) or `s` (without) |
 | `-U` | No [automatic updates](#automatic-updates-debian) on Debian: writes `TPOT_AUTO_UPDATES=DISABLED` into `~/tpotce/.env` |
+| `--sudo-nopasswd` | Keep passwordless sudo through T-Pot's own rule; unattended installations otherwise select the more secure mode |
+| `--user <name>` | When started as root from a saved installer file, continue as this existing regular user |
+| `--user-password-file <file>` | Private file with a new account password if that account has no usable password and the secure mode is requested |
 
-Password files for `-B` must belong to you, be regular files (not links), have mode `0600` or `0400`,
+Password files for `-B` and `--user-password-file` must belong to you, be regular files (not links), have mode `0600` or `0400`,
 and contain one nonempty UTF-8 line. A password from stdin is kept in a private temporary file and
 removed on success, failure or cancellation. A file you supplied is only read: remove it afterwards
 when no longer needed. Only one of `-P` and `-B` can read stdin.
 
-⚠️ ***`-s` requires passwordless `sudo` for the user running the installer, or `-B`.*** Ansible would otherwise ask for the `BECOME password` and the run would stall, so the installer stops right away and tells you so. Grant it before you start (or hand the password over with `-B`):
+⚠️ ***`-s` requires working passwordless `sudo`, `-B`, or a root start with `--user`.*** The secure
+mode prepares a usable account password and another sudo grant before configuring the host, then
+removes T-Pot's permanent passwordless rule after the last privileged installation step. Foreign
+rules (for example cloud-init rules) are left alone; the reported effective state can therefore
+still be passwordless.
+
+Without sudo installed, save the installer and run it as root with the existing normal user's
+name. Root starts need a saved file, not an inline `bash -c` command, so the exact same installer
+can be handed to the user without another download. For example, from a root shell:
 ```
-echo "$(whoami) ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/$(whoami)
-sudo chmod 440 /etc/sudoers.d/$(whoami)
+bash ./install.sh --user operator -s -t s --user-password-file /root/operator-password
 ```
-Remove `/etc/sudoers.d/<user>` after the installation if you do not want to keep it. On Debian without `sudo` installed the installer creates this rule itself, because it has to add `sudo` anyway - it says so when it does.
+The new password must pass cracklib and is also used by SSH if password logins are enabled.
+It is not changed when the account already has a usable password. Root's parent process cleans
+up the temporary `/etc/sudoers.d/tpot-install` grant and its private handover files on exit;
+boot cleanup covers a killed parent or a power loss. If removing a rule would break a modified
+sudoers policy, it is retained with an error instead. The installer no longer creates an
+unmanaged `/etc/sudoers.d/<user>` rule. Remove password files you provided when no longer needed.
 <br><br>
 
 ## Testing a Branch

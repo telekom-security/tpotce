@@ -285,7 +285,7 @@ def _normal_uid(uid):
     return uid >= int(match.group(1))
 
 
-def apply(user, action, *, password="", keep=False):
+def apply(user, action, *, password="", keep=False, prepare=False):
     if sys.platform != "linux" or os.geteuid() != 0:
         raise SudoError("Sudo-mode management must run with become on a Linux host.")
     if action not in ("status", "secure", "convenient", "safe_remove"):
@@ -327,7 +327,7 @@ def apply(user, action, *, password="", keep=False):
                     changes.append("Set the user password (also used by SSH when password login is enabled).")
                 if before["alternative"] is not True:
                     _ensure_alternative(user, account.pw_uid, sudo, changes)
-            if _set_rule(user, account.pw_uid, sudo, action == "convenient"):
+            if not prepare and _set_rule(user, account.pw_uid, sudo, action == "convenient"):
                 changes.append("Installed the T-Pot sudo rule." if action == "convenient" else "Removed the T-Pot sudo rule.")
             result = _snapshot(user, account.pw_uid, sudo)
             result.update(changes=changes, changed=bool(changes))
@@ -347,6 +347,7 @@ def main():
         action=dict(type="str", choices=["status", "secure", "convenient", "safe_remove"], default="status"),
         password=dict(type="str", no_log=True),
         keep=dict(type="bool", default=False),
+        prepare=dict(type="bool", default=False),
     ), supports_check_mode=True)
     try:
         password = module.params["password"] or ""
@@ -356,7 +357,7 @@ def main():
                 or any(char in password for char in "\r\n\0")):
             raise SudoError("The password file must contain exactly one nonempty line.")
         result = apply(module.params["user"], "status" if module.check_mode else module.params["action"],
-                       password=password, keep=module.params["keep"])
+                       password=password, keep=module.params["keep"], prepare=module.params["prepare"])
     except SudoError as err:
         module.fail_json(msg=str(err), changed=bool(err.changes), changes=err.changes)
     module.exit_json(changed=result["changed"], status=result)

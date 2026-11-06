@@ -46,7 +46,7 @@ STUBS = {
                         "  printf '      Task one\\tTAGS: [Debian]\\n      Task two\\tTAGS: [Debian]\\n'; exit 0 ;;\nesac\n"
                         "echo 'PLAY [T-Pot] ****'\necho 'TASK [Task one] ****'\necho 'ok: [127.0.0.1]'\n"
                         "echo 'TASK [Task two] ****'\n"
-                        "if [ -n \"$FAKE_PLAYBOOK_RC\" ]; then echo 'fatal: [127.0.0.1]: FAILED! => {}'; "
+                        "if [ -n \"$FAKE_PLAYBOOK_RC\" ] && [ \"${1##*/}\" = tpot.yml ]; then echo 'fatal: [127.0.0.1]: FAILED! => {}'; "
                         "exit \"$FAKE_PLAYBOOK_RC\"; fi\necho 'changed: [127.0.0.1]'\n",
     # config --images names an image once per service (cowrie twice here), the pull of Compose v5 reports
     # every image once
@@ -163,6 +163,8 @@ class InstallShTest(Scripts):
         super().setUp()
         # the clone the playbook would make: the installer finds its playbook, nothing is cloned
         write(os.path.join(self.tpotce, "installer", "install", "tpot.yml"), "- hosts: all\n")
+        shutil.copy(os.path.join(REPO, "installer", "install", "sudo_mode.yml"),
+                    os.path.join(self.tpotce, "installer", "install", "sudo_mode.yml"))
         for edition in ("standard", "sensor", "mobile"):
             write(os.path.join(self.tpotce, "compose", f"{edition}.yml"),
                   f"# T-Pot: {edition.upper()}\nservices: {{}}\n")
@@ -184,6 +186,71 @@ class InstallShTest(Scripts):
 
     def test_help(self):
         self.assert_help("install.sh", self.run_script(self.script, "-h"))
+
+    def test_sudo_mode_runs_after_the_last_privileged_install_step(self):
+        for flags, action in (((), "secure"), (("--sudo-nopasswd",), "convenient")):
+            with self.subTest(action=action):
+                write(os.path.join(self.home, "calls"), "")
+                result = self.install("-s", "-t", "s", *flags)
+                self.assertEqual(result.returncode, 0, result.stdout)
+                calls = self.calls().splitlines()
+                mode = [line for line in calls if "ansible-playbook" in line and "sudo_mode.yml" in line]
+                self.assertEqual(len(mode), 2, self.calls())
+                self.assertIn(f"tpot_sudo_action={action}", mode[1])
+                self.assertGreater(calls.index(mode[1]), next(i for i, line in enumerate(calls) if "grc netstat" in line))
+                main = next(i for i, line in enumerate(calls) if "ansible-playbook" in line and "/tpot.yml" in line)
+                self.assertLess(calls.index(mode[0]), main)
+                self.assertIn("tpot_sudo_prepare=true", mode[0])
+                self.assertNotIn("--tags", mode[1])
+
+    def test_sudo_mode_failure_is_not_an_installation_success(self):
+        path = os.path.join(self.bin, "ansible-playbook")
+        write(path, STUBS["ansible-playbook"].replace(
+            "#!/bin/sh\n", '#!/bin/sh\ncase "$*" in *tpot_sudo_prepare=false*) echo "sudo mode refused"; exit 1 ;; esac\n'),
+            0o755)
+        result = self.install("-s", "-M", "-t", "s")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertNotIn("T-Pot is installed", result.stdout)
+        self.assertIn("sudo", result.stdout)
+        self.assertEqual(self.marks(result.stdout)[-2:], ["@@tpot fail sudo", "@@tpot phase failed"])
+
+    def test_user_password_path_is_forwarded_to_the_final_play(self):
+        secret = os.path.join(self.home, "new user password")
+        write(secret, "Distant-Otters!swim-47\n", 0o600)
+        result = self.install("-s", "-t", "s", "--user-password-file", secret)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        mode = [line for line in self.calls().splitlines() if "sudo_mode.yml" in line]
+        self.assertEqual(len(mode), 2, self.calls())
+        data = json.loads(mode[1][mode[1].index("{"):])
+        self.assertEqual(data["tpot_user_password_file"], secret)
+        self.assertNotIn("Distant-Otters!swim-47", self.calls() + result.stdout)
+
+    def test_prepare_failure_prevents_host_reconfiguration(self):
+        path = os.path.join(self.bin, "ansible-playbook")
+        write(path, STUBS["ansible-playbook"].replace(
+            "#!/bin/sh\n", '#!/bin/sh\ncase "$*" in *tpot_sudo_prepare=true*) echo "password refused"; exit 1 ;; esac\n'),
+            0o755)
+        result = self.install("-s", "-M", "-t", "s")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertNotIn("/tpot.yml", self.calls())
+        self.assertNotIn(" pull", self.calls())
+        self.assertIn("password refused", result.stdout)
+        self.assertEqual(self.feed(result.stdout).step, "sudo_prepare")
+
+    def test_missing_sudo_uses_the_explicit_root_handover_not_a_personal_rule(self):
+        text = base.read("install.sh").replace(
+            "unset CDPATH", """unset CDPATH
+command () {
+  [ "$*" != "-v sudo" ] || return 1
+  builtin command "$@"
+}""", 1)
+        write(self.script, text, 0o755)
+        write(os.path.join(self.bin, "su"), '#!/bin/sh\necho legacy-su >> "$HOME/calls"\nexit 1\n', 0o755)
+        result = self.run_merged(self.script, "-s", "-t", "s")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--user", result.stdout)
+        self.assertNotIn("legacy-su", self.calls())
+        self.assertNotIn("ansible-playbook", self.calls())
 
     def sudo_from_file(self):
         write(os.path.join(self.bin, "sudo"), '#!/bin/sh\n'
@@ -477,6 +544,8 @@ PY
 
     def test_usage_errors(self):
         for args, text in ((["-Z"], "Unknown option -Z."), (["-t"], "Option -t requires an argument."),
+                           (["--user"], "--user requires an argument"),
+                           (["--user-password-file="], "--user-password-file requires an argument"),
                            (["-t", "x"], "Invalid installation type: x"),
                            (["-s"], "-t is required"), (["-s", "-t", "h"], "-u and -p (or -P) are required"),
                            (["-c", os.path.join(self.home, "missing.yml")], "does not exist"),

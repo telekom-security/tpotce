@@ -371,6 +371,19 @@ class EngineTest(unittest.TestCase):
         progress.feed("@@tpot phase done")
         self.assertEqual(progress.fraction, 1.0)
 
+    def test_final_sudo_phase_preserves_progress_and_names_the_failure(self):
+        progress = installer.Progress()
+        for line in ("@@tpot phase pull", "@@tpot images 1", " cowrie Pulled", "@@tpot phase sudo",
+                     "@@tpot fail sudo", "@@tpot phase failed"):
+            progress.feed(line)
+        self.assertAlmostEqual(progress.fraction, 0.99)
+        self.assertEqual(progress.failed_phase, "sudo")
+        self.assertIn("sudo", progress.title.lower())
+        progress = installer.Progress()
+        progress.feed("@@tpot phase sudo_prepare")
+        self.assertAlmostEqual(progress.fraction, 0.05)
+        self.assertIn("sudo", progress.title.lower())
+
     def test_progress_keeps_the_phase_that_failed(self):
         """@@tpot fail <phase> and @@tpot phase failed: the bar stays where the run was, the title names
         the step that failed and that it failed."""
