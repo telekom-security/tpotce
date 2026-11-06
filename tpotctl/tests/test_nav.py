@@ -539,23 +539,25 @@ class AppsTest(unittest.IsolatedAsyncioTestCase):
         from tpotctl.tests.test_installer import FakeEngine as InstallEngine, all_ok
         from tpotctl.tests.test_settings import make_checkout
         app = InstallApp(engine=InstallEngine, checks=all_ok, sudo_mode="password",
-                         password_ok=lambda pw: pw == "right", run=lambda *a, **k: None, repo_dir=make_checkout(self))
+                         password_ok=lambda pw: pw == "right", run=lambda *a, **k: None, repo_dir=make_checkout(self),
+                         password_state=lambda: True)
         async with app.run_test(size=(150, 50)) as pilot:
             await pilot.pause(0.5)
             graph = await edges(pilot, app)
             check(self, graph, app.focused if app.focused in graph else next(iter(graph)), "installer")
             self.assertIn(app.query_one("#ins-next"), graph)
 
-    def installer(self, sudo):
+    def installer(self, sudo, password_usable=True):
         from tpotctl.screens.install import InstallApp
         from tpotctl.tests.test_installer import FakeEngine as InstallEngine, all_ok
         from tpotctl.tests.test_settings import make_checkout
         return InstallApp(engine=InstallEngine, checks=all_ok, sudo_mode=sudo, password_ok=lambda pw: pw == "right",
-                          run=lambda *a, **k: None, repo_dir=make_checkout(self))
+                          run=lambda *a, **k: None, repo_dir=make_checkout(self),
+                          password_state=lambda: password_usable)
 
     async def test_installer_every_step(self):
-        for sudo in ("password", "passwordless"):
-            app = self.installer(sudo)
+        for sudo, password_usable in (("password", True), ("passwordless", True), ("passwordless", False)):
+            app = self.installer(sudo, password_usable)
             async with app.run_test(size=(80, 24)) as pilot:
                 await pilot.pause(0.5)
                 for step in app.steps() + ["failed"]:
@@ -568,18 +570,23 @@ class AppsTest(unittest.IsolatedAsyncioTestCase):
                             app.finished(1)
                         else:
                             app.goto(step)
+                            if step == "review" and not password_usable:
+                                app.query_one("#ins-sudo-mode").value = "secure"
                         await pilot.pause(0.3)
                         graph = await edges(pilot, app)
                         if graph:
                             check(self, graph, app.focused if app.focused in graph else next(iter(graph)),
                                   f"installer {step}")
+                        if step == "review" and not password_usable:
+                            self.assertIn(app.query_one("#ins-account-password"), graph)
+                            self.assertIn(app.query_one("#ins-account-repeat"), graph)
                         review = app.query_one("#step-review")
                         if step == "review" and review.max_scroll_y > 0:
                             # more than fits: the arrows reach all of it, with and without the sudo field
                             if review.focusable:
                                 self.assertIn(review, graph)
                             else:
-                                app.query_one("#ins-sudo").focus()
+                                app.query_one("#ins-sudo-mode").focus()
                                 await pilot.pause(0.2)
                                 before = review.scroll_y
                                 await pilot.press("up")         # nothing above the field: it scrolls

@@ -17,13 +17,14 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import (Button, ContentSwitcher, Footer, Input, OptionList, ProgressBar, RichLog,
-                             Static)
+                             Select, Static)
 from textual.widgets.option_list import Option
 
 from tpotctl import engine, glyphs, installer, logo, theme, users
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ConfirmDialog
 from tpotctl.theme import apply as apply_theme
+from tpotctl.widgets.fields import TpotSelect
 from tpotctl.widgets.nav import (BINDINGS as NAV_BINDINGS, FIND, FIND_KEY, ArrowNav, NavInput, NavOptionList,
                                  NavRichLog, NavScroll)
 
@@ -97,15 +98,25 @@ class InstallApp(ArrowNav, App):
 
     def __init__(self, engine: Callable[[List[str]], Engine] = Engine, checks: Optional[Callable] = None,
                  sudo_mode: Optional[str] = None, password_ok: Optional[Callable[[str], bool]] = None,
-                 run: Callable = subprocess.run, repo_dir: str = REPO_DIR):
+                 run: Callable = subprocess.run, repo_dir: str = REPO_DIR,
+                 password_state: Optional[Callable[[], bool]] = None, sudo_nopasswd: bool = False,
+                 become_file: str = "", user_password_file: str = ""):
         super().__init__()
+        from tpotctl.sudo_mode import read_password_file
         self.repo_dir = repo_dir
         self.engine_factory = engine
         self.check_runner = checks or installer.run_checks
         self.sudo = sudo_mode
         self.password_ok = password_ok or installer.sudo_password_ok
+        self.password_state = password_state or installer.user_password_usable
+        self.password_usable: Optional[bool] = None
+        self.password_state_error = ""
         self.run_command = run
-        self.answers = installer.Answers(installer.EDITIONS[0])
+        self.answers = installer.Answers(
+            installer.EDITIONS[0], sudo_mode="convenient" if sudo_nopasswd else "",
+            sudo_password=read_password_file(become_file) if become_file else "",
+            user_password=read_password_file(user_password_file) if user_password_file else "")
+        self.supplied_files = [path for path in (become_file, user_password_file) if path]
         self.step = "check"
         self.checks: List[installer.Check] = []
         self.busy = False
@@ -142,6 +153,14 @@ class InstallApp(ArrowNav, App):
                                   style=theme.color("ash")), classes="ins-lead")
             with NavScroll(id="step-review", classes="ins-step"):
                 yield Static("", id="review-text")
+                yield Static(Text("Sudo mode", style=f"bold {theme.color('magenta')}"))
+                yield TpotSelect([("More secure - sudo asks for your password", "secure"),
+                                  ("More convenient - sudo works without a password", "convenient")],
+                                 prompt="Choose a mode", value=self.answers.sudo_mode or Select.NULL,
+                                 id="ins-sudo-mode")
+                yield Static("", id="ins-account-hint")
+                yield NavInput(placeholder="set a user password now", password=True, id="ins-account-password")
+                yield NavInput(placeholder="repeat your user password", password=True, id="ins-account-repeat")
                 yield NavInput(placeholder="your sudo password", password=True, id="ins-sudo")
                 yield Static("", id="ins-sudo-hint")
             with Vertical(id="step-install", classes="ins-step"):
@@ -250,6 +269,13 @@ class InstallApp(ArrowNav, App):
         checks = self.check_runner()
         if self.sudo is None:
             self.sudo = installer.sudo_mode()
+        try:
+            self.password_usable = self.password_state()
+            self.password_state_error = ""
+        except OSError as err:
+            self.password_usable = None
+            self.password_state_error = str(err)
+            checks.append(installer.Check("User password", "warn", str(err)))
         memory, free = installer.resources()
         self.call_from_thread(self.show_checks, checks, memory, free)
 
@@ -401,6 +427,8 @@ class InstallApp(ArrowNav, App):
         elif event.input.id == "ins-sudo":
             self.query_one("#ins-sudo-hint", Static).update("")
             self.refresh_nav()
+        elif event.input.id and event.input.id.startswith("ins-account-"):
+            self.refresh_nav()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id and event.input.id.startswith("ins-user") and event.input.id != "ins-user-repeat":
@@ -520,33 +548,83 @@ class InstallApp(ArrowNav, App):
             text.append(f"{change}\n", style=theme.color("glass"))
         text.append("\nThe installation takes 10 to 30 minutes, the host needs a reboot afterwards.",
                     style=theme.color("ash"))
-        if self.sudo == "password":
+        if self.sudo == "password" and not answers.sudo_password:
             text.append("\n\nsudo needs your password, the installer hands it to Ansible in a file only you can "
                         "read and removes it afterwards.", style=theme.color("ash"))
+        if self.supplied_files:
+            text.append("\n\nRemove your supplied password files when no longer needed: " +
+                        ", ".join(self.supplied_files), style=theme.color("ash"))
         self.query_one("#review-text", Static).update(text)
         sudo = self.query_one("#ins-sudo", Input)
-        sudo.display = self.sudo == "password"
+        sudo.display = self.sudo == "password" and not answers.sudo_password
         self.query_one("#ins-sudo-hint", Static).display = self.sudo == "password"
-        if sudo.display:
+        self.show_account_password()
+        if not answers.sudo_mode:
+            self.query_one("#ins-sudo-mode", Select).focus()
+        elif sudo.display:
             sudo.focus()
         else:
             self.query_one("#ins-next", Button).focus()
 
     def problem_review(self) -> str:
-        if self.sudo == "password" and not self.query_one("#ins-sudo", Input).value:
+        if self.answers.sudo_mode not in ("secure", "convenient"):
+            return "choose a sudo mode"
+        if self.answers.sudo_mode == "secure":
+            if self.password_usable is None:
+                return self.password_state_error or "checking the user password state"
+            if self.password_usable is False:
+                password = self.answers.user_password or self.query_one("#ins-account-password", Input).value
+                repeat = self.query_one("#ins-account-repeat", Input).value
+                if not password:
+                    return "set a user password for More secure"
+                if not self.answers.user_password and password != repeat:
+                    return "the user passwords do not match"
+                if any(char in password for char in "\r\n\0"):
+                    return "the user password must be one line"
+                if users.weakness(password):
+                    return ("the supplied user password is too weak; replace the file and restart"
+                            if self.answers.user_password else "choose a stronger user password")
+        if self.sudo == "password" and not (self.answers.sudo_password or self.query_one("#ins-sudo", Input).value):
             return "enter your sudo password"
         return ""
+
+    def needs_user_password(self) -> bool:
+        return (self.answers.sudo_mode == "secure" and self.password_usable is False
+                and not self.answers.user_password)
+
+    def show_account_password(self) -> None:
+        needs = self.needs_user_password()
+        self.query_one("#ins-account-password").display = needs
+        self.query_one("#ins-account-repeat").display = needs
+        text = ("No usable user password. Set one now for More secure. It also works for SSH if password login "
+                "is enabled." if needs else "")
+        if self.answers.sudo_mode == "secure" and self.password_usable is False and self.answers.user_password:
+            text = "The supplied user password also works for SSH if password login is enabled."
+        self.query_one("#ins-account-hint", Static).update(Text(text, style=theme.color("warn")))
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "ins-sudo-mode":
+            self.answers.sudo_mode = str(event.value) if event.value is not Select.NULL else ""
+            self.show_account_password()
+            self.refresh_nav()
 
     # -- 6 install -----------------------------------------------------------
 
     def start_install(self) -> None:
+        if self.problem_review():
+            self.refresh_nav()
+            return
         if self.sudo == "password":
-            password = self.query_one("#ins-sudo", Input).value
+            password = self.answers.sudo_password or self.query_one("#ins-sudo", Input).value
             if not self.password_ok(password):
+                self.answers.sudo_password = ""
+                self.query_one("#ins-sudo").display = True
                 self.query_one("#ins-sudo-hint", Static).update(
                     Text(f"{glyphs.g('fail')} sudo does not accept this password", style=theme.color("error")))
                 return
             self.answers.sudo_password = password
+        if self.needs_user_password():
+            self.answers.user_password = self.query_one("#ins-account-password", Input).value
         weak = users.weakness(self.answers.web_password) if self.answers.needs_web_user else ""
         if weak:
             self.push_screen(ConfirmDialog(f"The web password is weak ({weak}). Keep it anyway?", yes="Keep it",
@@ -574,10 +652,14 @@ class InstallApp(ArrowNav, App):
     def run_engine(self) -> None:
         answers = self.answers
         secrets = {"web": answers.web_password if answers.needs_web_user else "",
-                   "become": answers.sudo_password}
-        with installer.secret_files(**secrets) as files:
-            command = installer.engine_command(answers, files, os.path.join(self.repo_dir, "install.sh"))
-            code = self.engine_factory(command).run(lambda line: self.call_from_thread(self.feed, line))
+                   "become": answers.sudo_password, "user": answers.user_password}
+        try:
+            with installer.secret_files(**secrets) as files:
+                command = installer.engine_command(answers, files, os.path.join(self.repo_dir, "install.sh"))
+                code = self.engine_factory(command).run(lambda line: self.call_from_thread(self.feed, line))
+        except (OSError, ValueError) as err:
+            self.call_from_thread(self.feed, f"Installation stopped: {err}\n")
+            code = 1
         self.call_from_thread(self.finished, code)
 
     def feed(self, line: str) -> None:
@@ -669,14 +751,16 @@ class InstallApp(ArrowNav, App):
         self.query_one("#done-reboot", Button).focus()
 
     def reboot(self) -> None:
-        if self.answers.sudo_password:
-            self.run_command(["sudo", "-S", "-p", "", "reboot"], input=self.answers.sudo_password + "\n",
+        password = self.answers.sudo_password or self.answers.user_password
+        if password:
+            self.run_command(["sudo", "-S", "-p", "", "reboot"], input=password + "\n",
                              universal_newlines=True)
         else:
             self.run_command(["sudo", "reboot"])
         self.exit(0)
 
 
-def run_install() -> int:
-    result = InstallApp().run()
+def run_install(*, sudo_nopasswd: bool = False, become_file: str = "", user_password_file: str = "") -> int:
+    result = InstallApp(sudo_nopasswd=sudo_nopasswd, become_file=become_file,
+                        user_password_file=user_password_file).run()
     return int(result or 0)

@@ -228,6 +228,18 @@ class LinuxModeTest(unittest.TestCase):
         self.assertFalse(Path(OWN).exists())
         self.assertEqual(before, {name: Path("/etc", name).read_bytes() for name in before})
 
+    def test_installer_reads_own_password_state_without_privilege(self):
+        from tpotctl import installer
+        def run(command, **kwargs):
+            return subprocess.run(["runuser", "-u", self.user, "--", *command], **kwargs)
+        self.assertFalse(installer.user_password_usable(run))
+        self.set_password()
+        self.assertTrue(installer.user_password_usable(run))
+        self.run_command("passwd", "-d", self.user)
+        self.assertFalse(installer.user_password_usable(run))
+        self.assertFalse(Path(OWN).exists())
+        self.assertNotIn("sudo", self.groups())
+
     def test_convenient_grants_real_passwordless_sudo_idempotently(self):
         result = tpot_sudo.apply(self.user, "convenient")
         self.assertTrue(result["changed"])

@@ -1650,11 +1650,10 @@ get_packages() {
       echo
       return
   fi
-  # a password is asked for now, in the terminal, the spinner cannot ask
+  # Keep it for the assistant and every later privileged step too.
   if [ -z "${myBECOME_FILE}" ] && sudo_password_required;
     then
-      fuUI_INFO "sudo needs your password to install the packages:"
-      sudo -v || install_failed "sudo did not accept the password" "Run the installer again"
+      ask_become_password
   fi
   local myRC=0
   fuUI_SPIN "${myINSTALL_NOTIFICATION}" "${myLOG}" install_packages || myRC=$?
@@ -1738,6 +1737,111 @@ private_password_file() {
       then usage_error "The password file must contain exactly one nonempty line."
     fi
   } < "${myFILE}"
+  [ -z "${myTRACE}" ] || set -x
+  return 0
+}
+
+use_become_file() {
+  # Refresh the timestamp before every call; pipes to sudo still reach its command.
+  sudo () {
+    command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1 || return
+    command sudo "$@"
+  }
+}
+
+prompt_private_password() {
+  local myKIND="$1" myPASSWORD myREPEAT myTRACE="" IFS=""
+  case $- in *x*) set +x; myTRACE=y ;; esac
+  export -n myPASSWORD myREPEAT
+  myPROMPT_FILE=$(mktemp "${TMPDIR:-/tmp}/tpot-install-password.XXXXXXXX") \
+    || install_failed "Cannot create a private password file" "Check the temporary directory"
+  myPASSWORD_FILES+=("${myPROMPT_FILE}")
+  chmod 600 "${myPROMPT_FILE}" \
+    || install_failed "Cannot protect the password file" "Check the temporary directory"
+  while true; do
+    myPASSWORD=$(fuUI_INPUT "Enter your ${myKIND} password:" password)
+    [ -n "${myPASSWORD}" ] || install_stopped "No password supplied" "Run the installer again"
+    if [ "${myKIND}" = user ]; then
+      myREPEAT=$(fuUI_INPUT "Repeat your user password:" password)
+      if [ "${myPASSWORD}" != "${myREPEAT}" ]; then
+        fuUI_WARN "Passwords do not match."
+        continue
+      fi
+      if [ -n "$(password_weakness "${myPASSWORD}")" ]; then
+        fuUI_WARN "The password is too weak. Choose a stronger user password."
+        continue
+      fi
+    fi
+    printf '%s\n' "${myPASSWORD}" > "${myPROMPT_FILE}" \
+      || install_failed "Cannot write the private password file" "Check the temporary directory"
+    private_password_file "${myPROMPT_FILE}"
+    if [ "${myKIND}" = sudo ] && ! command sudo -S -k -p "" -v < "${myPROMPT_FILE}" >/dev/null 2>&1; then
+      fuUI_WARN "sudo does not accept this password."
+      continue
+    fi
+    break
+  done
+  [ -z "${myTRACE}" ] || set -x
+  return 0
+}
+
+ask_become_password() {
+  [ -z "${myBECOME_FILE}" ] && sudo_password_required || return 0
+  [ "${myUNATTENDED}" != y ] || abort_unattended
+  fuUI_INFO "sudo needs your password; it is kept in a private file for this installation only."
+  prompt_private_password sudo
+  myBECOME_FILE="${myPROMPT_FILE}"
+  use_become_file
+}
+
+ask_sudo_mode() {
+  [ "${myUNATTENDED}" != y ] && [ "${mySUDO_MODE}" != convenient ] || return 0
+  while true; do
+    mySUDO_MODE=$(fuUI_CHOOSE --selected none "Choose how sudo works after installation:" \
+      "Choose a mode:none" "More secure - sudo asks for your password:secure" \
+      "More convenient - sudo works without a password:convenient") \
+      || install_stopped "No sudo mode chosen" "Run the installer again"
+    case "${mySUDO_MODE}" in secure|convenient) return 0 ;; esac
+  done
+}
+
+check_user_password() {
+  [ "${mySUDO_MODE}" = secure ] || return 0
+  local mySTATUS mySTATE
+  mySTATUS=$(LC_ALL=C passwd -S "${myUSER}" 2>/dev/null) \
+    || install_failed "Cannot verify the user password state" "Check passwd -S ${myUSER} before installing"
+  mySTATE=$(printf '%s\n' "${mySTATUS}" | awk '{print $2}')
+  case "${mySTATE}" in
+    P) return 0 ;;
+    L|NP) ;;
+    *) install_failed "Unknown user password state" "Check passwd -S ${myUSER} before installing" ;;
+  esac
+  myNEEDS_USER_PASSWORD=y
+  if [ -z "${myUSER_PASSWORD_FILE}" ]; then
+    [ "${myUNATTENDED}" != y ] \
+      || install_failed "More secure needs a usable user password before installation" \
+        "Supply a private --user-password-file, or explicitly choose --sudo-nopasswd"
+    fuUI_INFO "More secure needs a usable user password. A new password also works for SSH if password login is enabled."
+    fuUI_CONFIRM --default no "Set a user password now?" "Set password" "Abort" \
+      || install_stopped "The user password was not set" "Choose the sudo mode again when ready"
+    prompt_private_password user
+    myUSER_PASSWORD_FILE="${myPROMPT_FILE}"
+  else
+    fuUI_INFO "The new user password also works for SSH if password login is enabled."
+  fi
+  check_new_password_strength
+}
+
+check_new_password_strength() {
+  [ "${myNEEDS_USER_PASSWORD}" = y ] || return 0
+  local myPASSWORD myTRACE="" myRC IFS=""
+  case $- in *x*) set +x; myTRACE=y ;; esac
+  export -n myPASSWORD
+  IFS= read -r myPASSWORD < "${myUSER_PASSWORD_FILE}"
+  myRC=$?
+  [ "${myRC}" -ne 0 ] || myPASSWORD="${myPASSWORD%$'\r'}"
+  [ -z "$(password_weakness "${myPASSWORD}")" ] \
+    || install_failed "The new user password is too weak" "Replace --user-password-file with a stronger password"
   [ -z "${myTRACE}" ] || set -x
   return 0
 }
@@ -2143,6 +2247,7 @@ myROOT_CHILD=""
 myROOT_GRANT=""
 myROOT_BOOT=""
 myUSER_PASSWORD_FILE=""
+myNEEDS_USER_PASSWORD=""
 mySUDO_MODE="secure"
 myCUSTOM_COMPOSE=""
 myCLASSIC=""
@@ -2273,12 +2378,7 @@ if [ -n "${myBECOME_FILE}" ];
   then
     private_password_file "${myBECOME_FILE}"
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
-    # every sudo of this script refreshes the timestamp from the file first, so none
-    # of them prompts and pipes into sudo (tee) keep working
-    sudo () {
-      command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1 || return
-      command sudo "$@"
-    }
+    use_become_file
 fi
 if [ -n "${myUSER_PASSWORD_FILE}" ]; then
   private_password_file "${myUSER_PASSWORD_FILE}"
@@ -2459,7 +2559,11 @@ if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && 
       then
         echo
         export TPOT_BRANCH="${myTPOT_BRANCH}" TPOT_REPO_URL="${myTPOT_REPO_URL}" TPOT_INSTALL_PACKAGES_DONE=1
-        "${HOME}/tpotce/tpot" install
+        myASSISTANT_ARGS=()
+        [ "${mySUDO_MODE}" != convenient ] || myASSISTANT_ARGS+=(--sudo-nopasswd)
+        [ -z "${myBECOME_FILE}" ] || myASSISTANT_ARGS+=(--become-file "${myBECOME_FILE}")
+        [ -z "${myUSER_PASSWORD_FILE}" ] || myASSISTANT_ARGS+=(--user-password-file "${myUSER_PASSWORD_FILE}")
+        "${HOME}/tpotce/tpot" install "${myASSISTANT_ARGS[@]}"
         exit $?
     fi
     fuUI_WARN "The assistant cannot start (see ${myLOG}), the installer asks in the terminal instead."
@@ -2484,6 +2588,8 @@ fi
 # The questions come before anything is installed, the rest runs on its own.
 ask_type
 ask_web_user
+ask_sudo_mode
+check_user_password
 
 # Fail before anything is installed if an existing ~/tpotce would be used
 # instead of the repository and branch that were asked for.
@@ -2510,11 +2616,13 @@ fi
 if command -v sudo >/dev/null && sudo_password_required;
   then
     sudo_rs_become_exe
+    ask_become_password
 fi
 
 check_ports
 # Install packages based on the distribution
 get_packages
+check_new_password_strength
 
 # Define tag for Ansible
 myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Rocky Linux" "Red Hat Enterprise Linux")

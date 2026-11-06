@@ -96,6 +96,8 @@ class Answers:
     web_user: str = ""
     web_password: str = ""
     sudo_password: str = ""
+    sudo_mode: str = ""
+    user_password: str = ""
     settings: Dict[str, str] = field(default_factory=dict)
 
     @property
@@ -287,6 +289,18 @@ def sudo_password_ok(password: str, run: Callable = subprocess.run) -> bool:
     return proc.returncode == 0
 
 
+def user_password_usable(run: Callable = subprocess.run) -> bool:
+    """Inspect the current account without reading shadow or requiring sudo."""
+    try:
+        proc = run(["passwd", "-S"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    except OSError as err:
+        raise OSError("Cannot verify the user password state with passwd -S.") from err
+    fields = proc.stdout.split()
+    if proc.returncode or len(fields) < 2 or fields[1] not in ("P", "L", "NP"):
+        raise OSError("Cannot verify the user password state with passwd -S.")
+    return fields[1] == "P"
+
+
 # -- running install.sh --------------------------------------------------------
 
 def secret_dir() -> str:
@@ -304,18 +318,27 @@ def secret_files(**secrets: str) -> Iterator[Dict[str, str]]:
             if not text:
                 continue
             handle, path = tempfile.mkstemp(prefix=".tpot-install-", dir=secret_dir())
-            os.fchmod(handle, 0o600)
-            with os.fdopen(handle, "w", encoding="utf-8") as out:
-                out.write(text + "\n")
             paths[name] = path
+            with os.fdopen(handle, "w", encoding="utf-8") as out:
+                os.fchmod(out.fileno(), 0o600)
+                out.write(text + "\n")
         yield paths
     finally:
+        failures = []
         for path in paths.values():
-            with contextlib.suppress(OSError):
+            try:
                 os.unlink(path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                failures.append(path)
+        if failures:
+            raise OSError("Could not remove temporary password files. Remove these manually: " + ", ".join(failures))
 
 
 def engine_command(answers: Answers, files: Dict[str, str], install_sh: str = INSTALL_SH) -> List[str]:
+    if answers.sudo_mode not in ("secure", "convenient"):
+        raise ValueError("Choose a sudo mode before installing.")
     letter = answers.edition.letter
     if answers.custom_compose:
         letter = "h" if answers.needs_web_user else "s"
@@ -326,6 +349,10 @@ def engine_command(answers: Answers, files: Dict[str, str], install_sh: str = IN
         command += ["-u", answers.web_user, "-P", files["web"]]
     if "become" in files:
         command += ["-B", files["become"]]
+    if answers.sudo_mode == "convenient":
+        command += ["--sudo-nopasswd"]
+    if "user" in files:
+        command += ["--user-password-file", files["user"]]
     for option, variable in (("-b", "TPOT_BRANCH"), ("-r", "TPOT_REPO_URL")):
         if os.environ.get(variable):
             command += [option, os.environ[variable]]

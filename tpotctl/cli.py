@@ -69,6 +69,10 @@ def build_parser() -> argparse.ArgumentParser:
     install = sub.add_parser("install", help="install T-Pot on this host with the assistant (install.sh -s does it "
                                              "without questions)")
     install.add_argument("--classic", action="store_true", help="the questions of install.sh in the terminal")
+    install.add_argument("--sudo-nopasswd", action="store_true", help="choose More convenient explicitly")
+    install.add_argument("-B", "--become-file", default="", metavar="FILE", help="private sudo password file")
+    install.add_argument("--user-password-file", default="", metavar="FILE",
+                         help="private new password for a user without a usable password")
     sub.add_parser("uninstall", help="remove T-Pot from this host, with a backup first if you like "
                                      "(uninstall.sh -y does it without questions, a loss of data of the backup "
                                      "needs a yes or --accept-data-loss)")
@@ -1778,19 +1782,32 @@ def run_customizer(args: List[str]) -> int:
     return 0    # not reached
 
 
-def run_install(classic: bool) -> int:
+def run_install(classic: bool, *, sudo_nopasswd: bool = False, become_file: str = "",
+                user_password_file: str = "") -> int:
     from tpotctl import installer
     if not sys.platform.startswith("linux"):
         raise ops.OpsError("tpot install installs T-Pot on Linux (Debian recommended), see the README")
     if installer.installed():
         raise ops.OpsError("T-Pot is installed on this host already, update it with: tpot update")
     if classic:
-        os.execv(installer.INSTALL_SH, [installer.INSTALL_SH, "-n"])
+        command = [installer.INSTALL_SH, "-n"]
+        if sudo_nopasswd:
+            command += ["--sudo-nopasswd"]
+        if become_file:
+            command += ["-B", become_file]
+        if user_password_file:
+            command += ["--user-password-file", user_password_file]
+        os.execv(installer.INSTALL_SH, command)
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         error("the assistant needs a terminal, install without questions with: install.sh -s -t ...")
         return 2
     from tpotctl.screens.install import run_install as assistant
-    return assistant()
+    from tpotctl.sudo_mode import SudoError
+    try:
+        return assistant(sudo_nopasswd=sudo_nopasswd, become_file=become_file,
+                         user_password_file=user_password_file)
+    except SudoError as err:
+        raise ops.OpsError(str(err)) from err
 
 
 def run_service(action: str) -> int:
@@ -1869,7 +1886,8 @@ def dispatch(argv: List[str]) -> int:
                 error(str(err))
                 return 1
         if args.command == "install":
-            return run_install(args.classic)
+            return run_install(args.classic, sudo_nopasswd=args.sudo_nopasswd,
+                               become_file=args.become_file, user_password_file=args.user_password_file)
         if args.command == "uninstall":
             ops.require_linux_host("uninstall")
             if not (sys.stdin.isatty() and sys.stdout.isatty()):

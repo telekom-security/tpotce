@@ -598,6 +598,17 @@ Validation status of the preview: in QEMU, the amd64 ISO boots under BIOS, UEFI 
 
 Without the assistant, i.e. when its Python packages cannot be downloaded, the installer asks the same questions in the terminal and goes on as before: `./install.sh -n` does that on purpose. The look of the installer and the other scripts comes from [gum](https://github.com/charmbracelet/gum), a pinned release the scripts download and check against its sha256; without it (or with `TPOT_GUM=off`) they print plain text.
 
+For both a HIVE and a SENSOR, choose **More secure** (sudo asks for your password) or
+**More convenient** (T-Pot grants passwordless sudo). Neither mode is preselected. An explicit
+`--sudo-nopasswd` answers that question in advance. More secure needs a usable account password:
+if yours is locked or absent, the installer offers to set one, asks twice and checks its strength.
+That password also works for SSH if SSH password login is enabled.
+
+The assistant accepts `tpot install [--classic] [--sudo-nopasswd] [--become-file FILE]
+[--user-password-file FILE]` too. A sudo password collected during package preparation is passed
+on privately, not asked again. Supplied password files remain yours; only the installer's temporary
+copies are removed. A failed cleanup is reported as a failure, with the files to remove manually.
+
 On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundation/sudo-rs), which formats its password prompt differently. Ansible does not recognise that prompt and privilege escalation times out, a fix exists upstream but is not released yet. The installer detects this and runs Ansible against the traditional sudo that Ubuntu still ships as `/usr/bin/sudo.ws` - nothing to do, it says so when it happens. If you would rather have it system wide, switch the alternative: `$ sudo update-alternatives --set sudo /usr/bin/sudo.ws`.
 <br><br>
 
