@@ -76,6 +76,20 @@ class SensorHome(base.Harness):
             self.git(path, "add", "restore.sh")
         self.git(path, "commit", "-qm", "fixture")
 
+    def seed_state(self, **changes):
+        state = dict(run_id=RUN_ID, name=SENSOR, repo=str(self.origin), branch="master",
+                     version=VERSION, previous_version="old-release", commit="a" * 40,
+                     phase="prepared", losses=[], warnings=[])
+        state.update(changes)
+        self.state.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        self.state.parent.chmod(0o700)
+        self.state.mkdir(mode=0o700, exist_ok=True)
+        self.state.chmod(0o700)
+        (self.state / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        (self.state / "state.json").chmod(0o600)
+        (self.state / "target").mkdir(mode=0o700, exist_ok=True)
+        return state
+
     def set_identity(self, kind="SENSOR", name=SENSOR):
         auth = base64.b64encode((name + ":ingest-secret").encode()).decode()
         (self.checkout / ".env").write_text(
@@ -287,7 +301,349 @@ class PrepareTest(SensorHome):
         self.assertEqual(list(outside.iterdir()), [])
 
 
+class StateReadTest(SensorHome):
+
+    def test_reads_only_private_valid_state_bound_to_this_run(self):
+        expected = self.seed_state()
+        actual = fleet_remote.read_state(self.home, RUN_ID)
+        self.assertEqual(actual, expected)
+
+    def test_rejects_malformed_or_wrong_run_state(self):
+        for data in ("{", "[]", "null", json.dumps(self.seed_state(run_id="f" * 32)),
+                     json.dumps(self.seed_state(phase="complete", unknown="field")),
+                     json.dumps(self.seed_state(losses="not a list")),
+                     json.dumps(self.seed_state(losses=["@@tpot loss old", "@@tpot loss old"])),
+                     json.dumps(self.seed_state(branch="../outside")),
+                     json.dumps(self.seed_state(repo="https://user:fixture@host/repo")),
+                     json.dumps(self.seed_state(warnings=[{"password": "do-not-read"}]))):
+            with self.subTest(data=data):
+                self.seed_state()
+                (self.state / "state.json").write_text(data, encoding="utf-8")
+                with self.assertRaises(fleet_remote.RemoteError):
+                    fleet_remote.read_state(self.home, RUN_ID)
+
+
+    def test_rejects_symlink_hardlink_and_non_private_state_file(self):
+        for kind in ("symlink", "hardlink", "mode"):
+            with self.subTest(kind=kind):
+                self.seed_state()
+                path = self.state / "state.json"
+                if kind == "symlink":
+                    path.unlink()
+                    path.symlink_to(self.home / "outside-state")
+                elif kind == "hardlink":
+                    os.link(path, self.home / "state-copy")
+                else:
+                    path.chmod(0o644)
+                with self.assertRaises(fleet_remote.RemoteError):
+                    fleet_remote.read_state(self.home, RUN_ID)
+
+    def test_rejects_linked_or_foreign_run_directory(self):
+        self.seed_state()
+        real = self.state
+        moved = self.home / "real-run"
+        real.rename(moved)
+        real.symlink_to(moved, target_is_directory=True)
+        with self.assertRaises(fleet_remote.RemoteError):
+            fleet_remote.read_state(self.home, RUN_ID)
+
+
+class StartTest(SensorHome):
+
+    def test_requires_exact_loss_approval_and_never_persists_credential(self):
+        losses = ["@@tpot loss images: old image (12 MB)"]
+        self.seed_state(losses=losses)
+        request = dict(action="start", run_id=RUN_ID, name=SENSOR, accepted_losses=[],
+                       password="fixture credential")
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(fleet_remote, "sudo"), \
+                mock.patch.object(fleet_remote, "command", return_value=SimpleNamespace(
+                    returncode=0, stdout="", stderr="")) as run:
+            with self.assertRaisesRegex(fleet_remote.RemoteError, "data-loss"):
+                fleet_remote.start(request, self.home)
+        self.assertFalse(any("systemd-run" in call.args[0] for call in run.call_args_list))
+        self.assertNotIn("password", (self.state / "state.json").read_text(encoding="utf-8"))
+        self.assertFalse((self.state / "become").exists())
+
+    def test_start_rechecks_sensor_identity_and_version_after_preparation(self):
+        self.seed_state()
+        self.set_identity(kind="HIVE")
+        request = dict(action="start", run_id=RUN_ID, name=SENSOR, accepted_losses=[])
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(fleet_remote, "sudo"), \
+                mock.patch.object(fleet_remote, "pin_source"), mock.patch.object(
+                    fleet_remote, "command", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run:
+            with self.assertRaisesRegex(fleet_remote.RemoteError, "identity"):
+                fleet_remote.start(request, self.home)
+        self.assertFalse(any("systemd-run" in call.args[0] for call in run.call_args_list))
+
+        self.set_identity()
+        (self.checkout / "version").write_text("new-local-version\n", encoding="utf-8")
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(fleet_remote, "sudo"), \
+                mock.patch.object(fleet_remote, "pin_source"), mock.patch.object(
+                    fleet_remote, "command", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run:
+            with self.assertRaisesRegex(fleet_remote.RemoteError, "changed"):
+                fleet_remote.start(request, self.home)
+        self.assertFalse(any("systemd-run" in call.args[0] for call in run.call_args_list))
+
+    def test_stages_worker_and_starts_transient_service_with_approved_losses(self):
+        losses = ["@@tpot loss images: old image (12 MB)"]
+        self.seed_state(losses=losses)
+        request = dict(action="start", run_id=RUN_ID, name=SENSOR, accepted_losses=losses,
+                       password="fixture credential")
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(fleet_remote, "sudo"), \
+                mock.patch.object(fleet_remote, "pin_source"), \
+                mock.patch.object(fleet_remote, "command", return_value=SimpleNamespace(
+                    returncode=0, stdout="Unit started.\n", stderr="")) as run:
+            result = fleet_remote.start(request, self.home)
+        self.assertEqual(result["phase"], "running")
+        self.assertEqual(result["unit"], "tpot-fleet-update.service")
+        self.assertEqual((self.state / "become").read_text(encoding="utf-8"), "fixture credential\n")
+        self.assertEqual((self.state / "accept-losses").read_text(encoding="utf-8"),
+                         losses[0] + "\n")
+        self.assertTrue((self.state / "fleet_remote.py").is_file())
+        self.assertTrue((self.state / "envfile.py").is_file())
+        args = run.call_args.args[0]
+        self.assertIn("systemd-run", args)
+        self.assertIn("--unit=tpot-fleet-update.service", args)
+        self.assertNotIn("fixture credential", json.dumps(result))
+
+    def test_failed_service_launch_removes_credential_and_marks_run_failed(self):
+        self.seed_state()
+        request = dict(action="start", run_id=RUN_ID, name=SENSOR, accepted_losses=[],
+                       password="fixture credential")
+        def fail_run(args, **kwargs):
+            return SimpleNamespace(returncode=0 if args[0:2] == ["git", "check-ref-format"]
+                                   or "reset-failed" in args else 1, stdout="", stderr="no service")
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(fleet_remote, "sudo"), \
+                mock.patch.object(fleet_remote, "pin_source"), \
+                mock.patch.object(fleet_remote, "command", side_effect=fail_run):
+            with self.assertRaisesRegex(fleet_remote.RemoteError, "systemd-run"):
+                fleet_remote.start(request, self.home)
+        state = fleet_remote.read_state(self.home, RUN_ID, name=SENSOR)
+        self.assertEqual(state["phase"], "failed")
+        self.assertFalse((self.state / "become").exists())
+
+    def test_loss_file_write_failure_does_not_leave_the_sudo_credential(self):
+        losses = ["@@tpot loss images: old image (12 MB)"]
+        self.seed_state(losses=losses)
+        request = dict(action="start", run_id=RUN_ID, name=SENSOR, accepted_losses=losses,
+                       password="fixture credential")
+        real_write = fleet_remote.write_private
+
+        def fail_loss_file(path, content):
+            if path.name == "accept-losses":
+                raise OSError("disk full")
+            return real_write(path, content)
+
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(fleet_remote, "sudo"), \
+                mock.patch.object(fleet_remote, "pin_source"), \
+                mock.patch.object(fleet_remote, "write_private", side_effect=fail_loss_file):
+            with self.assertRaisesRegex(fleet_remote.RemoteError, "stage"):
+                fleet_remote.start(request, self.home)
+        self.assertFalse((self.state / "become").exists())
+        self.assertEqual(fleet_remote.read_state(self.home, RUN_ID)["phase"], "prepared")
+
+    def test_pins_the_reviewed_git_commit_even_if_the_source_branch_moves(self):
+        code, reply = self.prepare()
+        self.assertEqual(code, 0, reply)
+        state = reply["result"]
+        reviewed = state["commit"]
+        (self.origin / "version").write_text("different-target\n", encoding="utf-8")
+        self.commit(self.origin)
+        source = fleet_remote.pin_source(self.home, state, self.state)
+        pinned = subprocess.run(
+            ["git", "--git-dir", str(source), "rev-parse", f'refs/heads/{state["branch"]}^{{commit}}'],
+            check=True, capture_output=True, text=True).stdout.strip()
+        self.assertEqual(pinned, reviewed)
+        clone = self.home / "pinned-clone"
+        subprocess.run(["git", "clone", "--branch", state["branch"], str(source), str(clone)],
+                       check=True, capture_output=True, text=True)
+        self.assertEqual((clone / "version").read_text(encoding="utf-8"), VERSION + "\n")
+
+    def test_worker_records_the_update_result_and_exact_private_backup(self):
+        archive_dir = self.home / "tpot_backups"
+        archive_dir.mkdir(mode=0o700)
+        archive = archive_dir / "20261010_tpot_backup.tar"
+        archive.write_text("synthetic archive", encoding="utf-8")
+        archive.chmod(0o600)
+        ref = "refs/tpot-fleet/" + RUN_ID
+        commit = self.git(self.checkout, "rev-parse", "HEAD")
+        self.git(self.checkout, "update-ref", ref, commit)
+        self.seed_state(phase="running", unit="tpot-fleet-update.service", started_at=1)
+        (self.state / "become").write_text("\n", encoding="utf-8")
+        (self.state / "become").chmod(0o600)
+        script = (
+            "#!/bin/bash\n"
+            "python3 - \"$TPOT_UPDATE_BACKUP_FD\" \"$HOME/tpot_backups/20261010_tpot_backup.tar\" <<'PY'\n"
+            "import json, os, sys\n"
+            "os.write(int(sys.argv[1]), (json.dumps({'archive': sys.argv[2]}) + '\\n').encode())\n"
+            "PY\n"
+            "exit 0\n"
+        )
+        (self.state / "target/update.sh").write_text(script, encoding="utf-8")
+        result = fleet_remote.worker(self.home, RUN_ID, "update")
+        self.assertEqual(result, 0)
+        state = fleet_remote.read_state(self.home, RUN_ID, name=SENSOR)
+        self.assertEqual(state["phase"], "completed")
+        self.assertEqual(state["archive"], str(archive))
+        self.assertEqual(state["exit_code"], 0)
+        self.assertFalse((self.state / "become").exists())
+        self.assertTrue((self.state / "worker.log").is_file())
+        remaining_ref = subprocess.run(
+            ["git", "-C", str(self.checkout), "show-ref", "--verify", "--quiet", ref],
+            check=False, capture_output=True)
+        self.assertEqual(remaining_ref.returncode, 1)
+
+    def test_status_preserves_live_credentials_and_marks_an_unrecorded_exit_failed(self):
+        self.seed_state(phase="running", unit="tpot-fleet-update.service", started_at=1)
+        for filename in ("become", "accept-losses"):
+            (self.state / filename).write_text("private\n", encoding="utf-8")
+            (self.state / filename).chmod(0o600)
+        (self.state / "worker.log").write_text("first line\nsecond line\nlast line\n", encoding="utf-8")
+        (self.state / "worker.log").chmod(0o600)
+        active = "LoadState=loaded\nActiveState=active\nSubState=running\nResult=success\nExecMainStatus=0"
+        with mock.patch.object(fleet_remote, "checked", return_value=active):
+            live = fleet_remote.status(self.home, RUN_ID, SENSOR)
+        self.assertEqual(live["phase"], "running")
+        self.assertEqual(live["log_tail"], "first line\nsecond line\nlast line\n")
+        self.assertTrue((self.state / "become").exists())
+        inactive = "LoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=exit-code\nExecMainStatus=1"
+        with mock.patch.object(fleet_remote, "checked", return_value=inactive):
+            stopped = fleet_remote.status(self.home, RUN_ID, SENSOR)
+        self.assertEqual(stopped["phase"], "failed")
+        self.assertEqual(stopped["exit_code"], 1)
+        self.assertFalse((self.state / "become").exists())
+        self.assertFalse((self.state / "accept-losses").exists())
+
+    def test_explicit_rollback_stages_only_the_recorded_archive(self):
+        archive_dir = self.home / "tpot_backups"
+        archive_dir.mkdir(mode=0o700)
+        archive = archive_dir / "20261010_tpot_backup.tar"
+        archive.write_text("synthetic archive", encoding="utf-8")
+        archive.chmod(0o600)
+        self.seed_state(phase="completed", unit="tpot-fleet-update.service", started_at=1,
+                        finished_at=2, exit_code=0, archive=str(archive))
+        request = dict(action="rollback", run_id=RUN_ID, name=SENSOR, password="fixture credential")
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(fleet_remote, "sudo"), \
+                mock.patch.object(fleet_remote, "command", return_value=SimpleNamespace(
+                    returncode=0, stdout="Unit started.\n", stderr="")) as run:
+            result = fleet_remote.rollback(request, self.home)
+        self.assertEqual(result["phase"], "rollback_running")
+        self.assertEqual((self.state / "rollback-archive").read_text(encoding="utf-8"), str(archive) + "\n")
+        self.assertIn("rollback", run.call_args.args[0])
+        self.assertNotIn("--accept-data-loss", run.call_args.args[0])
+
+    def test_explicit_rollback_can_be_retried_after_a_rollback_failure(self):
+        archive_dir = self.home / "tpot_backups"
+        archive_dir.mkdir(mode=0o700)
+        archive = archive_dir / "20261010_tpot_backup.tar"
+        archive.write_text("synthetic archive", encoding="utf-8")
+        archive.chmod(0o600)
+        self.seed_state(phase="rollback_failed", unit="tpot-fleet-update.service", started_at=1,
+                        finished_at=2, exit_code=1, archive=str(archive))
+        request = dict(action="rollback", run_id=RUN_ID, name=SENSOR, password="fixture-password")
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(fleet_remote, "sudo"), \
+                mock.patch.object(fleet_remote, "command", return_value=SimpleNamespace(
+                    returncode=0, stdout="Unit started.\n", stderr="")):
+            result = fleet_remote.rollback(request, self.home)
+        self.assertEqual(result["phase"], "rollback_running")
+
+    def test_rollback_worker_restores_checkout_and_restarts_tpot(self):
+        archive_dir = self.home / "tpot_backups"
+        archive_dir.mkdir(mode=0o700)
+        archive = archive_dir / "20261010_tpot_backup.tar"
+        archive.write_text("synthetic archive", encoding="utf-8")
+        archive.chmod(0o600)
+        self.seed_state(phase="rollback_running", unit="tpot-fleet-update.service", started_at=1,
+                        archive=str(archive))
+        (self.state / "become").write_text("fixture credential\n", encoding="utf-8")
+        (self.state / "become").chmod(0o600)
+        (self.state / "rollback-archive").write_text(str(archive) + "\n", encoding="utf-8")
+        (self.state / "rollback-archive").chmod(0o600)
+        marker = self.home / "restore-ran"
+        (self.state / "target/restore.sh").write_text(
+            f'printf "%s\\n" "$@" > {marker}\n', encoding="utf-8")
+        (self.state / "target/restore.sh").chmod(0o600)
+        with mock.patch.object(fleet_remote, "command", return_value=SimpleNamespace(
+                returncode=0, stdout="", stderr="")) as run:
+            result = fleet_remote.worker(self.home, RUN_ID, "rollback")
+        self.assertEqual(result, 0, fleet_remote.read_state(self.home, RUN_ID, name=SENSOR))
+        state = fleet_remote.read_state(self.home, RUN_ID, name=SENSOR)
+        self.assertEqual(state["phase"], "rolled_back")
+        self.assertIn("-c", marker.read_text(encoding="utf-8").splitlines())
+        self.assertIn(str(archive), marker.read_text(encoding="utf-8"))
+        self.assertTrue(any("systemctl" in call.args[0] and "start" in call.args[0]
+                            for call in run.call_args_list))
+        self.assertFalse((self.state / "become").exists())
+
+    def test_backup_report_rejects_a_linked_backup_directory(self):
+        actual_dir = self.home / "actual-backups"
+        actual_dir.mkdir(mode=0o700)
+        archive = actual_dir / "20261010_tpot_backup.tar"
+        archive.write_text("synthetic archive", encoding="utf-8")
+        archive.chmod(0o600)
+        (self.home / "tpot_backups").symlink_to(actual_dir, target_is_directory=True)
+        report = self.home / "backup-report.jsonl"
+        report.write_text(json.dumps({"archive": str(self.home / "tpot_backups" / archive.name)}) + "\n",
+                          encoding="utf-8")
+        report.chmod(0o600)
+        with self.assertRaises(fleet_remote.RemoteError):
+            fleet_remote.read_backup_report(report, self.home)
+
+    def test_discard_removes_only_a_stopped_run_and_its_private_target_ref(self):
+        self.seed_state()
+        request = dict(action="discard", run_id=RUN_ID, name=SENSOR)
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(
+                fleet_remote, "checked", return_value="") as checked:
+            result = fleet_remote.discard(request, self.home)
+            repeated = fleet_remote.discard(request, self.home)
+        self.assertEqual(result, {"run_id": RUN_ID, "discarded": True})
+        self.assertEqual(repeated, result)
+        self.assertFalse(self.state.exists())
+        checked.assert_called_once_with(["git", "-C", str(self.checkout), "update-ref", "-d",
+                                         "refs/tpot-fleet/" + RUN_ID])
+
+    def test_discard_is_idempotent_when_precheck_created_no_remote_state(self):
+        request = dict(action="discard", run_id=RUN_ID, name=SENSOR)
+        self.assertEqual(fleet_remote.discard(request, self.home),
+                         {"run_id": RUN_ID, "discarded": True})
+
+    def test_discard_preserves_unexpected_run_files(self):
+        self.seed_state()
+        unexpected = self.state / "preserve-me"
+        unexpected.write_text("unowned by fleet", encoding="utf-8")
+        request = dict(action="discard", run_id=RUN_ID, name=SENSOR)
+        with mock.patch.object(fleet_remote, "idle"), mock.patch.object(
+                fleet_remote, "checked", return_value=""):
+            with self.assertRaisesRegex(fleet_remote.RemoteError, "unexpected"):
+                fleet_remote.discard(request, self.home)
+        self.assertEqual(unexpected.read_text(encoding="utf-8"), "unowned by fleet")
+
+    def test_discard_refuses_a_running_worker_before_touching_state(self):
+        self.seed_state(phase="running", unit="tpot-fleet-update.service", started_at=1)
+        request = dict(action="discard", run_id=RUN_ID, name=SENSOR)
+        with mock.patch.object(fleet_remote, "idle", side_effect=fleet_remote.RemoteError("still active")):
+            with self.assertRaisesRegex(fleet_remote.RemoteError, "running"):
+                fleet_remote.discard(request, self.home)
+        self.assertTrue((self.state / "state.json").exists())
+
+
 class PrivateFilesTest(unittest.TestCase):
+
+    def test_external_commands_ignore_inherited_git_repository_and_config_overrides(self):
+        variables = {
+            "GIT_DIR": "/tmp/untrusted-git-dir",
+            "GIT_WORK_TREE": "/tmp/untrusted-work-tree",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.hooksPath",
+            "GIT_CONFIG_VALUE_0": "/tmp/untrusted-hooks",
+        }
+        code = ("import os; print('|'.join(os.environ.get(key, '') for key in "
+                "('GIT_DIR', 'GIT_WORK_TREE', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', "
+                "'GIT_CONFIG_VALUE_0')))")
+        with mock.patch.dict(os.environ, variables):
+            result = fleet_remote.command([sys.executable, "-c", code])
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "||||")
 
     def test_failed_secret_write_removes_the_partial_file(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -312,3 +668,76 @@ class PrivateFilesTest(unittest.TestCase):
                     mock.patch.object(fleet_remote.os, "statvfs",
                                       return_value=SimpleNamespace(f_bavail=available, f_frsize=1)):
                 self.assertEqual(bool(fleet_remote.storage_warnings()), warning)
+
+
+class RuntimeTest(SensorHome):
+
+    def setUp(self):
+        super().setUp()
+        self.set_identity()
+        (self.checkout / "version").write_text(VERSION + "\n", encoding="utf-8")
+        with (self.checkout / ".env").open("a", encoding="utf-8") as stream:
+            stream.write(f'TPOT_VERSION="{VERSION}"\n')
+        self.seed_state(phase="completed")
+        self.request = dict(action="runtime", run_id=RUN_ID, name=SENSOR)
+        self.services = {
+            "tpotinit": {"image": f"registry/tpotinit:{VERSION}"},
+            "cowrie": {"image": f"registry/cowrie:{VERSION}"},
+        }
+        self.containers = [
+            {"Name": "tpotinit", "Service": "tpotinit", "State": "running", "Health": "healthy"},
+            {"Name": "cowrie", "Service": "cowrie", "State": "running", "Health": ""},
+        ]
+        self.service_state = "active"
+        self.tpotinit_image = f"registry/tpotinit:{VERSION}"
+
+    def runtime(self):
+        def run(args, **kwargs):
+            if args[:2] == ["git", "check-ref-format"]:
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            if args[:2] == ["systemctl", "is-active"]:
+                return SimpleNamespace(returncode=0 if self.service_state == "active" else 3,
+                                       stdout=self.service_state + "\n", stderr="")
+            if args[:3] == ["docker", "compose", "--project-directory"]:
+                if args[-3:] == ["config", "--format", "json"]:
+                    return SimpleNamespace(returncode=0, stdout=json.dumps({"services": self.services}),
+                                           stderr="")
+                if args[-4:] == ["ps", "--all", "--format", "json"]:
+                    output = "\n".join(json.dumps(item) for item in self.containers) + "\n"
+                    return SimpleNamespace(returncode=0, stdout=output, stderr="")
+            if args[:2] == ["docker", "inspect"]:
+                return SimpleNamespace(returncode=0, stdout=self.tpotinit_image + "\n", stderr="")
+            self.fail(f"unexpected command: {args}")
+
+        with mock.patch.object(fleet_remote, "command", side_effect=run):
+            return fleet_remote.runtime_status(self.request, self.home)
+
+    def test_runtime_requires_target_version_service_and_every_container_ready(self):
+        result = self.runtime()
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["version"], VERSION)
+        self.assertEqual(result["service"], "active")
+        self.assertEqual(result["tpotinit_image"], f"registry/tpotinit:{VERSION}")
+
+        self.containers[1]["Health"] = "unhealthy"
+        result = self.runtime()
+        self.assertFalse(result["ready"])
+        self.assertTrue(any("cowrie" in item for item in result["problems"]))
+
+        self.containers[1]["Health"] = ""
+        self.containers[1]["State"] = "exited"
+        result = self.runtime()
+        self.assertFalse(result["ready"])
+        self.assertTrue(any("cowrie" in item for item in result["problems"]))
+
+        self.containers[1]["State"] = "running"
+        self.tpotinit_image = "registry/tpotinit:old-release"
+        result = self.runtime()
+        self.assertFalse(result["ready"])
+        self.assertTrue(any("tpotinit" in item for item in result["problems"]))
+
+        self.tpotinit_image = f"registry/tpotinit:{VERSION}"
+        self.service_state = "inactive"
+        result = self.runtime()
+        self.assertFalse(result["ready"])
+        self.assertTrue(any("tpot.service" in item for item in result["problems"]))

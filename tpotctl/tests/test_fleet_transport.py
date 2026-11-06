@@ -5,7 +5,7 @@ import os
 import shlex
 import subprocess
 
-from tpotctl import fleet_transport, sensors
+from tpotctl import fleet_remote, fleet_transport, sensors
 from tpotctl.tests.test_fleet_remote import SensorHome
 
 
@@ -25,6 +25,18 @@ class TransportTest(SensorHome):
         env = dict(os.environ, HOME=str(self.home), PATH=f"{self.bin}:{os.environ['PATH']}",
                    PYTHONDONTWRITEBYTECODE="1")
         return subprocess.run(shlex.split(args[-1]), env=env, cwd=self.home, **kwargs)
+
+    def enable_worker_stubs(self):
+        self.stub("sudo", '#!/bin/sh\n'
+                  'if [ "$1" = -S ]; then\n'
+                  ' shift\n [ "$1" = -p ] && shift 2\n'
+                  ' IFS= read -r password\n [ "$password" = fleet-test ] || exit 1\n'
+                  ' [ "$1" = -v ] && exit 0\n'
+                  'else\n [ "$1" = -n ] && shift\nfi\n'
+                  'exec "$@"\n')
+        self.stub("systemd-run", '#!/bin/sh\n'
+                  'touch "$HOME/active-unit"\n'
+                  'echo started > "$HOME/unit-started"\n')
 
     def test_real_bootstrap_delivers_prepare_and_removes_temporary_sources(self):
         result = fleet_transport.call(self.sensor, self.request, run=self.local_ssh)
@@ -48,6 +60,57 @@ class TransportTest(SensorHome):
         self.set_identity(kind="HIVE")
         with self.assertRaisesRegex(fleet_transport.RemoteError, "identity"):
             fleet_transport.call(self.sensor, self.request, run=self.local_ssh)
+        self.assertFalse(self.state.exists())
+
+    def test_start_status_and_discard_use_the_real_remote_bootstrap(self):
+        fleet_transport.call(self.sensor, self.request, run=self.local_ssh)
+        self.enable_worker_stubs()
+        start = dict(self.request, action="start", accepted_losses=[])
+        result = fleet_transport.call(self.sensor, start, password="fleet-test", run=self.local_ssh)
+        self.assertEqual(result["phase"], "running")
+
+        result = fleet_transport.call(
+            self.sensor, dict(self.request, action="status"), run=self.local_ssh)
+        self.assertEqual(result["unit_active_state"], "active")
+
+        (self.home / "active-unit").unlink()
+        result = fleet_transport.call(
+            self.sensor, dict(self.request, action="status"), run=self.local_ssh)
+        self.assertEqual(result["phase"], "failed")
+        self.assertFalse((self.state / "become").exists())
+
+        result = fleet_transport.call(
+            self.sensor, dict(self.request, action="discard"), run=self.local_ssh)
+        self.assertTrue(result["discarded"])
+        self.assertFalse(self.state.exists())
+
+    def test_rollback_status_and_discard_use_the_real_remote_bootstrap(self):
+        fleet_transport.call(self.sensor, self.request, run=self.local_ssh)
+        backup_dir = self.home / "tpot_backups"
+        backup_dir.mkdir(mode=0o700)
+        archive = backup_dir / "test_tpot_backup.tar"
+        archive.write_text("synthetic archive", encoding="utf-8")
+        archive.chmod(0o600)
+        state = fleet_remote.read_state(self.home, self.request["run_id"])
+        state.update(phase="completed", archive=str(archive))
+        fleet_remote.save(self.state / "state.json", state)
+        self.enable_worker_stubs()
+
+        rollback = dict(self.request, action="rollback")
+        result = fleet_transport.call(self.sensor, rollback, password="fleet-test", run=self.local_ssh)
+        self.assertEqual(result["phase"], "rollback_running")
+        result = fleet_transport.call(
+            self.sensor, dict(self.request, action="status"), run=self.local_ssh)
+        self.assertEqual(result["unit_active_state"], "active")
+
+        (self.home / "active-unit").unlink()
+        result = fleet_transport.call(
+            self.sensor, dict(self.request, action="status"), run=self.local_ssh)
+        self.assertEqual(result["phase"], "rollback_failed")
+
+        result = fleet_transport.call(
+            self.sensor, dict(self.request, action="discard"), run=self.local_ssh)
+        self.assertTrue(result["discarded"])
         self.assertFalse(self.state.exists())
 
     def test_broken_ssh_and_invalid_reply_never_look_like_success(self):
