@@ -26,8 +26,8 @@ REPO_DIR = os.path.dirname(COMPOSE_DIR)
 CATALOG_FILE = os.path.join(COMPOSE_DIR, "tpot_services.yml")
 HEADER_VERSION = "2"
 CUSTOM_EDITION = "CUSTOM"
-# Docker's default address pools hold 31 networks, docker0 takes one and Docker
-# Desktop reserves another one, so 29 are left for T-Pot (measured on Docker 29).
+# Docker's default address pools hold 31 networks, docker0 takes one and one more stays
+# free as a margin, so 29 are left for T-Pot (measured on Docker 29).
 DEFAULT_MAX_NETWORKS = 29
 GROUPS = [
     ("core", "T-Pot"),
@@ -39,7 +39,10 @@ GROUPS = [
     ("tools", "Tools"),
 ]
 GROUP_TITLES = dict(GROUPS)
-EDITION_ORDER = ["STANDARD", "SENSOR", "LLM", "MINI", "MOBILE", "TARPIT", "MAC_WIN"]
+EDITION_ORDER = ["STANDARD", "SENSOR", "LLM", "MINI", "MOBILE", "TARPIT"]
+# editions of earlier releases: a configuration built from one names why it cannot be rebuilt
+REMOVED_EDITIONS = {"MAC_WIN": "the MAC_WIN edition (Docker Desktop on macOS and Windows) is gone, T-Pot runs on "
+                                "Linux only: build the configuration again from another edition, e.g. STANDARD"}
 
 _ENTRY_RE = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*$")
 _TOPLEVEL_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):\s*$")
@@ -200,8 +203,6 @@ class Catalog:
         if name in self.editions[base].services:
             return True
         if base == "SENSOR" and self.flag(name, "hive_only"):
-            return False
-        if base == "MAC_WIN" and self.flag(name, "linux_only"):
             return False
         return True
 
@@ -424,6 +425,8 @@ def resolve(catalog: Catalog, selection: Selection, max_networks: int = DEFAULT_
     it they are dropped with a warning (rebuild after an update removed them).
     """
     findings: List[Finding] = []
+    if selection.base in REMOVED_EDITIONS and selection.base not in catalog.editions:
+        raise CustomizerError(REMOVED_EDITIONS[selection.base])
     if selection.base not in catalog.editions:
         raise CustomizerError(
             f"edition '{selection.base}' does not exist, choose one of {', '.join(catalog.edition_names())}")
@@ -435,8 +438,7 @@ def resolve(catalog: Catalog, selection: Selection, max_networks: int = DEFAULT_
         if name not in catalog.catalog.services:
             findings.append(Finding(unknown_level, "service", f"{name} is not a T-Pot service, left out", (name,)))
         elif not catalog.offered(base, name):
-            why = "a SENSOR has no " if base == "SENSOR" else "Docker Desktop cannot run "
-            findings.append(Finding("error", "service", f"{why}{name}", (name,)))
+            findings.append(Finding("error", "service", f"a {base} has no {name}", (name,)))
         else:
             add.append(name)
     for name in selection.remove:

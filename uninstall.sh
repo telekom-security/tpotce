@@ -143,7 +143,8 @@ while getopts ":ykB:h" opt; do
   esac
 done
 
-# A T-Pot host is Linux (WSL2 too): elsewhere it stops before any sudo or Ansible
+# A T-Pot host is Linux (an install of an earlier release on WSL2 can still be removed): elsewhere
+# it stops before any sudo or Ansible
 fuUI_LINUX_ONLY uninstall.sh
 
 trap fuCLEANUP EXIT
@@ -181,7 +182,7 @@ if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[*]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
     # the list in words: "a, b and c", from the array, so the message names every one of them
     myLIST=$(printf '%s, ' "${mySUPPORTED_DISTRIBUTIONS[@]:0:${#mySUPPORTED_DISTRIBUTIONS[@]}-1}")
     fuUI_ERROR "Only the following distributions are supported: ${myLIST%, } and ${mySUPPORTED_DISTRIBUTIONS[${#mySUPPORTED_DISTRIBUTIONS[@]}-1]}."
-    fuUI_INFO "Please follow the T-Pot documentation on how to run T-Pot on macOS, Windows and other currently unsupported platforms."
+    fuUI_INFO "T-Pot runs on Linux only (Debian recommended), see the T-Pot README for host requirements."
     echo
     exit 1
 fi

@@ -245,23 +245,23 @@ class SetVersionTest(unittest.TestCase):
     def test_a_target_it_cannot_open_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             paths = copy_of_the_places(tmp)
-            target = Path(tmp, "genuserwin.ps1")       # late in the order, the files before it would be written
+            target = Path(tmp, "docker/p0f/dist/run.sh")   # late in the order, the files before it would be written
             os.chmod(str(target), 0o444)
             before = contents(tmp, paths)
             with self.assertRaises(release.ReleaseError) as caught:
                 release.set_version(Path(tmp), NEW)
-            self.assertIn("genuserwin.ps1", str(caught.exception))
+            self.assertIn("run.sh", str(caught.exception))
             self.assertIn("nothing written", str(caught.exception))
             self.assertEqual(contents(tmp, paths), before)
             result = run("set-version", NEW, "--root", tmp)
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertIn("genuserwin.ps1", result.stderr)
+            self.assertIn("run.sh", result.stderr)
             self.assertEqual(contents(tmp, paths), before)
 
     def test_a_file_replaced_after_reading_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             paths = copy_of_the_places(tmp)
-            target = Path(tmp, "genuserwin.ps1")
+            target = Path(tmp, "docker/p0f/dist/run.sh")
             swapped = target.read_bytes().replace(b"\n", b"\r\n")
             real_open = open
 
@@ -276,9 +276,9 @@ class SetVersionTest(unittest.TestCase):
             with mock.patch("tpotctl.release.open", opener, create=True):
                 with self.assertRaises(release.ReleaseError) as caught:
                     release.set_version(Path(tmp), NEW)
-            self.assertIn("genuserwin.ps1", str(caught.exception))
+            self.assertIn("run.sh", str(caught.exception))
             self.assertIn("nothing written", str(caught.exception))
-            before["genuserwin.ps1"] = swapped
+            before["docker/p0f/dist/run.sh"] = swapped
             self.assertEqual(contents(tmp, paths), before)
 
     def test_a_failed_write_restores_what_was_written(self):

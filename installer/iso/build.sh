@@ -2,15 +2,19 @@
 # The T-Pot ISO (a preview): the Debian netinst T-Pot prefers as its host, with the T-Pot installer.
 # Its boot menus get "Install T-Pot" (the default) in front of Debian's own entries; the Debian
 # installer then asks for the disks, the user and its password as always (preseed.cfg answers only
-# what is safe on any machine, it erases no disk on its own), and at the first login of that user
-# the install.sh of the ISO installs T-Pot from the repository and the branch the ISO was built for
-# (late.sh, profile.sh, start.sh): the same installer as on a prepared Debian.
+# what is safe on any machine, it erases no disk on its own), and after the first boot the T-Pot
+# installer starts on the console as that user, without a login (late.sh, tpot-iso.service,
+# start.sh; a login starts it too, profile.sh): the same installer as on a prepared Debian. The ISO carries T-Pot of the repository and the branch it was built for (a git repository
+# of one commit, as git clone leaves it), the packages of the installer (preseed.cfg), gum and the
+# wheels of the T-Pot Manager (for the glibc of the netinst and the python3 Debian's archive names
+# for its release): prepare.sh puts them into the new system, the installer needs the
+# internet for the images of T-Pot only.
 #
 # The netinst is Debian's own, checked against its SHA512SUMS signed by the Debian CD signing key
 # (the fingerprint is pinned below). Its kernels, initrds and signed boot loaders (Secure Boot) stay
-# untouched, xorriso replays its boot records. Linux with xorriso, python3, gpg and curl, or Docker
-# (-D; on macOS and without those tools on its own). A tool for building the ISO, not part of the
-# T-Pot Manager.
+# untouched, xorriso replays its boot records. Linux with xorriso, python3 with pip, gpg, curl and
+# git, or Docker (-D; on macOS and without those tools on its own; git is needed here all the same).
+# A tool for building the ISO, not part of the T-Pot Manager.
 #
 # With no option at a terminal it asks (a menu): build an ISO, write one to a USB stick, build the
 # ISOs of a release with their checksums (SHA256SUMS, SHA512SUMS, signed with GPG if wanted, uploaded
@@ -56,7 +60,7 @@ myUPDATE_BACK="later on a branch again: ./update.sh -y -b master"
 # the Docker image of the build: Debian with the tools of the build, refreshed weekly
 myDOCKER_IMAGE="tpot-iso-build:${myDEBIAN_MAJOR}"
 # the files of the ISO in /tpot (late.sh puts them into the new system), iso.conf is made here
-myPAYLOAD="preseed.cfg early.sh late.sh profile.sh start.sh terminal.sh tpot.issue"
+myPAYLOAD="preseed.cfg early.sh late.sh prepare.sh profile.sh start.sh terminal.sh tpot.issue tpot-iso.service"
 # gum for macOS (ui.sh fetches the one of Linux only): the version of ui.sh (the test checks it),
 # the sha256 of the release archives of github.com/charmbracelet/gum
 myGUM_DARWIN_VERSION="2.0.2"
@@ -92,6 +96,8 @@ myGH_REPO=""
 myHOW=""
 myLOG=""
 myWORK=""
+# T-Pot for the ISOs of the run (fuSNAPSHOT): ${myOUT}/work-<pid>-src
+mySNAPSHOT=""
 myMENU=""
 myDOCKER_USED=""
 myWROTE_LOG=""
@@ -101,11 +107,11 @@ myBUILT=()
 
 fuHELP () {
   fuUI_HELP "ISO Builder (preview)" "installer/iso/build.sh [options]" \
-    --about "Builds the T-Pot ISO: the Debian ${myDEBIAN_MAJOR} netinst with \"Install T-Pot\" as the default of its boot menus. The Debian installer asks for the disks, the user and its password as always; at the first login of that user the T-Pot installer of the ISO starts. Debian's own entries stay and install a plain Debian." \
-    --about "With no option at a terminal it asks: build an ISO, write one to a USB stick, build the ISOs of a release. The netinst is checked against Debian's signed SHA512SUMS, its boot loaders stay untouched (Secure Boot). Linux with xorriso, python3, gpg and curl, or Docker (macOS)." \
+    --about "Builds the T-Pot ISO: the Debian ${myDEBIAN_MAJOR} netinst with \"Install T-Pot\" as the default of its boot menus. The Debian installer asks for the disks, the user and its password as always; after the first boot the T-Pot installer of the ISO starts on the console, without a login. Debian's own entries stay and install a plain Debian." \
+    --about "With no option at a terminal it asks: build an ISO, write one to a USB stick, build the ISOs of a release. The netinst is checked against Debian's signed SHA512SUMS, its boot loaders stay untouched (Secure Boot). Linux with xorriso, python3 with pip, gpg, curl and git, or Docker (macOS; git is needed there too)." \
     --opt "-a <arch>" "amd64, arm64 or both (default: the architecture of this machine, with -R both)" \
-    --opt "-b <branch>" "the branch the ISO installs T-Pot from (default: TPOT_BRANCH, the branch of this checkout, master); a tag or a commit works too, but update.sh cannot update such a T-Pot. At its first login the ISO offers another one as well" \
-    --opt "-r <repo-url>" "the repository the ISO installs T-Pot from (default: TPOT_REPO_URL, the origin of this checkout, ${myUPSTREAM})" \
+    --opt "-b <branch>" "the branch of T-Pot the ISO carries and installs (default: TPOT_BRANCH, the branch of this checkout, master); a tag or a commit works too, but update.sh cannot update such a T-Pot. When its installer starts the ISO offers another one as well" \
+    --opt "-r <repo-url>" "the repository of that T-Pot, the one update.sh follows (default: TPOT_REPO_URL, the origin of this checkout, ${myUPSTREAM})" \
     --opt "-i <netinst>" "a Debian netinst on disk instead of the download (one architecture), checked against Debian's signed SHA512SUMS all the same" \
     --opt "-o <folder>" "where the ISOs go (default: installer/iso/out, with -R installer/iso/out/release-<version>); the downloads stay in installer/iso/out/cache (TPOT_ISO_CACHE)" \
     --opt "-D" "build in Docker (default outside Linux and without the tools of the build)" \
@@ -124,6 +130,7 @@ fuHELP () {
     --example "installer/iso/build.sh -w installer/iso/out/tpot-master-debian-${myDEBIAN_MAJOR}.x.y-amd64.iso" "writes an ISO, the stick is picked from a list" \
     --example "installer/iso/build.sh -R -s <gpg-key> -U <tag>" "the ISOs of a release for both architectures, signed and uploaded" \
     --note "The ISO asks before it installs anything and never erases a disk on its own. It holds no password or key." \
+    --note "The ISO carries T-Pot (one commit as git clone leaves it: the last commit of this checkout when -b and -r are its branch and origin, uncommitted changes are not in it; else the one of the repository), gum and the wheels of the T-Pot Manager for the Python and the glibc of its Debian (the glibc from the netinst, the Python from Debian's archive, asked once per release and kept in the cache): the installer of the ISO needs the internet for the images of T-Pot only." \
     --note "USB sticks: only removable or USB drives are listed and written to, never the disk of the system, of the home folder or of the ISOs; the stick is read back and checked. Windows: Rufus (DD mode) or balenaEtcher." \
     --note "Each run asks Debian for its signed SHA512SUMS: a new point release replaces the netinst in the cache, a broken download is fetched again. The Docker image is refreshed weekly." \
     --note "Exit codes: 0 done, 1 failed, 2 wrong options, 130 cancelled."
@@ -192,22 +199,22 @@ fuTIMEOUT () {
 
 fuREMOTE () {
   # what the repository has of the branch, into myREMOTE (ok, tag, commit, missing, unreachable,
-  # differs, nogit) and myREMOTE_TEXT; the installer of the ISO clones it at the first login. tag and
-  # commit: the installer checks it out, update.sh of that T-Pot refuses the detached HEAD. differs:
-  # the branch of this checkout, the repository has another commit (the ISO carries install.sh of
-  # this checkout). myREMOTE_COMMIT: the commit of the branch or tag there
+  # differs, nogit) and myREMOTE_TEXT; update.sh of the T-Pot of the ISO follows it. tag and commit:
+  # the ISO installs it, update.sh of that T-Pot refuses the detached HEAD. differs: the branch of
+  # this checkout, the repository has another commit (the ISO carries this checkout, fuSNAPSHOT).
+  # myREMOTE_COMMIT: the commit of the branch or tag there
   local myLS myRC=0 myHEAD myREF
   myREMOTE="" myREMOTE_TEXT="" myREMOTE_COMMIT=""
   if ! command -v git >/dev/null;
     then myREMOTE="nogit" myREMOTE_TEXT="git is missing here: whether ${myREPO_URL} has ${myBRANCH} is not checked"; return 0
   fi
   if [[ "${myBRANCH}" =~ ^[0-9a-f]{40}$ ]];
-    then myREMOTE="commit" myREMOTE_TEXT="${myBRANCH:0:7} is a commit: the installer checks it out, update.sh cannot update it (${myUPDATE_BACK})"; return 0
+    then myREMOTE="commit" myREMOTE_TEXT="${myBRANCH:0:7} is a commit: the ISO installs it, update.sh cannot update it (${myUPDATE_BACK})"; return 0
   fi
   myLS=$(GIT_TERMINAL_PROMPT=0 fuTIMEOUT 30 git ls-remote --exit-code "${myREPO_URL}" "refs/heads/${myBRANCH}" \
          "refs/tags/${myBRANCH}" "refs/tags/${myBRANCH}^{}" 2>/dev/null) || myRC=$?
   if [ "${myRC}" -eq 2 ];
-    then myREMOTE="missing" myREMOTE_TEXT="${myREPO_URL} has no branch or tag ${myBRANCH}: the installer of the ISO could not get T-Pot"; return 0
+    then myREMOTE="missing" myREMOTE_TEXT="${myREPO_URL} has no branch or tag ${myBRANCH}: update.sh of an installed T-Pot could not follow it"; return 0
   elif [ "${myRC}" -ne 0 ];
     then myREMOTE="unreachable" myREMOTE_TEXT="${myREPO_URL} cannot be reached now: whether it has ${myBRANCH} is not checked"; return 0
   fi
@@ -219,7 +226,7 @@ fuREMOTE () {
   if [ "${myREF%% *}" = "tag" ];
     then
       myREMOTE="tag"
-      myREMOTE_TEXT="${myBRANCH} is a tag of ${myREPO_URL} (${myREMOTE_COMMIT:0:7}): the installer checks it out, update.sh cannot update it (${myUPDATE_BACK})"
+      myREMOTE_TEXT="${myBRANCH} is a tag of ${myREPO_URL} (${myREMOTE_COMMIT:0:7}): the ISO installs it, update.sh cannot update it (${myUPDATE_BACK})"
       return 0
   fi
   myREMOTE="ok" myREMOTE_TEXT="${myREPO_URL} has ${myBRANCH} (${myREMOTE_COMMIT:0:7})"
@@ -228,16 +235,103 @@ fuREMOTE () {
      && [ "${myREMOTE_COMMIT}" != "${myHEAD}" ];
     then
       myREMOTE="differs"
-      myREMOTE_TEXT="${myREPO_URL} has ${myBRANCH} at ${myREMOTE_COMMIT:0:7}, this checkout is at ${myHEAD:0:7}: the ISO carries install.sh of this checkout, its installer clones the one of the repository (git push or git pull)"
+      myREMOTE_TEXT="${myREPO_URL} has ${myBRANCH} at ${myREMOTE_COMMIT:0:7}, this checkout is at ${myHEAD:0:7}: the ISO carries this checkout, update.sh of that T-Pot follows the repository (git push or git pull)"
   fi
   return 0
 }
 
 fuCHECK_REMOTE () {
-  # the warning of fuREMOTE when the repository may not give the installer of the ISO what it needs,
-  # or what it gives cannot be updated (a tag or a commit)
+  # the warning of fuREMOTE when update.sh of the T-Pot of the ISO could not follow the repository,
+  # or what it installs cannot be updated (a tag or a commit)
   fuREMOTE
   [ "${myREMOTE}" = "ok" ] || fuUI_WARN "${myREMOTE_TEXT}."
+}
+
+fuSNAPSHOT_FROM () {
+  # where the ISO gets T-Pot from: checkout when this checkout has the commit of -b, or -b and -r are
+  # the branch and the origin of this checkout (its last commit, no git push needed), else repository
+  if [[ "${myBRANCH}" =~ ^[0-9a-f]{40}$ ]];
+    then
+      if fuGIT cat-file -e "${myBRANCH}^{commit}"; then echo "checkout"; return 0; fi
+  elif [ "${myBRANCH}" = "${myDEF_BRANCH}" ] && [ "${myREPO_URL}" = "${myDEF_REPO_URL}" ] \
+       && fuGIT rev-parse -q --verify "HEAD^{commit}" >/dev/null;
+    then echo "checkout"; return 0
+  fi
+  echo "repository"
+}
+
+fuSNAPSHOT_GIT () {
+  # fuSNAPSHOT_GIT <folder> <checkout|repository>: T-Pot of -b and -r as git clone leaves it, of one
+  # commit (shallow): origin -r, a branch with its upstream (a tag or a commit a detached HEAD), no
+  # reflogs, no settings of this file system (core.ignorecase of macOS); next to its .git the
+  # install.sh, version, requirements.txt and ui.sh of that commit and the commit (commit)
+  local myD="$1" myC="" myKIND="branch" myF
+  local -a myG=(git -C "$1" -c core.logAllRefUpdates=false)
+  rm -rf "${myD}" && mkdir -p "${myD}" || return 1
+  git -c init.defaultBranch=master init -q --template= "${myD}" || return 1
+  "${myG[@]}" config --unset core.ignorecase
+  "${myG[@]}" config --unset core.precomposeunicode
+  "${myG[@]}" remote add origin "${myREPO_URL}" || return 1
+  [[ ! "${myBRANCH}" =~ ^[0-9a-f]{40}$ ]] || myKIND="commit"
+  if [ "$2" = "checkout" ];
+    then
+      if [ "${myKIND}" = "commit" ]; then myC="${myBRANCH}"; else myC=$(fuGIT rev-parse -q --verify "HEAD^{commit}"); fi
+      [ -n "${myC}" ] && "${myG[@]}" fetch -q --depth 1 --no-tags "file://${myREPO}" "${myC}" || return 1
+  elif [ "${myKIND}" = "commit" ];
+    then
+      GIT_TERMINAL_PROMPT=0 fuTIMEOUT 600 "${myG[@]}" fetch -q --depth 1 --no-tags origin "${myBRANCH}" || return 1
+      myC="${myBRANCH}"
+  elif GIT_TERMINAL_PROMPT=0 fuTIMEOUT 600 "${myG[@]}" fetch -q --depth 1 --no-tags origin \
+         "+refs/heads/${myBRANCH}:refs/remotes/origin/${myBRANCH}";
+    then myC=$("${myG[@]}" rev-parse -q --verify "refs/remotes/origin/${myBRANCH}^{commit}")
+  elif GIT_TERMINAL_PROMPT=0 fuTIMEOUT 600 "${myG[@]}" fetch -q --depth 1 --no-tags origin \
+         "+refs/tags/${myBRANCH}:refs/tags/${myBRANCH}";
+    then myKIND="tag" myC=$("${myG[@]}" rev-parse -q --verify "refs/tags/${myBRANCH}^{commit}")
+    else echo "${myREPO_URL} has no branch or tag ${myBRANCH}, or cannot be reached" >&2; return 1
+  fi
+  "${myG[@]}" cat-file -e "${myC}^{commit}" || return 1
+  if [ "${myKIND}" = "branch" ];
+    then
+      "${myG[@]}" update-ref "refs/heads/${myBRANCH}" "${myC}" \
+        && "${myG[@]}" update-ref "refs/remotes/origin/${myBRANCH}" "${myC}" \
+        && "${myG[@]}" symbolic-ref HEAD "refs/heads/${myBRANCH}" \
+        && "${myG[@]}" config "branch.${myBRANCH}.remote" origin \
+        && "${myG[@]}" config "branch.${myBRANCH}.merge" "refs/heads/${myBRANCH}" || return 1
+    else "${myG[@]}" update-ref --no-deref HEAD "${myC}" || return 1
+  fi
+  rm -rf "${myD}/.git/FETCH_HEAD" "${myD}/.git/logs"
+  for myF in install.sh version tpotctl/requirements.txt installer/lib/ui.sh; do
+    if ! "${myG[@]}" show "${myC}:${myF}" > "${myD}/${myF##*/}" 2>/dev/null; then
+      echo "${myBRANCH} (${myC:0:7}) has no ${myF}: the ISO needs a T-Pot with the T-Pot Manager" >&2
+      return 1
+    fi
+  done
+  echo "${myC}" > "${myD}/commit"
+  echo "T-Pot for the ISO: ${myREPO_URL} at ${myBRANCH} (${myKIND} ${myC}, from the $2)"
+}
+
+fuSNAPSHOT () {
+  # T-Pot for the ISOs of the run (fuSNAPSHOT_GIT) into ${myOUT}/work-<pid>-src, fuEXIT removes it;
+  # rc 1 with the error
+  local myFROM myWHERE="${myREPO_URL}" myHEAD
+  if ! command -v git >/dev/null;
+    then
+      fuUI_ERROR "The ISO carries T-Pot as a git repository: git is missing here."
+      fuUI_HINT "Debian: sudo apt-get install git; macOS: xcode-select --install" >&2
+      return 1
+  fi
+  myFROM=$(fuSNAPSHOT_FROM)
+  mySNAPSHOT="${myOUT}/work-$$-src"
+  if [ "${myFROM}" = "checkout" ]; then
+    myWHERE="this checkout"
+    myHEAD=$(fuGIT rev-parse -q --verify HEAD)
+    if { [[ ! "${myBRANCH}" =~ ^[0-9a-f]{40}$ ]] || [ "${myBRANCH}" = "${myHEAD}" ]; } \
+       && [ -n "$(fuGIT status --porcelain --untracked-files=no)" ]; then
+      fuUI_WARN "The ISO carries the last commit of this checkout, its uncommitted changes are not in it."
+    fi
+  fi
+  fuUI_SPIN "Getting T-Pot (${myBRANCH}) from ${myWHERE} for the ISO ..." "${myLOG}" \
+    fuSNAPSHOT_GIT "${mySNAPSHOT}" "${myFROM}"
 }
 
 fuHASH () {
@@ -424,6 +518,151 @@ fuNETINST () {
   printf '%s\n%s\n%s\n%s\n%s\n' "${myFILE}" "${myNAME}" "${mySUM}" "${myURL}/SHA512SUMS" "${myNOTE}" > "${myWORK}/netinst"
 }
 
+fuDEBIAN_GLIBC () {
+  # fuDEBIAN_GLIBC <netinst> <arch>: X.Y of the glibc of its Debian, from the one libc6 of that
+  # architecture in its pool (libc6_2.41-12+deb13u4_arm64.deb: 2.41); the wheels of the ISO are for it
+  local myDEBS myN myV
+  myDEBS=$(xorriso -indev "$1" -find /pool/main/g/glibc -name "libc6_*_$2.deb" 2>/dev/null \
+    | sed -n "s|^'/pool/main/g/glibc/libc6_\\([^_/']*\\)_$2\\.deb'\$|\\1|p")
+  myN=$(printf '%s' "${myDEBS}" | grep -c .)
+  if [ "${myN}" != "1" ];
+    then
+      [ "${myN}" = "0" ] && echo "$1 carries no libc6 for $2 (/pool/main/g/glibc)" >&2 \
+        || echo "$1 carries ${myN} libc6 for $2 (/pool/main/g/glibc), one is expected" >&2
+      return 1
+  fi
+  myV="${myDEBS%%-*}"
+  [[ "${myV}" =~ ^2\.[0-9]+ ]] && myV="${BASH_REMATCH[0]}"
+  if [[ ! "${myV}" =~ ^2\.[0-9]+$ ]] || [ "${myV#2.}" -lt 17 ];
+    then
+      echo "glibc ${myV} of the netinst: older than 2.17 or no version, no wheels for it" >&2
+      return 1
+  fi
+  echo "${myV}"
+}
+
+fuDEBIAN_CODENAME () {
+  # fuDEBIAN_CODENAME <netinst>: the codename of its Debian (trixie), from its .disk/info
+  # (Debian GNU/Linux 13.7.0 "Trixie" - Official ...)
+  local myINFO="${myWORK}/disk-info" myNAME
+  rm -f "${myINFO}"
+  if ! xorriso -osirrox on -indev "$1" -extract /.disk/info "${myINFO}" >/dev/null 2>&1 || [ ! -f "${myINFO}" ];
+    then
+      echo "$1 has no .disk/info" >&2
+      return 1
+  fi
+  myNAME=$(sed -n 's/^Debian GNU\/Linux [0-9.]* "\([A-Za-z]*\)" .*/\1/p' "${myINFO}" | head -n 1 | tr 'A-Z' 'a-z')
+  rm -f "${myINFO}"
+  if [[ ! "${myNAME}" =~ ^[a-z]+$ ]];
+    then
+      echo "$1 names no Debian release in its .disk/info" >&2
+      return 1
+  fi
+  echo "${myNAME}"
+}
+
+fuDEBIAN_PYTHON () {
+  # fuDEBIAN_PYTHON <codename>: X.Y of the python3 of that Debian, from the cache (a release of
+  # Debian keeps its python3), else from madison of Debian's archive, then kept in the cache
+  local myFILE="${myCACHE}/debian-$1.python" myPY=""
+  [ ! -f "${myFILE}" ] || myPY=$(head -n 1 "${myFILE}")
+  if [[ "${myPY}" =~ ^3\.[0-9]+$ ]]; then echo "${myPY}"; return 0; fi
+  if ! fuFETCH "https://api.ftp-master.debian.org/madison?package=python3&f=json&s=$1" "${myWORK}/madison.json";
+    then
+      echo "Debian's archive does not answer (api.ftp-master.debian.org, the python3 of $1): the network, a proxy (https_proxy)?" >&2
+      return 1
+  fi
+  myPY=$(PYTHONDONTWRITEBYTECODE=1 python3 "${myDIR}/isotree.py" debian-python "${myWORK}/madison.json") || return 1
+  mkdir -p "${myCACHE}" && printf '%s\n' "${myPY}" > "${myFILE}.part" && mv -f "${myFILE}.part" "${myFILE}" \
+    || echo "cannot keep the python3 of $1 in ${myCACHE}" >&2
+  echo "${myPY}"
+}
+
+fuPIN () {
+  # fuPIN <file> <name>: the value of name="value" in a script (read, never sourced; prepare.sh the same)
+  sed -n "s/^$2=\"\\([^\"]*\\)\"\$/\\1/p" "$1" 2>/dev/null | head -n 1
+}
+
+fuGUM_LINUX () {
+  # fuGUM_LINUX <arch> <folder>: the gum release archive the ui.sh of the T-Pot of the ISO would fetch
+  # on that architecture (its version and sha256), from the cache or downloaded, checked, into the
+  # folder: prepare.sh checks it against the same ui.sh and puts it where ui.sh looks for it
+  local myM myVER mySHA myNAME myFILE
+  case "$1" in
+    amd64) myM="x86_64" ;;
+    arm64) myM="arm64" ;;
+    *) return 1 ;;
+  esac
+  myVER=$(fuPIN "${mySNAPSHOT}/ui.sh" myUI_GUM_VERSION)
+  case "${myM}" in
+    x86_64) mySHA=$(fuPIN "${mySNAPSHOT}/ui.sh" myUI_GUM_SHA256_x86_64) ;;
+    arm64) mySHA=$(fuPIN "${mySNAPSHOT}/ui.sh" myUI_GUM_SHA256_arm64) ;;
+  esac
+  if [[ ! "${myVER}" =~ ^[0-9]+(\.[0-9]+)*$ ]] || [[ ! "${mySHA}" =~ ^[0-9a-f]{64}$ ]];
+    then
+      echo "the ui.sh of the T-Pot of the ISO pins no gum for ${myM}" >&2
+      return 1
+  fi
+  myNAME="gum_${myVER}_Linux_${myM}.tar.gz"
+  myFILE="${myCACHE}/${myNAME}"
+  if [ "$(fuHASH 256 "${myFILE}")" != "${mySHA}" ]; then
+    rm -f "${myFILE}" "${myFILE}.part"
+    fuFETCH "https://github.com/charmbracelet/gum/releases/download/v${myVER}/${myNAME}" "${myFILE}.part" \
+      || return 1
+    if [ "$(fuHASH 256 "${myFILE}.part")" != "${mySHA}" ];
+      then
+        echo "${myNAME}: its sha256 is not the one of ui.sh (${mySHA})" >&2
+        rm -f "${myFILE}.part"
+        return 1
+    fi
+    mv -f "${myFILE}.part" "${myFILE}" || return 1
+  fi
+  echo "${myNAME}: sha256 matches ui.sh"
+  cp "${myFILE}" "$2/${myNAME}"
+}
+
+fuWHEELS () {
+  # fuWHEELS <arch> <folder> <netinst>: the wheels of the T-Pot Manager (requirements.txt of the T-Pot
+  # of the ISO, with its hashes) for the python3 and the glibc of the Debian of the netinst on that
+  # architecture, into the folder: tpot setup of the new system takes them from there (prepare.sh);
+  # the python3 and the glibc into ${myWORK}/wheels.debian for the .buildinfo
+  local myM myPY myGLIBC myNAME myN myWANT myGOT
+  local myHINT="a requirement without a wheel for them: raise it in tpotctl/requirements.in and compile tpotctl/requirements.txt again"
+  local -a myPLATFORMS=()
+  case "$1" in
+    amd64) myM="x86_64" ;;
+    arm64) myM="aarch64" ;;
+    *) return 1 ;;
+  esac
+  myGLIBC=$(fuDEBIAN_GLIBC "$3" "$1") || return 1
+  myNAME=$(fuDEBIAN_CODENAME "$3") || return 1
+  myPY=$(fuDEBIAN_PYTHON "${myNAME}") || return 1
+  echo "Debian ${myNAME}: python ${myPY}, glibc ${myGLIBC}"
+  printf '%s %s\n' "${myPY}" "${myGLIBC}" > "${myWORK}/wheels.debian" || return 1
+  # every manylinux tag that glibc runs, the newest first
+  for (( myN = ${myGLIBC#*.}; myN >= 17; myN-- )); do myPLATFORMS+=(--platform "manylinux_2_${myN}_${myM}"); done
+  myPLATFORMS+=(--platform "manylinux2014_${myM}")
+  PYTHONDONTWRITEBYTECODE=1 python3 "${myDIR}/isotree.py" requirements --python "${myPY}" --machine "${myM}" \
+    "${mySNAPSHOT}/requirements.txt" > "${myWORK}/requirements.txt" || return 1
+  # an empty folder: every wheel in it is one of these requirements
+  rm -rf "$2" && mkdir -p "$2" || return 1
+  if ! python3 -m pip download --quiet --disable-pip-version-check --no-input --cache-dir "${myCACHE}/pip" \
+    --dest "$2" --only-binary :all: --no-deps --require-hashes --implementation cp --python-version "${myPY}" \
+    --abi "cp${myPY/./}" "${myPLATFORMS[@]}" -r "${myWORK}/requirements.txt";
+    then
+      echo "pip download failed for python ${myPY} on ${myM} (glibc ${myGLIBC}): the network, or ${myHINT}" >&2
+      return 1
+  fi
+  myWANT=$(grep -c '==' "${myWORK}/requirements.txt")
+  myGOT=$(find "$2" -maxdepth 1 -name '*.whl' | wc -l)
+  if [ "${myGOT// /}" != "${myWANT}" ];
+    then
+      echo "${myGOT// /} wheels for ${myWANT} requirements of python ${myPY} on ${myM} (glibc ${myGLIBC}): ${myHINT}" >&2
+      return 1
+  fi
+  echo "${myWANT} wheels for python ${myPY} on ${myM}"
+}
+
 fuBUILD () {
   # fuBUILD <arch> <netinst>: extract the boot files, patch them, add /tpot and write the ISO
   # (${myWORK}/new.iso)
@@ -447,12 +686,23 @@ fuBUILD () {
   for myFILE in ${myPAYLOAD}; do
     cp "${myDIR}/${myFILE}" "${myWORK}/overlay/tpot/${myFILE}" || return 1
   done
-  cp "${myREPO}/install.sh" "${myREPO}/version" "${myWORK}/overlay/tpot/" || return 1
-  printf '%s\n' "# The T-Pot ISO: where its T-Pot installer gets T-Pot from (start.sh reads it, never sources it)" \
-    "TPOT_REPO_URL=${myREPO_URL}" "TPOT_BRANCH=${myBRANCH}" > "${myWORK}/overlay/tpot/iso.conf"
+  # the look of start.sh: ui.sh of this checkout, as start.sh itself
+  cp "${myREPO}/installer/lib/ui.sh" "${myWORK}/overlay/tpot/ui.sh" || return 1
+  # T-Pot of the run (fuSNAPSHOT): its .git, install.sh and version; gum and the wheels for it
+  [ -n "${mySNAPSHOT}" ] && [ -d "${mySNAPSHOT}/.git" ] || { echo "T-Pot for the ISO is missing (${mySNAPSHOT})" >&2; return 1; }
+  cp "${mySNAPSHOT}/install.sh" "${mySNAPSHOT}/version" "${myWORK}/overlay/tpot/" || return 1
+  PYTHONDONTWRITEBYTECODE=1 python3 "${myDIR}/isotree.py" gittar --dir "${mySNAPSHOT}" \
+    "${myWORK}/overlay/tpot/tpotce.tar" || return 1
+  fuGUM_LINUX "${myA}" "${myWORK}/overlay/tpot" || return 1
+  fuWHEELS "${myA}" "${myWORK}/overlay/tpot/wheels" "${mySRC}" || return 1
+  printf '%s\n' "# The T-Pot ISO: the T-Pot it carries (start.sh reads it, never sources it)" \
+    "TPOT_REPO_URL=${myREPO_URL}" "TPOT_BRANCH=${myBRANCH}" "TPOT_COMMIT=$(cat "${mySNAPSHOT}/commit")" \
+    > "${myWORK}/overlay/tpot/iso.conf"
   chmod 0755 "${myWORK}/overlay/tpot/"*.sh
   chmod 0644 "${myWORK}/overlay/tpot/preseed.cfg" "${myWORK}/overlay/tpot/tpot.issue" \
-    "${myWORK}/overlay/tpot/iso.conf" "${myWORK}/overlay/tpot/version"
+    "${myWORK}/overlay/tpot/tpot-iso.service" "${myWORK}/overlay/tpot/ui.sh" "${myWORK}/overlay/tpot/iso.conf" \
+    "${myWORK}/overlay/tpot/version" "${myWORK}/overlay/tpot/tpotce.tar" \
+    "${myWORK}/overlay/tpot/"gum_*.tar.gz "${myWORK}/overlay/tpot/wheels/"*
   PYTHONDONTWRITEBYTECODE=1 python3 "${myDIR}/isotree.py" md5sum --orig "${myWORK}/orig/md5sum.txt" \
     --out "${myWORK}/overlay" || return 1
   while IFS= read -r myFILE; do
@@ -460,6 +710,10 @@ fuBUILD () {
     myMAP+=(-map "${myFILE}" "${myREL}")
     myPATHS+=("${myREL}")
   done < <(find "${myWORK}/overlay" -type f | sort)
+  # the folders under /tpot (wheels) owned by root too
+  while IFS= read -r myFILE; do
+    myPATHS+=("${myFILE#"${myWORK}/overlay"}")
+  done < <(find "${myWORK}/overlay/tpot" -mindepth 1 -type d | sort)
   # the volume ID, the El Torito boot images and the system area (MBR, GPT, the EFI partition) of
   # Debian's netinst, replayed; the new files owned by root and read-only like Debian's
   xorriso -indev "${mySRC}" -outdev "${myWORK}/new.iso" -boot_image any replay "${myMAP[@]}" \
@@ -515,7 +769,7 @@ fuBUILD_ONE () {
   # fuBUILD_ONE <arch>: the ISO of one architecture here (Linux with the tools, the container of
   # fuDOCKER_ONE): checked netinst, ISO, its boot records, .sha256, .sha512, .buildinfo; its name
   # and the note of the cache into ${myOUT}/.last-<arch> for the run
-  local myA="$1" mySRC_ISO myNAME mySRC_SUM mySUMS_URL myNOTE myVER myISO my256 my512
+  local myA="$1" mySRC_ISO myNAME mySRC_SUM mySUMS_URL myNOTE myVER myISO my256 my512 myPY="" myGLIBC=""
   # work-<pid of the run>-<arch>: fuEXIT of the run finds the one of a container it stopped
   myWORK=$(mktemp -d "${myOUT}/work-${TPOT_ISO_RUN:-$$}-${myA}.XXXXXX") \
     || { fuUI_ERROR "Cannot create a work folder in ${myOUT}."; return 1; }
@@ -537,14 +791,19 @@ fuBUILD_ONE () {
   fuUI_SPIN "Writing its checksums ..." "${myLOG}" fuCHECKSUMS "${myOUT}/${myISO}" || return $?
   my256=$(fuSUM_FILE "${myOUT}/${myISO}" 256)
   my512=$(fuSUM_FILE "${myOUT}/${myISO}" 512)
+  [ ! -f "${myWORK}/wheels.debian" ] || read -r myPY myGLIBC < "${myWORK}/wheels.debian"
   {
     echo "iso: ${myISO}"
     echo "sha256: ${my256}"
     echo "sha512: ${my512}"
     echo "tpot_repository: ${myREPO_URL}"
     echo "tpot_branch: ${myBRANCH}"
+    echo "tpot_commit: $(cat "${mySNAPSHOT}/commit" 2>/dev/null)"
+    echo "tpot_version: $(cat "${mySNAPSHOT}/version" 2>/dev/null)"
     echo "tpot_source_commit: $(fuCOMMIT)"
-    echo "tpot_version: $(cat "${myREPO}/version" 2>/dev/null)"
+    echo "gum: $(fuPIN "${mySNAPSHOT}/ui.sh" myUI_GUM_VERSION)"
+    echo "wheels_python: ${myPY}"
+    echo "wheels_glibc: ${myGLIBC}"
     echo "debian_netinst: ${myNAME}"
     echo "debian_netinst_sha512: ${mySRC_SUM}"
     echo "debian_sha512sums: ${mySUMS_URL}"
@@ -562,6 +821,7 @@ fuTOOLS_MISSING () {
   for myTOOL in xorriso python3 gpg curl; do
     command -v "${myTOOL}" >/dev/null || myMISSING="${myMISSING} ${myTOOL}"
   done
+  ! command -v python3 >/dev/null || python3 -m pip --version >/dev/null 2>&1 || myMISSING="${myMISSING} python3-pip"
   command -v sha512sum >/dev/null || command -v shasum >/dev/null || myMISSING="${myMISSING} sha512sum"
   echo "${myMISSING# }"
 }
@@ -570,7 +830,7 @@ fuHOW () {
   # where the build runs into myHOW (here or docker) and myHOW_TEXT; rc 1 with an error when
   # neither works: -D and outside Linux Docker, on Linux Docker only without the tools
   local myMISSING=""
-  myHOW="here" myHOW_TEXT="Build here (Linux with xorriso, python3, gpg and curl)"
+  myHOW="here" myHOW_TEXT="Build here (Linux with xorriso, python3 with pip, gpg and curl)"
   if [ -z "${myDOCKER}" ] && [ "$(uname -s 2>/dev/null)" = "Linux" ];
     then
       myMISSING=$(fuTOOLS_MISSING)
@@ -583,9 +843,9 @@ fuHOW () {
       if [ -n "${myMISSING}" ];
         then
           fuUI_ERROR "Missing: ${myMISSING}; Docker does not answer either."
-          fuUI_HINT "Debian: sudo apt-get install xorriso python3 gpg curl" "or start Docker and run it again" >&2
+          fuUI_HINT "Debian: sudo apt-get install xorriso python3 python3-pip gpg curl" "or start Docker and run it again" >&2
         else
-          fuUI_ERROR "The build needs Docker here (or Linux with xorriso, python3, gpg and curl)."
+          fuUI_ERROR "The build needs Docker here (or Linux with xorriso, python3 with pip, gpg and curl)."
           fuUI_HINT "Start Docker and run it again." >&2
       fi
       return 1
@@ -594,15 +854,17 @@ fuHOW () {
 
 fuDOCKER_IMAGE () {
   # the Dockerfile on stdin (fuUI_SPIN gives a step /dev/null as its stdin); --pull and the week
-  # (REFRESH) in its RUN line: a new Debian base image and new packages at least once a week
-  printf '%s\n' "FROM debian:trixie-slim" "ARG REFRESH" \
-    "RUN echo \"refresh \${REFRESH}\" && apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gpg python3 xorriso && rm -rf /var/lib/apt/lists/*" \
+  # (REFRESH) in its RUN line: a new Debian base image and new packages at least once a week; the
+  # Debian of the ISO, so its python3 runs the build
+  printf '%s\n' "FROM debian:${myDEBIAN_MAJOR}-slim" "ARG REFRESH" \
+    "RUN echo \"refresh \${REFRESH}\" && apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gpg python3 python3-pip xorriso && rm -rf /var/lib/apt/lists/*" \
     | docker build --pull --build-arg "REFRESH=$(date +%G-%V)" -t "${myDOCKER_IMAGE}" -
 }
 
 fuDOCKER_ONE () {
   # fuDOCKER_ONE <arch>: the build of one architecture in a Debian container, the same script with
-  # the source worked out here (fuIN_DOCKER); the log of this run goes on there
+  # the source and T-Pot (fuSNAPSHOT, in /out) worked out here (fuIN_DOCKER); the log of this run
+  # goes on there
   local myA="$1"
   local -a myMOUNTS=(-v "${myREPO}:/src:ro" -v "${myOUT}:/out" -v "${myCACHE}:/cache")
   local -a myARGS=(-a "${myA}" -b "${myBRANCH}" -r "${myREPO_URL}" -o /out)
@@ -613,7 +875,8 @@ fuDOCKER_ONE () {
   fi
   docker run --rm --init --name "tpot-iso-build-$$-${myA}" --user "$(id -u):$(id -g)" -e HOME=/tmp \
     -e TPOT_GUM=off -e TPOT_ISO_IN_DOCKER=1 -e "TPOT_ISO_RUN=$$" -e "TPOT_ISO_PREFIX=${myPREFIX}" \
-    -e "TPOT_ISO_SOURCE_COMMIT=$(fuCOMMIT)" -e TPOT_ISO_CACHE=/cache "${myMOUNTS[@]}" "${myDOCKER_IMAGE}" \
+    -e "TPOT_ISO_SOURCE_COMMIT=$(fuCOMMIT)" -e TPOT_ISO_CACHE=/cache -e "TPOT_ISO_SNAPSHOT=/out/${mySNAPSHOT##*/}" \
+    "${myMOUNTS[@]}" "${myDOCKER_IMAGE}" \
     bash /src/installer/iso/build.sh "${myARGS[@]}"
 }
 
@@ -633,6 +896,7 @@ fuIN_DOCKER () {
   myOUT="$(CDPATH="" cd -- "${myOUT}" && pwd)" || return 1
   myLOG="${myOUT}/build.log"
   myPREFIX="${TPOT_ISO_PREFIX:-tpot-${myBRANCH//\//-}}"
+  mySNAPSHOT="${TPOT_ISO_SNAPSHOT:-}"
   myMISSING=$(fuTOOLS_MISSING)
   [ -z "${myMISSING}" ] || { fuUI_ERROR "Missing in the image ${myDOCKER_IMAGE}: ${myMISSING}."; return 1; }
   trap fuWORK_CLEAN EXIT
@@ -964,7 +1228,7 @@ fuWRITE () {
   fi
   [ "$(uname -s 2>/dev/null)" != "Darwin" ] \
     || myITEMS+=("info:macOS may say it cannot read the stick: Ignore or Eject, macOS does not know the file systems of the ISO")
-  myITEMS+=("next:Boot from it (${myBOOT}), choose Install T-Pot; the T-Pot installer starts at the first login")
+  myITEMS+=("next:Boot from it (${myBOOT}), choose Install T-Pot; the T-Pot installer starts after the first boot")
   fuUI_SUMMARY "USB stick" "${myITEMS[@]}"
 }
 
@@ -1057,8 +1321,8 @@ fuCANCEL () {
 }
 
 fuRELEASE_CHECK () {
-  # -R: the version of the checkout, the checkout clean, its HEAD the branch of the repository. A
-  # branch, no tag or commit: the ISO installs it with git clone, update.sh of that T-Pot refuses a
+  # -R: the version of the checkout, the checkout clean, its HEAD the branch of the repository (the
+  # ISOs carry it, fuSNAPSHOT). A branch, no tag or commit: update.sh of that T-Pot refuses a
   # detached HEAD. rc 1 with the error
   local myHEAD myLS myRC=0 myAT
   myVERSION=$(fuUI_VERSION "${myREPO}")
@@ -1102,7 +1366,7 @@ fuRELEASE_CHECK () {
   if [ "${myAT}" != "${myHEAD}" ];
     then
       fuUI_ERROR "${myREPO_URL} has ${myBRANCH} at ${myAT:0:7}, this checkout is at ${myHEAD:0:7}."
-      fuUI_HINT "The ISOs carry install.sh of this checkout and install ${myBRANCH} of the repository: git push (or git pull) first." >&2
+      fuUI_HINT "The ISOs carry this checkout, update.sh of their T-Pot follows ${myBRANCH} of the repository: git push (or git pull) first." >&2
       return 1
   fi
   [ "${myBRANCH}" = "master" ] || fuUI_WARN "The ISOs install ${myBRANCH}, a release usually master."
@@ -1296,7 +1560,11 @@ fuRUN () {
   [ -z "${myMENU}" ] || fuUI_INFO "Building: $(fuDESCRIBE)"
   fuUI_INFO "${myHOW_TEXT}; the log: ${myLOG}"
   [ -n "${myRELEASE}" ] || fuCHECK_REMOTE
+  fuSNAPSHOT || myRC=$?
+  [ "${myRC}" -ne 130 ] || return 130
+  [ "${myRC}" -eq 0 ] || myITEMS+=("fail:T-Pot from ${myREPO_URL} at ${myBRANCH} for the ISO")
   for myA in "${myARCHS[@]}"; do
+    [ "${myRC}" -eq 0 ] || break
     rm -f "${myOUT}/.last-${myA}"
     if [ "${myHOW}" = "here" ];
       then
@@ -1372,7 +1640,7 @@ fuRUN () {
   if [ -z "${myDEVICE}" ]; then
     myITEMS+=("next:Onto a USB stick: $(fuQ "${mySELF}") -w $(fuQ "${myOUT}/${myBUILT[0]}") (or the menu); Windows: Rufus (DD mode) or balenaEtcher")
   fi
-  myITEMS+=("next:Boot from it (${myBOOT}), choose Install T-Pot; the T-Pot installer starts at the first login")
+  myITEMS+=("next:Boot from it (${myBOOT}), choose Install T-Pot; the T-Pot installer starts after the first boot")
   fuUI_SUMMARY "T-Pot ISO" "${myITEMS[@]}"
 }
 

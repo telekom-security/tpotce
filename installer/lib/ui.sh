@@ -759,7 +759,7 @@ fuUI_LINUX_ONLY () {
     "") mySYSTEM="an unknown system" ;;
   esac
   fuUI_ERROR "$1 does not run on ${mySYSTEM}."
-  fuUI_HINT "$1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+  fuUI_HINT "$1 runs on Linux: a T-Pot host, a build host or a VM." >&2
   exit "${2:-1}"
 }
 

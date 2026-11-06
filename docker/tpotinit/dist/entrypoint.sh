@@ -7,17 +7,14 @@ exec > >(tee /data/tpotinit.log) 2>&1
 cleanup() {
   echo "# SIGTERM received, cleaning up ..."
   echo
-  if [ "${TPOT_OSTYPE}" = "linux" ];
+  echo "## ... removing firewall rules."
+  /opt/tpot/bin/rules.sh ${COMPOSE} unset
+  echo
+  if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ -f "/etc/blackhole/mass_scanner.txt" ];
     then
-      echo "## ... removing firewall rules."
-      /opt/tpot/bin/rules.sh ${COMPOSE} unset
+      echo "## ... removing Blackhole routes."
+      /opt/tpot/bin/blackhole.sh del
       echo
-      if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ -f "/etc/blackhole/mass_scanner.txt" ];
-        then
-          echo "## ... removing Blackhole routes."
-          /opt/tpot/bin/blackhole.sh del
-          echo
-      fi
   fi
   # autoheal, es_retention.sh and kibana_objects.sh, once they run; a PUT of the ILM policy in flight
   # may finish, the Kibana objects are checked again on the next start
@@ -268,40 +265,17 @@ update_permissions() {
 # Update permissions
 update_permissions
 
-# Check for compatible OSType
+# T-Pot runs on Docker Engine for Linux only: host networking, the firewall rules and the
+# capture interface need the kernel of the host. Docker Desktop (macOS, Windows, Linux) runs
+# a VM of its own (linuxkit), WSL2 a kernel of Microsoft; both stop here.
 echo
-echo "# Checking if OSType is set correctly."
+echo "# Checking the host ..."
 echo
-myOSTYPE=$(uname -a | grep -Eo "microsoft|linuxkit")
-if [ "${myOSTYPE}" == "microsoft" ] && [ "${TPOT_OSTYPE}" != "win" ];
+myKERNEL=$(uname -a | grep -Eio "microsoft|linuxkit" | head -n 1)
+if [ -n "${myKERNEL}" ];
   then
-    echo "# Docker Desktop for Windows detected, but TPOT_OSTYPE is not set to win."
-    echo "# 1. You need to adjust the OSType in the T-Pot .env config."
-    echo "# 2. You need to copy compose/mac_win.yml to ./docker-compose.yml."
-    echo
-    echo "# Aborting."
-    echo
-    sleep 1
-    exit 1
-fi
-
-if [ "${myOSTYPE}" == "linuxkit" ] && [ "${TPOT_OSTYPE}" != "mac" ];
-  then
-    echo "# Docker Desktop for macOS detected, but TPOT_OSTYPE is not set to mac."
-    echo "# 1. You need to adjust the OSType in the T-Pot .env config."
-    echo "# 2. You need to copy compose/mac_win.yml to ./docker-compose.yml."
-    echo
-    echo "# Aborting."
-    echo
-    sleep 1
-    exit 1
-fi
-
-if [ "${myOSTYPE}" == "" ] && [ "${TPOT_OSTYPE}" != "linux" ];
-  then
-    echo "# Docker Engine detected, but TPOT_OSTYPE is not set to linux."
-    echo "# 1. You need to adjust the OSType in the T-Pot .env config."
-    echo "# 2. You need to copy compose/standard.yml to ./docker-compose.yml."
+    echo "# The kernel of this Docker is not that of a Linux host (${myKERNEL}): Docker Desktop or WSL2."
+    echo "# T-Pot runs on Docker Engine for Linux only (Debian recommended)."
     echo
     echo "# Aborting."
     echo
@@ -396,29 +370,22 @@ fi
 clear_ews_hold /data
 
 # Check if TPOT_BLACKHOLE is enabled
-if [ "${TPOT_OSTYPE}" == "linux" ];
+if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ ! -f "/etc/blackhole/mass_scanner.txt" ];
   then
-    if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ ! -f "/etc/blackhole/mass_scanner.txt" ];
-      then
-        echo
-        echo "# Adding Blackhole routes."
-        /opt/tpot/bin/blackhole.sh add
-        echo
-    fi
-    if [ "${TPOT_BLACKHOLE}" == "DISABLED" ] && [ -f "/etc/blackhole/mass_scanner.txt" ];
-      then
-        echo
-        echo "# Removing Blackhole routes."
-        /opt/tpot/bin/blackhole.sh del
-        echo
-      else
-        echo
-        echo "# Blackhole is not active."
-    fi
+    echo
+    echo "# Adding Blackhole routes."
+    /opt/tpot/bin/blackhole.sh add
+    echo
+fi
+if [ "${TPOT_BLACKHOLE}" == "DISABLED" ] && [ -f "/etc/blackhole/mass_scanner.txt" ];
+  then
+    echo
+    echo "# Removing Blackhole routes."
+    /opt/tpot/bin/blackhole.sh del
+    echo
   else
     echo
-    echo "# T-Pot is configured for macOS / Windows. Blackhole is not supported."
-    echo
+    echo "# Blackhole is not active."
 fi
 
 # Get IP
@@ -431,49 +398,34 @@ echo
 update_permissions
 
 # Update NSM interfaces and set up Honeytrap NFQUEUE / Glutton native nftables TPROXY.
-### This is currently not supported on Docker for Desktop, only on Docker Engine for Linux
-if [ "${TPOT_OSTYPE}" == "linux" ];
+echo
+echo "# Get IF, disable offloading, enable promiscious mode for NSM services ..."
+echo
+# Same detection as in the NSM containers (TPOT_CAPTURE_INTERFACE or the route
+# to the internet), so the settings apply to the interface they capture on.
+# Without an interface only the NSM services fail, T-Pot itself keeps running.
+if myIF="$(sh /opt/tpot/bin/capture-if.sh)";
   then
-    echo
-    echo "# Get IF, disable offloading, enable promiscious mode for NSM services ..."
-    echo
-    # Same detection as in the NSM containers (TPOT_CAPTURE_INTERFACE or the route
-    # to the internet), so the settings apply to the interface they capture on.
-    # Without an interface only the NSM services fail, T-Pot itself keeps running.
-    if myIF="$(sh /opt/tpot/bin/capture-if.sh)";
-      then
-        echo "Capture interface: ${myIF}"
-        ethtool --offload "${myIF}" rx off tx off
-        ethtool -K "${myIF}" gso off gro off
-        ip link set "${myIF}" promisc on
-      else
-        echo "# Warning: No capture interface found, skipping offload / promiscuous mode settings. NSM services will not start."
-    fi
-    echo
-    echo "# Adding firewall rules ..."
-    echo
-    /opt/tpot/bin/rules.sh ${COMPOSE} set
+    echo "Capture interface: ${myIF}"
+    ethtool --offload "${myIF}" rx off tx off
+    ethtool -K "${myIF}" gso off gro off
+    ip link set "${myIF}" promisc on
   else
-    echo
-    echo "# T-Pot is configured for macOS / Windows. Setting up firewall rules on the host is not supported."
-    echo
+    echo "# Warning: No capture interface found, skipping offload / promiscuous mode settings. NSM services will not start."
 fi
+echo
+echo "# Adding firewall rules ..."
+echo
+/opt/tpot/bin/rules.sh ${COMPOSE} set
 
 # Display open ports
-if [ "${TPOT_OSTYPE}" == "linux" ];
-  then
-    echo
-    echo "# This is a list of open ports on the host (netstat -tulpen)."
-    echo "# Make sure there are no conflicting ports by checking the docker compose file."
-    echo "# Conflicting ports will prevent the startup of T-Pot."
-    echo
-    netstat -tulpen | grep -Eo ':([0-9]+)' | cut -d ":" -f 2 | uniq
-    echo
-  else
-    echo
-    echo "# T-Pot is configured for macOS / Windows. Showing open ports from the host is not supported."
-    echo
-fi
+echo
+echo "# This is a list of open ports on the host (netstat -tulpen)."
+echo "# Make sure there are no conflicting ports by checking the docker compose file."
+echo "# Conflicting ports will prevent the startup of T-Pot."
+echo
+netstat -tulpen | grep -Eo ':([0-9]+)' | cut -d ":" -f 2 | uniq
+echo
 
 
 # Done
@@ -501,14 +453,10 @@ if [ "${TPOT_TYPE}" == "HIVE" ] && yq -e '.services | has("kibana")' "${COMPOSE}
 fi
 
 # We want to see true source for UDP packets in container (https://github.com/moby/libnetwork/issues/1994)
-# Start autoheal if running on a supported os
-if [ "${TPOT_OSTYPE}" == "linux" ];
-  then
-    # in the background, so that a SIGTERM ends the wait at once (cleanup)
-    sleep 60 & wait $!
-    echo "# Dropping UDP connection tables to improve visibility of true source IPs."
-    /usr/sbin/conntrack -D -p udp
-fi
+# in the background, so that a SIGTERM ends the wait at once (cleanup)
+sleep 60 & wait $!
+echo "# Dropping UDP connection tables to improve visibility of true source IPs."
+/usr/sbin/conntrack -D -p udp
 
 # Starting container health monitoring
 echo

@@ -859,7 +859,7 @@ fuUI_LINUX_ONLY () {
     "") mySYSTEM="an unknown system" ;;
   esac
   fuUI_ERROR "$1 does not run on ${mySYSTEM}."
-  fuUI_HINT "$1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+  fuUI_HINT "$1 runs on Linux: a T-Pot host, a build host or a VM." >&2
   exit "${2:-1}"
 }
 
@@ -1634,6 +1634,21 @@ install_sudo_debian() {
   echo
 }
 
+packages_installed() {
+  # Debian and Ubuntu: are all of them there already (the T-Pot ISO brings them)? Then no apt run.
+  [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && command -v sudo >/dev/null \
+    && command -v dpkg-query >/dev/null || return 1
+  local mySTATES
+  mySTATES=$(dpkg-query -W -f='${db:Status-Abbrev}\n' ${myPACKAGES_DEBIAN} 2>/dev/null) || return 1
+  [ -n "${mySTATES}" ] && ! printf '%s\n' "${mySTATES}" | grep -qv '^ii'
+}
+
+bootstrap_needed() {
+  # does the assistant have to get anything first: packages, the clone, the venv of the T-Pot Manager?
+  ! packages_installed || [ ! -d "${HOME}/tpotce/.git" ] \
+    || [ ! -x "${XDG_DATA_HOME:-${HOME}/.local/share}/tpotce/venv/bin/python" ]
+}
+
 get_packages() {
   echo
   mark_phase packages
@@ -1646,6 +1661,12 @@ get_packages() {
   if [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && ! command -v sudo >/dev/null;
     then
       install_sudo_debian
+      return
+  fi
+  if packages_installed;
+    then
+      fuUI_OK "The packages the installer needs are there."
+      echo
       return
   fi
   # a password is asked for now, in the terminal, the spinner cannot ask
@@ -1922,6 +1943,17 @@ if [[ ! "${myMACHINE}" =~ ^(x86_64|amd64|aarch64|arm64)$ ]] || [ "${myBITS:-64}"
     exit 1
 fi
 
+# WSL2 is no T-Pot host: its Docker sits behind the network and the firewall of Windows, the
+# honeypots would not see the attackers. Its kernel says so (uname -r: ...-microsoft-standard-WSL2).
+if [[ "$(uname -r 2>/dev/null)" =~ [Mm]icrosoft ]];
+  then
+    fuUI_ERROR "T-Pot does not run on WSL2, it needs a Linux host of its own."
+    fuUI_INFO "Install Debian on a machine or in a VM, see the T-Pot README for host requirements."
+    echo
+    mark_failed
+    exit 1
+fi
+
 # Accepted distributions include best-effort hosts; support tiers are reported below. Raspberry Pi
 # OS (64-bit) is "Debian GNU/Linux", only its 32-bit variant calls itself Raspbian.
 mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
@@ -1996,8 +2028,11 @@ esac
 # tpot install asks everything up front and runs this script again with -s.
 if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && [ "${TPOT_ASSISTANT:-on}" != "off" ];
   then
-    fuUI_INFO "It first installs git, Ansible and the Python packages it needs."
-    if ! fuUI_CONFIRM "Start the T-Pot installer?" "Start" "Abort";
+    ! bootstrap_needed || fuUI_INFO "It first installs git, Ansible and the Python packages it needs."
+    # the start dialog of the T-Pot ISO (installer/iso/start.sh) asked already
+    if [ "${TPOT_INSTALL_CONFIRMED:-}" = "1" ];
+      then unset TPOT_INSTALL_CONFIRMED
+    elif ! fuUI_CONFIRM "Start the T-Pot installer?" "Start" "Abort";
       then
         echo
         fuUI_INFO "Aborting!"
@@ -2008,7 +2043,13 @@ if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && 
     check_ports
     get_packages
     myRC=0
-    fuUI_SPIN "Getting T-Pot from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH} ..." "${myLOG}" clone_tpot || myRC=$?
+    if [ -d "${HOME}/tpotce/.git" ];
+      then
+        # check_tpot_clone made sure it is the requested one
+        fuUI_OK "T-Pot from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH} is in ${HOME}/tpotce."
+      else
+        fuUI_SPIN "Getting T-Pot from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH} ..." "${myLOG}" clone_tpot || myRC=$?
+    fi
     [ "${myRC}" -ne 130 ] || install_stopped "Stopped while getting T-Pot" "Run the installer again"
     if [ "${myRC}" -ne 0 ];
       then
@@ -2029,6 +2070,10 @@ if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && 
     myQST="y"
 fi
 
+if [ "${TPOT_INSTALL_CONFIRMED:-}" = "1" ]; then
+  unset TPOT_INSTALL_CONFIRMED
+  myQST="y"
+fi
 if [[ -z "$myQST" ]]; then
   if ! fuUI_CONFIRM "Install?";
     then

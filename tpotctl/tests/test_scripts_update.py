@@ -215,7 +215,7 @@ class HelpTest(Scripts):
 
 class LinuxOnlyTest(Scripts):
     """update.sh and restore.sh run on a T-Pot host: outside Linux (uname -s) they stop after the
-    options, before sudo, docker or git; -h works everywhere. update.sh names the way of mac_win."""
+    options, before sudo, docker or git; -h works everywhere. update.sh says T-Pot runs on Linux only."""
 
     def setUp(self):
         super().setUp()
@@ -230,13 +230,13 @@ class LinuxOnlyTest(Scripts):
                     me = os.path.basename(script)
                     self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                     self.assertIn(f"### [ERROR] - {me} does not run on {name}.", result.stderr)
-                    self.assertIn(f"{me} runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows.",
+                    self.assertIn(f"{me} runs on Linux: a T-Pot host, a build host or a VM.",
                                   result.stderr)
                     self.assertNotIn("T-Pot Updater", result.stdout)            # before the banner
                     self.assertNotIn("T-Pot Restorer", result.stdout)
                     self.assertEqual(self.calls(), "")
                     if script == UPDATE_SH:
-                        self.assertIn("git pull in ~/tpotce, then tpot customize", result.stderr)
+                        self.assertIn("T-Pot runs on Linux only (Debian recommended).", result.stderr)
 
     def test_help_and_usage_errors_work_everywhere(self):
         for script in (UPDATE_SH, RESTORE_SH):
@@ -249,16 +249,28 @@ class LinuxOnlyTest(Scripts):
                 self.assertIn("Unknown option -Z.", result.stderr)
                 self.assertNotIn("does not run on", result.stderr)
 
-    def test_wsl2_is_linux(self):
+    def test_wsl2_is_linux_but_no_tpot_host(self):
         """RA12: WSL2 says Linux with uname -s, everything else about it says Microsoft (its kernel in
-        uname -r / -v / -a, /proc/version): only uname -s counts. A uname that answers anything but -s
-        with Windows / Darwin names keeps update.sh going (here to the version check of the empty
-        ~/tpotce), and fuUI_LINUX_ONLY reads nothing else (no /proc/version, no other uname)."""
+        uname -r / -v / -a, /proc/version). fuUI_LINUX_ONLY reads only uname -s (the image builder runs
+        there), but T-Pot does not: update.sh and restore.sh stop on the kernel release before anything
+        changes, update.sh --backup-only goes on (the backup to take along to a Linux host)."""
         self.stub("uname", '#!/bin/sh\ncase "$*" in\n  -s) echo Linux ;;\n'
                            '  *) echo "MINGW64_NT-10.0-19045 Darwin 5.15.153.1-microsoft-standard-WSL2" ;;\nesac\n')
-        result = self.run_plain(UPDATE_SH, "-y", cwd=self.tpotce)
-        self.assertNotIn("does not run on", result.stderr)
-        self.assertIn("Checking for version tag", result.stdout)
+        for script, args, text in ((UPDATE_SH, ("-y",), "T-Pot no longer runs on WSL2, an update would not start there."),
+                                   (UPDATE_SH, (), "T-Pot no longer runs on WSL2, an update would not start there."),
+                                   (RESTORE_SH, ("-y",), "T-Pot does not run on WSL2, restore the backup on a Linux host")):
+            with self.subTest(script=os.path.basename(script), args=args):
+                result = self.run_plain(script, *args, cwd=self.tpotce)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertNotIn("does not run on Linux", result.stderr)
+                self.assertIn(f"### [ERROR] - {text}", result.stderr)
+                self.assertNotIn("T-Pot Updater", result.stdout)
+                self.assertNotIn("T-Pot Restorer", result.stdout)
+                self.assertEqual(self.calls(), "")
+        result = self.run_plain(UPDATE_SH, "-y", "--backup-only", cwd=self.tpotce)
+        self.assertNotIn("WSL2", result.stdout + result.stderr)
+        self.assertIn("### T-Pot Updater", result.stdout)
+        self.assertIn("Checking the space for the backup", result.stdout)
         result = subprocess.run(["bash", "-c", f"source {shlex.quote(os.path.join(REPO, 'installer', 'lib', 'ui.sh'))}"
                                                "; fuUI_LINUX_ONLY test.sh; echo linux"],
                                 capture_output=True, universal_newlines=True, env=self.env(TPOT_GUM="off"),

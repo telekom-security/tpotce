@@ -839,41 +839,26 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertIn(name, names)
         self.assertNotIn("Switch to the Hive edition", names)       # in use
 
-    def mac_backend(self, in_use):
-        from tpotctl import editions
-        backend = FakeBackend(host=False)
-        backend.editions = lambda: [editions.Choice("mac_win", "macOS / Windows", "Docker Desktop.", "HIVE", 16,
-                                                    256, "/x/mac_win.yml")]
-        backend.edition_current = lambda: (in_use, "")
-        backend.edition_plan = lambda key: editions.SwitchPlan(backend.editions()[0], in_use, "/x/keep.yml")
-        return backend
-
-    async def test_edition_switch_on_a_mac_to_mac_win(self):
+    async def test_edition_switch_on_a_mac_prepares_the_checkout(self):
+        """Off a T-Pot host (macOS) the editions are the same, a switch only changes the checkout: no sudo,
+        nothing started, and the page and the question say so."""
         from tpotctl.screens.task import TaskScreen
         FakeEngine.seen.clear()
-        app = tapp.TpotApp(backend=self.mac_backend("STANDARD"), runner=Recorder(), engine=FakeEngine)
+        app = tapp.TpotApp(backend=FakeBackend(host=False), runner=Recorder(), engine=FakeEngine)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.2)
             app.goto("edition")
             await pilot.pause(0.2)
-            self.assertFalse(app.query_one("#switch-edition").disabled)
-            await pilot.click("#switch-edition")
+            self.assertIn("No T-Pot host", str(app.query_one("#edition-note").render()))
+            app.switch_edition("mini")
             await pilot.pause(0.2)
             self.assertIsInstance(app.screen, ConfirmDialog)
             await pilot.click("#yes")
             await pilot.pause(0.4)
             self.assertIsInstance(app.screen, TaskScreen)
-            self.assertEqual(app.screen.job.become, "")              # no sudo on Docker Desktop
-        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "edition", "set", "mac_win", "-y"]])
-
-    async def test_edition_switch_on_a_mac_running_mac_win(self):
-        app = tapp.TpotApp(backend=self.mac_backend("MAC_WIN"), runner=Recorder(), engine=FakeEngine)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.2)
-            app.goto("edition")
-            await pilot.pause(0.2)
-            self.assertTrue(app.query_one("#switch-edition").disabled)
-            self.assertIn("MAC_WIN", str(app.query_one("#edition-note").render()))
+            self.assertEqual(app.screen.job.become, "")              # no sudo off a T-Pot host
+            self.assertEqual(app.screen.job.done, "docker-compose.yml is the Mini edition.")
+        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "edition", "set", "mini", "-y"]])
 
     async def test_host_pages_are_shown_locked_off_host(self):
         backend = FakeBackend(host=False)
@@ -1618,7 +1603,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(">", tapp.INSTEAD["elastic"])
 
     async def test_settings_previews_a_shorter_retention_off_a_tpot_host_too(self):
-        # Docker Desktop: no T-Pot host, but Elasticsearch on 127.0.0.1:64298 (MAC_WIN)
+        # no T-Pot host, but an Elasticsearch on 127.0.0.1:64298 (an SSH tunnel to one)
         from tpotctl import settings
         repo = self.retention_checkout()
         backend = self.settings_backend(repo)

@@ -28,7 +28,8 @@ SUDO = "#!/bin/sh\n# runs the command without sudo, options of sudo are left out
 # uname -s (and uname alone) says FAKE_UNAME_S, Linux without it; the rest is the real uname. The
 # host scripts stop outside Linux (fuUI_LINUX_ONLY), the tests run on macOS as well
 REAL_UNAME = shutil.which("uname") or "/usr/bin/uname"
-UNAME = ('#!/bin/sh\ncase "$*" in\n  -s|"") echo "${FAKE_UNAME_S-Linux}"; exit 0 ;;\nesac\n'
+UNAME = ('#!/bin/sh\ncase "$*" in\n  -s|"") echo "${FAKE_UNAME_S-Linux}"; exit 0 ;;\n'
+         '  -r) [ -z "${FAKE_UNAME_R}" ] || { echo "${FAKE_UNAME_R}"; exit 0; } ;;\nesac\n'
          f'exec {REAL_UNAME} "$@"\n')
 
 
@@ -1354,7 +1355,7 @@ class LossConfirmTerminalTest(unittest.TestCase):
 
 
 class FallbackTest(Harness):
-    """genuser.sh and deploy.sh without the Python packages of tpot: the old steps, the new look."""
+    """deploy.sh without the Python packages of tpot: the old steps, the new look."""
 
     def setUp(self):
         super().setUp()
@@ -1372,29 +1373,6 @@ class FallbackTest(Harness):
 
     def without_ui_sh(self):
         os.remove(os.path.join(self.home, "tpotce", "installer", "lib", "ui.sh"))
-
-    def test_genuser_fallback(self):
-        result = self.run_script(os.path.join(REPO, "genuser.sh"))
-        self.assertIn("### [WARNING] - tpot is not available, using the tpotinit container.", result.stdout)
-        with open(os.path.join(self.home, "calls"), encoding="utf-8") as handle:
-            self.assertIn("tpotinit:24.04.2", handle.read())
-        self.assertEqual(result.returncode, 0)
-        summary = result.stdout[result.stdout.index("### T-Pot web user"):]
-        self.assertIn("### [NEXT] - Restart T-Pot", summary)
-        self.assertIn("sudo systemctl restart tpot", summary)
-
-    def test_genuser_fallback_without_ui_sh(self):
-        self.without_ui_sh()
-        result = self.run_script(os.path.join(REPO, "genuser.sh"))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("### [WARNING] - tpot is not available, using the tpotinit container.", result.stdout)
-        self.assertIn("### [NEXT] - Restart T-Pot", result.stdout)
-
-    def test_genuser_fallback_failure_ends_with_a_summary(self):
-        self.stub("docker", "#!/bin/sh\nexit 125\n")
-        result = self.run_script(os.path.join(REPO, "genuser.sh"))
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("### [FAILED] - The tpotinit container did not add a web user", result.stdout)
 
     def deploy(self):
         """deploy.sh without tpot, its answers on stdin, a playbook that fails: nothing changes."""
@@ -1436,50 +1414,6 @@ class FallbackTest(Harness):
 
     def test_deploy_fallback_keeps_the_password_out_of_argv(self):
         self.assertNotRegex(read("deploy.sh"), r"htpasswd [^|]*-b")
-
-
-class GenuserImageTest(Harness):
-    """genuser.sh of the tpotinit image (the fallback of ~/tpotce/genuser.sh): the new user goes into
-    WEB_USER, also into a .env without that line. Its fixed paths point into the temporary HOME."""
-
-    def run_genuser(self, env_text):
-        env = os.path.join(self.home, ".env")
-        with open(env, "w", encoding="utf-8") as out:
-            out.write(env_text)
-        cracklib = os.path.join(self.bin, "cracklib-check")
-        for name, text in (("htpasswd", "#!/bin/sh\necho \"$4:\\$2y\\$05\\$hash\"\n"),
-                           ("cracklib-check", "#!/bin/sh\nread -r pw\necho \"$pw: OK\"\n")):
-            path = os.path.join(self.bin, name)
-            with open(path, "w", encoding="utf-8") as out:
-                out.write(text)
-            os.chmod(path, 0o755)
-        script = os.path.join(self.home, "genuser.sh")
-        with open(script, "w", encoding="utf-8") as out:
-            out.write(read("docker/tpotinit/dist/bin/genuser.sh").replace("/data/.env", env)
-                      .replace("/usr/sbin/cracklib-check", cracklib))
-        environment = dict(os.environ, HOME=self.home, PATH=f"{self.bin}:{os.environ['PATH']}")
-        result = subprocess.run(["bash", script], input="alice\ny\nA long passphrase\nA long passphrase\n",
-                                capture_output=True, universal_newlines=True, env=environment, cwd=self.home,
-                                timeout=60)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        with open(env, encoding="utf-8") as handle:
-            return handle.read()
-
-    def test_a_missing_web_user_line_is_added(self):
-        import base64
-        entry = base64.b64encode(b"alice:$2y$05$hash").decode()
-        for text in ("TPOT_TYPE=HIVE\n", "TPOT_TYPE=HIVE"):
-            with self.subTest(text=text):
-                self.assertEqual(self.run_genuser(text), f"TPOT_TYPE=HIVE\nWEB_USER={entry}\n")
-
-    def test_the_line_is_changed_in_place(self):
-        """The sed of the image is GNU / busybox; a BSD sed (macOS) does not take -i without a suffix."""
-        if subprocess.run(["sed", "--version"], capture_output=True).returncode != 0:
-            self.skipTest("the sed of this host is no GNU sed")
-        import base64
-        entry = base64.b64encode(b"alice:$2y$05$hash").decode()
-        self.assertEqual(self.run_genuser("WEB_USER=old\nTPOT_TYPE=HIVE\n"),
-                         f"WEB_USER=old {entry}\nTPOT_TYPE=HIVE\n")
 
 
 class MytopipsTest(Harness):

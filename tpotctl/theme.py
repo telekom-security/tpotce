@@ -97,13 +97,13 @@ def build(system: str) -> Theme:
 def color_system() -> str:
     """truecolor, 256 or 16, exactly as Textual renders: its COLOR_SYSTEM (TEXTUAL_COLOR_SYSTEM when it was
     imported, which the launcher and the customizer set by prefs.apply_color_system: TPOT_COLORS,
-    tpot.json or the rule of the scripts, prefs.detect_colors), for auto (nothing set it, or a console
-    of Windows) Rich's look at the terminal. Read from the prefs here, palette and output could disagree."""
+    tpot.json or the rule of the scripts, prefs.detect_colors), for auto (nothing set it) Rich's look at
+    the terminal. Read from the prefs here, palette and output could disagree."""
     from textual import constants
     system = constants.COLOR_SYSTEM or "auto"
     if system == "auto":
         from rich.console import Console
-        # as Textual builds its console: a legacy Windows console does not count
+        # as Textual builds its console
         system = Console(force_terminal=True, legacy_windows=False).color_system or "truecolor"
     return {"truecolor": "truecolor", "256": "256"}.get(system, "16")       # standard (and windows): 16
 

@@ -13,8 +13,8 @@
 # Sourced, it only defines the functions.
 
 # Where Elasticsearch answers: fuILM_CANDIDATES (TPOT_ES_URL, else the port it publishes on the host
-# when tpotinit runs with the host network, else its service name: MAC_WIN, tpotinit joins
-# nginx_local), within myILM_WAIT seconds of _cluster/health (fuILM_FIND_ES).
+# when tpotinit runs with the host network, else its service name: a compose file of your own
+# where tpotinit joins nginx_local), within myILM_WAIT seconds of _cluster/health (fuILM_FIND_ES).
 myILM_ES=""
 myILM_WAIT="${TPOT_ES_RETENTION_WAIT:-600}"
 
@@ -87,7 +87,7 @@ function fuILM_DECIDE () {
 }
 
 # prints the one URL Elasticsearch is reached by: TPOT_ES_URL, else the service name when tpotinit
-# is no host container (MAC_WIN: it joins nginx_local), else the port Elasticsearch publishes
+# is no host container (it joins nginx_local), else the port Elasticsearch publishes
 function fuILM_CANDIDATES () {
   local myFILE="${COMPOSE:-/tmp/tpot/docker-compose.yml}" myMODE
   if [[ -n "${TPOT_ES_URL:-}" ]];

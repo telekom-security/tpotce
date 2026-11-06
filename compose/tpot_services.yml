@@ -11,7 +11,6 @@
 #   conflicts    services that cannot run next to this one
 #   hidden       helper, only selected through depends_on / requires
 #   hive_only    not offered when starting from the SENSOR edition
-#   linux_only   not offered when starting from the MAC_WIN edition
 # Run `python3 -m unittest discover compose/tests` after changes.
 
 networks:
@@ -529,7 +528,7 @@ services:
 
 # Glutton service
   glutton:
-    x-tpot: {group: honeypots, description: "TCP/UDP catch-all for unused ports (native nftables TPROXY)", conflicts: [honeytrap], linux_only: true}
+    x-tpot: {group: honeypots, description: "TCP/UDP catch-all for unused ports (native nftables TPROXY)", conflicts: [honeytrap]}
     container_name: glutton
     restart: always
     stop_grace_period: 30s
@@ -717,7 +716,7 @@ services:
 
 # Honeytrap service
   honeytrap:
-    x-tpot: {group: honeypots, description: "Catch-all for every port without a honeypot (NFQ)", conflicts: [glutton], linux_only: true}
+    x-tpot: {group: honeypots, description: "Catch-all for every port without a honeypot (NFQ)", conflicts: [glutton]}
     container_name: honeytrap
     restart: always
     depends_on:
@@ -1211,8 +1210,6 @@ services:
     x-tpot: {group: tools, description: "Web UI and sensor ingest on 64297 / 64294", hive_only: true}
     container_name: nginx
     restart: always
-    environment:
-     - TPOT_OSTYPE=${TPOT_OSTYPE}
     depends_on:
       tpotinit:
         condition: service_healthy

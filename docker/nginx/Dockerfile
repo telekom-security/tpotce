@@ -30,8 +30,7 @@ RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add \
       nginx \
       nginx-mod-http-brotli \
-      nginx-mod-http-headers-more \
-      nginx-mod-http-lua && \
+      nginx-mod-http-headers-more && \
     rm -rf /etc/nginx/conf.d/* /usr/share/nginx/html/*
 #
 ## Add prepared web assets and Nginx / T-Pot specific configs

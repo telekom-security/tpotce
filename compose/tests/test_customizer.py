@@ -77,9 +77,11 @@ class CoreTest(unittest.TestCase):
         self.assertTrue("BEELZEBUB_LLM_" in texts[0], texts[0])
         self.assertEqual([f for f in self.resolve("LLM").warnings if f.kind == "edition"], [])
 
-    def test_mac_win_offers_no_nfq_honeypots(self):
-        self.assertFalse(self.catalog.offered("MAC_WIN", "honeytrap"))
-        self.assertTrue(self.catalog.offered("MAC_WIN", "p0f"))
+    def test_removed_mac_win_edition_says_why(self):
+        with self.assertRaises(core.CustomizerError) as caught:
+            core.resolve(self.catalog, core.Selection("MAC_WIN"), strict=False)
+        self.assertIn("Linux only", str(caught.exception))
+        self.assertIn("STANDARD", str(caught.exception))
 
     def test_unknown_service_strict_and_lenient(self):
         self.assertTrue(errors(self.resolve("STANDARD", add=["nope"])))
@@ -118,7 +120,7 @@ class CoreTest(unittest.TestCase):
         # wordpot from the catalog on 80 next to hellpot: STANDARD puts it on 8080
         selection = core.Selection("TARPIT", add=["wordpot"], remove=["go-pot"])
         labels = dict(core.suggestions(self.catalog, selection, "wordpot"))
-        self.assertEqual(list(labels), ["host ports as in STANDARD, SENSOR, MOBILE, MAC_WIN"])
+        self.assertEqual(list(labels), ["host ports as in STANDARD, SENSOR, MOBILE"])
         self.assertEqual(list(labels.values()), [{("wordpot", 80, "tcp"): 8080}])
 
     def test_override_by_original_host_port(self):

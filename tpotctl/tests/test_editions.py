@@ -50,7 +50,7 @@ class EditionsTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.repo)
         self.backups = os.path.join(self.repo, "backups")
         os.makedirs(os.path.join(self.repo, "compose"))
-        for name in ("standard", "sensor", "mini", "llm", "tarpit", "mobile", "mac_win"):
+        for name in ("standard", "sensor", "mini", "llm", "tarpit", "mobile"):
             shutil.copy(os.path.join(REPO, "compose", f"{name}.yml"), os.path.join(self.repo, "compose"))
         shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.repo, ".env"))
         self.use("standard")
@@ -67,16 +67,18 @@ class EditionsTest(unittest.TestCase):
 
     def plan(self, target, env=None, users_ok=True):
         return editions.plan(target, self.repo, env or {"TPOT_TYPE": "HIVE"}, users_ok=users_ok,
-                             backup_dir=self.backups, linux=True)
+                             backup_dir=self.backups)
 
     # what there is ----------------------------------------------------------
 
-    def test_linux_editions(self):
-        keys = [choice.key for choice in editions.available(self.repo, linux=True)]
+    def test_the_editions(self):
+        """The same on every host: off a T-Pot host (macOS) a switch prepares the checkout."""
+        keys = [choice.key for choice in editions.available(self.repo)]
         self.assertEqual(keys, ["standard", "sensor", "llm", "mini", "mobile", "tarpit"])
 
-    def test_off_linux_only_mac_win(self):
-        self.assertEqual([c.key for c in editions.available(self.repo, linux=False)], ["mac_win"])
+    def test_mac_win_is_gone(self):
+        with self.assertRaises(editions.EditionError):
+            self.plan("mac_win")
 
     def test_current(self):
         self.assertEqual(editions.current(self.repo), ("STANDARD", ""))
@@ -135,30 +137,7 @@ class EditionsTest(unittest.TestCase):
 
     # the switch -------------------------------------------------------------
 
-    @unittest.skipUnless(yaml, "PyYAML is not installed")
-    def test_mac_win_on_a_mac_sets_the_os_type(self):
-        from tpotctl import ops, settings
-        plan = editions.plan("mac_win", self.repo, ops.env_values(self.repo), backup_dir=self.backups,
-                             linux=False, host_ostype="mac")
-        self.assertEqual(plan.env_changes.get("TPOT_OSTYPE"), "mac")
-        calls = Calls()
-        with contextlib.redirect_stdout(io.StringIO()):
-            editions.switch(plan, self.repo, run=calls, linux=False)
-        self.assertEqual(calls.commands, [])                       # no systemctl, no sudo on a Mac
-        self.assertEqual(settings.load(self.repo).values["TPOT_OSTYPE"], "mac")
-
-    def test_a_linux_edition_puts_linux_back(self):
-        plan = editions.plan("mini", self.repo, {"TPOT_TYPE": "HIVE", "TPOT_OSTYPE": "mac"},
-                             backup_dir=self.backups, linux=True, host_ostype="linux")
-        self.assertEqual(plan.env_changes.get("TPOT_OSTYPE"), "linux")
-
-    def test_a_linux_edition_on_docker_desktop_warns_and_keeps_the_os_type(self):
-        plan = editions.plan("mini", self.repo, {"TPOT_TYPE": "HIVE", "TPOT_OSTYPE": "win"},
-                             backup_dir=self.backups, linux=True, host_ostype="win")
-        self.assertNotIn("TPOT_OSTYPE", plan.env_changes)
-        self.assertTrue(any("MAC_WIN" in w for w in plan.warnings), plan.warnings)
-
-    def test_linux_stays_linux(self):
+    def test_no_os_type_goes_into_env(self):
         self.assertNotIn("TPOT_OSTYPE", self.plan("mini").env_changes)
 
     def test_switch_runs_the_steps_in_order(self):
@@ -258,8 +237,9 @@ class EditionsTest(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             editions.switch(self.plan("mini"), self.repo, run=calls, linux=False)
-        self.assertEqual(calls.commands, [])
-        self.assertIn("docker compose up -d", out.getvalue())
+        self.assertEqual(calls.commands, [])              # no systemctl, no sudo off a T-Pot host
+        self.assertIn("nothing is started", out.getvalue())
+        self.assertEqual(self.read(self.compose()), self.read(os.path.join(self.repo, "compose", "mini.yml")))
 
     def test_marks_with_tpot_marks(self):
         out = io.StringIO()

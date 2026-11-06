@@ -7,7 +7,6 @@ import re
 import shutil
 import subprocess
 import unittest
-from unittest import mock
 
 from tpotctl import prefs, say
 from tpotctl.tests import isolate
@@ -120,10 +119,6 @@ class SayTest(unittest.TestCase):
                     self.assertEqual(say.styled("ok", "done", colors=say.DUMB), "✓ done")
                     self.assertEqual(say.styled("error", "bad", colors=say.DUMB), "✗ bad")
                     self.assertEqual(say.styled("info", "step", colors=say.DUMB), "⬢ step")
-        # a console of Windows has no TERM and is no dumb terminal
-        with mock.patch.object(prefs, "CONSOLE_KNOWS", True):
-            self.assertEqual(say.depth({"COLORTERM": "truecolor", "HOME": os.environ["TPOT_TEST_CONFIG"],
-                                        "XDG_CONFIG_HOME": os.environ["TPOT_TEST_CONFIG"]}), "truecolor")
 
     def test_error_is_bold(self):
         """An error is bold in its colour, as fuUI_ERROR (gum style --bold); the others are not bold."""

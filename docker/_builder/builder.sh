@@ -172,7 +172,7 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
         "") mySYSTEM="an unknown system" ;;
       esac
       echo "### [ERROR] - $1 does not run on ${mySYSTEM}." >&2
-      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM." >&2
       exit "${2:-1}"
     }
     fuUI_RESULT () {

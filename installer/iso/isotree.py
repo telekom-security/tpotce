@@ -11,6 +11,19 @@
         installer's check of the medium reads it. Writes DIR/md5sum.txt.
     python3 installer/iso/isotree.py splash FILE
         the background alone (a preview).
+    python3 installer/iso/isotree.py requirements --python X.Y --machine MACHINE FILE
+        tpotctl/requirements.txt for the python3 of Debian on MACHINE (x86_64, aarch64): its markers
+        decided for that python, the requirements that apply without them (their hashes stay), one
+        per line, to stdout. pip download decides markers for the python it runs with, never the one
+        of --python-version; a marker this does not know stops the build.
+    python3 installer/iso/isotree.py debian-python FILE
+        the python3 (X.Y) of a Debian release from the answer of madison of Debian's archive
+        (api.ftp-master.debian.org/madison?package=python3&f=json&s=<codename>) in FILE, to stdout;
+        the highest if it names several, an answer without one stops the build.
+    python3 installer/iso/isotree.py gittar --dir DIR FILE
+        DIR/.git as the tar prepare.sh unpacks into ~/tpotce: owned by root, in a fixed order, files,
+        folders and links only, without the extended attributes of the file system it was made on
+        (tar of macOS adds them, GNU tar of Debian warns about every one).
 
 Every change looks for the exact text of the Debian netinst it was written for: a newer one that
 differs stops the build with what was not found, never a half patched menu. The kernels, the initrds,
@@ -19,10 +32,12 @@ the boot loaders and their signatures (Secure Boot) stay untouched.
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import struct
 import sys
+import tarfile
 import zlib
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -49,6 +64,149 @@ LABEL_TOP, LABEL_LEFT = 165, "18%"
 
 class PatchError(Exception):
     """The netinst is not the one the patch was written for."""
+
+
+class MarkerError(PatchError):
+    """A marker of requirements.txt that cannot be decided here."""
+
+
+# PEP 508 environment markers: those of the versions, those of the platform (Debian, CPython)
+MARKER_VERSIONS = ("python_version", "python_full_version")
+MARKER_TOKEN = re.compile(r"""\s*(\(|\)|'[^']*'|"[^"]*"|===|==|!=|<=|>=|~=|<|>|not\s+in\b|in\b|and\b|or\b|"""
+                          r"""[A-Za-z_][A-Za-z0-9_]*)""")
+
+
+def marker_env(python: str, machine: str) -> Dict[str, str]:
+    """The markers of the python3 X.Y of Debian on machine (its patch level is not known)."""
+    if not re.fullmatch(r"\d+\.\d+", python) or machine not in ("x86_64", "aarch64"):
+        raise MarkerError(f"not a python X.Y and a machine x86_64 / aarch64: {python} {machine}")
+    return {"python_version": python, "python_full_version": python, "implementation_name": "cpython",
+            "platform_python_implementation": "CPython", "sys_platform": "linux", "platform_system": "Linux",
+            "os_name": "posix", "platform_machine": machine}
+
+
+def _version(text: str) -> Tuple[int, ...]:
+    if not re.fullmatch(r"\d+(\.\d+)*", text):
+        raise MarkerError(f"not a version: {text!r}")
+    return tuple(int(part) for part in text.split("."))
+
+
+def _compare(name: str, op: str, value: str, env: Dict[str, str]) -> bool:
+    if name not in env:
+        raise MarkerError(f"unknown marker {name}")
+    if name in MARKER_VERSIONS:
+        if op not in ("<", "<=", "==", "!=", ">=", ">"):
+            raise MarkerError(f"{name} {op} {value!r} is not decided here")
+        ours, theirs = _version(env[name]), _version(value)
+        # python_full_version: any patch level of X.Y, the answer has to be the same for all of them
+        width = max(len(ours) + 1, len(theirs))
+        lowest = ours + (0,) * (width - len(ours))
+        candidates = [lowest] if name == "python_version" else [lowest, ours + (999,) * (width - len(ours))]
+        if name == "python_full_version" and theirs[:len(ours)] == ours:
+            candidates.append(theirs + (0,) * (width - len(theirs)))
+        bound = theirs + (0,) * (width - len(theirs))
+        results = {{"<": c < bound, "<=": c <= bound, "==": c == bound, "!=": c != bound,
+                    ">=": c >= bound, ">": c > bound}[op] for c in candidates}
+        if len(results) != 1:
+            raise MarkerError(f"{name} {op} {value!r} depends on the patch level of python {env[name]}")
+        return results.pop()
+    if op == "==":
+        return env[name] == value
+    if op == "!=":
+        return env[name] != value
+    if op == "in":
+        return env[name] in value
+    if op.split() == ["not", "in"]:
+        return env[name] not in value
+    raise MarkerError(f"{name} {op} {value!r} is not decided here")
+
+
+def marker_true(marker: str, env: Dict[str, str]) -> bool:
+    """A PEP 508 marker of variables, quoted strings, comparisons, and, or and brackets."""
+    tokens, at = [], 0
+    while at < len(marker):
+        if not marker[at:].strip():
+            break
+        found = MARKER_TOKEN.match(marker, at)
+        if not found:
+            raise MarkerError(f"cannot read the marker {marker!r}")
+        tokens.append(found.group(1))
+        at = found.end()
+    position = [0]
+
+    def peek():
+        return tokens[position[0]] if position[0] < len(tokens) else None
+
+    def take():
+        token = peek()
+        if token is None:
+            raise MarkerError(f"the marker {marker!r} ends too early")
+        position[0] += 1
+        return token
+
+    def atom():
+        if peek() == "(":
+            take()
+            result = either()
+            if take() != ")":
+                raise MarkerError(f"a bracket of the marker {marker!r} is not closed")
+            return result
+        left, op, right = take(), take(), take()
+        if left[:1] in "'\"" and right[:1] not in "'\"":
+            # 'value' op name: the same comparison turned round
+            turned = {"<": ">", "<=": ">=", ">": "<", ">=": "<=", "==": "==", "!=": "!="}
+            if op not in turned:
+                raise MarkerError(f"{left} {op} {right} is not decided here")
+            left, op, right = right, turned[op], left
+        if right[:1] not in "'\"" or left[:1] in "'\"":
+            raise MarkerError(f"{left} {op} {right} compares no marker with a value")
+        return _compare(left, op, right[1:-1], env)
+
+    def both():
+        result = atom()
+        while peek() == "and":
+            take()
+            result = atom() and result
+        return result
+
+    def either():
+        result = both()
+        while peek() == "or":
+            take()
+            result = both() or result
+        return result
+
+    result = either()
+    if peek() is not None:
+        raise MarkerError(f"cannot read the marker {marker!r} after {peek()!r}")
+    return result
+
+
+def requirements_for(text: str, env: Dict[str, str]) -> str:
+    """requirements.txt (uv pip compile): its lines joined, comments left out, the markers decided, the
+    requirements that apply without their marker and with their options (--hash), one per line."""
+    logical, current = [], ""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not current and (not stripped or stripped.startswith("#")):
+            continue
+        if stripped.endswith("\\"):
+            current += stripped[:-1] + " "
+            continue
+        logical.append((current + stripped).strip())
+        current = ""
+    if current.strip():
+        logical.append(current.strip())
+    out = []
+    for line in logical:
+        options = re.search(r"\s--", line)
+        requirement, rest = (line[:options.start()], line[options.start():]) if options else (line, "")
+        if ";" in requirement:
+            requirement, marker = requirement.split(";", 1)
+            if not marker_true(marker.strip(), env):
+                continue
+        out.append(" ".join([requirement.strip()] + rest.split()))
+    return "".join(f"{line}\n" for line in out)
 
 
 def _once(text: str, old: str, new: str, where: str) -> str:
@@ -408,6 +566,58 @@ def tree_files(folder: str) -> Dict[str, bytes]:
     return found
 
 
+def debian_python(text: str) -> str:
+    """X.Y of python3 in an answer of madison (see the docstring of the module), whatever its suites
+    are called there (it answers a codename with its alias, trixie as stable)."""
+    try:
+        answer = json.loads(text)
+    except ValueError:
+        answer = None
+    found = []
+    for entry in answer if isinstance(answer, list) else []:
+        suites = entry.get("python3") if isinstance(entry, dict) else None
+        for versions in suites.values() if isinstance(suites, dict) else []:
+            for version in versions if isinstance(versions, dict) else []:
+                match = re.match(r"(?:\d+:)?3\.(\d+)[.~+-]", version + "-")
+                if match:
+                    found.append(int(match.group(1)))
+    if not found:
+        raise PatchError("no python3 in the answer of Debian's archive")
+    return f"3.{max(found)}"
+
+
+def git_tar(folder: str, out: str) -> int:
+    """folder/.git into the tar out (see the docstring of the module); the number of entries."""
+    top = os.path.join(folder, ".git")
+    if os.path.islink(top) or not os.path.isdir(top):
+        raise OSError(f"{top} is no folder")
+    count = 0
+
+    def add(tar: tarfile.TarFile, path: str) -> None:
+        nonlocal count
+        info = tar.gettarinfo(path, os.path.relpath(path, folder).replace(os.sep, "/"))
+        if not (info.isfile() or info.isdir() or info.issym() or info.islnk()):
+            raise OSError(f"{path} is no file, folder or link")
+        info.uid = info.gid = 0
+        info.uname = info.gname = "root"
+        info.mtime = int(info.mtime)
+        if info.isreg():
+            with open(path, "rb") as handle:
+                tar.addfile(info, handle)
+        else:
+            tar.addfile(info)
+        count += 1
+
+    with tarfile.open(out, "w", format=tarfile.PAX_FORMAT) as tar:
+        for root, dirs, names in os.walk(top):
+            add(tar, root)
+            dirs.sort()
+            links = [name for name in dirs if os.path.islink(os.path.join(root, name))]
+            for name in sorted(names + links):
+                add(tar, os.path.join(root, name))
+    return count
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="isotree.py", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -420,11 +630,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     md5.add_argument("--out", required=True)
     splash = sub.add_parser("splash")
     splash.add_argument("file")
+    requirements = sub.add_parser("requirements")
+    requirements.add_argument("--python", required=True)
+    requirements.add_argument("--machine", required=True)
+    requirements.add_argument("file")
+    python = sub.add_parser("debian-python")
+    python.add_argument("file")
+    gittar = sub.add_parser("gittar")
+    gittar.add_argument("--dir", required=True)
+    gittar.add_argument("file")
     args = parser.parse_args(argv)
     try:
         if args.command == "patch":
             for rel in patch_tree(args.arch, args.orig, args.out):
                 print(rel)
+        elif args.command == "requirements":
+            sys.stdout.write(requirements_for(_read(args.file), marker_env(args.python, args.machine)))
+        elif args.command == "debian-python":
+            print(debian_python(_read(args.file)))
+        elif args.command == "gittar":
+            git_tar(args.dir, args.file)
         elif args.command == "md5sum":
             text = update_md5sum(_read(args.orig), tree_files(args.out))
             with open(os.path.join(args.out, "md5sum.txt"), "w", encoding="utf-8") as handle:
@@ -432,7 +657,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             with open(args.file, "wb") as handle:
                 handle.write(splash_png())
-    except (PatchError, OSError) as error:
+    except (PatchError, OSError, tarfile.TarError) as error:
         print(f"isotree.py: {error}", file=sys.stderr)
         return 1
     return 0

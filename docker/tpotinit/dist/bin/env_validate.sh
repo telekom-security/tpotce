@@ -71,7 +71,7 @@ fuCOMPOSE_HAS() {
 myENV_HTPASSWD='^([^:[:space:]]+):(\$apr1\$|\$2[aby]\$|\$5\$|\$6\$|\{SHA\})'
 
 # Every entry has to be base64 of "name:secret", $1 = variable, $2 = htpasswd (the
-# secret is a htpasswd hash, as genuser.sh creates it) | basic (a plain password,
+# secret is a htpasswd hash, as tpot users add creates it) | basic (a plain password,
 # as for the basic auth of a SENSOR). Only the names are shown.
 fuCREDENTIALS() {
     local myVAR="$1" myMODE="$2" myENTRY myLINE
@@ -94,7 +94,7 @@ fuCREDENTIALS() {
               echo "Found valid user in ${myVAR}: ${BASH_REMATCH[1]}"
           elif [ "${myMODE}" == "htpasswd" ];
             then
-              fuENV_ERROR "${myVAR}" "an entry is not a htpasswd user (name:hash), please create it with genuser.sh."
+              fuENV_ERROR "${myVAR}" "an entry is not a htpasswd user (name:hash), please create it with tpot users add."
           else
             fuENV_ERROR "${myVAR}" "an entry is not base64 of name:password."
         fi

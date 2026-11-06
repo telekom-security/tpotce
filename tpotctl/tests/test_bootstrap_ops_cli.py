@@ -155,6 +155,18 @@ class LauncherTest(unittest.TestCase):
         self.assertIn("Cancelled.", err)
         self.assertNotIn("\n\n", err)
 
+    def test_setup_takes_a_folder_of_wheels(self):
+        with tempfile.TemporaryDirectory() as wheels:
+            with mock.patch.object(bootstrap, "setup_venv", return_value="/venv/bin/python3") as setup:
+                code, err = self.launch("setup", "--wheels", wheels)
+            self.assertEqual(code, 0, err)
+            setup.assert_called_once_with(force=False, wheels=wheels)
+        with mock.patch.object(bootstrap, "setup_venv", side_effect=AssertionError("must not build")):
+            for argv in (("setup", "--wheels"), ("setup", "--wheels", "/nonexistent/wheels")):
+                code, err = self.launch(*argv)
+                self.assertEqual(code, 2, err)
+                self.assertIn("--wheels needs a folder", err)
+
     def test_the_exit_code_of_the_venv_child_comes_through(self):
         with mock.patch.object(bootstrap, "ensure", return_value="/venv/bin/python3"), \
                 mock.patch.object(bootstrap, "reexec", return_value=130):
@@ -459,51 +471,24 @@ class OpsTest(unittest.TestCase):
                              ["20261001_tpot_backup_full.tar", "20260901_tpot_backup.tar"])
 
 
-class HostOstypeTest(unittest.TestCase):
-    """ops.host_ostype: what tpotinit compares TPOT_OSTYPE with (entrypoint.sh, uname of the Docker kernel)."""
+class LinuxHostTest(unittest.TestCase):
+    """ops.linux_host: a T-Pot host is Linux with systemd, WSL2 is none (tpotinit refuses its kernel)."""
 
-    def setUp(self):
-        patcher = mock.patch.dict(os.environ)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        os.environ.pop("TPOT_HOST_OSTYPE", None)
+    def test_linux_with_systemd(self):
+        with mock.patch("sys.platform", "linux"), mock.patch("shutil.which", return_value="/usr/bin/systemctl"), \
+                mock.patch("platform.release", return_value="6.12.48+deb13-amd64"):
+            self.assertTrue(ops.linux_host())
 
-    @staticmethod
-    def kernel(text, code=0):
-        import subprocess
-        return lambda command, **kwargs: subprocess.CompletedProcess(command, code, stdout=text, stderr="")
+    def test_wsl2_is_no_tpot_host(self):
+        with mock.patch("sys.platform", "linux"), mock.patch("shutil.which", return_value="/usr/bin/systemctl"), \
+                mock.patch("platform.release", return_value="5.15.167.4-microsoft-standard-WSL2"):
+            self.assertFalse(ops.linux_host())
 
-    def test_from_the_docker_kernel(self):
-        with mock.patch("shutil.which", return_value="/usr/bin/docker"):
-            self.assertEqual(ops.host_ostype(run=self.kernel("6.10.14-linuxkit\n")), "mac")
-            self.assertEqual(ops.host_ostype(run=self.kernel("5.15.167.4-microsoft-standard-WSL2\n")), "win")
-            self.assertEqual(ops.host_ostype(run=self.kernel("6.12.48+deb13-amd64\n")), "linux")
-
-    def test_no_docker_falls_back_to_the_platform(self):
-        with mock.patch("shutil.which", return_value=None):
-            with mock.patch("sys.platform", "darwin"):
-                self.assertEqual(ops.host_ostype(run=self.kernel("", 1)), "mac")
-            with mock.patch("sys.platform", "linux"), mock.patch("platform.release", return_value="6.8.0-45-generic"):
-                self.assertEqual(ops.host_ostype(run=self.kernel("", 1)), "linux")
-            with mock.patch("sys.platform", "linux"), \
-                    mock.patch("platform.release", return_value="5.15.167.4-microsoft-standard-WSL2"):
-                self.assertEqual(ops.host_ostype(run=self.kernel("", 1)), "win")
-
-    def test_docker_that_does_not_answer(self):
-        import subprocess
-
-        def hangs(command, **kwargs):
-            raise subprocess.TimeoutExpired(command, kwargs.get("timeout"))
-        with mock.patch("shutil.which", return_value="/usr/bin/docker"), mock.patch("sys.platform", "darwin"):
-            self.assertEqual(ops.host_ostype(run=hangs), "mac")
-
-    def test_the_environment_wins(self):
-        os.environ["TPOT_HOST_OSTYPE"] = "win"
-        self.assertEqual(ops.host_ostype(run=self.kernel("6.10.14-linuxkit\n")), "win")
-
-    def test_tests_never_ask_docker(self):
-        isolate()
-        self.assertEqual(os.environ.get("TPOT_HOST_OSTYPE"), "linux")
+    def test_macos_and_linux_without_systemd(self):
+        with mock.patch("sys.platform", "darwin"), mock.patch("shutil.which", return_value="/bin/launchctl"):
+            self.assertFalse(ops.linux_host())
+        with mock.patch("sys.platform", "linux"), mock.patch("shutil.which", return_value=None):
+            self.assertFalse(ops.linux_host())
 
 
 class CliTest(unittest.TestCase):
@@ -1035,6 +1020,41 @@ class SetupForceTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.venv + ".new"))
         self.assertFalse(os.path.exists(self.venv + ".old"))
 
+    def pip_calls(self, wheels=None, offline_ok=True, environ=None):
+        """setup_venv(force=True) with a wheels folder: the pip commands it ran."""
+        calls = []
+
+        def call(command, **kwargs):
+            if command[1:3] == ["-m", "venv"]:
+                return self.fake_call()(command, **kwargs)
+            calls.append(command)
+            return 0 if offline_ok or "--no-index" not in command else 1
+        with mock.patch.object(bootstrap, "run_child", side_effect=call), \
+                mock.patch.object(bootstrap, "imports_ok", return_value=True), \
+                mock.patch.dict(os.environ, environ or {}):
+            bootstrap.setup_venv(force=True, quiet=True, wheels=wheels)
+        return calls
+
+    def test_the_wheels_of_the_iso_first_then_pypi(self):
+        """tpot setup --wheels (the T-Pot ISO): no index, the hashes all the same; PyPI only when they do not fit."""
+        import tempfile
+        wheels = tempfile.mkdtemp(dir=self.data)
+        calls = self.pip_calls(wheels)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("--require-hashes", calls[0])
+        self.assertEqual(calls[0][calls[0].index("--find-links") + 1], wheels)
+        self.assertIn("--no-index", calls[0])
+        calls = self.pip_calls(wheels, offline_ok=False)
+        self.assertEqual(len(calls), 2)
+        self.assertNotIn("--no-index", calls[1])
+        self.assertIn("--require-hashes", calls[1])
+        # TPOT_WHEELS without --wheels; a folder that is not there is PyPI at once
+        calls = self.pip_calls(environ={bootstrap.WHEELS_ENV: wheels})
+        self.assertIn("--no-index", calls[0])
+        calls = self.pip_calls(os.path.join(self.data, "none"))
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("--no-index", calls[0])
+
     def test_failed_rebuild_keeps_the_old_venv(self):
         with mock.patch.object(bootstrap, "run_child", side_effect=self.fake_call(pip_ok=False)), \
                 mock.patch.object(bootstrap, "imports_ok", return_value=True):
@@ -1123,6 +1143,7 @@ class SetupForceTest(unittest.TestCase):
     def test_launcher_and_cli_know_force(self):
         from tpotctl import cli
         self.assertTrue(cli.build_parser().parse_args(["setup", "--force"]).force)
+        self.assertEqual(cli.build_parser().parse_args(["setup", "--wheels", "/w"]).wheels, "/w")
         with open(os.path.join(bootstrap.REPO_DIR, "tpot"), encoding="utf-8") as handle:
             self.assertTrue('"--force" in argv' in handle.read())
 

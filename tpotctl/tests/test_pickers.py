@@ -286,7 +286,7 @@ class SettingsHelpersBase(unittest.IsolatedAsyncioTestCase):
                 return []
 
             def settings(self):
-                return settings.load(repo, host_ostype=self.host_ostype())
+                return settings.load(repo)
 
             def edition_current(self):
                 from tpotctl import editions
@@ -693,13 +693,11 @@ class StartProblemsTest(SettingsHelpersBase):
 
     async def test_one_notice_per_start_problem(self):
         notes = self.notes()
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                await self.open_settings(pilot)
-                await pilot.pause(0.3)
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            await pilot.pause(0.3)
         start = [m for t, m in notes if t == "T-Pot would not start"]
-        self.assertEqual(len(start), 2, start)
-        self.assertTrue(any("TPOT_OSTYPE" in m and "Save" in m and "MAC_WIN" in m for m in start), start)
+        self.assertEqual(len(start), 1, start)
         self.assertTrue(any("WEB_USER" in m and "Web users" in m for m in start), start)
         self.assertFalse([m for m in start if ".." in m], start)         # texts that end with a full stop
 
@@ -720,35 +718,35 @@ class StartProblemsTest(SettingsHelpersBase):
             self.assertEqual(self.app.start_problems(), [])
         self.assertFalse([m for t, m in notes if t == "T-Pot would not start"], notes)
 
-    async def test_quit_warns_about_the_proposal_and_the_web_user(self):
+    async def test_quit_warns_about_the_unsaved_change_and_the_web_user(self):
         from tpotctl.screens.dialogs import ConfirmDialog
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                await self.open_settings(pilot)
-                self.app.query_one("#sidebar").focus()
-                await pilot.press("q")
-                await pilot.pause(0.3)
-                self.assertIsInstance(self.app.screen, ConfirmDialog)
-                body = " ".join(str(w.render()) for w in self.app.screen.query("Static"))
-                for part in ("Unsaved on the Settings page: TPOT_OSTYPE", "WEB_USER", "Web users"):
-                    self.assertTrue(part in body, (part, body))
-                await pilot.click("#no")
-                await pilot.pause(0.3)
-                self.assertTrue(self.app.is_running)
-                self.assertEqual(self.app.query_one("#panes").current, "settings")
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            pane.query_one("#set-TPOT_PULL_POLICY").value = "daily"
+            await pilot.pause(0.3)
+            self.app.query_one("#sidebar").focus()
+            await pilot.press("q")
+            await pilot.pause(0.3)
+            self.assertIsInstance(self.app.screen, ConfirmDialog)
+            body = " ".join(str(w.render()) for w in self.app.screen.query("Static"))
+            for part in ("Unsaved on the Settings page: TPOT_PULL_POLICY", "WEB_USER", "Web users"):
+                self.assertTrue(part in body, (part, body))
+            await pilot.click("#no")
+            await pilot.pause(0.3)
+            self.assertTrue(self.app.is_running)
+            self.assertEqual(self.app.query_one("#panes").current, "settings")
 
     async def test_ctrl_q_on_the_quit_dialog_quits(self):
         from tpotctl.screens.dialogs import ConfirmDialog
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                await self.open_settings(pilot)
-                self.app.query_one("#sidebar").focus()
-                await pilot.press("q")
-                await pilot.pause(0.3)
-                self.assertIsInstance(self.app.screen, ConfirmDialog)
-                await pilot.press("ctrl+q")             # the second ask to quit is the yes
-                await pilot.pause(0.3)
-                self.assertFalse(self.app.is_running)
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            self.app.query_one("#sidebar").focus()
+            await pilot.press("q")
+            await pilot.pause(0.3)
+            self.assertIsInstance(self.app.screen, ConfirmDialog)
+            await pilot.press("ctrl+q")             # the second ask to quit is the yes
+            await pilot.pause(0.3)
+            self.assertFalse(self.app.is_running)
 
     async def test_ctrl_q_elsewhere_still_only_says_so(self):
         from tpotctl.screens.dialogs import ConfirmDialog
@@ -765,62 +763,19 @@ class StartProblemsTest(SettingsHelpersBase):
             self.assertTrue(self.app.is_running)
             self.assertIs(self.app.screen, dialog)
 
-    async def test_ready_only_when_the_draft_holds_it(self):
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                pane = await self.open_settings(pilot)
-
-                def fix():
-                    return next(p.fix for p in self.app.start_problems() if p.key == "TPOT_OSTYPE")
-                self.assertIn("ready", fix())
-                pane.query_one("#set-TPOT_OSTYPE").value = "win"           # your own value, not saved
-                await pilot.pause(0.3)
-                self.assertNotIn("ready", fix())
-                self.assertIn("Set it to mac", fix())
-                pane.query_one("#set-TPOT_OSTYPE").value = "mac"
-                await pilot.pause(0.3)
-                self.assertIn("ready", fix())
-
-    async def test_mac_win_hint_when_the_edition_is_unknown(self):
-        def unknown():
-            raise OSError("no compose file")
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                await self.open_settings(pilot)
-                self.app.backend.edition_current = unknown
-                fix = next(p.fix for p in self.app.start_problems() if p.key == "TPOT_OSTYPE")
-        self.assertIn("Docker Desktop runs the MAC_WIN edition", fix)
-        self.assertNotIn("switch to", fix)
-
-    async def test_mac_win_hint_follows_the_edition_in_use(self):
-        cases = {("CUSTOM", "MAC_WIN"): "", ("MAC_WIN", ""): "", ("none", ""): "Docker Desktop runs",
-                 ("unknown", ""): "Docker Desktop runs", ("STANDARD", ""): "switch to the MAC_WIN"}
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                await self.open_settings(pilot)
-                for in_use, want in cases.items():
-                    with self.subTest(edition=in_use):
-                        self.app.backend.edition_current = lambda in_use=in_use: in_use
-                        fix = next(p.fix for p in self.app.start_problems() if p.key == "TPOT_OSTYPE")
-                        if want:
-                            self.assertIn(want, fix)
-                        else:
-                            self.assertNotIn("MAC_WIN", fix)
-
     async def test_q_on_the_quit_dialog_quits(self):
         from tpotctl.screens.dialogs import ConfirmDialog
         from textual.widgets import Input
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                await self.open_settings(pilot)
-                self.app.query_one("#sidebar").focus()
-                await pilot.press("q")
-                await pilot.pause(0.3)
-                self.assertIsInstance(self.app.screen, ConfirmDialog)
-                self.assertFalse(self.app.screen.query(Input))            # nothing to type q into
-                await pilot.press("q")
-                await pilot.pause(0.3)
-                self.assertFalse(self.app.is_running)
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            self.app.query_one("#sidebar").focus()
+            await pilot.press("q")
+            await pilot.pause(0.3)
+            self.assertIsInstance(self.app.screen, ConfirmDialog)
+            self.assertFalse(self.app.screen.query(Input))            # nothing to type q into
+            await pilot.press("q")
+            await pilot.pause(0.3)
+            self.assertFalse(self.app.is_running)
 
     async def test_q_elsewhere_does_nothing(self):
         from tpotctl.screens.dialogs import ConfirmDialog
@@ -838,15 +793,14 @@ class StartProblemsTest(SettingsHelpersBase):
             self.assertIs(self.app.screen, dialog)
 
     async def test_quit_anyway(self):
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                await self.open_settings(pilot)
-                self.app.query_one("#sidebar").focus()
-                await pilot.press("q")
-                await pilot.pause(0.3)
-                await pilot.click("#yes")
-                await pilot.pause(0.3)
-                self.assertFalse(self.app.is_running)
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            self.app.query_one("#sidebar").focus()
+            await pilot.press("q")
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.3)
+            self.assertFalse(self.app.is_running)
 
     async def test_quit_without_anything_pending_ends_at_once(self):
         self.with_web_user()
@@ -1119,41 +1073,40 @@ class RefreshTriggersTest(SettingsHelpersBase):
             await pilot.pause(0.5)
             self.assertFalse(self.app.is_running)
 
-    async def test_edition_switch_refreshes_the_proposal(self):
+    async def test_edition_switch_refreshes_the_settings(self):
         from tpotctl.screens.task import Task, TaskScreen
         repo = self.repo
 
         class Switching:
-            """tpot edition set mac_win as it leaves the checkout: compose file and TPOT_OSTYPE."""
+            """tpot edition set mini as it leaves the checkout: compose file and .env."""
             def __init__(self, command, env=None, cwd=None):
                 pass
 
             def run(self, line):
                 from tpotctl.envfile import EnvFile
-                shutil.copy(os.path.join(REPO_DIR, "compose", "mac_win.yml"), os.path.join(repo, "docker-compose.yml"))
+                shutil.copy(os.path.join(REPO_DIR, "compose", "mini.yml"), os.path.join(repo, "docker-compose.yml"))
                 env = EnvFile(os.path.join(repo, ".env"))
-                env.set("TPOT_OSTYPE", "mac")
+                env.set("TPOT_PULL_POLICY", "daily")
                 env.save()
                 line("@@tpot phase done Done\n")
                 return 0
 
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                pane = await self.open_settings(pilot)
-                self.assertEqual(pane.changes().get("TPOT_OSTYPE"), "mac")
-                self.app.engine = Switching
-                self.app.run_task(Task("Switch to the macOS / Windows edition", ["/x/tpot", "edition", "set"]))
-                await pilot.pause(0.3)
-                self.assertIsInstance(self.app.screen, TaskScreen)
-                await pilot.click("#task-run")
-                for _ in range(40):
-                    await pilot.pause(0.05)
-                    if self.app.screen.code is not None:
-                        break
-                await pilot.press("escape")
-                await pilot.pause(0.8)
-                self.assertNotIn("TPOT_OSTYPE", pane.changes())
-                self.assertFalse([p for p in self.app.start_problems() if p.key == "TPOT_OSTYPE"])
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            self.assertNotEqual(pane.query_one("#set-TPOT_PULL_POLICY").value, "daily")
+            self.app.engine = Switching
+            self.app.run_task(Task("Switch to the Mini edition", ["/x/tpot", "edition", "set"]))
+            await pilot.pause(0.3)
+            self.assertIsInstance(self.app.screen, TaskScreen)
+            await pilot.click("#task-run")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if self.app.screen.code is not None:
+                    break
+            await pilot.press("escape")
+            await pilot.pause(0.8)
+            self.assertEqual(pane.query_one("#set-TPOT_PULL_POLICY").value, "daily")
+            self.assertEqual(pane.changes(), {})
 
     async def test_customizer_refreshes_the_services(self):
         from tpotctl import app as tapp
@@ -1437,54 +1390,11 @@ class SettingsDraftTest(SettingsHelpersBase):
             self.assertNotIn("GALAH_LLM_MODEL", settings.changes())
             self.assertTrue(any("GALAH_LLM_MODEL" in n for n in notes))
 
-    async def test_settings_page_on_a_mac_proposes_the_os_type(self):
-        notes = []
-        self.app.notify = lambda message, **kwargs: notes.append(message)
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                settings_pane = await self.open_settings(pilot)
-                self.assertEqual(settings_pane.changes().get("TPOT_OSTYPE"), "mac")
-                self.assertIn("TPOT_OSTYPE", settings_pane.unlocked)
-                self.assertTrue(any("TPOT_OSTYPE" in n for n in notes), notes)
-                self.assertIn("mac fits this host", str(settings_pane.rows["TPOT_OSTYPE"].note))
-                settings_pane.query_one("#settings-save").press()
-                for _ in range(30):
-                    await pilot.pause(0.1)
-                    if self.app.screen.query("#no"):
-                        break
-                if self.app.screen.query("#no"):
-                    await pilot.click("#no")             # no restart of T-Pot
-                    await pilot.pause(0.3)
-        with open(os.path.join(self.repo, ".env"), encoding="utf-8") as handle:
-            self.assertTrue("TPOT_OSTYPE=mac\n" in handle.read())
-
-    async def test_settings_page_on_linux_proposes_nothing(self):
+    async def test_settings_page_proposes_nothing(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
             settings_pane = await self.open_settings(pilot)
-            self.assertNotIn("TPOT_OSTYPE", settings_pane.changes())
-            self.assertNotIn("TPOT_OSTYPE", settings_pane.unlocked)
-
-    async def test_the_llm_page_does_not_take_the_os_type(self):
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                llm_pane = await self.open_llm(pilot)
-                self.assertNotIn("TPOT_OSTYPE", llm_pane.changes())
-
-    async def test_revert_declines_the_proposal(self):
-        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
-            async with self.app.run_test(size=(150, 50)) as pilot:
-                pane = await self.open_settings(pilot)
-                self.assertEqual(pane.changes().get("TPOT_OSTYPE"), "mac")
-                pane.query_one("#settings-revert").press()
-                await pilot.pause(0.6)
-                self.assertNotIn("TPOT_OSTYPE", pane.changes())
-                problem = next(p for p in self.app.start_problems() if p.key == "TPOT_OSTYPE")
-                self.assertNotIn("ready", problem.fix)               # nothing is ready any more
-                await self.save_llm_model(pilot, "qwen3")            # a reload from the other page
-                self.assertNotIn("TPOT_OSTYPE", pane.changes())
-                self.app.fix_setting("TPOT_OSTYPE")                  # the palette entry asks again
-                await pilot.pause(0.6)
-                self.assertEqual(pane.changes().get("TPOT_OSTYPE"), "mac")
+            self.assertEqual(settings_pane.changes(), {})
+            self.assertFalse(settings_pane.unlocked)
 
     async def test_same_value_saved_elsewhere_says_nothing(self):
         async with self.app.run_test(size=(150, 50)) as pilot:

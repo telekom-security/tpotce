@@ -24,10 +24,7 @@ import threading
 import time
 from typing import Callable, Iterable, List, Optional, Tuple
 
-try:
-    import fcntl
-except ImportError:          # Windows: checks run on a Linux T-Pot host only
-    fcntl = None
+import fcntl
 
 from tpotctl import kibana_objects
 from tpotctl.checks import CheckError, HoldError
@@ -134,8 +131,6 @@ def ews_state(data_dir: str, now: Callable[[], float] = time.time) -> Tuple[str,
 def check_running(data_dir: str) -> bool:
     """Whether a check holds the lock of the checks now (<data>/ews/check.lock): tried without
     waiting and given back at once; no folder or no lock file is no check (never created here)."""
-    if fcntl is None:
-        return False
     try:
         folder = Folder.walk(data_dir, (EWS_DIR,), False)
     except (KibanaError, OSError):
@@ -317,7 +312,7 @@ class EwsHold:
         return os.path.join(self.data_dir, EWS_DIR)
 
     def __enter__(self) -> "EwsHold":
-        if fcntl is None or not kibana_objects.DIR_FD:
+        if not kibana_objects.DIR_FD:
             raise CheckError("this system cannot lock a check or hold ewsposter, checks need a Linux T-Pot host")
         self._stop = threading.Event()
         self._failed = ""

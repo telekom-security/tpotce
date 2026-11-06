@@ -336,7 +336,7 @@ class CliTest(BuilderHarness):
                     rc, out = self.builder(*args, STUB_SYSTEM=system)
                     self.assertEqual(rc, 3, out)
                     self.assertIn(f"### [ERROR] - Image Builder does not run on {name}.", out)
-                    self.assertIn("runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows", out)
+                    self.assertIn("runs on Linux: a T-Pot host, a build host or a VM.", out)
                     self.assertEqual(self.calls(), [])
                     self.assertFalse(os.path.exists(self.local))
         rc, out = self.builder("-h", STUB_SYSTEM="Darwin")

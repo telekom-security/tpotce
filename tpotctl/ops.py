@@ -29,55 +29,16 @@ class OpsError(Exception):
 
 
 def linux_host() -> bool:
-    """A T-Pot host: Linux with systemd. mac_win installations only get the customizer."""
-    return sys.platform.startswith("linux") and shutil.which("systemctl") is not None
-
-
-# TPOT_OSTYPE and the Docker it stands for, see tpotinit's entrypoint.sh
-OSTYPE_TEXT = {"linux": "Docker Engine on Linux", "mac": "Docker Desktop for macOS",
-               "win": "Docker Desktop for Windows"}
-_HOST_OSTYPE: List[str] = []
-
-
-def host_ostype(run: Optional[Callable] = None) -> str:
-    """linux, mac or win: what tpotinit compares TPOT_OSTYPE with when it starts (uname of the
-    kernel Docker runs on: microsoft is Windows, linuxkit is macOS). Without an answer from Docker
-    the platform of tpot decides. TPOT_HOST_OSTYPE wins (the tests set it); one Docker call per
-    process unless run is given."""
-    forced = os.environ.get("TPOT_HOST_OSTYPE", "")
-    if forced in OSTYPE_TEXT:
-        return forced
-    if run is None and _HOST_OSTYPE:
-        return _HOST_OSTYPE[0]
-    kernel = ""
-    if shutil.which("docker"):
-        try:
-            proc = (run or subprocess.run)(["docker", "info", "--format", "{{.KernelVersion}}"],
-                                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                           universal_newlines=True, timeout=2)
-            kernel = (proc.stdout or "").strip().lower() if proc.returncode == 0 else ""
-        except (OSError, subprocess.SubprocessError):
-            kernel = ""
-    if "microsoft" in kernel:
-        found = "win"
-    elif "linuxkit" in kernel:
-        found = "mac"
-    elif kernel:
-        found = "linux"
-    elif sys.platform == "darwin":
-        found = "mac"
-    elif sys.platform in ("win32", "cygwin") or "microsoft" in platform.release().lower():
-        found = "win"
-    else:
-        found = "linux"
-    if run is None:
-        _HOST_OSTYPE.append(found)
-    return found
+    """A T-Pot host: Linux with systemd, not WSL2 (tpotinit and install.sh refuse its kernel). Elsewhere,
+    i.e. on macOS, the T-Pot Manager prepares a configuration: editions, customizer, settings, users."""
+    return sys.platform.startswith("linux") and shutil.which("systemctl") is not None \
+        and "microsoft" not in platform.release().lower()
 
 
 def require_linux_host(what: str) -> None:
     if not linux_host():
-        raise OpsError(f"'{what}' needs a T-Pot host (Linux with systemd), here only 'tpot customize' works")
+        raise OpsError(f"'{what}' needs a T-Pot host (Linux with systemd, Debian recommended), here the T-Pot "
+                       f"Manager prepares a configuration only")
 
 
 # ---------------------------------------------------------------------------

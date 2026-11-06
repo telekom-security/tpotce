@@ -39,7 +39,6 @@ in that profile. Every existing competing honeypot retains its mapping
 | Profile | Additional Heralding host ports |
 |---|---|
 | root, standard, sensor, mobile | 389, 636, 990, 8883 TCP |
-| mac_win | above plus 445 TCP |
 | tarpit | above plus 445, 587, 1433, 1883, 6379 TCP; 5060 TCP+UDP |
 | tpot_services catalogue | 636, 990, 8883 TCP (389 belongs to honeypots) |
 | standalone docker/heralding compose | all new service ports, including 8080 |

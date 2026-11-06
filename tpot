@@ -27,7 +27,10 @@ def main():
 
 
 def run(argv):
-    if hasattr(os, "geteuid") and os.geteuid() == 0:
+    # T-Pot runs on Linux; macOS prepares configurations for it, Windows is not supported
+    if os.name == "nt":
+        fail("The T-Pot Manager runs on Linux and macOS, not on Windows.")
+    if os.geteuid() == 0:
         fail("do not run tpot as root, it calls sudo itself where needed")
     # the colours chosen (TPOT_COLORS, prefs) reach Textual before anything imports it
     prefs.apply_color_system(os.environ)
@@ -43,8 +46,14 @@ def run(argv):
     if on_host and not os.environ.get(bootstrap.GUARD) and argv[:1] in ([], ["setup"]):
         bootstrap.ensure_link(os.path.join(REPO_DIR, "tpot"))
     if argv[:1] == ["setup"]:
+        wheels = None
+        if "--wheels" in argv[1:]:
+            at = argv.index("--wheels", 1)
+            if at + 1 >= len(argv) or not os.path.isdir(argv[at + 1]):
+                fail("--wheels needs a folder with the wheels of tpotctl/requirements.txt")
+            wheels = argv[at + 1]
         try:
-            python = bootstrap.setup_venv(force="--force" in argv[1:])
+            python = bootstrap.setup_venv(force="--force" in argv[1:], wheels=wheels)
         except bootstrap.BootstrapError as err:
             fail(str(err), 1)
         say.ok(f"The Python packages of the T-Pot Manager are ready ({os.path.dirname(os.path.dirname(python))}).")

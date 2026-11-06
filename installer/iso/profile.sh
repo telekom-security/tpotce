@@ -2,7 +2,7 @@
 # The T-Pot ISO (/etc/profile.d/tpot-iso.sh, put here by late.sh): starts the T-Pot installer of the
 # ISO at an interactive login, on the console or via SSH, until T-Pot is installed (tpot.service).
 # Never for root, never without a terminal, not again inside the installer. Abort in the installer
-# keeps a plain Debian and asks again at the next login.
+# keeps a plain Debian and asks again at the next login (and after the next boot, tpot-iso.service).
 #   bash /usr/local/share/tpot-iso/start.sh   starts it by hand
 #   TPOT_ISO=off                              skips it for one login
 #   sudo rm /etc/profile.d/tpot-iso.sh        stops asking for good

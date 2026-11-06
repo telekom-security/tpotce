@@ -1,2 +1,3 @@
-T-Pot ISO: log in as the user created during the installation (here or via SSH to \4),
-the T-Pot installer starts at the first login.
+T-Pot ISO: on a screen the T-Pot installer starts on its own after the boot
+(Alt+F8). Otherwise log in as the user created during the installation, here
+or via SSH to \4: the installer starts then.

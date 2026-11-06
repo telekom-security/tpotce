@@ -479,7 +479,7 @@ FALLBACK = r'''    fuUI_INIT () { return 0; }
         "") mySYSTEM="an unknown system" ;;
       esac
       echo "### [ERROR] - $1 does not run on ${mySYSTEM}." >&2
-      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM." >&2
       exit "${2:-1}"
     }
     fuUI_RESULT () {
@@ -588,7 +588,7 @@ FALLBACK_END = "# <<< plain fallback"
 
 def _fallback_files() -> Tuple[str, ...]:
     """The scripts at the top of the checkout and in the folders of docker/ with a fallback block
-    (update.sh, restore.sh, genuser.sh, deploy.sh and the image builder; tests/test_ui.py names them).
+    (update.sh, restore.sh, deploy.sh and the image builder; tests/test_ui.py names them).
     Found by the mark, so a new script gets its block from the generator too."""
     found = []
     docker = os.path.join(REPO, "docker")

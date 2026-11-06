@@ -11,6 +11,7 @@ the one of the distribution when there is one.
 """
 
 import contextlib
+import fcntl
 import hashlib
 import os
 import re
@@ -24,6 +25,9 @@ from typing import Optional
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQUIREMENTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
 MARKER = "tpot-requirements.sha256"
+# a folder of the wheels of requirements.txt (the T-Pot ISO has them): tpot setup installs from there
+# first, without the internet, and from PyPI only when they do not fit (another requirements.txt)
+WHEELS_ENV = "TPOT_WHEELS"
 # set for a process started from the venv, so a broken venv cannot loop
 GUARD = "TPOT_VENV"
 NEEDS = {"yaml": ("yaml",), "ui": ("yaml", "textual", "rich")}
@@ -108,8 +112,6 @@ def old_venv_dir() -> str:
 
 
 def venv_python(directory: str) -> str:
-    if os.name == "nt":
-        return os.path.join(directory, "Scripts", "python.exe")
     return os.path.join(directory, "bin", "python3")
 
 
@@ -153,8 +155,6 @@ def install_hint(package: str = "python3-venv") -> str:
     """What to install when this Python cannot create a venv."""
     if sys.platform == "darwin":
         return "Install Python from python.org or Homebrew (brew install python), both can create a venv."
-    if os.name == "nt":
-        return "Install Python from python.org, it can create a venv."
     return linux_hint(os_release_ids(), package)
 
 
@@ -199,7 +199,7 @@ def apt_get():
 
 def interactive() -> bool:
     """A person at a terminal: the question goes to stderr, the answer comes from stdin. stdout may be
-    redirected (tpot attackers > file, setup > /dev/null in genuser.sh) and must not swallow it."""
+    redirected (tpot attackers > file, setup > /dev/null in a script) and must not swallow it."""
     return sys.stdin.isatty() and sys.stderr.isatty()
 
 
@@ -317,8 +317,11 @@ def _make_venv(directory: str):
     return False, output
 
 
-def setup_venv(force: bool = False, quiet: bool = False) -> str:
+def setup_venv(force: bool = False, quiet: bool = False, wheels: Optional[str] = None) -> str:
     """Create, refresh or (force) rebuild the venv, give back its Python.
+
+    wheels (default TPOT_WHEELS): a folder with the wheels of requirements.txt, tried first without
+    the internet (their hashes are checked all the same); PyPI only when they do not fit.
 
     The venv is built next to the one in use (venv.new) and swapped in when it works, so
     a tpot that runs meanwhile keeps its packages, and a failed build (no internet)
@@ -327,6 +330,9 @@ def setup_venv(force: bool = False, quiet: bool = False) -> str:
     """
     directory = venv_dir()
     python = venv_python(directory)
+    if wheels is None:
+        wheels = os.environ.get(WHEELS_ENV, "")
+    wheels = wheels if wheels and os.path.isdir(wheels) else ""
     shutil.rmtree(old_venv_dir(), ignore_errors=True)
     if not force and venv_current(directory):
         _clear_leftovers(directory)
@@ -339,9 +345,10 @@ def setup_venv(force: bool = False, quiet: bool = False) -> str:
         for leftover in (directory + ".new", directory + ".old"):       # of a run that broke off
             shutil.rmtree(leftover, ignore_errors=True)
         if not quiet:
-            print(f"[INFO] - Setting up the Python packages of the T-Pot Manager in {directory} (needs internet) ...",
+            source = f"from {wheels}" if wheels else "needs internet"
+            print(f"[INFO] - Setting up the Python packages of the T-Pot Manager in {directory} ({source}) ...",
                   file=sys.stderr)
-        _build(directory + ".new")
+        _build(directory + ".new", wheels)
         try:
             _swap(directory + ".new", directory)
         except OSError as err:
@@ -353,10 +360,6 @@ def _clear_leftovers(directory: str) -> None:
     """venv.new / venv.old of a build that broke off (tpot setup --force stopped with ^C), only when no
     build runs: one that holds the lock (another shell) keeps its venv.new."""
     if not (os.path.exists(directory + ".new") or os.path.exists(directory + ".old")):
-        return
-    try:
-        import fcntl
-    except ImportError:             # Windows: left for the next build
         return
     try:
         with open(directory + ".lock", "w") as handle:
@@ -376,11 +379,6 @@ def _clear_leftovers(directory: str) -> None:
 @contextlib.contextmanager
 def _build_lock(directory: str):
     os.makedirs(os.path.dirname(directory), exist_ok=True)
-    try:
-        import fcntl
-    except ImportError:          # Windows: the customizer only, no menu that rebuilds meanwhile
-        yield
-        return
     with open(directory + ".lock", "w") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:
@@ -389,16 +387,16 @@ def _build_lock(directory: str):
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def _build(directory: str) -> None:
+def _build(directory: str, wheels: str = "") -> None:
     """Build the venv in directory; a build that breaks off (^C, an error) leaves nothing behind."""
     try:
-        _build_in(directory)
+        _build_in(directory, wheels)
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
 
 
-def _build_in(directory: str) -> None:
+def _build_in(directory: str, wheels: str = "") -> None:
     os.makedirs(os.path.dirname(directory), exist_ok=True)
     python = venv_python(directory)
     made, output = _make_venv(directory)
@@ -411,9 +409,12 @@ def _build_in(directory: str) -> None:
         raise BootstrapError(f"{sys.executable} cannot create a venv. {install_hint(package)}"
                              + (f"\nvenv said: {said}" if said else ""))
     pip = [python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--no-cache-dir",
-           "--timeout", "15", "--retries", "1",
-           "--require-hashes", "--only-binary", ":all:", "--no-deps", "-r", REQUIREMENTS]
-    if run_child(pip) != 0 or not imports_ok(python, NEEDS["ui"]):
+           "--require-hashes", "--only-binary", ":all:", "--no-deps"]
+    # the wheels at hand first (no index at all), then PyPI: they may be of another requirements.txt
+    installed = bool(wheels) and run_child(pip + ["--no-index", "--find-links", wheels, "-r", REQUIREMENTS]) == 0
+    if not installed:
+        installed = run_child(pip + ["--timeout", "15", "--retries", "1", "-r", REQUIREMENTS]) == 0
+    if not installed or not imports_ok(python, NEEDS["ui"]):
         shutil.rmtree(directory, ignore_errors=True)
         raise BootstrapError(
             "the packages could not be installed: no internet, pypi.org not reachable, or no wheel "

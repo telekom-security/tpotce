@@ -882,8 +882,6 @@ services:
   nginx:
     container_name: nginx
     restart: always
-    environment:
-      - TPOT_OSTYPE=${TPOT_OSTYPE}
     depends_on:
       tpotinit:
         condition: service_healthy

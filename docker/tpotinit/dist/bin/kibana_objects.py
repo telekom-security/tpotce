@@ -70,10 +70,7 @@ import zipfile
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
-try:
-    import fcntl
-except ImportError:          # Windows: the imports run on a Linux host only, the lock is not needed there
-    fcntl = None
+import fcntl
 
 RULES = 2
 SKIP_TYPES = frozenset({"config", "config-global"})
@@ -373,7 +370,7 @@ def lock_path(data_dir: str) -> str:
 
 
 BUSY = "another Kibana import is running (tpotinit or tpot elastic), try again in a minute"
-# flock errors of a file system without file locks (Docker Desktop bind mounts): the run goes on
+# flock errors of a file system without file locks (some network or FUSE mounts): the run goes on
 # without the lock, warned once per process
 NO_LOCKS = {e for e in (getattr(errno, "ENOLCK", None), getattr(errno, "ENOTSUP", None),
                         getattr(errno, "EOPNOTSUPP", None), errno.EINVAL) if e is not None}
@@ -413,8 +410,7 @@ def _not_own(path: str, what: str) -> KibanaError:
 
 
 def _blocking(handle: int) -> None:
-    if fcntl is not None:
-        fcntl.fcntl(handle, fcntl.F_SETFL, fcntl.fcntl(handle, fcntl.F_GETFL) & ~NONBLOCK)
+    fcntl.fcntl(handle, fcntl.F_SETFL, fcntl.fcntl(handle, fcntl.F_GETFL) & ~NONBLOCK)
 
 
 # errors of fchown that mean the folder cannot take this owner (NFS with root_squash, a file
@@ -767,7 +763,7 @@ def import_lock(data_dir: str, wait: Optional[float] = None):
     <data>/kibana_objects/lock, waited for at most `wait` (LOCK_WAIT) seconds (then BUSY).
     The run holds <data>/kibana_objects open for all its files. A run inside a run of the
     same thread holds it already; another thread waits like any other run. A file system
-    without file locks (NO_LOCKS, a bind mount of Docker Desktop) runs without the lock,
+    without file locks (NO_LOCKS, some network or FUSE mounts) runs without the lock,
     with one warning per process; any other lock that cannot be opened or taken is a
     KibanaError that names it."""
     path = os.path.abspath(lock_path(data_dir))
@@ -778,9 +774,6 @@ def import_lock(data_dir: str, wait: Optional[float] = None):
             yield
         finally:
             held[path] -= 1
-        return
-    if fcntl is None:
-        yield
         return
     folder = None
     try:

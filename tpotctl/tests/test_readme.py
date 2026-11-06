@@ -22,7 +22,7 @@ NAMES = {"ADBHoney": ["adbhoney"], "Beelzebub": ["beelzebub"], "CiscoASA": ["cis
          "Wordpot": ["wordpot"]}
 # the editions in the order a honeypot outside the standard edition is listed with, and their names
 EDITIONS = {"standard": "standard", "llm": "LLM", "tarpit": "Tarpit", "mini": "Mini", "mobile": "Mobile",
-            "sensor": "Sensor", "mac_win": "Mac / Windows"}
+            "sensor": "Sensor"}
 # groups of the catalogue whose services the table lists
 GROUPS = ("honeypots", "conpot", "llm")
 

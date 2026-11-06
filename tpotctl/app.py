@@ -44,9 +44,6 @@ class Backend:
     def linux_host(self) -> bool:
         return ops.linux_host()
 
-    def host_ostype(self) -> str:
-        return ops.host_ostype()
-
     def config_stamp(self):
         return ops.config_stamp()
 
@@ -69,8 +66,7 @@ class Backend:
 
     def settings(self):
         from tpotctl import settings
-        # TPOT_OSTYPE is compared with the host, as tpotinit does (one docker call per run)
-        return settings.load(host_ostype=self.host_ostype())
+        return settings.load()
 
     def tpot_type(self) -> str:
         return ops.env_values().get("TPOT_TYPE", "HIVE")
@@ -600,8 +596,8 @@ class EditionPane(Vertical):
         choice = self.selected()
         button = self.query_one("#switch-edition", Button)
         note = Text()
-        if not self.app.backend.linux_host() and self.in_use == "mac_win":
-            note.append("macOS and Windows run the MAC_WIN edition, there is no other to switch to.",
+        if not self.app.backend.linux_host():
+            note.append("No T-Pot host: a switch prepares the compose file and .env here, T-Pot runs on Linux.",
                         style=theme.color("ash"))
         button.disabled = choice is None or choice.key == self.in_use
         button.label = f"Switch to {choice.title}" if choice is not None else "Switch"
@@ -718,8 +714,7 @@ class SettingsPane(Vertical):
         self.current = None
         self.rows = {}
         self.unlocked = set()
-        self.fix_told = False           # the notice about a value that does not fit the host, once
-        self.declined = set()           # proposals (TPOT_OSTYPE) taken back with Revert
+        self.fix_told = False           # the notice about the values T-Pot would not start with, once
         await self.reload()
 
     async def reload(self, keep: Optional[Dict[str, str]] = None, keep_unlocked: Iterable[str] = ()) -> None:
@@ -771,10 +766,6 @@ class SettingsPane(Vertical):
         by_section = {}
         shown = [rule for rule in self.current.relevant(include_all=self.include_all, offered=True)
                  if self.wanted(rule)]
-        # a fixed value that does not fit this host (TPOT_OSTYPE): the one that fits, ready to save
-        fixes = {key: value for key, value in self.current.fixes().items()
-                 if key in {rule.key for rule in shown} and key not in (keep or {}) and key not in self.declined}
-        self.draft.update(fixes)
         for rule in shown:
             row = SettingRow(rule, self.draft.get(rule.key, ""), self.current.why_fixed(rule.key),
                              unlockable=self.current.can_unlock(rule.key), note=self.current.not_here(rule))
@@ -786,7 +777,7 @@ class SettingsPane(Vertical):
                                             id=f"tab-{section}"))
         if active and active in [f"tab-{section}" for section in by_section]:
             tabs.active = active
-        for key in list(keep_unlocked) + [key for key in fixes if key in self.rows]:
+        for key in keep_unlocked:
             if key in self.rows and key not in self.unlocked:
                 # unlocked again in the background: the focus stays where the person is
                 await self.unlock(self.rows[key], focus=False)
@@ -919,11 +910,8 @@ class SettingsPane(Vertical):
         from tpotctl.widgets.fields import SettingRow
         key = row.rule.key
         self.unlocked.add(key)
-        fix = self.current.fixes().get(key) if self.current is not None else None
-        # short: it sits under the title in the narrow label column, the notice says the rest
-        note = f"{fix} fits this host, Save it" if fix in ops.OSTYPE_TEXT else ""
         editable = SettingRow(dataclasses.replace(row.rule, editable=True), self.draft.get(key, ""), "",
-                              unlocked=True, note=note)
+                              unlocked=True)
         parent = row.parent
         place = list(parent.children).index(row)
         await row.remove()
@@ -1000,9 +988,6 @@ class SettingsPane(Vertical):
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == f"{self.PREFIX}-revert":
-            # Revert takes the proposal back too, it stays away until asked for again (palette: Fix ...)
-            if self.current is not None:
-                self.declined |= set(self.current.fixes())
             await self.reload()
         elif event.button.id == f"{self.PREFIX}-save":
             if self.saving:             # a press that came in before Save was disabled
@@ -1031,7 +1016,7 @@ class SettingsPane(Vertical):
     async def save_retention(self, saved: Dict[str, str]) -> None:
         """A changed TPOT_ES_RETENTION: a shorter retention asks first, before anything is written, whether
         indices go right away or not (as tpot elastic; a policy kept longer than .env says counts too). Off
-        a T-Pot host as well (Docker Desktop publishes Elasticsearch on 127.0.0.1 too). An Elasticsearch that
+        a T-Pot host as well (an Elasticsearch on 127.0.0.1:64298 answers there too). An Elasticsearch that
         does not answer: only .env is written, a shorter value waits, T-Pot never shortens on its own.
         Save stays disabled until the save is done: after a yes, until the apply and the reload are."""
         import asyncio
@@ -2746,7 +2731,7 @@ class ElasticPane(Vertical):
 
 # indices listed in the question before a shorter retention, the rest as a count
 DOOMED_SHOWN = 12
-# where the ILM policy tpot is changed where the T-Pot Manager has no Elastic page (Docker Desktop)
+# where the ILM policy tpot is changed where the T-Pot Manager has no Elastic page
 KIBANA_ILM = "Kibana, Stack Management › Index Lifecycle Policies"
 
 
@@ -3064,14 +3049,14 @@ PANES = [
     ("update", "Update & backup", UpdatePane, "host"),
 ]
 PANES.sort(key=lambda pane: menu.PAGE_ORDER.index(pane[0]))
-NOT_HERE = "needs a T-Pot host: Linux with systemd. On macOS and Windows T-Pot runs in Docker Desktop."
+NOT_HERE = "needs a T-Pot host: Linux with systemd (Debian recommended, not WSL2). Here the T-Pot Manager prepares a configuration."
 ON_A_SENSOR = {"users": "a SENSOR has no web UI, its events go to its HIVE.",
                "sensors": "sensors are managed on their HIVE, this is a SENSOR.",
                "elastic": "a SENSOR has no Elasticsearch, its events go to its HIVE."}
 # what does the job of a locked page on the command line or elsewhere
 INSTEAD = {"status": "docker compose ps, or tpot status on the T-Pot host",
            "sensors": "tpot sensors on the HIVE", "images": "docker images",
-           "checks": "tpot check on the T-Pot host", "update": "git pull in ~/tpotce, then tpot customize",
+           "checks": "tpot check on the T-Pot host", "update": "git pull in ~/tpotce, or tpot update on the T-Pot host",
            "users": "tpot users on the HIVE",
            "elastic": f"tpot elastic on the HIVE, or {KIBANA_ILM}"}
 SHORT = {"edition": "Edition", "users": "Users", "update": "Update"}
@@ -3412,31 +3397,12 @@ class TpotApp(App):
             problems = current.problems()
         except Exception:      # SettingsError, OSError: the Settings page says so itself
             return []
-        fixes, found = current.fixes(), {}
+        found = {}
         for problem in problems:
             if problem.level != "error" or problem.key in found:
                 continue
             key, page = problem.key, "settings"
-            if key in fixes:
-                value, page_pane = fixes[key], pane.first() if pane else None
-                if page_pane is not None and getattr(page_pane, "draft", {}).get(key) == value:
-                    fix = f"Settings has {value} ready, Save it"
-                elif key in getattr(page_pane, "declined", ()):
-                    fix = f"Set it to {value} on the Settings page (palette: Fix {key})"
-                else:           # not loaded yet, or a value of your own in the draft
-                    fix = f"Set it to {value} on the Settings page"
-                if value != "linux":
-                    try:        # (name, base): CUSTOM from MAC_WIN runs MAC_WIN too
-                        name, base = (part.lower() for part in self.backend.edition_current())
-                    except Exception:
-                        name, base = "unknown", ""
-                    if "mac_win" in (name, base):
-                        pass
-                    elif name in ("none", "unknown"):
-                        fix += " (Docker Desktop runs the MAC_WIN edition)"
-                    else:
-                        fix += " and switch to the MAC_WIN edition on Edition & services"
-            elif key == "WEB_USER" and "tpot users import" in problem.text:
+            if key == "WEB_USER" and "tpot users import" in problem.text:
                 fix, page = "Take them over on the Web users page (tpot users import)", "users"
             elif key == "WEB_USER":
                 fix, page = "Add one on the Web users page (tpot users add)", "users"
@@ -3446,22 +3412,6 @@ class TpotApp(App):
                 fix = "Fix it on the Settings page"
             found[key] = StartProblem(key, problem.text.rstrip(". "), fix, page)     # the callers add ". "
         return list(found.values())
-
-    def setting_fixes(self):
-        """{key: value} of fixed settings that do not fit this host (TPOT_OSTYPE)."""
-        pane = self.query("#settings")
-        current = getattr(pane.first(), "current", None) if pane else None
-        return current.fixes() if current is not None else {}
-
-    def fix_setting(self, key: str) -> None:
-        """The palette's Fix entry: the proposal again (also after a Revert), then the setting."""
-        pane = self.query_one("#settings", SettingsPane)
-        pane.declined.discard(key)
-
-        async def again() -> None:
-            await pane.reload(keep=pane.changes(), keep_unlocked=pane.unlocked)
-            self.goto_setting(key)
-        self.call_later(again)
 
     def goto_setting(self, key: str) -> None:
         self.goto("settings")
@@ -3755,18 +3705,21 @@ class TpotApp(App):
             self.notify(str(err), title="Edition", severity="error", timeout=8)
             return
         command = [LAUNCHER, "edition", "set", key, "-y"]
+        host = self.backend.linux_host()
         body = Text()
         for warning in plan.warnings:
             body.append(f"{glyphs.g('warn')} {warning}\n", style=theme.color("warn"))
-        body.append("T-Pot is down while it switches, the images of the new edition are pulled when it starts.",
+        body.append("T-Pot is down while it switches, the images of the new edition are pulled when it starts."
+                    if host else "This is no T-Pot host: only the compose file and .env change, nothing is started.",
                     style=theme.color("mist"))
 
         def run(secrets) -> None:
             task = Task(f"Switch to the {plan.target.title} edition", command + (
                 ["--web-user", secrets[0]] if secrets else []),
-                become="--become-file" if self.backend.linux_host() else "",
+                become="--become-file" if host else "",
                 secrets={"--password-file": secrets[1]} if secrets else {}, autostart=True,
-                done=f"T-Pot runs the {plan.target.title} edition.", restart_tpot=plan.target.role != "HIVE"
+                done=f"T-Pot runs the {plan.target.title} edition." if host else
+                f"docker-compose.yml is the {plan.target.title} edition.", restart_tpot=plan.target.role != "HIVE"
                 or bool(plan.env_changes))
             self.run_task(task, lambda _code: self.after_switch())
 

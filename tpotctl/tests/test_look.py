@@ -1194,7 +1194,7 @@ class NamesTest(unittest.TestCase):
              "Rebuild tpot's", "return to tpot", "packages of tpot", "tpot ends", "page of tpot",
              "tpot does not change", "the tpot menu", "venv of tpot", "tpot could not", ". the T-Pot Manager")
     # the scripts and playbooks a person sees running: their texts, not their comments
-    SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh",
+    SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "deploy.sh",
                "installer/install/tpot.yml", "installer/remove/tpot.yml")
 
     def test_names_say_what_they_mean(self):
