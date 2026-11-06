@@ -385,6 +385,73 @@ class LinuxModeTest(unittest.TestCase):
         self.assertFalse(Path(OWN).exists())
         self.assertTrue(result["alternative"])
 
+    def stale_install(self):
+        self.grant(TEMP)
+        boot = Path("/etc/tmpfiles.d/tpot-install.conf")
+        boot.parent.mkdir(exist_ok=True)
+        boot.write_text("# Managed by T-Pot: installer cleanup\nr /etc/sudoers.d/tpot-install - - - -\n")
+        boot.chmod(0o644)
+        self.addCleanup(boot.unlink, missing_ok=True)
+        return boot
+
+    def test_finishing_secure_removes_stale_temporary_access_after_preparation(self):
+        boot = self.stale_install()
+        result = tpot_sudo.apply(self.user, "secure", password=self.password, cleanup_install=True)
+        self.assertEqual(result["temporary_rule"], "absent")
+        self.assertTrue(result["password_required"])
+        self.assertFalse(boot.exists())
+        self.assertEqual(self.probe(self.password).returncode, 0)
+
+    def test_convenient_can_replace_stale_temporary_access_without_setting_a_password(self):
+        boot = self.stale_install()
+        result = tpot_sudo.apply(self.user, "convenient", cleanup_install=True)
+        self.assertEqual(result["own_rule"], "owned")
+        self.assertEqual(result["temporary_rule"], "absent")
+        self.assertFalse(result["password_usable"])
+        self.assertFalse(boot.exists())
+        self.assertEqual(self.probe().returncode, 0)
+
+    def test_an_active_root_parent_keeps_its_temporary_access(self):
+        boot = self.stale_install()
+        directory = Path("/run/tpot-install")
+        directory.mkdir(exist_ok=True)
+        fd = os.open(directory / "lock", os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            result = tpot_sudo.apply(self.user, "convenient", cleanup_install=True)
+            self.assertEqual(result["temporary_rule"], "owned")
+            self.assertTrue(boot.exists())
+            self.assertTrue(any("active" in warning for warning in result["warnings"]))
+        finally:
+            os.close(fd)
+
+    def test_safe_remove_does_not_drop_the_only_stale_sudo_grant(self):
+        boot = self.stale_install()
+        result = tpot_sudo.apply(self.user, "safe_remove", cleanup_install=True)
+        self.assertEqual(result["temporary_rule"], "owned")
+        self.assertFalse(boot.exists())   # do not defer the lockout to the next boot
+        self.assertTrue(any("losing sudo access" in warning for warning in result["warnings"]))
+        self.assertEqual(self.probe().returncode, 0)
+
+    def test_foreign_boot_cleanup_is_not_removed(self):
+        boot = self.stale_install()
+        boot.write_text("# administrator-owned cleanup\n")
+        result = tpot_sudo.apply(self.user, "convenient", cleanup_install=True)
+        self.assertEqual(boot.read_text(), "# administrator-owned cleanup\n")
+        self.assertTrue(any("boot cleanup" in warning for warning in result["warnings"]))
+
+    def test_failed_stale_rule_removal_keeps_sudo_valid_at_boot(self):
+        boot = self.stale_install()
+        self.set_password()
+        self.run_command("usermod", "-aG", "sudo", self.user)
+        with Path("/etc/sudoers").open("a") as stream:
+            stream.write("\n@include /etc/sudoers.d/tpot-install\n")
+        with self.assertRaisesRegex(tpot_sudo.SudoError, "visudo"):
+            tpot_sudo.apply(self.user, "secure", cleanup_install=True)
+        self.assertTrue(Path(TEMP).exists())
+        self.assertFalse(boot.exists())
+        self.assertEqual(self.run_command("visudo", "-c").returncode, 0)
+
     def test_root_and_service_accounts_are_refused(self):
         for user in ("root", "nobody"):
             with self.subTest(user=user), self.assertRaises(tpot_sudo.SudoError):
@@ -501,23 +568,39 @@ raise SystemExit(subprocess.call(command + ["-vvv"]))
 
     def test_install_prepare_sets_password_and_group_without_revoking_access(self):
         self.grant()
+        boot = self.stale_install()
         with tempfile.TemporaryDirectory() as directory:
             secret = Path(directory, "secret")
             secret.write_text(self.password + "\n")
             secret.chmod(0o600)
             play = Path(tpot_sudo.__file__).parent.parent / "sudo_mode.yml"
             variables = dict(tpot_sudo_user=self.user, tpot_sudo_action="secure", tpot_sudo_prepare=True,
+                             tpot_cleanup_install=True,
                              tpot_user_password_file=str(secret), ansible_python_interpreter="/usr/bin/python3")
             proc = self.run_command("ansible-playbook", str(play), "-i", "localhost,", "-c", "local",
                                     "-e", json.dumps(variables), check=False)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertTrue(Path(OWN).exists(), "Preparation must not revoke access needed by the installer.")
+        self.assertTrue(Path(TEMP).exists())
+        self.assertTrue(boot.exists())
         self.assertIn("sudo", self.groups())
         self.assertIn(" P ", self.run_command("passwd", "-S", self.user).stdout)
         self.assertEqual(self.probe().returncode, 0)
         tpot_sudo.apply(self.user, "secure")
         self.assertFalse(Path(OWN).exists())
         self.assertEqual(self.probe(self.password).returncode, 0)
+
+    def test_play_forwards_stale_cleanup_and_reports_effective_state(self):
+        boot = self.stale_install()
+        play = Path(tpot_sudo.__file__).parent.parent / "sudo_mode.yml"
+        variables = dict(tpot_sudo_user=self.user, tpot_sudo_action="convenient", tpot_cleanup_install=True,
+                         ansible_python_interpreter="/usr/bin/python3")
+        proc = self.run_command("ansible-playbook", str(play), "-i", "localhost,", "-c", "local",
+                                "-e", json.dumps(variables), check=False)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(Path(TEMP).exists(), "The play must forward cleanup to the shared module.")
+        self.assertFalse(boot.exists())
+        self.assertIn('"temporary_rule": "absent"', proc.stdout)
 
     def test_install_tag_selects_the_shared_sudo_play_not_host_changes(self):
         play = Path(tpot_sudo.__file__).parent.parent / "tpot.yml"
@@ -619,6 +702,37 @@ sudo -n -k true || exit 81
         self.assertEqual(proc.returncode, 7, proc.stdout + proc.stderr)
         self.assertFalse(Path(TEMP).exists())
         self.assertFalse(Path(OWN).exists())
+
+    def test_root_password_wrapper_does_not_hide_a_missing_sudo_binary(self):
+        self.set_password()
+        script = self.root_installer()
+        with tempfile.TemporaryDirectory() as directory:
+            secret = Path(directory, "password")
+            secret.write_text(self.password + "\n")
+            secret.chmod(0o600)
+            binary = Path("/usr/bin/sudo")
+            backup = Path(directory, "saved-sudo")
+            apt = Path(directory, "apt-get")
+            apt.write_text(f"""#!/bin/sh
+case "$*" in
+  update) exit 0 ;;
+  'install -y sudo') cp -p '{backup}' '{binary}' ;;
+  *) exit 99 ;;
+esac
+""")
+            apt.chmod(0o700)
+            binary.rename(backup)
+            try:
+                proc = subprocess.run(
+                    ["bash", str(script), "--user", self.user, "-s", "-t", "s", "-B", str(secret)],
+                    env=dict(os.environ, PATH=directory + ":" + os.environ["PATH"]),
+                    text=True, capture_output=True,
+                )
+            finally:
+                backup.replace(binary)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertFalse(Path(TEMP).exists())
+            self.assertEqual(secret.read_text(), self.password + "\n")
 
     def test_root_inline_start_requests_a_saved_script_before_changing_access(self):
         self.set_password()

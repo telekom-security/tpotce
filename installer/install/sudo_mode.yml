@@ -52,6 +52,7 @@
         password: "{{ lookup('file', tpot_user_password_file, rstrip=false, lstrip=false) if tpot_user_password_file | default('') | length > 0 else omit }}"
         keep: "{{ tpot_keep_sudo_rule | default(false) }}"
         prepare: "{{ tpot_sudo_prepare | default(false) }}"
+        cleanup_install: "{{ tpot_cleanup_install | default(false) }}"
       register: tpot_sudo_outcome
       ignore_errors: true
 

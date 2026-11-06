@@ -21,6 +21,9 @@ MARKER = "# Managed by T-Pot: sudo mode\n"
 RULE = "/etc/sudoers.d/tpot"
 INSTALL_RULE = "/etc/sudoers.d/tpot-install"
 LOCK = "/run/lock/tpot-sudo.lock"
+INSTALL_DIR = "/run/tpot-install"
+BOOT_CLEANUP = "/etc/tmpfiles.d/tpot-install.conf"
+BOOT_TEXT = b"# Managed by T-Pot: installer cleanup\nr /etc/sudoers.d/tpot-install - - - -\n"
 
 
 class SudoError(RuntimeError):
@@ -172,7 +175,7 @@ def _snapshot(user, uid, sudo):
     if own == "foreign" or temporary == "foreign":
         warnings.append("A foreign or modified file occupies a T-Pot sudoers path; it will not be changed.")
     if temporary == "owned":
-        warnings.append("The temporary installer grant remains active until the installer exits.")
+        warnings.append("The temporary installer grant is present.")
     if required is None:
         warnings.append("The sudo access probe could not be verified: " + probe.stderr.strip())
     elif required is False and own != "owned" and temporary != "owned":
@@ -212,8 +215,8 @@ def _ensure_alternative(user, uid, sudo, changes):
         raise
 
 
-def _set_rule(user, uid, sudo, enable):
-    parent = os.path.dirname(RULE)
+def _set_rule(user, uid, sudo, enable, path=RULE):
+    parent = os.path.dirname(path)
     directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     temporary = ""
     backup = ""
@@ -221,7 +224,7 @@ def _set_rule(user, uid, sudo, enable):
         info = os.fstat(directory)
         if info.st_uid or info.st_mode & 0o022:
             raise SudoError("The sudoers directory must be root-owned and not writable by other users.")
-        previous = _file_state(RULE, uid)
+        previous = _file_state(path, uid)
         if previous == "foreign":
             raise SudoError("The foreign file at the T-Pot sudoers path will not be changed.")
         if (enable and previous == "owned") or (not enable and previous == "absent"):
@@ -234,30 +237,33 @@ def _set_rule(user, uid, sudo, enable):
             out.flush()
             os.fsync(out.fileno())
         _run(["visudo", "-c", "-f", temporary])
-        if _file_state(RULE, uid) != previous:
+        if _file_state(path, uid) != previous:
             raise SudoError("The T-Pot sudoers file changed during validation; try again.")
         # Finish validation or rollback before delivering an interruption.
         mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM, signal.SIGHUP})
         try:
             if enable:
-                os.replace(temporary, RULE)
+                os.replace(temporary, path)
                 temporary = ""
             else:
-                os.replace(RULE, temporary)
+                os.replace(path, temporary)
                 backup, temporary = temporary, ""
             try:
                 os.fsync(directory)
                 _run(["visudo", "-c"])
                 after = _snapshot(user, uid, sudo)
+                alternate = after["alternative"] is True
+                if path == INSTALL_RULE and after["own_rule"] == "owned" and after["password_required"] is False:
+                    alternate = True
                 if (enable and after["password_required"] is not False) or (
-                    not enable and (after["alternative"] is not True or after["password_required"] is None)
+                    not enable and (not alternate or after["password_required"] is None)
                 ):
                     raise SudoError("The resulting sudo access could not be verified; the previous rule was restored.")
             except (SudoError, OSError):
                 if enable:
-                    os.unlink(RULE)
+                    os.unlink(path)
                 else:
-                    os.replace(backup, RULE)
+                    os.replace(backup, path)
                     backup = ""
                 os.fsync(directory)
                 raise
@@ -274,6 +280,93 @@ def _set_rule(user, uid, sudo, enable):
         os.close(directory)
 
 
+def _remove_boot_cleanup(changes, warnings):
+    parent = os.path.dirname(BOOT_CLEANUP)
+    try:
+        directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return
+    try:
+        info = os.fstat(directory)
+        if info.st_uid or info.st_mode & 0o022:
+            raise SudoError("The boot cleanup directory must be root-owned and not writable by other users.")
+        try:
+            fd = os.open(os.path.basename(BOOT_CLEANUP), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                         dir_fd=directory)
+        except FileNotFoundError:
+            return
+        except OSError as err:
+            if err.errno != errno.ELOOP:
+                raise
+            warnings.append("The foreign boot cleanup file was kept.")
+            return
+        try:
+            info = os.fstat(fd)
+            owned = (stat.S_ISREG(info.st_mode) and info.st_uid == info.st_gid == 0 and info.st_nlink == 1
+                     and stat.S_IMODE(info.st_mode) == 0o644 and os.read(fd, len(BOOT_TEXT) + 1) == BOOT_TEXT)
+        finally:
+            os.close(fd)
+        if not owned:
+            warnings.append("The foreign boot cleanup file was kept.")
+            return
+        os.unlink(os.path.basename(BOOT_CLEANUP), dir_fd=directory)
+        os.fsync(directory)
+        changes.append("Removed the stale installer boot cleanup.")
+    finally:
+        os.close(directory)
+
+
+def _cleanup_install(user, uid, sudo, changes, warnings):
+    state = _snapshot(user, uid, sudo)
+    if state["temporary_rule"] == "absent" and not os.path.lexists(BOOT_CLEANUP):
+        return
+    try:
+        os.mkdir(INSTALL_DIR, 0o755)
+    except FileExistsError:
+        pass
+    directory = os.open(INSTALL_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(directory)
+        if info.st_uid or info.st_mode & 0o022:
+            raise SudoError("The installer lock directory must be root-owned and not writable by other users.")
+        fd = os.open("lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=directory)
+        try:
+            info = os.fstat(fd)
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid or info.st_gid or info.st_nlink != 1
+                    or stat.S_IMODE(info.st_mode) != 0o600):
+                raise SudoError("The installer lock is not a private root-owned regular file.")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                warnings.append("A root installation is active; its temporary access and boot cleanup were kept.")
+                return
+            # A failed removal must not be retried blindly by tmpfiles at boot.
+            _remove_boot_cleanup(changes, warnings)
+            if state["temporary_rule"] != "owned":
+                return
+            safe = (state["password_usable"] and state["alternative"] is True) or (
+                state["own_rule"] == "owned" and state["password_required"] is False)
+            if not safe:
+                warnings.append("The stale installer rule was kept to avoid losing sudo access; repair access as root.")
+                return
+            if _set_rule(user, uid, sudo, False, path=INSTALL_RULE):
+                changes.append("Removed the stale temporary installer grant.")
+        finally:
+            os.close(fd)
+    finally:
+        os.close(directory)
+
+
+def _finish(user, uid, sudo, changes, cleanup_install, warnings=()):
+    warnings = list(warnings)
+    if cleanup_install:
+        _cleanup_install(user, uid, sudo, changes, warnings)
+    result = _snapshot(user, uid, sudo)
+    result["warnings"].extend(warnings)
+    result.update(changes=changes, changed=bool(changes))
+    return result
+
+
 def _normal_uid(uid):
     try:
         with open("/etc/login.defs", encoding="utf-8") as stream:
@@ -285,7 +378,7 @@ def _normal_uid(uid):
     return uid >= int(match.group(1))
 
 
-def apply(user, action, *, password="", keep=False, prepare=False):
+def apply(user, action, *, password="", keep=False, prepare=False, cleanup_install=False):
     if sys.platform != "linux" or os.geteuid() != 0:
         raise SudoError("Sudo-mode management must run with become on a Linux host.")
     if action not in ("status", "secure", "convenient", "safe_remove"):
@@ -308,11 +401,12 @@ def apply(user, action, *, password="", keep=False, prepare=False):
                 return before
             if action == "safe_remove" and (keep or before["own_rule"] != "owned"
                                             or not before["password_usable"] or before["alternative"] is not True):
+                warnings = []
                 if before["own_rule"] == "owned":
-                    before["warnings"].append("The T-Pot sudo rule was kept " + (
+                    warnings.append("The T-Pot sudo rule was kept " + (
                         "as requested." if keep else "to avoid losing sudo access; verify a password and another sudo grant first."
                     ))
-                return before
+                return _finish(user, account.pw_uid, sudo, changes, cleanup_install and not prepare, warnings)
             if "foreign" in (before["own_rule"], before["temporary_rule"]):
                 raise SudoError("The foreign file at a T-Pot sudoers path will not be changed.")
             _run(["visudo", "-c"])
@@ -329,9 +423,7 @@ def apply(user, action, *, password="", keep=False, prepare=False):
                     _ensure_alternative(user, account.pw_uid, sudo, changes)
             if not prepare and _set_rule(user, account.pw_uid, sudo, action == "convenient"):
                 changes.append("Installed the T-Pot sudo rule." if action == "convenient" else "Removed the T-Pot sudo rule.")
-            result = _snapshot(user, account.pw_uid, sudo)
-            result.update(changes=changes, changed=bool(changes))
-            return result
+            return _finish(user, account.pw_uid, sudo, changes, cleanup_install and not prepare)
     except SudoError as err:
         err.changes = changes
         raise
@@ -348,6 +440,7 @@ def main():
         password=dict(type="str", no_log=True),
         keep=dict(type="bool", default=False),
         prepare=dict(type="bool", default=False),
+        cleanup_install=dict(type="bool", default=False),
     ), supports_check_mode=True)
     try:
         password = module.params["password"] or ""
@@ -357,7 +450,8 @@ def main():
                 or any(char in password for char in "\r\n\0")):
             raise SudoError("The password file must contain exactly one nonempty line.")
         result = apply(module.params["user"], "status" if module.check_mode else module.params["action"],
-                       password=password, keep=module.params["keep"], prepare=module.params["prepare"])
+                       password=password, keep=module.params["keep"], prepare=module.params["prepare"],
+                       cleanup_install=module.params["cleanup_install"])
     except SudoError as err:
         module.fail_json(msg=str(err), changed=bool(err.changes), changes=err.changes)
     module.exit_json(changed=result["changed"], status=result)

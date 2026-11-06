@@ -288,6 +288,8 @@ esac
                 mode = [line for line in calls if "ansible-playbook" in line and "sudo_mode.yml" in line]
                 self.assertEqual(len(mode), 2, self.calls())
                 self.assertIn(f"tpot_sudo_action={action}", mode[1])
+                self.assertIn("tpot_cleanup_install=true", mode[1])
+                self.assertIn("tpot_cleanup_install=false", mode[0])
                 self.assertGreater(calls.index(mode[1]), next(i for i, line in enumerate(calls) if "grc netstat" in line))
                 main = next(i for i, line in enumerate(calls) if "ansible-playbook" in line and "/tpot.yml" in line)
                 self.assertLess(calls.index(mode[0]), main)
@@ -331,9 +333,9 @@ esac
     def test_missing_sudo_uses_the_explicit_root_handover_not_a_personal_rule(self):
         text = base.read("install.sh").replace(
             "unset CDPATH", """unset CDPATH
-command () {
-  [ "$*" != "-v sudo" ] || return 1
-  builtin command "$@"
+type () {
+  [ "$*" != "-P sudo" ] || return 1
+  builtin type "$@"
 }""", 1)
         write(self.script, text, 0o755)
         write(os.path.join(self.bin, "su"), '#!/bin/sh\necho legacy-su >> "$HOME/calls"\nexit 1\n', 0o755)

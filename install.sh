@@ -1542,7 +1542,7 @@ check_port_conflicts() {
     # naming the process needs root, and on the Debian branch below `sudo` may
     # not be installed yet - the occupied port is reported either way
     myPROC=""
-    if command -v sudo >/dev/null;
+    if type -P sudo >/dev/null;
       then
         myPROC=$(sudo -n ss -H -lnp --"${myPROTO}" "sport = :${myPORT}" 2>/dev/null \
                  | sed -n 's/.*users:(("\([^"]*\)".*/\1/p' \
@@ -1617,7 +1617,7 @@ install_packages() {
 
 packages_installed() {
   # Debian and Ubuntu: are all of them there already (the T-Pot ISO brings them)? Then no apt run.
-  [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && command -v sudo >/dev/null \
+  [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && type -P sudo >/dev/null \
     && command -v dpkg-query >/dev/null || return 1
   local mySTATES
   mySTATES=$(dpkg-query -W -f='${db:Status-Abbrev}\n' ${myPACKAGES_DEBIAN} 2>/dev/null) || return 1
@@ -1639,7 +1639,7 @@ get_packages() {
       fuUI_OK "The packages the installer needs are there."
       return
   fi
-  if ! command -v sudo >/dev/null;
+  if ! type -P sudo >/dev/null;
     then
       install_failed "sudo is not installed; no personal sudo rule was created" \
         "Save install.sh, log in as root, then run: bash /path/to/install.sh --user ${myUSER}"
@@ -2001,7 +2001,7 @@ root_handover() {
   for myX in /etc /run; do
     root_directory "${myX}" || usage_error "Unsafe root directory: ${myX}"
   done
-  if ! command -v sudo >/dev/null; then
+  if ! type -P sudo >/dev/null; then
     case "${myCURRENT_DISTRIBUTION}" in
       "Debian GNU/Linux"|"Ubuntu") apt-get update && apt-get install -y sudo ;;
       "openSUSE Tumbleweed") zypper --non-interactive install sudo ;;
@@ -2141,10 +2141,12 @@ run_ansible() {
 }
 
 install_sudo_mode() {
-  local myPLAY="${HOME}/tpotce/installer/install/sudo_mode.yml" myVARS
+  local myPLAY="${HOME}/tpotce/installer/install/sudo_mode.yml" myVARS myCLEANUP=false
+  [ "$1" != false ] || myCLEANUP=true
   local -a myCOMMAND=(ansible-playbook "${myPLAY}" -i 127.0.0.1, -c local
                       "${myANSIBLE_BECOME_OPTION[@]}" ${myANSIBLE_BECOME_EXE}
-                      -e "tpot_sudo_action=${mySUDO_MODE}" -e "tpot_sudo_prepare=$1")
+                      -e "tpot_sudo_action=${mySUDO_MODE}" -e "tpot_sudo_prepare=$1"
+                      -e "tpot_cleanup_install=${myCLEANUP}")
   [ -f "${myPLAY}" ] || {
     fuUI_ERROR "This checkout has no shared sudo-mode play. Use its matching installer or a checkout with sudo-mode support."
     return 1
@@ -2596,7 +2598,7 @@ check_user_password
 check_tpot_clone
 
 # A sudo password from -B has to work, a typo would only show in the playbook
-if [ -n "${myBECOME_FILE}" ] && command -v sudo >/dev/null && ! command sudo -S -k -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1;
+if [ -n "${myBECOME_FILE}" ] && type -P sudo >/dev/null && ! command sudo -S -k -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1;
   then
     fuUI_ERROR "The sudo password in ${myBECOME_FILE} is not accepted."
     install_failed "sudo does not accept the password of -B" "Check ${myBECOME_FILE}, then run the installer again"
@@ -2605,7 +2607,7 @@ fi
 # Fail before anything is installed: -s promises an unattended run, but Ansible
 # would ask for the become password. Only possible where sudo already exists -
 # the Debian branch below installs it and the check is repeated afterwards.
-if [ "${myUNATTENDED}" = "y" ] && [ -z "${myBECOME_FILE}" ] && command -v sudo >/dev/null && sudo_password_required;
+if [ "${myUNATTENDED}" = "y" ] && [ -z "${myBECOME_FILE}" ] && type -P sudo >/dev/null && sudo_password_required;
   then
     abort_unattended
 fi
@@ -2613,7 +2615,7 @@ fi
 # Same here: a become password will be needed, so settle the sudo-rs question
 # before anything is installed. On the Debian branch below sudo may not exist
 # yet, the check is repeated with the become option further down.
-if command -v sudo >/dev/null && sudo_password_required;
+if type -P sudo >/dev/null && sudo_password_required;
   then
     sudo_rs_become_exe
     ask_become_password

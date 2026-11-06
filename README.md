@@ -654,6 +654,10 @@ up the temporary `/etc/sudoers.d/tpot-install` grant and its private handover fi
 boot cleanup covers a killed parent or a power loss. If removing a rule would break a modified
 sudoers policy, it is retained with an error instead. The installer no longer creates an
 unmanaged `/etc/sudoers.d/<user>` rule. Remove password files you provided when no longer needed.
+At the end of a later installation, stale temporary grants are removed only after another
+sudo path has been verified; an active root installer keeps its grant until its own cleanup.
+If safe removal is impossible, a warning identifies the retained grant and the installer's
+boot deletion instruction is removed so the next reboot cannot lock out the user.
 <br><br>
 
 ## Testing a Branch
