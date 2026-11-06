@@ -23,7 +23,7 @@ VERSION = "fleet-target"
 REMOTE = Path(base.REPO, "tpotctl", "fleet_remote.py")
 
 
-class PrepareTest(base.Harness):
+class SensorHome(base.Harness):
 
     def setUp(self):
         super().setUp()
@@ -90,6 +90,9 @@ class PrepareTest(base.Harness):
         self.assertIn(result.returncode, (0, 1), result.stdout + result.stderr)
         self.assertEqual(result.stderr, "", result.stderr)
         return result.returncode, json.loads(result.stdout)
+
+
+class PrepareTest(SensorHome):
 
     def test_prepare_fetches_target_without_running_or_replacing_old_updater(self):
         before = self.git(self.checkout, "rev-parse", "HEAD")
