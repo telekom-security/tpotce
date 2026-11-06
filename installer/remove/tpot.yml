@@ -504,3 +504,11 @@
         - "Fedora"
         - "RedHat"
         - "Rocky"
+
+# uninstall.sh stages and runs this after deleting the checkout with sudo.
+- name: T-Pot - Remove owned sudo rules explicitly
+  ansible.builtin.import_playbook: ../install/sudo_mode.yml
+  vars:
+    tpot_sudo_action: safe_remove
+    tpot_cleanup_install: true
+  tags: [never, tpot_sudo]

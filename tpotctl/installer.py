@@ -96,6 +96,8 @@ class Answers:
     web_user: str = ""
     web_password: str = ""
     sudo_password: str = ""
+    sudo_mode: str = ""
+    user_password: str = ""
     settings: Dict[str, str] = field(default_factory=dict)
 
     @property
@@ -287,6 +289,18 @@ def sudo_password_ok(password: str, run: Callable = subprocess.run) -> bool:
     return proc.returncode == 0
 
 
+def user_password_usable(run: Callable = subprocess.run) -> bool:
+    """Inspect the current account without reading shadow or requiring sudo."""
+    try:
+        proc = run(["passwd", "-S"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    except (OSError, UnicodeError) as err:
+        raise OSError("Cannot verify the user password state with passwd -S.") from err
+    fields = proc.stdout.split()
+    if proc.returncode or len(fields) < 2 or fields[1] not in ("P", "L", "NP"):
+        raise OSError("Cannot verify the user password state with passwd -S.")
+    return fields[1] == "P"
+
+
 # -- running install.sh --------------------------------------------------------
 
 def secret_dir() -> str:
@@ -304,18 +318,27 @@ def secret_files(**secrets: str) -> Iterator[Dict[str, str]]:
             if not text:
                 continue
             handle, path = tempfile.mkstemp(prefix=".tpot-install-", dir=secret_dir())
-            os.fchmod(handle, 0o600)
-            with os.fdopen(handle, "w", encoding="utf-8") as out:
-                out.write(text + "\n")
             paths[name] = path
+            with os.fdopen(handle, "w", encoding="utf-8") as out:
+                os.fchmod(out.fileno(), 0o600)
+                out.write(text + "\n")
         yield paths
     finally:
+        failures = []
         for path in paths.values():
-            with contextlib.suppress(OSError):
+            try:
                 os.unlink(path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                failures.append(path)
+        if failures:
+            raise OSError("Could not remove temporary password files. Remove these manually: " + ", ".join(failures))
 
 
 def engine_command(answers: Answers, files: Dict[str, str], install_sh: str = INSTALL_SH) -> List[str]:
+    if answers.sudo_mode not in ("secure", "convenient"):
+        raise ValueError("Choose a sudo mode before installing.")
     letter = answers.edition.letter
     if answers.custom_compose:
         letter = "h" if answers.needs_web_user else "s"
@@ -326,6 +349,10 @@ def engine_command(answers: Answers, files: Dict[str, str], install_sh: str = IN
         command += ["-u", answers.web_user, "-P", files["web"]]
     if "become" in files:
         command += ["-B", files["become"]]
+    if answers.sudo_mode == "convenient":
+        command += ["--sudo-nopasswd"]
+    if "user" in files:
+        command += ["--user-password-file", files["user"]]
     for option, variable in (("-b", "TPOT_BRANCH"), ("-r", "TPOT_REPO_URL")):
         if os.environ.get(variable):
             command += [option, os.environ[variable]]
@@ -338,13 +365,15 @@ def engine_env() -> Dict[str, str]:
     return env
 
 
-PHASES = ["checks", "packages", "playbook", "compose", "user", "pull", "done"]
+PHASES = ["checks", "packages", "sudo_prepare", "playbook", "compose", "user", "pull", "sudo", "done"]
 PHASE_TITLES = {"checks": "Checking the host", "packages": "Installing the packages", "playbook": "Setting up the host",
                 "compose": "Choosing the edition", "user": "Creating the web user", "pull": "Pulling the images",
+                "sudo_prepare": "Preparing sudo access", "sudo": "Applying the sudo mode",
                 "done": "Done", "failed": "Failed"}
 # where a phase starts on the whole bar, the playbook and the pull fill most of it
-SPANS = {"checks": (0.0, 0.02), "packages": (0.02, 0.05), "playbook": (0.05, 0.78), "compose": (0.78, 0.79),
-         "user": (0.79, 0.80), "pull": (0.80, 0.99), "done": (1.0, 1.0)}
+SPANS = {"checks": (0.0, 0.02), "packages": (0.02, 0.05), "sudo_prepare": (0.05, 0.05),
+         "playbook": (0.05, 0.78), "compose": (0.78, 0.79),
+         "user": (0.79, 0.80), "pull": (0.80, 0.99), "sudo": (0.99, 1.0), "done": (1.0, 1.0)}
 
 _TASK = re.compile(r"^TASK \[(.*)\]")
 _FAILED = re.compile(r"^(fatal|failed): \[")
@@ -390,7 +419,8 @@ class Progress:
             return
         match = _TASK.match(line)
         if match:
-            self.tasks_done += 1
+            if self.phase == "playbook":
+                self.tasks_done += 1
             self.task = match.group(1).rstrip("*").strip()
             return
         if _FAILED.match(line) and "...ignoring" not in line:
@@ -429,12 +459,15 @@ class Progress:
 Handover = Tuple[List[str], Dict[str, str]]
 
 
-def uninstall_handover(backup: bool, sudo_password: str = "", script: str = UNINSTALL_SH) -> Handover:
+def uninstall_handover(backup: bool, sudo_password: str = "", script: str = UNINSTALL_SH,
+                      *, keep_sudo_rule: bool = False) -> Handover:
     """argv and environment for uninstall.sh, which tpot execs; the password file is
     removed by uninstall.sh (TPOT_REMOVE_BECOME_FILE), tpot is gone by then."""
     argv = [script, "-y"]
     if backup:
         argv.append("-k")
+    if keep_sudo_rule:
+        argv.append("--keep-sudo-rule")
     env = dict(os.environ)
     if sudo_password:
         handle, path = tempfile.mkstemp(prefix=".tpot-uninstall-", dir=secret_dir())

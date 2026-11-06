@@ -6,7 +6,7 @@ unset CDPATH
 
 print_help() {
   # shellcheck disable=SC2088 # the examples show ~ as a person types it
-  fuUI_HELP "Uninstaller" "uninstall.sh [-y] [-k] [-B <file>]"$'\n'"             [--accept-data-loss | --accept-data-loss-file <file>]" \
+  fuUI_HELP "Uninstaller" "uninstall.sh [-y] [-k] [-B <file>] [--keep-sudo-rule]"$'\n'"             [--accept-data-loss | --accept-data-loss-file <file>]" \
     --about "Removes T-Pot from this host: the containers, images and data, Docker Engine,
 tpot.service, the tpot user and group, the tpot command and ~/tpotce. SSH goes
 back to port 22. Backups in ~/tpot_backups stay." \
@@ -16,7 +16,9 @@ sudo or -B)" \
     --opt "-k" "Keep a full backup first (update.sh --backup-only --full), it
 lands in ~/tpot_backups and restore.sh can bring it back" \
     --opt "-B <file>" "Read the sudo password from a file, so -y also works without
-passwordless sudo" \
+passwordless sudo; use your own regular file with chmod 600" \
+    --opt "--keep-sudo-rule" "Keep T-Pot's sudo rule; otherwise remove it only when a usable
+password and another sudo route are verified. Foreign rules always stay" \
     --opt "--accept-data-loss" "With -k: confirm a loss of data of the backup (older backups
 deleted to make room) without a terminal; -y does not, at a terminal the
 backup asks" \
@@ -89,12 +91,34 @@ sudo_rs_become_exe() {
 }
 
 fuCLEANUP () {
-  [ -n "${myUI_TMP}" ] && rm -rf "${myUI_TMP}"
-  # tpot uninstall hands over a password file of its own, it goes with this run
-  if [ -n "${myBECOME_FILE}" ] && [ "${TPOT_REMOVE_BECOME_FILE}" = "1" ];
-    then
-      rm -f "${myBECOME_FILE}"
+  local myRC=0
+  if [ -n "${mySUDO_STAGE}" ] && ! rm -rf -- "${mySUDO_STAGE}"; then
+    fuUI_ERROR "Cannot remove temporary files in ${mySUDO_STAGE}. Remove them manually."
+    myRC=1
   fi
+  mySUDO_STAGE=""
+  # tpot uninstall hands over a password file of its own, it goes with this run
+  if [ -n "${myBECOME_SOURCE}" ] && [ "${TPOT_REMOVE_BECOME_FILE}" = "1" ];
+    then
+      if ! rm -f -- "${myBECOME_SOURCE}"; then
+        fuUI_ERROR "Cannot remove the temporary password file ${myBECOME_SOURCE}. Remove it manually."
+        myRC=1
+      fi
+  fi
+  myBECOME_SOURCE=""
+  return "${myRC}"
+}
+
+fuEXIT () {
+  local myRC=$?
+  trap '' INT TERM HUP
+  fuCLEANUP || { [ "${myRC}" -ne 0 ] || myRC=1; }
+  if [ -n "${myUI_TMP}" ] && ! rm -rf -- "${myUI_TMP}"; then
+    myUI_GUM=""
+    fuUI_ERROR "Cannot remove temporary UI files in ${myUI_TMP}. Remove them manually."
+    [ "${myRC}" -ne 0 ] || myRC=1
+  fi
+  exit "${myRC}"
 }
 
 myQST=""
@@ -102,6 +126,9 @@ myUNATTENDED=""
 myBACKUP=""
 myACCEPT_LOSS=""
 myBECOME_FILE=""
+myBECOME_SOURCE=""
+mySUDO_STAGE=""
+myKEEP_SUDO=false
 myUSER=$(whoami)
 myANSIBLE_TPOT_PLAYBOOK="${myHERE}/installer/remove/tpot.yml"
 # Ansible become executable, empty means the Ansible default. See
@@ -122,6 +149,7 @@ for myARG in "$@";
         continue
     fi
     case "${myARG}" in
+      --keep-sudo-rule) myKEEP_SUDO=true ;;
       --accept-data-loss) myACCEPT_LOSS="y" ;;
       --accept-data-loss-file) myACCEPT_FILE_NEXT="y" ;;
       --help) myARGV+=("-h") ;;
@@ -147,14 +175,16 @@ done
 # it stops before any sudo or Ansible
 fuUI_LINUX_ONLY uninstall.sh
 
-trap fuCLEANUP EXIT
+trap fuEXIT EXIT
+trap 'exit 130' INT TERM HUP
 
 if [ -n "${myBECOME_FILE}" ];
   then
     [ -r "${myBECOME_FILE}" ] || usage_error "Cannot read the sudo password from ${myBECOME_FILE}."
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
+    myBECOME_SOURCE="${myBECOME_FILE}"
     # every sudo of this script refreshes the timestamp from the file first
-    sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
+    sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1 || return; command sudo "$@"; }
 fi
 
 fuUI_INIT
@@ -200,6 +230,37 @@ if [ -z "${myQST}" ] && ! fuUI_CONFIRM "Uninstall T-Pot?" "Uninstall" "Keep T-Po
     exit 0
 fi
 
+# Everything needed after the checkout goes lives outside it, including a private password copy.
+mySUDO_STAGE=$(mktemp -d /tmp/tpot-uninstall.XXXXXXXX) \
+  || uninstall_failed "Cannot prepare the sudo cleanup" "Check the temporary directory"
+if [ -z "${myBECOME_FILE}" ] && [ "${myUNATTENDED}" != y ] && sudo_password_required; then
+  myTRACE=""
+  case $- in *x*) set +x; myTRACE=y ;; esac
+  export -n myPASSWORD
+  myPASSWORD=$(fuUI_INPUT "Enter your sudo password:" password)
+  [ -n "${myPASSWORD}" ] || uninstall_failed "No sudo password supplied" "Run the uninstaller again"
+  myBECOME_FILE="${mySUDO_STAGE}/input"
+  (umask 077; printf '%s\n' "${myPASSWORD}" > "${myBECOME_FILE}") \
+    || uninstall_failed "Cannot save the temporary password" "Check the temporary directory"
+  unset myPASSWORD
+  [ -z "${myTRACE}" ] || set -x
+fi
+python3 - "${myHERE}" "${mySUDO_STAGE}" "${myBECOME_FILE}" "${myKEEP_SUDO}" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1] + "/tpotctl")
+from sudo_mode import SudoError, stage_uninstall
+try:
+    stage_uninstall(sys.argv[2], repo_dir=sys.argv[1], become_file=sys.argv[3], keep=sys.argv[4] == "true")
+except (OSError, SudoError) as err:
+    print(str(err), file=sys.stderr)
+    sys.exit(1)
+PY
+[ $? -eq 0 ] || usage_error "Cannot prepare safe sudo cleanup or read the private sudo password."
+if [ -n "${myBECOME_FILE}" ]; then
+  myBECOME_FILE="${mySUDO_STAGE}/become"
+  sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1 || return; command sudo "$@"; }
+fi
+
 # A sudo password from -B has to work, a typo would only show in the playbook
 if [ -n "${myBECOME_FILE}" ] && ! command sudo -S -k -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1;
   then
@@ -233,6 +294,7 @@ if [ "${myBACKUP}" = "y" ];
     myLOSS_ARGS=()
     [ -z "${myACCEPT_LOSS}" ] || myLOSS_ARGS+=(--accept-data-loss)
     [ -z "${myACCEPT_FILE}" ] || myLOSS_ARGS+=(--accept-data-loss-file "${myACCEPT_FILE}")
+    [ -z "${myBECOME_FILE}" ] || myLOSS_ARGS+=(-B "${myBECOME_FILE}")
     myRC=0
     "${myHERE}/update.sh" -y --backup-only --full ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"} || myRC=$?
     if [ "${myRC}" -eq 5 ];
@@ -275,15 +337,12 @@ if ! sudo_password_required;
 elif [ -n "${myBECOME_FILE}" ];
   then
     sudo_rs_become_exe
-    myANSIBLE_BECOME_OPTION="--become --become-password-file ${myBECOME_FILE}"
+    myANSIBLE_BECOME_OPTION="--become"
     fuUI_INFO "‘sudo‘ requires a password, Ansible reads it from ${myBECOME_FILE}."
     echo
   else
-    sudo_rs_become_exe
-    myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
-    fuUI_INFO "‘sudo‘ requires a password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-    fuUI_INFO "Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
-    echo
+    uninstall_failed "sudo access changed after its initial check" \
+      "Run the uninstaller again with a private -B password file"
 fi
 
 # Run Ansible Playbook
@@ -292,7 +351,7 @@ echo
 rm "${HOME}/uninstall_tpot.log" > /dev/null 2>&1
 # see install.sh for why these two are set explicitly
 ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
-ANSIBLE_LOG_PATH=${HOME}/uninstall_tpot.log ansible-playbook "${myANSIBLE_TPOT_PLAYBOOK}" -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION} ${myANSIBLE_BECOME_EXE}
+ANSIBLE_LOG_PATH=${HOME}/uninstall_tpot.log ansible-playbook "${myANSIBLE_TPOT_PLAYBOOK}" -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION} ${myANSIBLE_BECOME_EXE} -e "@${mySUDO_STAGE}/variables.json"
 
 # Something went wrong
 if [ ! $? -eq 0 ];
@@ -327,11 +386,26 @@ if [ "${myRC}" -ne 0 ];
 fi
 rm -rf "${HOME}/tpot.yml"
 
+# No privileged shell operation follows: removing the rule cannot strand the uninstaller.
+mySUDO_RESULT="ok:Sudo access checked; retained rules and the effective state are reported above"
+fuUI_INFO "Checking the sudo rules after removal ..."
+if ! ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
+    ANSIBLE_LOG_PATH="${HOME}/uninstall_tpot.log" ansible-playbook "${mySUDO_STAGE}/sudo_mode.yml" \
+    -i 127.0.0.1, -c local -e "@${mySUDO_STAGE}/variables.json"; then
+  mySUDO_RESULT="fail:Sudo cleanup failed; review ${HOME}/uninstall_tpot.log before changing any remaining rule"
+fi
+
 # Done: what is gone and what comes next
-mySUMMARY=("ok:T-Pot, its data, Docker Engine and the T-Pot Manager are removed" "${myREMOVED}")
+mySUMMARY=("ok:T-Pot, its data, Docker Engine and the T-Pot Manager are removed" "${myREMOVED}" "${mySUDO_RESULT}")
 if [ "${myBACKUP}" = "y" ];
   then mySUMMARY+=("ok:A full backup is in ~/tpot_backups, restore.sh brings it back after a new installation")
   else mySUMMARY+=("info:Backups in ~/tpot_backups stay")
 fi
 mySUMMARY+=("next:Reboot, then re-connect via SSH on tcp/22")
+if [ -n "${myBECOME_SOURCE}" ] && [ "${TPOT_REMOVE_BECOME_FILE}" != "1" ]; then
+  mySUMMARY+=("next:Delete the supplied sudo password file ${myBECOME_SOURCE} when it is no longer needed")
+fi
+if ! fuCLEANUP; then
+  mySUMMARY+=("fail:Temporary-file cleanup failed; remove the reported files manually")
+fi
 fuUI_SUMMARY "T-Pot is uninstalled" "${mySUMMARY[@]}"

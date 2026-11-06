@@ -38,8 +38,19 @@ handover = installer.uninstall_handover
 
 def run_handover(target: Handover) -> None:
     argv, env = target
-    os.chdir(os.path.expanduser("~"))       # ~/tpotce goes away
-    os.execve(argv[0], argv, env)
+    try:
+        os.chdir(os.path.expanduser("~"))       # ~/tpotce goes away
+        os.execve(argv[0], argv, env)
+    except OSError as err:
+        if env.get("TPOT_REMOVE_BECOME_FILE") == "1" and "-B" in argv:
+            path = argv[argv.index("-B") + 1]
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+            except OSError as cleanup:
+                raise OSError(f"{err}; cannot remove temporary password file {path}: {cleanup}") from err
+        raise
 
 
 class UninstallScreen(Screen):
@@ -48,11 +59,12 @@ class UninstallScreen(Screen):
     BINDINGS = [Binding("escape", "keep", "Keep T-Pot")]
 
     def __init__(self, sudo_mode: Optional[str] = None, password_ok: Optional[Callable[[str], bool]] = None,
-                 hostname: str = ""):
+                 hostname: str = "", keep_sudo_rule: bool = False):
         super().__init__(id="uninstall")
         self.sudo = sudo_mode
         self.password_ok = password_ok or installer.sudo_password_ok
         self.hostname = hostname or socket.gethostname()
+        self.keep_sudo_rule = keep_sudo_rule
 
     def compose(self) -> ComposeResult:
         with NavScroll(id="un-body"):
@@ -60,6 +72,9 @@ class UninstallScreen(Screen):
             yield Static(self.summary(), id="un-text")
             yield Checkbox("Write a full backup to ~/tpot_backups first (restore.sh brings it back)", True,
                            id="un-backup")
+            yield Checkbox("Keep T-Pot's sudo rule", self.keep_sudo_rule, id="un-keep-sudo")
+            yield Static("Otherwise it is removed only with a verified password and another sudo route. "
+                         "Foreign rules stay.", classes="hint")
             yield Static(self.space(), id="un-space")
             yield Static(Text(f"Type the name of this host, {self.hostname}, to confirm:",
                               style=theme.color("glass")), classes="un-label")
@@ -133,7 +148,8 @@ class UninstallScreen(Screen):
             self.query_one("#un-hint", Static).update(
                 Text(f"{glyphs.g('fail')} sudo does not accept this password", style=theme.color("error")))
             return
-        self.dismiss(handover(self.query_one("#un-backup", Checkbox).value, password))
+        self.dismiss(handover(self.query_one("#un-backup", Checkbox).value, password,
+                              keep_sudo_rule=self.query_one("#un-keep-sudo", Checkbox).value))
 
     def action_keep(self) -> None:
         self.dismiss(None)
@@ -163,8 +179,8 @@ class UninstallApp(ArrowNav, App):
         self.push_screen(UninstallScreen(**self.options), self.exit)
 
 
-def run_uninstall() -> int:
-    target = UninstallApp().run()
+def run_uninstall(*, keep_sudo_rule: bool = False) -> int:
+    target = UninstallApp(keep_sudo_rule=keep_sudo_rule).run()
     if target:
         run_handover(target)
     return 1

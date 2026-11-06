@@ -1,0 +1,83 @@
+---
+- name: T-Pot - Manage sudo mode
+  hosts: all
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Identify the login user
+      ansible.builtin.command: id -un
+      register: tpot_sudo_login
+      changed_when: false
+      check_mode: false
+
+    - name: Identify the sudo implementation
+      ansible.builtin.command: sudo --version
+      register: tpot_sudo_version
+      changed_when: false
+      check_mode: false
+
+    - name: Use traditional sudo for Ansible on sudo-rs hosts
+      ansible.builtin.set_fact:
+        ansible_become_exe: /usr/bin/sudo.ws
+      when: "'sudo-rs' in tpot_sudo_version.stdout | lower"
+
+    - name: Inspect the private password file on the controller
+      ansible.builtin.stat:
+        path: "{{ tpot_user_password_file }}"
+        follow: false
+        get_checksum: false
+        get_mime: false
+      delegate_to: localhost
+      register: tpot_sudo_password_stat
+      when: tpot_user_password_file | default('') | length > 0
+
+    - name: Require a private password file owned by the controller user
+      ansible.builtin.assert:
+        that:
+          - tpot_sudo_password_stat.stat.isreg | default(false)
+          - tpot_sudo_password_stat.stat.mode | default('') in ['0400', '0600']
+          - tpot_sudo_password_stat.stat.uid | default(-1) == lookup('pipe', 'id -u') | int
+          - tpot_sudo_password_stat.stat.nlink | default(0) == 1
+          - tpot_sudo_password_stat.stat.size | default(0) <= 65536
+        fail_msg: "Use your own regular password file, readable only by you: chmod 600 <password-file>."
+      delegate_to: localhost
+      when: tpot_user_password_file | default('') | length > 0
+
+    - name: Check or change the sudo mode
+      become: true
+      tpot_sudo:
+        user: "{{ tpot_sudo_user | default(tpot_sudo_login.stdout | trim) }}"
+        action: "{{ tpot_sudo_action | default('status') }}"
+        password: "{{ lookup('file', tpot_user_password_file, rstrip=false, lstrip=false) if tpot_user_password_file | default('') | length > 0 else omit }}"
+        keep: "{{ tpot_keep_sudo_rule | default(false) }}"
+        prepare: "{{ tpot_sudo_prepare | default(false) }}"
+        cleanup_install: "{{ tpot_cleanup_install | default(false) }}"
+      register: tpot_sudo_outcome
+      ignore_errors: true
+
+    - name: Save the sudo-mode result on the controller
+      ansible.builtin.lineinfile:
+        path: "{{ tpot_sudo_result_file }}"
+        line: "{{ {'schema': 1, 'host': inventory_hostname, 'result': tpot_sudo_outcome.status | default(none), 'changes': tpot_sudo_outcome.changes | default([]), 'error': (tpot_sudo_outcome.msg | default('Sudo-mode operation failed.')) if tpot_sudo_outcome is failed else ''} | to_json }}"
+        create: true
+        mode: '0600'
+      delegate_to: localhost
+      throttle: 1
+      when: tpot_sudo_result_file | default('') | length > 0
+
+    # reset_connection ignores its own when condition.
+    - name: Reconnect with updated login groups
+      ansible.builtin.include_tasks: sudo_reconnect.yml
+      when:
+        - tpot_sudo_outcome is changed
+        - ansible_connection | default('ssh') != 'local'
+
+    - name: Report a refused sudo-mode operation
+      ansible.builtin.fail:
+        msg: "{{ tpot_sudo_outcome.msg | default('Sudo-mode operation failed.') }}"
+      when: tpot_sudo_outcome is failed
+
+    - name: Show the effective sudo state
+      ansible.builtin.debug:
+        var: tpot_sudo_outcome.status

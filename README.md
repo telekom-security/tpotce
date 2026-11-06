@@ -12,9 +12,16 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
 4. Install `curl`: `$ sudo [apt, dnf, zypper] install curl` if not installed already
 5. Run installer as non-root from `$HOME`:
 ```
-env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/install.sh)"
+env bash -c '
+  installer=$(mktemp) || exit
+  cleanup() { result=$?; rm -f -- "$installer" || result=1; exit "$result"; }
+  trap cleanup EXIT
+  curl -fsSL https://github.com/telekom-security/tpotce/raw/master/install.sh -o "$installer" &&
+    bash "$installer" "$@"
+' --
 ```
    * It installs what it needs to start (git, Ansible, the Python packages of `tpot`) and opens the installer assistant: system check, edition, web user, first settings, a review of what changes, then the installation with its progress. Reboot at the end.
+   * The download is a private temporary file, removed on exit. Passing the entire installer to `bash -c "$(curl ...)"` no longer fits Linux's single-argument limit; use the command above instead. Download and installer failures retain their exit status.
 
 <!-- TOC -->
 - [T-Pot - The All In One Multi Honeypot Platform](#t-pot---the-all-in-one-multi-honeypot-platform)
@@ -598,13 +605,24 @@ Validation status of the preview: in QEMU, the amd64 ISO boots under BIOS, UEFI 
 
 Without the assistant, i.e. when its Python packages cannot be downloaded, the installer asks the same questions in the terminal and goes on as before: `./install.sh -n` does that on purpose. The look of the installer and the other scripts comes from [gum](https://github.com/charmbracelet/gum), a pinned release the scripts download and check against its sha256; without it (or with `TPOT_GUM=off`) they print plain text.
 
+For both a HIVE and a SENSOR, choose **More secure** (sudo asks for your password) or
+**More convenient** (T-Pot grants passwordless sudo). Neither mode is preselected. An explicit
+`--sudo-nopasswd` answers that question in advance. More secure needs a usable account password:
+if yours is locked or absent, the installer offers to set one, asks twice and checks its strength.
+That password also works for SSH if SSH password login is enabled.
+
+The assistant accepts `tpot install [--classic] [--sudo-nopasswd] [--become-file FILE]
+[--user-password-file FILE]` too. A sudo password collected during package preparation is passed
+on privately, not asked again. Supplied password files remain yours; only the installer's temporary
+copies are removed. A failed cleanup is reported as a failure, with the files to remove manually.
+
 On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundation/sudo-rs), which formats its password prompt differently. Ansible does not recognise that prompt and privilege escalation times out, a fix exists upstream but is not released yet. The installer detects this and runs Ansible against the traditional sudo that Ubuntu still ships as `/usr/bin/sudo.ws` - nothing to do, it says so when it happens. If you would rather have it system wide, switch the alternative: `$ sudo update-alternatives --set sudo /usr/bin/sudo.ws`.
 <br><br>
 
 ## Unattended Installation
 The installer can run without any interaction, i.e. for automated tests or cloud provisioning:
 ```
-./install.sh -s -t <type> [-u <webuser>] [-P <file> | -p <password>] [-B <file>] [-c <compose file>] [-U]
+./install.sh -s -t <type> [-u <webuser>] [-P <file> | -p <password>] [-B <file>] [-c <compose file>] [-U] [--sudo-nopasswd]
 ```
 | Option | Description |
 |---|---|
@@ -613,16 +631,59 @@ The installer can run without any interaction, i.e. for automated tests or cloud
 | `-u` | Web user name, required for `h`, `l`, `i` and `t` |
 | `-P` | Read the web user password from a file (`-` for stdin), required for `h`, `l`, `i` and `t` (or `-p`) |
 | `-p` | The web user password itself; it shows up in the process list and the shell history, so prefer `-P` |
-| `-B` | Read the `sudo` password from a file, so `-s` works without passwordless `sudo` |
+| `-B` | Read the `sudo` password from your private file (`chmod 600`), or `-` for stdin, so `-s` works without passwordless `sudo` |
 | `-c` | Install your own compose file (i.e. from `tpot customize`) instead of an edition, `-t` is then `h` (with a web UI) or `s` (without) |
 | `-U` | No [automatic updates](#automatic-updates-debian) on Debian: writes `TPOT_AUTO_UPDATES=DISABLED` into `~/tpotce/.env` |
+| `--sudo-nopasswd` | Keep passwordless sudo through T-Pot's own rule; unattended installations otherwise select the more secure mode |
+| `--user <name>` | When started as root from a saved installer file, continue as this existing regular user |
+| `--user-password-file <file>` | Private file with a new account password if that account has no usable password and the secure mode is requested |
 
-⚠️ ***`-s` requires passwordless `sudo` for the user running the installer, or `-B`.*** Ansible would otherwise ask for the `BECOME password` and the run would stall, so the installer stops right away and tells you so. Grant it before you start (or hand the password over with `-B`):
+Password files for `-B` and `--user-password-file` must belong to you, be regular files (not links), have mode `0600` or `0400`,
+and contain one nonempty UTF-8 line. A password from stdin is kept in a private temporary file and
+removed on success, failure or cancellation. A file you supplied is only read: remove it afterwards
+when no longer needed. Only one of `-P` and `-B` can read stdin.
+
+⚠️ ***`-s` requires working passwordless `sudo`, `-B`, or a root start with `--user`.*** The secure
+mode prepares a usable account password and another sudo grant before configuring the host, then
+removes T-Pot's permanent passwordless rule after the last privileged installation step. Foreign
+rules (for example cloud-init rules) are left alone; the reported effective state can therefore
+still be passwordless.
+
+Without sudo installed, save the installer and run it as root with the existing normal user's
+name. Root starts need a saved file, not the script's contents as an inline shell command, so the exact same installer
+can be handed to the user without another download. For example, from a root shell:
 ```
-echo "$(whoami) ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/$(whoami)
-sudo chmod 440 /etc/sudoers.d/$(whoami)
+bash ./install.sh --user operator -s -t s --user-password-file /root/operator-password
 ```
-Remove `/etc/sudoers.d/<user>` after the installation if you do not want to keep it. On Debian without `sudo` installed the installer creates this rule itself, because it has to add `sudo` anyway - it says so when it does.
+The new password must pass cracklib and is also used by SSH if password logins are enabled.
+It is not changed when the account already has a usable password. The root start installs Python3
+if missing so it can use the same sudo checks as the Manager. Root's parent process cleans
+up the temporary `/etc/sudoers.d/tpot-install` grant and its private handover files on exit.
+The guarded `tpot-install-cleanup.service` covers a killed parent or a power loss, using a private,
+hash-checked backend in `/var/lib/tpot-install`. It binds the rule to the originally selected
+user and UID and checks the remaining sudo access. Foreign or modified files stay untouched.
+If safe removal cannot be proved, the rule is retained with an error instead; passwordless
+sudo can therefore remain until access is repaired as root. The installer no longer creates an
+unmanaged `/etc/sudoers.d/<user>` rule. Remove password files you provided when no longer needed.
+At the end of a later installation, stale temporary grants are removed only after another
+sudo path has been verified; an active root installer keeps its grant until its own cleanup.
+If safe removal is impossible, a warning identifies the retained grant and the installer's
+owned boot-cleanup files are removed so the next reboot cannot lock out the user.
+
+After installation, use `tpot sudo` to inspect sudo and `tpot sudo secure` or
+`tpot sudo convenient` to change it. On a HIVE, `tpot sensors sudo [NAME ...] status|secure|convenient`
+does the same over SSH using the registry; omit names for all registered sensors.
+Changes ask first (`-y` confirms). If a password is needed without a terminal, supply a private
+`--become-file FILE`; secure mode also needs `--user-password-file FILE` when the account has no
+usable password. The latter sets only missing passwords, never replaces an existing one.
+The effective state is reported even when a foreign rule still permits passwordless sudo.
+If a sudo group was added, existing local sessions need a new login; SSH connections managed by
+the play are refreshed automatically. Failed targets are reported separately and make the command
+fail; successful targets can still change. These operations remain available during configuration drift.
+In the Manager, use **Settings > Host > Change...** or select a sensor and choose **Sudo mode...**.
+The dialog collects passwords before starting the task. The Host line uses only a passwordless
+check: if that fails, it reports **unknown**, not an unverified secure state. Detailed checks and
+changes run only on request; the Sensors table does not poll SSH for sudo access.
 <br><br>
 
 ## Testing a Branch
@@ -635,8 +696,14 @@ git clone -b my-feature https://github.com/telekom-security/tpotce ~/tpotce
 # explicitly, works the same for an unattended run
 ./install.sh -b my-feature -r https://github.com/someuser/tpotce -s -t h -u user -P ~/webpw.txt
 
-# as environment variables, i.e. for the one-liner or cloud provisioning
-TPOT_BRANCH=my-feature env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/my-feature/install.sh)"
+# as environment variables, i.e. for cloud provisioning
+TPOT_BRANCH=my-feature env bash -c '
+  installer=$(mktemp) || exit
+  cleanup() { result=$?; rm -f -- "$installer" || result=1; exit "$result"; }
+  trap cleanup EXIT
+  curl -fsSL https://github.com/telekom-security/tpotce/raw/my-feature/install.sh -o "$installer" &&
+    bash "$installer" "$@"
+' --
 
 # from a T-Pot ISO: "Another branch or repository" in its start dialog, or
 bash /usr/local/share/tpot-iso/start.sh -b my-feature -r https://github.com/someuser/tpotce
@@ -709,6 +776,16 @@ To uninstall T-Pot run `tpot uninstall` (or *Uninstall ...* on the *Update & bac
 ~/tpotce/uninstall.sh -y -B file # no questions, the sudo password from a file
 ```
 `-y` requires passwordless `sudo` or `-B`, just like `install.sh -s`. Backups in `~/tpot_backups` are kept. Once the uninstall is finished reboot the machine `sudo reboot`
+
+T-Pot's own sudo rule is removed only after the last privileged cleanup, and only if the account
+has a usable password and another verified sudo route. Otherwise it stays with a warning.
+Foreign rules are never changed. To keep T-Pot's rule explicitly, choose **Keep T-Pot's sudo rule**
+in the assistant or add `--keep-sudo-rule` to `tpot uninstall` or `uninstall.sh`.
+Stale temporary installer grants are cleaned up only when safe; an active installer keeps its grant.
+The `-B` file must be your own regular private file (`chmod 600`). A private copy survives removal
+of the checkout and also supplies an optional backup; temporary copies are deleted at the end.
+Delete your supplied file when it is no longer needed. After removing passwordless sudo, the reboot
+may ask for your account password.
 <br><br>
 
 # First Start
@@ -742,8 +819,20 @@ A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the *
 | `tpot sensors set NAME --host … --ssh-user …` | adds where a sensor is, i.e. for sensors of earlier releases |
 | `tpot sensors cert` | shows the addresses the certificate of the **Hive** covers, `--renew` issues it anew, `--distribute` copies it to the sensors |
 | `tpot sensors import` | gives the sensors of `lswebpasswd` / `lswebpasswd.lost` that `LS_WEB_USER` does not name their access back |
+| `tpot sensors update [NAME ...] [--all] [--parallel N|all] [--dry-run] [-y] [--become-file FILE|--no-become-pass] [--accept-data-loss|--accept-data-loss-file FILE] [--resume|--discard]` | prepares and coordinates sensor updates from the **Hive** |
 
 The **Hive** keeps a list of its sensors in `~/tpotce/data/sensors.json` (names, addresses, SSH user, date and version, no passwords). Sensors deployed with an earlier release are taken over from `LS_WEB_USER` the first time `tpot sensors` runs, add their addresses with `tpot sensors set` to manage them as well.
+
+Fleet updates precheck every selected sensor before starting. They run sequentially by default; parallel updates
+start only after a successful canary. The *Sensors* page presents the same flow, with per-sensor progress,
+failure decisions, resume and discard. `-y` confirms starting or resuming, but never approves reported data loss
+or a rollback. A saved run can be continued with `tpot sensors update --resume`; `--discard` removes a stopped
+run. A run interrupted during prechecks (`preparing`) cannot be resumed, but can be safely discarded from the
+CLI or Sensors page. Fleet state lives outside the checkout at `~/.local/share/tpotce/fleet/` and does not
+contain passwords. The Sensors page checks saved runs before asking for sensor sudo credentials, so a stopped
+run can be discarded without them; credentials are requested only for prechecks or remote actions that need them.
+Once a sensor's update completes, the HIVE waits up to 15 minutes for a fresh heartbeat with the target version;
+this extendable window starts after the update, not when it begins.
 
 ### Sensor Heartbeats
 The *Sensors* page and `tpot sensors list` show **Sensor | Host | Version | Heartbeat | Last event | State**.
@@ -964,18 +1053,21 @@ header instead of letting its path squeeze out the form.
 | `tpot env [list [--all] [--show-secrets]]` | *Settings* (*All settings*) | every host | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
 | `tpot env get KEY` / `tpot env set KEY=VALUE …` | *Settings* | every host | read or change a setting, it is only written if it is valid afterwards |
 | `tpot env check` | `ctrl+f` *Check the settings* | every host | checks `.env` as T-Pot does on start, exit code 1 on errors |
+| `tpot sudo [status\|secure\|convenient] [-y] [--become-file FILE] [--user-password-file FILE]` | *Settings* (Host) | T-Pot host | checks or changes this login user's sudo mode; foreign rules stay untouched, the effective password requirement is shown |
 | `tpot llm [detect [--scan]\|models\|test]` | *LLM* | every host | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
 | **Access** | | | |
 | `tpot sensors [list\|add\|remove\|set\|cert\|import]` | *Sensors* (`set` is *Edit*, `import` is *Take over*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
+| `tpot sensors update [NAME ...] [--all] [--parallel N\|all] [--dry-run] [-y] [--become-file FILE\|--no-become-pass] [--accept-data-loss\|--accept-data-loss-file FILE] [--resume\|--discard]` | *Sensors* | T-Pot host, HIVE | prepares all targets first, runs one canary before any parallel updates, verifies service/container health and a fresh heartbeat with the target version; failures can be retried, skipped, rolled back explicitly or resumed, and `-y` never approves data loss |
+| `tpot sensors sudo [NAME ...] status\|secure\|convenient [-y] [--become-file FILE] [--user-password-file FILE]` | *Sensors* | T-Pot host, HIVE | the same sudo-mode operation over SSH, on the named registered sensors or all when no names are given; uses their registered login users and ports |
 | `tpot users [list\|add\|passwd\|remove\|import]` | *Web users* (`import` is *Take over*) | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | **Data & maintenance** | | | |
 | `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--sensor-history] [--adopt] [--force] [--accept-data-loss]` | *Elastic* | T-Pot host, HIVE | event retention (`TPOT_ES_RETENTION`, policy `tpot`), or with `--sensor-history` heartbeat history (`TPOT_SENSOR_STATUS_RETENTION`, policy `tpot-sensor-status`); a shorter time always asks first (also with `-y`; without a terminal `--accept-data-loss`), T-Pot never shortens it on its own, and lists the indices it deletes; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value), `DAYS` alone writes only `.env` then and says so (exit 0), as the pages do; where Elasticsearch cannot be read it says why and writes only `.env`. `status` shows both retentions, `TPOT_KIBANA_OBJECTS` and what an import would bring (new, to update, the same, yours), or why Kibana cannot be read |
 | `tpot elastic export [FILE]` / `tpot elastic import [--mode add\|update\|overwrite] [--dry-run] [-y]` / `tpot elastic import --prune [--dry-run] [-y]` / `tpot elastic restore FILE [-y]` | *Elastic* | T-Pot host, HIVE (with Kibana) | T-Pot's [Kibana objects](#kibana-objects): `export` saves every object into `~/tpot_backups` (or into the new `FILE`); `import` brings T-Pot's objects in as the mode does (default `update`: the missing and the unchanged ones, yours stay), `--dry-run` only shows what it would do, `overwrite` lists the objects of yours it replaces and asks first (`-y` confirms, without a terminal it needs `-y`, exit 2); `import --prune` imports nothing, it lists the unchanged objects of earlier releases that this one no longer ships and removes them after an export and its question (default no, `-y` confirms, without a terminal it needs `-y`, exit 2; with `--mode` exit 2); `restore` checks the file, asks and imports every object of it, the advanced settings too; `restore` and `import` with `update` or `overwrite` export first and import nothing if that fails (`add` replaces nothing and makes no export); exit 1 on an error or an object Kibana refused, "This edition runs no Kibana." where it has none |
-| `tpot install [--classic]` | `ctrl+f` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
+| `tpot install [--classic] [--sudo-nopasswd] [--become-file FILE] [--user-password-file FILE]` | `ctrl+f` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
 | `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` (naming the size of the Elasticsearch data when the archive holds it) |
 | `tpot setup [--force] [--wheels DIR]` | *Update & backup* (*Rebuild the Manager's packages*) | every host | sets up or refreshes the Python packages of `tpot`; `--force` builds the venv anew, next to the old one, swapped when it works; `--wheels` installs from a folder of wheels first, without the internet (the T-Pot ISO has them, default `TPOT_WHEELS`), PyPI only when they do not fit |
 | `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot.service` |
-| `tpot uninstall` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
+| `tpot uninstall [--keep-sudo-rule]` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like; keeps its sudo rule on request or if removing it risks access, see [Uninstall T-Pot](#uninstall-t-pot) |
 | `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log, after `--check-data-loss` and a question if the update would [lose data](#loss-of-data) |
 
 The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed.
@@ -1164,6 +1256,13 @@ Turn both off with `TPOT_AUTO_UPDATES=DISABLED` in `~/tpotce/.env` (`tpot env se
 T-Pot releases are offered through GitHub and can be pulled using `~/tpotce/update.sh`.<br> 
 ***If you made any relevant changes to the T-Pot config files make sure to create a backup first!***<br>
 ***Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!***<br>
+
+Only one update or `--backup-only` run can operate for the same T-Pot user at a time.
+A second run stops before sudo, logging or changes. The lock is
+`~/.local/share/tpotce/update.lock`, outside the checkout, and stays held when the
+updater restarts itself. Its file remains after the run; the operating system
+releases the lock when its holders exit. Do not delete the file to unlock it.
+Help and `--check-data-loss` do not acquire a lock or create its directory.
 
 The update script will ...
  - ***mercilessly*** overwrite local changes to be in sync with the branch the installation follows, `master` by default

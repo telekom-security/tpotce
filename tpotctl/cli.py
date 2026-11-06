@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import stat
 import sys
 import time
 from typing import List, Optional
@@ -9,6 +10,7 @@ from typing import List, Optional
 from tpotctl import bootstrap, menu, ops, say
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.elastic import EVENTS, RETENTIONS, Retention
+from tpotctl.sudo_mode import SudoError
 
 MAGENTA = "#E20074"
 HEALTH_STYLE = {"healthy": "green", "unhealthy": "red", "starting": "yellow"}
@@ -46,12 +48,26 @@ class ArgumentParser(argparse.ArgumentParser):
         return title + "\n\n" + super().format_help()
 
 
+def parallelism(value: str):
+    if value == "all":
+        return value
+    if not value.isascii() or not value.isdigit():
+        raise argparse.ArgumentTypeError("must be 1-1000 or 'all'")
+    try:
+        count = int(value)
+    except ValueError as err:
+        raise argparse.ArgumentTypeError("must be 1-1000 or 'all'") from err
+    if not 1 <= count <= 1000:
+        raise argparse.ArgumentTypeError("must be 1-1000 or 'all'")
+    return count
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = ArgumentParser(
         prog="tpot", description="Configure and run T-Pot.",
         epilog="Without a command tpot opens the T-Pot Manager, its menu. update, restore and customize hand all their "
                "options to update.sh, restore.sh and compose/customizer.py, i.e. tpot update -h. status, ps, "
-               "images, start, stop, restart, update, restore, check, uninstall, sensors and elastic need a T-Pot "
+               "images, start, stop, restart, update, restore, check, uninstall, sudo, sensors and elastic need a T-Pot "
                "host (Linux with systemd); users, sensors and elastic a HIVE.")
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.add_parser("status", help="version, edition, service state and containers")
@@ -61,6 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("images", help="docker images (was: dim)")
     for action in ("start", "stop", "restart"):
         sub.add_parser(action, help=f"{action} T-Pot (sudo systemctl {action} tpot.service)")
+    sudo = sub.add_parser("sudo", help="check or change this user's sudo mode (default: status)")
+    sudo_arguments(sudo)
     sub.add_parser("update", help="update T-Pot, runs update.sh with your options (it asks before a loss of "
                                   "data, without a terminal --accept-data-loss confirms one; a compose file of "
                                   "your own it adapts after a yes, without a terminal with --adapt-compose)")
@@ -69,9 +87,14 @@ def build_parser() -> argparse.ArgumentParser:
     install = sub.add_parser("install", help="install T-Pot on this host with the assistant (install.sh -s does it "
                                              "without questions)")
     install.add_argument("--classic", action="store_true", help="the questions of install.sh in the terminal")
-    sub.add_parser("uninstall", help="remove T-Pot from this host, with a backup first if you like "
+    install.add_argument("--sudo-nopasswd", action="store_true", help="choose More convenient explicitly")
+    install.add_argument("-B", "--become-file", default="", metavar="FILE", help="private sudo password file")
+    install.add_argument("--user-password-file", default="", metavar="FILE",
+                         help="private new password for a user without a usable password")
+    uninstall = sub.add_parser("uninstall", help="remove T-Pot from this host, with a backup first if you like "
                                      "(uninstall.sh -y does it without questions, a loss of data of the backup "
                                      "needs a yes or --accept-data-loss)")
+    uninstall.add_argument("--keep-sudo-rule", action="store_true", help="keep T-Pot's sudo rule after removal")
     env = sub.add_parser("env", help="list, check and change the settings in .env (default: list)")
     actions = env.add_subparsers(dest="env_command", metavar="ACTION")
     listing = actions.add_parser("list", help="the settings of this T-Pot, secrets masked")
@@ -142,6 +165,8 @@ def build_parser() -> argparse.ArgumentParser:
     importing.add_argument("-y", "--yes", action="store_true", help="do not ask")
     sensors = sub.add_parser("sensors", help="sensors of this HIVE (default: list)")
     sensor_actions = sensors.add_subparsers(dest="sensors_command", metavar="ACTION")
+    sudo = sensor_actions.add_parser("sudo", help="check or change sudo over SSH on registered sensors")
+    sudo_arguments(sudo, remote=True)
     listing = sensor_actions.add_parser("list", help="sensors, their access and when they were last seen")
     listing.add_argument("--days", type=int, default=7, help="look for events of the last DAYS days (default 7)")
     add = sensor_actions.add_parser("add", help="deploy a sensor over SSH (was: deploy.sh)")
@@ -172,6 +197,23 @@ def build_parser() -> argparse.ArgumentParser:
     importing = sensor_actions.add_parser("import", help="give the sensors of lswebpasswd and lswebpasswd.lost "
                                                          "that LS_WEB_USER does not name their access back")
     importing.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    update = sensor_actions.add_parser("update", help="update registered sensors from this HIVE")
+    update.add_argument("names", nargs="*", metavar="NAME", help="no names: sensors behind this HIVE")
+    update.add_argument("--all", dest="all_sensors", action="store_true", help="include every accessible sensor")
+    update.add_argument("--parallel", type=parallelism, default=1, metavar="1-1000|all",
+                        help="updates at once after a successful canary (default 1)")
+    update.add_argument("--dry-run", action="store_true", help="run prechecks only and remove their temporary state")
+    update.add_argument("-y", "--yes", action="store_true", help="confirm starting and continuing, never data loss")
+    become = update.add_mutually_exclusive_group()
+    become.add_argument("-B", "--become-file", default="", metavar="FILE", help="private sensor sudo password file")
+    become.add_argument("--no-become-pass", action="store_true", help="sudo on every sensor needs no password")
+    losses = update.add_mutually_exclusive_group()
+    losses.add_argument("--accept-data-loss", action="store_true", help="explicitly accept reported data loss")
+    losses.add_argument("--accept-data-loss-file", default="", metavar="FILE",
+                        help="private file containing the exact reported data-loss lines")
+    control = update.add_mutually_exclusive_group()
+    control.add_argument("--resume", action="store_true", default=None, help="resume a saved fleet run")
+    control.add_argument("--discard", action="store_true", default=None, help="discard a stopped fleet run")
     edition = sub.add_parser("edition", help="the editions of T-Pot and switching between them (default: list)")
     edition_actions = edition.add_subparsers(dest="edition_command", metavar="ACTION")
     edition_actions.add_parser("list", help="the editions, the one in use marked")
@@ -1128,6 +1170,268 @@ def confirm(question: str, yes: bool) -> bool:
     return ask(f"{question} [y/N] ").lower() == "y"
 
 
+def _fleet_password(args) -> str:
+    from tpotctl import sudo_mode
+    if args.become_file:
+        return sudo_mode.read_password_file(args.become_file)
+    if args.no_become_pass:
+        return ""
+    if not sys.stdin.isatty():
+        fail("No terminal for the sensor sudo password; provide --become-file or --no-become-pass.", 2)
+    import getpass
+    password = getpass.getpass("Sensor sudo password: ")
+    if not password:
+        fail("The sensor sudo password cannot be empty.", 2)
+    return password
+
+
+def _fleet_run(coordinator, resume: bool, discard: bool, console):
+    candidates = coordinator.store.list_runs()
+    if resume:
+        candidates = [run for run in candidates
+                      if run["phase"] in ("running", "paused", "aborting", "prepared", "precheck_failed")]
+        action = "resume"
+    elif discard:
+        candidates = [run for run in candidates
+                      if run["phase"] in (
+                          "preparing", "prepared", "precheck_failed", "paused", "aborted", "completed", "failed")]
+        action = "discard"
+    else:
+        return None
+    if not candidates:
+        fail(f"There is no saved fleet run to {action}.", 2)
+    if len(candidates) == 1:
+        return candidates[0]
+    if not sys.stdin.isatty():
+        fail(f"More than one fleet run can be {action}; run this command at a terminal to choose one.", 2)
+    console.print(f"Choose the fleet run to {action}:")
+    for run in candidates:
+        console.print(f"  {run['run_id']}  {run['phase']}  " +
+                      ", ".join(target["name"] for target in run["targets"]))
+    chosen = ask("Run ID: ")
+    selected = next((run for run in candidates if run["run_id"] == chosen), None)
+    if selected is None:
+        fail("That run ID is not a valid choice.", 2)
+    return selected
+
+
+def _fleet_losses(state, args, console):
+    losses = {target["name"]: target["losses"] for target in state["targets"]}
+    reported = sorted({line for items in losses.values() for line in items})
+    if not reported:
+        return losses
+    if args.accept_data_loss:
+        return losses
+    if args.accept_data_loss_file:
+        path = args.accept_data_loss_file
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode):
+                    raise OSError("not a regular file")
+                raw = stream.read(1024 * 1024 + 1)
+            if len(raw) > 1024 * 1024:
+                raise OSError("file is too large")
+            text = raw.decode("utf-8")
+        except (OSError, UnicodeError) as err:
+            fail(f"Cannot read the data-loss approval file {path}: {err}.", 2)
+        approved = text.splitlines()
+        if len(approved) != len(set(approved)) or sorted(approved) != reported:
+            fail("The data-loss approval file must contain the exact data-loss lines from this run.", 2)
+        return losses
+    console.print("The sensor update reports these data-loss items:")
+    for line in reported:
+        console.print(f"  {line}")
+    if not confirm_data_loss("Accept every listed data-loss item?", False):
+        return None
+    return losses
+
+
+def _fleet_show(state, console):
+    for target in state["targets"]:
+        console.print(f"{target['name']}: {target['phase']}"
+                      f"{' (from ' + target['previous_version'] + ')' if target['previous_version'] else ''}")
+        for warning in target.get("warnings", []):
+            console.print(f"  Warning: {warning}")
+        if target.get("last_error"):
+            console.print(f"  Error: {target['last_error']}")
+    for warning in state.get("warnings", []):
+        console.print(f"Warning: {warning}")
+
+
+def _fleet_monitor(coordinator, run_id, password, args, console) -> int:
+    from tpotctl import sensors as tsensors
+    extension_prompted = {}
+    while True:
+        state = coordinator.store.read(run_id)
+        if state["phase"] == "completed":
+            _fleet_show(state, console)
+            return 0
+        if state["phase"] in ("aborted", "failed"):
+            _fleet_show(state, console)
+            return 1
+        active = [target for target in state["targets"]
+                  if target["phase"] in ("running", "checking", "rollback_running")]
+        if not active and state["phase"] == "prepared":
+            accepted = _fleet_losses(state, args, console)
+            if accepted is None:
+                return 1
+            if not confirm(f"Start the fleet update {run_id}?", args.yes):
+                return 1
+            coordinator.start(run_id, accepted_losses=accepted, password=password)
+            continue
+        retry = next((target for target in state["targets"]
+                      if target["phase"] == "prepared" and target.get("attempt", 1) > 1), None)
+        if not active and retry is not None and state["phase"] == "paused":
+            accepted = _fleet_losses({"targets": [retry]}, args, console)
+            if accepted is None:
+                return 1
+            if not confirm(f"Start retry for {retry['name']}?", args.yes):
+                return 1
+            coordinator.start_retry(run_id, retry["name"],
+                                    accepted_losses=accepted[retry["name"]], password=password)
+            continue
+        if not active and state["phase"] in ("paused", "precheck_failed"):
+            failed = next((target for target in state["targets"]
+                           if target["phase"] in ("failed", "rollback_failed")), None)
+            if failed is not None:
+                _fleet_show(state, console)
+                if not sys.stdin.isatty():
+                    say.hint(f"Resume this run interactively with: tpot sensors update --resume", stream=console.file)
+                    return 1
+                options = ["retry", "skip", "abort"]
+                if failed.get("archive"):
+                    options.insert(2, "rollback")
+                choice = ask(f"{failed['name']} failed; choose {', '.join(options)}: ").lower()
+                if choice not in options:
+                    console.print("No valid failure action was selected.")
+                    return 1
+                state = coordinator.resolve_failure(run_id, failed["name"], choice, password=password)
+                if choice == "retry":
+                    target = next(item for item in state["targets"] if item["name"] == failed["name"])
+                    if target["phase"] == "prepared":
+                        approved = _fleet_losses({"targets": [target]}, args, console)
+                        if approved is None:
+                            return 1
+                        coordinator.start_retry(run_id, target["name"],
+                                                accepted_losses=approved[target["name"]], password=password)
+                if choice == "abort" and state["phase"] == "aborted":
+                    _fleet_show(state, console)
+                    return 1
+                continue
+        if sys.stdin.isatty():
+            now = int(time.time())
+            for target in active:
+                deadline = target.get("deadline", now)
+                if (target["phase"] == "checking" and deadline - now <= 60
+                        and extension_prompted.get(target["name"]) != deadline):
+                    if confirm(f"Extend {target['name']}'s heartbeat deadline by 15 minutes?", False):
+                        coordinator.extend_deadline(run_id, target["name"])
+                    extension_prompted[target["name"]] = deadline
+        status = tsensors.fetch_status()
+        coordinator.resume(run_id, status, password=password)
+        current = coordinator.store.read(run_id)
+        console.print("Fleet status: " + ", ".join(
+            f"{target['name']} {target['phase']}" for target in current["targets"]))
+        time.sleep(10)
+
+
+def run_fleet_update(args, registry, console) -> int:
+    from tpotctl import fleet as tfleet, sensors as tsensors
+    ops.require_linux_host("tpot sensors update")
+    ops.require_config_current()
+    if args.names and args.all_sensors:
+        fail("Choose sensor names or --all, not both.", 2)
+    if args.resume is not None and (args.names or args.all_sensors or args.dry_run):
+        fail("--resume cannot be combined with selection or --dry-run.", 2)
+    if args.discard is not None and (
+            args.names or args.all_sensors or args.dry_run or args.accept_data_loss or args.accept_data_loss_file):
+        fail("--discard cannot be combined with selection, dry-run or data-loss options.", 2)
+    if not args.yes and not sys.stdin.isatty():
+        fail("Sensor fleet updates need a terminal or --yes.", 2)
+    coordinator = tfleet.FleetCoordinator(registry=registry)
+    if args.resume is not None or args.discard is not None:
+        password = _fleet_password(args) if args.resume is not None else ""
+        state = _fleet_run(coordinator, args.resume is not None, args.discard is not None, console)
+        if args.discard is not None:
+            if not confirm(f"Discard saved fleet run {state['run_id']}?", args.yes):
+                return 1
+            coordinator.discard(state["run_id"])
+            console.print(f"Fleet run {state['run_id']} discarded.")
+            return 0
+        console.print(f"Resuming fleet run {state['run_id']}.")
+        return _fleet_monitor(coordinator, state["run_id"], password, args, console)
+
+    password = _fleet_password(args)
+    pending = [run for run in coordinator.store.list_runs()
+               if run["phase"] in ("preparing", "running", "paused", "aborting", "prepared", "precheck_failed")]
+    if pending:
+        if not sys.stdin.isatty():
+            names = ", ".join(run["run_id"] for run in pending)
+            action = "discarded" if any(run["phase"] == "preparing" for run in pending) \
+                else "resumed or discarded"
+            fail(f"Saved fleet run(s) {names} must be {action} before starting another.", 2)
+        console.print("Saved fleet runs:")
+        for run in pending:
+            console.print(f"  {run['run_id']}  {run['phase']}")
+        discardable_phases = (
+            "preparing", "prepared", "precheck_failed", "paused", "aborted", "completed", "failed")
+        can_discard = all(run["phase"] in discardable_phases for run in pending) and not any(
+            target["phase"] in ("running", "checking", "rollback_running")
+            for run in pending for target in run["targets"]
+        )
+        can_resume = any(run["phase"] != "preparing" for run in pending)
+        choices = (("resume",) if can_resume else ()) + (("discard", "new") if can_discard else ())
+        choice = ask(f"Choose {', '.join(choices)}: ").lower()
+        if choice not in choices:
+            fail(f"Choose {', '.join(choices)}.", 2)
+        if choice == "resume":
+            state = _fleet_run(coordinator, True, False, console)
+            return _fleet_monitor(coordinator, state["run_id"], password, args, console)
+        if choice == "new":
+            for run in pending:
+                if not confirm(f"Discard saved fleet run {run['run_id']}?", False):
+                    return 1
+                coordinator.discard(run["run_id"])
+        elif choice == "discard":
+            state = _fleet_run(coordinator, False, True, console)
+            if not confirm(f"Discard saved fleet run {state['run_id']}?", False):
+                return 1
+            coordinator.discard(state["run_id"])
+            console.print(f"Fleet run {state['run_id']} discarded.")
+            return 0
+    repo = (os.environ.get("TPOT_REPO_URL") or registry.env.get("TPOT_REPO_URL")
+            or ops.git(registry.repo_dir, "remote", "get-url", "origin"))
+    branch = (os.environ.get("TPOT_BRANCH") or registry.env.get("TPOT_BRANCH")
+              or ops.git(registry.repo_dir, "branch", "--show-current"))
+    version = registry.env.get("TPOT_VERSION") or ""
+    if not repo or not branch or not version:
+        fail("The HIVE repository, current branch and TPOT_VERSION are required for a fleet update.", 3)
+    state = coordinator.prepare(
+        registry, tsensors.fetch_status(), repo=repo, branch=branch, version=version,
+        names=args.names, all_sensors=args.all_sensors, parallel=args.parallel, password=password,
+    )
+    _fleet_show(state, console)
+    console.print(f"Fleet run: {state['run_id']}")
+    if args.parallel != 1:
+        console.print("Warning: parallel sensor updates can increase network load; use the sequential default if unsure.")
+    if args.dry_run:
+        coordinator.discard(state["run_id"])
+        console.print("Dry run complete; no sensor was updated.")
+        return 0 if state["phase"] == "prepared" else 1
+    if state["phase"] == "prepared":
+        accepted = _fleet_losses(state, args, console)
+        if accepted is None:
+            coordinator.discard(state["run_id"])
+            return 1
+        if not confirm(f"Start the fleet update {state['run_id']}?", args.yes):
+            coordinator.discard(state["run_id"])
+            return 1
+        coordinator.start(state["run_id"], accepted_losses=accepted, password=password)
+    return _fleet_monitor(coordinator, state["run_id"], password, args, console)
+
+
 def sensors_table(registry, status, days: int, found=()):
     """found: the sensors of lswebpasswd / lswebpasswd.lost that can be taken over (Registry.file_only)."""
     from rich import box
@@ -1145,9 +1449,16 @@ def run_sensors(args) -> int:
     from rich.text import Text
     from tpotctl import sensors as tsensors
     command = args.sensors_command or "list"
+    if command == "update":
+        ops.require_linux_host("tpot sensors update")
+        ops.require_config_current()
+    if command == "sudo":
+        ops.require_linux_host("tpot sensors sudo")
     if command == "add" or (command == "cert" and args.distribute is not None):
         ops.require_config_current()
     registry = tsensors.Registry()
+    if command == "sudo":
+        return run_sudo(args, registry)
     console = _console()
     if registry.migrated:
         console.print(Text(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. Add where they are "
@@ -1155,6 +1466,8 @@ def run_sensors(args) -> int:
     if command == "import":
         return run_import(registry, "sensor", "LS_WEB_USER", "They can send to this HIVE then.", args.yes, console,
                           registry.lswebpasswd)
+    if command == "update":
+        return run_fleet_update(args, registry, console)
     if command == "list":
         status = tsensors.fetch_status(args.days)
         tsensors.link_hostnames(registry, status)
@@ -1188,6 +1501,136 @@ def run_sensors(args) -> int:
     if command == "cert":
         return run_sensor_cert(args, registry, console)
     return run_sensor_add(args, registry, console)
+
+
+def sudo_arguments(parser, remote: bool = False) -> None:
+    if remote:
+        parser.add_argument("names", nargs="*", metavar="NAME", help="no names: all registered sensors")
+    parser.add_argument("sudo_action", choices=("status", "secure", "convenient"),
+                        **({} if remote else {"nargs": "?", "default": "status"}))
+    parser.add_argument("-y", "--yes", action="store_true", help="confirm the mode change")
+    parser.add_argument("-B", "--become-file", default="", metavar="FILE", help="private sudo password file")
+    parser.add_argument("--user-password-file", default="", metavar="FILE",
+                        help="private new password, used only for an account without a usable password")
+
+
+def sudo_become_password(sensor=None) -> str:
+    import getpass
+    import subprocess
+    from tpotctl import installer, sensors as tsensors
+    name = sensor.name if sensor else "this host"
+    if sensor:
+        try:
+            proc = subprocess.run(tsensors.ssh_command(sensor.host, sensor.ssh_user, "sudo -n -k true",
+                                                       port=sensor.ssh_port),
+                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                  universal_newlines=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired) as err:
+            raise SudoError(f"{name}: SSH sudo check failed: {err}") from err
+        if proc.returncode == 255:
+            raise SudoError(f"{name}: SSH connection failed: {proc.stderr.strip()}")
+        needs_password = proc.returncode != 0
+    else:
+        mode = installer.sudo_mode()
+        if mode == "missing":
+            raise SudoError("sudo is not installed on this host.")
+        needs_password = mode != "passwordless"
+    if not needs_password:
+        return ""
+    if not sys.stdin.isatty():
+        fail(f"{name}: no terminal for the sudo password; use --become-file FILE", 2)
+    try:
+        password = getpass.getpass(f"Sudo password for {name}: ")
+    except EOFError:
+        raise SudoError("No sudo password entered.") from None
+    if not password or any(c in password for c in "\r\n\0"):
+        raise SudoError("Enter a nonempty, single-line sudo password.")
+    return password
+
+
+def show_sudo_status(name, status, console) -> None:
+    from rich.text import Text
+    from tpotctl import sudo_mode
+    console.print(Text(f"{name}: {sudo_mode.summary(status)}", style="red" if status.error else ""))
+    if not status.error:
+        console.print(Text(f"  User: {status.user}; T-Pot rule: {status.own_rule}; "
+                           f"temporary installer rule: {status.temporary_rule}"))
+    for text in status.changes:
+        console.print(Text(f"  {text}"))
+    for text in status.warnings:
+        console.print(Text(f"  {text}", style="yellow"))
+
+
+def run_sudo(args, registry=None) -> int:
+    import contextlib
+    from tpotctl import installer, sensors as tsensors, sudo_mode, users
+    ops.require_linux_host("tpot sensors sudo" if registry else "tpot sudo")
+    action = args.sudo_action
+    selected = ([registry.get(name) for name in dict.fromkeys(args.names)] if args.names else registry.sensors()) \
+        if registry else [None]
+    if not selected:
+        raise SudoError("No registered sensors to manage.")
+    if action != "status" and not confirm(
+            f"Use {'More secure (sudo asks for a password)' if action == 'secure' else 'More convenient (passwordless sudo)'}"
+            f" on {', '.join(s.name if s else 'this host' for s in selected)}?", args.yes):
+        return 1
+    console = _console()
+    become = sudo_mode.read_password_file(args.become_file) if args.become_file else ""
+    new_password = sudo_mode.read_password_file(args.user_password_file) if args.user_password_file else ""
+    if new_password and action == "secure":
+        weak = users.weakness(new_password)
+        if weak:
+            raise SudoError("The new user password is weak: " + weak)
+    failed = False
+    prepared = []
+    try:
+        with contextlib.ExitStack() as stack:
+            for sensor in selected:
+                name = sensor.name if sensor else "localhost"
+                try:
+                    inventory = stack.enter_context(tempfile_inventory(tsensors.inventory_text([sensor]))) \
+                        if sensor else "localhost,"
+                    files = dict(stack.enter_context(installer.secret_files(
+                        become=become or sudo_become_password(sensor))))
+                    code, results = sudo_mode.execute("status", inventory, [name], local=sensor is None,
+                                                      become_file=files.get("become", ""), invoke=call)
+                    state = results[name]
+                    if code == 130:
+                        return 130
+                    if code or action == "status":
+                        show_sudo_status(name, state, console)
+                        failed |= bool(code)
+                        continue
+                    password = new_password
+                    if action == "secure" and not state.password_usable and not password:
+                        if not sys.stdin.isatty():
+                            fail(f"{name}: no usable user password; supply --user-password-file before changing anything", 2)
+                        say.warn(f"Set a new password for {state.user} on {name}. SSH also uses it when password "
+                                 "logins are enabled.", console.file)
+                        password = read_password(argparse.Namespace(password_stdin=False))
+                        if any(c in password for c in "\r\n\0") or users.weakness(password):
+                            raise SudoError("The new user password must be a strong, nonempty single line.")
+                    if password and action == "secure":
+                        files.update(stack.enter_context(installer.secret_files(user=password)))
+                    prepared.append((sensor, name, inventory, files))
+                except (SudoError, tsensors.SensorsError) as err:
+                    error(f"{name}: {err}")
+                    failed = True
+            for sensor, name, inventory, files in prepared:
+                code, results = sudo_mode.execute(action, inventory, [name], local=sensor is None,
+                                                  become_file=files.get("become", ""),
+                                                  user_password_file=files.get("user", ""), invoke=call)
+                show_sudo_status(name, results[name], console)
+                if code == 130:
+                    return 130
+                failed |= bool(code)
+    except OSError as err:
+        raise SudoError(str(err)) from err
+    finally:
+        for path in dict.fromkeys((args.become_file, args.user_password_file)):
+            if path:
+                say.hint(f"Remove the password file you provided when no longer needed: {path}", console.file)
+    return int(failed)
 
 
 def renew_certificate(registry, addresses, console, yes: bool, restart: bool) -> bool:
@@ -1778,19 +2221,32 @@ def run_customizer(args: List[str]) -> int:
     return 0    # not reached
 
 
-def run_install(classic: bool) -> int:
+def run_install(classic: bool, *, sudo_nopasswd: bool = False, become_file: str = "",
+                user_password_file: str = "") -> int:
     from tpotctl import installer
     if not sys.platform.startswith("linux"):
         raise ops.OpsError("tpot install installs T-Pot on Linux (Debian recommended), see the README")
     if installer.installed():
         raise ops.OpsError("T-Pot is installed on this host already, update it with: tpot update")
     if classic:
-        os.execv(installer.INSTALL_SH, [installer.INSTALL_SH, "-n"])
+        command = [installer.INSTALL_SH, "-n"]
+        if sudo_nopasswd:
+            command += ["--sudo-nopasswd"]
+        if become_file:
+            command += ["-B", become_file]
+        if user_password_file:
+            command += ["--user-password-file", user_password_file]
+        os.execv(installer.INSTALL_SH, command)
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         error("the assistant needs a terminal, install without questions with: install.sh -s -t ...")
         return 2
     from tpotctl.screens.install import run_install as assistant
-    return assistant()
+    from tpotctl.sudo_mode import SudoError
+    try:
+        return assistant(sudo_nopasswd=sudo_nopasswd, become_file=become_file,
+                         user_password_file=user_password_file)
+    except SudoError as err:
+        raise ops.OpsError(str(err)) from err
 
 
 def run_service(action: str) -> int:
@@ -1810,6 +2266,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 def dispatch(argv: List[str]) -> int:
+    args = None
     try:
         if argv and argv[0] in PASSTHROUGH:
             ops.require_linux_host(argv[0])
@@ -1849,12 +2306,17 @@ def dispatch(argv: List[str]) -> int:
                 error(str(err))
                 return 1
         if args.command == "sensors":
-            from tpotctl import sensors as tsensors
+            from tpotctl import fleet as tfleet, sensors as tsensors
             try:
                 return run_sensors(args)
-            except tsensors.SensorsError as err:
+            except tsensors.SensorsRoleError as err:
+                error(str(err))
+                return 3
+            except (tsensors.SensorsError, tfleet.FleetError) as err:
                 error(str(err))
                 return 1
+        if args.command == "sudo":
+            return run_sudo(args)
         if args.command == "edition":
             return run_edition(args)
         if args.command == "check":
@@ -1869,14 +2331,15 @@ def dispatch(argv: List[str]) -> int:
                 error(str(err))
                 return 1
         if args.command == "install":
-            return run_install(args.classic)
+            return run_install(args.classic, sudo_nopasswd=args.sudo_nopasswd,
+                               become_file=args.become_file, user_password_file=args.user_password_file)
         if args.command == "uninstall":
             ops.require_linux_host("uninstall")
             if not (sys.stdin.isatty() and sys.stdout.isatty()):
                 error("tpot uninstall asks first and needs a terminal, without questions: uninstall.sh -y")
                 return 2
             from tpotctl.screens.uninstall import run_uninstall
-            return run_uninstall()
+            return run_uninstall(keep_sudo_rule=args.keep_sudo_rule)
         if args.command in ("start", "stop", "restart"):
             return run_service(args.command)
         ops.require_linux_host(args.command)
@@ -1886,7 +2349,10 @@ def dispatch(argv: List[str]) -> int:
             return print_ps(args.watch)
         if args.command == "images":
             return print_images()
-    except (ops.OpsError, bootstrap.BootstrapError) as err:
+    except (ops.OpsError, bootstrap.BootstrapError, SudoError) as err:
         error(str(err))
+        if isinstance(err, ops.OpsError) and args is not None and args.command == "sensors" \
+                and args.sensors_command == "update":
+            return 3
         return 1
     return 2

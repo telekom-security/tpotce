@@ -39,7 +39,7 @@ class Task:
     done: str = ""
     # more secrets the command reads from files: {option: text}, each one appended as
     # "option file" (i.e. the password of a new web user)
-    secrets: Dict[str, str] = field(default_factory=dict)
+    secrets: Dict[str, str] = field(default_factory=dict, repr=False)
     restart_tpot: bool = False          # the checkout changed, offer to start the T-Pot Manager anew
     autostart: bool = False             # confirmed before, start without asking
 

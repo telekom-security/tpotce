@@ -7,9 +7,13 @@ gum, and the os-release of a Debian 13 (an awk that reads $HOME/os-release inste
 nothing touches the host, the real checkout, its .env or ~/.config/tpotce, nothing calls docker.
 """
 
+import hashlib
+import json
 import os
+from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import time
 import unittest
@@ -32,6 +36,8 @@ STUBS = {
            "  [ \"$a\" = /etc/os-release ] && a=\"$HOME/os-release\"\n  set -- \"$@\" \"$a\"\ndone\n"
            f"exec {AWK} \"$@\"\n",
     "ss": "#!/bin/sh\nexit 0\n",
+    "passwd": '#!/bin/sh\n[ "${FAKE_PASSWORD_STATE:-P}" != error ] || exit 1\n'
+              'printf "%s %s 01/01/2020 0 99999 7 -1\\n" "$2" "${FAKE_PASSWORD_STATE:-P}"\n',
     # the packages of the host: none (dpkg-query fails), with FAKE_DPKG=ii all of them
     "dpkg-query": "#!/bin/sh\n[ -n \"$FAKE_DPKG\" ] || exit 1\nshift 2\nfor p; do echo \"$FAKE_DPKG \"; done\n",
     "apt": "#!/bin/sh\necho \"apt $*\" >> \"$HOME/calls\"\n",
@@ -43,7 +49,7 @@ STUBS = {
                         "  printf '      Task one\\tTAGS: [Debian]\\n      Task two\\tTAGS: [Debian]\\n'; exit 0 ;;\nesac\n"
                         "echo 'PLAY [T-Pot] ****'\necho 'TASK [Task one] ****'\necho 'ok: [127.0.0.1]'\n"
                         "echo 'TASK [Task two] ****'\n"
-                        "if [ -n \"$FAKE_PLAYBOOK_RC\" ]; then echo 'fatal: [127.0.0.1]: FAILED! => {}'; "
+                        "if [ -n \"$FAKE_PLAYBOOK_RC\" ] && [ \"${1##*/}\" = tpot.yml ]; then echo 'fatal: [127.0.0.1]: FAILED! => {}'; "
                         "exit \"$FAKE_PLAYBOOK_RC\"; fi\necho 'changed: [127.0.0.1]'\n",
     # config --images names an image once per service (cowrie twice here), the pull of Compose v5 reports
     # every image once
@@ -90,10 +96,12 @@ BASH4 = re.compile(r"\[-\d+\]|\$\{[^}]*(,,|\^\^|,|\^)\}|\b(mapfile|readarray|cop
 
 
 def body_without_ui(script):
-    """The script without the ui block of install.sh (installer/lib/ui.sh has its own bash 3.2 tests)."""
+    """Shell only, excluding the separately tested UI and embedded Python data."""
     text = base.read(script)
     if "# >>> tpot ui >>>" in text:
         text = text[:text.index("# >>> tpot ui >>>")] + text[text.index("# <<< tpot ui <<<"):]
+    if "# >>> tpot sudo backend >>>" in text:
+        text = text[:text.index("# >>> tpot sudo backend >>>")] + text[text.index("# <<< tpot sudo backend <<<"):]
     return text
 
 
@@ -160,6 +168,8 @@ class InstallShTest(Scripts):
         super().setUp()
         # the clone the playbook would make: the installer finds its playbook, nothing is cloned
         write(os.path.join(self.tpotce, "installer", "install", "tpot.yml"), "- hosts: all\n")
+        shutil.copy(os.path.join(REPO, "installer", "install", "sudo_mode.yml"),
+                    os.path.join(self.tpotce, "installer", "install", "sudo_mode.yml"))
         for edition in ("standard", "sensor", "mobile"):
             write(os.path.join(self.tpotce, "compose", f"{edition}.yml"),
                   f"# T-Pot: {edition.upper()}\nservices: {{}}\n")
@@ -181,6 +191,270 @@ class InstallShTest(Scripts):
 
     def test_help(self):
         self.assert_help("install.sh", self.run_script(self.script, "-h"))
+
+    def classic(self, answers, **env):
+        return subprocess.run(["bash", self.script, "-n", "-t", "s"], input=answers,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=self.home,
+                              env=self.env(TPOT_GUM="off", TPOT_INSTALL_CONFIRMED="1",
+                                           TPOT_INSTALL_PACKAGES_DONE="1", **env), timeout=30)
+
+    def test_classic_requires_an_explicit_sudo_choice(self):
+        result = self.classic("\n1\n3\n")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertGreaterEqual(result.stdout.count("Choose how sudo works"), 2)
+        self.assertIn("More secure", result.stdout)
+        self.assertIn("More convenient", result.stdout)
+        self.assertIn("tpot_sudo_action=convenient", self.calls())
+        self.assertNotIn("tpot_sudo_action=secure", self.calls())
+
+    def test_unattended_locked_account_refuses_before_changes(self):
+        result = self.install("-s", "-t", "s", FAKE_PASSWORD_STATE="L")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("--user-password-file", result.stdout)
+        self.assertNotIn("ansible-playbook", self.calls())
+        self.assertEqual(base.read(os.path.join(self.tpotce, ".env")), "TPOT_TYPE=HIVE\nWEB_USER=\n")
+
+    def test_an_unknown_password_state_is_not_treated_as_usable(self):
+        for state in ("error", "unexpected"):
+            with self.subTest(state=state):
+                result = self.install("-s", "-t", "s", FAKE_PASSWORD_STATE=state)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("password state", result.stdout)
+                self.assertNotIn("ansible-playbook", self.calls())
+
+    def test_weak_new_password_file_is_refused_before_configuration(self):
+        path = os.path.join(self.home, "user-password")
+        write(path, "short\n", 0o600)
+        result = self.install("-s", "-t", "s", "--user-password-file", path, FAKE_PASSWORD_STATE="L")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("too weak", result.stdout)
+        self.assertNotIn("ansible-playbook", self.calls())
+        self.assertEqual(base.read(os.path.join(self.tpotce, ".env")), "TPOT_TYPE=HIVE\nWEB_USER=\n")
+
+    def test_classic_sets_a_locked_accounts_password_through_a_private_file(self):
+        playbook = os.path.join(self.bin, "ansible-playbook")
+        write(playbook, STUBS["ansible-playbook"].replace("#!/bin/sh\n", """#!/bin/sh
+if [ "${1##*/}" = sudo_mode.yml ]; then
+  python3 - "$@" <<'PY'
+import json, os, stat, sys
+for arg in sys.argv[1:]:
+    if arg.startswith("{"):
+        path = json.loads(arg).get("tpot_user_password_file")
+        if path:
+            assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+            with open(path) as secret:
+                assert secret.read() == "  Truly-different horse 874!  \\n"
+            with open(os.path.join(os.environ["HOME"], "password-path"), "w") as out:
+                out.write(path)
+PY
+  [ "$?" -eq 0 ] || exit 1
+fi
+"""), 0o755)
+        result = self.classic("2\ny\nshort\nshort\n  Truly-different horse 874!  \n"
+                              "not-the-same\n  Truly-different horse 874!  \n"
+                              "  Truly-different horse 874!  \n", FAKE_PASSWORD_STATE="L")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("SSH", result.stdout)
+        self.assertIn("Passwords do not match", result.stdout)
+        self.assertNotIn("Truly-different", result.stdout + self.calls())
+        path_file = os.path.join(self.home, "password-path")
+        self.assertTrue(os.path.isfile(path_file), result.stdout)
+        self.assertFalse(os.path.exists(base.read(path_file)))
+
+    def test_classic_collects_the_sudo_password_only_once(self):
+        write(os.path.join(self.bin, "sudo"), """#!/bin/sh
+case "$*" in
+  '-n -k true') exit 1 ;;
+  '-S -p  -v'|'-S -k -p  -v')
+    IFS= read -r password
+    [ "$password" = '  Existing-access 874!  ' ]; exit $? ;;
+  '-v') echo 'unexpected interactive sudo' >&2; exit 1 ;;
+esac
+""" + base.SUDO.partition("\n")[2], 0o755)
+        code, output = base.at_terminal(
+            ["bash", self.script, "-n", "-t", "s"],
+            self.env(TPOT_GUM="off", TPOT_INSTALL_CONFIRMED="1", TPOT_INSTALL_PACKAGES_DONE="1"),
+            self.home, answers=[("Choice (1-3", b"2\n"),
+                                ("Enter your sudo password:", b"  Existing-access 874!  \n")])
+        self.assertEqual(code, 0, output)
+        self.assertEqual(output.count("Enter your sudo password"), 1, output)
+        self.assertNotIn("Existing-access", output + self.calls())
+        self.assertEqual(self.calls().count("--become-password-file -"), 3, self.calls())
+
+    def test_sudo_mode_runs_after_the_last_privileged_install_step(self):
+        for flags, action in (((), "secure"), (("--sudo-nopasswd",), "convenient")):
+            with self.subTest(action=action):
+                write(os.path.join(self.home, "calls"), "")
+                result = self.install("-s", "-t", "s", *flags)
+                self.assertEqual(result.returncode, 0, result.stdout)
+                calls = self.calls().splitlines()
+                mode = [line for line in calls if "ansible-playbook" in line and "sudo_mode.yml" in line]
+                self.assertEqual(len(mode), 2, self.calls())
+                self.assertIn(f"tpot_sudo_action={action}", mode[1])
+                self.assertIn("tpot_cleanup_install=true", mode[1])
+                self.assertIn("tpot_cleanup_install=false", mode[0])
+                self.assertGreater(calls.index(mode[1]), next(i for i, line in enumerate(calls) if "grc netstat" in line))
+                main = next(i for i, line in enumerate(calls) if "ansible-playbook" in line and "/tpot.yml" in line)
+                self.assertLess(calls.index(mode[0]), main)
+                self.assertIn("tpot_sudo_prepare=true", mode[0])
+                self.assertNotIn("--tags", mode[1])
+
+    def test_sudo_mode_failure_is_not_an_installation_success(self):
+        path = os.path.join(self.bin, "ansible-playbook")
+        write(path, STUBS["ansible-playbook"].replace(
+            "#!/bin/sh\n", '#!/bin/sh\ncase "$*" in *tpot_sudo_prepare=false*) echo "sudo mode refused"; exit 1 ;; esac\n'),
+            0o755)
+        result = self.install("-s", "-M", "-t", "s")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertNotIn("T-Pot is installed", result.stdout)
+        self.assertIn("sudo", result.stdout)
+        self.assertEqual(self.marks(result.stdout)[-2:], ["@@tpot fail sudo", "@@tpot phase failed"])
+
+    def test_user_password_path_is_forwarded_to_the_final_play(self):
+        secret = os.path.join(self.home, "new user password")
+        write(secret, "Distant-Otters!swim-47\n", 0o600)
+        result = self.install("-s", "-t", "s", "--user-password-file", secret)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        mode = [line for line in self.calls().splitlines() if "sudo_mode.yml" in line]
+        self.assertEqual(len(mode), 2, self.calls())
+        data = json.loads(mode[1][mode[1].index("{"):])
+        self.assertEqual(data["tpot_user_password_file"], secret)
+        self.assertNotIn("Distant-Otters!swim-47", self.calls() + result.stdout)
+
+    def test_prepare_failure_prevents_host_reconfiguration(self):
+        path = os.path.join(self.bin, "ansible-playbook")
+        write(path, STUBS["ansible-playbook"].replace(
+            "#!/bin/sh\n", '#!/bin/sh\ncase "$*" in *tpot_sudo_prepare=true*) echo "password refused"; exit 1 ;; esac\n'),
+            0o755)
+        result = self.install("-s", "-M", "-t", "s")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertNotIn("/tpot.yml", self.calls())
+        self.assertNotIn(" pull", self.calls())
+        self.assertIn("password refused", result.stdout)
+        self.assertEqual(self.feed(result.stdout).step, "sudo_prepare")
+
+    def test_missing_sudo_uses_the_explicit_root_handover_not_a_personal_rule(self):
+        text = base.read("install.sh").replace(
+            "unset CDPATH", """unset CDPATH
+type () {
+  [ "$*" != "-P sudo" ] || return 1
+  builtin type "$@"
+}""", 1)
+        write(self.script, text, 0o755)
+        write(os.path.join(self.bin, "su"), '#!/bin/sh\necho legacy-su >> "$HOME/calls"\nexit 1\n', 0o755)
+        result = self.run_merged(self.script, "-s", "-t", "s")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--user", result.stdout)
+        self.assertNotIn("legacy-su", self.calls())
+        self.assertNotIn("ansible-playbook", self.calls())
+
+    def sudo_from_file(self):
+        write(os.path.join(self.bin, "sudo"), '#!/bin/sh\n'
+              '[ "$*" != "-n -k true" ] || exit 1\n' + base.SUDO.split("\n", 1)[1], 0o755)
+        script = STUBS["ansible-playbook"]
+        capture = '''python3 - "$@" 3<&0 <<'PY'
+import hashlib, json, os, stat, sys
+args = sys.argv[1:]
+if "--become-password-file" in args:
+    path = args[args.index("--become-password-file") + 1]
+    with os.fdopen(os.dup(3), "rb") if path == "-" else open(path, "rb") as stream:
+        digest = hashlib.sha256(stream.read()).hexdigest()
+        info = os.fstat(stream.fileno())
+    temporary = [os.path.join(os.environ["HOME"], name) for name in os.listdir(os.environ["HOME"])
+                 if name.startswith("tpot-install-password.")]
+    with open(os.path.join(os.environ["HOME"], "become-observed.json"), "w") as stream:
+        json.dump(dict(path=path, mode=stat.S_IMODE(info.st_mode), inode=info.st_ino,
+                       digest=digest, temporary=temporary), stream)
+PY
+'''
+        write(os.path.join(self.bin, "ansible-playbook"), script.replace("#!/bin/sh\n", "#!/bin/sh\n" + capture), 0o755)
+
+    def test_readable_sudo_password_file_is_refused_before_installation(self):
+        path = os.path.join(self.home, "sudo-pw")
+        write(path, "test password\n", 0o644)
+        result = self.install("-s", "-t", "s", "-B", path)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("chmod 600", result.stdout)
+        self.assertNotIn("ansible-playbook", self.calls())
+        self.assertNotIn("apt ", self.calls())
+
+    def test_sudo_password_path_with_spaces_reaches_ansible_unchanged(self):
+        self.sudo_from_file()
+        path = os.path.join(self.home, "sudo password")
+        write(path, "a test password\n", 0o600)
+        result = self.install("-s", "-t", "s", "-B", path)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(os.path.exists(os.path.join(self.home, "become-observed.json")), result.stdout)
+        with open(os.path.join(self.home, "become-observed.json")) as stream:
+            observed = json.load(stream)
+        self.assertEqual(observed["path"], "-")
+        self.assertEqual(observed["inode"], os.stat(path).st_ino)
+        self.assertEqual(observed["digest"], hashlib.sha256(b"a test password\n").hexdigest())
+        self.assertTrue(os.path.exists(path))
+        self.assertIn("Remove the password file", result.stdout)
+
+    def test_become_file_is_available_if_passwordless_sudo_changes_during_install(self):
+        self.sudo_from_file()
+        write(os.path.join(self.bin, "sudo"), base.SUDO, 0o755)
+        path = os.path.join(self.home, "sudo-pw")
+        write(path, "a test password\n", 0o600)
+        result = self.install("-s", "-t", "s", "-B", path)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(os.path.exists(os.path.join(self.home, "become-observed.json")),
+                        "Ansible must receive -B even when sudo initially needs no password.")
+
+    def test_sudo_password_stdin_is_private_and_removed_after_success_or_failure(self):
+        self.sudo_from_file()
+        password = "a synthetic password\n"
+        for playbook_rc in ("0", "1"):
+            with self.subTest(playbook_rc=playbook_rc):
+                result = subprocess.run(["bash", self.script, "-s", "-t", "s", "-B", "-"],
+                                        input=password, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        cwd=self.home, timeout=60,
+                                        env=self.env(TPOT_GUM="off", TPOT_INSTALL_PACKAGES_DONE="1", TMPDIR=self.home,
+                                                     FAKE_PLAYBOOK_RC=playbook_rc if playbook_rc != "0" else ""))
+                self.assertEqual(result.returncode, int(playbook_rc), result.stdout)
+                self.assertTrue(os.path.exists(os.path.join(self.home, "become-observed.json")), result.stdout)
+                with open(os.path.join(self.home, "become-observed.json")) as stream:
+                    observed = json.load(stream)
+                self.assertEqual(observed["mode"], 0o600)
+                self.assertEqual(observed["digest"], hashlib.sha256(password.encode()).hexdigest())
+                self.assertEqual(len(observed["temporary"]), 1)
+                self.assertFalse(os.path.exists(observed["temporary"][0]))
+                self.assertNotIn(password.strip(), result.stdout + self.calls())
+
+    def test_term_while_reading_stdin_removes_the_private_file(self):
+        write(os.path.join(self.bin, "cat"), '#!/bin/sh\ntouch "$HOME/cat-ready"\nexec /bin/cat "$@"\n', 0o755)
+        proc = subprocess.Popen(["bash", self.script, "-s", "-t", "s", "-B", "-"],
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, start_new_session=True, cwd=self.home,
+                                env=self.env(TPOT_GUM="off", TMPDIR=self.home))
+        try:
+            until = time.monotonic() + 5
+            while not os.path.exists(os.path.join(self.home, "cat-ready")) and time.monotonic() < until:
+                time.sleep(0.01)
+            self.assertTrue(os.path.exists(os.path.join(self.home, "cat-ready")))
+            proc.send_signal(signal.SIGTERM)
+            try:
+                result = proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.fail("The installer did not cancel while its stdin reader was waiting.")
+            self.assertEqual(result, 130)
+            self.assertFalse([name for name in os.listdir(self.home) if name.startswith("tpot-install-password.")])
+        finally:
+            if proc.poll() is None:
+                os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate(timeout=5)
+
+    def test_private_password_does_not_leak_through_shell_tracing(self):
+        path = os.path.join(self.home, "sudo-pw")
+        write(path, "trace-must-not-show-this\n", 0o600)
+        result = subprocess.run(["bash", "-x", self.script, "-s", "-t", "s", "-B", path],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                stdin=subprocess.DEVNULL, cwd=self.home, timeout=60,
+                                env=self.env(TPOT_GUM="off", TPOT_INSTALL_PACKAGES_DONE="1"))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("trace-must-not-show-this", result.stdout)
 
     def test_missing_freshness_hooks_are_named_in_the_final_summary(self):
         result = self.install("-s", "-t", "s")
@@ -366,6 +640,8 @@ class InstallShTest(Scripts):
 
     def test_usage_errors(self):
         for args, text in ((["-Z"], "Unknown option -Z."), (["-t"], "Option -t requires an argument."),
+                           (["--user"], "--user requires an argument"),
+                           (["--user-password-file="], "--user-password-file requires an argument"),
                            (["-t", "x"], "Invalid installation type: x"),
                            (["-s"], "-t is required"), (["-s", "-t", "h"], "-u and -p (or -P) are required"),
                            (["-c", os.path.join(self.home, "missing.yml")], "does not exist"),
@@ -727,6 +1003,29 @@ class InstallShTest(Scripts):
         self.assertIn('if [ "${TPOT_INSTALL_CONFIRMED:-}" = "1" ]; then\n  unset TPOT_INSTALL_CONFIRMED\n  myQST="y"\n',
                       base.read("install.sh"))
 
+    def test_assistant_keeps_explicit_sudo_mode_and_password_files(self):
+        base_git = ["git", "-C", self.tpotce, "-c", "user.name=T", "-c", "user.email=t@example.org"]
+        for args in (["init", "-q", "-b", "master"], ["remote", "add", "origin",
+                     "https://github.com/telekom-security/tpotce"], ["add", "-A"], ["commit", "-q", "-m", "iso"]):
+            subprocess.run(base_git + args, check=True, capture_output=True)
+        write(os.path.join(self.tpotce, "tpot"), """#!/bin/sh
+if [ "$1" = install ] && [ "$2" != --help ]; then
+  printf '%s\\n' "$@" > "$HOME/assistant-args"
+fi
+""", 0o755)
+        write(os.path.join(self.data, "tpotce", "venv", "bin", "python"), "#!/bin/sh\n", 0o755)
+        become, user = (os.path.join(self.home, name) for name in ("become file", "user file"))
+        write(become, "  Existing password 974!  \n", 0o600)
+        write(user, "  New password 947!  \n", 0o600)
+        output = ui.plain(self.at_terminal(self.script, "--sudo-nopasswd", "-B", become,
+                                          "--user-password-file", user, FAKE_DPKG="ii",
+                                          TPOT_INSTALL_CONFIRMED="1"))
+        self.assertEqual(base.read(os.path.join(self.home, "assistant-args")).splitlines(),
+                         ["install", "--sudo-nopasswd", "--become-file", become, "--user-password-file", user])
+        self.assertNotIn("password 974!", output)
+        self.assertTrue(os.path.exists(become))
+        self.assertTrue(os.path.exists(user))
+
     def test_the_version_of_the_logo(self):
         # an older clone in ~/tpotce says nothing about what this installer installs
         write(os.path.join(self.tpotce, "version"), "99.9.9\n")
@@ -851,6 +1150,101 @@ class UninstallShTest(Scripts):
         write(os.path.join(self.tpotce, "version"), NEW + "\n")
         write(os.path.join(self.tpotce, "update.sh"),
               "#!/bin/sh\necho \"update.sh $*\" >> \"$HOME/calls\"\nexit \"${FAKE_BACKUP_RC:-0}\"\n", 0o755)
+        for name in ("tpotctl/sudo_mode.py", "installer/install/sudo_mode.yml",
+                     "installer/install/sudo_reconnect.yml", "installer/install/library/tpot_sudo.py",
+                     "installer/remove/tpot.yml"):
+            write(os.path.join(self.tpotce, name), base.read(name))
+
+    def test_safe_remove_runs_from_staging_after_checkout_removal(self):
+        write(os.path.join(self.bin, "ansible-playbook"), """#!/usr/bin/env python3
+import json, os, pathlib, sys
+home = pathlib.Path.home()
+args = sys.argv[1:]
+with (home / "calls").open("a") as stream:
+    stream.write("ansible-playbook " + " ".join(args) + "\\n")
+play = pathlib.Path(args[0])
+if play.name == "sudo_mode.yml":
+    assert not (home / "tpotce").exists(), "sudo must stay until the last privileged removal"
+    assert play.is_file() and (play.parent / "sudo_reconnect.yml").is_file()
+    assert (play.parent / "library/tpot_sudo.py").is_file()
+    variables = json.loads(pathlib.Path(args[args.index("-e") + 1][1:]).read_text())
+    assert variables["tpot_sudo_action"] == "safe_remove"
+    assert variables["tpot_cleanup_install"] is True
+    assert variables["tpot_keep_sudo_rule"] is True
+    (home / "sudo-stage").write_text(str(play.parent))
+""", 0o755)
+        result = self.run_merged(self.script, "-y", "--keep-sudo-rule")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("sudo_mode.yml", self.calls())
+        stage = Path(self.home, "sudo-stage").read_text()
+        self.assertFalse(os.path.exists(stage), "The uninstaller must remove its private staging directory.")
+
+    def test_uninstall_rejects_public_password_files_before_any_removal(self):
+        password = os.path.join(self.home, "sudo-password")
+        write(password, "not-a-real-password\n", 0o644)
+        result = self.run_merged(self.script, "-y", "-B", password)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("chmod 600", result.stdout)
+        self.assertTrue(os.path.isdir(self.tpotce))
+        self.assertNotIn("ansible-playbook", self.calls())
+
+    def test_password_cleanup_failure_is_reported_and_fails_the_run(self):
+        password = os.path.join(self.home, "handover-password")
+        write(password, "not-a-real-password\n", 0o600)
+        write(os.path.join(self.bin, "rm"), '#!/bin/sh\ncase "$*" in *"/handover-password") exit 1 ;; esac\n'
+              f'exec {shutil.which("rm")} "$@"\n', 0o755)
+        result = self.run_merged(self.script, "-y", "-B", password, TPOT_REMOVE_BECOME_FILE="1")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("temporary password file", result.stdout)
+        self.assertTrue(os.path.isfile(password))
+        self.assertNotIn("not-a-real-password", result.stdout)
+
+    def test_backup_receives_the_private_password_copy(self):
+        password = os.path.join(self.tpotce, "sudo-password")
+        write(password, "  not-a-real-password  \n", 0o600)
+        write(os.path.join(self.tpotce, "update.sh"), """#!/usr/bin/env python3
+import pathlib, sys
+args = sys.argv[1:]
+assert "-B" in args, "backup needs the same sudo credential"
+path = pathlib.Path(args[args.index("-B") + 1])
+assert path.stat().st_mode & 0o777 == 0o600
+assert path.read_text() == "  not-a-real-password  \\n"
+assert "tpotce" not in path.parts, "the private copy must survive checkout removal"
+(pathlib.Path.home() / "backup-ran").touch()
+""", 0o755)
+        result = self.run_merged(self.script, "-y", "-k", "-B", password)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(os.path.isfile(os.path.join(self.home, "backup-ran")))
+
+    def test_lost_passwordless_access_never_prompts_in_an_unattended_run(self):
+        write(os.path.join(self.bin, "sudo"), """#!/bin/sh
+if [ "$*" = "-n -k true" ]; then
+  if [ -e "$HOME/sudo-checked" ]; then exit 1; fi
+  touch "$HOME/sudo-checked"
+  exit 0
+fi
+exit 0
+""", 0o755)
+        result = self.run_merged(self.script, "-y")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("sudo access changed", result.stdout)
+        self.assertNotIn("ansible-playbook", self.calls())
+        self.assertTrue(os.path.isdir(self.tpotce))
+
+    def test_failed_final_sudo_cleanup_cannot_report_success(self):
+        write(os.path.join(self.bin, "ansible-playbook"),
+              '#!/bin/sh\ncase "$1" in */sudo_mode.yml) echo "Sudo cleanup refused"; exit 1 ;; esac\nexit 0\n', 0o755)
+        result = self.run_merged(self.script, "-y")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("[FAILED] - Sudo cleanup failed", result.stdout)
+        self.assertNotIn("[OK] - Sudo access checked", result.stdout)
+        self.assertFalse(os.path.isdir(self.tpotce))
+
+    def test_gum_remains_available_through_the_final_summary(self):
+        output = ui.plain(self.at_terminal(self.script, "-y"))
+        self.assertIn("T-Pot is uninstalled", output)
+        self.assertIn("Backups in ~/tpot_backups stay", output)
+        self.assertNotIn("No such file or directory", output)
 
     def test_help(self):
         result = self.run_script(self.script, "-h")

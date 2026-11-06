@@ -106,6 +106,19 @@ class Backend:
         from tpotctl import installer
         return installer.sudo_mode()
 
+    def sudo_account(self, sensor=None) -> bool:
+        from tpotctl import installer, sensors
+        if sensor is None:
+            return installer.user_password_usable()
+
+        def remote(command, **kwargs):
+            return subprocess.run(sensors.ssh_command(sensor.host, sensor.ssh_user, *command, port=sensor.ssh_port),
+                                  timeout=20, **kwargs)
+        try:
+            return installer.user_password_usable(remote)
+        except (subprocess.TimeoutExpired, sensors.SensorsError) as err:
+            raise OSError(f"Cannot check the login account on {sensor.name}: {err}") from err
+
     def installable(self) -> bool:
         """A Linux host without T-Pot: tpot install would run here."""
         from tpotctl import installer
@@ -720,6 +733,10 @@ class SettingsPane(Vertical):
                 yield Button("Save", id=f"{self.PREFIX}-save", variant="primary", disabled=True)
         yield from self.extra()
         yield TabbedContent(id=f"{self.PREFIX}-tabs", classes="settings-tabs")
+        if self.PREFIX == "settings":
+            with Horizontal(id="settings-host", classes="actions"):
+                yield Static("Host: checking sudo ...", id="settings-sudo-state")
+                yield Button("Change...", id="settings-sudo-change")
 
     def extra(self) -> ComposeResult:
         """Widgets between the head and the tabs, for subclasses."""
@@ -748,6 +765,30 @@ class SettingsPane(Vertical):
         self.unlocked = set()
         self.fix_told = False           # the notice about the values T-Pot would not start with, once
         await self.reload()
+        if self.PREFIX == "settings":
+            self.refresh_sudo()
+            self.set_interval(30, self.refresh_sudo)
+
+    def refresh_sudo(self) -> None:
+        host = self.app.backend.linux_host()
+        self.query_one("#settings-sudo-change", Button).disabled = not host
+        if not host:
+            self.query_one("#settings-sudo-state", Static).update(
+                "Host: sudo controls need a Linux T-Pot host.")
+        else:
+            self.read_sudo()
+
+    @work(thread=True, exclusive=True, group="sudo-status")
+    def read_sudo(self) -> None:
+        try:
+            mode = self.app.backend.sudo_mode()
+            text = {"passwordless": "Host: sudo password not required",
+                    "password": "Host: sudo unknown (passwordless check failed)",
+                    "missing": "Host: sudo is not installed"}.get(mode, "Host: sudo state unknown")
+        except OSError as err:
+            text = f"Host: sudo unknown ({err})"
+        if self.is_attached:
+            self.app.call_from_thread(self.query_one("#settings-sudo-state", Static).update, Text(text))
 
     async def reload(self, keep: Optional[Dict[str, str]] = None, keep_unlocked: Iterable[str] = ()) -> None:
         """.env anew; keep: unsaved changes that stay (a save on the other settings page), keep_unlocked:
@@ -1022,7 +1063,10 @@ class SettingsPane(Vertical):
         self.call_after_refresh(focus)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == f"{self.PREFIX}-revert":
+        if event.button.id == "settings-sudo-change" and self.PREFIX == "settings":
+            event.stop()
+            self.app.change_sudo(then=lambda _code: self.refresh_sudo())
+        elif event.button.id == f"{self.PREFIX}-revert":
             await self.reload()
         elif event.button.id == f"{self.PREFIX}-save":
             if self.saving:             # a press that came in before Save was disabled
@@ -1529,6 +1573,9 @@ class SensorsPane(Vertical):
         # sensors of lswebpasswd / lswebpasswd.lost that LS_WEB_USER does not name (tpot sensors import)
         with Horizontal(classes="actions", id="sensors-import-actions"):
             yield Button("Take over", id="sensor-import")
+        with Horizontal(classes="actions"):
+            yield Button("Sudo mode...", id="sensor-sudo", disabled=True)
+            yield Button("Update sensors...", id="sensor-update", variant="primary", disabled=True)
 
     def on_mount(self) -> None:
         from tpotctl.sensors import COLUMNS
@@ -1597,6 +1644,8 @@ class SensorsPane(Vertical):
         info = Text()
         self.query_one("#sensors-import-actions", Horizontal).display = bool(self.found)
         self.query_one("#sensor-import", Button).label = take_over_label(len(self.found), "sensor")
+        self.query_one("#sensor-sudo", Button).disabled = True
+        self.query_one("#sensor-update", Button).disabled = True
         if registry is None:
             table.sync_rows([])
             info.append(problem, style=theme.color("error"))
@@ -1606,6 +1655,9 @@ class SensorsPane(Vertical):
             return
         observed = list(tsensors.observations(registry, status, self.found))
         table.sync_rows(tsensors.table_rows(observed))
+        self.query_one("#sensor-sudo", Button).disabled = not table.row_count
+        self.query_one("#sensor-update", Button).disabled = not any(
+            sensor.access for sensor in registry.sensors())
         for pane in self.app.query(StatusPane):
             pane.show_sensors(observed, "\n".join(p for p in (problem, status.problem) if p))
         if self.found:
@@ -1642,7 +1694,7 @@ class SensorsPane(Vertical):
             self.app.push_screen(SensorDialog(tsensors.check_address, tsensors.check_user,
                                               tsensors.default_hive_address, tsensors.check_hive_address),
                                  self.deploy)
-        elif button in ("sensor-edit", "sensor-remove") and self.registry is not None \
+        elif button in ("sensor-edit", "sensor-remove", "sensor-sudo") and self.registry is not None \
                 and self.selected() and self.selected() not in self.registry.records:
             # a sensor of lswebpasswd(.lost) only: nothing to edit or revoke before it is taken over
             self.app.notify(f"{self.selected()} has no access yet: {take_over_label(len(self.found), 'sensor')}.",
@@ -1658,6 +1710,17 @@ class SensorsPane(Vertical):
             self.app.push_screen(ConfirmDialog(f"Revoke the access of {name}? It cannot send to this HIVE any more, "
                                                f"nothing is done on the sensor itself.", yes="Revoke"),
                                  lambda yes: self.revoke(name) if yes else None)
+        elif button == "sensor-sudo" and self.selected() and self.registry is not None:
+            self.app.change_sudo(self.registry.get(self.selected()), then=lambda _code: self.load())
+        elif button == "sensor-update" and self.registry is not None:
+            from tpotctl.screens.fleet import FleetUpdateScreen
+            registry = self.registry
+
+            def finished(result) -> None:
+                if result is not None:
+                    self.load()
+
+            self.app.push_screen(FleetUpdateScreen(None, registry), finished)
         elif button == "sensor-import" and self.found and self.registry is not None:
             names, registry = [entry.name for entry in self.found], self.registry
             self.app.push_screen(ConfirmDialog(f"{take_over_label(len(names), 'sensor')}?",
@@ -1676,7 +1739,8 @@ class SensorsPane(Vertical):
         """enter on a sensor: the actions of that row."""
         event.stop()
         offer_row_actions(self, self.selected(), "Sensor",
-                          [("Edit", "#sensor-edit"), ("Revoke the access of", "#sensor-remove")])
+                          [("Edit", "#sensor-edit"), ("Revoke the access of", "#sensor-remove"),
+                           ("Sudo mode of", "#sensor-sudo")])
 
     def deploy(self, result) -> None:
         if not result:
@@ -3798,6 +3862,30 @@ class TpotApp(App):
                 then(result)
 
         self.push_screen(TaskScreen(task, engine=self.engine or Engine, sudo_mode=self.backend.sudo_mode()), ended)
+
+    def change_sudo(self, sensor=None, then: Optional[Callable] = None) -> None:
+        from tpotctl.screens.sudo import SudoDialog
+        from tpotctl.screens.task import Task
+        if not self.backend.linux_host():
+            self.notify("Sudo mode needs a Linux T-Pot host.", title="Sudo mode", severity="warning")
+            return
+        if sensor and (not sensor.host or not sensor.ssh_user):
+            self.notify(f"Add the host and SSH user first: tpot sensors set {sensor.name} --host ... --ssh-user ...",
+                        title="Sudo mode", severity="warning", timeout=10)
+            return
+        name = sensor.name if sensor else "this host"
+
+        def selected(choice) -> None:
+            if choice is None:
+                return
+            command = [LAUNCHER] + (["sensors", "sudo", sensor.name] if sensor else ["sudo"])
+            command += [choice.action, "-y"]
+            secrets = {key: value for key, value in (("--become-file", choice.password),
+                                                    ("--user-password-file", choice.user_password)) if value}
+            self.run_task(Task(f"Sudo mode: {name}", command, secrets=secrets, autostart=True), then)
+
+        self.push_screen(SudoDialog(name, lambda: self.backend.sudo_account(sensor), remote=sensor is not None,
+                                    passwordless=sensor is None and self.backend.sudo_mode() == "passwordless"), selected)
 
     def switch_edition(self, key: str) -> None:
         from tpotctl import editions

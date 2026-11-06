@@ -696,17 +696,6 @@ esac
 """
 
 
-FLOCK_STUB = """#!/bin/sh
-# flock -n <fd>: the lock of the open file of that fd (macOS has no flock)
-[ "$1" = -n ] || exit 64
-exec python3 -c 'import fcntl, sys
-try:
-    fcntl.flock(int(sys.argv[1]), fcntl.LOCK_EX | fcntl.LOCK_NB)
-except OSError:
-    sys.exit(1)' "$2"
-"""
-
-
 X_TOOLS = ("startx", "xauth", "Xorg", "xterm", "matchbox-window-manager")
 # terminal.sh of the tests: start.sh at once, as if X had come up; X does not come up
 TERMINAL_WORKS = 'echo "TERMINAL:${TPOT_ISO_TERMINAL_TRIED}"\n[ "$1" = -- ] || exit 2\nshift\nexec "$@"\n'
@@ -1119,7 +1108,7 @@ class StartTest(unittest.TestCase):
         self.assertIn(f"INSTALL -b master -r {url}", out)
 
     def test_one_installer_at_a_time(self):
-        stub(self.bin, "flock", FLOCK_STUB)
+        stub(self.bin, "flock", base.FLOCK_STUB)
         write(os.path.join(self.share, "install.sh"),
               f'#!/bin/sh\nif flock -n 7 7<"{self.lock}"; then echo "INSTALL FREE"; else echo "INSTALL HELD"; fi\n',
               0o755)
@@ -2128,19 +2117,21 @@ class BuildToolTest(unittest.TestCase):
         }
         self.darwin(disks, ["disk4", "disk5", "disk6", "disk7", "disk8", "disk9"], {"disk4": ["STICK"]},
                     {"/": "/dev/disk3s1s1", out: "/dev/disk7s1"})
-        script = (f'myDIR="{self.tmp}/iso" myCACHE="{out}/cache" myOUT=""\n'
-                  'fuUSB_LIST; echo --; fuPROTECTED; echo --\n'
-                  'for d in disk4 rdisk4 /dev/rdisk4 disk4s1 disk0 disk7 disk9 sdb; do\n'
-                  '  if fuUSB_FIND "$d" >/dev/null; then echo "$d yes"; else echo "$d no"; fi\n'
-                  'done\n')
-        result = self.source(script)
+        setup = f'myDIR="{self.tmp}/iso" myCACHE="{out}/cache" myOUT=""\n'
+        result = self.source(setup + 'fuUSB_LIST; echo --; fuPROTECTED\n')
         self.assertEqual(result.returncode, 0, result.stderr)
-        sticks, protected, found = result.stdout.split("--\n")
+        sticks, protected = result.stdout.split("--\n")
         self.assertEqual(sticks, "/dev/disk4|32015679488|SanDisk Ultra · 32.0 GB · USB · /dev/disk4 · STICK\n"
                          "/dev/disk8|63864569856|Apple SDXC Reader · 63.9 GB · Secure Digital · /dev/disk8\n")
         self.assertEqual(protected, "/dev/disk0\n/dev/disk7\n")
-        self.assertEqual(found, "disk4 yes\nrdisk4 yes\n/dev/rdisk4 yes\ndisk4s1 no\ndisk0 no\ndisk7 no\n"
-                         "disk9 no\nsdb no\n")
+        # Each lookup enumerates the disks again; keep the deadline per lookup, not for all eight.
+        for device, found in (("disk4", "yes"), ("rdisk4", "yes"), ("/dev/rdisk4", "yes"), ("disk4s1", "no"),
+                              ("disk0", "no"), ("disk7", "no"), ("disk9", "no"), ("sdb", "no")):
+            with self.subTest(device=device):
+                result = self.source(setup + f'if fuUSB_FIND {shlex.quote(device)} >/dev/null; '
+                                     'then echo yes; else echo no; fi\n')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, found + "\n")
 
     def test_writing_an_iso_to_a_stick(self):
         build = self.tree()

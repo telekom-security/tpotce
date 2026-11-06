@@ -277,6 +277,17 @@ Screen.-narrow .settings-actions Button {
     height: 1fr;
 }
 
+#settings-host {
+    height: auto;
+    margin-top: 1;
+}
+
+#settings-sudo-state {
+    width: 1fr;
+    height: auto;
+    color: $mist;
+}
+
 .settings-form {
     height: 1fr;
     padding: 1 1 0 0;

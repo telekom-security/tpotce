@@ -234,6 +234,27 @@ class SshColortermTest(unittest.TestCase):
 
 class ChecksTest(unittest.TestCase):
 
+    def test_undecodable_account_output_is_an_explicit_verification_error(self):
+        def run(*args, **kwargs):
+            raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid byte")
+        with self.assertRaisesRegex(OSError, "password state"):
+            installer.user_password_usable(run=run)
+
+    def test_password_state_is_read_without_sudo_and_unknown_is_an_error(self):
+        for state, expected in (("P", True), ("L", False), ("NP", False)):
+            with self.subTest(state=state):
+                calls = []
+                def run(command, **kwargs):
+                    calls.append(command)
+                    return subprocess.CompletedProcess(command, 0, f"alice {state} 01/01/2020 0 99999 7 -1\n", "")
+                self.assertIs(installer.user_password_usable(run=run), expected)
+                self.assertEqual(calls, [["passwd", "-S"]])
+        for code, output in ((1, ""), (0, "alice unknown"), (0, "")):
+            with self.subTest(code=code, output=output):
+                with self.assertRaisesRegex(OSError, "password state"):
+                    installer.user_password_usable(
+                        run=lambda command, **kwargs: subprocess.CompletedProcess(command, code, output, ""))
+
     def test_tpot_on_path_is_this_manager(self):
         from unittest import mock
         mine = os.path.join(REPO_DIR, "tpot")
@@ -324,9 +345,47 @@ class ChecksTest(unittest.TestCase):
 
 class EngineTest(unittest.TestCase):
 
+    def test_no_install_command_until_the_sudo_mode_is_chosen(self):
+        answers = installer.Answers(installer.EDITION_BY_LETTER["s"])
+        with self.assertRaisesRegex(ValueError, "sudo mode"):
+            installer.engine_command(answers, {}, "/x/install.sh")
+
+    def test_sudo_choice_and_new_password_reach_the_engine_without_secrets_in_argv(self):
+        for mode in ("secure", "convenient"):
+            with self.subTest(mode=mode):
+                answers = installer.Answers(installer.EDITION_BY_LETTER["s"], sudo_mode=mode,
+                                            user_password="  New-user secret 874!  ")
+                with installer.secret_files(user=answers.user_password) as files:
+                    command = installer.engine_command(answers, files, "/x/install.sh")
+                    self.assertEqual("--sudo-nopasswd" in command, mode == "convenient")
+                    self.assertEqual(command[command.index("--user-password-file") + 1], files["user"])
+                    self.assertNotIn(answers.user_password, " ".join(command))
+                self.assertFalse(os.path.exists(files["user"]))
+
+    def test_password_cleanup_failure_is_reported_and_other_files_are_removed(self):
+        from unittest import mock
+        removed = []
+        unlink = os.unlink
+        def remove(path):
+            removed.append(path)
+            if len(removed) == 1:
+                raise PermissionError("cleanup refused")
+            unlink(path)
+        try:
+            with mock.patch.object(installer.os, "unlink", side_effect=remove):
+                with self.assertRaisesRegex(OSError, "Remove.*manually"):
+                    with installer.secret_files(web="web", become="become") as files:
+                        pass
+            self.assertEqual(len(removed), 2)
+            self.assertFalse(os.path.exists(files["become"]))
+        finally:
+            for path in removed:
+                if os.path.exists(path):
+                    unlink(path)
+
     def test_no_password_in_the_command_and_files_are_private(self):
         answers = installer.Answers(installer.EDITION_BY_LETTER["h"], web_user="alice", web_password="s3cret-pass",
-                                    sudo_password="sudo-pass")
+                                    sudo_password="sudo-pass", sudo_mode="secure")
         with installer.secret_files(web=answers.web_password, become=answers.sudo_password) as files:
             command = installer.engine_command(answers, files, "/x/install.sh")
             self.assertNotIn("s3cret-pass", " ".join(command))
@@ -341,13 +400,13 @@ class EngineTest(unittest.TestCase):
             self.assertFalse(os.path.exists(path))
 
     def test_sensor_and_custom(self):
-        sensor = installer.Answers(installer.EDITION_BY_LETTER["s"])
+        sensor = installer.Answers(installer.EDITION_BY_LETTER["s"], sudo_mode="secure")
         with installer.secret_files(web="", become="") as files:
             command = installer.engine_command(sensor, files, "/x/install.sh")
         self.assertNotIn("-u", command)
         self.assertNotIn("-B", command)
         custom = installer.Answers(installer.EDITION_BY_LETTER["h"], custom_compose="/r/docker-compose-custom.yml",
-                                   web_user="bob", web_password="pw")
+                                   web_user="bob", web_password="pw", sudo_mode="secure")
         with installer.secret_files(web="pw") as files:
             command = installer.engine_command(custom, files, "/x/install.sh")
         self.assertEqual(command[command.index("-c") + 1], "/r/docker-compose-custom.yml")
@@ -370,6 +429,19 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(len(progress.warnings), 1)
         progress.feed("@@tpot phase done")
         self.assertEqual(progress.fraction, 1.0)
+
+    def test_final_sudo_phase_preserves_progress_and_names_the_failure(self):
+        progress = installer.Progress()
+        for line in ("@@tpot phase pull", "@@tpot images 1", " cowrie Pulled", "@@tpot phase sudo",
+                     "@@tpot fail sudo", "@@tpot phase failed"):
+            progress.feed(line)
+        self.assertAlmostEqual(progress.fraction, 0.99)
+        self.assertEqual(progress.failed_phase, "sudo")
+        self.assertIn("sudo", progress.title.lower())
+        progress = installer.Progress()
+        progress.feed("@@tpot phase sudo_prepare")
+        self.assertAlmostEqual(progress.fraction, 0.05)
+        self.assertIn("sudo", progress.title.lower())
 
     def test_progress_keeps_the_phase_that_failed(self):
         """@@tpot fail <phase> and @@tpot phase failed: the bar stays where the run was, the title names
@@ -444,14 +516,116 @@ def all_ok():
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
 class AssistantTest(unittest.IsolatedAsyncioTestCase):
 
-    def make_app(self, sudo="password", checks=all_ok):
+    def make_app(self, sudo="password", checks=all_ok, password_state=lambda: True):
         from tpotctl.screens.install import InstallApp
         FakeEngine.runs, FakeEngine.code = [], 0
         self.repo = make_checkout(self)
         self.reboots = []
         return InstallApp(engine=FakeEngine, checks=checks, sudo_mode=sudo,
                           password_ok=lambda pw: pw == "right", run=lambda *a, **k: self.reboots.append(a[0]),
-                          repo_dir=self.repo)
+                          repo_dir=self.repo, password_state=password_state)
+
+    async def test_hive_and_sensor_require_a_deliberate_sudo_choice(self):
+        for edition in ("h", "s"):
+            with self.subTest(edition=edition):
+                app = self.make_app(sudo="passwordless")
+                async with app.run_test(size=(80, 24)) as pilot:
+                    await pilot.pause(0.4)
+                    app.answers.edition = installer.EDITION_BY_LETTER[edition]
+                    app.goto("review")
+                    await pilot.pause(0.2)
+                    self.assertTrue(app.query_one("#ins-next").disabled)
+                    app.start_install()
+                    await pilot.pause(0.2)
+                    self.assertEqual(app.step, "review")
+                    self.assertEqual(FakeEngine.runs, [])
+                    self.assertFalse(os.path.exists(os.path.join(self.repo, ".env")))
+
+    async def test_secure_locked_account_needs_matching_strong_user_passwords(self):
+        from unittest import mock
+        with mock.patch.object(installer, "user_password_usable", return_value=False, create=True):
+            app = self.make_app(sudo="passwordless", password_state=installer.user_password_usable)
+            async with app.run_test(size=(100, 36)) as pilot:
+                await pilot.pause(0.4)
+                app.answers.edition = installer.EDITION_BY_LETTER["s"]
+                app.goto("review")
+                app.query_one("#ins-sudo-mode").value = "secure"
+                await pilot.pause(0.2)
+                self.assertTrue(app.query_one("#ins-next").disabled)
+                self.assertIn("SSH", str(app.query_one("#ins-account-hint").render()))
+                first, repeat = app.query_one("#ins-account-password"), app.query_one("#ins-account-repeat")
+                first.value, repeat.value = "short", "short"
+                await pilot.pause(0.2)
+                self.assertTrue(app.query_one("#ins-next").disabled)
+                first.value, repeat.value = "  A new strong password 974!  ", "other"
+                await pilot.pause(0.2)
+                self.assertTrue(app.query_one("#ins-next").disabled)
+                repeat.value = first.value
+                await pilot.pause(0.2)
+                self.assertFalse(app.query_one("#ins-next").disabled)
+                app.start_install()
+                await pilot.pause(0.8)
+                self.assertEqual(app.step, "done")
+                self.assertEqual(app.answers.user_password, "  A new strong password 974!  ")
+                command = FakeEngine.runs[0]
+                self.assertIn("--user-password-file", command)
+                self.assertNotIn(app.answers.user_password, " ".join(command))
+                self.assertFalse(os.path.exists(command[command.index("--user-password-file") + 1]))
+
+    async def test_convenient_does_not_require_a_new_user_password(self):
+        from unittest import mock
+        with mock.patch.object(installer, "user_password_usable", return_value=False, create=True):
+            app = self.make_app(sudo="passwordless", password_state=installer.user_password_usable)
+            async with app.run_test(size=(100, 36)) as pilot:
+                await pilot.pause(0.4)
+                app.answers.edition = installer.EDITION_BY_LETTER["s"]
+                app.goto("review")
+                app.query_one("#ins-sudo-mode").value = "convenient"
+                await pilot.pause(0.2)
+                self.assertFalse(app.query_one("#ins-next").disabled)
+                app.start_install()
+                await pilot.pause(0.8)
+                self.assertEqual(app.step, "done")
+                self.assertIn("--sudo-nopasswd", FakeEngine.runs[0])
+                self.assertNotIn("--user-password-file", FakeEngine.runs[0])
+
+    async def test_weak_supplied_user_password_blocks_configuration_changes(self):
+        app = self.make_app(sudo="passwordless", password_state=lambda: False)
+        app.answers.user_password = "short"
+        async with app.run_test(size=(100, 36)) as pilot:
+            await pilot.pause(0.4)
+            app.answers.edition = installer.EDITION_BY_LETTER["s"]
+            app.goto("review")
+            app.query_one("#ins-sudo-mode").value = "secure"
+            await pilot.pause(0.2)
+            self.assertTrue(app.query_one("#ins-next").disabled)
+            app.start_install()
+            await pilot.pause(0.2)
+            self.assertEqual(FakeEngine.runs, [])
+            self.assertFalse(os.path.exists(os.path.join(self.repo, ".env")))
+
+    async def test_password_files_and_explicit_mode_survive_the_cli_handover(self):
+        from unittest import mock
+        from tpotctl import cli
+        from tpotctl.screens.install import InstallApp
+        with installer.secret_files(become="  Existing password 974!  ", user="  New password 947!  ") as files:
+            captured = []
+            def run(app):
+                captured.append(app.answers)
+                return 0
+            with mock.patch.object(cli.sys, "platform", "linux"), \
+                    mock.patch.object(installer, "installed", return_value=False), \
+                    mock.patch.object(cli.sys.stdin, "isatty", return_value=True), \
+                    mock.patch.object(cli.sys.stdout, "isatty", return_value=True), \
+                    mock.patch.object(InstallApp, "run", autospec=True, side_effect=run):
+                code = cli.dispatch(["install", "--sudo-nopasswd", "--become-file", files["become"],
+                                     "--user-password-file", files["user"]])
+            self.assertEqual(code, 0)
+            self.assertEqual(len(captured), 1)
+            self.assertEqual(captured[0].sudo_mode, "convenient")
+            self.assertEqual(captured[0].sudo_password, "  Existing password 974!  ")
+            self.assertEqual(captured[0].user_password, "  New password 947!  ")
+            self.assertTrue(all(os.path.exists(path) for path in files.values()))
 
     async def walk_to_review(self, app, pilot):
         await pilot.pause(0.4)
@@ -474,6 +648,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
         await pilot.click("#ins-next")
         await pilot.pause(0.3)
         self.assertEqual(app.step, "review")
+        app.query_one("#ins-sudo-mode").value = "secure"
+        await pilot.pause(0.2)
 
     async def test_best_effort_warning_is_visible_and_does_not_block_installation(self):
         check = installer.check_distro({"NAME": "Ubuntu", "VERSION_ID": "26.04"})
@@ -575,6 +751,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
             await pilot.click("#ins-next")
             await pilot.pause(0.2)
             self.assertFalse(app.query_one("#ins-sudo").display)       # passwordless
+            app.query_one("#ins-sudo-mode").value = "secure"
+            await pilot.pause(0.2)
             await pilot.click("#ins-next")
             await pilot.pause(1.0)
             self.assertEqual(app.step, "done")
@@ -614,6 +792,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
                     await pilot.click("#ins-next")
                     await pilot.pause(0.2)
                     self.assertEqual(app.step, "review")
+                    app.query_one("#ins-sudo-mode").value = "secure"
+                    await pilot.pause(0.2)
                     review = str(app.query_one("#review-text").render())
                     self.assertEqual("weekly security updates" in review, offered and not turn_off, review)
                     await pilot.click("#ins-next")
@@ -656,6 +836,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause(0.3)
                 await pilot.click("#ins-next")
                 await pilot.pause(0.2)
+                app.query_one("#ins-sudo-mode").value = "secure"
+                await pilot.pause(0.2)
                 await pilot.click("#ins-next")
                 await pilot.pause(1.0)
                 self.assertEqual(app.step, "done")
@@ -688,6 +870,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             await pilot.click("#ins-next")
             await pilot.pause(0.2)
+            app.query_one("#ins-sudo-mode").value = "secure"
+            await pilot.pause(0.2)
             await pilot.click("#ins-next")
             await pilot.pause(1.0)
             self.assertIn("Install Docker Engine (All)", str(app.query_one("#install-phase").render()))
@@ -707,7 +891,7 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
                 return code
         self.repo = make_checkout(self)
         app = InstallApp(engine=Failing, checks=all_ok, sudo_mode="passwordless", password_ok=lambda pw: True,
-                         run=lambda *a, **k: None, repo_dir=self.repo)
+                         run=lambda *a, **k: None, repo_dir=self.repo, password_state=lambda: True)
         async with app.run_test(size=(140, 44)) as pilot:
             await pilot.pause(0.4)
             await pilot.click("#ins-next")
@@ -715,6 +899,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
             await pilot.press("down", "enter")                 # Sensor
             await pilot.pause(0.3)
             await pilot.click("#ins-next")
+            await pilot.pause(0.2)
+            app.query_one("#ins-sudo-mode").value = "secure"
             await pilot.pause(0.2)
             await pilot.click("#ins-next")
             for _ in range(80):                                # under load the engine thread takes a while
@@ -787,6 +973,20 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
 
 class UninstallHandoverTest(unittest.TestCase):
 
+    @unittest.skipUnless(textual, "run with the T-Pot Manager venv")
+    def test_exec_failure_removes_the_handover_password_file(self):
+        from pathlib import Path
+        from unittest import mock
+        from tpotctl.screens.uninstall import run_handover
+        target = installer.uninstall_handover(False, "not-a-real-password", script="/missing/uninstall.sh")
+        argv, _ = target
+        path = Path(argv[argv.index("-B") + 1])
+        self.addCleanup(path.unlink, missing_ok=True)
+        with mock.patch("os.chdir"), mock.patch("os.execve", side_effect=OSError("exec failed")):
+            with self.assertRaisesRegex(OSError, "exec failed"):
+                run_handover(target)
+        self.assertFalse(path.exists(), "A failed exec must not abandon the collected sudo password.")
+
     def test_arguments_and_password_file(self):
         argv, env = installer.uninstall_handover(backup=True, sudo_password="pw", script="/x/uninstall.sh")
         self.assertEqual(argv[:3], ["/x/uninstall.sh", "-y", "-k"])
@@ -812,6 +1012,22 @@ class UninstallHandoverTest(unittest.TestCase):
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
 class UninstallScreenTest(unittest.IsolatedAsyncioTestCase):
+
+    async def test_explicit_keep_sudo_rule_reaches_the_uninstaller(self):
+        from tpotctl.screens.uninstall import UninstallApp
+        app = UninstallApp(sudo_mode="passwordless", hostname="honey")
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            self.assertTrue(app.screen.query("#un-keep-sudo"), "Uninstall must offer keeping the sudo rule.")
+            self.assertFalse(app.screen.query_one("#un-keep-sudo").value)
+            app.screen.query_one("#un-keep-sudo").value = True
+            app.screen.query_one("#un-backup").value = False
+            app.screen.query_one("#un-host").value = "honey"
+            await pilot.pause()
+            app.screen.query_one("#un-go").press()
+            await pilot.pause()
+        argv, _ = app.return_value
+        self.assertIn("--keep-sudo-rule", argv)
 
     async def test_confirm_with_the_host_name(self):
         from tpotctl.screens.uninstall import UninstallApp

@@ -2,7 +2,7 @@
 
 GROUPS = (
     ("Monitor", ("status", "checks", "images"), ("status", "attackers", "check", "images", "ps")),
-    ("Configure", ("edition", "llm", "settings"), ("customize", "edition", "env", "llm")),
+    ("Configure", ("edition", "llm", "settings"), ("customize", "edition", "env", "llm", "sudo")),
     ("Access", ("sensors", "users"), ("sensors", "users")),
     ("Data & maintenance", ("elastic", "update"),
      ("elastic", "install", "restart", "restore", "setup", "start", "stop", "uninstall", "update")),

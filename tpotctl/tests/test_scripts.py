@@ -8,9 +8,11 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import textwrap
@@ -31,6 +33,15 @@ REAL_UNAME = shutil.which("uname") or "/usr/bin/uname"
 UNAME = ('#!/bin/sh\ncase "$*" in\n  -s|"") echo "${FAKE_UNAME_S-Linux}"; exit 0 ;;\n'
          '  -r) [ -z "${FAKE_UNAME_R}" ] || { echo "${FAKE_UNAME_R}"; exit 0; } ;;\nesac\n'
          f'exec {REAL_UNAME} "$@"\n')
+FLOCK_STUB = ('#!/bin/sh\n[ "$1" = -n ] || exit 64\n'
+              f'exec {shlex.quote(sys.executable)} -c \'import fcntl, sys\n'
+              'try:\n'
+              '    fcntl.flock(int(sys.argv[1]), fcntl.LOCK_EX | fcntl.LOCK_NB)\n'
+              'except BlockingIOError:\n'
+              '    sys.exit(1)\n'
+              'except OSError as err:\n'
+              '    print(err, file=sys.stderr)\n'
+              '    sys.exit(2)\' "$2"\n')
 
 
 def read(path):
@@ -58,6 +69,11 @@ class Harness(unittest.TestCase):
             path = os.path.join(self.bin, name)
             with open(path, "w", encoding="utf-8") as out:
                 out.write(text)
+            os.chmod(path, 0o755)
+        if not shutil.which("flock"):
+            path = os.path.join(self.bin, "flock")
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(FLOCK_STUB)
             os.chmod(path, 0o755)
 
     def run_script(self, script, *args, env=None, cwd=None):

@@ -5,7 +5,7 @@
 unset CDPATH
 
 print_help() {
-  fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>]"$'\n'"           [-U] [-n] [-M]" \
+  fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>]"$'\n'"           [-U] [-n] [-M] [--sudo-nopasswd] [--user <name>]"$'\n'"           [--user-password-file <file>]" \
     --about "Installs T-Pot on this host: the packages it needs, Docker Engine and the
 services of the edition, by the Ansible playbook installer/install/tpot.yml." \
     --about "Without -s, at a terminal, the installer gets what it needs to start and hands
@@ -25,8 +25,17 @@ With -c only h (a HIVE) or s (a SENSOR)." \
     --opt "-p <password>" "Web interface password (required for h/l/i/t)" \
     --opt "-P <file>" "Read the web interface password from a file, - for stdin.
 Unlike -p it does not show up in the process list." \
-    --opt "-B <file>" "Read the sudo password from a file, so -s also works without
-passwordless sudo. The file is only read." \
+    --opt "-B <file>" "Read the sudo password from your private file (chmod 600),
+or use - for stdin. A temporary stdin file is removed afterwards.
+Your own file is only read; remove it after the installation." \
+    --opt "--sudo-nopasswd" "Keep sudo passwordless with the T-Pot rule. Without this option,
+an unattended installation selects the more secure mode.
+Foreign passwordless rules are never removed." \
+    --opt "--user <name>" "As root, continue as this existing regular user.
+Save install.sh locally first; the Manager does not run as root." \
+    --opt "--user-password-file <file>" "Private file (chmod 600) with a new account password, needed
+for secure unattended installation when the account has no
+usable password. It also applies to SSH password logins." \
     --opt "-c <file>" "Install this compose file (i.e. from tpot customize) instead
 of an edition." \
     --opt "-b <branch>" "Branch, tag or commit to install from. Default: the branch
@@ -47,7 +56,7 @@ install.sh -s -M with its answers" \
     --example "./install.sh -s -t h -u admin -P ~/webpw.txt" "A HIVE without questions, the web password from a file" \
     --example "./install.sh -s -t s -B ~/sudopw.txt" "A SENSOR without questions, sudo needs a password" \
     --example "./install.sh -b dev -r https://github.com/<you>/tpotce" "Test a branch of a fork (see the README, Testing a Branch)" \
-    --note "Run it as a regular user with sudo, not as root." \
+    --note "Run it as a regular user with sudo, or as root with --user <name>." \
     --note "The environment variables TPOT_BRANCH and TPOT_REPO_URL work like -b and -r,
 the options win." \
     --note "Logs: ~/install_tpot_prepare.log (packages, clone), ~/install_tpot.log
@@ -1533,7 +1542,7 @@ check_port_conflicts() {
     # naming the process needs root, and on the Debian branch below `sudo` may
     # not be installed yet - the occupied port is reported either way
     myPROC=""
-    if command -v sudo >/dev/null;
+    if type -P sudo >/dev/null;
       then
         myPROC=$(sudo -n ss -H -lnp --"${myPROTO}" "sport = :${myPORT}" 2>/dev/null \
                  | sed -n 's/.*users:(("\([^"]*\)".*/\1/p' \
@@ -1606,37 +1615,9 @@ install_packages() {
   esac
 }
 
-install_sudo_debian() {
-  # Debian without sudo: install it with the root password, add the user. Not in
-  # the background, su asks for the password in the terminal.
-  fuUI_WARN "‘sudo‘ is not installed. To continue you need to provide the ‘root‘ password"
-  fuUI_INFO "or press CTRL-C to manually install ‘sudo‘ and add your user to the sudoers."
-  echo
-  # Ansible cannot be handed a become password by -s, so an unattended
-  # run needs a passwordless rule for the user we are about to add.
-  if [ "${myUNATTENDED}" = "y" ] && [ -z "${myBECOME_FILE}" ];
-    then
-      mySUDOERS_RULE="${myUSER} ALL=(ALL) NOPASSWD:ALL"
-      fuUI_INFO "‘-s‘ was given, so ${myUSER} will get passwordless sudo."
-      fuUI_INFO "Remove /etc/sudoers.d/${myUSER} after the installation to undo it."
-      echo
-    else
-      mySUDOERS_RULE="${myUSER} ALL=(ALL:ALL) ALL"
-  fi
-  su -c "apt -y update && \
-         NEEDRESTART_SUSPEND=1 apt -y install sudo ${myPACKAGES_DEBIAN} && \
-         /usr/sbin/usermod -aG sudo ${myUSER} && \
-         echo '${mySUDOERS_RULE}' | tee /etc/sudoers.d/${myUSER} >/dev/null && \
-         chmod 440 /etc/sudoers.d/${myUSER}" || install_failed "sudo could not be installed" \
-           "Install sudo, add ${myUSER} to the sudoers, then run the installer again"
-  fuUI_INFO "We need sudo for Ansible, please enter the sudo password ..."
-  sudo true && fuUI_OK "sudo works. Note that Ansible needs it without a password prompt, see below."
-  echo
-}
-
 packages_installed() {
   # Debian and Ubuntu: are all of them there already (the T-Pot ISO brings them)? Then no apt run.
-  [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && command -v sudo >/dev/null \
+  [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && type -P sudo >/dev/null \
     && command -v dpkg-query >/dev/null || return 1
   local mySTATES
   mySTATES=$(dpkg-query -W -f='${db:Status-Abbrev}\n' ${myPACKAGES_DEBIAN} 2>/dev/null) || return 1
@@ -1658,10 +1639,10 @@ get_packages() {
       fuUI_OK "The packages the installer needs are there."
       return
   fi
-  if [[ "${myCURRENT_DISTRIBUTION}" =~ ^(Debian\ GNU/Linux|Ubuntu)$ ]] && ! command -v sudo >/dev/null;
+  if ! type -P sudo >/dev/null;
     then
-      install_sudo_debian
-      return
+      install_failed "sudo is not installed; no personal sudo rule was created" \
+        "Save install.sh, log in as root, then run: bash /path/to/install.sh --user ${myUSER}"
   fi
   if packages_installed;
     then
@@ -1669,11 +1650,10 @@ get_packages() {
       echo
       return
   fi
-  # a password is asked for now, in the terminal, the spinner cannot ask
+  # Keep it for the assistant and every later privileged step too.
   if [ -z "${myBECOME_FILE}" ] && sudo_password_required;
     then
-      fuUI_INFO "sudo needs your password to install the packages:"
-      sudo -v || install_failed "sudo did not accept the password" "Run the installer again"
+      ask_become_password
   fi
   local myRC=0
   fuUI_SPIN "${myINSTALL_NOTIFICATION}" "${myLOG}" install_packages || myRC=$?
@@ -1725,6 +1705,1042 @@ read_password_file() {
     then IFS= read -r myWEB_PW
     else IFS= read -r myWEB_PW < "$1" || [ -n "${myWEB_PW}" ] || usage_error "Cannot read the password from $1."
   fi
+}
+
+private_password_file() {
+  # This also runs before Python is installed; only base-system tools are used.
+  local myFILE="$1" mySTAT myUID mySIZE myRC myPASSWORD_LINE myPASSWORD_EXTRA myTRACE=""
+  case $- in *x*) set +x; myTRACE="y" ;; esac
+  export -n myPASSWORD_LINE myPASSWORD_EXTRA
+  [ -f "${myFILE}" ] && [ ! -L "${myFILE}" ] && [ -r "${myFILE}" ] \
+    || usage_error "Cannot read the sudo password from ${myFILE}; use your own regular file with chmod 600."
+  myUID=$(id -u)
+  mySTAT=$(stat -c '%a:%u:%h' -- "${myFILE}" 2>/dev/null) \
+    || mySTAT=$(stat -f '%OLp:%u:%l' "${myFILE}" 2>/dev/null) \
+    || usage_error "Cannot check password file permissions."
+  [[ "${mySTAT}" = "600:${myUID}:1" || "${mySTAT}" = "400:${myUID}:1" ]] \
+    || usage_error "Use your own private password file: chmod 600 ${myFILE}"
+  mySIZE=$(wc -c < "${myFILE}")
+  [ "${mySIZE}" -gt 0 ] && [ "${mySIZE}" -le 65536 ] \
+    || usage_error "The password file must contain one nonempty line (at most 65536 bytes)."
+  [ "$(LC_ALL=C tr -d '\000' < "${myFILE}" | wc -c)" -eq "${mySIZE}" ] \
+    || usage_error "The password file must not contain NUL bytes."
+  iconv -f UTF-8 -t UTF-8 "${myFILE}" >/dev/null 2>&1 \
+    || usage_error "The password file must be UTF-8; the system iconv tool is required."
+  {
+    IFS= read -r myPASSWORD_LINE
+    myRC=$?
+    [ "${myRC}" -ne 0 ] || myPASSWORD_LINE="${myPASSWORD_LINE%$'\r'}"
+    [ -n "${myPASSWORD_LINE}" ] && [[ "${myPASSWORD_LINE}" != *$'\r'* ]] \
+      || usage_error "The password file must contain exactly one nonempty line."
+    if IFS= read -r myPASSWORD_EXTRA || [ -n "${myPASSWORD_EXTRA}" ];
+      then usage_error "The password file must contain exactly one nonempty line."
+    fi
+  } < "${myFILE}"
+  [ -z "${myTRACE}" ] || set -x
+  return 0
+}
+
+use_become_file() {
+  # Refresh the timestamp before every call; pipes to sudo still reach its command.
+  sudo () {
+    command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1 || return
+    command sudo "$@"
+  }
+}
+
+prompt_private_password() {
+  local myKIND="$1" myPASSWORD myREPEAT myTRACE="" IFS=""
+  case $- in *x*) set +x; myTRACE=y ;; esac
+  export -n myPASSWORD myREPEAT
+  myPROMPT_FILE=$(mktemp "${TMPDIR:-/tmp}/tpot-install-password.XXXXXXXX") \
+    || install_failed "Cannot create a private password file" "Check the temporary directory"
+  myPASSWORD_FILES+=("${myPROMPT_FILE}")
+  chmod 600 "${myPROMPT_FILE}" \
+    || install_failed "Cannot protect the password file" "Check the temporary directory"
+  while true; do
+    myPASSWORD=$(fuUI_INPUT "Enter your ${myKIND} password:" password)
+    [ -n "${myPASSWORD}" ] || install_stopped "No password supplied" "Run the installer again"
+    if [ "${myKIND}" = user ]; then
+      myREPEAT=$(fuUI_INPUT "Repeat your user password:" password)
+      if [ "${myPASSWORD}" != "${myREPEAT}" ]; then
+        fuUI_WARN "Passwords do not match."
+        continue
+      fi
+      if [ -n "$(password_weakness "${myPASSWORD}")" ]; then
+        fuUI_WARN "The password is too weak. Choose a stronger user password."
+        continue
+      fi
+    fi
+    printf '%s\n' "${myPASSWORD}" > "${myPROMPT_FILE}" \
+      || install_failed "Cannot write the private password file" "Check the temporary directory"
+    private_password_file "${myPROMPT_FILE}"
+    if [ "${myKIND}" = sudo ] && ! command sudo -S -k -p "" -v < "${myPROMPT_FILE}" >/dev/null 2>&1; then
+      fuUI_WARN "sudo does not accept this password."
+      continue
+    fi
+    break
+  done
+  [ -z "${myTRACE}" ] || set -x
+  return 0
+}
+
+ask_become_password() {
+  [ -z "${myBECOME_FILE}" ] && sudo_password_required || return 0
+  [ "${myUNATTENDED}" != y ] || abort_unattended
+  fuUI_INFO "sudo needs your password; it is kept in a private file for this installation only."
+  prompt_private_password sudo
+  myBECOME_FILE="${myPROMPT_FILE}"
+  use_become_file
+}
+
+ask_sudo_mode() {
+  [ "${myUNATTENDED}" != y ] && [ "${mySUDO_MODE}" != convenient ] || return 0
+  while true; do
+    mySUDO_MODE=$(fuUI_CHOOSE --selected none "Choose how sudo works after installation:" \
+      "Choose a mode:none" "More secure - sudo asks for your password:secure" \
+      "More convenient - sudo works without a password:convenient") \
+      || install_stopped "No sudo mode chosen" "Run the installer again"
+    case "${mySUDO_MODE}" in secure|convenient) return 0 ;; esac
+  done
+}
+
+check_user_password() {
+  [ "${mySUDO_MODE}" = secure ] || return 0
+  local mySTATUS mySTATE
+  mySTATUS=$(LC_ALL=C passwd -S "${myUSER}" 2>/dev/null) \
+    || install_failed "Cannot verify the user password state" "Check passwd -S ${myUSER} before installing"
+  mySTATE=$(printf '%s\n' "${mySTATUS}" | awk '{print $2}')
+  case "${mySTATE}" in
+    P) return 0 ;;
+    L|NP) ;;
+    *) install_failed "Unknown user password state" "Check passwd -S ${myUSER} before installing" ;;
+  esac
+  myNEEDS_USER_PASSWORD=y
+  if [ -z "${myUSER_PASSWORD_FILE}" ]; then
+    [ "${myUNATTENDED}" != y ] \
+      || install_failed "More secure needs a usable user password before installation" \
+        "Supply a private --user-password-file, or explicitly choose --sudo-nopasswd"
+    fuUI_INFO "More secure needs a usable user password. A new password also works for SSH if password login is enabled."
+    fuUI_CONFIRM --default no "Set a user password now?" "Set password" "Abort" \
+      || install_stopped "The user password was not set" "Choose the sudo mode again when ready"
+    prompt_private_password user
+    myUSER_PASSWORD_FILE="${myPROMPT_FILE}"
+  else
+    fuUI_INFO "The new user password also works for SSH if password login is enabled."
+  fi
+  check_new_password_strength
+}
+
+check_new_password_strength() {
+  [ "${myNEEDS_USER_PASSWORD}" = y ] || return 0
+  local myPASSWORD myTRACE="" myRC IFS=""
+  case $- in *x*) set +x; myTRACE=y ;; esac
+  export -n myPASSWORD
+  IFS= read -r myPASSWORD < "${myUSER_PASSWORD_FILE}"
+  myRC=$?
+  [ "${myRC}" -ne 0 ] || myPASSWORD="${myPASSWORD%$'\r'}"
+  [ -z "$(password_weakness "${myPASSWORD}")" ] \
+    || install_failed "The new user password is too weak" "Replace --user-password-file with a stronger password"
+  [ -z "${myTRACE}" ] || set -x
+  return 0
+}
+
+root_directory() {
+  local myMODE
+  [ -d "$1" ] && [ ! -L "$1" ] && [ "$(stat -c '%u:%g' -- "$1")" = "0:0" ] || return 1
+  myMODE=$(stat -c '%a' -- "$1") || return 1
+  (( (8#${myMODE} & 0022) == 0 ))
+}
+
+root_file() {
+  [ -f "$1" ] && [ ! -L "$1" ] && [ "$(stat -c '%u:%g:%a:%h' -- "$1")" = "0:0:$2:1" ]
+}
+
+root_sudo_backend() {
+  cat <<'TPOT_SUDO_BACKEND'
+# >>> tpot sudo backend >>>
+"""Privileged sudo-mode operations shared by the T-Pot Ansible frontends."""
+
+import contextlib
+import errno
+import fcntl
+import grp
+import hashlib
+import os
+import pwd
+import re
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from typing import Iterable, Optional
+
+
+MARKER = "# Managed by T-Pot: sudo mode\n"
+RULE = "/etc/sudoers.d/tpot"
+INSTALL_RULE = "/etc/sudoers.d/tpot-install"
+LOCK = "/run/lock/tpot-sudo.lock"
+INSTALL_DIR = "/run/tpot-install"
+BOOT_CLEANUP = "/etc/tmpfiles.d/tpot-install.conf"
+BOOT_TEXT = b"# Managed by T-Pot: installer cleanup\nr /etc/sudoers.d/tpot-install - - - -\n"
+BOOT_DIR = "/var/lib/tpot-install"
+BOOT_HELPER = BOOT_DIR + "/cleanup.py"
+BOOT_UNIT = "/etc/systemd/system/tpot-install-cleanup.service"
+BOOT_LINK = "/etc/systemd/system/multi-user.target.wants/tpot-install-cleanup.service"
+
+
+class SudoError(RuntimeError):
+    def __init__(self, message, changes=()):
+        super().__init__(message)
+        self.changes = list(changes)
+
+
+@dataclass(frozen=True)
+class Policy:
+    alternative: Optional[bool]
+    reason: str = ""
+
+
+def rule(uid: int) -> str:
+    if type(uid) is not int or uid <= 0:
+        raise ValueError("the sudo rule needs a non-root numeric user ID")
+    return f"{MARKER}#{uid} ALL=(ALL:ALL) NOPASSWD: ALL\n"
+
+
+def owns_rule(text: str, uid: int) -> bool:
+    return text == rule(uid)
+
+
+def inspect_policy(listing: str, owned_paths: Iterable[str]) -> Policy:
+    """Use evaluated grants, not group membership, to prove an independent root grant."""
+    unknown = Policy(None, "The custom sudo policy cannot be verified automatically; check it with sudo -ll.")
+    parts = re.split(r"(?m)^Sudoers entry:[ \t]*(.*)$", listing)
+    if len(parts) == 1:
+        if re.search(r"(?m)^User \S+ is not allowed to run sudo on .+\.$", listing):
+            return Policy(False)
+        return unknown
+    if re.search(r"(?:^|[,\s])(?:rootpw|targetpw|runaspw|requiretty)(?:$|[,\s])", parts[0]):
+        return unknown
+    owned = {os.path.realpath(path) for path in owned_paths}
+    allowed_options = {"authenticate", "!authenticate", "setenv", "!setenv",
+                       "log_input", "!log_input", "log_output", "!log_output"}
+    alternative = False
+    for source, body in zip(parts[1::2], parts[2::2]):
+        source = source.strip()
+        if not re.fullmatch(r"/[A-Za-z0-9_./+ -]+", source):
+            return unknown
+        if os.path.realpath(source) in owned:
+            continue
+        fields = {}
+        current = ""
+        for line in body.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            match = re.fullmatch(r"(RunAsUsers|RunAsGroups|Options|Commands):[ \t]*(.*)", line)
+            if match:
+                current, value = match.groups()
+                if current in fields:
+                    return unknown
+                fields[current] = [value] if value else []
+            elif current and not re.match(r"[A-Za-z]+:", line):
+                fields[current].append(line)
+            else:
+                return unknown
+        if not fields.get("RunAsUsers") or not fields.get("Commands"):
+            return unknown
+        users = {item.strip() for item in " ".join(fields["RunAsUsers"]).split(",")}
+        groups = {item.strip() for item in " ".join(fields.get("RunAsGroups", ["root"])).split(",")}
+        options = {item.strip() for item in " ".join(fields.get("Options", [])).split(",") if item.strip()}
+        commands = fields["Commands"]
+        if (any(item.startswith("!") for item in users | groups) or
+                any(command.startswith("!") for command in commands) or
+                not options <= allowed_options):
+            return unknown
+        if users & {"ALL", "root", "#0"} and groups & {"ALL", "root", "#0"} and commands == ["ALL"]:
+            alternative = True
+    return Policy(alternative)
+
+
+def _run(args, *, input=None, check=True, private=False):
+    try:
+        proc = subprocess.run(args, input=input, stdin=subprocess.DEVNULL if input is None else None,
+                              capture_output=True, text=True, timeout=30, env=dict(os.environ, LC_ALL="C"))
+    except (OSError, UnicodeError, subprocess.TimeoutExpired) as err:
+        raise SudoError(f"{args[0]} could not run ({type(err).__name__}).") from err
+    if check and proc.returncode:
+        detail = "" if private else ": " + proc.stderr.strip()
+        raise SudoError(f"{args[0]} failed (exit {proc.returncode}){detail}")
+    return proc
+
+
+@contextlib.contextmanager
+def _lock():
+    fd = os.open(LOCK, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid or info.st_nlink != 1 or info.st_mode & 0o077:
+            raise SudoError("The sudo-mode lock is not a private root-owned regular file.")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as err:
+            raise SudoError("Another sudo-mode change is running; try again after it finishes.") from err
+        yield
+    finally:
+        os.close(fd)
+
+
+def _file_state(path, uid):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return "absent"
+    except OSError as err:
+        if err.errno == errno.ELOOP:
+            return "foreign"
+        raise
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid or info.st_gid or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != 0o440):
+            return "foreign"
+        return "owned" if os.read(fd, 8193) == rule(uid).encode("ascii") else "foreign"
+    finally:
+        os.close(fd)
+
+
+def _sudo():
+    sudo = shutil.which("sudo")
+    if not sudo:
+        raise SudoError("Install sudo before changing the sudo mode.")
+    version = _run([sudo, "--version"])
+    if "sudo-rs" in version.stdout.lower():
+        sudo = shutil.which("sudo.ws")
+        if not sudo:
+            raise SudoError("The traditional sudo (sudo.ws) is needed to verify the sudo policy.")
+    return sudo
+
+
+def _snapshot(user, uid, sudo):
+    own = _file_state(RULE, uid)
+    temporary = _file_state(INSTALL_RULE, uid)
+    owned = [path for path, state in ((RULE, own), (INSTALL_RULE, temporary)) if state == "owned"]
+    listing = _run([sudo, "-ll", "-U", user], check=False)
+    policy = inspect_policy(listing.stdout, owned)
+    if listing.stderr or listing.returncode not in (0, 1):
+        policy = Policy(None, "sudo could not verify its policy: " + listing.stderr.strip())
+    password = _run(["passwd", "-S", "--", user]).stdout.split()
+    if len(password) < 2 or password[0] != user or password[1] not in ("P", "L", "NP"):
+        raise SudoError("passwd -S returned an unrecognized account status.")
+    probe = _run(["runuser", "-u", user, "--", sudo, "-n", "-k", "-p", "", "--", "/usr/bin/true"], check=False)
+    required = False if probe.returncode == 0 else True if "a password is required" in probe.stderr else None
+    warnings = [policy.reason] if policy.reason else []
+    if own == "foreign" or temporary == "foreign":
+        warnings.append("A foreign or modified file occupies a T-Pot sudoers path; it will not be changed.")
+    if temporary == "owned":
+        warnings.append("The temporary installer grant is present.")
+    if required is None:
+        warnings.append("The sudo access probe could not be verified: " + probe.stderr.strip())
+    elif required is False and own != "owned" and temporary != "owned":
+        warnings.append("A foreign sudo policy still allows sudo without a password.")
+    return dict(user=user, uid=uid, own_rule=own, temporary_rule=temporary,
+                password_usable=password[1] == "P", alternative=policy.alternative,
+                password_required=required, warnings=warnings, changed=False, changes=[])
+
+
+def _password(value):
+    if not value or any(char in value for char in "\r\n\0"):
+        raise SudoError("Provide a nonempty, single-line user password.")
+    check = _run(["cracklib-check"], input=value + "\n", private=True)
+    if not check.stdout.endswith(": OK\n"):
+        raise SudoError("The user password does not pass cracklib; choose a stronger password.")
+
+
+def _ensure_alternative(user, uid, sudo, changes):
+    added = []
+    try:
+        for name in ("sudo", "wheel"):
+            try:
+                group = grp.getgrnam(name)
+            except KeyError:
+                continue
+            if group.gr_gid in os.getgrouplist(user, pwd.getpwnam(user).pw_gid):
+                continue
+            _run(["usermod", "-a", "-G", name, "--", user])
+            added.append(name)
+            if _snapshot(user, uid, sudo)["alternative"] is True:
+                changes.extend(f"Added {user} to {group_name}." for group_name in added)
+                return
+        raise SudoError("No verified alternative sudo grant is available; the own rule was kept.")
+    except (SudoError, OSError):
+        for name in reversed(added):
+            _run(["gpasswd", "-d", user, name])
+        raise
+
+
+def _set_rule(user, uid, sudo, enable, path=RULE):
+    parent = os.path.dirname(path)
+    directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    temporary = ""
+    backup = ""
+    try:
+        info = os.fstat(directory)
+        if info.st_uid or info.st_mode & 0o022:
+            raise SudoError("The sudoers directory must be root-owned and not writable by other users.")
+        previous = _file_state(path, uid)
+        if previous == "foreign":
+            raise SudoError("The foreign file at the T-Pot sudoers path will not be changed.")
+        if (enable and previous == "owned") or (not enable and previous == "absent"):
+            return False
+        fd, temporary = tempfile.mkstemp(prefix=".tpot-", dir=parent)
+        with os.fdopen(fd, "wb") as out:
+            os.fchown(out.fileno(), 0, 0)
+            os.fchmod(out.fileno(), 0o440)
+            out.write(rule(uid).encode("ascii"))
+            out.flush()
+            os.fsync(out.fileno())
+        _run(["visudo", "-c", "-f", temporary])
+        if _file_state(path, uid) != previous:
+            raise SudoError("The T-Pot sudoers file changed during validation; try again.")
+        # Finish validation or rollback before delivering an interruption.
+        mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM, signal.SIGHUP})
+        try:
+            if enable:
+                os.replace(temporary, path)
+                temporary = ""
+            else:
+                os.replace(path, temporary)
+                backup, temporary = temporary, ""
+            try:
+                os.fsync(directory)
+                _run(["visudo", "-c"])
+                after = _snapshot(user, uid, sudo)
+                alternate = after["alternative"] is True
+                if path == INSTALL_RULE and after["own_rule"] == "owned" and after["password_required"] is False:
+                    alternate = True
+                if (enable and after["password_required"] is not False) or (
+                    not enable and (not alternate or after["password_required"] is None)
+                ):
+                    raise SudoError("The resulting sudo access could not be verified; the previous rule was restored.")
+            except (SudoError, OSError):
+                if enable:
+                    os.unlink(path)
+                else:
+                    os.replace(backup, path)
+                    backup = ""
+                os.fsync(directory)
+                raise
+            if backup:
+                os.unlink(backup)
+                backup = ""
+            os.fsync(directory)
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+        return True
+    finally:
+        if temporary:
+            os.unlink(temporary)
+        os.close(directory)
+
+
+def _remove_boot_cleanup(changes, warnings):
+    parent = os.path.dirname(BOOT_CLEANUP)
+    try:
+        directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return
+    try:
+        info = os.fstat(directory)
+        if info.st_uid or info.st_mode & 0o022:
+            raise SudoError("The boot cleanup directory must be root-owned and not writable by other users.")
+        try:
+            fd = os.open(os.path.basename(BOOT_CLEANUP), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                         dir_fd=directory)
+        except FileNotFoundError:
+            return
+        except OSError as err:
+            if err.errno != errno.ELOOP:
+                raise
+            warnings.append("The foreign boot cleanup file was kept.")
+            return
+        try:
+            info = os.fstat(fd)
+            owned = (stat.S_ISREG(info.st_mode) and info.st_uid == info.st_gid == 0 and info.st_nlink == 1
+                     and stat.S_IMODE(info.st_mode) == 0o644 and os.read(fd, len(BOOT_TEXT) + 1) == BOOT_TEXT)
+        finally:
+            os.close(fd)
+        if not owned:
+            warnings.append("The foreign boot cleanup file was kept.")
+            return
+        os.unlink(os.path.basename(BOOT_CLEANUP), dir_fd=directory)
+        os.fsync(directory)
+        changes.append("Removed the stale installer boot cleanup.")
+    finally:
+        os.close(directory)
+
+
+def _boot_unit(user, uid, digest):
+    return f"""# Managed by T-Pot: installer cleanup
+[Unit]
+Description=Safely clean up interrupted T-Pot installer sudo access
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sh -c 'echo "{digest}  {BOOT_HELPER}" | /usr/bin/sha256sum --check --status'
+ExecStart=/usr/bin/python3 -I {BOOT_HELPER} --boot-cleanup {user} {uid}
+
+[Install]
+WantedBy=multi-user.target
+""".encode("ascii")
+
+
+@contextlib.contextmanager
+def _root_directory(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if info.st_uid or info.st_gid or info.st_mode & 0o022:
+            raise SudoError(f"The directory must be root-owned and not writable by other users: {path}")
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def _read_root_file(path, mode):
+    try:
+        with _root_directory(os.path.dirname(path)) as directory:
+            fd = os.open(os.path.basename(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                         dir_fd=directory)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid or info.st_gid or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != mode):
+            raise SudoError(f"The foreign file was kept: {path}")
+        data = stream.read(1048577)
+        if len(data) > 1048576:
+            raise SudoError(f"The oversized file was kept: {path}")
+        return data
+
+
+def _write_root_file(path, data, mode):
+    parent = os.path.dirname(path)
+    with _root_directory(parent) as directory:
+        fd, temporary = tempfile.mkstemp(prefix=".tpot-", dir=parent)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                os.fchown(stream.fileno(), 0, 0)
+                os.fchmod(stream.fileno(), mode)
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            # Publish only a whole file, without replacing any existing entry.
+            os.link(temporary, os.path.basename(path), dst_dir_fd=directory, follow_symlinks=False)
+            os.fsync(directory)
+        finally:
+            os.unlink(temporary)
+            os.fsync(directory)
+
+
+def _boot_link_owned():
+    try:
+        with _root_directory(os.path.dirname(BOOT_LINK)) as directory:
+            info = os.stat(os.path.basename(BOOT_LINK), dir_fd=directory, follow_symlinks=False)
+            return (stat.S_ISLNK(info.st_mode) and info.st_uid == info.st_gid == 0
+                    and os.readlink(os.path.basename(BOOT_LINK), dir_fd=directory) == BOOT_UNIT)
+    except FileNotFoundError:
+        return True
+
+
+def _remove_guarded_cleanup(user, uid, changes, warnings):
+    unit = _read_root_file(BOOT_UNIT, 0o644)
+    helper = _read_root_file(BOOT_HELPER, 0o600)
+    if unit is None:
+        if helper is None and not os.path.lexists(BOOT_LINK):
+            return True
+        warnings.append("The incomplete boot cleanup was kept; inspect " + BOOT_DIR + " as root.")
+        return False
+    digest = re.search(rb'echo "([0-9a-f]{64})  ', unit)
+    if (not digest or unit != _boot_unit(user, uid, digest.group(1).decode("ascii"))
+            or not _boot_link_owned()):
+        warnings.append("The foreign boot cleanup was kept.")
+        return False
+    if helper is None or hashlib.sha256(helper).hexdigest().encode("ascii") != digest.group(1):
+        warnings.append("The changed boot cleanup helper was kept; inspect " + BOOT_HELPER + " as root.")
+        return False
+    for path in (BOOT_LINK, BOOT_UNIT, BOOT_HELPER):
+        if path == BOOT_LINK and not os.path.lexists(path):
+            continue
+        with _root_directory(os.path.dirname(path)) as directory:
+            try:
+                os.unlink(os.path.basename(path), dir_fd=directory)
+            except FileNotFoundError:
+                if path != BOOT_LINK:
+                    raise
+            os.fsync(directory)
+    changes.append("Removed the guarded installer boot cleanup.")
+    return True
+
+
+def _prepare_boot_cleanup(user, uid):
+    for path in ("/var/lib", "/etc/systemd/system"):
+        with _root_directory(path):
+            pass
+    try:
+        os.mkdir(BOOT_DIR, 0o755)
+    except FileExistsError:
+        pass
+    if any(os.path.lexists(path) for path in (BOOT_HELPER, BOOT_UNIT, BOOT_LINK)):
+        raise SudoError("Existing boot cleanup files were kept; inspect " + BOOT_DIR + " as root.")
+    source = _read_root_file(os.path.abspath(__file__), 0o600)
+    if source is None:
+        raise SudoError("The staged sudo backend is missing.")
+    _write_root_file(BOOT_HELPER, source, 0o600)
+    _write_root_file(BOOT_UNIT, _boot_unit(user, uid, hashlib.sha256(source).hexdigest()), 0o644)
+    _run(["systemctl", "enable", "--no-reload", BOOT_UNIT])
+    if not os.path.lexists(BOOT_LINK) or not _boot_link_owned():
+        raise SudoError("The boot cleanup could not be enabled.")
+
+
+@contextlib.contextmanager
+def _install_lock(parent_fd=None):
+    try:
+        os.mkdir(INSTALL_DIR, 0o755)
+    except FileExistsError:
+        pass
+    with _root_directory(INSTALL_DIR) as directory:
+        fd = (os.dup(parent_fd) if parent_fd is not None else
+              os.open("lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK,
+                      0o600, dir_fd=directory))
+        try:
+            info = os.fstat(fd)
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid or info.st_gid or info.st_nlink != 1
+                    or stat.S_IMODE(info.st_mode) != 0o600):
+                raise SudoError("The installer lock is not a private root-owned regular file.")
+            path_info = os.stat("lock", dir_fd=directory, follow_symlinks=False)
+            if (info.st_dev, info.st_ino) != (path_info.st_dev, path_info.st_ino):
+                raise SudoError("The inherited installer lock does not belong to this installation.")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                yield False
+                return
+            yield True
+        finally:
+            os.close(fd)
+
+
+def _cleanup_locked(user, uid, sudo, changes, warnings):
+    state = _snapshot(user, uid, sudo)
+    _remove_boot_cleanup(changes, warnings)
+    if not _remove_guarded_cleanup(user, uid, changes, warnings):
+        return
+    if state["temporary_rule"] != "owned":
+        return
+    safe = (state["password_usable"] and state["alternative"] is True) or (
+        state["own_rule"] == "owned" and state["password_required"] is False)
+    if not safe:
+        warnings.append("The stale installer rule was kept to avoid losing sudo access; repair access as root.")
+        return
+    if _set_rule(user, uid, sudo, False, path=INSTALL_RULE):
+        changes.append("Removed the stale temporary installer grant.")
+
+
+def _cleanup_install(user, uid, sudo, changes, warnings):
+    if (_file_state(INSTALL_RULE, uid) == "absent"
+            and not any(os.path.lexists(path) for path in (BOOT_CLEANUP, BOOT_HELPER, BOOT_UNIT, BOOT_LINK))):
+        return
+    with _install_lock() as held:
+        if not held:
+            warnings.append("A root installation is active; its temporary access and boot cleanup were kept.")
+            return
+        _cleanup_locked(user, uid, sudo, changes, warnings)
+
+
+def _finish(user, uid, sudo, changes, cleanup_install, warnings=()):
+    warnings = list(warnings)
+    if cleanup_install:
+        _cleanup_install(user, uid, sudo, changes, warnings)
+    result = _snapshot(user, uid, sudo)
+    result["warnings"].extend(warnings)
+    result.update(changes=changes, changed=bool(changes))
+    return result
+
+
+def _normal_uid(uid):
+    try:
+        with open("/etc/login.defs", encoding="utf-8") as stream:
+            match = re.search(r"(?m)^[ \t]*UID_MIN[ \t]+([0-9]+)[ \t]*(?:#.*)?$", stream.read())
+    except (OSError, UnicodeError) as err:
+        raise SudoError("Cannot verify the normal user range from /etc/login.defs.") from err
+    if not match or int(match.group(1)) <= 0:
+        raise SudoError("Cannot verify UID_MIN in /etc/login.defs.")
+    return uid >= int(match.group(1))
+
+
+def _account(user):
+    if sys.platform != "linux" or os.geteuid() != 0:
+        raise SudoError("Sudo-mode management must run with become on a Linux host.")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]*[$]?", user) or user == "tpot":
+        raise SudoError("Choose an existing normal user, not root or tpot.")
+    try:
+        account = pwd.getpwnam(user)
+    except KeyError as err:
+        raise SudoError("Choose an existing normal user.") from err
+    if (account.pw_uid == 0 or not _normal_uid(account.pw_uid)
+            or account.pw_shell.rsplit("/", 1)[-1] in ("false", "nologin", "")):
+        raise SudoError("Choose a normal login user, not root or a service account.")
+    return account
+
+
+def root_install(user, uid, *, prepare=False, parent_fd=None):
+    account = _account(user)
+    if account.pw_uid != uid:
+        raise SudoError("The selected user's UID changed; the installer grant was kept.")
+    changes, warnings = [], []
+    with _lock(), _install_lock(parent_fd) as held:
+        if not held:
+            raise SudoError("A root installation is active; its temporary access and boot cleanup were kept.")
+        sudo = _sudo()
+        _cleanup_locked(user, uid, sudo, changes, warnings)
+        state = _snapshot(user, uid, sudo)
+        if prepare:
+            if state["temporary_rule"] != "absent" or state["own_rule"] == "foreign":
+                raise SudoError("The existing or foreign installer rule was kept; repair sudo access as root first.")
+            _run(["visudo", "-c"])
+            _prepare_boot_cleanup(user, uid)
+            if _set_rule(user, uid, sudo, True, path=INSTALL_RULE):
+                changes.append("Prepared temporary installer access.")
+            state = _snapshot(user, uid, sudo)
+        state["warnings"].extend(warnings)
+        state.update(changes=changes, changed=bool(changes))
+        return state
+
+
+def apply(user, action, *, password="", keep=False, prepare=False, cleanup_install=False):
+    account = _account(user)
+    if action not in ("status", "secure", "convenient", "safe_remove"):
+        raise SudoError("Unknown sudo-mode action.")
+    changes = []
+    warnings = []
+    try:
+        with _lock():
+            sudo = _sudo()
+            before = _snapshot(user, account.pw_uid, sudo)
+            if action == "status":
+                return before
+            if action == "safe_remove" and (keep or before["own_rule"] != "owned"
+                                            or not before["password_usable"] or before["alternative"] is not True):
+                warnings = []
+                if before["own_rule"] == "owned":
+                    warnings.append("The T-Pot sudo rule was kept " + (
+                        "as requested." if keep else "to avoid losing sudo access; verify a password and another sudo grant first."
+                    ))
+                return _finish(user, account.pw_uid, sudo, changes, cleanup_install and not prepare, warnings)
+            if "foreign" in (before["own_rule"], before["temporary_rule"]):
+                raise SudoError("The foreign file at a T-Pot sudoers path will not be changed.")
+            _run(["visudo", "-c"])
+            if action == "secure":
+                if before["alternative"] is None:
+                    raise SudoError("The custom sudo policy is unverified; the own rule was kept.")
+                if not before["password_usable"]:
+                    if not password:
+                        raise SudoError("A usable user password is required; supply --user-password-file before changing anything.")
+                    _password(password)
+                    _run(["chpasswd"], input=f"{user}:{password}\n", private=True)
+                    changes.append("Set the user password (also used by SSH when password login is enabled).")
+                if before["alternative"] is not True:
+                    _ensure_alternative(user, account.pw_uid, sudo, changes)
+                    warnings.append("Existing sessions need a new login to use the added sudo group; "
+                                    "log out and back in before further local sudo commands.")
+            if not prepare and _set_rule(user, account.pw_uid, sudo, action == "convenient"):
+                changes.append("Installed the T-Pot sudo rule." if action == "convenient" else "Removed the T-Pot sudo rule.")
+            return _finish(user, account.pw_uid, sudo, changes, cleanup_install and not prepare, warnings)
+    except SudoError as err:
+        err.changes = changes
+        raise
+    except OSError as err:
+        raise SudoError(f"Sudo-mode file operation failed: {err}", changes) from err
+
+
+def main():
+    from ansible.module_utils.basic import AnsibleModule
+
+    module = AnsibleModule(argument_spec=dict(
+        user=dict(type="str", required=True),
+        action=dict(type="str", choices=["status", "secure", "convenient", "safe_remove"], default="status"),
+        password=dict(type="str", no_log=True),
+        keep=dict(type="bool", default=False),
+        prepare=dict(type="bool", default=False),
+        cleanup_install=dict(type="bool", default=False),
+    ), supports_check_mode=True)
+    try:
+        password = module.params["password"] or ""
+        if password.endswith("\n"):
+            password = password[:-1].removesuffix("\r")
+        if ((module.params["password"] is not None and not password)
+                or any(char in password for char in "\r\n\0")):
+            raise SudoError("The password file must contain exactly one nonempty line.")
+        result = apply(module.params["user"], "status" if module.check_mode else module.params["action"],
+                       password=password, keep=module.params["keep"], prepare=module.params["prepare"],
+                       cleanup_install=module.params["cleanup_install"])
+    except SudoError as err:
+        module.fail_json(msg=str(err), changed=bool(err.changes), changes=err.changes)
+    module.exit_json(changed=result["changed"], status=result)
+
+
+def root_main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Guarded root-installer cleanup")
+    actions = parser.add_mutually_exclusive_group(required=True)
+    for option in ("root-prepare", "root-cleanup", "boot-cleanup"):
+        actions.add_argument("--" + option, dest="action", action="store_const", const=option)
+    parser.add_argument("user")
+    parser.add_argument("uid", type=int)
+    parser.add_argument("--lock-fd", type=int)
+    args = parser.parse_args()
+    try:
+        result = root_install(args.user, args.uid, prepare=args.action == "root-prepare",
+                              parent_fd=args.lock_fd)
+    except (SudoError, OSError) as err:
+        print(f"Installer sudo cleanup failed: {err}", file=sys.stderr)
+        return 1
+    for change in result["changes"]:
+        print(change)
+    if args.action != "root-prepare":
+        for warning in result["warnings"]:
+            print("Warning: " + warning, file=sys.stderr)
+        if result["temporary_rule"] != "absent":
+            print("The installer rule was kept. Repair sudo access as root.", file=sys.stderr)
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    if any(arg in sys.argv[1:] for arg in ("--root-prepare", "--root-cleanup", "--boot-cleanup")):
+        sys.exit(root_main())
+    main()
+# <<< tpot sudo backend <<<
+TPOT_SUDO_BACKEND
+}
+
+root_run_sudo_core() {
+  local myOUTPUT myRC
+  root_file "${myROOT_STAGE}/sudo.py" 600 || {
+    fuUI_ERROR "The staged sudo backend changed; access was kept. Inspect ${myROOT_STAGE} as root."
+    return 1
+  }
+  myOUTPUT=$(python3 -I "${myROOT_STAGE}/sudo.py" "$1" "${myROOT_USER}" "${myROOT_UID}" --lock-fd 9 2>&1)
+  myRC=$?
+  if [ "${myRC}" -ne 0 ]; then fuUI_ERROR "${myOUTPUT}"
+  elif [ -n "${myOUTPUT}" ]; then fuUI_INFO "${myOUTPUT}"; fi
+  return "${myRC}"
+}
+
+root_cleanup() {
+  local myRC=0 myP myI myALIVE
+  local -a myPIDS=()
+  [ -n "${myROOT_ACTIVE}" ] || return 0
+  if [ -n "${myROOT_CHILD}" ]; then
+    while IFS= read -r myP; do myPIDS+=("${myP}"); done < <(fuUI_TREE "${myROOT_CHILD}")
+    for myP in "${myPIDS[@]}"; do kill -TERM "${myP}" 2>/dev/null; done
+    wait "${myROOT_CHILD}" 2>/dev/null
+    for ((myI=0; myI<50; myI++)); do
+      myALIVE=""
+      for myP in "${myPIDS[@]}"; do
+        kill -0 "${myP}" 2>/dev/null && myALIVE=y
+      done
+      [ -n "${myALIVE}" ] || break
+      sleep 0.1
+    done
+    for myP in "${myPIDS[@]}"; do
+      kill -0 "${myP}" 2>/dev/null && kill -KILL "${myP}" 2>/dev/null
+    done
+  fi
+  [ -z "${myROOT_CORE}" ] || root_run_sudo_core --root-cleanup || myRC=1
+  # The parent directory stays root-owned: the child cannot replace these paths.
+  if [ -n "${myROOT_STAGE}" ]; then
+    if root_directory /run/tpot-install && root_directory "${myROOT_STAGE}"; then
+      for myP in install.sh sudo.py become user-password web-password compose; do
+        rm -f -- "${myROOT_STAGE}/${myP}" || myRC=1
+      done
+      rmdir -- "${myROOT_STAGE}" || myRC=1
+    else
+      fuUI_ERROR "The handover directory changed; its files were kept."
+      myRC=1
+    fi
+  fi
+  [ "${myRC}" -eq 0 ] || fuUI_ERROR "Installer cleanup failed. Inspect /var/lib/tpot-install and /etc/sudoers.d/tpot-install as root."
+  return "${myRC}"
+}
+
+root_handover() {
+  local myENTRY myNAME myX myUID myGID myGECOS myHOME mySHELL myMIN mySTATE myGROUP myRC myTRACE=""
+  local -a myCHILD_ARGS=() myROOT_PACKAGES=()
+  [ "${BASH_SOURCE[0]}" != environment ] && [ -f "${BASH_SOURCE[0]}" ] && [ -r "${BASH_SOURCE[0]}" ] \
+    || usage_error "Save install.sh to a file before using --user; the same script must run as the selected user."
+  [[ "${myROOT_USER}" =~ ^[A-Za-z_][A-Za-z0-9_.-]*[$]?$ ]] \
+    || usage_error "--user must name an existing normal user."
+  myENTRY=$(getent passwd "${myROOT_USER}") || usage_error "--user must name an existing normal user."
+  IFS=: read -r myNAME myX myUID myGID myGECOS myHOME mySHELL <<< "${myENTRY}"
+  myMIN=$(awk '$1 == "UID_MIN" {print $2}' /etc/login.defs)
+  [[ "${myMIN}" =~ ^[1-9][0-9]*$ && "${myUID}" =~ ^[1-9][0-9]*$ ]] \
+    && [ "${myUID}" -ge "${myMIN}" ] && [ "${myNAME}" = "${myROOT_USER}" ] \
+    && [ "${myNAME}" != tpot ] && [ -x "${mySHELL}" ] \
+    && [[ "${mySHELL}" != */nologin && "${mySHELL}" != */false ]] \
+    || usage_error "--user must name a normal login user, not root or a service account."
+  [ -d "${myHOME}" ] && [ ! -L "${myHOME}" ] && [ "$(stat -c %u -- "${myHOME}")" = "${myUID}" ] \
+    || usage_error "The selected user's home must be an existing directory owned by that user."
+  myROOT_UID="${myUID}"
+  mySTATE=$(passwd -S "${myNAME}") || usage_error "Cannot check the selected user's password."
+  read -r myX mySTATE myX <<< "${mySTATE}"
+  if [ "${myUNATTENDED}" = y ] && [ "${mySUDO_MODE}" != convenient ] \
+    && [ "${mySTATE}" != P ] && [ -z "${myUSER_PASSWORD_FILE}" ]; then
+    usage_error "This user has no usable password. Provide --user-password-file for secure unattended installation."
+  fi
+  for myX in /etc /run; do
+    root_directory "${myX}" || usage_error "Unsafe root directory: ${myX}"
+  done
+  type -P sudo >/dev/null || myROOT_PACKAGES+=(sudo)
+  type -P python3 >/dev/null || myROOT_PACKAGES+=(python3)
+  if [ "${#myROOT_PACKAGES[@]}" -gt 0 ]; then
+    case "${myCURRENT_DISTRIBUTION}" in
+      "Debian GNU/Linux"|"Ubuntu") apt-get update && apt-get install -y "${myROOT_PACKAGES[@]}" ;;
+      "openSUSE Tumbleweed") zypper --non-interactive install "${myROOT_PACKAGES[@]}" ;;
+      *) dnf -y install "${myROOT_PACKAGES[@]}" ;;
+    esac || install_failed "Root installer dependencies could not be installed" "Install sudo and python3 as root, then try again."
+  fi
+  for myX in runuser flock visudo ps systemctl python3; do
+    command -v "${myX}" >/dev/null || usage_error "The root installer requires ${myX}."
+  done
+  for myX in /run/tpot-install /etc/sudoers.d; do
+    if [ ! -e "${myX}" ] && [ ! -L "${myX}" ]; then
+      mkdir -m 755 -- "${myX}" || usage_error "Cannot create ${myX}."
+    fi
+    root_directory "${myX}" || usage_error "Unsafe root directory: ${myX}"
+  done
+  if [ ! -e /run/tpot-install/lock ]; then
+    (umask 077; set -C; : > /run/tpot-install/lock) || usage_error "Cannot create the installer lock."
+  fi
+  root_file /run/tpot-install/lock 600 || usage_error "Unsafe installer lock."
+  exec 9<> /run/tpot-install/lock || usage_error "Cannot open the installer lock."
+  flock -n 9 || usage_error "Another root installation is active."
+  myROOT_ACTIVE=y
+  myROOT_STAGE=$(mktemp -d /run/tpot-install/run.XXXXXXXX) || usage_error "Cannot stage the root handover."
+  chmod 711 "${myROOT_STAGE}" || exit 1
+  (umask 077; root_sudo_backend > "${myROOT_STAGE}/sudo.py") || exit 1
+  myROOT_CORE=y
+  root_run_sudo_core --root-prepare || usage_error "Cannot prepare temporary installer access safely."
+  cp -- "${BASH_SOURCE[0]}" "${myROOT_STAGE}/install.sh" \
+    && chown "${myUID}:${myGID}" "${myROOT_STAGE}/install.sh" \
+    && chmod 400 "${myROOT_STAGE}/install.sh" || exit 1
+  myGROUP=""
+  for myX in sudo wheel; do
+    if getent group "${myX}" >/dev/null; then myGROUP="${myX}"; break; fi
+  done
+  # A locked account gets its password and group together in the common play, in that order.
+  if [ "${mySTATE}" = P ]; then
+    [ -n "${myGROUP}" ] || usage_error "No sudo or wheel group is available."
+    usermod -aG "${myGROUP}" "${myNAME}" || usage_error "Cannot add the user to ${myGROUP}."
+  fi
+  myCHILD_ARGS=(-b "${myTPOT_BRANCH}" -r "${myTPOT_REPO_URL}")
+  [ -z "${myUNATTENDED}" ] || myCHILD_ARGS+=(-s)
+  [ -z "${myTPOT_TYPE}" ] || myCHILD_ARGS+=(-t "${myTPOT_TYPE}")
+  [ -z "${myWEB_USER}" ] || myCHILD_ARGS+=(-u "${myWEB_USER}")
+  [ -z "${myCLASSIC}" ] || myCHILD_ARGS+=(-n)
+  [ -z "${myMARKS}" ] || myCHILD_ARGS+=(-M)
+  [ -z "${myNO_AUTO_UPDATES}" ] || myCHILD_ARGS+=(-U)
+  [ "${mySUDO_MODE}" != convenient ] || myCHILD_ARGS+=(--sudo-nopasswd)
+  for myX in become user-password compose; do
+    local mySOURCE="" myOPTION=""
+    case "${myX}" in
+      become) mySOURCE="${myBECOME_FILE}"; myOPTION=-B ;;
+      user-password) mySOURCE="${myUSER_PASSWORD_FILE}"; myOPTION=--user-password-file ;;
+      compose) mySOURCE="${myCUSTOM_COMPOSE}"; myOPTION=-c ;;
+    esac
+    [ -n "${mySOURCE}" ] || continue
+    cp -- "${mySOURCE}" "${myROOT_STAGE}/${myX}" \
+      && chown "${myUID}:${myGID}" "${myROOT_STAGE}/${myX}" \
+      && chmod 400 "${myROOT_STAGE}/${myX}" || exit 1
+    myCHILD_ARGS+=("${myOPTION}" "${myROOT_STAGE}/${myX}")
+  done
+  case $- in *x*) set +x; myTRACE=y ;; esac
+  if [ -n "${myWEB_PW}" ]; then
+    printf '%s\n' "${myWEB_PW}" > "${myROOT_STAGE}/web-password" \
+      && chown "${myUID}:${myGID}" "${myROOT_STAGE}/web-password" \
+      && chmod 400 "${myROOT_STAGE}/web-password" || exit 1
+    myCHILD_ARGS+=(-P "${myROOT_STAGE}/web-password")
+  fi
+  [ -z "${myTRACE}" ] || set -x
+  # Explicit stdin keeps terminal questions attached despite the asynchronous wait.
+  (
+    cd "${myHOME}" || exit 1
+    exec runuser -u "${myNAME}" -- env -u XDG_DATA_HOME -u XDG_CONFIG_HOME -u XDG_CACHE_HOME \
+      -u XDG_STATE_HOME -u XDG_RUNTIME_DIR -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND \
+      -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV HOME="${myHOME}" USER="${myNAME}" LOGNAME="${myNAME}" \
+      bash "${myROOT_STAGE}/install.sh" "${myCHILD_ARGS[@]}"
+  ) <&0 &
+  myROOT_CHILD=$!
+  wait "${myROOT_CHILD}"
+  myRC=$?
+  myROOT_CHILD=""
+  return "${myRC}"
+}
+
+cleanup_password_files() {
+  local myFILE myRC=0
+  trap '' INT TERM HUP
+  root_cleanup || myRC=1
+  if [ -n "${myPASSWORD_PID}" ]; then
+    if kill -0 "${myPASSWORD_PID}" 2>/dev/null; then
+      kill -TERM "${myPASSWORD_PID}" || { fuUI_ERROR "Could not stop the password reader."; myRC=1; }
+    fi
+    # Cancellation is expected to give this child a nonzero status.
+    wait "${myPASSWORD_PID}" 2>/dev/null
+  fi
+  for myFILE in "${myPASSWORD_FILES[@]}"; do
+    if ! rm -f -- "${myFILE}"; then
+      fuUI_ERROR "Could not remove the temporary password file ${myFILE}. Remove it manually."
+      myRC=1
+    fi
+  done
+  return "${myRC}"
+}
+
+run_ansible() {
+  if [ -n "${myBECOME_FILE}" ]; then
+    ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
+      ANSIBLE_LOG_PATH="${HOME}/install_tpot.log" "$@" < "${myBECOME_FILE}"
+  else
+    ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
+      ANSIBLE_LOG_PATH="${HOME}/install_tpot.log" "$@"
+  fi
+}
+
+install_sudo_mode() {
+  local myPLAY="${HOME}/tpotce/installer/install/sudo_mode.yml" myVARS myCLEANUP=false
+  [ "$1" != false ] || myCLEANUP=true
+  local -a myCOMMAND=(ansible-playbook "${myPLAY}" -i 127.0.0.1, -c local
+                      "${myANSIBLE_BECOME_OPTION[@]}" ${myANSIBLE_BECOME_EXE}
+                      -e "tpot_sudo_action=${mySUDO_MODE}" -e "tpot_sudo_prepare=$1"
+                      -e "tpot_cleanup_install=${myCLEANUP}")
+  [ -f "${myPLAY}" ] || {
+    fuUI_ERROR "This checkout has no shared sudo-mode play. Use its matching installer or a checkout with sudo-mode support."
+    return 1
+  }
+  if [ -n "${myUSER_PASSWORD_FILE}" ]; then
+    myVARS=$(python3 -c 'import json, sys; print(json.dumps({"tpot_user_password_file": sys.argv[1]}))' \
+      "${myUSER_PASSWORD_FILE}") || return 1
+    myCOMMAND+=(-e "${myVARS}")
+  fi
+  run_ansible "${myCOMMAND[@]}"
 }
 
 env_set() {
@@ -1803,6 +2819,18 @@ unset myWEB_PW myWEB_PW2
 myWEB_PW=""
 myWEB_PW_FILE=""
 myBECOME_FILE=""
+myPASSWORD_FILES=()
+myPASSWORD_PID=""
+myBECOME_OWN_FILE=""
+myROOT_USER=""
+myROOT_STAGE=""
+myROOT_ACTIVE=""
+myROOT_UID=""
+myROOT_CORE=""
+myROOT_CHILD=""
+myUSER_PASSWORD_FILE=""
+myNEEDS_USER_PASSWORD=""
+mySUDO_MODE="secure"
 myCUSTOM_COMPOSE=""
 myCLASSIC=""
 myMARKS=""
@@ -1816,8 +2844,29 @@ myANSIBLE_BECOME_EXE=""
 myTPOT_BRANCH="${TPOT_BRANCH}"
 myTPOT_REPO_URL="${TPOT_REPO_URL}"
 
-while getopts ":sb:r:t:u:p:P:B:c:UnMh" opt; do
+myARGS=("$@")
+while getopts ":sb:r:t:u:p:P:B:c:UnMh-:" opt; do
   case "$opt" in
+    -)
+      case "${OPTARG}" in
+        sudo-nopasswd) mySUDO_MODE="convenient" ;;
+        user|user-password-file|user=*|user-password-file=*)
+          myKEY="${OPTARG%%=*}"
+          case "${OPTARG}" in
+            *=*) myVALUE="${OPTARG#*=}" ;;
+            *)
+              [ "${OPTIND}" -le "${#myARGS[@]}" ] || usage_error "--${myKEY} requires an argument."
+              myVALUE="${myARGS[OPTIND-1]}"
+              OPTIND=$((OPTIND + 1))
+              ;;
+          esac
+          [ -n "${myVALUE}" ] || usage_error "--${myKEY} requires an argument."
+          if [ "${myKEY}" = user ]; then myROOT_USER="${myVALUE}"
+            else myUSER_PASSWORD_FILE="${myVALUE}"; fi
+          ;;
+        *) usage_error "Unknown option --${OPTARG}." ;;
+      esac
+      ;;
     s)
       myQST="y"
       myUNATTENDED="y"
@@ -1870,6 +2919,24 @@ while getopts ":sb:r:t:u:p:P:B:c:UnMh" opt; do
   esac
 done
 
+trap 'myEXIT=$?; cleanup_password_files || myEXIT=1; exit "${myEXIT}"' EXIT
+trap 'exit 130' INT TERM HUP
+
+[ "${myWEB_PW_FILE}" != "-" ] || [ "${myBECOME_FILE}" != "-" ] \
+  || usage_error "Only one password can be read from stdin; use a file for the other one."
+if [ "${myBECOME_FILE}" = "-" ]; then
+  myBECOME_FILE=$(mktemp "${TMPDIR:-/tmp}/tpot-install-password.XXXXXXXX") \
+    || usage_error "Cannot create a private file for the sudo password."
+  myPASSWORD_FILES+=("${myBECOME_FILE}")
+  chmod 600 "${myBECOME_FILE}" || usage_error "Cannot protect the temporary sudo password file."
+  cat > "${myBECOME_FILE}" <&0 &
+  myPASSWORD_PID=$!
+  wait "${myPASSWORD_PID}" || usage_error "Cannot read the sudo password from stdin."
+  myPASSWORD_PID=""
+elif [ -n "${myBECOME_FILE}" ]; then
+  myBECOME_OWN_FILE="${myBECOME_FILE}"
+fi
+
 [ -n "${myWEB_PW_FILE}" ] && read_password_file "${myWEB_PW_FILE}"
 
 # -s requires -t
@@ -1891,11 +2958,13 @@ fi
 
 if [ -n "${myBECOME_FILE}" ];
   then
-    [ -r "${myBECOME_FILE}" ] || usage_error "Cannot read the sudo password from ${myBECOME_FILE}."
+    private_password_file "${myBECOME_FILE}"
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
-    # every sudo of this script refreshes the timestamp from the file first, so none
-    # of them prompts and pipes into sudo (tee) keep working
-    sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
+    use_become_file
+fi
+if [ -n "${myUSER_PASSWORD_FILE}" ]; then
+  private_password_file "${myUSER_PASSWORD_FILE}"
+  myUSER_PASSWORD_FILE=$(cd "$(dirname "${myUSER_PASSWORD_FILE}")" && pwd)/$(basename "${myUSER_PASSWORD_FILE}")
 fi
 
 resolve_tpot_source
@@ -1922,10 +2991,14 @@ fuUI_INIT
 # Check if running with root privileges
 if [ ${EUID} -eq 0 ];
   then
-    fuUI_ERROR "This script should not be run as root. Please run it as a regular user."
-    echo
-    mark_failed
-    exit 1
+    if [ -z "${myROOT_USER}" ]; then
+      fuUI_ERROR "This script should not be run as root. Use --user <name> to continue as an existing regular user."
+      echo
+      mark_failed
+      exit 1
+    fi
+  elif [ -n "${myROOT_USER}" ]; then
+    usage_error "--user is only for a root start; the Manager runs as a regular user."
 fi
 
 # Check for a 64-bit system: the images of T-Pot are amd64 and arm64 only. The userland counts,
@@ -2007,6 +3080,11 @@ if [ -n "${mySUPPORTED_VERSION}" ] && [ "${myCURRENT_VERSION}" != "${mySUPPORTED
     exit 1
 fi
 
+if [ -n "${myROOT_USER}" ]; then
+  root_handover
+  exit $?
+fi
+
 # Begin of Installer: the T-Pot logo above the banner, at a terminal only (fuUI_LOGO_ON,
 # never with -M). Without a version its credits name none, fuUI_VERSION would read ~/tpotce
 myUI_LOGO=1
@@ -2063,7 +3141,12 @@ if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && 
       then
         echo
         export TPOT_BRANCH="${myTPOT_BRANCH}" TPOT_REPO_URL="${myTPOT_REPO_URL}" TPOT_INSTALL_PACKAGES_DONE=1
-        exec "${HOME}/tpotce/tpot" install
+        myASSISTANT_ARGS=()
+        [ "${mySUDO_MODE}" != convenient ] || myASSISTANT_ARGS+=(--sudo-nopasswd)
+        [ -z "${myBECOME_FILE}" ] || myASSISTANT_ARGS+=(--become-file "${myBECOME_FILE}")
+        [ -z "${myUSER_PASSWORD_FILE}" ] || myASSISTANT_ARGS+=(--user-password-file "${myUSER_PASSWORD_FILE}")
+        "${HOME}/tpotce/tpot" install "${myASSISTANT_ARGS[@]}"
+        exit $?
     fi
     fuUI_WARN "The assistant cannot start (see ${myLOG}), the installer asks in the terminal instead."
     export TPOT_INSTALL_PACKAGES_DONE=1
@@ -2087,13 +3170,15 @@ fi
 # The questions come before anything is installed, the rest runs on its own.
 ask_type
 ask_web_user
+ask_sudo_mode
+check_user_password
 
 # Fail before anything is installed if an existing ~/tpotce would be used
 # instead of the repository and branch that were asked for.
 check_tpot_clone
 
 # A sudo password from -B has to work, a typo would only show in the playbook
-if [ -n "${myBECOME_FILE}" ] && command -v sudo >/dev/null && ! command sudo -S -k -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1;
+if [ -n "${myBECOME_FILE}" ] && type -P sudo >/dev/null && ! command sudo -S -k -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1;
   then
     fuUI_ERROR "The sudo password in ${myBECOME_FILE} is not accepted."
     install_failed "sudo does not accept the password of -B" "Check ${myBECOME_FILE}, then run the installer again"
@@ -2102,7 +3187,7 @@ fi
 # Fail before anything is installed: -s promises an unattended run, but Ansible
 # would ask for the become password. Only possible where sudo already exists -
 # the Debian branch below installs it and the check is repeated afterwards.
-if [ "${myUNATTENDED}" = "y" ] && [ -z "${myBECOME_FILE}" ] && command -v sudo >/dev/null && sudo_password_required;
+if [ "${myUNATTENDED}" = "y" ] && [ -z "${myBECOME_FILE}" ] && type -P sudo >/dev/null && sudo_password_required;
   then
     abort_unattended
 fi
@@ -2110,14 +3195,16 @@ fi
 # Same here: a become password will be needed, so settle the sudo-rs question
 # before anything is installed. On the Debian branch below sudo may not exist
 # yet, the check is repeated with the become option further down.
-if command -v sudo >/dev/null && sudo_password_required;
+if type -P sudo >/dev/null && sudo_password_required;
   then
     sudo_rs_become_exe
+    ask_become_password
 fi
 
 check_ports
 # Install packages based on the distribution
 get_packages
+check_new_password_strength
 
 # Define tag for Ansible
 myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Rocky Linux" "Red Hat Enterprise Linux")
@@ -2186,16 +3273,17 @@ fi
 
 # Check type of sudo access. Applies to every distribution - making an
 # exception for one of them breaks unattended installation there.
-if ! sudo_password_required;
-  then
-    myANSIBLE_BECOME_OPTION="--become"
-    fuUI_INFO "Passwordless ‘sudo‘ available, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-    echo
-elif [ -n "${myBECOME_FILE}" ];
+if [ -n "${myBECOME_FILE}" ];
   then
     sudo_rs_become_exe
-    myANSIBLE_BECOME_OPTION="--become --become-password-file ${myBECOME_FILE}"
-    fuUI_INFO "‘sudo‘ requires a password, Ansible reads it from ${myBECOME_FILE}."
+    # Ansible strips spaces from files but preserves them when its password comes from stdin.
+    myANSIBLE_BECOME_OPTION=(--become --become-password-file -)
+    fuUI_INFO "Ansible reads the sudo password from ${myBECOME_FILE}."
+    echo
+elif ! sudo_password_required;
+  then
+    myANSIBLE_BECOME_OPTION=(--become)
+    fuUI_INFO "Passwordless ‘sudo‘ available, setting ansible become option to ${myANSIBLE_BECOME_OPTION[*]}."
     echo
   else
     # -s promises an unattended run, and --ask-become-pass would prompt. On the
@@ -2205,16 +3293,22 @@ elif [ -n "${myBECOME_FILE}" ];
         abort_unattended
     fi
     sudo_rs_become_exe
-    myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
-    fuUI_INFO "‘sudo‘ requires a password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    myANSIBLE_BECOME_OPTION=(--become --ask-become-pass)
+    fuUI_INFO "‘sudo‘ requires a password, setting ansible become option to ${myANSIBLE_BECOME_OPTION[*]}."
     fuUI_INFO "Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
     echo
 fi
 
 # Run Ansible Playbook
+rm -f -- "${HOME}/install_tpot.log"
+mark_phase sudo_prepare
+fuUI_INFO "Checking the requested sudo mode before changing the host ..."
+if ! install_sudo_mode true; then
+  install_failed "The sudo mode prerequisites could not be prepared" \
+    "Review ${HOME}/install_tpot.log and the output above; no host playbook was run."
+fi
 fuUI_INFO "Now running T-Pot Ansible Installation Playbook ..."
 echo
-rm ${HOME}/install_tpot.log > /dev/null 2>&1
 # neither a repository URL nor a git reference contains a space, so the
 # unquoted expansion below splits into exactly four arguments
 myANSIBLE_EXTRA_VARS="-e tpot_repo=${myTPOT_REPO_URL} -e tpot_branch=${myTPOT_BRANCH}"
@@ -2231,8 +3325,9 @@ mark_phase playbook
 # silently working until then, and it keeps the deprecation warnings out of the
 # log. PYTHON_INTERPRETER=auto_silent keeps the interpreter discovery hint out,
 # the discovery itself is unchanged.
-ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
-ANSIBLE_LOG_PATH=${HOME}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION} ${myANSIBLE_BECOME_EXE} ${myANSIBLE_EXTRA_VARS}
+myANSIBLE_COMMAND=(ansible-playbook "${myANSIBLE_TPOT_PLAYBOOK}" -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}"
+                   "${myANSIBLE_BECOME_OPTION[@]}" ${myANSIBLE_BECOME_EXE} ${myANSIBLE_EXTRA_VARS})
+run_ansible "${myANSIBLE_COMMAND[@]}"
 
 # Something went wrong
 if [ ! $? -eq 0 ];
@@ -2346,6 +3441,16 @@ if [ -n "${myTPOT_FOUND}" ] && [ "$(readlink -f "${myTPOT_FOUND}")" = "$(readlin
     myTPOT_ITEM="warn:The command tpot is not in your PATH, link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
 fi
 
+mark_phase sudo
+if ! install_sudo_mode false; then
+  mark_failed
+  fuUI_SUMMARY "The installation needs attention" \
+    "fail:The requested sudo mode could not be applied." \
+    "info:The services are installed; verify the sudo state before disconnecting." \
+    "next:Review ${HOME}/install_tpot.log and the output above."
+  exit 1
+fi
+
 # Done: what is installed and what comes next
 mark_phase "done"
 if [ -n "${myCUSTOM_COMPOSE}" ];
@@ -2355,6 +3460,7 @@ fi
 [ "${myTPOT_TYPE}" = "HIVE" ] && mySUMMARY+=("ok:The web user ${myWEB_USER} is set up")
 [ -n "${myPULL_FAILED}" ] && mySUMMARY+=("warn:Not all images could be pulled, T-Pot tries again when it starts")
 [ -n "${myHOOKS_WARNING}" ] && mySUMMARY+=("warn:${myHOOKS_WARNING}")
+[ -n "${myBECOME_OWN_FILE}" ] && mySUMMARY+=("next:Remove the password file ${myBECOME_OWN_FILE} when it is no longer needed")
 mySUMMARY+=("${myTPOT_ITEM}")
 [ -n "${myINFO}" ] && mySUMMARY+=("info:${myINFO}")
 mySUMMARY+=("next:Reboot, then re-connect via SSH on tcp/64295")
