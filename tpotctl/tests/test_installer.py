@@ -310,6 +310,129 @@ class AccountCheckTest(unittest.TestCase):
         self.assertEqual([c.state for c in checks if c.title == "Account tpot"], ["fail"])
 
 
+PLAYBOOK = os.path.join(REPO_DIR, "installer", "install", "tpot.yml")
+ABORT_PLAY = "T-Pot - Abort if run as tpot, root or on unsupported distribution"
+ACCOUNT_BLOCK = "Check the accounts of the T-Pot containers (All)"
+# the stops of the table in the order they are asked: the login first, then the user, group, uid and gid
+ACCOUNT_STOPS = list(ACCOUNTS["words"])
+
+
+def account_block():
+    """(the play that stops a run before it changes anything, its block that checks the accounts or None)."""
+    import yaml as pyyaml
+    with open(PLAYBOOK, encoding="utf-8") as handle:
+        plays = pyyaml.safe_load(handle)
+    play = next(p for p in plays if p.get("name") == ABORT_PLAY)
+    found = [t for t in play["tasks"] if t.get("name") == ACCOUNT_BLOCK]
+    return play, found[0] if found else None
+
+
+@unittest.skipUnless(yaml, "PyYAML is not installed")
+class AccountPlaybookTest(unittest.TestCase):
+    """The playbook says no to the same accounts as install.sh and the assistant (the cases are
+    tpotctl/tests/account_cases.json), for a run of ansible-playbook without them: in the play that stops a run
+    before it changes anything, and it only reads and asserts. AccountPlaybookRunTest runs every case."""
+
+    def setUp(self):
+        self.play, self.block = account_block()
+        self.assertIsNotNone(self.block, f"the play '{ABORT_PLAY}' has no block '{ACCOUNT_BLOCK}'")
+        self.tasks = self.block["block"]
+
+    def test_it_comes_after_the_check_for_root_and_takes_the_place_of_the_one_for_the_login(self):
+        names = [t["name"] for t in self.play["tasks"]]
+        self.assertLess(names.index("Check if running as root (All)"), names.index(ACCOUNT_BLOCK))
+        self.assertLess(names.index(ACCOUNT_BLOCK), names.index("Check if supported distribution (All)"))
+        self.assertNotIn("Check if running as tpot (All)", names)
+
+    def test_it_only_reads_the_accounts_and_never_changes_one(self):
+        for task in self.tasks:
+            modules = set(task) - {"name", "register", "when", "vars", "tags", "failed_when", "changed_when"}
+            self.assertEqual(len(modules), 1, task["name"])
+            self.assertLessEqual(modules, {"assert", "ansible.builtin.getent"}, task["name"])
+
+    def test_it_reads_the_user_group_uid_and_gid_and_a_missing_one_is_no_failure(self):
+        reads = [t["ansible.builtin.getent"] for t in self.tasks if "ansible.builtin.getent" in t]
+        self.assertEqual(sorted((r["database"], str(r["key"])) for r in reads),
+                         [("group", "2000"), ("group", "tpot"), ("passwd", "2000"), ("passwd", "tpot")])
+        for read in reads:
+            self.assertIs(read["fail_key"], False, read)
+
+    def test_the_stops_come_in_the_order_of_the_table_each_with_its_way_out(self):
+        fixes = {}
+        for case in ACCOUNTS["cases"]:
+            if case["stop"]:
+                self.assertEqual(fixes.setdefault(case["stop"], case["fix"]), case["fix"], case["case"])
+        checks = [t["assert"] for t in self.tasks if "assert" in t]
+        self.assertEqual(len(checks), len(ACCOUNT_STOPS))
+        for key, check in zip(ACCOUNT_STOPS, checks):
+            message = check["fail_msg"]
+            self.assertIn(ACCOUNTS["words"][key], message, key)
+            for tool in ("userdel", "groupdel"):
+                if fixes[key] and tool in fixes[key]:
+                    self.assertIn(fixes[key], message, key)
+                else:
+                    self.assertNotIn(tool, message, key)
+        # "as tpot" is part of "logged in as tpot": the second check is the one without an account to remove
+        self.assertNotIn(ACCOUNTS["words"]["login-account"], checks[1]["fail_msg"])
+
+
+@unittest.skipUnless(yaml and shutil.which("ansible-playbook") and shutil.which("awk"),
+                     "PyYAML and ansible-playbook are needed")
+class AccountPlaybookRunTest(unittest.TestCase):
+    """ansible-playbook runs the account tasks of the playbook for every case of the table: a getent that answers
+    from files stands in for the host and the login comes from the environment, nothing of the host is read."""
+
+    GETENT = ('#!/bin/sh\n[ -r "$TPOT_TEST_ETC/$1" ] || exit 2\n'
+              "awk -F: -v key=\"$2\" '$1 == key || $3 == key { print; found = 1; exit } "
+              "END { exit (found ? 0 : 2) }' \"$TPOT_TEST_ETC/$1\"\n")
+
+    def run_case(self, case, home):
+        etc, stubs = os.path.join(home, "etc"), os.path.join(home, "bin")
+        os.makedirs(etc)
+        os.makedirs(stubs)
+        for database, lines in (("passwd", case["passwd"]), ("group", case["group"])):
+            with open(os.path.join(etc, database), "w", encoding="utf-8") as handle:
+                handle.write("".join(line + "\n" for line in lines))
+        getent = os.path.join(stubs, "getent")
+        with open(getent, "w", encoding="utf-8") as handle:
+            handle.write(self.GETENT)
+        os.chmod(getent, 0o755)
+        _play, block = account_block()
+        self.assertIsNotNone(block, f"the play '{ABORT_PLAY}' has no block '{ACCOUNT_BLOCK}'")
+        play = os.path.join(home, "play.yml")
+        with open(play, "w", encoding="utf-8") as handle:     # JSON is YAML
+            json.dump([{"name": "accounts", "hosts": "all", "gather_facts": True, "gather_subset": ["!all"],
+                        "tasks": [block]}], handle)
+        env = dict(os.environ, HOME=home, PATH=stubs + os.pathsep + os.environ["PATH"], TPOT_TEST_ETC=etc,
+                   LOGNAME=case["login"], USER=case["login"], ANSIBLE_INJECT_FACT_VARS="False",
+                   ANSIBLE_NOCOLOR="1", ANSIBLE_LOCALHOST_WARNING="False",
+                   ANSIBLE_INVENTORY_UNPARSED_WARNING="False", ANSIBLE_CALLBACK_RESULT_FORMAT="json")
+        return subprocess.run(["ansible-playbook", play, "-i", "127.0.0.1,", "-c", "local",
+                               "-e", f"ansible_python_interpreter={sys.executable}"],
+                              env=env, cwd=home, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True, timeout=300)
+
+    def test_every_case_of_the_table(self):
+        for case in ACCOUNTS["cases"]:
+            with self.subTest(case=case["case"]), tempfile.TemporaryDirectory() as home:
+                result = self.run_case(case, home)
+                output = result.stdout
+                if not case["stop"]:
+                    self.assertEqual(result.returncode, 0, output[-1500:])
+                    continue
+                self.assertEqual(result.returncode, 2, output[-1500:])
+                self.assertIn("FAILED!", output)
+                for text in [ACCOUNTS["words"][case["stop"]]] + case["says"]:
+                    self.assertIn(text, output)
+                for tool in ("userdel", "groupdel"):
+                    if case["fix"] and tool in case["fix"]:
+                        self.assertIn(case["fix"], output)
+                    else:
+                        self.assertNotIn(tool, output)
+                for text in case.get("silent", []):
+                    self.assertNotIn(text, output)
+
+
 class ChecksTest(unittest.TestCase):
 
     def test_undecodable_account_output_is_an_explicit_verification_error(self):

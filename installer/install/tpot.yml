@@ -85,11 +85,86 @@
         fail_msg: "T-Pot playbook should not be run as root."
         success_msg: "Running as user: {{ ansible_facts.user_id }}."
 
-    - name: Check if running as tpot (All)
-      assert:
-        that: ansible_facts.user_id != 'tpot'
-        fail_msg: "Reserved username `tpot` detected."
-        success_msg: "Running as user: {{ ansible_facts.user_id }}."
+    - name: Check the accounts of the T-Pot containers (All)
+      # The containers run as the user and group tpot with the uid and gid 2000, which this playbook makes
+      # further down. install.sh and the T-Pot Manager stop on the same cases before it starts (the table
+      # is tpotctl/tests/account_cases.json), this is for a run without them. An account named tpot would
+      # be turned into the container account (login, shell and home gone), a uid or gid 2000 of another
+      # name would stop the run only after the packages and Docker are installed. Nothing here changes or
+      # removes an account, the way out is the user's.
+      # Ansible makes the fail_msg of an assert before it asks the condition, also where the condition
+      # passes: the variables below always have a value (empty where there is no such account).
+      vars:
+        my_tpot_user: "{{ my_account_user.ansible_facts.getent_passwd.tpot | default([], true) }}"
+        my_tpot_uid: "{{ my_tpot_user[1] | default('') }}"
+        my_tpot_group: "{{ my_account_group.ansible_facts.getent_group.tpot | default([], true) }}"
+        my_tpot_gid: "{{ my_tpot_group[1] | default('') }}"
+        my_uid_owner: "{{ my_account_uid.ansible_facts.getent_passwd | dict2items | selectattr('value') | map(attribute='key') | reject('equalto', 'tpot') | join(', ') }}"
+        my_gid_owner: "{{ my_account_gid.ansible_facts.getent_group | dict2items | selectattr('value') | map(attribute='key') | reject('equalto', 'tpot') | join(', ') }}"
+      block:
+        - name: Read the user tpot (All)
+          ansible.builtin.getent:
+            database: passwd
+            key: tpot
+            fail_key: false
+          register: my_account_user
+
+        - name: Read the group tpot (All)
+          ansible.builtin.getent:
+            database: group
+            key: tpot
+            fail_key: false
+          register: my_account_group
+
+        - name: Read the owner of the uid 2000 (All)
+          ansible.builtin.getent:
+            database: passwd
+            key: "2000"
+            fail_key: false
+          register: my_account_uid
+
+        - name: Read the owner of the gid 2000 (All)
+          ansible.builtin.getent:
+            database: group
+            key: "2000"
+            fail_key: false
+          register: my_account_gid
+
+        - name: Check that the login is no account named tpot (All)
+          assert:
+            that: ansible_facts.user_id != 'tpot' or my_tpot_uid == '' or my_tpot_uid == '2000'
+            fail_msg: "You are logged in as tpot (uid {{ my_tpot_uid }}), a name T-Pot keeps for its containers. The installer would turn this account into it. Log in as another user with sudo rights, remove this account from there and run the installer again: sudo userdel -r tpot"
+            quiet: true
+
+        - name: Check that the login is not the user of the containers (All)
+          assert:
+            that: ansible_facts.user_id != 'tpot'
+            fail_msg: "The installer runs as tpot, the system user of the T-Pot containers. Run it as a regular user with sudo rights."
+            quiet: true
+
+        - name: Check that no user named tpot has another uid (All)
+          assert:
+            that: my_tpot_uid == '' or my_tpot_uid == '2000'
+            fail_msg: "The user tpot exists (uid {{ my_tpot_uid }}), a name T-Pot keeps for its containers. The installer would turn it into that account, its login, shell and home would be gone. Remove it (not while it is logged in) and run the installer again: sudo userdel -r tpot"
+            quiet: true
+
+        - name: Check that no group named tpot has another gid (All)
+          assert:
+            that: my_tpot_gid == '' or my_tpot_gid == '2000'
+            fail_msg: "The group tpot exists (gid {{ my_tpot_gid }}), a name T-Pot keeps for its containers. The installer would change its gid. Remove the group and run the installer again: sudo groupdel tpot"
+            quiet: true
+
+        - name: Check that the uid 2000 is free for the containers (All)
+          assert:
+            that: my_uid_owner == ''
+            fail_msg: "The uid 2000 belongs to {{ my_uid_owner }}, T-Pot needs it for its containers. Give {{ my_uid_owner }} another uid or remove that account, then run the installer again."
+            quiet: true
+
+        - name: Check that the gid 2000 is free for the containers (All)
+          assert:
+            that: my_gid_owner == ''
+            fail_msg: "The gid 2000 belongs to the group {{ my_gid_owner }}, T-Pot needs it for its containers. Give that group another gid or remove it, then run the installer again."
+            quiet: true
 
     - name: Check if supported distribution (All)
       assert:
