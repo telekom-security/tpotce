@@ -94,6 +94,32 @@ class SensorHome(base.Harness):
 
 class PrepareTest(SensorHome):
 
+    @unittest.skipUnless(sys.platform == "linux", "the real updater needs GNU host tools")
+    def test_real_target_data_loss_check_runs_outside_the_installed_checkout(self):
+        source = Path(base.REPO)
+        current_version = (source / "version").read_text().strip()
+        for name in ("update.sh", "restore.sh", "version", "env.example"):
+            shutil.copyfile(source / name, self.origin / name)
+        (self.origin / "compose").mkdir()
+        shutil.copyfile(source / "compose/sensor.yml", self.origin / "compose/sensor.yml")
+        self.git(self.origin, "add", "env.example", "compose/sensor.yml")
+        self.commit(self.origin)
+        (self.checkout / "version").write_text("24.04.0\n")
+        (self.checkout / "docker-compose.yml").write_text("# T-Pot: SENSOR\nservices: {}\n")
+        with (self.checkout / ".env").open("a") as stream:
+            stream.write("TPOT_VERSION=24.04.0\nTPOT_REPO=ghcr.io/telekom-security\nTPOT_DATA_PATH=./data\n")
+        self.stub("sudo", '#!/bin/sh\n[ "$1" != -n ] || shift\n'
+                  '[ "$1" != -v ] || exit 0\nexec "$@"\n')
+        self.stub("docker", '#!/bin/sh\n[ "$1" != info ] || echo "$HOME"\nexit 0\n')
+        self.stub("curl", "#!/bin/sh\nexit 7\n")
+        self.stub("wget", "#!/bin/sh\nexit 7\n")
+        code, reply = self.prepare(version=current_version)
+        self.assertEqual(code, 0, reply)
+        self.assertEqual(reply["result"]["version"], current_version)
+        self.assertEqual((self.checkout / "version").read_text(), "24.04.0\n")
+        self.assertFalse((self.home / "old-ran").exists())
+        self.assertFalse((self.home / "unit-started").exists())
+
     def test_prepare_fetches_target_without_running_or_replacing_old_updater(self):
         before = self.git(self.checkout, "rev-parse", "HEAD")
         code, reply = self.prepare()
