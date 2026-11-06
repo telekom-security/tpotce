@@ -1575,6 +1575,7 @@ class SensorsPane(Vertical):
             yield Button("Take over", id="sensor-import")
         with Horizontal(classes="actions"):
             yield Button("Sudo mode...", id="sensor-sudo", disabled=True)
+            yield Button("Update sensors...", id="sensor-update", variant="primary", disabled=True)
 
     def on_mount(self) -> None:
         from tpotctl.sensors import COLUMNS
@@ -1644,6 +1645,7 @@ class SensorsPane(Vertical):
         self.query_one("#sensors-import-actions", Horizontal).display = bool(self.found)
         self.query_one("#sensor-import", Button).label = take_over_label(len(self.found), "sensor")
         self.query_one("#sensor-sudo", Button).disabled = True
+        self.query_one("#sensor-update", Button).disabled = True
         if registry is None:
             table.sync_rows([])
             info.append(problem, style=theme.color("error"))
@@ -1654,6 +1656,8 @@ class SensorsPane(Vertical):
         observed = list(tsensors.observations(registry, status, self.found))
         table.sync_rows(tsensors.table_rows(observed))
         self.query_one("#sensor-sudo", Button).disabled = not table.row_count
+        self.query_one("#sensor-update", Button).disabled = not any(
+            sensor.access for sensor in registry.sensors())
         for pane in self.app.query(StatusPane):
             pane.show_sensors(observed, "\n".join(p for p in (problem, status.problem) if p))
         if self.found:
@@ -1708,6 +1712,15 @@ class SensorsPane(Vertical):
                                  lambda yes: self.revoke(name) if yes else None)
         elif button == "sensor-sudo" and self.selected() and self.registry is not None:
             self.app.change_sudo(self.registry.get(self.selected()), then=lambda _code: self.load())
+        elif button == "sensor-update" and self.registry is not None:
+            from tpotctl.screens.fleet import FleetUpdateScreen
+            registry = self.registry
+
+            def finished(result) -> None:
+                if result is not None:
+                    self.load()
+
+            self.app.push_screen(FleetUpdateScreen(None, registry), finished)
         elif button == "sensor-import" and self.found and self.registry is not None:
             names, registry = [entry.name for entry in self.found], self.registry
             self.app.push_screen(ConfirmDialog(f"{take_over_label(len(names), 'sensor')}?",

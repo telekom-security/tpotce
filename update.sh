@@ -760,6 +760,9 @@ function fuEND () {
 	  then
 	    myTITLE="T-Pot is updated"
 	    [ -z "${myBACKUP_ONLY}" ] || myTITLE="The backup is written"
+	    if [ -z "${myBACKUP_ONLY}" ] && [ "$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_TYPE)" = "HIVE" ];
+	      then fuDID next "Update registered sensors from this HIVE with 'tpot sensors update'."
+	    fi
 	  else
 	    myTITLE="The update did not finish"
 	    [ -z "${myBACKUP_ONLY}" ] || myTITLE="The backup did not finish"

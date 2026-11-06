@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
 
@@ -88,6 +89,23 @@ class RunStoreTest(unittest.TestCase):
         self.assertEqual(store.list_runs(), [self.state])
         store.remove(self.run_id)
         self.assertFalse(path.exists())
+
+    def test_run_lock_is_exclusive_between_threads(self):
+        store = fleet.RunStore(self.home)
+        store.create(self.state)
+        acquired = threading.Event()
+
+        def acquire():
+            with store.lock(self.run_id):
+                acquired.set()
+
+        with store.lock(self.run_id):
+            thread = threading.Thread(target=acquire)
+            thread.start()
+            self.assertFalse(acquired.wait(0.1))
+        thread.join(timeout=2)
+        self.assertFalse(thread.is_alive())
+        self.assertTrue(acquired.is_set())
 
     def test_rejects_secret_fields_in_persisted_state(self):
         store = fleet.RunStore(self.home)
@@ -214,6 +232,22 @@ class PreparationTest(unittest.TestCase):
         self.assertEqual([target["phase"] for target in result["targets"]], ["failed", "prepared"])
         self.assertIn("SSH unreachable", result["targets"][0]["last_error"])
 
+    def test_interrupted_precheck_can_be_discarded(self):
+        coordinator = self.coordinator()
+        state = coordinator.prepare(
+            self.registry, self.status, names=["sensor-a"], repo="https://example.invalid/tpotce.git",
+            branch="master", version="target-release")
+        state["phase"] = "preparing"
+        state["targets"][0]["phase"] = "preparing"
+        coordinator.store.write(state)
+
+        result = coordinator.discard(state["run_id"])
+
+        self.assertEqual(result, {"run_id": state["run_id"], "discarded": True})
+        self.assertFalse(coordinator.store.run_path(state["run_id"]).exists())
+        self.assertEqual([request["action"] for _, request, _ in self.calls if request["action"] == "discard"],
+                         ["discard"])
+
     def test_precheck_rejects_duplicate_data_loss_items(self):
         loss = "@@tpot loss images: old image (12 MB)"
         self.losses["sensor-a"] = [loss, loss]
@@ -233,13 +267,90 @@ class PreparationTest(unittest.TestCase):
         with self.assertRaisesRegex(fleet.FleetError, "data-loss"):
             coordinator.start(state["run_id"])
         self.assertFalse(any(request["action"] == "start" for _, request, _ in self.calls))
-
         result = coordinator.start(state["run_id"], accepted_losses={"sensor-a": [loss]})
         starts = [(name, request) for name, request, _ in self.calls if request["action"] == "start"]
         self.assertEqual([name for name, _ in starts], ["sensor-a"])
         self.assertEqual(result["targets"][0]["phase"], "running")
         self.assertNotIn("password", (fleet.RunStore(self.home).run_path(state["run_id"])
                                       / "state.json").read_text(encoding="utf-8"))
+
+    def test_lost_start_response_with_sensor_still_prepared_is_actionable_failure(self):
+        def lost_start(sensor, request, *, password=""):
+            if request["action"] == "start":
+                raise fleet_transport.TransportError("SSH disconnected after start")
+            if request["action"] == "status":
+                return {"name": sensor.name, "phase": "prepared"}
+            return self.remote(sensor, request, password=password)
+
+        coordinator = self.coordinator(lost_start)
+        state = coordinator.prepare(
+            self.registry, self.status, names=["sensor-a"], repo="https://example.invalid/tpotce.git",
+            branch="master", version="target-release")
+        coordinator.start(state["run_id"])
+
+        result = coordinator.advance(state["run_id"], self.status, now=1240)
+
+        self.assertEqual(result["phase"], "paused")
+        self.assertEqual(result["targets"][0]["phase"], "failed")
+        self.assertIn("prepared", result["targets"][0]["last_error"])
+
+    def test_concurrent_starts_launch_only_once(self):
+        coordinator = self.coordinator()
+        state = coordinator.prepare(
+            self.registry, self.status, names=["sensor-a"], repo="https://example.invalid/tpotce.git",
+            branch="master", version="target-release")
+        first_write = threading.Event()
+        second_write = threading.Event()
+        second_started = threading.Event()
+        release_write = threading.Event()
+        secondary_writes = 0
+        write_count_lock = threading.Lock()
+        original_write = coordinator.store.write
+
+        def delayed_write(value):
+            nonlocal secondary_writes
+            if value["phase"] == "running" and value["targets"][0]["phase"] == "running":
+                if threading.current_thread() is first:
+                    if not first_write.is_set():
+                        first_write.set()
+                        if not release_write.wait(5):
+                            raise AssertionError("test did not release the first start")
+                else:
+                    with write_count_lock:
+                        secondary_writes += 1
+                    second_write.set()
+            original_write(value)
+
+        coordinator.store.write = delayed_write
+        successes, errors = [], []
+
+        def start():
+            try:
+                successes.append(coordinator.start(state["run_id"]))
+            except fleet.FleetError as err:
+                errors.append(err)
+
+        first = threading.Thread(target=start)
+        second = threading.Thread(target=lambda: (second_started.set(), start()))
+        first.start()
+        try:
+            self.assertTrue(first_write.wait(2))
+            second.start()
+            self.assertTrue(second_started.wait(2))
+            self.assertFalse(second_write.wait(0.2))
+        finally:
+            release_write.set()
+            first.join(timeout=5)
+            if second.ident is not None:
+                second.join(timeout=5)
+
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(secondary_writes, 0)
+        self.assertEqual([request["action"] for _, request, _ in self.calls if request["action"] == "start"],
+                         ["start"])
 
     def test_canary_must_pass_runtime_and_fresh_heartbeat_before_parallel_start(self):
         coordinator = self.coordinator()
@@ -395,8 +506,25 @@ class PreparationTest(unittest.TestCase):
             self.registry, self.status, names=["sensor-a"], repo="https://example.invalid/tpotce.git",
             branch="master", version="target-release")
         coordinator.start(state["run_id"])
+        coordinator.advance(state["run_id"], self.status, now=1234 + 901)
+
         result = coordinator.extend_deadline(state["run_id"], "sensor-a")
-        self.assertEqual(result["targets"][0]["deadline"], 1234 + 900 + 900)
+        self.assertEqual(result["targets"][0]["deadline"], 1234 + 901 + 900 + 900)
+
+    def test_long_update_gets_a_full_heartbeat_window_after_completion(self):
+        coordinator = self.coordinator()
+        state = coordinator.prepare(
+            self.registry, self.status, names=["sensor-a"], repo="https://example.invalid/tpotce.git",
+            branch="master", version="target-release")
+        coordinator.start(state["run_id"])
+        completed_at = 1234 + 3600
+
+        result = coordinator.advance(state["run_id"], self.status, now=completed_at)
+
+        target = result["targets"][0]
+        self.assertEqual(target["phase"], "checking")
+        self.assertEqual(target["checking_started_at"], completed_at)
+        self.assertEqual(target["deadline"], completed_at + 900)
 
     def test_abort_waits_for_active_canary_and_does_not_launch_other_targets(self):
         coordinator = self.coordinator()

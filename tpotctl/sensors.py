@@ -57,6 +57,10 @@ class SensorsError(Exception):
     """Something that is not done to the sensors."""
 
 
+class SensorsRoleError(SensorsError):
+    """A HIVE-only sensor operation was requested on another T-Pot role."""
+
+
 @dataclass
 class Sensor:
     name: str
@@ -269,7 +273,7 @@ class Registry:
         except OSError as err:
             raise SensorsError(f"cannot read the .env of T-Pot: {err}")
         if (self.env.get("TPOT_TYPE") or "HIVE") != "HIVE":
-            raise SensorsError("sensors are managed on the HIVE")
+            raise SensorsRoleError("sensors are managed on the HIVE")
         data = os.path.normpath(os.path.join(repo_dir, self.env.get("TPOT_DATA_PATH") or "./data"))
         self.path = os.path.join(data, "sensors.json")
         self.lswebpasswd = os.path.join(data, "nginx", "conf", "lswebpasswd")

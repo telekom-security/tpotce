@@ -708,6 +708,17 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, text)
         self.assertIn("Nothing to take over", text)
 
+    def test_sensor_role_gate_returns_environment_exit_code(self):
+        from tpotctl import ops
+        env = EnvFile(os.path.join(self.repo, ".env"))
+        env.set("TPOT_TYPE", "SENSOR")
+        env.save()
+        with mock.patch.object(ops, "require_linux_host"), \
+                mock.patch.object(ops, "require_config_current"):
+            code, text = self.run_cli("sensors", "update", "--yes", "--no-become-pass")
+        self.assertEqual(code, 3, text)
+        self.assertIn("sensors are managed on the HIVE", text)
+
     def test_import_names_lines_in_another_format(self):
         env = EnvFile(os.path.join(self.repo, ".env"))
         env.set("LS_WEB_USER", "")
@@ -1272,6 +1283,389 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.click("#yes")
                 await pilot.pause(0.5)
         self.assertEqual([u.name for u in sensors.Registry(repo).entries()], ["sensor-old-otter"])
+
+    async def test_update_sensors_opens_the_fleet_request_dialog(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.fleet import FleetUpdateDialog
+        _repo, backend = self.heartbeat_backend()
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            app.goto("sensors")
+            await pilot.pause(0.3)
+            await pilot.click("#sensor-update")
+            await pilot.pause(0.2)
+            self.assertIsInstance(app.screen, FleetUpdateDialog)
+            self.assertEqual(app.screen.query_one("#fleet-parallel").value, "1")
+            self.assertFalse(app.screen.query_one("#fleet-all").value)
+
+    async def test_fleet_discard_is_available_before_collecting_credentials(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.dialogs import ChoiceDialog, ConfirmDialog
+        from tpotctl.screens.fleet import FleetUpdateDialog, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        preparing = {
+            "run_id": "a" * 32,
+            "phase": "preparing",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "preparing", "previous_version": "",
+                "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = [preparing]
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        with mock.patch("tpotctl.screens.fleet.tfleet.FleetCoordinator", return_value=coordinator):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.5)
+                app.goto("sensors")
+                await pilot.pause(0.3)
+                await pilot.click("#sensor-update")
+                await pilot.pause(0.5)
+                self.assertIsInstance(app.screen, ChoiceDialog)
+                self.assertIn(f"Discard {preparing['run_id']}", app.screen.options)
+
+                choices = app.screen.query_one("#choices")
+                choices.highlighted = 1
+                await pilot.press("enter")
+                await pilot.pause(0.2)
+                self.assertIsInstance(app.screen, ConfirmDialog)
+                await pilot.click("#yes")
+                await pilot.pause(0.5)
+                coordinator.discard.assert_called_once_with(preparing["run_id"])
+                self.assertNotIsInstance(app.screen, FleetUpdateDialog)
+
+    async def test_fleet_request_dialog_returns_selection_without_credentials(self):
+        from textual.app import App
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateDialog
+        app = App()
+        selected = []
+        dialog = FleetUpdateDialog()
+        async with app.run_test(size=(100, 40)) as pilot:
+            app.push_screen(dialog, selected.append)
+            await pilot.pause()
+            dialog.query_one("#fleet-names").value = "sensor-a, sensor-b"
+            dialog.query_one("#fleet-parallel").value = "3"
+            await pilot.click("#fleet-start")
+            await pilot.pause()
+        self.assertEqual(len(selected), 1)
+        self.assertIsInstance(selected[0], FleetRequest)
+        self.assertEqual(selected[0].names, ["sensor-a", "sensor-b"])
+        self.assertEqual(selected[0].parallel, 3)
+        self.assertEqual(selected[0].password, "")
+        self.assertNotIn("fleet-password", [widget.id for widget in dialog.query("*")])
+
+    async def test_fleet_password_dialog_clears_password_when_cancelled(self):
+        from textual.app import App
+        from tpotctl.screens.fleet import FleetPasswordDialog
+        app = App()
+        dialog = FleetPasswordDialog()
+        async with app.run_test(size=(100, 40)) as pilot:
+            app.push_screen(dialog)
+            await pilot.pause()
+            password = dialog.query_one("#fleet-sudo-password")
+            password.value = "secret-value"
+            await pilot.click("#fleet-sudo-back")
+            await pilot.pause()
+        self.assertEqual(password.value, "")
+
+    async def test_fleet_password_dialog_returns_passwordless_choice(self):
+        from textual.app import App
+        from tpotctl.screens.fleet import FleetCredentials, FleetPasswordDialog
+        app = App()
+        selected = []
+        dialog = FleetPasswordDialog()
+        async with app.run_test(size=(100, 40)) as pilot:
+            app.push_screen(dialog, selected.append)
+            await pilot.pause()
+            dialog.query_one("#fleet-sudo-nopass").value = True
+            await pilot.click("#fleet-sudo-continue")
+            await pilot.pause()
+        self.assertEqual(selected, [FleetCredentials(passwordless=True)])
+
+    async def test_fleet_progress_requires_confirmation_before_starting(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.dialogs import ConfirmDialog
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        prepared = {
+            "run_id": "f" * 32,
+            "phase": "prepared",
+            "version": "24.04.1",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "prepared", "previous_version": "24.04.0",
+                "losses": ["@@tpot loss Elasticsearch data"], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        completed = {
+            "run_id": "f" * 32, "phase": "completed", "version": "24.04.1",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "completed", "previous_version": "24.04.0",
+                "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = []
+        coordinator.store.read.return_value = completed
+        coordinator.prepare.return_value = prepared
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        with mock.patch("tpotctl.screens.fleet.ops.require_linux_host"), \
+                mock.patch("tpotctl.screens.fleet.ops.require_config_current"), \
+                mock.patch.dict("os.environ", {"TPOT_REPO_URL": "https://example.test/tpotce",
+                                               "TPOT_BRANCH": "main"}, clear=False):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.5)
+                app.push_screen(FleetUpdateScreen(FleetRequest([], False, 1, passwordless=True), backend.sensors(),
+                                                  coordinator_factory=lambda **_kwargs: coordinator))
+                await pilot.pause(0.4)
+                self.assertIsInstance(app.screen, ConfirmDialog)
+                self.assertIn("@@tpot loss Elasticsearch data", app.screen.body)
+                coordinator.start.assert_not_called()
+                await pilot.click("#no")
+                await pilot.pause(0.2)
+                self.assertEqual(app.screen.id, "fleet-update")
+                coordinator.start.assert_not_called()
+
+    async def test_fleet_resume_prompts_before_starting_a_prepared_retry(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.dialogs import ConfirmDialog
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        paused = {
+            "run_id": "f" * 32,
+            "phase": "paused",
+            "version": "24.04.1",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "prepared", "attempt": 2,
+                "previous_version": "24.04.0", "losses": ["Elasticsearch data may be lost."],
+                "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = [paused]
+        coordinator.store.read.return_value = paused
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            app.push_screen(FleetUpdateScreen(
+                FleetRequest([], False, 1), backend.sensors(), run_id=paused["run_id"],
+                coordinator_factory=lambda **_kwargs: coordinator))
+            await pilot.pause(0.5)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIn("Elasticsearch data may be lost.", app.screen.body)
+            coordinator.resume.assert_not_called()
+            await pilot.click("#no")
+            await pilot.pause(0.2)
+            self.assertTrue(app.screen.query_one("#fleet-retry").display)
+            self.assertEqual(str(app.screen.query_one("#fleet-retry").label), "Start retry")
+            coordinator.start_retry.assert_not_called()
+
+    async def test_interrupted_fleet_precheck_is_offered_for_discard(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.dialogs import ChoiceDialog
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        preparing = {
+            "run_id": "a" * 32,
+            "phase": "preparing",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "preparing", "previous_version": "",
+                "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = [preparing]
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            app.push_screen(FleetUpdateScreen(
+                FleetRequest([], False, 1), backend.sensors(),
+                coordinator_factory=lambda **_kwargs: coordinator))
+            await pilot.pause(0.5)
+
+            self.assertIsInstance(app.screen, ChoiceDialog)
+            self.assertIn(f"Discard {preparing['run_id']}", app.screen.options)
+
+    async def test_fleet_start_errors_are_shown_without_worker_crash(self):
+        from tpotctl import app as tapp, fleet
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        prepared = {
+            "run_id": "f" * 32,
+            "phase": "prepared",
+            "version": "24.04.1",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "prepared", "previous_version": "24.04.0",
+                "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = []
+        coordinator.store.read.return_value = prepared
+        coordinator.prepare.return_value = prepared
+        coordinator.start.side_effect = fleet.FleetError("start failed")
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        with mock.patch("tpotctl.screens.fleet.ops.require_linux_host"), \
+                mock.patch("tpotctl.screens.fleet.ops.require_config_current"), \
+                mock.patch.dict("os.environ", {"TPOT_REPO_URL": "https://example.test/tpotce",
+                                               "TPOT_BRANCH": "main"}, clear=False):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.5)
+                app.push_screen(FleetUpdateScreen(FleetRequest([], False, 1, passwordless=True), backend.sensors(),
+                                                  coordinator_factory=lambda **_kwargs: coordinator))
+                await pilot.pause(0.4)
+                await pilot.click("#yes")
+                await pilot.pause(0.4)
+                self.assertIn("start failed", str(app.screen.query_one("#fleet-summary").render()))
+
+    async def test_fleet_refresh_error_reenables_status_controls(self):
+        import threading
+        from tpotctl import app as tapp, fleet
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        running = {
+            "run_id": "f" * 32,
+            "phase": "running",
+            "version": "24.04.1",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "running", "previous_version": "24.04.0",
+                "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = [running]
+        coordinator.store.read.return_value = running
+        release_refresh = threading.Event()
+
+        def resume(*_args, **_kwargs):
+            if coordinator.resume.call_count == 1:
+                return running
+            release_refresh.wait(5)
+            raise fleet.FleetError("status unavailable")
+
+        coordinator.resume.side_effect = resume
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            app.push_screen(FleetUpdateScreen(
+                FleetRequest([], False, 1), backend.sensors(), run_id=running["run_id"],
+                coordinator_factory=lambda **_kwargs: coordinator))
+            await pilot.pause(0.5)
+            self.assertFalse(app.screen.query_one("#fleet-refresh").disabled)
+            app.screen.poll()
+            await pilot.pause(0.1)
+            self.assertTrue(app.screen.query_one("#fleet-refresh").disabled)
+            self.assertTrue(app.screen.query_one("#fleet-back").disabled)
+            release_refresh.set()
+            await pilot.pause(0.4)
+            self.assertFalse(app.screen.query_one("#fleet-refresh").disabled)
+            self.assertFalse(app.screen.query_one("#fleet-back").disabled)
+            self.assertIn("status unavailable", str(app.screen.query_one("#fleet-summary").render()))
+
+    async def test_fleet_failure_decision_disables_controls_and_recovers_on_error(self):
+        import threading
+        from tpotctl import app as tapp, fleet
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        paused = {
+            "run_id": "f" * 32,
+            "phase": "paused",
+            "version": "24.04.1",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "failed", "previous_version": "24.04.0",
+                "losses": [], "warnings": [], "last_error": "update failed",
+            }],
+            "warnings": [],
+        }
+        release_decision = threading.Event()
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = [paused]
+        coordinator.store.read.return_value = paused
+        coordinator.resume.return_value = paused
+
+        def resolve_failure(*_args, **_kwargs):
+            release_decision.wait(5)
+            raise fleet.FleetError("decision failed")
+
+        coordinator.resolve_failure.side_effect = resolve_failure
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            app.push_screen(FleetUpdateScreen(
+                FleetRequest([], False, 1, passwordless=True), backend.sensors(), run_id=paused["run_id"],
+                coordinator_factory=lambda **_kwargs: coordinator))
+            await pilot.pause(0.5)
+            await pilot.click("#fleet-retry")
+            await pilot.pause(0.1)
+            self.assertTrue(app.screen.query_one("#fleet-retry").disabled)
+            release_decision.set()
+            await pilot.pause(0.4)
+            self.assertFalse(app.screen.query_one("#fleet-retry").disabled)
+            self.assertIn("decision failed", str(app.screen.query_one("#fleet-summary").render()))
+
+    async def test_fleet_failure_actions_fit_an_80_column_terminal(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        paused = {
+            "run_id": "f" * 32,
+            "phase": "paused",
+            "version": "24.04.1",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "failed", "previous_version": "24.04.0",
+                "archive": "/tmp/fleet-backup", "last_error": "update failed",
+                "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = [paused]
+        coordinator.store.read.return_value = paused
+        coordinator.resume.return_value = paused
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        async with app.run_test(size=(80, 40)) as pilot:
+            await pilot.pause(0.5)
+            app.push_screen(FleetUpdateScreen(
+                FleetRequest([], False, 1), backend.sensors(), run_id=paused["run_id"],
+                coordinator_factory=lambda **_kwargs: coordinator))
+            await pilot.pause(0.5)
+            actions = app.screen.query_one("#fleet-actions")
+            self.assertLessEqual(actions.virtual_size.width, actions.size.width)
+
+    async def test_fleet_active_run_offers_abort(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        running = {
+            "run_id": "f" * 32,
+            "phase": "running",
+            "version": "24.04.1",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "running", "previous_version": "24.04.0",
+                "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = [running]
+        coordinator.store.read.return_value = running
+        coordinator.resume.return_value = running
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            app.push_screen(FleetUpdateScreen(
+                FleetRequest([], False, 1), backend.sensors(), run_id=running["run_id"],
+                coordinator_factory=lambda **_kwargs: coordinator))
+            await pilot.pause(0.5)
+            self.assertTrue(app.screen.query_one("#fleet-abort").display)
 
     async def test_take_over_from_lswebpasswd(self):
         from tpotctl import app as tapp, ops

@@ -819,8 +819,20 @@ A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the *
 | `tpot sensors set NAME --host … --ssh-user …` | adds where a sensor is, i.e. for sensors of earlier releases |
 | `tpot sensors cert` | shows the addresses the certificate of the **Hive** covers, `--renew` issues it anew, `--distribute` copies it to the sensors |
 | `tpot sensors import` | gives the sensors of `lswebpasswd` / `lswebpasswd.lost` that `LS_WEB_USER` does not name their access back |
+| `tpot sensors update [NAME ...] [--all] [--parallel N|all] [--dry-run] [-y] [--become-file FILE|--no-become-pass] [--accept-data-loss|--accept-data-loss-file FILE] [--resume|--discard]` | prepares and coordinates sensor updates from the **Hive** |
 
 The **Hive** keeps a list of its sensors in `~/tpotce/data/sensors.json` (names, addresses, SSH user, date and version, no passwords). Sensors deployed with an earlier release are taken over from `LS_WEB_USER` the first time `tpot sensors` runs, add their addresses with `tpot sensors set` to manage them as well.
+
+Fleet updates precheck every selected sensor before starting. They run sequentially by default; parallel updates
+start only after a successful canary. The *Sensors* page presents the same flow, with per-sensor progress,
+failure decisions, resume and discard. `-y` confirms starting or resuming, but never approves reported data loss
+or a rollback. A saved run can be continued with `tpot sensors update --resume`; `--discard` removes a stopped
+run. A run interrupted during prechecks (`preparing`) cannot be resumed, but can be safely discarded from the
+CLI or Sensors page. Fleet state lives outside the checkout at `~/.local/share/tpotce/fleet/` and does not
+contain passwords. The Sensors page checks saved runs before asking for sensor sudo credentials, so a stopped
+run can be discarded without them; credentials are requested only for prechecks or remote actions that need them.
+Once a sensor's update completes, the HIVE waits up to 15 minutes for a fresh heartbeat with the target version;
+this extendable window starts after the update, not when it begins.
 
 ### Sensor Heartbeats
 The *Sensors* page and `tpot sensors list` show **Sensor | Host | Version | Heartbeat | Last event | State**.
@@ -1045,6 +1057,7 @@ header instead of letting its path squeeze out the form.
 | `tpot llm [detect [--scan]\|models\|test]` | *LLM* | every host | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
 | **Access** | | | |
 | `tpot sensors [list\|add\|remove\|set\|cert\|import]` | *Sensors* (`set` is *Edit*, `import` is *Take over*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
+| `tpot sensors update [NAME ...] [--all] [--parallel N\|all] [--dry-run] [-y] [--become-file FILE\|--no-become-pass] [--accept-data-loss\|--accept-data-loss-file FILE] [--resume\|--discard]` | *Sensors* | T-Pot host, HIVE | prepares all targets first, runs one canary before any parallel updates, verifies service/container health and a fresh heartbeat with the target version; failures can be retried, skipped, rolled back explicitly or resumed, and `-y` never approves data loss |
 | `tpot sensors sudo [NAME ...] status\|secure\|convenient [-y] [--become-file FILE] [--user-password-file FILE]` | *Sensors* | T-Pot host, HIVE | the same sudo-mode operation over SSH, on the named registered sensors or all when no names are given; uses their registered login users and ports |
 | `tpot users [list\|add\|passwd\|remove\|import]` | *Web users* (`import` is *Take over*) | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | **Data & maintenance** | | | |

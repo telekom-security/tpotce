@@ -429,12 +429,26 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
         from rich.text import Text
         from tpotctl import sensors
         from tpotctl.screens import customizer, dialogs, pickers, restore, sudo, task, uninstall
+        from tpotctl.screens import fleet
         from tpotctl.screens.customizer import State, core
         from tpotctl.tests.test_app import sample_check as check
+        from unittest.mock import Mock
         times = [("UTC", Text("UTC"), False), ("Europe/Berlin", Text("Europe/Berlin"), False)]
 
         def state():
             return State(core.Catalog(), core.Selection("MINI"), core.DEFAULT_MAX_NETWORKS)
+
+        def fleet_update():
+            coordinator = Mock()
+            coordinator.store.list_runs.return_value = []
+            coordinator.store.read.return_value = {
+                "run_id": "f" * 32, "phase": "completed", "version": "24.04.1", "targets": [], "warnings": [],
+            }
+            return fleet.FleetUpdateScreen(
+                fleet.FleetRequest([], False, 1), None, run_id="f" * 32,
+                coordinator_factory=lambda **_kwargs: coordinator,
+            )
+
         return {
             "confirm": lambda: dialogs.ConfirmDialog("Really?", body="It stops T-Pot."),
             "quit": lambda: dialogs.QuitDialog("Quit the T-Pot Manager?", body="Unsaved on the Settings page", yes="Quit anyway",
@@ -444,6 +458,9 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
             "user": lambda: dialogs.UserDialog("Add a web user"),
             "sensor": lambda: dialogs.SensorDialog(),
             "sensor-edit": lambda: dialogs.SensorEditDialog(sensors.Sensor("s1", host="192.0.2.9", ssh_user="t")),
+            "fleet-update-request": lambda: fleet.FleetUpdateDialog(),
+            "fleet-password": lambda: fleet.FleetPasswordDialog(),
+            "fleet-update": fleet_update,
             "sudo": lambda: sudo.SudoDialog("this host", lambda: True),
             "picker": lambda: pickers.Picker("Choose a time zone", lambda: times, current="UTC",
                                              detect=lambda: "UTC"),

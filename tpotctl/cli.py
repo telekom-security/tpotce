@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import stat
 import sys
 import time
 from typing import List, Optional
@@ -45,6 +46,20 @@ class ArgumentParser(argparse.ArgumentParser):
     def format_help(self):
         title = "T-Pot Manager" if self.prog == "tpot" else f"T-Pot Manager: {self.prog}"
         return title + "\n\n" + super().format_help()
+
+
+def parallelism(value: str):
+    if value == "all":
+        return value
+    if not value.isascii() or not value.isdigit():
+        raise argparse.ArgumentTypeError("must be 1-1000 or 'all'")
+    try:
+        count = int(value)
+    except ValueError as err:
+        raise argparse.ArgumentTypeError("must be 1-1000 or 'all'") from err
+    if not 1 <= count <= 1000:
+        raise argparse.ArgumentTypeError("must be 1-1000 or 'all'")
+    return count
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -182,6 +197,23 @@ def build_parser() -> argparse.ArgumentParser:
     importing = sensor_actions.add_parser("import", help="give the sensors of lswebpasswd and lswebpasswd.lost "
                                                          "that LS_WEB_USER does not name their access back")
     importing.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    update = sensor_actions.add_parser("update", help="update registered sensors from this HIVE")
+    update.add_argument("names", nargs="*", metavar="NAME", help="no names: sensors behind this HIVE")
+    update.add_argument("--all", dest="all_sensors", action="store_true", help="include every accessible sensor")
+    update.add_argument("--parallel", type=parallelism, default=1, metavar="1-1000|all",
+                        help="updates at once after a successful canary (default 1)")
+    update.add_argument("--dry-run", action="store_true", help="run prechecks only and remove their temporary state")
+    update.add_argument("-y", "--yes", action="store_true", help="confirm starting and continuing, never data loss")
+    become = update.add_mutually_exclusive_group()
+    become.add_argument("-B", "--become-file", default="", metavar="FILE", help="private sensor sudo password file")
+    become.add_argument("--no-become-pass", action="store_true", help="sudo on every sensor needs no password")
+    losses = update.add_mutually_exclusive_group()
+    losses.add_argument("--accept-data-loss", action="store_true", help="explicitly accept reported data loss")
+    losses.add_argument("--accept-data-loss-file", default="", metavar="FILE",
+                        help="private file containing the exact reported data-loss lines")
+    control = update.add_mutually_exclusive_group()
+    control.add_argument("--resume", action="store_true", default=None, help="resume a saved fleet run")
+    control.add_argument("--discard", action="store_true", default=None, help="discard a stopped fleet run")
     edition = sub.add_parser("edition", help="the editions of T-Pot and switching between them (default: list)")
     edition_actions = edition.add_subparsers(dest="edition_command", metavar="ACTION")
     edition_actions.add_parser("list", help="the editions, the one in use marked")
@@ -1138,6 +1170,268 @@ def confirm(question: str, yes: bool) -> bool:
     return ask(f"{question} [y/N] ").lower() == "y"
 
 
+def _fleet_password(args) -> str:
+    from tpotctl import sudo_mode
+    if args.become_file:
+        return sudo_mode.read_password_file(args.become_file)
+    if args.no_become_pass:
+        return ""
+    if not sys.stdin.isatty():
+        fail("No terminal for the sensor sudo password; provide --become-file or --no-become-pass.", 2)
+    import getpass
+    password = getpass.getpass("Sensor sudo password: ")
+    if not password:
+        fail("The sensor sudo password cannot be empty.", 2)
+    return password
+
+
+def _fleet_run(coordinator, resume: bool, discard: bool, console):
+    candidates = coordinator.store.list_runs()
+    if resume:
+        candidates = [run for run in candidates
+                      if run["phase"] in ("running", "paused", "aborting", "prepared", "precheck_failed")]
+        action = "resume"
+    elif discard:
+        candidates = [run for run in candidates
+                      if run["phase"] in (
+                          "preparing", "prepared", "precheck_failed", "paused", "aborted", "completed", "failed")]
+        action = "discard"
+    else:
+        return None
+    if not candidates:
+        fail(f"There is no saved fleet run to {action}.", 2)
+    if len(candidates) == 1:
+        return candidates[0]
+    if not sys.stdin.isatty():
+        fail(f"More than one fleet run can be {action}; run this command at a terminal to choose one.", 2)
+    console.print(f"Choose the fleet run to {action}:")
+    for run in candidates:
+        console.print(f"  {run['run_id']}  {run['phase']}  " +
+                      ", ".join(target["name"] for target in run["targets"]))
+    chosen = ask("Run ID: ")
+    selected = next((run for run in candidates if run["run_id"] == chosen), None)
+    if selected is None:
+        fail("That run ID is not a valid choice.", 2)
+    return selected
+
+
+def _fleet_losses(state, args, console):
+    losses = {target["name"]: target["losses"] for target in state["targets"]}
+    reported = sorted({line for items in losses.values() for line in items})
+    if not reported:
+        return losses
+    if args.accept_data_loss:
+        return losses
+    if args.accept_data_loss_file:
+        path = args.accept_data_loss_file
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode):
+                    raise OSError("not a regular file")
+                raw = stream.read(1024 * 1024 + 1)
+            if len(raw) > 1024 * 1024:
+                raise OSError("file is too large")
+            text = raw.decode("utf-8")
+        except (OSError, UnicodeError) as err:
+            fail(f"Cannot read the data-loss approval file {path}: {err}.", 2)
+        approved = text.splitlines()
+        if len(approved) != len(set(approved)) or sorted(approved) != reported:
+            fail("The data-loss approval file must contain the exact data-loss lines from this run.", 2)
+        return losses
+    console.print("The sensor update reports these data-loss items:")
+    for line in reported:
+        console.print(f"  {line}")
+    if not confirm_data_loss("Accept every listed data-loss item?", False):
+        return None
+    return losses
+
+
+def _fleet_show(state, console):
+    for target in state["targets"]:
+        console.print(f"{target['name']}: {target['phase']}"
+                      f"{' (from ' + target['previous_version'] + ')' if target['previous_version'] else ''}")
+        for warning in target.get("warnings", []):
+            console.print(f"  Warning: {warning}")
+        if target.get("last_error"):
+            console.print(f"  Error: {target['last_error']}")
+    for warning in state.get("warnings", []):
+        console.print(f"Warning: {warning}")
+
+
+def _fleet_monitor(coordinator, run_id, password, args, console) -> int:
+    from tpotctl import sensors as tsensors
+    extension_prompted = {}
+    while True:
+        state = coordinator.store.read(run_id)
+        if state["phase"] == "completed":
+            _fleet_show(state, console)
+            return 0
+        if state["phase"] in ("aborted", "failed"):
+            _fleet_show(state, console)
+            return 1
+        active = [target for target in state["targets"]
+                  if target["phase"] in ("running", "checking", "rollback_running")]
+        if not active and state["phase"] == "prepared":
+            accepted = _fleet_losses(state, args, console)
+            if accepted is None:
+                return 1
+            if not confirm(f"Start the fleet update {run_id}?", args.yes):
+                return 1
+            coordinator.start(run_id, accepted_losses=accepted, password=password)
+            continue
+        retry = next((target for target in state["targets"]
+                      if target["phase"] == "prepared" and target.get("attempt", 1) > 1), None)
+        if not active and retry is not None and state["phase"] == "paused":
+            accepted = _fleet_losses({"targets": [retry]}, args, console)
+            if accepted is None:
+                return 1
+            if not confirm(f"Start retry for {retry['name']}?", args.yes):
+                return 1
+            coordinator.start_retry(run_id, retry["name"],
+                                    accepted_losses=accepted[retry["name"]], password=password)
+            continue
+        if not active and state["phase"] in ("paused", "precheck_failed"):
+            failed = next((target for target in state["targets"]
+                           if target["phase"] in ("failed", "rollback_failed")), None)
+            if failed is not None:
+                _fleet_show(state, console)
+                if not sys.stdin.isatty():
+                    say.hint(f"Resume this run interactively with: tpot sensors update --resume", stream=console.file)
+                    return 1
+                options = ["retry", "skip", "abort"]
+                if failed.get("archive"):
+                    options.insert(2, "rollback")
+                choice = ask(f"{failed['name']} failed; choose {', '.join(options)}: ").lower()
+                if choice not in options:
+                    console.print("No valid failure action was selected.")
+                    return 1
+                state = coordinator.resolve_failure(run_id, failed["name"], choice, password=password)
+                if choice == "retry":
+                    target = next(item for item in state["targets"] if item["name"] == failed["name"])
+                    if target["phase"] == "prepared":
+                        approved = _fleet_losses({"targets": [target]}, args, console)
+                        if approved is None:
+                            return 1
+                        coordinator.start_retry(run_id, target["name"],
+                                                accepted_losses=approved[target["name"]], password=password)
+                if choice == "abort" and state["phase"] == "aborted":
+                    _fleet_show(state, console)
+                    return 1
+                continue
+        if sys.stdin.isatty():
+            now = int(time.time())
+            for target in active:
+                deadline = target.get("deadline", now)
+                if (target["phase"] == "checking" and deadline - now <= 60
+                        and extension_prompted.get(target["name"]) != deadline):
+                    if confirm(f"Extend {target['name']}'s heartbeat deadline by 15 minutes?", False):
+                        coordinator.extend_deadline(run_id, target["name"])
+                    extension_prompted[target["name"]] = deadline
+        status = tsensors.fetch_status()
+        coordinator.resume(run_id, status, password=password)
+        current = coordinator.store.read(run_id)
+        console.print("Fleet status: " + ", ".join(
+            f"{target['name']} {target['phase']}" for target in current["targets"]))
+        time.sleep(10)
+
+
+def run_fleet_update(args, registry, console) -> int:
+    from tpotctl import fleet as tfleet, sensors as tsensors
+    ops.require_linux_host("tpot sensors update")
+    ops.require_config_current()
+    if args.names and args.all_sensors:
+        fail("Choose sensor names or --all, not both.", 2)
+    if args.resume is not None and (args.names or args.all_sensors or args.dry_run):
+        fail("--resume cannot be combined with selection or --dry-run.", 2)
+    if args.discard is not None and (
+            args.names or args.all_sensors or args.dry_run or args.accept_data_loss or args.accept_data_loss_file):
+        fail("--discard cannot be combined with selection, dry-run or data-loss options.", 2)
+    if not args.yes and not sys.stdin.isatty():
+        fail("Sensor fleet updates need a terminal or --yes.", 2)
+    coordinator = tfleet.FleetCoordinator(registry=registry)
+    if args.resume is not None or args.discard is not None:
+        password = _fleet_password(args) if args.resume is not None else ""
+        state = _fleet_run(coordinator, args.resume is not None, args.discard is not None, console)
+        if args.discard is not None:
+            if not confirm(f"Discard saved fleet run {state['run_id']}?", args.yes):
+                return 1
+            coordinator.discard(state["run_id"])
+            console.print(f"Fleet run {state['run_id']} discarded.")
+            return 0
+        console.print(f"Resuming fleet run {state['run_id']}.")
+        return _fleet_monitor(coordinator, state["run_id"], password, args, console)
+
+    password = _fleet_password(args)
+    pending = [run for run in coordinator.store.list_runs()
+               if run["phase"] in ("preparing", "running", "paused", "aborting", "prepared", "precheck_failed")]
+    if pending:
+        if not sys.stdin.isatty():
+            names = ", ".join(run["run_id"] for run in pending)
+            action = "discarded" if any(run["phase"] == "preparing" for run in pending) \
+                else "resumed or discarded"
+            fail(f"Saved fleet run(s) {names} must be {action} before starting another.", 2)
+        console.print("Saved fleet runs:")
+        for run in pending:
+            console.print(f"  {run['run_id']}  {run['phase']}")
+        discardable_phases = (
+            "preparing", "prepared", "precheck_failed", "paused", "aborted", "completed", "failed")
+        can_discard = all(run["phase"] in discardable_phases for run in pending) and not any(
+            target["phase"] in ("running", "checking", "rollback_running")
+            for run in pending for target in run["targets"]
+        )
+        can_resume = any(run["phase"] != "preparing" for run in pending)
+        choices = (("resume",) if can_resume else ()) + (("discard", "new") if can_discard else ())
+        choice = ask(f"Choose {', '.join(choices)}: ").lower()
+        if choice not in choices:
+            fail(f"Choose {', '.join(choices)}.", 2)
+        if choice == "resume":
+            state = _fleet_run(coordinator, True, False, console)
+            return _fleet_monitor(coordinator, state["run_id"], password, args, console)
+        if choice == "new":
+            for run in pending:
+                if not confirm(f"Discard saved fleet run {run['run_id']}?", False):
+                    return 1
+                coordinator.discard(run["run_id"])
+        elif choice == "discard":
+            state = _fleet_run(coordinator, False, True, console)
+            if not confirm(f"Discard saved fleet run {state['run_id']}?", False):
+                return 1
+            coordinator.discard(state["run_id"])
+            console.print(f"Fleet run {state['run_id']} discarded.")
+            return 0
+    repo = (os.environ.get("TPOT_REPO_URL") or registry.env.get("TPOT_REPO_URL")
+            or ops.git(registry.repo_dir, "remote", "get-url", "origin"))
+    branch = (os.environ.get("TPOT_BRANCH") or registry.env.get("TPOT_BRANCH")
+              or ops.git(registry.repo_dir, "branch", "--show-current"))
+    version = registry.env.get("TPOT_VERSION") or ""
+    if not repo or not branch or not version:
+        fail("The HIVE repository, current branch and TPOT_VERSION are required for a fleet update.", 3)
+    state = coordinator.prepare(
+        registry, tsensors.fetch_status(), repo=repo, branch=branch, version=version,
+        names=args.names, all_sensors=args.all_sensors, parallel=args.parallel, password=password,
+    )
+    _fleet_show(state, console)
+    console.print(f"Fleet run: {state['run_id']}")
+    if args.parallel != 1:
+        console.print("Warning: parallel sensor updates can increase network load; use the sequential default if unsure.")
+    if args.dry_run:
+        coordinator.discard(state["run_id"])
+        console.print("Dry run complete; no sensor was updated.")
+        return 0 if state["phase"] == "prepared" else 1
+    if state["phase"] == "prepared":
+        accepted = _fleet_losses(state, args, console)
+        if accepted is None:
+            coordinator.discard(state["run_id"])
+            return 1
+        if not confirm(f"Start the fleet update {state['run_id']}?", args.yes):
+            coordinator.discard(state["run_id"])
+            return 1
+        coordinator.start(state["run_id"], accepted_losses=accepted, password=password)
+    return _fleet_monitor(coordinator, state["run_id"], password, args, console)
+
+
 def sensors_table(registry, status, days: int, found=()):
     """found: the sensors of lswebpasswd / lswebpasswd.lost that can be taken over (Registry.file_only)."""
     from rich import box
@@ -1155,6 +1449,9 @@ def run_sensors(args) -> int:
     from rich.text import Text
     from tpotctl import sensors as tsensors
     command = args.sensors_command or "list"
+    if command == "update":
+        ops.require_linux_host("tpot sensors update")
+        ops.require_config_current()
     if command == "sudo":
         ops.require_linux_host("tpot sensors sudo")
     if command == "add" or (command == "cert" and args.distribute is not None):
@@ -1169,6 +1466,8 @@ def run_sensors(args) -> int:
     if command == "import":
         return run_import(registry, "sensor", "LS_WEB_USER", "They can send to this HIVE then.", args.yes, console,
                           registry.lswebpasswd)
+    if command == "update":
+        return run_fleet_update(args, registry, console)
     if command == "list":
         status = tsensors.fetch_status(args.days)
         tsensors.link_hostnames(registry, status)
@@ -1967,6 +2266,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 def dispatch(argv: List[str]) -> int:
+    args = None
     try:
         if argv and argv[0] in PASSTHROUGH:
             ops.require_linux_host(argv[0])
@@ -2006,10 +2306,13 @@ def dispatch(argv: List[str]) -> int:
                 error(str(err))
                 return 1
         if args.command == "sensors":
-            from tpotctl import sensors as tsensors
+            from tpotctl import fleet as tfleet, sensors as tsensors
             try:
                 return run_sensors(args)
-            except tsensors.SensorsError as err:
+            except tsensors.SensorsRoleError as err:
+                error(str(err))
+                return 3
+            except (tsensors.SensorsError, tfleet.FleetError) as err:
                 error(str(err))
                 return 1
         if args.command == "sudo":
@@ -2048,5 +2351,8 @@ def dispatch(argv: List[str]) -> int:
             return print_images()
     except (ops.OpsError, bootstrap.BootstrapError, SudoError) as err:
         error(str(err))
+        if isinstance(err, ops.OpsError) and args is not None and args.command == "sensors" \
+                and args.sensors_command == "update":
+            return 3
         return 1
     return 2

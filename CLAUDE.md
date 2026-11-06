@@ -114,6 +114,24 @@ check. `sensor_heartbeat` smoke exercises the Manager against actual Elasticsear
 Optional null hostname/IP metadata is removed by ingestion and treated as absent when reading older status
 documents; it must not invalidate other sensors' status.
 
+### HIVE fleet update
+
+`tpot sensors update` and the Sensors page share `tpotctl/fleet.py` for
+prechecks, canary-first sequencing, heartbeat/runtime verification, failure
+decisions and resumable state. The UI polls active runs every 10 seconds;
+restarting a prepared retry always asks again about its exact data-loss list,
+and `-y` is not that approval. The Sensors page checks saved runs before
+asking for sensor sudo credentials, so stopped runs can be discarded without
+them; credentials are collected only for prechecks or remote actions that need
+them. Fleet state is outside the checkout under
+`~/.local/share/tpotce/fleet/`; passwords must stay in memory/private
+transport only, never persisted or logged. Mutations of a run are serialized
+with a private per-run lock. An interrupted `preparing` run is not resumable,
+but can be discarded; `preparing` alone does not mean a remote worker is active.
+The 15-minute heartbeat deadline begins when the worker reports completion,
+not when its update starts. Keep the CLI and UI resume, discard and retry
+semantics aligned.
+
 `python3 -m tpotctl.sensor_dashboard` generates only the `tpot-sensors-*` Kibana objects and updates the
 export ZIP; unrelated NDJSON lines stay byte-identical (`--check` validates both). The status data view has
 no time field, its `heartbeat.state` runtime field compares ES time with HIVE receipt; timeline and version

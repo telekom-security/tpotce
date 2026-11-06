@@ -1,5 +1,6 @@
 """Coordinated updates of the sensors registered on a HIVE."""
 
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,8 @@ import secrets
 import stat
 import tempfile
 import time
+from contextlib import contextmanager
+from functools import wraps
 from typing import Dict, List, Optional, Sequence
 from urllib.parse import urlsplit
 from datetime import datetime, timezone
@@ -17,6 +20,14 @@ from tpotctl import fleet_remote, fleet_transport, sensors
 
 class FleetError(Exception):
     """A fleet update cannot safely continue."""
+
+
+def _serialize_run(method):
+    @wraps(method)
+    def wrapped(self, run_id, *args, **kwargs):
+        with self.store.lock(run_id):
+            return method(self, run_id, *args, **kwargs)
+    return wrapped
 
 
 RUN_ID = re.compile(r"[a-f0-9]{32}")
@@ -38,7 +49,8 @@ RUN_OPTIONAL_KEYS = {"started_at", "finished_at", "error", "canary_passed", "abo
 TARGET_KEYS = {"name", "remote_run_id", "phase", "previous_version", "losses", "warnings"}
 TARGET_OPTIONAL_KEYS = {
     "prepared_at", "started_at", "deadline", "exit_code", "archive", "last_error",
-    "runtime", "heartbeat_received_at", "completed_observed_at", "attempt", "decision", "approved_losses",
+    "runtime", "heartbeat_received_at", "completed_observed_at", "checking_started_at",
+    "attempt", "decision", "approved_losses",
 }
 
 
@@ -94,7 +106,9 @@ def validate_run(state: dict) -> None:
                 or not all(isinstance(item, str) and len(item) <= 4096 for item in target["warnings"])):
             raise FleetError("A fleet target contains invalid values.")
         names.add(name)
-        for key in ("prepared_at", "started_at", "deadline", "heartbeat_received_at", "completed_observed_at"):
+        for key in (
+                "prepared_at", "started_at", "deadline", "heartbeat_received_at", "completed_observed_at",
+                "checking_started_at"):
             if key in target and (type(target[key]) is not int or target[key] < 0):
                 raise FleetError("A fleet target contains an invalid timestamp.")
         if "exit_code" in target and type(target["exit_code"]) is not int:
@@ -151,6 +165,38 @@ class RunStore:
             current /= part
             self._directory(current, create=True)
         self._directory(self.root, private=True, create=True)
+
+    @contextmanager
+    def lock(self, run_id: str):
+        self.run_path(run_id)
+        self._ensure_root()
+        lock_dir = self.root / "locks"
+        self._directory(lock_dir, private=True, create=True)
+        path = lock_dir / f"{run_id}.lock"
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1:
+                raise FleetError("The fleet run lock is not a private regular file.")
+            os.fchmod(fd, 0o600)
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        except FleetError:
+            if "fd" in locals():
+                os.close(fd)
+            raise
+        except OSError as err:
+            if "fd" in locals():
+                os.close(fd)
+            raise FleetError("The fleet run lock cannot be used.") from err
+        try:
+            yield
+        finally:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError as err:
+                raise FleetError("The fleet run lock could not be released.") from err
+            finally:
+                os.close(fd)
 
     def _read(self, path: Path, run_id: str) -> Dict:
         try:
@@ -229,6 +275,9 @@ class RunStore:
             raise err
         runs = []
         for path in sorted(self.root.iterdir()):
+            if path.name == "locks":
+                self._directory(path, private=True)
+                continue
             if not RUN_ID.fullmatch(path.name):
                 raise FleetError("The fleet state directory contains an invalid entry.")
             self._directory(path, private=True)
@@ -306,7 +355,6 @@ class FleetCoordinator:
 
     def prepare(self, registry, status: sensors.Status, *, repo: str, branch: str, version: str,
                 names: Sequence[str] = (), all_sensors: bool = False, parallel=1, password: str = "") -> Dict:
-        self.registry = registry
         if (type(parallel) is not int and parallel != "all") or (
                 type(parallel) is int and not 1 <= parallel <= 1000):
             raise FleetError("Parallelism must be a positive number or 'all'.")
@@ -318,6 +366,12 @@ class FleetCoordinator:
         if not targets:
             raise FleetError("No sensors match the update selection.")
         run_id = secrets.token_hex(16)
+        with self.store.lock(run_id):
+            return self._prepare_run(
+                registry, status, repo, branch, version, parallel, targets, run_id, password)
+
+    def _prepare_run(self, registry, status, repo, branch, version, parallel, targets, run_id, password) -> Dict:
+        self.registry = registry
         observations = {
             sensor.name: sensors.observe(sensor, status, version, now=self.clock())
             for sensor in targets
@@ -377,6 +431,7 @@ class FleetCoordinator:
         self.store.write(state)
         return state
 
+    @_serialize_run
     def resolve_failure(self, run_id: str, name: str, choice: str, *, password: str = "") -> Dict:
         state = self.store.read(run_id)
         target = next((item for item in state["targets"] if item["name"] == name), None)
@@ -454,7 +509,7 @@ class FleetCoordinator:
             attempt=target.get("attempt", 1) + 1,
         )
         for key in ("started_at", "deadline", "exit_code", "archive", "last_error", "runtime",
-                    "heartbeat_received_at", "completed_observed_at", "approved_losses"):
+                    "heartbeat_received_at", "completed_observed_at", "checking_started_at", "approved_losses"):
             target.pop(key, None)
         state["phase"] = "paused"
         self.store.write(state)
@@ -481,6 +536,7 @@ class FleetCoordinator:
         self.store.write(state)
         return state
 
+    @_serialize_run
     def start_retry(self, run_id: str, name: str, *, accepted_losses: Optional[List[str]] = None,
                     password: str = "") -> Dict:
         state = self.store.read(run_id)
@@ -496,12 +552,13 @@ class FleetCoordinator:
         self._launch(state, target, password)
         return self.store.read(run_id)
 
+    @_serialize_run
     def extend_deadline(self, run_id: str, name: str) -> Dict:
         state = self.store.read(run_id)
         target = next((item for item in state["targets"] if item["name"] == name), None)
-        if (target is None or target["phase"] not in ("running", "checking")
+        if (target is None or target["phase"] != "checking"
                 or state["phase"] not in ("running", "paused")):
-            raise FleetError("Only a running sensor update can have its deadline extended.")
+            raise FleetError("Only a sensor waiting for its heartbeat can have its deadline extended.")
         now = int(self.clock())
         deadline = target.get("deadline")
         if type(deadline) is not int:
@@ -510,12 +567,14 @@ class FleetCoordinator:
         self.store.write(state)
         return state
 
+    @_serialize_run
     def discard(self, run_id: str) -> Dict:
         state = self.store.read(run_id)
-        if any(target["phase"] in ("preparing", "running", "checking", "rollback_running")
+        if any(target["phase"] in ("running", "checking", "rollback_running")
                for target in state["targets"]):
             raise FleetError("A running fleet update cannot be discarded.")
-        if state["phase"] not in ("prepared", "precheck_failed", "paused", "aborted", "completed", "failed"):
+        if state["phase"] not in (
+                "preparing", "prepared", "precheck_failed", "paused", "aborted", "completed", "failed"):
             raise FleetError("This fleet run is not in a discardable state.")
         for target in state["targets"]:
             name = target["name"]
@@ -549,7 +608,8 @@ class FleetCoordinator:
     def _launch(self, state: dict, target: dict, password: str = "") -> None:
         target["phase"] = "running"
         target["started_at"] = int(self.clock())
-        target["deadline"] = target["started_at"] + 900
+        target.pop("deadline", None)
+        target.pop("checking_started_at", None)
         target.pop("last_error", None)
         state["phase"] = "running"
         self.store.write(state)
@@ -570,6 +630,7 @@ class FleetCoordinator:
             target["last_error"] = str(err)[:4096]
         self.store.write(state)
 
+    @_serialize_run
     def start(self, run_id: str, *, accepted_losses: Optional[Dict[str, List[str]]] = None,
               password: str = "") -> Dict:
         state = self.store.read(run_id)
@@ -645,15 +706,21 @@ class FleetCoordinator:
             warning = f"The version cache could not be saved for {target['name']}: {err}"
             target["warnings"].append(warning[:4096])
 
+    @_serialize_run
     def resume(self, run_id: str, heartbeat_status: sensors.Status, *, password: str = "",
                now: Optional[int] = None) -> Dict:
         state = self.store.read(run_id)
         if state["phase"] not in ("running", "paused", "aborting"):
             raise FleetError("This fleet run has no work that can be resumed.")
-        return self.advance(run_id, heartbeat_status, password=password, now=now)
+        return self._advance(run_id, heartbeat_status, password=password, now=now)
 
+    @_serialize_run
     def advance(self, run_id: str, heartbeat_status: sensors.Status, *, password: str = "",
                 now: Optional[int] = None) -> Dict:
+        return self._advance(run_id, heartbeat_status, password=password, now=now)
+
+    def _advance(self, run_id: str, heartbeat_status: sensors.Status, *, password: str = "",
+                 now: Optional[int] = None) -> Dict:
         state = self.store.read(run_id)
         if state["phase"] not in ("running", "paused", "aborting"):
             return state
@@ -670,6 +737,13 @@ class FleetCoordinator:
                 phase = reply.get("phase")
                 if phase in ("running", "rollback_running"):
                     target["phase"] = phase
+                    continue
+                if phase == "prepared":
+                    target.update(
+                        phase="failed",
+                        last_error="The sensor is still prepared and has no running worker; retry or skip this target.",
+                    )
+                    state["phase"] = "paused"
                     continue
                 if phase == "rolled_back":
                     target["phase"] = "rolled_back"
@@ -704,6 +778,9 @@ class FleetCoordinator:
                     continue
                 target["phase"] = "checking"
                 target.setdefault("completed_observed_at", current)
+                if "checking_started_at" not in target or "deadline" not in target:
+                    target["checking_started_at"] = current
+                    target["deadline"] = current + 900
                 target["archive"] = archive
                 runtime = self.remote_call(sensor, {
                     "action": "runtime", "run_id": target["remote_run_id"], "name": target["name"],

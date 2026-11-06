@@ -454,6 +454,23 @@ class SummaryTest(Scripts):
                 self.assertEqual(result.stdout.count("[FAILED]"), 1 if rc == 1 else 0, result.stdout)
         self.assertEqual(self.source_update("exit 3").stdout, "")         # not confirmed: no summary
 
+    def test_successful_hive_update_points_to_fleet_update(self):
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=HIVE\n")
+        result = self.source_update('myRUNNING=1; fuDID ok "T-Pot is started."; exit 0')
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("### [NEXT] - Update registered sensors from this HIVE with 'tpot sensors update'.",
+                      result.stdout)
+
+    def test_sensor_update_has_no_hive_fleet_hint(self):
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=SENSOR\n")
+        result = self.source_update('myRUNNING=1; fuDID ok "T-Pot is started."; exit 0')
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("tpot sensors update", result.stdout)
+
     def test_the_warnings_of_a_run_are_in_its_summary(self):
         """A changed edition and a Kibana that does not answer: both warnings are in the summary too."""
         self.stub("docker", "#!/bin/sh\necho kibana\n")                  # the container runs, curl fails
