@@ -433,6 +433,32 @@ class AccountPlaybookRunTest(unittest.TestCase):
                     self.assertNotIn(text, output)
 
 
+class AccountWaysOutTest(unittest.TestCase):
+    """The way out of an account named tpot is one command wherever a text names it (the installer, the
+    assistant, the playbook, the ISO, the docs): nobody is sent to a variant (deluser, userdel without -r)."""
+
+    PLACES = {      # the places and the ways each one has to name
+        "install.sh": (installer.REMOVE_USER, installer.REMOVE_GROUP),
+        "tpotctl/installer.py": (installer.REMOVE_USER, installer.REMOVE_GROUP),
+        "installer/install/tpot.yml": (installer.REMOVE_USER, installer.REMOVE_GROUP),
+        "installer/iso/start.sh": (installer.REMOVE_USER,),
+        "README.md": (installer.REMOVE_USER, installer.REMOVE_GROUP),
+        "CHANGELOG.md": (),
+    }
+
+    def test_every_place_names_its_ways_and_no_other(self):
+        for place, ways in self.PLACES.items():
+            with self.subTest(place=place):
+                with open(os.path.join(REPO_DIR, place), encoding="utf-8") as handle:
+                    text = handle.read()
+                for way in ways:
+                    self.assertIn(way, text)
+                for way in (installer.REMOVE_USER, installer.REMOVE_GROUP):
+                    text = text.replace(way, "")
+                for tool in ("userdel", "groupdel", "deluser", "delgroup"):
+                    self.assertNotIn(tool, text)
+
+
 class ChecksTest(unittest.TestCase):
 
     def test_undecodable_account_output_is_an_explicit_verification_error(self):

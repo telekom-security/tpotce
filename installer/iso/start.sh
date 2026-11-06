@@ -602,12 +602,17 @@ if [ "$(id -u)" = "0" ];
       "Log in as that user and run: bash ${myDIR}/start.sh"
 fi
 # T-Pot runs its containers as the system user tpot (uid 2000): a login of that name would be
-# turned into it
+# turned into it. The way out is the one of install.sh (tpot_account_problem), the same text
+# everywhere (tpotctl/tests/test_installer.py AccountWaysOutTest)
 if [ "$(id -un)" = "tpot" ];
   then
-    fuSTOP "The user tpot is reserved for the containers of T-Pot." \
-      "Create another user with sudo (sudo adduser <name> && sudo usermod -aG sudo <name>)," \
-      "log in as that user and run: bash ${myDIR}/start.sh"
+    [ "$(id -u)" != "2000" ] \
+      || fuSTOP "The user tpot is the system user of the T-Pot containers, it does not run the installer." \
+           "Log in as a regular user with sudo rights and run: bash ${myDIR}/start.sh"
+    fuSTOP "The user tpot is reserved for the containers of T-Pot, the installer would turn this account into it." \
+      "Create another user with sudo (sudo adduser <name> && sudo usermod -aG sudo <name>) and log in as that user." \
+      "Remove this account from there, not while it is logged in: sudo userdel -r tpot" \
+      "Then run: bash ${myDIR}/start.sh"
 fi
 [ ! -e "${myINSTALLED}" ] || fuDONE
 ! fuBUSY || fuSTOP "The T-Pot installer runs already: ${myHOLDER}." "${myBUSY_HINT}"

@@ -858,10 +858,19 @@ class StartTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertNotIn("INSTALL", result.stdout)
         self.assertIn("not as root", result.stderr)
-        result = self.run_start(STUB_UID="2000", STUB_USER="tpot")
+        # a regular user named tpot: the playbook would turn it into the container account, the way out
+        # is the one of the other installers (tpotctl/tests/test_installer.py AccountWaysOutTest)
+        result = self.run_start(STUB_UID="1000", STUB_USER="tpot")
         self.assertEqual(result.returncode, 1)
         self.assertNotIn("INSTALL", result.stdout)
         self.assertIn("reserved for the containers", result.stderr)
+        self.assertIn("sudo userdel -r tpot", result.stderr)
+        # the system user of the containers has nothing to remove and does not log in
+        result = self.run_start(STUB_UID="2000", STUB_USER="tpot")
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("INSTALL", result.stdout)
+        self.assertIn("system user of the T-Pot containers", result.stderr)
+        self.assertNotIn("userdel", result.stderr)
 
     def test_without_its_ui_sh_the_one_of_tpotce_or_a_plain_error(self):
         os.remove(os.path.join(self.share, "ui.sh"))
