@@ -9,6 +9,7 @@ from typing import List, Optional
 from tpotctl import bootstrap, menu, ops, say
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.elastic import EVENTS, RETENTIONS, Retention
+from tpotctl.sudo_mode import SudoError
 
 MAGENTA = "#E20074"
 HEALTH_STYLE = {"healthy": "green", "unhealthy": "red", "starting": "yellow"}
@@ -51,7 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="tpot", description="Configure and run T-Pot.",
         epilog="Without a command tpot opens the T-Pot Manager, its menu. update, restore and customize hand all their "
                "options to update.sh, restore.sh and compose/customizer.py, i.e. tpot update -h. status, ps, "
-               "images, start, stop, restart, update, restore, check, uninstall, sensors and elastic need a T-Pot "
+               "images, start, stop, restart, update, restore, check, uninstall, sudo, sensors and elastic need a T-Pot "
                "host (Linux with systemd); users, sensors and elastic a HIVE.")
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.add_parser("status", help="version, edition, service state and containers")
@@ -61,6 +62,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("images", help="docker images (was: dim)")
     for action in ("start", "stop", "restart"):
         sub.add_parser(action, help=f"{action} T-Pot (sudo systemctl {action} tpot.service)")
+    sudo = sub.add_parser("sudo", help="check or change this user's sudo mode (default: status)")
+    sudo_arguments(sudo)
     sub.add_parser("update", help="update T-Pot, runs update.sh with your options (it asks before a loss of "
                                   "data, without a terminal --accept-data-loss confirms one; a compose file of "
                                   "your own it adapts after a yes, without a terminal with --adapt-compose)")
@@ -146,6 +149,8 @@ def build_parser() -> argparse.ArgumentParser:
     importing.add_argument("-y", "--yes", action="store_true", help="do not ask")
     sensors = sub.add_parser("sensors", help="sensors of this HIVE (default: list)")
     sensor_actions = sensors.add_subparsers(dest="sensors_command", metavar="ACTION")
+    sudo = sensor_actions.add_parser("sudo", help="check or change sudo over SSH on registered sensors")
+    sudo_arguments(sudo, remote=True)
     listing = sensor_actions.add_parser("list", help="sensors, their access and when they were last seen")
     listing.add_argument("--days", type=int, default=7, help="look for events of the last DAYS days (default 7)")
     add = sensor_actions.add_parser("add", help="deploy a sensor over SSH (was: deploy.sh)")
@@ -1149,9 +1154,13 @@ def run_sensors(args) -> int:
     from rich.text import Text
     from tpotctl import sensors as tsensors
     command = args.sensors_command or "list"
+    if command == "sudo":
+        ops.require_linux_host("tpot sensors sudo")
     if command == "add" or (command == "cert" and args.distribute is not None):
         ops.require_config_current()
     registry = tsensors.Registry()
+    if command == "sudo":
+        return run_sudo(args, registry)
     console = _console()
     if registry.migrated:
         console.print(Text(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. Add where they are "
@@ -1192,6 +1201,136 @@ def run_sensors(args) -> int:
     if command == "cert":
         return run_sensor_cert(args, registry, console)
     return run_sensor_add(args, registry, console)
+
+
+def sudo_arguments(parser, remote: bool = False) -> None:
+    if remote:
+        parser.add_argument("names", nargs="*", metavar="NAME", help="no names: all registered sensors")
+    parser.add_argument("sudo_action", choices=("status", "secure", "convenient"),
+                        **({} if remote else {"nargs": "?", "default": "status"}))
+    parser.add_argument("-y", "--yes", action="store_true", help="confirm the mode change")
+    parser.add_argument("-B", "--become-file", default="", metavar="FILE", help="private sudo password file")
+    parser.add_argument("--user-password-file", default="", metavar="FILE",
+                        help="private new password, used only for an account without a usable password")
+
+
+def sudo_become_password(sensor=None) -> str:
+    import getpass
+    import subprocess
+    from tpotctl import installer, sensors as tsensors
+    name = sensor.name if sensor else "this host"
+    if sensor:
+        try:
+            proc = subprocess.run(tsensors.ssh_command(sensor.host, sensor.ssh_user, "sudo -n -k true",
+                                                       port=sensor.ssh_port),
+                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                  universal_newlines=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired) as err:
+            raise SudoError(f"{name}: SSH sudo check failed: {err}") from err
+        if proc.returncode == 255:
+            raise SudoError(f"{name}: SSH connection failed: {proc.stderr.strip()}")
+        needs_password = proc.returncode != 0
+    else:
+        mode = installer.sudo_mode()
+        if mode == "missing":
+            raise SudoError("sudo is not installed on this host.")
+        needs_password = mode != "passwordless"
+    if not needs_password:
+        return ""
+    if not sys.stdin.isatty():
+        fail(f"{name}: no terminal for the sudo password; use --become-file FILE", 2)
+    try:
+        password = getpass.getpass(f"Sudo password for {name}: ")
+    except EOFError:
+        raise SudoError("No sudo password entered.") from None
+    if not password or any(c in password for c in "\r\n\0"):
+        raise SudoError("Enter a nonempty, single-line sudo password.")
+    return password
+
+
+def show_sudo_status(name, status, console) -> None:
+    from rich.text import Text
+    from tpotctl import sudo_mode
+    console.print(Text(f"{name}: {sudo_mode.summary(status)}", style="red" if status.error else ""))
+    if not status.error:
+        console.print(Text(f"  User: {status.user}; T-Pot rule: {status.own_rule}; "
+                           f"temporary installer rule: {status.temporary_rule}"))
+    for text in status.changes:
+        console.print(Text(f"  {text}"))
+    for text in status.warnings:
+        console.print(Text(f"  {text}", style="yellow"))
+
+
+def run_sudo(args, registry=None) -> int:
+    import contextlib
+    from tpotctl import installer, sensors as tsensors, sudo_mode, users
+    ops.require_linux_host("tpot sensors sudo" if registry else "tpot sudo")
+    action = args.sudo_action
+    selected = ([registry.get(name) for name in dict.fromkeys(args.names)] if args.names else registry.sensors()) \
+        if registry else [None]
+    if not selected:
+        raise SudoError("No registered sensors to manage.")
+    if action != "status" and not confirm(
+            f"Use {'More secure (sudo asks for a password)' if action == 'secure' else 'More convenient (passwordless sudo)'}"
+            f" on {', '.join(s.name if s else 'this host' for s in selected)}?", args.yes):
+        return 1
+    console = _console()
+    become = sudo_mode.read_password_file(args.become_file) if args.become_file else ""
+    new_password = sudo_mode.read_password_file(args.user_password_file) if args.user_password_file else ""
+    if new_password and action == "secure":
+        weak = users.weakness(new_password)
+        if weak:
+            raise SudoError("The new user password is weak: " + weak)
+    failed = False
+    prepared = []
+    try:
+        with contextlib.ExitStack() as stack:
+            for sensor in selected:
+                name = sensor.name if sensor else "localhost"
+                try:
+                    inventory = stack.enter_context(tempfile_inventory(tsensors.inventory_text([sensor]))) \
+                        if sensor else "localhost,"
+                    files = dict(stack.enter_context(installer.secret_files(
+                        become=become or sudo_become_password(sensor))))
+                    code, results = sudo_mode.execute("status", inventory, [name], local=sensor is None,
+                                                      become_file=files.get("become", ""), invoke=call)
+                    state = results[name]
+                    if code == 130:
+                        return 130
+                    if code or action == "status":
+                        show_sudo_status(name, state, console)
+                        failed |= bool(code)
+                        continue
+                    password = new_password
+                    if action == "secure" and not state.password_usable and not password:
+                        if not sys.stdin.isatty():
+                            fail(f"{name}: no usable user password; supply --user-password-file before changing anything", 2)
+                        say.warn(f"Set a new password for {state.user} on {name}. SSH also uses it when password "
+                                 "logins are enabled.", console.file)
+                        password = read_password(argparse.Namespace(password_stdin=False))
+                        if any(c in password for c in "\r\n\0") or users.weakness(password):
+                            raise SudoError("The new user password must be a strong, nonempty single line.")
+                    if password and action == "secure":
+                        files.update(stack.enter_context(installer.secret_files(user=password)))
+                    prepared.append((sensor, name, inventory, files))
+                except (SudoError, tsensors.SensorsError) as err:
+                    error(f"{name}: {err}")
+                    failed = True
+            for sensor, name, inventory, files in prepared:
+                code, results = sudo_mode.execute(action, inventory, [name], local=sensor is None,
+                                                  become_file=files.get("become", ""),
+                                                  user_password_file=files.get("user", ""), invoke=call)
+                show_sudo_status(name, results[name], console)
+                if code == 130:
+                    return 130
+                failed |= bool(code)
+    except OSError as err:
+        raise SudoError(str(err)) from err
+    finally:
+        for path in dict.fromkeys((args.become_file, args.user_password_file)):
+            if path:
+                say.hint(f"Remove the password file you provided when no longer needed: {path}", console.file)
+    return int(failed)
 
 
 def renew_certificate(registry, addresses, console, yes: bool, restart: bool) -> bool:
@@ -1872,6 +2011,8 @@ def dispatch(argv: List[str]) -> int:
             except tsensors.SensorsError as err:
                 error(str(err))
                 return 1
+        if args.command == "sudo":
+            return run_sudo(args)
         if args.command == "edition":
             return run_edition(args)
         if args.command == "check":
@@ -1904,7 +2045,7 @@ def dispatch(argv: List[str]) -> int:
             return print_ps(args.watch)
         if args.command == "images":
             return print_images()
-    except (ops.OpsError, bootstrap.BootstrapError) as err:
+    except (ops.OpsError, bootstrap.BootstrapError, SudoError) as err:
         error(str(err))
         return 1
     return 2

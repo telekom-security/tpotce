@@ -4,8 +4,10 @@ import json
 import os
 import re
 import stat
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -124,3 +126,42 @@ def read_results(path: str) -> Dict[str, ModeStatus]:
     if not results:
         raise SudoError("No sudo-mode result was returned.")
     return results
+
+
+def execute(action: str, inventory: str, hosts: List[str], *, local: bool = False,
+            become_file: str = "", user_password_file: str = "", repo_dir: str = REPO_DIR,
+            invoke: Optional[Callable] = None) -> Tuple[int, Dict[str, ModeStatus]]:
+    from tpotctl import bootstrap
+    invoke = invoke or bootstrap.run_child
+    with tempfile.TemporaryDirectory(prefix="tpot-sudo-") as directory:
+        path = os.path.join(directory, "results")
+        args = command(action, inventory, become_file=become_file, user_password_file=user_password_file,
+                       result_file=path, repo_dir=repo_dir)
+        if local:
+            args += ["-c", "local"]
+        try:
+            code = invoke(args, stdin=subprocess.DEVNULL, cwd=repo_dir)
+            try:
+                size = os.path.getsize(path)
+            except FileNotFoundError:
+                size = 0
+            results = read_results(path) if size else {}
+        except OSError as err:
+            raise SudoError(f"Cannot run the sudo-mode play: {err}") from err
+        if set(results) - set(hosts):
+            raise SudoError("The sudo-mode play returned an unexpected host.")
+        for host in hosts:
+            if host not in results:
+                results[host] = ModeStatus(error="No sudo result. Check the SSH connection and sudo access "
+                                                "in the Ansible output.")
+        if code == 130:
+            return 130, results
+        return int(bool(code) or any(status.error for status in results.values())), results
+
+
+def summary(status: ModeStatus) -> str:
+    if status.error:
+        return status.error
+    if status.password_required is None:
+        return "Sudo password requirement unknown"
+    return "Sudo password required" if status.password_required else "Sudo password not required"

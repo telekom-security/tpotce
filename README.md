@@ -658,6 +658,17 @@ At the end of a later installation, stale temporary grants are removed only afte
 sudo path has been verified; an active root installer keeps its grant until its own cleanup.
 If safe removal is impossible, a warning identifies the retained grant and the installer's
 boot deletion instruction is removed so the next reboot cannot lock out the user.
+
+After installation, use `tpot sudo` to inspect sudo and `tpot sudo secure` or
+`tpot sudo convenient` to change it. On a HIVE, `tpot sensors sudo [NAME ...] status|secure|convenient`
+does the same over SSH using the registry; omit names for all registered sensors.
+Changes ask first (`-y` confirms). If a password is needed without a terminal, supply a private
+`--become-file FILE`; secure mode also needs `--user-password-file FILE` when the account has no
+usable password. The latter sets only missing passwords, never replaces an existing one.
+The effective state is reported even when a foreign rule still permits passwordless sudo.
+If a sudo group was added, existing local sessions need a new login; SSH connections managed by
+the play are refreshed automatically. Failed targets are reported separately and make the command
+fail; successful targets can still change. These operations remain available during configuration drift.
 <br><br>
 
 ## Testing a Branch
@@ -999,14 +1010,16 @@ header instead of letting its path squeeze out the form.
 | `tpot env [list [--all] [--show-secrets]]` | *Settings* (*All settings*) | every host | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
 | `tpot env get KEY` / `tpot env set KEY=VALUE …` | *Settings* | every host | read or change a setting, it is only written if it is valid afterwards |
 | `tpot env check` | `ctrl+f` *Check the settings* | every host | checks `.env` as T-Pot does on start, exit code 1 on errors |
+| `tpot sudo [status\|secure\|convenient] [-y] [--become-file FILE] [--user-password-file FILE]` | *Settings* (Host) | T-Pot host | checks or changes this login user's sudo mode; foreign rules stay untouched, the effective password requirement is shown |
 | `tpot llm [detect [--scan]\|models\|test]` | *LLM* | every host | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
 | **Access** | | | |
 | `tpot sensors [list\|add\|remove\|set\|cert\|import]` | *Sensors* (`set` is *Edit*, `import` is *Take over*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
+| `tpot sensors sudo [NAME ...] status\|secure\|convenient [-y] [--become-file FILE] [--user-password-file FILE]` | *Sensors* | T-Pot host, HIVE | the same sudo-mode operation over SSH, on the named registered sensors or all when no names are given; uses their registered login users and ports |
 | `tpot users [list\|add\|passwd\|remove\|import]` | *Web users* (`import` is *Take over*) | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | **Data & maintenance** | | | |
 | `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--sensor-history] [--adopt] [--force] [--accept-data-loss]` | *Elastic* | T-Pot host, HIVE | event retention (`TPOT_ES_RETENTION`, policy `tpot`), or with `--sensor-history` heartbeat history (`TPOT_SENSOR_STATUS_RETENTION`, policy `tpot-sensor-status`); a shorter time always asks first (also with `-y`; without a terminal `--accept-data-loss`), T-Pot never shortens it on its own, and lists the indices it deletes; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value), `DAYS` alone writes only `.env` then and says so (exit 0), as the pages do; where Elasticsearch cannot be read it says why and writes only `.env`. `status` shows both retentions, `TPOT_KIBANA_OBJECTS` and what an import would bring (new, to update, the same, yours), or why Kibana cannot be read |
 | `tpot elastic export [FILE]` / `tpot elastic import [--mode add\|update\|overwrite] [--dry-run] [-y]` / `tpot elastic import --prune [--dry-run] [-y]` / `tpot elastic restore FILE [-y]` | *Elastic* | T-Pot host, HIVE (with Kibana) | T-Pot's [Kibana objects](#kibana-objects): `export` saves every object into `~/tpot_backups` (or into the new `FILE`); `import` brings T-Pot's objects in as the mode does (default `update`: the missing and the unchanged ones, yours stay), `--dry-run` only shows what it would do, `overwrite` lists the objects of yours it replaces and asks first (`-y` confirms, without a terminal it needs `-y`, exit 2); `import --prune` imports nothing, it lists the unchanged objects of earlier releases that this one no longer ships and removes them after an export and its question (default no, `-y` confirms, without a terminal it needs `-y`, exit 2; with `--mode` exit 2); `restore` checks the file, asks and imports every object of it, the advanced settings too; `restore` and `import` with `update` or `overwrite` export first and import nothing if that fails (`add` replaces nothing and makes no export); exit 1 on an error or an object Kibana refused, "This edition runs no Kibana." where it has none |
-| `tpot install [--classic]` | `ctrl+f` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
+| `tpot install [--classic] [--sudo-nopasswd] [--become-file FILE] [--user-password-file FILE]` | `ctrl+f` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
 | `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` (naming the size of the Elasticsearch data when the archive holds it) |
 | `tpot setup [--force] [--wheels DIR]` | *Update & backup* (*Rebuild the Manager's packages*) | every host | sets up or refreshes the Python packages of `tpot`; `--force` builds the venv anew, next to the old one, swapped when it works; `--wheels` installs from a folder of wheels first, without the internet (the T-Pot ISO has them, default `TPOT_WHEELS`), PyPI only when they do not fit |
 | `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot.service` |

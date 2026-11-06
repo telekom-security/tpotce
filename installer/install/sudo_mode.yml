@@ -66,6 +66,13 @@
       throttle: 1
       when: tpot_sudo_result_file | default('') | length > 0
 
+    # reset_connection ignores its own when condition.
+    - name: Reconnect with updated login groups
+      ansible.builtin.include_tasks: sudo_reconnect.yml
+      when:
+        - tpot_sudo_outcome is changed
+        - ansible_connection | default('ssh') != 'local'
+
     - name: Report a refused sudo-mode operation
       ansible.builtin.fail:
         msg: "{{ tpot_sudo_outcome.msg | default('Sudo-mode operation failed.') }}"

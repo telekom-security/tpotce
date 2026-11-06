@@ -6,7 +6,9 @@ import os
 from pathlib import Path
 import pwd
 import re
+import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -269,6 +271,7 @@ class LinuxModeTest(unittest.TestCase):
         self.assertTrue(result["alternative"])
         self.assertTrue(result["password_required"])
         self.assertIn("sudo", self.groups())
+        self.assertTrue(any("new login" in text for text in result["warnings"]), result)
         self.assertNotEqual(self.probe().returncode, 0)
         self.assertEqual(self.probe(self.password).returncode, 0)
 
@@ -504,6 +507,89 @@ tpot_sudo.apply("tpot_test_sudo", "secure")
 
     def test_normal_controller_uses_the_password_file_for_become(self):
         self.normal_controller_become()
+
+    def test_controller_uses_the_registered_ssh_port_and_login_user(self):
+        self.assertIsNotNone(shutil.which("sshd"), "The disposable test image needs openssh-server.")
+        self.set_password()
+        self.grant()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o755)
+            client_key, host_key = root / "client", root / "host"
+            for path in (client_key, host_key):
+                self.run_command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(path))
+            home = Path(pwd.getpwnam(self.user).pw_dir)
+            authorized = home / "authorized_keys"
+            shutil.copyfile(str(client_key) + ".pub", authorized)
+            os.chown(authorized, self.uid, pwd.getpwnam(self.user).pw_gid)
+            authorized.chmod(0o600)
+            with socket.socket() as port_socket:
+                port_socket.bind(("127.0.0.1", 0))
+                port = port_socket.getsockname()[1]
+            Path("/run/sshd").mkdir(mode=0o755, exist_ok=True)
+            config = root / "sshd_config"
+            config.write_text(f"""Port {port}
+ListenAddress 127.0.0.1
+HostKey {host_key}
+PidFile {root / 'sshd.pid'}
+AuthorizedKeysFile {authorized}
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+UsePAM no
+AllowUsers {self.user}
+Subsystem sftp internal-sftp
+""")
+            server = subprocess.Popen([shutil.which("sshd"), "-D", "-e", "-f", str(config)],
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            try:
+                deadline = time.monotonic() + 5
+                while server.poll() is None:
+                    try:
+                        with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                            break
+                    except OSError:
+                        if time.monotonic() >= deadline:
+                            self.fail("The isolated SSH server did not become ready.")
+                        time.sleep(0.02)
+                self.assertIsNone(server.poll(), "The isolated SSH server stopped.")
+                inventory = root / "inventory"
+                inventory.write_text(
+                    f"edge ansible_host=127.0.0.1 ansible_user={self.user} ansible_port={port} "
+                    f"ansible_ssh_private_key_file={client_key} ansible_python_interpreter=/usr/bin/python3 "
+                    f"ansible_ssh_args='-o ControlMaster=auto -o ControlPersist=30s -o ControlPath={root / 'control'} "
+                    f"-o BatchMode=yes "
+                    f"-o StrictHostKeyChecking=accept-new "
+                    f"-o UserKnownHostsFile={root / 'known_hosts'}'\n")
+                password_file = root / "password"
+                password_file.write_text(self.password + "\n")
+                password_file.chmod(0o600)
+                script = """
+import sys
+from tpotctl import sudo_mode
+code, results = sudo_mode.execute("secure", sys.argv[1], ["edge"])
+if code:
+    raise SystemExit(code)
+status = results["edge"]
+assert status.user == sys.argv[2], status
+assert status.own_rule == "absent", status
+assert status.password_required is True, status
+code, results = sudo_mode.execute("status", sys.argv[1], ["edge"], become_file=sys.argv[3])
+assert code == 0, results
+assert results["edge"].password_required is True, results
+"""
+                proc = self.run_command("python3", "-", str(inventory), self.user, str(password_file),
+                                        input=script, check=False)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertNotIn("does not support when", proc.stdout + proc.stderr)
+                self.assertNotIn(self.password, proc.stdout + proc.stderr)
+                self.assertFalse(Path(OWN).exists())
+                self.assertEqual(self.probe(self.password).returncode, 0)
+            finally:
+                if (root / "control").exists():
+                    self.run_command("ssh", "-S", str(root / "control"), "-p", str(port), "-O", "exit",
+                                     f"{self.user}@127.0.0.1", check=False)
+                self.stop_root_child(server)
 
     def test_controller_can_authenticate_an_existing_whitespace_only_password(self):
         self.password = "    "

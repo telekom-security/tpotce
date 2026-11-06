@@ -393,6 +393,7 @@ def apply(user, action, *, password="", keep=False, prepare=False, cleanup_insta
             or account.pw_shell.rsplit("/", 1)[-1] in ("false", "nologin", "")):
         raise SudoError("Choose a normal login user, not root or a service account.")
     changes = []
+    warnings = []
     try:
         with _lock():
             sudo = _sudo()
@@ -421,9 +422,11 @@ def apply(user, action, *, password="", keep=False, prepare=False, cleanup_insta
                     changes.append("Set the user password (also used by SSH when password login is enabled).")
                 if before["alternative"] is not True:
                     _ensure_alternative(user, account.pw_uid, sudo, changes)
+                    warnings.append("Existing sessions need a new login to use the added sudo group; "
+                                    "log out and back in before further local sudo commands.")
             if not prepare and _set_rule(user, account.pw_uid, sudo, action == "convenient"):
                 changes.append("Installed the T-Pot sudo rule." if action == "convenient" else "Removed the T-Pot sudo rule.")
-            return _finish(user, account.pw_uid, sudo, changes, cleanup_install and not prepare)
+            return _finish(user, account.pw_uid, sudo, changes, cleanup_install and not prepare, warnings)
     except SudoError as err:
         err.changes = changes
         raise
