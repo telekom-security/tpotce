@@ -10,6 +10,7 @@ nothing touches the host, the real checkout, its .env or ~/.config/tpotce, nothi
 import hashlib
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import signal
@@ -1147,6 +1148,101 @@ class UninstallShTest(Scripts):
         write(os.path.join(self.tpotce, "version"), NEW + "\n")
         write(os.path.join(self.tpotce, "update.sh"),
               "#!/bin/sh\necho \"update.sh $*\" >> \"$HOME/calls\"\nexit \"${FAKE_BACKUP_RC:-0}\"\n", 0o755)
+        for name in ("tpotctl/sudo_mode.py", "installer/install/sudo_mode.yml",
+                     "installer/install/sudo_reconnect.yml", "installer/install/library/tpot_sudo.py",
+                     "installer/remove/tpot.yml"):
+            write(os.path.join(self.tpotce, name), base.read(name))
+
+    def test_safe_remove_runs_from_staging_after_checkout_removal(self):
+        write(os.path.join(self.bin, "ansible-playbook"), """#!/usr/bin/env python3
+import json, os, pathlib, sys
+home = pathlib.Path.home()
+args = sys.argv[1:]
+with (home / "calls").open("a") as stream:
+    stream.write("ansible-playbook " + " ".join(args) + "\\n")
+play = pathlib.Path(args[0])
+if play.name == "sudo_mode.yml":
+    assert not (home / "tpotce").exists(), "sudo must stay until the last privileged removal"
+    assert play.is_file() and (play.parent / "sudo_reconnect.yml").is_file()
+    assert (play.parent / "library/tpot_sudo.py").is_file()
+    variables = json.loads(pathlib.Path(args[args.index("-e") + 1][1:]).read_text())
+    assert variables["tpot_sudo_action"] == "safe_remove"
+    assert variables["tpot_cleanup_install"] is True
+    assert variables["tpot_keep_sudo_rule"] is True
+    (home / "sudo-stage").write_text(str(play.parent))
+""", 0o755)
+        result = self.run_merged(self.script, "-y", "--keep-sudo-rule")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("sudo_mode.yml", self.calls())
+        stage = Path(self.home, "sudo-stage").read_text()
+        self.assertFalse(os.path.exists(stage), "The uninstaller must remove its private staging directory.")
+
+    def test_uninstall_rejects_public_password_files_before_any_removal(self):
+        password = os.path.join(self.home, "sudo-password")
+        write(password, "not-a-real-password\n", 0o644)
+        result = self.run_merged(self.script, "-y", "-B", password)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("chmod 600", result.stdout)
+        self.assertTrue(os.path.isdir(self.tpotce))
+        self.assertNotIn("ansible-playbook", self.calls())
+
+    def test_password_cleanup_failure_is_reported_and_fails_the_run(self):
+        password = os.path.join(self.home, "handover-password")
+        write(password, "not-a-real-password\n", 0o600)
+        write(os.path.join(self.bin, "rm"), '#!/bin/sh\ncase "$*" in *"/handover-password") exit 1 ;; esac\n'
+              f'exec {shutil.which("rm")} "$@"\n', 0o755)
+        result = self.run_merged(self.script, "-y", "-B", password, TPOT_REMOVE_BECOME_FILE="1")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("temporary password file", result.stdout)
+        self.assertTrue(os.path.isfile(password))
+        self.assertNotIn("not-a-real-password", result.stdout)
+
+    def test_backup_receives_the_private_password_copy(self):
+        password = os.path.join(self.tpotce, "sudo-password")
+        write(password, "  not-a-real-password  \n", 0o600)
+        write(os.path.join(self.tpotce, "update.sh"), """#!/usr/bin/env python3
+import pathlib, sys
+args = sys.argv[1:]
+assert "-B" in args, "backup needs the same sudo credential"
+path = pathlib.Path(args[args.index("-B") + 1])
+assert path.stat().st_mode & 0o777 == 0o600
+assert path.read_text() == "  not-a-real-password  \\n"
+assert "tpotce" not in path.parts, "the private copy must survive checkout removal"
+(pathlib.Path.home() / "backup-ran").touch()
+""", 0o755)
+        result = self.run_merged(self.script, "-y", "-k", "-B", password)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(os.path.isfile(os.path.join(self.home, "backup-ran")))
+
+    def test_lost_passwordless_access_never_prompts_in_an_unattended_run(self):
+        write(os.path.join(self.bin, "sudo"), """#!/bin/sh
+if [ "$*" = "-n -k true" ]; then
+  if [ -e "$HOME/sudo-checked" ]; then exit 1; fi
+  touch "$HOME/sudo-checked"
+  exit 0
+fi
+exit 0
+""", 0o755)
+        result = self.run_merged(self.script, "-y")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("sudo access changed", result.stdout)
+        self.assertNotIn("ansible-playbook", self.calls())
+        self.assertTrue(os.path.isdir(self.tpotce))
+
+    def test_failed_final_sudo_cleanup_cannot_report_success(self):
+        write(os.path.join(self.bin, "ansible-playbook"),
+              '#!/bin/sh\ncase "$1" in */sudo_mode.yml) echo "Sudo cleanup refused"; exit 1 ;; esac\nexit 0\n', 0o755)
+        result = self.run_merged(self.script, "-y")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("[FAILED] - Sudo cleanup failed", result.stdout)
+        self.assertNotIn("[OK] - Sudo access checked", result.stdout)
+        self.assertFalse(os.path.isdir(self.tpotce))
+
+    def test_gum_remains_available_through_the_final_summary(self):
+        output = ui.plain(self.at_terminal(self.script, "-y"))
+        self.assertIn("T-Pot is uninstalled", output)
+        self.assertIn("Backups in ~/tpot_backups stay", output)
+        self.assertNotIn("No such file or directory", output)
 
     def test_help(self):
         result = self.run_script(self.script, "-h")

@@ -759,6 +759,16 @@ To uninstall T-Pot run `tpot uninstall` (or *Uninstall ...* on the *Update & bac
 ~/tpotce/uninstall.sh -y -B file # no questions, the sudo password from a file
 ```
 `-y` requires passwordless `sudo` or `-B`, just like `install.sh -s`. Backups in `~/tpot_backups` are kept. Once the uninstall is finished reboot the machine `sudo reboot`
+
+T-Pot's own sudo rule is removed only after the last privileged cleanup, and only if the account
+has a usable password and another verified sudo route. Otherwise it stays with a warning.
+Foreign rules are never changed. To keep T-Pot's rule explicitly, choose **Keep T-Pot's sudo rule**
+in the assistant or add `--keep-sudo-rule` to `tpot uninstall` or `uninstall.sh`.
+Stale temporary installer grants are cleaned up only when safe; an active installer keeps its grant.
+The `-B` file must be your own regular private file (`chmod 600`). A private copy survives removal
+of the checkout and also supplies an optional backup; temporary copies are deleted at the end.
+Delete your supplied file when it is no longer needed. After removing passwordless sudo, the reboot
+may ask for your account password.
 <br><br>
 
 # First Start
@@ -1027,7 +1037,7 @@ header instead of letting its path squeeze out the form.
 | `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` (naming the size of the Elasticsearch data when the archive holds it) |
 | `tpot setup [--force] [--wheels DIR]` | *Update & backup* (*Rebuild the Manager's packages*) | every host | sets up or refreshes the Python packages of `tpot`; `--force` builds the venv anew, next to the old one, swapped when it works; `--wheels` installs from a folder of wheels first, without the internet (the T-Pot ISO has them, default `TPOT_WHEELS`), PyPI only when they do not fit |
 | `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot.service` |
-| `tpot uninstall` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
+| `tpot uninstall [--keep-sudo-rule]` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like; keeps its sudo rule on request or if removing it risks access, see [Uninstall T-Pot](#uninstall-t-pot) |
 | `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log, after `--check-data-loss` and a question if the update would [lose data](#loss-of-data) |
 
 The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed.

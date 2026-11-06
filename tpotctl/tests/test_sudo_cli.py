@@ -81,8 +81,8 @@ class CliTest(unittest.TestCase):
                     out.write(json.dumps(dict(schema=1, host=name, result=status, error="")) + "\n")
         return 1 if self.missing.intersection(names) else 0
 
-    def run_cli(self, *args, stdin=None):
-        out = io.StringIO()
+    def run_cli(self, *args, stdin=None, stdout=None):
+        out = stdout if stdout is not None else io.StringIO()
         with redirect_stdout(out), redirect_stderr(out), mock.patch("sys.stdin", stdin or io.StringIO()):
             try:
                 code = cli.dispatch(list(args))
@@ -102,6 +102,17 @@ class CliTest(unittest.TestCase):
         self.assertIn("password required", text.lower())
         self.assertEqual([action for action, *_ in self.calls], ["status"])
         self.assertTrue(all(not path.exists() for path in self.paths))
+
+    def test_uninstall_keep_option_is_handed_to_the_assistant(self):
+        class Terminal(io.StringIO):
+            def isatty(self):
+                return True
+        tty = mock.Mock(isatty=lambda: True)
+        def assistant(*, keep_sudo_rule=False):
+            return 17 if keep_sudo_rule else 18
+        with mock.patch("tpotctl.screens.uninstall.run_uninstall", side_effect=assistant):
+            code, text = self.run_cli("uninstall", "--keep-sudo-rule", stdin=tty, stdout=Terminal())
+        self.assertEqual(code, 17, text)
 
     def test_a_change_needs_confirmation_but_not_current_configuration(self):
         code, _ = self.run_cli("sudo", "convenient")

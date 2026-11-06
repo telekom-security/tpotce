@@ -459,12 +459,15 @@ class Progress:
 Handover = Tuple[List[str], Dict[str, str]]
 
 
-def uninstall_handover(backup: bool, sudo_password: str = "", script: str = UNINSTALL_SH) -> Handover:
+def uninstall_handover(backup: bool, sudo_password: str = "", script: str = UNINSTALL_SH,
+                      *, keep_sudo_rule: bool = False) -> Handover:
     """argv and environment for uninstall.sh, which tpot execs; the password file is
     removed by uninstall.sh (TPOT_REMOVE_BECOME_FILE), tpot is gone by then."""
     argv = [script, "-y"]
     if backup:
         argv.append("-k")
+    if keep_sudo_rule:
+        argv.append("--keep-sudo-rule")
     env = dict(os.environ)
     if sudo_password:
         handle, path = tempfile.mkstemp(prefix=".tpot-uninstall-", dir=secret_dir())

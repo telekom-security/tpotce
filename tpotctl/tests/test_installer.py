@@ -973,6 +973,20 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
 
 class UninstallHandoverTest(unittest.TestCase):
 
+    @unittest.skipUnless(textual, "run with the T-Pot Manager venv")
+    def test_exec_failure_removes_the_handover_password_file(self):
+        from pathlib import Path
+        from unittest import mock
+        from tpotctl.screens.uninstall import run_handover
+        target = installer.uninstall_handover(False, "not-a-real-password", script="/missing/uninstall.sh")
+        argv, _ = target
+        path = Path(argv[argv.index("-B") + 1])
+        self.addCleanup(path.unlink, missing_ok=True)
+        with mock.patch("os.chdir"), mock.patch("os.execve", side_effect=OSError("exec failed")):
+            with self.assertRaisesRegex(OSError, "exec failed"):
+                run_handover(target)
+        self.assertFalse(path.exists(), "A failed exec must not abandon the collected sudo password.")
+
     def test_arguments_and_password_file(self):
         argv, env = installer.uninstall_handover(backup=True, sudo_password="pw", script="/x/uninstall.sh")
         self.assertEqual(argv[:3], ["/x/uninstall.sh", "-y", "-k"])
@@ -998,6 +1012,22 @@ class UninstallHandoverTest(unittest.TestCase):
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
 class UninstallScreenTest(unittest.IsolatedAsyncioTestCase):
+
+    async def test_explicit_keep_sudo_rule_reaches_the_uninstaller(self):
+        from tpotctl.screens.uninstall import UninstallApp
+        app = UninstallApp(sudo_mode="passwordless", hostname="honey")
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            self.assertTrue(app.screen.query("#un-keep-sudo"), "Uninstall must offer keeping the sudo rule.")
+            self.assertFalse(app.screen.query_one("#un-keep-sudo").value)
+            app.screen.query_one("#un-keep-sudo").value = True
+            app.screen.query_one("#un-backup").value = False
+            app.screen.query_one("#un-host").value = "honey"
+            await pilot.pause()
+            app.screen.query_one("#un-go").press()
+            await pilot.pause()
+        argv, _ = app.return_value
+        self.assertIn("--keep-sudo-rule", argv)
 
     async def test_confirm_with_the_host_name(self):
         from tpotctl.screens.uninstall import UninstallApp

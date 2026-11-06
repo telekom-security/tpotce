@@ -79,6 +79,27 @@ def command(action: str, inventory: str, *, become_file: str = "", user_password
     return args
 
 
+def stage_uninstall(directory: str, *, repo_dir: str = REPO_DIR, become_file: str = "", keep: bool = False) -> None:
+    """Keep the shared play and credentials available after uninstall removes the checkout."""
+    password = read_password_file(become_file) if become_file else ""
+    if password:
+        become_file = os.path.join(directory, "become")
+        with open(become_file, "x", encoding="utf-8") as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(password + "\n")
+    os.mkdir(os.path.join(directory, "library"), 0o700)
+    for name in ("sudo_mode.yml", "sudo_reconnect.yml", "library/tpot_sudo.py"):
+        with open(os.path.join(repo_dir, "installer", "install", name), "rb") as source:
+            with open(os.path.join(directory, name), "xb") as target:
+                target.write(source.read())
+    variables = json.loads(command("safe_remove", "127.0.0.1,", become_file=become_file,
+                                   repo_dir=repo_dir, keep=keep)[-1])
+    variables["tpot_cleanup_install"] = True
+    with open(os.path.join(directory, "variables.json"), "x", encoding="utf-8") as stream:
+        os.fchmod(stream.fileno(), 0o600)
+        json.dump(variables, stream)
+
+
 def _status(record: dict) -> ModeStatus:
     error = record.get("error")
     if not isinstance(error, str):

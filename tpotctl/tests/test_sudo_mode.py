@@ -112,6 +112,29 @@ class RuleTest(unittest.TestCase):
 
 
 class ControllerTest(unittest.TestCase):
+    def test_uninstall_stages_the_play_and_private_credentials_outside_the_checkout(self):
+        from tpotctl import sudo_mode
+        self.assertTrue(hasattr(sudo_mode, "stage_uninstall"), "Uninstall needs a surviving copy of the shared play.")
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory, "stage")
+            stage.mkdir(mode=0o700)
+            secret = Path(directory, "a password file")
+            secret.write_text("  Distant-Otters!swim-47  \r\n")
+            secret.chmod(0o600)
+            sudo_mode.stage_uninstall(str(stage), become_file=str(secret), keep=True)
+            self.assertEqual((stage / "become").read_text(), "  Distant-Otters!swim-47  \n")
+            self.assertEqual((stage / "become").stat().st_mode & 0o777, 0o600)
+            for relative in ("sudo_mode.yml", "sudo_reconnect.yml", "library/tpot_sudo.py"):
+                self.assertEqual((stage / relative).read_bytes(),
+                                 Path(sudo_mode.REPO_DIR, "installer/install", relative).read_bytes())
+            variables = json.loads((stage / "variables.json").read_text())
+            self.assertEqual(variables["tpot_sudo_action"], "safe_remove")
+            self.assertTrue(variables["tpot_keep_sudo_rule"])
+            self.assertTrue(variables["tpot_cleanup_install"])
+            self.assertEqual(variables["tpot_become_password_file"], str(stage / "become"))
+            self.assertNotIn("Distant-Otters", json.dumps(variables))
+            self.assertTrue(secret.exists(), "The caller still owns its supplied password file.")
+
     def test_command_keeps_credentials_out_of_arguments_and_preserves_paths(self):
         from tpotctl import sudo_mode
         with tempfile.TemporaryDirectory() as directory:
@@ -315,6 +338,61 @@ class LinuxModeTest(unittest.TestCase):
         self.assertFalse(result["changed"])
         self.assertTrue(result["warnings"])
         self.assertEqual(self.probe().returncode, 0)
+
+    def test_uninstaller_keeps_access_until_checkout_removal_and_cleans_stale_grants(self):
+        from tpotctl import sudo_mode
+        self.grant()
+        boot = self.stale_install()
+        self.set_password()
+        self.run_command("usermod", "-aG", "sudo", self.user)
+        home = Path(pwd.getpwnam(self.user).pw_dir)
+        checkout, commands = home / "tpotce", home / "commands"
+        commands.mkdir()
+        names = ("uninstall.sh", "installer/lib/ui.sh", "version", "tpotctl/sudo_mode.py",
+                 "installer/install/sudo_mode.yml", "installer/install/sudo_reconnect.yml",
+                 "installer/install/library/tpot_sudo.py", "installer/remove/tpot.yml")
+        for name in names:
+            target = checkout / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(Path(sudo_mode.REPO_DIR, name), target)
+        secret = checkout / "sudo-password"
+        secret.write_text(self.password + "\n")
+        secret.chmod(0o600)
+        self.run_command("chown", "-R", self.user, str(checkout), str(commands))
+        wrapper = commands / "ansible-playbook"
+        wrapper.write_text(f"""#!/usr/bin/env python3
+import os, pathlib, sys
+args = sys.argv[1:]
+if args[0].endswith('/installer/remove/tpot.yml'):
+    sys.exit(0)  # Only the unrelated package/service removal is replaced.
+assert pathlib.Path(args[0]).name == 'sudo_mode.yml'
+assert not (pathlib.Path.home() / 'tpotce').exists()
+os.execv({shutil.which("ansible-playbook")!r}, ['ansible-playbook', *args])
+""")
+        wrapper.chmod(0o755)
+        proc = self.run_command("runuser", "-u", self.user, "--", "env",
+                                f"PATH={commands}:{os.environ['PATH']}", "TPOT_GUM=off",
+                                "bash", str(checkout / "uninstall.sh"), "-y", "-B", str(secret), check=False)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(checkout.exists())
+        self.assertFalse(Path(OWN).exists())
+        self.assertFalse(Path(TEMP).exists())
+        self.assertFalse(boot.exists())
+        self.assertNotIn(self.password, proc.stdout + proc.stderr)
+        self.assertEqual(self.probe(self.password).returncode, 0)
+
+    def test_remove_play_exposes_safe_cleanup_only_under_its_explicit_tag(self):
+        from tpotctl import sudo_mode
+        self.grant()
+        self.set_password()
+        self.run_command("usermod", "-aG", "sudo", self.user)
+        command = ("ansible-playbook", str(Path(sudo_mode.REPO_DIR, "installer/remove/tpot.yml")),
+                   "-i", "127.0.0.1,", "-c", "local", "--tags", "tpot_sudo", "--skip-tags", "always",
+                   "-e", json.dumps(dict(tpot_sudo_user=self.user)))
+        proc = self.run_command(*command, check=False)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(Path(OWN).exists(), "The explicit removal tag must invoke the shared safe_remove.")
+        self.assertEqual(self.probe(self.password).returncode, 0)
 
     def test_foreign_file_at_reserved_path_is_never_replaced(self):
         text = "# owned by an administrator\nroot ALL=(ALL) ALL\n"

@@ -76,9 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("-B", "--become-file", default="", metavar="FILE", help="private sudo password file")
     install.add_argument("--user-password-file", default="", metavar="FILE",
                          help="private new password for a user without a usable password")
-    sub.add_parser("uninstall", help="remove T-Pot from this host, with a backup first if you like "
+    uninstall = sub.add_parser("uninstall", help="remove T-Pot from this host, with a backup first if you like "
                                      "(uninstall.sh -y does it without questions, a loss of data of the backup "
                                      "needs a yes or --accept-data-loss)")
+    uninstall.add_argument("--keep-sudo-rule", action="store_true", help="keep T-Pot's sudo rule after removal")
     env = sub.add_parser("env", help="list, check and change the settings in .env (default: list)")
     actions = env.add_subparsers(dest="env_command", metavar="ACTION")
     listing = actions.add_parser("list", help="the settings of this T-Pot, secrets masked")
@@ -2035,7 +2036,7 @@ def dispatch(argv: List[str]) -> int:
                 error("tpot uninstall asks first and needs a terminal, without questions: uninstall.sh -y")
                 return 2
             from tpotctl.screens.uninstall import run_uninstall
-            return run_uninstall()
+            return run_uninstall(keep_sudo_rule=args.keep_sudo_rule)
         if args.command in ("start", "stop", "restart"):
             return run_service(args.command)
         ops.require_linux_host(args.command)
