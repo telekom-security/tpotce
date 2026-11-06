@@ -252,10 +252,15 @@ def check_hive_address(address: str) -> str:
 
 
 def check_user(user: str) -> str:
-    """A Linux user name: capitals too (useradd of Fedora, RHEL and openSUSE takes them)."""
+    """A Linux user name: capitals too (useradd of Fedora, RHEL and openSUSE takes them), but not tpot."""
     # fullmatch: $ would match before a final newline, which splits the inventory line (as deploy.sh)
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,31}", user or ""):
         raise SensorsError(f"'{user}' is not a user name")
+    # the name the playbook gives the system user of the containers (uid 2000, /bin/false, no home):
+    # ssh as that user can only end with the key refused, late and without a reason
+    if user == "tpot":
+        raise SensorsError("'tpot' is the system user of the T-Pot containers (uid 2000, no shell, no home), nobody "
+                           "logs in as tpot: give the user T-Pot was installed with on the sensor")
     return user
 
 

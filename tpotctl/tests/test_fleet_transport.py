@@ -62,6 +62,14 @@ class TransportTest(SensorHome):
             fleet_transport.call(self.sensor, self.request, run=self.local_ssh)
         self.assertFalse(self.state.exists())
 
+    def test_a_login_named_tpot_never_reaches_ssh(self):
+        """A registered sensor with ssh_user tpot (set by hand): the system user of the containers has no
+        shell and no key, so the run fails at once with the reason and no ssh is started."""
+        sensor = sensors.Sensor(self.request["name"], host="sensor.example.org", ssh_user="tpot", ssh_port=12345)
+        with self.assertRaisesRegex(sensors.SensorsError, "system user of the T-Pot containers"):
+            fleet_transport.call(sensor, self.request, run=self.local_ssh)
+        self.assertEqual(self.sent, [])
+
     def test_start_status_and_discard_use_the_real_remote_bootstrap(self):
         fleet_transport.call(self.sensor, self.request, run=self.local_ssh)
         self.enable_worker_stubs()

@@ -303,8 +303,10 @@ fuCHECK_HIVE_ADDRESS () {
 
 fuCHECK_USER () {
   # fuCHECK_USER <text>: 0 for a user name of Linux, capitals too (useradd of Fedora, RHEL and
-  # openSUSE takes them), as tpot sensors add takes it
+  # openSUSE takes them), but not tpot, the system user of the containers: nobody logs in as tpot
+  # (as tpot sensors add takes it)
   local LC_ALL=C
+  [ "$1" != "tpot" ] || return 1
   [[ "$1" =~ ^[A-Za-z_][A-Za-z0-9_.-]{0,31}$ ]]
 }
 
@@ -438,7 +440,7 @@ fi
 
 # Ask for the remote user, a user name of Linux only (it goes to ssh)
 if ! fuASK_VALID "Enter the remote username T-Pot SENSOR was installed with:" fuCHECK_USER \
-       "Invalid user name. Please enter a Linux user name, e.g. tpot.";
+       "Invalid user name. Not tpot: it is the system user of the containers.";
   then
     fuUI_ERROR "You need to enter a user. Aborting."
     exit 1

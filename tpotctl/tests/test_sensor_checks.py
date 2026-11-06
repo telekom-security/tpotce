@@ -9,7 +9,8 @@ address of this HIVE and the SSH user on the SENSOR.
   brackets in that URL cannot work. So an IPv4 address or a host name tpotinit takes, an IPv6
   HIVE is refused with the way out: its host name.
 - The SSH user is a Linux user name, capitals included (useradd of Fedora, RHEL and openSUSE takes
-  them).
+  them), but never tpot: that name is the system user of the containers (uid 2000, /bin/false, no
+  home) on every installed SENSOR, nobody logs in as tpot.
 """
 
 import os
@@ -205,9 +206,33 @@ class UserTest(unittest.TestCase):
 
     def test_linux_user_names_with_capitals(self):
         """Marco: useradd of Fedora, RHEL and openSUSE takes capitals, such a SENSOR can be joined."""
-        for good in ("Marco", "Admin", "tpot", "tpot.admin-1", "_svc", "tpot_admin", "a" * 32, "A" * 32):
+        for good in ("Marco", "Admin", "Tpot", "tpot2", "mytpot", "tpot.admin-1", "_svc", "tpot_admin", "a" * 32,
+                     "A" * 32):
             with self.subTest(user=good):
                 self.assertEqual(sensors.check_user(good), good)
+
+    def test_tpot_is_the_system_user_of_the_containers_and_no_login(self):
+        """tpot is uid 2000 of the containers (/bin/false, no home) on every installed SENSOR: ssh as tpot
+        can only end late, with the key refused. It is refused here, with the reason and the way out, and
+        only that exact name: Linux names are case sensitive, Tpot or tpot2 are other users."""
+        with self.assertRaises(sensors.SensorsError) as caught:
+            sensors.check_user("tpot")
+        for word in ("'tpot'", "system user", "2000", "T-Pot was installed with"):
+            self.assertIn(word, str(caught.exception))
+
+    def test_every_place_that_takes_the_user_refuses_tpot(self):
+        sensor = sensors.Sensor("sensor-old-lynx", host="10.0.0.5", ssh_user="tpot")
+        for place, call in (("ssh", lambda: sensors.ssh_command("10.0.0.5", "tpot", "true")),
+                            ("ssh-copy-id", lambda: sensors.copy_id_command("10.0.0.5", "tpot")),
+                            ("ansible", lambda: sensors.deploy_command("10.0.0.5", "tpot")),
+                            ("inventory", lambda: sensors.inventory_text([sensor]))):
+            with self.subTest(place=place):
+                with self.assertRaisesRegex(sensors.SensorsError, "system user"):
+                    call()
+        registry = sensors.Registry(checkout(self), hasher=fake_hash)
+        with self.assertRaisesRegex(sensors.SensorsError, "system user"):
+            registry.update("sensor-old-lynx", ssh_user="tpot")
+        self.assertNotEqual(registry.get("sensor-old-lynx").ssh_user, "tpot")
 
     def test_nothing_that_breaks_a_command(self):
         for wrong in ("", "a b", "-l", "-oProxyCommand=x", "root;id", "Admin User", "1admin", "a" * 33, "a@b",
@@ -217,20 +242,20 @@ class UserTest(unittest.TestCase):
                     sensors.check_user(wrong)
 
     def test_a_trailing_newline_is_refused_like_deploy_sh_does(self):
-        """r2-RA 4: $ of re.match matches before a final newline, so "tpot\n" went through (tpot sensors
+        """r2-RA 4: $ of re.match matches before a final newline, so "admin\n" went through (tpot sensors
         set --ssh-user, a hand-edited sensors.json) and split the inventory line of sensors cert
         --distribute; fuCHECK_USER of deploy.sh ([[ =~ ]], $ only at the end) refuses it."""
         from tpotctl.tests.test_scripts_deploy import body
         functions = "\n".join(re.findall(r"^fu(?:TRIM|IS_\w+|CHECK_\w+) \(\) \{\n.*?^\}$", body("deploy.sh"),
                                          re.M | re.S))
-        for value in ("tpot\n", "tpot", "tpot\n\n"):
+        for value in ("admin\n", "admin", "admin\n\n"):
             with self.subTest(user=value):
                 bash = subprocess.run(["bash", "-c", functions + '\nfuCHECK_USER "$1"', "x", value],
                                       capture_output=True, universal_newlines=True, timeout=60).returncode == 0
                 self.assertEqual(accepts(sensors.check_user, value), bash)
         registry = sensors.Registry(checkout(self), hasher=fake_hash)
         with self.assertRaises(sensors.SensorsError):
-            registry.update("sensor-old-lynx", ssh_user="tpot\n")
+            registry.update("sensor-old-lynx", ssh_user="admin\n")
         self.assertNotIn("\n", registry.get("sensor-old-lynx").ssh_user)
 
     def test_no_host_name_check_takes_a_trailing_newline(self):

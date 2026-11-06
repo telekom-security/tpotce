@@ -148,8 +148,8 @@ class PreparationTest(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.home = Path(self.temporary.name)
         self.sensors = [
-            sensors.Sensor("sensor-a", host="sensor-a.example.org", ssh_user="tpot"),
-            sensors.Sensor("sensor-b", host="sensor-b.example.org", ssh_user="tpot"),
+            sensors.Sensor("sensor-a", host="sensor-a.example.org", ssh_user="admin"),
+            sensors.Sensor("sensor-b", host="sensor-b.example.org", ssh_user="admin"),
         ]
         self.registry = SimpleNamespace(
             env={"TPOT_VERSION": "target-release"},
@@ -180,7 +180,7 @@ class PreparationTest(unittest.TestCase):
             phase = self.worker_phases.get(sensor.name, "completed")
             return {"name": sensor.name, "phase": phase,
                     "exit_code": 0 if phase in ("completed", "rolled_back") else 1,
-                    "archive": "/home/tpot/tpot_backups/run_tpot_backup.tar",
+                    "archive": "/home/admin/tpot_backups/run_tpot_backup.tar",
                     "error": "synthetic worker failure"}
         if request["action"] == "runtime":
             return {"name": sensor.name, "ready": self.runtime_ready, "problems": []}
@@ -487,7 +487,7 @@ class PreparationTest(unittest.TestCase):
         self.worker_phases["sensor-a"] = "failed"
         result = coordinator.advance(state["run_id"], self.status, now=1240)
         self.assertEqual(result["targets"][0]["phase"], "failed")
-        self.assertEqual(result["targets"][0]["archive"], "/home/tpot/tpot_backups/run_tpot_backup.tar")
+        self.assertEqual(result["targets"][0]["archive"], "/home/admin/tpot_backups/run_tpot_backup.tar")
 
         result = coordinator.resolve_failure(state["run_id"], "sensor-a", "rollback")
         self.assertEqual(result["targets"][0]["phase"], "rollback_running")

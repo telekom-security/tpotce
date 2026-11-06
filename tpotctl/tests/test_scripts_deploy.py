@@ -239,12 +239,25 @@ class DeployAddressTest(Harness):
                 os.remove(os.path.join(self.home, "calls"))
 
     def test_user_names_with_dots_and_dashes_go_through(self):
-        for good in ("tpot.admin-1", "_svc", "a" * 32, "Marco", "Admin"):
+        for good in ("tpot.admin-1", "_svc", "a" * 32, "Marco", "Admin", "Tpot", "tpot2"):
             with self.subTest(user=good):
                 result = self.deploy(*self.answers(user=good))
                 self.assert_deployed(result)
                 self.assertEqual(self.args()[self.args().index("-u") + 1], good)
                 os.remove(os.path.join(self.home, "calls"))
+
+    def test_tpot_is_asked_again_it_is_the_system_user_of_the_containers(self):
+        """tpot is uid 2000 of the containers on the SENSOR (/bin/false, no home), nobody logs in as tpot:
+        sensors.check_user refuses it and so does deploy.sh; its warning gives the reason and no longer
+        offers tpot as the example."""
+        for _ in self.both():
+            result = self.deploy("y", "tpot", "admin", "10.0.0.2", "y", "10.0.0.1")
+            self.assertIn("### [WARNING] - Invalid user name", result.stdout)
+            self.assertIn("system user of the containers", result.stdout)
+            self.assertNotIn("e.g. tpot", result.stdout)
+            self.assert_asked_again(result)
+            self.assertEqual(self.args()[self.args().index("-u") + 1], "admin")
+            os.remove(os.path.join(self.home, "calls"))
 
     def test_an_empty_answer_ends_it(self):
         """No endless questions at the end of the input (Ctrl+D, Esc in gum): it stops before Ansible."""
@@ -273,7 +286,7 @@ class DeployAddressTest(Harness):
                                   "::ffff:1.2.3.256", "1:::2", ":1::2", "12345::1", "a_b", "host_name.example.com",
                                   "_sensor"]
         users = ["admin", "tpot.admin-1", "_svc", "a" * 32, "a" * 33, "Admin", "Marco", "A" * 32, "1admin", "a b",
-                 "-o", "root;id", "a@b", ""]
+                 "-o", "root;id", "a@b", "", "tpot", "Tpot", "tpot2", "mytpot"]
 
         def python(check, value):
             try:
