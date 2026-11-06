@@ -507,6 +507,80 @@ function fuTMPDIR () {
 	fi
 }
 
+function fuUPDATE_LOCK () {
+	local myDIR="${HOME}/.local/share/tpotce" myLOCK myMODE myMASK myRC=0
+	myLOCK="${myDIR}/update.lock"
+	if ! command -v flock >/dev/null 2>&1;
+	  then
+	    fuUI_ERROR "flock is required to serialize T-Pot updates (install util-linux)."
+	    return 1
+	fi
+	if ! command -v python3 >/dev/null 2>&1;
+	  then
+	    fuUI_ERROR "python3 is required to validate the update lock."
+	    return 1
+	fi
+	if ! (umask 077; mkdir -p "${myDIR}") || [ -L "${myDIR}" ] || [ ! -O "${myDIR}" ];
+	  then
+	    fuUI_ERROR "Cannot use the update lock directory ${myDIR}."
+	    return 1
+	fi
+	myMODE=$(stat -c %a -- "${myDIR}" 2>/dev/null || stat -f %Lp -- "${myDIR}" 2>/dev/null)
+	if ! [[ "${myMODE}" =~ ^[0-7]{3,4}$ ]] || (( (8#${myMODE} & 0022) != 0 ));
+	  then
+	    fuUI_ERROR "The update lock directory must not be writable by other users: ${myDIR}."
+	    return 1
+	fi
+	if [ -L "${myLOCK}" ] || { [ -e "${myLOCK}" ] && { [ ! -f "${myLOCK}" ] || [ ! -O "${myLOCK}" ]; }; };
+	  then
+	    fuUI_ERROR "Cannot use the update lock ${myLOCK}: expected a regular file owned by you."
+	    return 1
+	fi
+	# Keep the same open description through fuSELFUPDATE's exec; reopening would drop the lock.
+	if [ ! -e /dev/fd/7 ];
+	  then
+	    myMASK=$(umask)
+	    umask 077
+	    { exec 7>>"${myLOCK}"; } 2>/dev/null || myRC=$?
+	    umask "${myMASK}"
+	    if [ "${myRC}" -ne 0 ];
+	      then fuUI_ERROR "Cannot open the update lock ${myLOCK}."; return 1
+	    fi
+	fi
+	if ! python3 - "${myLOCK}" <<'PY'
+import os
+import stat
+import sys
+
+try:
+    opened = os.fstat(7)
+    named = os.lstat(sys.argv[1])
+    if not (stat.S_ISREG(named.st_mode) and opened.st_uid == os.geteuid()
+            and opened.st_nlink == 1
+            and (opened.st_dev, opened.st_ino) == (named.st_dev, named.st_ino)):
+        raise OSError("expected the same owned, regular, single-link file on descriptor 7")
+    os.fchmod(7, 0o600)
+except OSError as err:
+    print(err, file=sys.stderr)
+    sys.exit(1)
+PY
+	  then
+	    exec 7>&-
+	    fuUI_ERROR "Cannot secure the update lock ${myLOCK}."
+	    return 1
+	fi
+	flock -n 7 || myRC=$?
+	if [ "${myRC}" -ne 0 ];
+	  then
+	    exec 7>&-
+	    if [ "${myRC}" -eq 1 ];
+	      then fuUI_ERROR "Another T-Pot update or backup is already running."
+	      else fuUI_ERROR "Could not lock ${myLOCK} (flock exited with ${myRC})."
+	    fi
+	    return 1
+	fi
+}
+
 # One item of the summary at the end, i.e. fuDID ok "The images are pulled."
 function fuDID () {   # $1 = ok | fail | warn | next | info, $2 = text
 	# one line each: a newline in the text becomes a space, so an item never splits in two
@@ -4759,6 +4833,7 @@ if [ "${myCONFIRMED}" != "y" ]; then
   echo
   exit
 fi
+fuUPDATE_LOCK || exit 1
 # From here on every way out ends with the summary (fuEND)
 myRUNNING="1"
 [ -z "${myPREPARED}" ] || mySTOPPED="1"

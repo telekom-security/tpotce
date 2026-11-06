@@ -8,7 +8,9 @@ network, the real docker or the .env / ~/.config/tpotce of the user running the 
 """
 
 import os
+from pathlib import Path
 import re
+import select
 import shlex
 import shutil
 import stat
@@ -3081,6 +3083,159 @@ class ComposeAdoptTest(Scripts):
         self.assertTrue(self.compose().startswith("# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\n"),
                         self.compose()[:200])
         self.assertIn("rebuilt for this release", out)
+
+
+class UpdateLockTest(Scripts):
+
+    def setUp(self):
+        super().setUp()
+        self.lock_dir = os.path.join(self.home, ".local", "share", "tpotce")
+        self.lock = os.path.join(self.lock_dir, "update.lock")
+
+    def stop_holder(self, proc):
+        if proc.poll() is None:
+            proc.terminate()
+        try:
+            proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate(timeout=5)
+
+    def holder(self, handover=False):
+        source = f"source {shlex.quote(UPDATE_SH)}\n"
+        script = source + "fuUPDATE_LOCK || exit $?\n"
+        if handover:
+            # A fresh open must still be excluded before the restarted updater rechecks fd7.
+            probe = ("import fcntl, sys\n"
+                     f"with open({self.lock!r}, 'a') as lock:\n"
+                     "    try:\n"
+                     "        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+                     "    except BlockingIOError:\n"
+                     "        sys.exit(0)\n"
+                     "    sys.exit(42)\n")
+            real_flock = shutil.which("flock") or os.path.join(self.bin, "flock")
+            restarted = (source + "flock() {\n"
+                         f"{shlex.quote(sys.executable)} -c {shlex.quote(probe)} || return $?\n"
+                         f"{shlex.quote(real_flock)} \"$@\"\n"
+                         "}\nfuUPDATE_LOCK || exit $?\necho locked\nread -r answer\n")
+            script += "exec bash -c " + shlex.quote(restarted)
+        else:
+            script += "echo locked\nread -r answer\n"
+        proc = subprocess.Popen(["bash", "-c", script], cwd=self.tpotce,
+                                env=self.env(TPOT_GUM="off"), text=True,
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.addCleanup(self.stop_holder, proc)
+        self.assertTrue(select.select([proc.stdout], [], [], 10)[0], "lock holder did not answer")
+        line = proc.stdout.readline()
+        self.assertEqual(line, "locked\n", proc.communicate(timeout=5) if not line else line)
+        return proc
+
+    def test_contention_and_release_keep_the_same_private_inode(self):
+        proc = self.holder()
+        before = os.stat(self.lock)
+        self.assertEqual(stat.S_IMODE(before.st_mode), 0o600)
+        result = self.source_update("fuUPDATE_LOCK")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("already running", result.stderr)
+        proc.communicate(input="done\n", timeout=5)
+        self.assertEqual(proc.returncode, 0)
+        result = self.source_update("fuUPDATE_LOCK")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(os.stat(self.lock).st_ino, before.st_ino)
+
+    def test_exec_handover_never_releases_the_lock(self):
+        self.holder(handover=True)
+        result = self.source_update("fuUPDATE_LOCK")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("already running", result.stderr)
+
+    def test_termination_releases_the_lock_without_removing_it(self):
+        proc = self.holder()
+        proc.terminate()
+        proc.communicate(timeout=5)
+        self.assertTrue(os.path.isfile(self.lock))
+        result = self.source_update("fuUPDATE_LOCK")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_main_update_and_backup_refuse_before_sudo_or_logs(self):
+        self.holder()
+        for args in (("-y",), ("-y", "--backup-only")):
+            with self.subTest(args=args):
+                result = self.run_plain(UPDATE_SH, *args)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("already running", result.stderr)
+                self.assertEqual(self.calls(), "")
+                self.assertFalse(os.path.exists(os.path.join(self.home, "tpot_backups")))
+
+    def test_prepared_environment_does_not_bypass_contention(self):
+        self.holder()
+        result = self.source_update("fuUPDATE_LOCK", TPOT_UPDATE_PREPARED="1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("already running", result.stderr)
+
+    def test_readonly_and_invalid_invocations_do_not_create_a_lock(self):
+        for args in (("-h",), ("--not-an-option",), ("--check-data-loss",)):
+            with self.subTest(args=args):
+                self.run_plain(UPDATE_SH, *args)
+                self.assertFalse(os.path.exists(self.lock_dir))
+
+    def test_lock_symlink_is_refused_without_changing_its_target(self):
+        os.makedirs(self.lock_dir)
+        target = os.path.join(self.home, "keep")
+        Path(target).write_text("untouched\n", encoding="utf-8")
+        os.symlink(target, self.lock)
+        result = self.source_update("fuUPDATE_LOCK")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("lock", result.stderr.lower())
+        self.assertEqual(Path(target).read_text(encoding="utf-8"), "untouched\n")
+        self.assertTrue(os.path.islink(self.lock))
+
+    def test_shared_or_linked_state_directory_is_refused(self):
+        os.makedirs(self.lock_dir)
+        os.chmod(self.lock_dir, 0o777)
+        result = self.source_update("fuUPDATE_LOCK")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertFalse(os.path.exists(self.lock))
+        os.chmod(self.lock_dir, 0o700)
+        os.rmdir(self.lock_dir)
+        os.symlink(self.tpotce, self.lock_dir)
+        result = self.source_update("fuUPDATE_LOCK")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.tpotce, "update.lock")))
+
+    def test_lock_hardlink_is_refused_without_changing_the_other_file(self):
+        os.makedirs(self.lock_dir)
+        target = Path(self.home) / "keep"
+        target.write_text("untouched\n", encoding="utf-8")
+        target.chmod(0o644)
+        os.link(target, self.lock)
+        result = self.source_update("fuUPDATE_LOCK")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(target.read_text(encoding="utf-8"), "untouched\n")
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o644)
+
+    def test_unavailable_flock_is_an_explicit_failure(self):
+        result = self.source_update(
+            'command() { if [ "$1" = -v ] && [ "$2" = flock ]; then return 1; fi; '
+            'builtin command "$@"; }\nfuUPDATE_LOCK')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("flock", result.stderr)
+        self.assertFalse(os.path.exists(self.lock))
+
+    def test_unavailable_python_is_an_explicit_failure_before_creating_state(self):
+        result = self.source_update(
+            'command() { if [ "$1" = -v ] && [ "$2" = python3 ]; then return 1; fi; '
+            'builtin command "$@"; }\nfuUPDATE_LOCK')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("python3", result.stderr)
+        self.assertFalse(os.path.exists(self.lock_dir))
+
+    def test_flock_errors_are_not_reported_as_contention(self):
+        self.stub("flock", "#!/bin/sh\nexit 64\n")
+        result = self.source_update("fuUPDATE_LOCK")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("Could not lock", result.stderr)
+        self.assertNotIn("already running", result.stderr)
 
 
 class StopTest(Scripts):

@@ -1244,6 +1244,13 @@ T-Pot releases are offered through GitHub and can be pulled using `~/tpotce/upda
 ***If you made any relevant changes to the T-Pot config files make sure to create a backup first!***<br>
 ***Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!***<br>
 
+Only one update or `--backup-only` run can operate for the same T-Pot user at a time.
+A second run stops before sudo, logging or changes. The lock is
+`~/.local/share/tpotce/update.lock`, outside the checkout, and stays held when the
+updater restarts itself. Its file remains after the run; the operating system
+releases the lock when its holders exit. Do not delete the file to unlock it.
+Help and `--check-data-loss` do not acquire a lock or create its directory.
+
 The update script will ...
  - ***mercilessly*** overwrite local changes to be in sync with the branch the installation follows, `master` by default
  - write a backup to `~/tpot_backups/<date>_tpot_backup.tar` before it touches anything

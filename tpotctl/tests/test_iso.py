@@ -696,17 +696,6 @@ esac
 """
 
 
-FLOCK_STUB = """#!/bin/sh
-# flock -n <fd>: the lock of the open file of that fd (macOS has no flock)
-[ "$1" = -n ] || exit 64
-exec python3 -c 'import fcntl, sys
-try:
-    fcntl.flock(int(sys.argv[1]), fcntl.LOCK_EX | fcntl.LOCK_NB)
-except OSError:
-    sys.exit(1)' "$2"
-"""
-
-
 X_TOOLS = ("startx", "xauth", "Xorg", "xterm", "matchbox-window-manager")
 # terminal.sh of the tests: start.sh at once, as if X had come up; X does not come up
 TERMINAL_WORKS = 'echo "TERMINAL:${TPOT_ISO_TERMINAL_TRIED}"\n[ "$1" = -- ] || exit 2\nshift\nexec "$@"\n'
@@ -1119,7 +1108,7 @@ class StartTest(unittest.TestCase):
         self.assertIn(f"INSTALL -b master -r {url}", out)
 
     def test_one_installer_at_a_time(self):
-        stub(self.bin, "flock", FLOCK_STUB)
+        stub(self.bin, "flock", base.FLOCK_STUB)
         write(os.path.join(self.share, "install.sh"),
               f'#!/bin/sh\nif flock -n 7 7<"{self.lock}"; then echo "INSTALL FREE"; else echo "INSTALL HELD"; fi\n',
               0o755)
