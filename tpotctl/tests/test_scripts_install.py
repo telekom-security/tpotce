@@ -29,6 +29,10 @@ UNAME = base.UNAME               # Linux, FAKE_UNAME_S says otherwise
 AWK = shutil.which("awk") or "/usr/bin/awk"
 GUM_VERSION = re.search(r'myUI_GUM_VERSION="([^"]+)"', base.read("installer/lib/ui.sh")).group(1)
 NEW = "99.1.0"
+# the accounts and ids T-Pot cannot take over, and what to do about it: one table for install.sh, the
+# assistant and the playbook
+ACCOUNTS = json.loads(base.read("tpotctl/tests/account_cases.json"))
+ACCOUNT_CASES, ACCOUNT_WORDS = ACCOUNTS["cases"], ACCOUNTS["words"]
 
 STUBS = {
     # the os-release of the test, not the one of the host
@@ -36,6 +40,12 @@ STUBS = {
            "  [ \"$a\" = /etc/os-release ] && a=\"$HOME/os-release\"\n  set -- \"$@\" \"$a\"\ndone\n"
            f"exec {AWK} \"$@\"\n",
     "ss": "#!/bin/sh\nexit 0\n",
+    # the accounts of the test: getent answers from $HOME/etc/passwd and $HOME/etc/group (none exist by
+    # default), by name or by id as the real one does; whoami says FAKE_WHOAMI, else the real login
+    "getent": "#!/bin/sh\n[ -r \"$HOME/etc/$1\" ] || exit 2\n"
+              "awk -F: -v key=\"$2\" '$1 == key || $3 == key { print; found = 1; exit } END { exit !found }' "
+              "\"$HOME/etc/$1\"\n",
+    "whoami": "#!/bin/sh\n[ -z \"$FAKE_WHOAMI\" ] || { echo \"$FAKE_WHOAMI\"; exit 0; }\nexec id -un\n",
     "passwd": '#!/bin/sh\n[ "${FAKE_PASSWORD_STATE:-P}" != error ] || exit 1\n'
               'printf "%s %s 01/01/2020 0 99999 7 -1\\n" "$2" "${FAKE_PASSWORD_STATE:-P}"\n',
     # the packages of the host: none (dpkg-query fails), with FAKE_DPKG=ii all of them
@@ -586,6 +596,69 @@ PY
                     if marks:
                         self.assertEqual(self.marks(result.stdout)[-2:],
                                          ["@@tpot fail checks", "@@tpot phase failed"])
+
+    # T-Pot runs its containers as uid and gid 2000, the playbook makes the user and group tpot for them.
+    # The cases are tpotctl/tests/account_cases.json, the assistant and the playbook follow the same ones
+    # (test_installer.py).
+    def accounts(self, passwd=(), group=()):
+        """The accounts of the host: the getent stub answers from these lines, nothing else exists."""
+        for database, lines in (("passwd", passwd), ("group", group)):
+            write(os.path.join(self.home, "etc", database), "".join(line + "\n" for line in lines))
+
+    def test_a_foreign_tpot_account_stops_before_anything_happens(self):
+        """The containers of T-Pot need uid and gid 2000, the playbook makes the user and group tpot for them. A
+        login or account of that name, or a uid or gid 2000 of another name, stops here with the cause and the
+        way out, before a package is installed. On a real Debian the playbook turned an existing login tpot
+        into that system account without a word and stopped on a taken uid 2000 only after it had installed
+        Docker (the evidence of the stage 3 plan)."""
+        for case in ACCOUNT_CASES:
+            if not case["stop"]:
+                continue
+            for marks in ([], ["-M"]):
+                with self.subTest(case=case["case"], marks=marks):
+                    write(os.path.join(self.home, "calls"), "")
+                    self.accounts(case["passwd"], case["group"])
+                    result = self.install("-s", "-t", "s", *marks, FAKE_WHOAMI=case["login"])
+                    self.assertEqual(result.returncode, 1, result.stdout[-800:])
+                    for text in [ACCOUNT_WORDS[case["stop"]]] + case["says"]:
+                        self.assertIn(text, result.stdout)
+                    for tool in ("userdel", "groupdel"):
+                        if case["fix"] and tool in case["fix"]:
+                            self.assertIn(case["fix"], result.stdout)
+                        else:
+                            self.assertNotIn(tool, result.stdout)
+                    for text in case.get("silent", []):
+                        self.assertNotIn(text, result.stdout)
+                    self.assertEqual(self.calls(), "")
+                    if marks:
+                        self.assertEqual(self.marks(result.stdout)[-2:],
+                                         ["@@tpot fail checks", "@@tpot phase failed"])
+
+    def test_the_account_of_the_containers_and_free_names_pass(self):
+        """An installed T-Pot (update, reinstall) has the user and group tpot with uid and gid 2000, a stale group
+        of an interrupted run has gid 2000 too: nothing to stop. The accounts of others do not matter."""
+        for case in ACCOUNT_CASES:
+            if case["stop"]:
+                continue
+            with self.subTest(case=case["case"]):
+                write(os.path.join(self.home, "calls"), "")
+                self.accounts(case["passwd"], case["group"])
+                result = self.install("-s", "-t", "s", FAKE_WHOAMI=case["login"])
+                self.assertEqual(result.returncode, 0, result.stdout[-800:])
+                self.assertIn("ansible-playbook", self.calls())
+
+    def test_the_login_is_checked_even_where_getent_gives_no_answer(self):
+        """Only the login is known without account data (no getent, a broken NSS): tpot is refused, any other
+        login goes on, nothing else is guessed."""
+        write(os.path.join(self.bin, "getent"), "#!/bin/sh\nexit 127\n", 0o755)
+        write(os.path.join(self.home, "calls"), "")
+        result = self.install("-s", "-t", "s", FAKE_WHOAMI="tpot")
+        self.assertEqual(result.returncode, 1, result.stdout[-800:])
+        self.assertIn("as tpot", result.stdout)
+        self.assertEqual(self.calls(), "")
+        result = self.install("-s", "-t", "s", FAKE_WHOAMI="analyst")
+        self.assertEqual(result.returncode, 0, result.stdout[-800:])
+        self.assertIn("ansible-playbook", self.calls())
 
     def test_an_exported_cdpath_changes_neither_the_source_nor_the_files(self):
         """r3-RB 5: started as co/install.sh from the folder above its clone with an exported CDPATH,

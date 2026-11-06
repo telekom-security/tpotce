@@ -1,0 +1,27 @@
+{
+  "words": {
+    "login-account": "logged in as tpot",
+    "login-system": "as tpot",
+    "user": "The user tpot exists",
+    "group": "The group tpot exists",
+    "uid": "The uid 2000 belongs to",
+    "gid": "The gid 2000 belongs to the group"
+  },
+  "cases": [
+    {"case": "the login is a regular account named tpot", "login": "tpot", "passwd": ["tpot:x:1000:1000::/home/tpot:/bin/bash"], "group": ["tpot:x:1000:"], "stop": "login-account", "says": ["uid 1000"], "fix": "sudo userdel -r tpot", "note": "the playbook would turn the account of the login into the system user (R1 of the stage 3 evidence)"},
+    {"case": "the login is the account of the containers", "login": "tpot", "passwd": ["tpot:x:2000:2000::/nonexistent:/bin/false"], "group": ["tpot:x:2000:"], "stop": "login-system", "says": [], "fix": null, "note": "nothing to remove, run it as a regular user"},
+    {"case": "the login tpot is no account of this host", "login": "tpot", "passwd": [], "group": [], "stop": "login-system", "says": [], "fix": null, "note": "the name alone stops it, whatever the account data say or fail to say"},
+    {"case": "a regular account named tpot exists", "login": "analyst", "passwd": ["tpot:x:1000:1000::/home/tpot:/bin/bash"], "group": ["tpot:x:1000:"], "stop": "user", "says": ["uid 1000"], "fix": "sudo userdel -r tpot", "note": "R2: the playbook turned it into the system user, login and home gone, no word"},
+    {"case": "a regular account named tpot has another group", "login": "analyst", "passwd": ["tpot:x:1000:1000::/home/tpot:/bin/bash"], "group": ["tpot:x:1001:"], "stop": "user", "says": ["uid 1000"], "fix": "sudo userdel -r tpot", "note": "the user comes first, the group goes with it"},
+    {"case": "a group named tpot has another gid", "login": "analyst", "passwd": [], "group": ["tpot:x:1001:analyst"], "stop": "group", "says": ["gid 1001"], "fix": "sudo groupdel tpot", "note": "a group without a user is removed with groupdel"},
+    {"case": "uid 2000 belongs to another name", "login": "analyst", "passwd": ["svc2000:x:2000:100::/:/bin/false"], "group": [], "stop": "uid", "says": ["svc2000"], "fix": null, "note": "R3a: the playbook stopped at useradd after Docker, nothing to remove here, it is not ours"},
+    {"case": "gid 2000 belongs to another name", "login": "analyst", "passwd": [], "group": ["grp2000:x:2000:"], "stop": "gid", "says": ["grp2000"], "fix": null, "note": "R3b: the playbook stopped at groupadd after Docker"},
+    {"case": "the account is wrong and so is the uid", "login": "analyst", "passwd": ["tpot:x:1000:1000::/home/tpot:/bin/bash", "svc2000:x:2000:100::/:/bin/false"], "group": ["tpot:x:1000:"], "stop": "user", "says": ["uid 1000"], "fix": "sudo userdel -r tpot", "silent": ["svc2000"], "note": "only the first problem is named, in this order: login, user, group, uid, gid"},
+
+    {"case": "no account of it", "login": "analyst", "passwd": [], "group": [], "stop": null, "note": "a fresh host"},
+    {"case": "the account of an installed T-Pot", "login": "analyst", "passwd": ["tpot:x:2000:2000::/nonexistent:/bin/false"], "group": ["tpot:x:2000:"], "stop": null, "note": "update, reinstall"},
+    {"case": "the account of the containers with another primary group", "login": "analyst", "passwd": ["tpot:x:2000:100::/nonexistent:/bin/false"], "group": ["tpot:x:2000:"], "stop": null, "note": "the playbook sets the group, the uid is the one that counts"},
+    {"case": "its group only", "login": "analyst", "passwd": [], "group": ["tpot:x:2000:"], "stop": null, "note": "left behind by an interrupted run (R3a)"},
+    {"case": "the accounts of others", "login": "analyst", "passwd": ["analyst:x:1000:1000::/home/analyst:/bin/bash", "svc:x:2001:2001::/:/bin/false"], "group": ["analyst:x:1000:", "svc:x:2001:"], "stop": null, "note": "other names and ids do not matter"}
+  ]
+}

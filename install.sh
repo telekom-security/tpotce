@@ -1846,6 +1846,57 @@ check_new_password_strength() {
   return 0
 }
 
+tpot_account_problem() {
+  # tpot_account_problem <login>: whether this host can take the account of the T-Pot containers. They
+  # run as uid and gid 2000 and the playbook makes the system user and group tpot for them
+  # (installer/install/tpot.yml). An account or group named tpot that is something else would be
+  # rewritten there (login, shell and home gone), a uid or gid 2000 of another name stops it late. rc 0:
+  # nothing in the way; rc 1: myACCOUNT_ERROR says what is wrong, myACCOUNT_INFO what to do and
+  # myACCOUNT_FIX is the command that does it (none where there is nothing to remove). The accounts are
+  # read through getent (NSS) and never changed, without getent only the login is known. The assistant
+  # (tpotctl/installer.py) and the playbook follow the same rules.
+  local myLOGIN="$1" myENTRY myX myTPOT_UID="" myTPOT_GID="" myUID_OWNER="" myGID_OWNER=""
+  myACCOUNT_ERROR=""
+  myACCOUNT_INFO=""
+  myACCOUNT_FIX=""
+  if command -v getent >/dev/null 2>&1;
+    then
+      myENTRY=$(getent passwd tpot 2>/dev/null) && IFS=: read -r myX myX myTPOT_UID myX <<< "${myENTRY}"
+      myENTRY=$(getent group tpot 2>/dev/null) && IFS=: read -r myX myX myTPOT_GID myX <<< "${myENTRY}"
+      myENTRY=$(getent passwd 2000 2>/dev/null) && IFS=: read -r myUID_OWNER myX <<< "${myENTRY}"
+      myENTRY=$(getent group 2000 2>/dev/null) && IFS=: read -r myGID_OWNER myX <<< "${myENTRY}"
+  fi
+  if [ "${myLOGIN}" = tpot ] && [ -n "${myTPOT_UID}" ] && [ "${myTPOT_UID}" != 2000 ];
+    then
+      myACCOUNT_ERROR="You are logged in as tpot (uid ${myTPOT_UID}), a name T-Pot keeps for its containers."
+      myACCOUNT_INFO="The installer would turn this account into it. Log in as another user with sudo rights, remove this account from there and run the installer again:"
+      myACCOUNT_FIX="sudo userdel -r tpot"
+  elif [ "${myLOGIN}" = tpot ];
+    then
+      myACCOUNT_ERROR="The installer runs as tpot, the system user of the T-Pot containers."
+      myACCOUNT_INFO="Run it as a regular user with sudo rights."
+  elif [ -n "${myTPOT_UID}" ] && [ "${myTPOT_UID}" != 2000 ];
+    then
+      myACCOUNT_ERROR="The user tpot exists (uid ${myTPOT_UID}), a name T-Pot keeps for its containers."
+      myACCOUNT_INFO="The installer would turn it into that account, its login, shell and home would be gone. Remove it (not while it is logged in) and run the installer again:"
+      myACCOUNT_FIX="sudo userdel -r tpot"
+  elif [ -n "${myTPOT_GID}" ] && [ "${myTPOT_GID}" != 2000 ];
+    then
+      myACCOUNT_ERROR="The group tpot exists (gid ${myTPOT_GID}), a name T-Pot keeps for its containers."
+      myACCOUNT_INFO="The installer would change its gid. Remove the group and run the installer again:"
+      myACCOUNT_FIX="sudo groupdel tpot"
+  elif [ -n "${myUID_OWNER}" ] && [ "${myUID_OWNER}" != tpot ];
+    then
+      myACCOUNT_ERROR="The uid 2000 belongs to ${myUID_OWNER}, T-Pot needs it for its containers."
+      myACCOUNT_INFO="Give ${myUID_OWNER} another uid or remove that account, then run the installer again."
+  elif [ -n "${myGID_OWNER}" ] && [ "${myGID_OWNER}" != tpot ];
+    then
+      myACCOUNT_ERROR="The gid 2000 belongs to the group ${myGID_OWNER}, T-Pot needs it for its containers."
+      myACCOUNT_INFO="Give that group another gid or remove it, then run the installer again."
+  fi
+  [ -z "${myACCOUNT_ERROR}" ]
+}
+
 root_directory() {
   local myMODE
   [ -d "$1" ] && [ ! -L "$1" ] && [ "$(stat -c '%u:%g' -- "$1")" = "0:0" ] || return 1
@@ -3075,6 +3126,20 @@ if [ -n "${mySUPPORTED_VERSION}" ] && [ "${myCURRENT_VERSION}" != "${mySUPPORTED
   then
     fuUI_ERROR "The installer requires ${myCURRENT_DISTRIBUTION} ${mySUPPORTED_VERSION}, this system runs ${myCURRENT_VERSION}."
     fuUI_INFO "Please install the required OS version. See the T-Pot README for host requirements and support tiers."
+    echo
+    mark_failed
+    exit 1
+fi
+
+# The containers of T-Pot run as the user and group tpot (uid and gid 2000): stop before anything is
+# installed where that name or id is taken by something else, the playbook would rewrite such an
+# account or stop late. A root start checks the user it hands over to.
+if ! tpot_account_problem "${myROOT_USER:-${myUSER}}";
+  then
+    fuUI_ERROR "${myACCOUNT_ERROR}"
+    fuUI_INFO "T-Pot runs its containers as the system user and group tpot (uid and gid 2000)."
+    fuUI_INFO "${myACCOUNT_INFO}"
+    [ -z "${myACCOUNT_FIX}" ] || fuUI_HINT "${myACCOUNT_FIX}"
     echo
     mark_failed
     exit 1
