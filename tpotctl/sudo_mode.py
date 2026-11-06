@@ -186,3 +186,38 @@ def summary(status: ModeStatus) -> str:
     if status.password_required is None:
         return "Sudo password requirement unknown"
     return "Sudo password required" if status.password_required else "Sudo password not required"
+
+
+def sync_installer(check: bool = False) -> bool:
+    """Keep the curl-compatible root installer on the same privileged backend."""
+    from pathlib import Path
+
+    root = Path(REPO_DIR)
+    script = root / "install.sh"
+    start, end = "# >>> tpot sudo backend >>>\n", "# <<< tpot sudo backend <<<"
+    source = script.read_bytes()
+    before, separator, rest = source.partition(start.encode("ascii"))
+    embedded, closing, after = rest.partition(end.encode("ascii"))
+    if not separator or not closing:
+        raise SudoError("The installer sudo-backend markers are missing.")
+    backend = (root / "installer/install/library/tpot_sudo.py").read_bytes()
+    if embedded == backend:
+        return True
+    if check:
+        return False
+    script.write_bytes(before + separator + backend + closing + after)
+    return True
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate the standalone installer's sudo backend")
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    try:
+        matched = sync_installer(args.check)
+    except (OSError, SudoError) as err:
+        parser.exit(1, str(err) + "\n")
+    if not matched:
+        parser.exit(1, "Regenerate the installer sudo backend: python3 -m tpotctl.sudo_mode\n")

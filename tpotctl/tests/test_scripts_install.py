@@ -96,10 +96,12 @@ BASH4 = re.compile(r"\[-\d+\]|\$\{[^}]*(,,|\^\^|,|\^)\}|\b(mapfile|readarray|cop
 
 
 def body_without_ui(script):
-    """The script without the ui block of install.sh (installer/lib/ui.sh has its own bash 3.2 tests)."""
+    """Shell only, excluding the separately tested UI and embedded Python data."""
     text = base.read(script)
     if "# >>> tpot ui >>>" in text:
         text = text[:text.index("# >>> tpot ui >>>")] + text[text.index("# <<< tpot ui <<<"):]
+    if "# >>> tpot sudo backend >>>" in text:
+        text = text[:text.index("# >>> tpot sudo backend >>>")] + text[text.index("# <<< tpot sudo backend <<<"):]
     return text
 
 

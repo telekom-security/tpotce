@@ -4,6 +4,7 @@ import contextlib
 import errno
 import fcntl
 import grp
+import hashlib
 import os
 import pwd
 import re
@@ -24,6 +25,10 @@ LOCK = "/run/lock/tpot-sudo.lock"
 INSTALL_DIR = "/run/tpot-install"
 BOOT_CLEANUP = "/etc/tmpfiles.d/tpot-install.conf"
 BOOT_TEXT = b"# Managed by T-Pot: installer cleanup\nr /etc/sudoers.d/tpot-install - - - -\n"
+BOOT_DIR = "/var/lib/tpot-install"
+BOOT_HELPER = BOOT_DIR + "/cleanup.py"
+BOOT_UNIT = "/etc/systemd/system/tpot-install-cleanup.service"
+BOOT_LINK = "/etc/systemd/system/multi-user.target.wants/tpot-install-cleanup.service"
 
 
 class SudoError(RuntimeError):
@@ -316,45 +321,184 @@ def _remove_boot_cleanup(changes, warnings):
         os.close(directory)
 
 
-def _cleanup_install(user, uid, sudo, changes, warnings):
-    state = _snapshot(user, uid, sudo)
-    if state["temporary_rule"] == "absent" and not os.path.lexists(BOOT_CLEANUP):
-        return
+def _boot_unit(user, uid, digest):
+    return f"""# Managed by T-Pot: installer cleanup
+[Unit]
+Description=Safely clean up interrupted T-Pot installer sudo access
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sh -c 'echo "{digest}  {BOOT_HELPER}" | /usr/bin/sha256sum --check --status'
+ExecStart=/usr/bin/python3 -I {BOOT_HELPER} --boot-cleanup {user} {uid}
+
+[Install]
+WantedBy=multi-user.target
+""".encode("ascii")
+
+
+@contextlib.contextmanager
+def _root_directory(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if info.st_uid or info.st_gid or info.st_mode & 0o022:
+            raise SudoError(f"The directory must be root-owned and not writable by other users: {path}")
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def _read_root_file(path, mode):
+    try:
+        with _root_directory(os.path.dirname(path)) as directory:
+            fd = os.open(os.path.basename(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                         dir_fd=directory)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid or info.st_gid or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != mode):
+            raise SudoError(f"The foreign file was kept: {path}")
+        data = stream.read(1048577)
+        if len(data) > 1048576:
+            raise SudoError(f"The oversized file was kept: {path}")
+        return data
+
+
+def _write_root_file(path, data, mode):
+    parent = os.path.dirname(path)
+    with _root_directory(parent) as directory:
+        fd, temporary = tempfile.mkstemp(prefix=".tpot-", dir=parent)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                os.fchown(stream.fileno(), 0, 0)
+                os.fchmod(stream.fileno(), mode)
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            # Publish only a whole file, without replacing any existing entry.
+            os.link(temporary, os.path.basename(path), dst_dir_fd=directory, follow_symlinks=False)
+            os.fsync(directory)
+        finally:
+            os.unlink(temporary)
+            os.fsync(directory)
+
+
+def _boot_link_owned():
+    try:
+        with _root_directory(os.path.dirname(BOOT_LINK)) as directory:
+            info = os.stat(os.path.basename(BOOT_LINK), dir_fd=directory, follow_symlinks=False)
+            return (stat.S_ISLNK(info.st_mode) and info.st_uid == info.st_gid == 0
+                    and os.readlink(os.path.basename(BOOT_LINK), dir_fd=directory) == BOOT_UNIT)
+    except FileNotFoundError:
+        return True
+
+
+def _remove_guarded_cleanup(user, uid, changes, warnings):
+    unit = _read_root_file(BOOT_UNIT, 0o644)
+    helper = _read_root_file(BOOT_HELPER, 0o600)
+    if unit is None:
+        if helper is None and not os.path.lexists(BOOT_LINK):
+            return True
+        warnings.append("The incomplete boot cleanup was kept; inspect " + BOOT_DIR + " as root.")
+        return False
+    digest = re.search(rb'echo "([0-9a-f]{64})  ', unit)
+    if (not digest or unit != _boot_unit(user, uid, digest.group(1).decode("ascii"))
+            or not _boot_link_owned()):
+        warnings.append("The foreign boot cleanup was kept.")
+        return False
+    if helper is None or hashlib.sha256(helper).hexdigest().encode("ascii") != digest.group(1):
+        warnings.append("The changed boot cleanup helper was kept; inspect " + BOOT_HELPER + " as root.")
+        return False
+    for path in (BOOT_LINK, BOOT_UNIT, BOOT_HELPER):
+        if path == BOOT_LINK and not os.path.lexists(path):
+            continue
+        with _root_directory(os.path.dirname(path)) as directory:
+            try:
+                os.unlink(os.path.basename(path), dir_fd=directory)
+            except FileNotFoundError:
+                if path != BOOT_LINK:
+                    raise
+            os.fsync(directory)
+    changes.append("Removed the guarded installer boot cleanup.")
+    return True
+
+
+def _prepare_boot_cleanup(user, uid):
+    for path in ("/var/lib", "/etc/systemd/system"):
+        with _root_directory(path):
+            pass
+    try:
+        os.mkdir(BOOT_DIR, 0o755)
+    except FileExistsError:
+        pass
+    if any(os.path.lexists(path) for path in (BOOT_HELPER, BOOT_UNIT, BOOT_LINK)):
+        raise SudoError("Existing boot cleanup files were kept; inspect " + BOOT_DIR + " as root.")
+    source = _read_root_file(os.path.abspath(__file__), 0o600)
+    if source is None:
+        raise SudoError("The staged sudo backend is missing.")
+    _write_root_file(BOOT_HELPER, source, 0o600)
+    _write_root_file(BOOT_UNIT, _boot_unit(user, uid, hashlib.sha256(source).hexdigest()), 0o644)
+    _run(["systemctl", "enable", "--no-reload", BOOT_UNIT])
+    if not os.path.lexists(BOOT_LINK) or not _boot_link_owned():
+        raise SudoError("The boot cleanup could not be enabled.")
+
+
+@contextlib.contextmanager
+def _install_lock(parent_fd=None):
     try:
         os.mkdir(INSTALL_DIR, 0o755)
     except FileExistsError:
         pass
-    directory = os.open(INSTALL_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        info = os.fstat(directory)
-        if info.st_uid or info.st_mode & 0o022:
-            raise SudoError("The installer lock directory must be root-owned and not writable by other users.")
-        fd = os.open("lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=directory)
+    with _root_directory(INSTALL_DIR) as directory:
+        fd = (os.dup(parent_fd) if parent_fd is not None else
+              os.open("lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK,
+                      0o600, dir_fd=directory))
         try:
             info = os.fstat(fd)
             if (not stat.S_ISREG(info.st_mode) or info.st_uid or info.st_gid or info.st_nlink != 1
                     or stat.S_IMODE(info.st_mode) != 0o600):
                 raise SudoError("The installer lock is not a private root-owned regular file.")
+            path_info = os.stat("lock", dir_fd=directory, follow_symlinks=False)
+            if (info.st_dev, info.st_ino) != (path_info.st_dev, path_info.st_ino):
+                raise SudoError("The inherited installer lock does not belong to this installation.")
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                warnings.append("A root installation is active; its temporary access and boot cleanup were kept.")
+                yield False
                 return
-            # A failed removal must not be retried blindly by tmpfiles at boot.
-            _remove_boot_cleanup(changes, warnings)
-            if state["temporary_rule"] != "owned":
-                return
-            safe = (state["password_usable"] and state["alternative"] is True) or (
-                state["own_rule"] == "owned" and state["password_required"] is False)
-            if not safe:
-                warnings.append("The stale installer rule was kept to avoid losing sudo access; repair access as root.")
-                return
-            if _set_rule(user, uid, sudo, False, path=INSTALL_RULE):
-                changes.append("Removed the stale temporary installer grant.")
+            yield True
         finally:
             os.close(fd)
-    finally:
-        os.close(directory)
+
+
+def _cleanup_locked(user, uid, sudo, changes, warnings):
+    state = _snapshot(user, uid, sudo)
+    _remove_boot_cleanup(changes, warnings)
+    if not _remove_guarded_cleanup(user, uid, changes, warnings):
+        return
+    if state["temporary_rule"] != "owned":
+        return
+    safe = (state["password_usable"] and state["alternative"] is True) or (
+        state["own_rule"] == "owned" and state["password_required"] is False)
+    if not safe:
+        warnings.append("The stale installer rule was kept to avoid losing sudo access; repair access as root.")
+        return
+    if _set_rule(user, uid, sudo, False, path=INSTALL_RULE):
+        changes.append("Removed the stale temporary installer grant.")
+
+
+def _cleanup_install(user, uid, sudo, changes, warnings):
+    if (_file_state(INSTALL_RULE, uid) == "absent"
+            and not any(os.path.lexists(path) for path in (BOOT_CLEANUP, BOOT_HELPER, BOOT_UNIT, BOOT_LINK))):
+        return
+    with _install_lock() as held:
+        if not held:
+            warnings.append("A root installation is active; its temporary access and boot cleanup were kept.")
+            return
+        _cleanup_locked(user, uid, sudo, changes, warnings)
 
 
 def _finish(user, uid, sudo, changes, cleanup_install, warnings=()):
@@ -378,11 +522,9 @@ def _normal_uid(uid):
     return uid >= int(match.group(1))
 
 
-def apply(user, action, *, password="", keep=False, prepare=False, cleanup_install=False):
+def _account(user):
     if sys.platform != "linux" or os.geteuid() != 0:
         raise SudoError("Sudo-mode management must run with become on a Linux host.")
-    if action not in ("status", "secure", "convenient", "safe_remove"):
-        raise SudoError("Unknown sudo-mode action.")
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]*[$]?", user) or user == "tpot":
         raise SudoError("Choose an existing normal user, not root or tpot.")
     try:
@@ -392,6 +534,37 @@ def apply(user, action, *, password="", keep=False, prepare=False, cleanup_insta
     if (account.pw_uid == 0 or not _normal_uid(account.pw_uid)
             or account.pw_shell.rsplit("/", 1)[-1] in ("false", "nologin", "")):
         raise SudoError("Choose a normal login user, not root or a service account.")
+    return account
+
+
+def root_install(user, uid, *, prepare=False, parent_fd=None):
+    account = _account(user)
+    if account.pw_uid != uid:
+        raise SudoError("The selected user's UID changed; the installer grant was kept.")
+    changes, warnings = [], []
+    with _lock(), _install_lock(parent_fd) as held:
+        if not held:
+            raise SudoError("A root installation is active; its temporary access and boot cleanup were kept.")
+        sudo = _sudo()
+        _cleanup_locked(user, uid, sudo, changes, warnings)
+        state = _snapshot(user, uid, sudo)
+        if prepare:
+            if state["temporary_rule"] != "absent" or state["own_rule"] == "foreign":
+                raise SudoError("The existing or foreign installer rule was kept; repair sudo access as root first.")
+            _run(["visudo", "-c"])
+            _prepare_boot_cleanup(user, uid)
+            if _set_rule(user, uid, sudo, True, path=INSTALL_RULE):
+                changes.append("Prepared temporary installer access.")
+            state = _snapshot(user, uid, sudo)
+        state["warnings"].extend(warnings)
+        state.update(changes=changes, changed=bool(changes))
+        return state
+
+
+def apply(user, action, *, password="", keep=False, prepare=False, cleanup_install=False):
+    account = _account(user)
+    if action not in ("status", "secure", "convenient", "safe_remove"):
+        raise SudoError("Unknown sudo-mode action.")
     changes = []
     warnings = []
     try:
@@ -460,5 +633,35 @@ def main():
     module.exit_json(changed=result["changed"], status=result)
 
 
+def root_main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Guarded root-installer cleanup")
+    actions = parser.add_mutually_exclusive_group(required=True)
+    for option in ("root-prepare", "root-cleanup", "boot-cleanup"):
+        actions.add_argument("--" + option, dest="action", action="store_const", const=option)
+    parser.add_argument("user")
+    parser.add_argument("uid", type=int)
+    parser.add_argument("--lock-fd", type=int)
+    args = parser.parse_args()
+    try:
+        result = root_install(args.user, args.uid, prepare=args.action == "root-prepare",
+                              parent_fd=args.lock_fd)
+    except (SudoError, OSError) as err:
+        print(f"Installer sudo cleanup failed: {err}", file=sys.stderr)
+        return 1
+    for change in result["changes"]:
+        print(change)
+    if args.action != "root-prepare":
+        for warning in result["warnings"]:
+            print("Warning: " + warning, file=sys.stderr)
+        if result["temporary_rule"] != "absent":
+            print("The installer rule was kept. Repair sudo access as root.", file=sys.stderr)
+            return 1
+    return 0
+
+
 if __name__ == "__main__":
+    if any(arg in sys.argv[1:] for arg in ("--root-prepare", "--root-cleanup", "--boot-cleanup")):
+        sys.exit(root_main())
     main()

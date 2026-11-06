@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -25,6 +26,20 @@ User operator may run the following commands on hive:
 """
 OWN = "/etc/sudoers.d/tpot"
 TEMP = "/etc/sudoers.d/tpot-install"
+BOOT_UNIT = Path("/etc/systemd/system/tpot-install-cleanup.service")
+BOOT_HELPER = Path("/var/lib/tpot-install/cleanup.py")
+BOOT_LINK = Path("/etc/systemd/system/multi-user.target.wants/tpot-install-cleanup.service")
+
+
+class CopyTest(unittest.TestCase):
+    def test_root_installer_ships_the_same_verified_backend(self):
+        script = Path(tpot_sudo.__file__).parents[3] / "install.sh"
+        source = script.read_text()
+        start = "# >>> tpot sudo backend >>>\n"
+        end = "# <<< tpot sudo backend <<<"
+        self.assertTrue(start in source and end in source, "The standalone installer lacks the shared backend.")
+        embedded = source.split(start, 1)[1].split(end, 1)[0]
+        self.assertEqual(embedded, Path(tpot_sudo.__file__).read_text())
 
 
 def entry(path, commands="ALL", users="ALL", groups="ALL", options=""):
@@ -211,8 +226,8 @@ class LinuxModeTest(unittest.TestCase):
     password = "  Distant-\u00d6tters!swim-47  "
     foreign = Path("/etc/sudoers.d/tpot-test-foreign")
 
-    def run_command(self, *args, input=None, check=True):
-        return subprocess.run(args, input=input, text=True, capture_output=True, check=check)
+    def run_command(self, *args, input=None, check=True, env=None):
+        return subprocess.run(args, input=input, text=True, capture_output=True, check=check, env=env)
 
     def setUp(self):
         self.original = Path("/etc/sudoers").read_bytes()
@@ -224,7 +239,7 @@ class LinuxModeTest(unittest.TestCase):
 
     def restore(self):
         Path("/etc/sudoers").write_bytes(self.original)
-        for path in (Path(OWN), Path(TEMP), self.foreign):
+        for path in (Path(OWN), Path(TEMP), self.foreign, BOOT_LINK, BOOT_UNIT, BOOT_HELPER):
             path.unlink(missing_ok=True)
         self.run_command("userdel", "-r", self.user)
 
@@ -856,6 +871,9 @@ sudo -n -k true || exit 81
         self.assertEqual(marker.read_text().strip(), str(self.uid))
         self.assertFalse(Path(TEMP).exists())
         self.assertFalse(Path("/etc/tmpfiles.d/tpot-install.conf").exists())
+        self.assertFalse(BOOT_UNIT.exists())
+        self.assertFalse(BOOT_HELPER.exists())
+        self.assertFalse(BOOT_LINK.is_symlink())
         self.assertFalse(Path(OWN).exists())
         self.assertIn("sudo", self.groups())
 
@@ -902,12 +920,40 @@ esac
         self.set_password()
         script = self.root_installer()
         groups = self.groups()
-        proc = self.run_command("bash", "-c", script.read_text(), "install-from-curl",
-                                "--user", self.user, "-s", "-t", "s", check=False)
+        proc = self.run_command("bash", "-s", "--", "--user", self.user, "-s", "-t", "s",
+                                input=script.read_text(), check=False)
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("Save install.sh", proc.stdout + proc.stderr)
         self.assertEqual(self.groups(), groups)
         self.assertFalse(Path(TEMP).exists())
+
+    def test_readme_bootstrap_handles_the_full_installer_and_download_failure(self):
+        root = Path(tpot_sudo.__file__).parents[3]
+        command = (root / "README.md").read_text().split("```\n", 1)[1].split("\n```", 1)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            stub = Path(directory, "curl")
+            marker = Path(directory, "download")
+            stub.write_text(f"""#!/bin/sh
+if [ "$#" -eq 2 ]; then cat '{root / "install.sh"}'; exit; fi
+[ "$#" -eq 4 ] && [ "$3" = -o ] || exit 97
+printf '%s\\n' "$4" > '{marker}'
+[ "$(stat -c %a "$4")" = 600 ] || exit 98
+cp '{root / "install.sh"}' "$4"
+""")
+            stub.chmod(0o755)
+            env = dict(os.environ, PATH=directory + ":" + os.environ["PATH"])
+            proc = self.run_command("bash", "-c", command, check=False, env=env)
+            self.assertIn("--user", proc.stdout + proc.stderr,
+                          "The full installer did not reach its normal root-user check.")
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertFalse(Path(marker.read_text().strip()).exists())
+            proc = self.run_command("bash", "-c", command + " -h", check=False, env=env)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertFalse(Path(marker.read_text().strip()).exists())
+            stub.write_text("#!/bin/sh\nexit 22\n")
+            proc = self.run_command("bash", "-c", command, check=False, env=env)
+            self.assertEqual(proc.returncode, 22, proc.stdout + proc.stderr)
+            self.assertFalse(Path(TEMP).exists())
 
     def test_root_unattended_locked_user_stops_before_account_or_rule_changes(self):
         before = self.groups()
@@ -941,6 +987,48 @@ printf '\\n@include /etc/sudoers.d/tpot-install\\n' | sudo -n tee -a /etc/sudoer
         self.assertEqual(self.run_command("visudo", "-c", check=False).returncode, 0)
         self.assertFalse(Path("/etc/tmpfiles.d/tpot-install.conf").exists())
 
+    def test_root_handover_keeps_another_users_sole_stale_grant(self):
+        self.set_password()
+        other = "tpot_test_previous"
+        self.run_command("useradd", "-m", "-s", "/bin/bash", other)
+        self.addCleanup(self.run_command, "userdel", "-r", other)
+        other_uid = pwd.getpwnam(other).pw_uid
+        before = f"# Managed by T-Pot: sudo mode\n#{other_uid} ALL=(ALL:ALL) NOPASSWD: ALL\n"
+        Path(TEMP).write_text(before)
+        Path(TEMP).chmod(0o440)
+        probe = ("runuser", "-u", other, "--", "sudo", "-n", "-k", "true")
+        self.assertEqual(self.run_command(*probe, check=False).returncode, 0)
+        proc = self.run_command("bash", str(self.root_installer()), "--user", self.user,
+                                "-s", "-t", "s", check=False)
+        self.assertEqual(self.run_command(*probe, check=False).returncode, 0,
+                         "The earlier user's only sudo access was withdrawn.")
+        self.assertEqual(Path(TEMP).read_text(), before)
+        self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_root_handover_keeps_its_users_sole_stale_grant(self):
+        self.set_password()
+        self.grant(TEMP)
+        policy = Path("/etc/sudoers")
+        policy.write_text(re.sub(r"(?m)^%sudo.*$", "", policy.read_text()))
+        self.assertEqual(self.probe().returncode, 0)
+        proc = self.run_command("bash", str(self.root_installer()), "--user", self.user,
+                                "-s", "-t", "s", check=False)
+        self.assertEqual(self.probe().returncode, 0,
+                         "Reusing a stale grant must not remove the user's only sudo access: "
+                         + proc.stdout + proc.stderr)
+
+    def test_root_cleanup_keeps_a_rule_whose_uid_changed_after_publication(self):
+        self.set_password()
+        replacement = "# Managed by T-Pot: sudo mode\n#65534 ALL=(ALL:ALL) NOPASSWD: ALL\n"
+        script = self.root_installer(extra="""
+printf '# Managed by T-Pot: sudo mode\\n#65534 ALL=(ALL:ALL) NOPASSWD: ALL\\n' \
+  | sudo -n tee /etc/sudoers.d/tpot-install >/dev/null
+""")
+        proc = self.run_command("bash", str(script), "--user", self.user, "-s", "-t", "s", check=False)
+        self.assertTrue(Path(TEMP).exists(), "Cleanup deleted the changed rule.")
+        self.assertEqual(Path(TEMP).read_text(), replacement)
+        self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
     def start_root_child(self):
         script = self.root_installer(extra="""
 sleep 60 &
@@ -966,12 +1054,12 @@ wait
     def test_root_term_stops_the_child_and_cleans_temporary_access(self):
         self.set_password()
         proc, sleeper = self.start_root_child()
-        self.assertTrue(Path("/etc/tmpfiles.d/tpot-install.conf").exists())
+        self.assertTrue(BOOT_UNIT.exists())
         proc.send_signal(signal.SIGTERM)
         output, _ = proc.communicate(timeout=15)
         self.assertEqual(proc.returncode, 130, output)
         self.assertFalse(Path(TEMP).exists())
-        self.assertFalse(Path("/etc/tmpfiles.d/tpot-install.conf").exists())
+        self.assertFalse(BOOT_UNIT.exists())
         state = Path(f"/proc/{sleeper}/stat")
         if state.exists():
             self.assertEqual(state.read_text().split(") ", 1)[1][0], "Z")
@@ -991,10 +1079,99 @@ wait
         self.set_password()
         self.grant()
         before = Path(OWN).read_bytes()
-        self.start_root_child()
-        self.run_command("systemd-tmpfiles", "--remove", "/etc/tmpfiles.d/tpot-install.conf")
+        self.crash_root_child()
+        verified = self.run_command("systemd-analyze", "verify", str(BOOT_UNIT), check=False)
+        self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+        proc = self.boot_cleanup()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertFalse(Path(TEMP).exists())
         self.assertEqual(Path(OWN).read_bytes(), before)
+
+    def boot_cleanup(self):
+        if not BOOT_UNIT.exists():
+            return self.run_command("systemd-tmpfiles", "--remove", "/etc/tmpfiles.d/tpot-install.conf")
+        commands = [line.partition("=")[2] for line in BOOT_UNIT.read_text().splitlines()
+                    if line.startswith(("ExecStartPre=", "ExecStart="))]
+        self.assertEqual(len(commands), 2)
+        for command in commands:
+            proc = self.run_command(*shlex.split(command), check=False)
+            if proc.returncode:
+                return proc
+        return proc
+
+    def crash_root_child(self):
+        proc, sleeper = self.start_root_child()
+        proc.kill()
+        os.kill(sleeper, signal.SIGTERM)
+        proc.communicate(timeout=15)
+        self.assertTrue(Path(TEMP).exists(), "The crash fixture must leave a stale grant.")
+
+    def test_root_boot_cleanup_keeps_a_foreign_replacement(self):
+        self.set_password()
+        self.crash_root_child()
+        replacement = "# administrator-owned rule\nroot ALL=(ALL:ALL) ALL\n"
+        Path(TEMP).write_text(replacement)
+        self.boot_cleanup()
+        self.assertTrue(Path(TEMP).exists(), "Boot cleanup deleted the administrator's replacement.")
+        self.assertEqual(Path(TEMP).read_text(), replacement)
+
+    def test_root_boot_cleanup_preserves_an_explicitly_included_rule(self):
+        self.set_password()
+        self.crash_root_child()
+        with Path("/etc/sudoers").open("a") as stream:
+            stream.write("\n@include /etc/sudoers.d/tpot-install\n")
+        self.assertEqual(self.run_command("visudo", "-c", check=False).returncode, 0)
+        self.boot_cleanup()
+        self.assertEqual(self.run_command("visudo", "-c", check=False).returncode, 0,
+                         "Boot cleanup left the system's sudo policy invalid.")
+        self.assertTrue(Path(TEMP).exists())
+
+    def test_failed_boot_enable_cleans_its_files_without_a_wants_directory(self):
+        from unittest.mock import patch
+
+        self.set_password()
+        with tempfile.TemporaryDirectory() as directory:
+            staged = Path(directory, "sudo.py")
+            staged.write_bytes(Path(tpot_sudo.__file__).read_bytes())
+            staged.chmod(0o600)
+            stub = Path(directory, "systemctl")
+            stub.write_text("#!/bin/sh\nexit 42\n")
+            stub.chmod(0o755)
+            link = str(Path(directory, "missing.target.wants", BOOT_UNIT.name))
+            with patch.object(tpot_sudo, "BOOT_LINK", link), patch.object(tpot_sudo, "__file__", str(staged)):
+                with patch.dict(os.environ, PATH=directory + ":" + os.environ["PATH"]):
+                    with self.assertRaisesRegex(tpot_sudo.SudoError, "exit 42"):
+                        tpot_sudo.root_install(self.user, self.uid, prepare=True)
+                    try:
+                        tpot_sudo.root_install(self.user, self.uid)
+                    except OSError as err:
+                        self.fail(f"Cleanup failed on the never-created wants directory: {err}")
+            self.assertFalse(Path(TEMP).exists())
+            self.assertFalse(BOOT_UNIT.exists())
+            self.assertFalse(BOOT_HELPER.exists())
+
+    def test_boot_cleanup_does_not_execute_a_changed_helper(self):
+        self.set_password()
+        self.crash_root_child()
+        before = Path(TEMP).read_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory, "executed")
+            BOOT_HELPER.write_text(f"open({str(marker)!r}, 'w').write('executed')\n")
+            proc = self.boot_cleanup()
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertFalse(marker.exists())
+            self.assertEqual(Path(TEMP).read_bytes(), before)
+
+    def test_boot_cleanup_keeps_unverified_access_with_a_warning(self):
+        self.set_password()
+        self.crash_root_child()
+        self.run_command("passwd", "-l", self.user)
+        self.run_command("gpasswd", "-d", self.user, "sudo")
+        proc = self.boot_cleanup()
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("kept", proc.stderr)
+        self.assertEqual(self.probe().returncode, 0)
+        self.assertFalse(BOOT_UNIT.exists())
 
     def test_root_copies_private_inputs_without_exposing_them_to_other_users(self):
         self.set_password()

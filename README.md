@@ -12,9 +12,16 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
 4. Install `curl`: `$ sudo [apt, dnf, zypper] install curl` if not installed already
 5. Run installer as non-root from `$HOME`:
 ```
-env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/install.sh)"
+env bash -c '
+  installer=$(mktemp) || exit
+  cleanup() { result=$?; rm -f -- "$installer" || result=1; exit "$result"; }
+  trap cleanup EXIT
+  curl -fsSL https://github.com/telekom-security/tpotce/raw/master/install.sh -o "$installer" &&
+    bash "$installer" "$@"
+' --
 ```
    * It installs what it needs to start (git, Ansible, the Python packages of `tpot`) and opens the installer assistant: system check, edition, web user, first settings, a review of what changes, then the installation with its progress. Reboot at the end.
+   * The download is a private temporary file, removed on exit. Passing the entire installer to `bash -c "$(curl ...)"` no longer fits Linux's single-argument limit; use the command above instead. Download and installer failures retain their exit status.
 
 <!-- TOC -->
 - [T-Pot - The All In One Multi Honeypot Platform](#t-pot---the-all-in-one-multi-honeypot-platform)
@@ -643,21 +650,25 @@ rules (for example cloud-init rules) are left alone; the reported effective stat
 still be passwordless.
 
 Without sudo installed, save the installer and run it as root with the existing normal user's
-name. Root starts need a saved file, not an inline `bash -c` command, so the exact same installer
+name. Root starts need a saved file, not the script's contents as an inline shell command, so the exact same installer
 can be handed to the user without another download. For example, from a root shell:
 ```
 bash ./install.sh --user operator -s -t s --user-password-file /root/operator-password
 ```
 The new password must pass cracklib and is also used by SSH if password logins are enabled.
-It is not changed when the account already has a usable password. Root's parent process cleans
-up the temporary `/etc/sudoers.d/tpot-install` grant and its private handover files on exit;
-boot cleanup covers a killed parent or a power loss. If removing a rule would break a modified
-sudoers policy, it is retained with an error instead. The installer no longer creates an
+It is not changed when the account already has a usable password. The root start installs Python3
+if missing so it can use the same sudo checks as the Manager. Root's parent process cleans
+up the temporary `/etc/sudoers.d/tpot-install` grant and its private handover files on exit.
+The guarded `tpot-install-cleanup.service` covers a killed parent or a power loss, using a private,
+hash-checked backend in `/var/lib/tpot-install`. It binds the rule to the originally selected
+user and UID and checks the remaining sudo access. Foreign or modified files stay untouched.
+If safe removal cannot be proved, the rule is retained with an error instead; passwordless
+sudo can therefore remain until access is repaired as root. The installer no longer creates an
 unmanaged `/etc/sudoers.d/<user>` rule. Remove password files you provided when no longer needed.
 At the end of a later installation, stale temporary grants are removed only after another
 sudo path has been verified; an active root installer keeps its grant until its own cleanup.
 If safe removal is impossible, a warning identifies the retained grant and the installer's
-boot deletion instruction is removed so the next reboot cannot lock out the user.
+owned boot-cleanup files are removed so the next reboot cannot lock out the user.
 
 After installation, use `tpot sudo` to inspect sudo and `tpot sudo secure` or
 `tpot sudo convenient` to change it. On a HIVE, `tpot sensors sudo [NAME ...] status|secure|convenient`
@@ -685,8 +696,14 @@ git clone -b my-feature https://github.com/telekom-security/tpotce ~/tpotce
 # explicitly, works the same for an unattended run
 ./install.sh -b my-feature -r https://github.com/someuser/tpotce -s -t h -u user -P ~/webpw.txt
 
-# as environment variables, i.e. for the one-liner or cloud provisioning
-TPOT_BRANCH=my-feature env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/my-feature/install.sh)"
+# as environment variables, i.e. for cloud provisioning
+TPOT_BRANCH=my-feature env bash -c '
+  installer=$(mktemp) || exit
+  cleanup() { result=$?; rm -f -- "$installer" || result=1; exit "$result"; }
+  trap cleanup EXIT
+  curl -fsSL https://github.com/telekom-security/tpotce/raw/my-feature/install.sh -o "$installer" &&
+    bash "$installer" "$@"
+' --
 
 # from a T-Pot ISO: "Another branch or repository" in its start dialog, or
 bash /usr/local/share/tpot-iso/start.sh -b my-feature -r https://github.com/someuser/tpotce
