@@ -8,8 +8,10 @@ the assistant ends.
 """
 
 import contextlib
+import grp
 import os
 import platform
+import pwd
 import re
 import shutil
 import struct
@@ -47,6 +49,13 @@ FULL_VERSION = {"Ubuntu"}
 CONFLICT_PORTS = [("tcp", 25), ("tcp", 53), ("udp", 53)]
 # the resolved stub listener, the playbook turns it off
 STUB_ADDRESSES = ("127.0.0.53", "127.0.0.54")
+
+# the containers run as the user and group tpot with this uid and gid, the playbook makes them
+CONTAINER_ID = 2000
+# the one way out of an account named tpot or a group named tpot, the same in install.sh, the playbook
+# and the ISO (tpotctl/tests/test_installer.py checks it)
+REMOVE_USER = "sudo userdel -r tpot"
+REMOVE_GROUP = "sudo groupdel tpot"
 
 REACH = [
     ("GitHub", "https://github.com"),
@@ -166,6 +175,72 @@ def check_root(euid: Optional[int] = None) -> Check:
     return Check("User", "ok", os.environ.get("USER", "") or "not root")
 
 
+@dataclass
+class Accounts:
+    """What the host holds of the account of the containers; None is nothing, or no answer."""
+    tpot_uid: Optional[int] = None      # the uid of a user named tpot
+    tpot_gid: Optional[int] = None      # the gid of a group named tpot
+    uid_owner: Optional[str] = None     # the user that holds the uid of the containers
+    gid_owner: Optional[str] = None     # the group that holds the gid of the containers
+
+
+def read_accounts(getpwnam: Optional[Callable] = None, getgrnam: Optional[Callable] = None,
+                  getpwuid: Optional[Callable] = None, getgrgid: Optional[Callable] = None) -> Accounts:
+    """The accounts of the host through its name service, as install.sh reads them with getent."""
+    getpwnam, getgrnam = getpwnam or pwd.getpwnam, getgrnam or grp.getgrnam
+    getpwuid, getgrgid = getpwuid or pwd.getpwuid, getgrgid or grp.getgrgid
+
+    def ask(lookup: Callable, key, attribute: str):
+        try:
+            return getattr(lookup(key), attribute)
+        except (KeyError, OSError):
+            return None
+
+    return Accounts(ask(getpwnam, "tpot", "pw_uid"), ask(getgrnam, "tpot", "gr_gid"),
+                    ask(getpwuid, CONTAINER_ID, "pw_name"), ask(getgrgid, CONTAINER_ID, "gr_name"))
+
+
+def current_login() -> str:
+    """The user running this, as whoami says it (install.sh checks the same name)."""
+    try:
+        return pwd.getpwuid(os.geteuid()).pw_name
+    except KeyError:
+        return os.environ.get("USER", "")
+
+
+def check_account(login: str, accounts: Optional[Accounts] = None) -> Check:
+    """The user and group tpot belong to the containers (uid and gid 2000), the playbook makes them. A login
+    or account of that name that is something else would be rewritten there, a uid or gid 2000 of another
+    name stops it late. Nothing is renamed, moved or removed here, only named. The first problem counts, in
+    this order, with the words of install.sh (tpotctl/tests/account_cases.json)."""
+    title = "Account tpot"
+    accounts = read_accounts() if accounts is None else accounts
+    foreign_user = accounts.tpot_uid not in (None, CONTAINER_ID)
+    if login == "tpot" and foreign_user:
+        return Check(title, "fail", f"You are logged in as tpot (uid {accounts.tpot_uid}), a name T-Pot keeps for its "
+                     "containers. The installer would turn this account into it. Log in as another user with "
+                     f"sudo rights, remove this account from there and check again: {REMOVE_USER}")
+    if login == "tpot":
+        return Check(title, "fail", "The assistant runs as tpot, the system user of the T-Pot containers. "
+                     "Run it as a regular user with sudo rights.")
+    if foreign_user:
+        return Check(title, "fail", f"The user tpot exists (uid {accounts.tpot_uid}), a name T-Pot keeps for its "
+                     "containers. The installer would turn it into that account, its login, shell and home would "
+                     f"be gone. Remove it (not while it is logged in) and check again: {REMOVE_USER}")
+    if accounts.tpot_gid not in (None, CONTAINER_ID):
+        return Check(title, "fail", f"The group tpot exists (gid {accounts.tpot_gid}), a name T-Pot keeps for its "
+                     f"containers. The installer would change its gid. Remove it and check again: {REMOVE_GROUP}")
+    if accounts.uid_owner not in (None, "tpot"):
+        return Check(title, "fail", f"The uid {CONTAINER_ID} belongs to {accounts.uid_owner}, T-Pot needs it for its "
+                     f"containers. Give {accounts.uid_owner} another uid or remove that account, then check again.")
+    if accounts.gid_owner not in (None, "tpot"):
+        return Check(title, "fail", f"The gid {CONTAINER_ID} belongs to the group {accounts.gid_owner}, T-Pot needs it "
+                     "for its containers. Give that group another gid or remove it, then check again.")
+    if accounts.tpot_uid == CONTAINER_ID:
+        return Check(title, "ok", f"there, uid {CONTAINER_ID} for the containers")
+    return Check(title, "ok", "free, the installer creates it")
+
+
 def sudo_mode(run: Callable = subprocess.run) -> str:
     """passwordless | password | missing"""
     if not shutil.which("sudo"):
@@ -274,7 +349,7 @@ def installed() -> bool:
 
 
 def run_checks(run: Callable = subprocess.run, opener: Callable = urllib.request.urlopen) -> List[Check]:
-    checks = [check_arch(), check_distro(os_release()), check_root()]
+    checks = [check_arch(), check_distro(os_release()), check_root(), check_account(current_login(), read_accounts())]
     if installed():
         checks.append(Check("T-Pot", "fail", "is installed already, use tpot update"))
     checks.append(check_sudo(sudo_mode(run), is_sudo_rs(run) if shutil.which("sudo") else False))

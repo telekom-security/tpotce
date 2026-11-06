@@ -5,6 +5,7 @@ the checkout the tests run from or the host.
 """
 
 import io
+import json
 import os
 import re
 import shutil
@@ -14,6 +15,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from tpotctl.tests import isolate  # noqa: E402
@@ -34,6 +36,8 @@ except ImportError:
 
 INSTALL_SH = os.path.join(REPO_DIR, "install.sh")
 UI_SH = os.path.join(REPO_DIR, "installer", "lib", "ui.sh")
+with open(os.path.join(REPO_DIR, "tpotctl", "tests", "account_cases.json"), encoding="utf-8") as handle:
+    ACCOUNTS = json.load(handle)
 
 
 def block(text):
@@ -230,6 +234,80 @@ class SshColortermTest(unittest.TestCase):
         found = [t for t in self.tasks("installer", "remove", "tpot.yml")
                  if (t.get("file") or {}).get("path") == self.DROPIN and t["file"].get("state") == "absent"]
         self.assertEqual(len(found), 1, found)
+
+
+class AccountCheckTest(unittest.TestCase):
+    """The containers of T-Pot run as the user and group tpot (uid and gid 2000), the playbook makes them
+    (installer/install/tpot.yml). A login or account of that name, a uid or gid 2000 of another name stops the
+    assistant before the installer starts, with the cause and the way out. The cases are
+    tpotctl/tests/account_cases.json, install.sh stops on the same ones."""
+
+    @staticmethod
+    def lookups(passwd, group):
+        """pwd and grp for these lines of /etc/passwd and /etc/group (KeyError: no such entry)."""
+        users = [line.split(":") for line in passwd]
+        groups = [line.split(":") for line in group]
+
+        def find(rows, key, column):
+            for row in rows:
+                if row[column] == str(key):
+                    return row
+            raise KeyError(key)
+
+        return {
+            "getpwnam": lambda name: SimpleNamespace(pw_name=name, pw_uid=int(find(users, name, 0)[2])),
+            "getgrnam": lambda name: SimpleNamespace(gr_name=name, gr_gid=int(find(groups, name, 0)[2])),
+            "getpwuid": lambda uid: SimpleNamespace(pw_name=find(users, uid, 2)[0], pw_uid=uid),
+            "getgrgid": lambda gid: SimpleNamespace(gr_name=find(groups, gid, 2)[0], gr_gid=gid),
+        }
+
+    def check(self, case):
+        return installer.check_account(case["login"], installer.read_accounts(
+            **self.lookups(case["passwd"], case["group"])))
+
+    def test_the_cases_install_sh_stops_on(self):
+        for case in ACCOUNTS["cases"]:
+            with self.subTest(case=case["case"]):
+                check = self.check(case)
+                self.assertEqual(check.title, "Account tpot")
+                if not case["stop"]:
+                    self.assertEqual(check.state, "ok", check.detail)
+                    continue
+                self.assertEqual(check.state, "fail")
+                for text in [ACCOUNTS["words"][case["stop"]]] + case["says"]:
+                    self.assertIn(text, check.detail)
+                for tool in ("userdel", "groupdel"):
+                    if case["fix"] and tool in case["fix"]:
+                        self.assertIn(case["fix"], check.detail)
+                    else:
+                        self.assertNotIn(tool, check.detail)
+                for text in case.get("silent", []):
+                    self.assertNotIn(text, check.detail)
+
+    def test_the_way_out_is_the_one_of_the_table(self):
+        ways = {case.get("fix") for case in ACCOUNTS["cases"]} - {None}
+        self.assertEqual(ways, {installer.REMOVE_USER, installer.REMOVE_GROUP})
+
+    def test_only_the_login_is_known_where_the_host_gives_no_answer(self):
+        def broken(key):
+            raise OSError("no name service")
+        accounts = installer.read_accounts(broken, broken, broken, broken)
+        self.assertEqual(accounts, installer.Accounts())
+        self.assertEqual(installer.check_account("analyst", accounts).state, "ok")
+        self.assertEqual(installer.check_account("tpot", accounts).state, "fail")
+
+    def test_the_host_is_read_through_pwd_and_grp(self):
+        self.assertIsInstance(installer.read_accounts(), installer.Accounts)
+
+    def test_the_assistant_runs_the_check(self):
+        from unittest import mock
+        regular = installer.read_accounts(**self.lookups(["tpot:x:1000:1000::/home/tpot:/bin/bash"],
+                                                         ["tpot:x:1000:"]))
+        done = lambda command, **kwargs: subprocess.CompletedProcess(command, 0, "", "")
+        with mock.patch.object(installer, "current_login", return_value="analyst"), \
+                mock.patch.object(installer, "read_accounts", return_value=regular):
+            checks = installer.run_checks(done, lambda request, timeout: io.BytesIO(b""))
+        self.assertEqual([c.state for c in checks if c.title == "Account tpot"], ["fail"])
 
 
 class ChecksTest(unittest.TestCase):
