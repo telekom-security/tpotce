@@ -2193,9 +2193,10 @@ class BuildToolTest(unittest.TestCase):
         return environ
 
     def source(self, script, **extra):
-        """The script after build.sh is sourced (its functions, nothing runs)."""
+        """The script after build.sh is sourced (its functions, nothing runs). The deadline only guards
+        against a hang: one lookup of the disks takes up to 16 s on a slow machine."""
         return subprocess.run([BASH, "-c", f'source "{BUILD}"\n{script}'], capture_output=True, text=True,
-                              env=self.env(**extra), stdin=subprocess.DEVNULL, timeout=60)
+                              env=self.env(**extra), stdin=subprocess.DEVNULL, timeout=120)
 
     def tree(self):
         """build.sh in a copy of what it needs (installer/iso without out, ui.sh, version), no git."""
@@ -2303,21 +2304,27 @@ class BuildToolTest(unittest.TestCase):
             "NAME,TYPE_dev_sdc1": "/dev/sdc1 part\n/dev/sdc disk\n",
             "NAME,TYPE_dev_sdg2": "/dev/sdg2 part\n/dev/sdg disk\n",
         })
-        script = (f'myDIR="{self.tmp}/iso" myCACHE="{out}/cache" myOUT=""\n'
-                  'fuUSB_LIST; echo --; fuPROTECTED; echo --\n'
-                  'for d in sdb /dev/sdb sda sdc sdg sdd sde sr0 mmcblk0; do\n'
-                  '  if fuUSB_FIND "$d" >/dev/null; then echo "$d yes"; else echo "$d no"; fi\n'
-                  'done\n'
-                  f'fuUSB_FIND sdb "{media}" || echo "the stick of the ISO no"\n')
-        result = self.source(script)
+        setup = f'myDIR="{self.tmp}/iso" myCACHE="{out}/cache" myOUT=""\n'
+        result = self.source(setup + 'fuUSB_LIST; echo --; fuPROTECTED\n')
         self.assertEqual(result.returncode, 0, result.stderr)
-        sticks, protected, found = result.stdout.split("--\n")
+        sticks, protected = result.stdout.split("--\n")
         self.assertEqual(sticks, "/dev/sdb|32015679488|SanDisk Cruzer Blade · 32.0 GB · USB · /dev/sdb · STICK, MY DATA\n"
                          f"/dev/sdf|4000000000|x$(touch {marker}) · 4.0 GB · removable · /dev/sdf\n"
                          "/dev/mmcblk0|15931539456|Drive · 15.9 GB · SD card · /dev/mmcblk0\n")
         self.assertEqual(protected, "/dev/sda\n/dev/sdc\n/dev/sdg\n")
-        self.assertEqual(found, "sdb yes\n/dev/sdb yes\nsda no\nsdc no\nsdg no\nsdd no\nsde no\nsr0 no\n"
-                         "mmcblk0 yes\nthe stick of the ISO no\n")
+        # Each lookup enumerates the disks again; keep the deadline per lookup, not for all ten.
+        for device, found in (("sdb", "yes"), ("/dev/sdb", "yes"), ("sda", "no"), ("sdc", "no"), ("sdg", "no"),
+                              ("sdd", "no"), ("sde", "no"), ("sr0", "no"), ("mmcblk0", "yes")):
+            with self.subTest(device=device):
+                result = self.source(setup + f'if fuUSB_FIND {shlex.quote(device)} >/dev/null; '
+                                     'then echo yes; else echo no; fi\n')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, found + "\n")
+        with self.subTest(device="the stick of the ISO"):
+            result = self.source(setup + f'if fuUSB_FIND sdb {shlex.quote(media)} >/dev/null; '
+                                 'then echo yes; else echo no; fi\n')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "no\n")
         self.assertFalse(os.path.exists(marker))
 
     def test_the_usb_sticks_of_macos(self):

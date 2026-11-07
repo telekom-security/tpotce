@@ -1434,18 +1434,19 @@ exit 0
 
 def stopped(case, script, *args, **env):
     """The script at a terminal (120 x 49) and its exit code as rc=<n>, the spin of FAKE_GUM_STOP
-    ends at once with 130 like gum on Ctrl+C."""
+    ends at once with 130 like gum on Ctrl+C. A hang ends at the deadline of the pty (60 s), how
+    long the run takes otherwise depends on the machine."""
     quoted = " ".join("'" + a.replace("'", "'\\''") + "'" for a in (script,) + args)
-    start = time.time()
-    out = ui.at_terminal(f'bash {quoted}; echo "rc=$?"', case.env(**env), 120, 49, source="/dev/null", timeout=60)
-    case.assertLess(time.time() - start, 10)
-    return out
+    return ui.at_terminal(f'bash {quoted}; echo "rc=$?"', case.env(**env), 120, 49, source="/dev/null", timeout=60)
 
 
 def went_no_further(case):
-    """The step under the spinner (2 s, then $HOME/marker) is gone."""
+    """The step under the spinner writes $HOME/marker 2 s after it starts: it is not there when the
+    script has ended (the script did not wait for the step) and not 2.5 s later (it did not go on)."""
+    marker = os.path.join(case.home, "marker")
+    case.assertFalse(os.path.exists(marker), "the script waited for the step")
     time.sleep(2.5)
-    case.assertFalse(os.path.exists(os.path.join(case.home, "marker")), "the step went on after Ctrl+C")
+    case.assertFalse(os.path.exists(marker), "the step went on after Ctrl+C")
 
 
 class HandoverTest(Scripts):

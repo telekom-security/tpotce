@@ -3360,6 +3360,9 @@ class StopTest(Scripts):
                         f'{rest}\n')
 
     def assert_went_no_further(self):
+        # the step writes the marker 2 s after it starts: it is not there when the script has ended (the
+        # script did not wait for the step) and not 2.5 s later (it did not go on)
+        self.assertFalse(os.path.exists(self.marker), "the script waited for the step")
         time.sleep(2.5)
         self.assertFalse(os.path.exists(self.marker), "the step went on after Ctrl+C")
 
@@ -3368,9 +3371,7 @@ class StopTest(Scripts):
         with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
             out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n")
         call = f'myRUNNING=1; mySTOPPED=1; fuLOG_START; myUI_GUM={shlex.quote(self.gum)}; fuUPDATER'
-        start = time.time()
         result = self.source_update(call, FAKE_GUM_SPIN_RC="130")
-        self.assertLess(time.time() - start, 1.8)
         self.assertEqual(result.returncode, 130, result.stdout + result.stderr)
         out = result.stdout
         self.assertIn("Stopped: Pulling the images of this release", out)
