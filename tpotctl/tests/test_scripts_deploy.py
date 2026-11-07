@@ -259,6 +259,18 @@ class DeployAddressTest(Harness):
             self.assertEqual(self.args()[self.args().index("-u") + 1], "admin")
             os.remove(os.path.join(self.home, "calls"))
 
+    def test_the_warning_for_a_user_name_is_true_for_every_refused_name(self):
+        """fuASK_VALID has one warning for the question and fuCHECK_USER only says no: it holds for tpot and for
+        a name that is no user name alike, so tpot and its reason stand in a parenthesis, never as the cause."""
+        for _ in self.both():
+            for wrong in ("tpot", "a b", "1admin"):
+                with self.subTest(user=wrong):
+                    result = self.deploy("y", wrong, "admin", "10.0.0.2", "y", "10.0.0.1")
+                    self.assertIn("### [WARNING] - Invalid user name (not tpot: the system user of the containers).",
+                                  result.stdout)
+                    self.assert_asked_again(result)
+                    os.remove(os.path.join(self.home, "calls"))
+
     def test_an_empty_answer_ends_it(self):
         """No endless questions at the end of the input (Ctrl+D, Esc in gum): it stops before Ansible."""
         for answers in (("y",), ("y", "admin"), ("y", "admin", "10.0.0.2", "y")):

@@ -440,7 +440,7 @@ fi
 
 # Ask for the remote user, a user name of Linux only (it goes to ssh)
 if ! fuASK_VALID "Enter the remote username T-Pot SENSOR was installed with:" fuCHECK_USER \
-       "Invalid user name. Not tpot: it is the system user of the containers.";
+       "Invalid user name (not tpot: the system user of the containers).";
   then
     fuUI_ERROR "You need to enter a user. Aborting."
     exit 1
