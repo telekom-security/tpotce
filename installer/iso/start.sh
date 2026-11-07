@@ -261,15 +261,21 @@ PY
 }
 
 fuNEWEST_LOOKUP () {
-  # fuNEWEST_LOOKUP <file>: the newest commit of the branch of the ISO into the file, empty
-  # without one (no network); never fails, the spinner shows no error for it
-  local myOUT=""
+  # fuNEWEST_LOOKUP <file>: the newest commit of the branch of the ISO into the file; "missing"
+  # where the remote answers without that branch (git ls-remote ends with 2), empty without an
+  # answer (no network); never fails, the spinner shows no error for it
+  local myOUT="" myRC=0
   local -a myLIMIT=()
   ! command -v timeout >/dev/null 2>&1 || myLIMIT=(timeout 15)
-  myOUT=$(GIT_TERMINAL_PROMPT=0 ${myLIMIT[@]+"${myLIMIT[@]}"} git ls-remote --heads "${myISO_REPO}" \
-          "refs/heads/${myISO_BRANCH}" 2>/dev/null) || myOUT=""
-  myOUT="${myOUT%%[[:space:]]*}"
-  [[ "${myOUT}" =~ ^[0-9a-f]{40}$ ]] || myOUT=""
+  myOUT=$(GIT_TERMINAL_PROMPT=0 ${myLIMIT[@]+"${myLIMIT[@]}"} git ls-remote --exit-code --heads "${myISO_REPO}" \
+          "refs/heads/${myISO_BRANCH}" 2>/dev/null) || myRC=$?
+  if [ "${myRC}" -eq 2 ];
+    then myOUT="missing"
+    else
+      [ "${myRC}" -eq 0 ] || myOUT=""
+      myOUT="${myOUT%%[[:space:]]*}"
+      [[ "${myOUT}" =~ ^[0-9a-f]{40}$ ]] || myOUT=""
+  fi
   printf '%s\n' "${myOUT}" > "$1"
   return 0
 }
@@ -326,7 +332,9 @@ fuDIALOG () {
       fuUI_SPIN "Looking for a newer ${myISO_BRANCH} ..." "${myLOG}" fuNEWEST_LOOKUP "${myFILE}" || true
       IFS= read -r myNEWEST < "${myFILE}" || true
       rm -f "${myFILE}"
-      if [ -z "${myNEWEST}" ];
+      if [ "${myNEWEST}" = "missing" ];
+        then fuUI_WARN "${myISO_REPO} has no branch ${myISO_BRANCH}, so there is no newer one."; myNEWEST=""
+      elif [ -z "${myNEWEST}" ];
         then fuUI_WARN "${myISO_REPO} cannot be reached now, the T-Pot installer needs the internet for the images of T-Pot."
       elif [ "${myNEWEST}" = "${myCOMMIT}" ];
         then fuUI_INFO "This ISO carries the newest ${myISO_BRANCH}."; myNEWEST=""

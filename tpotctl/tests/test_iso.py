@@ -1334,6 +1334,21 @@ class StartTest(unittest.TestCase):
         self.assertNotIn("The newest master", out)
         self.assertIn(f"INSTALL -b master -r {url}", out)
 
+    @unittest.skipUnless(shutil.which("git"), "no git")
+    def test_at_a_terminal_a_branch_missing_on_the_remote_is_no_network_problem(self):
+        # an ISO built from a branch that was never pushed or is gone: the remote answers, without it
+        url = self.origin()
+        self.iso_clone(url)
+        origin = os.path.join(self.tmp, "origin")
+        self.git("checkout", "-q", "dev", cwd=origin)
+        self.git("branch", "-q", "-D", "master", cwd=origin)
+        code, out = self.at_terminal(("enter = 1): ", b"\n"))
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"{url} has no branch master, so there is no newer one.", out)
+        self.assertNotIn("cannot be reached", out)
+        self.assertNotIn("The newest master", out)
+        self.assertIn(f"INSTALL -b master -r {url}", out)
+
     def test_one_installer_at_a_time(self):
         stub(self.bin, "flock", base.FLOCK_STUB)
         write(os.path.join(self.share, "install.sh"),
