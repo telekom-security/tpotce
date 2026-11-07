@@ -19,6 +19,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import stat
 import struct
 import subprocess
@@ -36,6 +37,7 @@ REPO = base.REPO
 ISO_DIR = os.path.join(REPO, "installer", "iso")
 BUILD = os.path.join(ISO_DIR, "build.sh")
 SH = shutil.which("sh") or "/bin/sh"
+DASH = shutil.which("dash")
 BASH = shutil.which("bash") or "/bin/bash"
 
 _spec = importlib.util.spec_from_file_location("isotree", os.path.join(ISO_DIR, "isotree.py"))
@@ -280,7 +282,7 @@ class PreseedTest(unittest.TestCase):
         self.assertLessEqual(set(installer), set(packages))
         self.assertFalse({"task-desktop", "gdm3", "lightdm", "sddm"} & set(packages))
 
-    def test_the_early_command_repairs_keyboard_detection_only(self):
+    def test_the_early_command_is_early_sh_of_the_iso(self):
         self.assertEqual(self.answers[("preseed/early_command", "string")], "sh /cdrom/tpot/early.sh")
 
     def test_the_late_command_runs_late_sh_of_the_iso(self):
@@ -288,35 +290,114 @@ class PreseedTest(unittest.TestCase):
         self.assertEqual(isotree.PRESEED, "preseed/file=/cdrom/tpot/preseed.cfg")
 
 
-class EarlyTest(unittest.TestCase):
-    FILES = ("usr/share/console-setup/keyboard-configuration.config",
-             "var/lib/dpkg/info/console-setup-udeb.postinst",
-             "usr/lib/base-installer.d/20console-setup")
+# The clock of the loop in early.sh, a stub of sleep: every call is one second of it and nothing waits. A
+# file of steps/ named like the number of the call runs at that second, $GATE holds the first second
+# back until the file exists, the call number $LAST (2 without it) ends the loop: its shell is the
+# parent of this stub.
+CLOCK = r"""#!/bin/sh
+d=$(dirname "$0")
+n=$(cat "$d/clock" 2>/dev/null || echo 0)
+n=$((n + 1))
+echo "$n" >"$d/clock"
+echo "second $n" >>"$d/watch"
+if [ "$n" = 1 ] && [ -n "$GATE" ]; then
+  i=0
+  while [ ! -e "$GATE" ] && [ "$i" -lt 600 ]; do /bin/sleep 0.05; i=$((i + 1)); done
+fi
+[ ! -f "$d/steps/$n" ] || sh "$d/steps/$n"
+if [ "$n" -ge "${LAST:-2}" ]; then echo end >>"$d/watch"; kill "$PPID"; fi
+exit 0
+"""
+
+# What the Debian installer hands to its commands: the pipes of debconf on the descriptors 3 to 6, next to
+# the pipes of log-output on 1 and 2. Whoever waits for one of them (log-output, the debconf frontend)
+# waits until every process has closed it. Here 3 to 9 are copies of the output pipes of the run, so a
+# process that keeps one of them open keeps the run from ending.
+INHERITED = 'exec 3>&1 4>&1 5>&1 6>&1 7>&1 8>&1 9>&1; exec "$@"'
+
+
+class EarlyBase(unittest.TestCase):
+    """early.sh on a folder, with stubs for the tools of the Debian installer it calls. Its loop is a
+    background process on the clock above. The script has a session of its own, so that whatever it
+    leaves behind goes with its process group before the folder does (a loop without a sleep would never
+    end)."""
+
+    SHELL = (SH,)
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp)
+        self.addCleanup(self.stop_scripts)
         self.bin = os.path.join(self.tmp, "bin")
         self.root = os.path.join(self.tmp, "root")
         self.trace = os.path.join(self.tmp, "trace")
-        self.before = "#!/bin/sh\nkeyboard_present () {\nreturn 1\n}\nkeyboard_present\n"
-        for file in self.FILES:
-            write(os.path.join(self.root, file), self.before)
-        write(os.path.join(self.root, "usr/share/debconf/confmodule"),
-              'db_fget () { test "$*" = "keyboard-configuration/xkb-keymap seen"; RET="$SEEN"; }\n'
-              'db_settitle () { echo "title $*" >>"$TRACE"; }\n')
+        self.watch = os.path.join(self.bin, "watch")
+        self.scripts = []
         write(os.path.join(self.bin, "udevadm"),
               '#!/bin/sh\nprintf "%s\\n" "$INPUT"\nexit "${UDEV_RC:-0}"\n', 0o755)
         for command in ("logger", "udpkg"):
             write(os.path.join(self.bin, command),
                   f'#!/bin/sh\necho "{command} $*" >>"$TRACE"\nexit "${{{command.upper()}_RC:-0}}"\n',
                   0o755)
+        write(os.path.join(self.bin, "sleep"), CLOCK, 0o755)
 
-    def run_early(self, **env):
+    def run_early(self, inherited=False, **env):
         environ = {**os.environ, "PATH": self.bin + os.pathsep + os.environ["PATH"],
                    "INPUT": "E: ID_INPUT_KEYBOARD=1", "SEEN": "false", "TRACE": self.trace, **env}
-        return subprocess.run([SH, os.path.join(ISO_DIR, "early.sh"), self.root],
-                              env=environ, capture_output=True, text=True, timeout=30)
+        command = [*self.SHELL, os.path.join(ISO_DIR, "early.sh"), self.root]
+        if inherited:
+            command = [*self.SHELL, "-c", INHERITED, "inherited", *command]
+        script = subprocess.Popen(command, env=environ, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  text=True, start_new_session=True)
+        self.scripts.append(script)
+        try:
+            stdout, stderr = script.communicate(timeout=20)
+        except subprocess.TimeoutExpired:
+            self.stop_scripts()
+            self.fail("early.sh did not end: it, or its loop, keeps open what the installer waits for")
+        return subprocess.CompletedProcess(script.args, script.returncode, stdout, stderr)
+
+    def stop_scripts(self):
+        for script in self.scripts:
+            try:
+                os.killpg(script.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            script.wait()
+            script.stdout.close()
+            script.stderr.close()
+        self.scripts = []
+
+    def watched(self):
+        try:
+            with open(self.watch, encoding="utf-8") as handle:
+                return handle.read().split("\n")
+        except FileNotFoundError:
+            return []
+
+    def loop_ended(self):
+        """Wait for the last second of the loop (a second takes milliseconds, a loop that never ends is a failure)."""
+        deadline = time.time() + 10
+        while "end" not in self.watched():
+            if time.time() > deadline:
+                self.stop_scripts()
+                self.fail("the loop of early.sh did not reach its last second")
+            time.sleep(0.02)
+
+
+class EarlyTest(EarlyBase):
+    FILES = ("usr/share/console-setup/keyboard-configuration.config",
+             "var/lib/dpkg/info/console-setup-udeb.postinst",
+             "usr/lib/base-installer.d/20console-setup")
+
+    def setUp(self):
+        super().setUp()
+        self.before = "#!/bin/sh\nkeyboard_present () {\nreturn 1\n}\nkeyboard_present\n"
+        for file in self.FILES:
+            write(os.path.join(self.root, file), self.before)
+        write(os.path.join(self.root, "usr/share/debconf/confmodule"),
+              'db_fget () { test "$*" = "keyboard-configuration/xkb-keymap seen"; RET="$SEEN"; }\n'
+              'db_settitle () { echo "title $*" >>"$TRACE"; }\n')
 
     def test_missed_keyboard_is_asked_and_all_target_hooks_are_repaired(self):
         result = self.run_early()
@@ -371,6 +452,141 @@ class EarlyTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.trace))
         with open(os.path.join(self.root, self.FILES[0])) as handle:
             self.assertEqual(handle.read(), self.before)
+
+
+class ReservedNameTest(EarlyBase):
+    """The name tpot belongs to the containers of T-Pot (uid and gid 2000) and the T-Pot installer refuses a
+    login of that name. user-setup, the account step of the Debian installer, refuses the names of its list
+    of reserved names and asks again, so early.sh puts tpot there. The list comes with user-setup-udeb, loaded
+    after the early command: a loop waits for it and puts the name in again where a newer udeb replaces it."""
+
+    LIST = "usr/lib/user-setup/reserved-usernames"
+    NAMES = "# Static users from base-passwd/passwd.master (3.5.41).\nroot\ndaemon\nbin\n"
+
+    def setUp(self):
+        super().setUp()
+        self.list = os.path.join(self.root, self.LIST)
+
+    def run_early(self, **env):
+        # no keyboard: the script ends right after it has started the loop
+        return super().run_early(**{"INPUT": "", **env})
+
+    def put(self, text):
+        return (f"mkdir -p {shlex.quote(os.path.dirname(self.list))} "
+                f"&& printf %s {shlex.quote(text)} >{shlex.quote(self.list)}\n")
+
+    def at(self, second, script):
+        write(os.path.join(self.bin, "steps", str(second)), script)
+
+    def names(self):
+        with open(self.list, encoding="utf-8") as handle:
+            return handle.read()
+
+    def logged(self):
+        try:
+            with open(self.trace, encoding="utf-8") as handle:
+                return handle.read().count("logger -t tpot-iso")
+        except FileNotFoundError:
+            return 0
+
+    def test_the_name_goes_into_the_list_once_user_setup_has_brought_it(self):
+        self.at(2, self.put(self.NAMES))
+        result = self.run_early(LAST="6")
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+        self.loop_ended()
+        self.assertEqual(self.names(), self.NAMES + "tpot\n")
+        self.assertEqual(self.logged(), 1)
+
+    def test_a_list_that_a_newer_udeb_replaces_gets_the_name_again(self):
+        write(self.list, self.NAMES)
+        self.at(3, self.put(self.NAMES))
+        self.run_early(LAST="6")
+        self.loop_ended()
+        self.assertEqual(self.names(), self.NAMES + "tpot\n")
+        self.assertEqual(self.logged(), 2)
+
+    def test_a_list_that_names_it_is_left_alone(self):
+        listed = "root\ntpot\ndaemon\n"
+        write(self.list, listed)
+        before = os.stat(self.list)
+        self.run_early(LAST="4")
+        self.loop_ended()
+        self.assertEqual(self.names(), listed)
+        self.assertEqual(os.stat(self.list).st_ino, before.st_ino)
+        self.assertEqual(os.listdir(os.path.dirname(self.list)), ["reserved-usernames"])
+        self.assertEqual(self.logged(), 0)
+
+    def test_names_that_only_look_like_it_do_not_count(self):
+        # user-setup skips the lines with a # and takes the others whole
+        looks = "# tpot\ntpotd\nmytpot\n tpot\ntpot \n"
+        write(self.list, looks)
+        self.run_early(LAST="3")
+        self.loop_ended()
+        self.assertEqual(self.names(), looks + "tpot\n")
+
+    def test_a_list_without_a_final_newline_keeps_its_last_name(self):
+        write(self.list, "root\ndaemon")
+        self.run_early(LAST="3")
+        self.loop_ended()
+        self.assertEqual(self.names(), "root\ndaemon\ntpot\n")
+
+    def test_the_installer_goes_on_while_the_loop_runs(self):
+        gate = os.path.join(self.tmp, "gate")
+        write(self.list, self.NAMES)
+        # the loop is held at its first second: a script that waited for it, or kept its output open, would
+        # not end here
+        result = self.run_early(GATE=gate, LAST="3")
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+        self.assertNotIn("end", self.watched())
+        write(gate, "")
+        self.loop_ended()
+        self.assertEqual(self.names(), self.NAMES + "tpot\n")
+
+    def test_the_loop_keeps_no_descriptor_of_the_installer_open(self):
+        gate = os.path.join(self.tmp, "gate")
+        write(self.list, self.NAMES)
+        # the installer waits for the pipes of debconf (3 to 6) as it does for the output of the command:
+        # a loop that holds one, for the whole installation, would hold up the start of the installer
+        result = self.run_early(GATE=gate, LAST="3", inherited=True)
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+        self.assertNotIn("end", self.watched())
+        write(gate, "")
+        self.loop_ended()
+        self.assertEqual(self.names(), self.NAMES + "tpot\n")
+
+    def test_the_loop_starts_before_the_keyboard_check_can_end_the_script(self):
+        write(self.list, self.NAMES)
+        result = self.run_early(UDEV_RC="1", LAST="3")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Cannot inspect the input devices", result.stderr)
+        self.loop_ended()
+        self.assertEqual(self.names(), self.NAMES + "tpot\n")
+
+    def test_a_list_that_is_still_empty_is_left_alone(self):
+        # the udeb is unpacked file by file, a list that is there but not yet written is no list
+        write(self.list, "")
+        self.run_early(LAST="3")
+        self.loop_ended()
+        self.assertEqual(self.names(), "")
+        self.assertEqual(self.logged(), 0)
+
+    @unittest.skipIf(os.geteuid() == 0, "root writes into any file")
+    def test_a_list_that_cannot_be_written_stops_neither_the_loop_nor_the_installer(self):
+        write(self.list, self.NAMES, 0o444)
+        result = self.run_early(LAST="4")
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+        self.loop_ended()
+        self.assertIn("second 4", self.watched())
+        self.assertEqual(self.names(), self.NAMES)
+        self.assertEqual(self.logged(), 0)
+
+
+@unittest.skipUnless(DASH, "dash is not installed")
+class ReservedNameDashTest(ReservedNameTest):
+    """The same under dash. The shell of the Debian installer is the ash of busybox, which comes from it:
+    both keep a copy of the streams that a redirected call of a function replaces, open in their process."""
+
+    SHELL = (DASH,)
 
 
 class LateTest(unittest.TestCase):
