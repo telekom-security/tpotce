@@ -587,7 +587,7 @@ Validation status of the preview: in QEMU, the amd64 ISO boots under BIOS, UEFI 
 3. Run the installer as non-root: `$ ./install.sh`:
    * ⚠️ ***Depending on your Linux distribution of choice the installer will:***
      * Abort if a service occupies the DNS or SMTP ports the honeypots need, before anything is changed
-     * Abort, before anything is changed, if it cannot make the user and group `tpot` (uid and gid `2000`) the containers run as: you run it as `tpot`, a user or group `tpot` with another id exists, or the id `2000` belongs to another name. It never renames, migrates or removes an account for you, the message names the way out: `sudo userdel -r tpot` for an account named `tpot` (from another user, the account is gone with its home) or `sudo groupdel tpot` for such a group
+     * Abort, before anything is changed, if it cannot make the user and group `tpot` (uid and gid `2000`) the containers run as: you run it as `tpot`, a user or group `tpot` with another id exists, or the id `2000` belongs to another name. It never renames, migrates or removes an account for you, the message names the way out: `sudo userdel -r tpot` for an account named `tpot` (from another user; this deletes its home directory, copy what you need first) or `sudo groupdel tpot` for such a group
      * Change the SSH port to `tcp/64295`
      * Disable the DNS Stub Listener to avoid port conflicts with honeypots
      * Set SELinux to Monitor Mode

@@ -627,6 +627,10 @@ PY
                             self.assertIn(case["fix"], result.stdout)
                         else:
                             self.assertNotIn(tool, result.stdout)
+                    if case["fix"] and "userdel" in case["fix"]:
+                        self.assertIn(ACCOUNTS["home"], result.stdout)
+                    else:
+                        self.assertNotIn(ACCOUNTS["home"], result.stdout)
                     for text in case.get("silent", []):
                         self.assertNotIn(text, result.stdout)
                     self.assertEqual(self.calls(), "")

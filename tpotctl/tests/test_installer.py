@@ -281,6 +281,11 @@ class AccountCheckTest(unittest.TestCase):
                         self.assertIn(case["fix"], check.detail)
                     else:
                         self.assertNotIn(tool, check.detail)
+                if case["fix"] == installer.REMOVE_USER:
+                    self.assertIn(ACCOUNTS["home"], check.detail)
+                else:
+                    self.assertNotIn(ACCOUNTS["home"], check.detail)
+                self.assertNotRegex(check.detail, r"home (would be )?gone")
                 for text in case.get("silent", []):
                     self.assertNotIn(text, check.detail)
 
@@ -331,7 +336,8 @@ def account_block():
 class AccountPlaybookTest(unittest.TestCase):
     """The playbook says no to the same accounts as install.sh and the assistant (the cases are
     tpotctl/tests/account_cases.json), for a run of ansible-playbook without them: in the play that stops a run
-    before it changes anything, and it only reads and asserts. AccountPlaybookRunTest runs every case."""
+    before it installs a package or touches an account (the play before it only brings a missing python3), and
+    it only reads and asserts. AccountPlaybookRunTest runs every case."""
 
     def setUp(self):
         self.play, self.block = account_block()
@@ -372,6 +378,10 @@ class AccountPlaybookTest(unittest.TestCase):
                     self.assertIn(fixes[key], message, key)
                 else:
                     self.assertNotIn(tool, message, key)
+            if fixes[key] == installer.REMOVE_USER:
+                self.assertIn(ACCOUNTS["home"], message, key)
+            else:
+                self.assertNotIn(ACCOUNTS["home"], message, key)
         # "as tpot" is part of "logged in as tpot": the second check is the one without an account to remove
         self.assertNotIn(ACCOUNTS["words"]["login-account"], checks[1]["fail_msg"])
 
@@ -429,6 +439,10 @@ class AccountPlaybookRunTest(unittest.TestCase):
                         self.assertIn(case["fix"], output)
                     else:
                         self.assertNotIn(tool, output)
+                if case["fix"] == installer.REMOVE_USER:
+                    self.assertIn(ACCOUNTS["home"], output)
+                else:
+                    self.assertNotIn(ACCOUNTS["home"], output)
                 for text in case.get("silent", []):
                     self.assertNotIn(text, output)
 
@@ -457,6 +471,24 @@ class AccountWaysOutTest(unittest.TestCase):
                     text = text.replace(way, "")
                 for tool in ("userdel", "groupdel", "deluser", "delgroup"):
                     self.assertNotIn(tool, text)
+
+    def test_every_text_with_the_way_to_remove_a_user_says_what_it_deletes(self):
+        """userdel -r takes the home directory of tpot with it and nothing brings it back: whoever is sent to
+        it is told to copy what is needed first, in every place that names it (the table says how)."""
+        for place, ways in self.PLACES.items():
+            if installer.REMOVE_USER not in ways:
+                continue
+            with self.subTest(place=place):
+                with open(os.path.join(REPO_DIR, place), encoding="utf-8") as handle:
+                    self.assertIn(ACCOUNTS["home"], handle.read())
+
+    def test_nobody_is_told_that_the_installer_deletes_the_home(self):
+        """The playbook turns the account into the container account: login and shell are changed, the files
+        of its home stay behind (R2 of the stage 3 evidence). Only the way out deletes them."""
+        for place in self.PLACES:
+            with self.subTest(place=place):
+                with open(os.path.join(REPO_DIR, place), encoding="utf-8") as handle:
+                    self.assertNotRegex(handle.read(), r"home (would be )?gone")
 
 
 class ChecksTest(unittest.TestCase):

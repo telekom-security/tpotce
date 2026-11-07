@@ -611,7 +611,7 @@ if [ "$(id -un)" = "tpot" ];
            "Log in as a regular user with sudo rights and run: bash ${myDIR}/start.sh"
     fuSTOP "The user tpot is reserved for the containers of T-Pot, the installer would turn this account into it." \
       "Create another user with sudo (sudo adduser <name> && sudo usermod -aG sudo <name>) and log in as that user." \
-      "Remove this account from there, not while it is logged in: sudo userdel -r tpot" \
+      "Remove this account from there, not while it is logged in (this deletes its home directory, copy what you need first): sudo userdel -r tpot" \
       "Then run: bash ${myDIR}/start.sh"
 fi
 [ ! -e "${myINSTALLED}" ] || fuDONE

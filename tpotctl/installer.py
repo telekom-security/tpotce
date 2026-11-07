@@ -210,23 +210,26 @@ def current_login() -> str:
 
 def check_account(login: str, accounts: Optional[Accounts] = None) -> Check:
     """The user and group tpot belong to the containers (uid and gid 2000), the playbook makes them. A login
-    or account of that name that is something else would be rewritten there, a uid or gid 2000 of another
-    name stops it late. Nothing is renamed, moved or removed here, only named. The first problem counts, in
-    this order, with the words of install.sh (tpotctl/tests/account_cases.json)."""
+    or account of that name that is something else would be turned into that account there (its login and
+    shell gone, the files of its home left behind), a uid or gid 2000 of another name stops it late. Nothing
+    is renamed, moved or removed here, only named. The first problem counts, in this order, with the words
+    of install.sh (tpotctl/tests/account_cases.json)."""
     title = "Account tpot"
     accounts = read_accounts() if accounts is None else accounts
     foreign_user = accounts.tpot_uid not in (None, CONTAINER_ID)
     if login == "tpot" and foreign_user:
         return Check(title, "fail", f"You are logged in as tpot (uid {accounts.tpot_uid}), a name T-Pot keeps for its "
                      "containers. The installer would turn this account into it. Log in as another user with "
-                     f"sudo rights, remove this account from there and check again: {REMOVE_USER}")
+                     "sudo rights, remove this account from there (this deletes its home directory, copy what "
+                     f"you need first) and check again: {REMOVE_USER}")
     if login == "tpot":
         return Check(title, "fail", "The assistant runs as tpot, the system user of the T-Pot containers. "
                      "Run it as a regular user with sudo rights.")
     if foreign_user:
         return Check(title, "fail", f"The user tpot exists (uid {accounts.tpot_uid}), a name T-Pot keeps for its "
-                     "containers. The installer would turn it into that account, its login, shell and home would "
-                     f"be gone. Remove it (not while it is logged in) and check again: {REMOVE_USER}")
+                     "containers. The installer would turn it into that account, its login and shell would be "
+                     "gone. Remove it (not while it is logged in; this deletes its home directory, copy what "
+                     f"you need first) and check again: {REMOVE_USER}")
     if accounts.tpot_gid not in (None, CONTAINER_ID):
         return Check(title, "fail", f"The group tpot exists (gid {accounts.tpot_gid}), a name T-Pot keeps for its "
                      f"containers. The installer would change its gid. Remove it and check again: {REMOVE_GROUP}")

@@ -1850,7 +1850,8 @@ tpot_account_problem() {
   # tpot_account_problem <login>: whether this host can take the account of the T-Pot containers. They
   # run as uid and gid 2000 and the playbook makes the system user and group tpot for them
   # (installer/install/tpot.yml). An account or group named tpot that is something else would be
-  # rewritten there (login, shell and home gone), a uid or gid 2000 of another name stops it late. rc 0:
+  # turned into the container account there (its login and shell gone, the files of its home left
+  # behind), a uid or gid 2000 of another name stops it late. rc 0:
   # nothing in the way; rc 1: myACCOUNT_ERROR says what is wrong, myACCOUNT_INFO what to do and
   # myACCOUNT_FIX is the command that does it (none where there is nothing to remove). The accounts are
   # read through getent (NSS) and never changed, without getent only the login is known. The assistant
@@ -1869,7 +1870,7 @@ tpot_account_problem() {
   if [ "${myLOGIN}" = tpot ] && [ -n "${myTPOT_UID}" ] && [ "${myTPOT_UID}" != 2000 ];
     then
       myACCOUNT_ERROR="You are logged in as tpot (uid ${myTPOT_UID}), a name T-Pot keeps for its containers."
-      myACCOUNT_INFO="The installer would turn this account into it. Log in as another user with sudo rights, remove this account from there and run the installer again:"
+      myACCOUNT_INFO="The installer would turn this account into it. Log in as another user with sudo rights, remove this account from there (this deletes its home directory, copy what you need first) and run the installer again:"
       myACCOUNT_FIX="sudo userdel -r tpot"
   elif [ "${myLOGIN}" = tpot ];
     then
@@ -1878,7 +1879,7 @@ tpot_account_problem() {
   elif [ -n "${myTPOT_UID}" ] && [ "${myTPOT_UID}" != 2000 ];
     then
       myACCOUNT_ERROR="The user tpot exists (uid ${myTPOT_UID}), a name T-Pot keeps for its containers."
-      myACCOUNT_INFO="The installer would turn it into that account, its login, shell and home would be gone. Remove it (not while it is logged in) and run the installer again:"
+      myACCOUNT_INFO="The installer would turn it into that account, its login and shell would be gone. Remove it (not while it is logged in; this deletes its home directory, copy what you need first) and run the installer again:"
       myACCOUNT_FIX="sudo userdel -r tpot"
   elif [ -n "${myTPOT_GID}" ] && [ "${myTPOT_GID}" != 2000 ];
     then

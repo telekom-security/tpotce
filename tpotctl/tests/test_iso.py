@@ -1081,6 +1081,7 @@ class StartTest(unittest.TestCase):
         self.assertNotIn("INSTALL", result.stdout)
         self.assertIn("reserved for the containers", result.stderr)
         self.assertIn("sudo userdel -r tpot", result.stderr)
+        self.assertIn(json.loads(base.read("tpotctl/tests/account_cases.json"))["home"], result.stderr)
         # the system user of the containers has nothing to remove and does not log in
         result = self.run_start(STUB_UID="2000", STUB_USER="tpot")
         self.assertEqual(result.returncode, 1)
