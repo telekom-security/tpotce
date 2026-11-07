@@ -288,11 +288,6 @@ COLUMN = re.compile(r"column\d+")
 ES_DATE = re.compile(r"^\d{4}(-\d{2}(-\d{2}(T\d{2}(:\d{2}(:\d{2}([.,]\d{1,9})?)?)?(Z|[+-]\d{2}(:?\d{2})?)?)?)?)?$")
 # failures known and waiting for a decision: honeypot -> (the start of its problem, why)
 KNOWN = {}
-if sys.argv[3] == "true":
-    KNOWN["elasticpot"] = (
-        "timestamp '",
-        "pre-existing SENSOR filter leaves ElasticPot's +00:00Z suffix (OPEN-ITEMS.md)",
-    )
 failed = known = 0
 for name, want in sorted(manifest.items()):
     found = by_name.get(name, [])
