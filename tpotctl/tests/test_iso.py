@@ -456,8 +456,9 @@ class EarlyTest(EarlyBase):
 
 class ReservedNameTest(EarlyBase):
     """The name tpot belongs to the containers of T-Pot (uid and gid 2000) and the T-Pot installer refuses a
-    login of that name. user-setup, the account step of the Debian installer, refuses the names of its list
-    of reserved names and asks again, so early.sh puts tpot there. The list comes with user-setup-udeb, loaded
+    login of that name. user-setup, the account step of the Debian installer, is meant to refuse the names of
+    its list of reserved names and to ask again, so early.sh puts tpot there (the test checks the list, not
+    the dialog). The list comes with user-setup-udeb, loaded
     after the early command: a loop waits for it and puts the name in again where a newer udeb replaces it."""
 
     LIST = "usr/lib/user-setup/reserved-usernames"

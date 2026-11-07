@@ -3,8 +3,9 @@
 # - Debian's legacy keyboard-name whitelist misses virtio keyboards. Use udev's keyboard
 #   classification as well, including in the hook that copies the layout to the target.
 # - The name tpot belongs to the containers of T-Pot (uid and gid 2000) and the T-Pot installer
-#   refuses it as a login. user-setup refuses the names of its list of reserved names and asks for
-#   another one, so tpot is put into that list.
+#   refuses it as a login. user-setup is meant to refuse the names of its list of reserved names and
+#   to ask for another one, so tpot is put into that list: the person hears it during the
+#   installation, not after it. A name that gets through is refused by the T-Pot installer later.
 # The optional root is for isolated tests; on the ISO this runs after mounting /cdrom.
 set -e
 myROOT="${1:-}"
