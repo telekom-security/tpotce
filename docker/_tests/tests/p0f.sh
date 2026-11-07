@@ -482,15 +482,15 @@ check_offline_mode() {
   local out="" err=""
 
   mkdir -p "${pcap_dir}"
-  # syn.pcap: one Linux 4.19+ SYN from 198.51.100.7, packet time 2023-11-14 22:13:20 UTC
+  # syn.pcap: calibrated Linux, uncalibrated FreeBSD, fuzzy Linux and an unknown SYN
   # vlan.pcap: the same SYN from .8 untagged, .9 with an 802.1Q tag, .10 with QinQ tags
   python3 - "${pcap_dir}" <<'PY'
 import struct, sys
 LINUX = struct.pack("!BBH", 2, 4, 1460) + b"\x04\x02" + struct.pack("!BBII", 8, 10, 12345, 0) + b"\x01" + struct.pack("!BBB", 3, 3, 7)
 FREEBSD = struct.pack("!BBH", 2, 4, 1460) + b"\x01" + struct.pack("!BBB", 3, 3, 6) + b"\x04\x02" + struct.pack("!BBII", 8, 10, 12345, 0)
-def frame(src, tags=b"", opts=LINUX, win=64240):
+def frame(src, tags=b"", opts=LINUX, win=64240, ip_flags=0x4000):
     tcp = struct.pack("!HHIIBBHHH", 40001, 22, 1, 0, (20 + len(opts)) // 4 << 4, 0x02, win, 0, 0) + opts
-    ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(tcp), 1, 0x4000, 56, 6, 0, bytes([198, 51, 100, src]), bytes([192, 0, 2, 1]))
+    ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(tcp), 1, ip_flags, 56, 6, 0, bytes([198, 51, 100, src]), bytes([192, 0, 2, 1]))
     s = sum(struct.unpack("!10H", ip)); s = (s >> 16) + (s & 0xFFFF); ip = ip[:10] + struct.pack("!H", ~(s + (s >> 16)) & 0xFFFF) + ip[12:]
     return b"\x02\x00\x00\x00\x00\x01\x02\x00\x00\x00\x00\x02" + tags + b"\x08\x00" + ip + tcp
 def pcap(name, frames):
@@ -498,7 +498,8 @@ def pcap(name, frames):
         fh.write(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1))
         for n, f in enumerate(frames):
             fh.write(struct.pack("<IIII", 1700000000 + n, 0, len(f), len(f)) + f)
-pcap("syn.pcap", [frame(7), frame(11, opts=FREEBSD, win=65535)])
+pcap("syn.pcap", [frame(7), frame(11, opts=FREEBSD, win=65535),
+                 frame(14, ip_flags=0), frame(15, opts=LINUX + b"\xfd\x04\x00\x00")])
 pcap("vlan.pcap", [frame(8), frame(9, b"\x81\x00\x00\x65"), frame(10, b"\x88\xa8\x00\x64\x81\x00\x00\x65")])
 # noua.pcap: Linux handshake from 198.51.100.13, then an HTTP request without User-Agent
 def tcp4(src, dst, sport, dport, seq, ack, flags, win, opts=b"", payload=b"", ttl=56):
@@ -535,12 +536,29 @@ if len(syn) != 1:
 e = syn[0]
 if e.get("timestamp") != "2023/11/14 22:13:20" or e.get("os") != linux_os or e.get("os_family") != "Linux":
     sys.exit(f"unexpected syn event: {e}")
+if (not isinstance(e.get("os_confidence"), float) or not 0.9 <= e["os_confidence"] <= 1
+        or type(e.get("os_samples")) is not int or e["os_samples"] <= 0):
+    sys.exit(f"calibrated SYN lacks numeric confidence/sample fields: {e}")
 print(f"offline: {e['timestamp']} {e['client_ip']} os={e['os']!r} os_family={e['os_family']}")
 # a label without data in the datasets: family only (conf short form), no confidence
 b = [e for e in events if e.get("mod") == "syn" and e.get("client_ip") == "198.51.100.11"]
-if len(b) != 1 or b[0].get("os") != "FreeBSD 9.x or newer" or b[0].get("os_family") != "BSD" or "os_confidence" in b[0]:
+if (len(b) != 1 or b[0].get("os") != "FreeBSD 9.x or newer" or b[0].get("os_family") != "BSD"
+        or {"os_confidence", "os_samples"} & b[0].keys()):
     sys.exit(f"expected FreeBSD 9.x or newer with os_family BSD and no os_confidence, got {b}")
 print("offline: FreeBSD SYN has os_family BSD without os_confidence")
+fuzzy = [e for e in events if e.get("mod") == "syn" and e.get("client_ip") == "198.51.100.14"]
+if (len(fuzzy) != 1 or fuzzy[0].get("os") != linux_os or fuzzy[0].get("os_family") != "Linux"
+        or "fuzzy" not in fuzzy[0].get("params", "").split()
+        or {"os_confidence", "os_samples"} & fuzzy[0].keys()):
+    sys.exit(f"expected fuzzy Linux without confidence/sample fields, got {fuzzy}")
+unknown = [e for e in events if e.get("mod") == "syn" and e.get("client_ip") == "198.51.100.15"]
+if (len(unknown) != 1 or unknown[0].get("os") != "???"
+        or {"os_family", "os_confidence", "os_samples"} & unknown[0].keys()):
+    sys.exit(f"expected unknown OS without family/confidence/sample fields, got {unknown}")
+mtu = [e for e in events if e.get("mod") == "mtu"]
+if not mtu or any({"os_family", "os_confidence", "os_samples"} & e.keys() for e in mtu):
+    sys.exit(f"MTU events must not carry client-SYN classification: {mtu}")
+print("offline: fuzzy/unknown SYNs and MTU events have no invented confidence")
 PY
 
   # VLAN tags (802.1Q, QinQ) are skipped per packet, untagged frames in between still work
@@ -565,10 +583,15 @@ PY
     || test_die "p0f offline mode failed on the request without User-Agent"
   python3 - "${out}" <<'PY' || test_die "p0f wrote ua_dishonest for a request it could not check"
 import json, sys
-h = [e for e in map(json.loads, sys.argv[1].splitlines()) if e.get("mod") == "http request"]
+events = list(map(json.loads, sys.argv[1].splitlines()))
+h = [e for e in events if e.get("mod") == "http request"]
 if len(h) != 1 or h[0].get("app") != "tpot-test" or "ua_dishonest" in h[0] or "user_agent" in h[0]:
     sys.exit(f"expected one http request matched by tpot-test without ua_dishonest / user_agent, got {h}")
 print("offline: no ua_dishonest without User-Agent / expected software")
+syn_ack = [e for e in events if e.get("mod") == "syn+ack"]
+if len(syn_ack) != 1 or {"os_family", "os_confidence", "os_samples"} & syn_ack[0].keys():
+    sys.exit(f"SYN+ACK must not carry client-SYN classification: {syn_ack}")
+print("offline: SYN+ACK has no client OS confidence/sample fields")
 PY
 
   # -o - keeps quiet on success: stdout and stderr on one stream (terminal,

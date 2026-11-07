@@ -76,6 +76,8 @@ Every line is one observation, `mod` names its type. All of them carry:
 
 Both come from the `conf` field of the matched label, see [below](#os-family-and-confidence-conf). Fuzzy matches and labels without data get the family alone, tools get no confidence. The Kibana visualization **P0f OS Distribution** counts client SYNs with `os_confidence >= 0.9` plus scanners.
 
+**P0f SYN coverage** accounts for all client SYNs in the selected time range: confidence at least 90%, below 90%, uncalibrated/unknown, and scanners. These groups are disjoint. The log table includes other event types too, so its total is not the OS chart's denominator; MTU and SYN+ACK events do not need confidence fields. An empty OS or scanner panel can mean there are no eligible observations, not that ingestion failed.
+
 ### User-Agent signals (`http request`)
 
 | Field | Content |
@@ -87,7 +89,7 @@ Both come from the `conf` field of the matched label, see [below](#os-family-and
 | `ua_dishonest` | `true` if the User-Agent does not fit the HTTP header order (p0f's `dishonest`). Only set if the request has a User-Agent and the matched HTTP signature expects some software |
 | `http_proxy` | `true` with a `Via` or `X-Forwarded-For` header: the TCP stack may be the proxy's, so a mismatch is no strong signal |
 
-The dashboard **P0f** shows these signals. It leaves out requests through a proxy and mismatches against TCP fingerprints the datasets measured below a confidence of 0.9.
+The dashboard **P0f** shows these signals. Its OS-mismatch panels require a present `os_confidence >= 0.9` and leave out detected proxies. Missing confidence is not evidence of a reliable mismatch. Header-order signals remain independent of the OS-confidence threshold. Plaintext HTTP observations are required: HTTPS management traffic alone cannot populate these panels.
 
 Limits:
 - Only plain-text HTTP is visible to p0f.
