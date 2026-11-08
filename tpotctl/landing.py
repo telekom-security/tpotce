@@ -6,7 +6,7 @@ which this module writes; the tests run --check:
   python3 -m tpotctl.landing           write queries.json
   python3 -m tpotctl.landing --check   exit 1 when queries.json is not the generated one
 
-Events of the NSM tools are left out as in tpotctl.events, the sources are its query for any range.
+Known honeypot event types count as in tpotctl.events; the sources use the same classification.
 """
 
 import json
@@ -14,7 +14,7 @@ import os
 import sys
 from typing import List, Optional
 
-from tpotctl.events import NOT_ATTACKS
+from tpotctl.events import honeypot_filter
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 QUERIES = os.path.join(REPO, "docker", "nginx", "dist", "html", "assets", "queries.json")
@@ -32,10 +32,6 @@ RANGES = [
 ]
 
 
-def honeypots() -> dict:
-    return {"bool": {"must_not": {"terms": {"type.keyword": NOT_ATTACKS}}}}
-
-
 def histogram(r: dict, before: bool = False) -> dict:
     """The points of the range, or with before of the range before it (the same width, one span earlier)."""
     bounds = {"min": f"now-{r['before']}", "max": f"now-{r['span']}"} if before else {"min": f"now-{r['span']}", "max": "now"}
@@ -48,7 +44,8 @@ def overview(r: dict) -> dict:
     counts of sources and honeypots, the newest attack and the attacks of the range before, per point too."""
     return {
         "size": 0,
-        "query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": f"now-{r['before']}"}}}, honeypots()]}},
+        "query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": f"now-{r['before']}", "lt": "now"}}},
+                                     honeypot_filter()]}},
         "aggs": {
             "current": {
                 "filter": {"range": {"@timestamp": {"gte": f"now-{r['span']}"}}},
@@ -71,7 +68,8 @@ def sources(r: dict, size: int = 12) -> dict:
     first five (seven without sensors) whose values pass its checks."""
     return {
         "size": 0,
-        "query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": f"now-{r['span']}"}}}, honeypots()]}},
+        "query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": f"now-{r['span']}", "lt": "now"}}},
+                                     honeypot_filter()]}},
         "aggs": {"sources": {"terms": {"field": "src_ip.keyword", "size": int(size)}, "aggs": {
             "country": {"terms": {"field": "geoip.country_name.keyword", "size": 1}},
             "rep": {"terms": {"field": "ip_rep.keyword", "size": 1}}}}},

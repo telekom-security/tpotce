@@ -1,9 +1,8 @@
-"""Attacks on this HIVE from Elasticsearch: per minute of the last hour, its sources, 24 hours, the
-busiest honeypots, the newest attack.
+"""Honeypot event documents indexed on this HIVE, including its sensors.
 
-Events of the NSM tools (Suricata, P0f) are not attacks of their own, they describe
-the same connections the honeypots see, so they are left out, as on the Attack Map.
-Ddospot target events (type DdospotTarget) describe the victims of reflection attacks, whose source addresses were forged, so they are not attacks either.
+Only known honeypot log types count, independently of the locally running services.
+NSM observations, infrastructure logs and reflection victims are not honeypot events.
+Document counts are not unique attacks; source cardinality is an estimate.
 """
 
 import json
@@ -11,8 +10,16 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional, Tuple
 
+from tpotctl.checks.inventory import LOGS
+
 ES_URL = "http://127.0.0.1:64298"        # as in tpotctl.sensors
-NOT_ATTACKS = ["Suricata", "P0f", "DdospotTarget"]
+HONEYPOT_TYPES = tuple(sorted({kind for service, (kind, _path) in LOGS.items()
+                              if service not in ("p0f", "suricata")}))
+
+
+def honeypot_filter() -> dict:
+    """Positive classification shared by the Manager, attackers command and landing page."""
+    return {"terms": {"type.keyword": list(HONEYPOT_TYPES)}}
 
 
 @dataclass
@@ -23,17 +30,18 @@ class Attacks:
     problem: str = ""
     latest: Optional[float] = None      # epoch seconds of the newest attack of 24 hours
     sources: int = 0                    # distinct source addresses of the last hour
+    last_hour: int = 0                  # exact rolling-hour count, not the sum of rounded buckets
 
 
 def query() -> dict:
-    honeypots = {"bool": {"must_not": {"terms": {"type.keyword": NOT_ATTACKS}}}}
     return {
         "size": 0,
         "track_total_hits": True,
-        "query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": "now-24h"}}}, honeypots]}},
+        "query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": "now-24h", "lt": "now"}}},
+                                     honeypot_filter()]}},
         "aggs": {
             "hour": {
-                "filter": {"range": {"@timestamp": {"gte": "now-60m/m"}}},
+                "filter": {"range": {"@timestamp": {"gte": "now-1h", "lt": "now"}}},
                 "aggs": {"minutes": {"date_histogram": {
                     "field": "@timestamp", "fixed_interval": "1m", "min_doc_count": 0,
                     "extended_bounds": {"min": "now-59m/m", "max": "now/m"}}},
@@ -55,7 +63,8 @@ def parse(answer: dict) -> Attacks:
     top = [(b["key"], int(b.get("doc_count", 0))) for b in (aggs.get("top") or {}).get("buckets", [])]
     latest = (aggs.get("latest") or {}).get("value")             # epoch milliseconds, None without hits
     sources = ((aggs.get("hour") or {}).get("sources") or {}).get("value") or 0
-    return Attacks(minutes, int(total), top, latest=latest / 1000 if latest else None, sources=int(sources))
+    return Attacks(minutes, int(total), top, latest=latest / 1000 if latest else None, sources=int(sources),
+                   last_hour=int((aggs.get("hour") or {}).get("doc_count", 0)))
 
 
 def fetch(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Attacks:
@@ -84,10 +93,10 @@ class Sources:
 
 
 def sources_query(hours: int, size: int) -> dict:
-    honeypots = {"bool": {"must_not": {"terms": {"type.keyword": NOT_ATTACKS}}}}
     return {
         "size": 0,
-        "query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": f"now-{int(hours)}h"}}}, honeypots]}},
+        "query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": f"now-{int(hours)}h", "lt": "now"}}},
+                                     honeypot_filter()]}},
         "aggs": {"sources": {"terms": {"field": "src_ip.keyword", "size": int(size)}, "aggs": {
             "country": {"terms": {"field": "geoip.country_name.keyword", "size": 1}},
             "rep": {"terms": {"field": "ip_rep.keyword", "size": 1}}}}},

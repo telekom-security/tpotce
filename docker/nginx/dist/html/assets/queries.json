@@ -16,21 +16,44 @@
               {
                 "range": {
                   "@timestamp": {
-                    "gte": "now-48h"
+                    "gte": "now-48h",
+                    "lt": "now"
                   }
                 }
               },
               {
-                "bool": {
-                  "must_not": {
-                    "terms": {
-                      "type.keyword": [
-                        "Suricata",
-                        "P0f",
-                        "DdospotTarget"
-                      ]
-                    }
-                  }
+                "terms": {
+                  "type.keyword": [
+                    "Adbhoney",
+                    "Beelzebub",
+                    "Ciscoasa",
+                    "CitrixHoneypot",
+                    "ConPot",
+                    "Cowrie",
+                    "Ddospot",
+                    "Dicompot",
+                    "Dionaea",
+                    "ElasticPot",
+                    "Endlessh",
+                    "Galah",
+                    "Glutton",
+                    "Go-pot",
+                    "H0neytr4p",
+                    "Hellpot",
+                    "Heralding",
+                    "Honeyaml",
+                    "Honeypots",
+                    "Honeytrap",
+                    "Ipphoney",
+                    "Log4pot",
+                    "Mailoney",
+                    "Medpot",
+                    "Miniprint",
+                    "RDPHoneypot",
+                    "Redishoneypot",
+                    "Sentrypeer",
+                    "Wordpot"
+                  ]
                 }
               }
             ]
@@ -126,21 +149,44 @@
               {
                 "range": {
                   "@timestamp": {
-                    "gte": "now-24h"
+                    "gte": "now-24h",
+                    "lt": "now"
                   }
                 }
               },
               {
-                "bool": {
-                  "must_not": {
-                    "terms": {
-                      "type.keyword": [
-                        "Suricata",
-                        "P0f",
-                        "DdospotTarget"
-                      ]
-                    }
-                  }
+                "terms": {
+                  "type.keyword": [
+                    "Adbhoney",
+                    "Beelzebub",
+                    "Ciscoasa",
+                    "CitrixHoneypot",
+                    "ConPot",
+                    "Cowrie",
+                    "Ddospot",
+                    "Dicompot",
+                    "Dionaea",
+                    "ElasticPot",
+                    "Endlessh",
+                    "Galah",
+                    "Glutton",
+                    "Go-pot",
+                    "H0neytr4p",
+                    "Hellpot",
+                    "Heralding",
+                    "Honeyaml",
+                    "Honeypots",
+                    "Honeytrap",
+                    "Ipphoney",
+                    "Log4pot",
+                    "Mailoney",
+                    "Medpot",
+                    "Miniprint",
+                    "RDPHoneypot",
+                    "Redishoneypot",
+                    "Sentrypeer",
+                    "Wordpot"
+                  ]
                 }
               }
             ]
@@ -221,21 +267,44 @@
               {
                 "range": {
                   "@timestamp": {
-                    "gte": "now-2h"
+                    "gte": "now-2h",
+                    "lt": "now"
                   }
                 }
               },
               {
-                "bool": {
-                  "must_not": {
-                    "terms": {
-                      "type.keyword": [
-                        "Suricata",
-                        "P0f",
-                        "DdospotTarget"
-                      ]
-                    }
-                  }
+                "terms": {
+                  "type.keyword": [
+                    "Adbhoney",
+                    "Beelzebub",
+                    "Ciscoasa",
+                    "CitrixHoneypot",
+                    "ConPot",
+                    "Cowrie",
+                    "Ddospot",
+                    "Dicompot",
+                    "Dionaea",
+                    "ElasticPot",
+                    "Endlessh",
+                    "Galah",
+                    "Glutton",
+                    "Go-pot",
+                    "H0neytr4p",
+                    "Hellpot",
+                    "Heralding",
+                    "Honeyaml",
+                    "Honeypots",
+                    "Honeytrap",
+                    "Ipphoney",
+                    "Log4pot",
+                    "Mailoney",
+                    "Medpot",
+                    "Miniprint",
+                    "RDPHoneypot",
+                    "Redishoneypot",
+                    "Sentrypeer",
+                    "Wordpot"
+                  ]
                 }
               }
             ]
@@ -331,21 +400,44 @@
               {
                 "range": {
                   "@timestamp": {
-                    "gte": "now-1h"
+                    "gte": "now-1h",
+                    "lt": "now"
                   }
                 }
               },
               {
-                "bool": {
-                  "must_not": {
-                    "terms": {
-                      "type.keyword": [
-                        "Suricata",
-                        "P0f",
-                        "DdospotTarget"
-                      ]
-                    }
-                  }
+                "terms": {
+                  "type.keyword": [
+                    "Adbhoney",
+                    "Beelzebub",
+                    "Ciscoasa",
+                    "CitrixHoneypot",
+                    "ConPot",
+                    "Cowrie",
+                    "Ddospot",
+                    "Dicompot",
+                    "Dionaea",
+                    "ElasticPot",
+                    "Endlessh",
+                    "Galah",
+                    "Glutton",
+                    "Go-pot",
+                    "H0neytr4p",
+                    "Hellpot",
+                    "Heralding",
+                    "Honeyaml",
+                    "Honeypots",
+                    "Honeytrap",
+                    "Ipphoney",
+                    "Log4pot",
+                    "Mailoney",
+                    "Medpot",
+                    "Miniprint",
+                    "RDPHoneypot",
+                    "Redishoneypot",
+                    "Sentrypeer",
+                    "Wordpot"
+                  ]
                 }
               }
             ]
@@ -426,21 +518,44 @@
               {
                 "range": {
                   "@timestamp": {
-                    "gte": "now-120s"
+                    "gte": "now-120s",
+                    "lt": "now"
                   }
                 }
               },
               {
-                "bool": {
-                  "must_not": {
-                    "terms": {
-                      "type.keyword": [
-                        "Suricata",
-                        "P0f",
-                        "DdospotTarget"
-                      ]
-                    }
-                  }
+                "terms": {
+                  "type.keyword": [
+                    "Adbhoney",
+                    "Beelzebub",
+                    "Ciscoasa",
+                    "CitrixHoneypot",
+                    "ConPot",
+                    "Cowrie",
+                    "Ddospot",
+                    "Dicompot",
+                    "Dionaea",
+                    "ElasticPot",
+                    "Endlessh",
+                    "Galah",
+                    "Glutton",
+                    "Go-pot",
+                    "H0neytr4p",
+                    "Hellpot",
+                    "Heralding",
+                    "Honeyaml",
+                    "Honeypots",
+                    "Honeytrap",
+                    "Ipphoney",
+                    "Log4pot",
+                    "Mailoney",
+                    "Medpot",
+                    "Miniprint",
+                    "RDPHoneypot",
+                    "Redishoneypot",
+                    "Sentrypeer",
+                    "Wordpot"
+                  ]
                 }
               }
             ]
@@ -536,21 +651,44 @@
               {
                 "range": {
                   "@timestamp": {
-                    "gte": "now-60s"
+                    "gte": "now-60s",
+                    "lt": "now"
                   }
                 }
               },
               {
-                "bool": {
-                  "must_not": {
-                    "terms": {
-                      "type.keyword": [
-                        "Suricata",
-                        "P0f",
-                        "DdospotTarget"
-                      ]
-                    }
-                  }
+                "terms": {
+                  "type.keyword": [
+                    "Adbhoney",
+                    "Beelzebub",
+                    "Ciscoasa",
+                    "CitrixHoneypot",
+                    "ConPot",
+                    "Cowrie",
+                    "Ddospot",
+                    "Dicompot",
+                    "Dionaea",
+                    "ElasticPot",
+                    "Endlessh",
+                    "Galah",
+                    "Glutton",
+                    "Go-pot",
+                    "H0neytr4p",
+                    "Hellpot",
+                    "Heralding",
+                    "Honeyaml",
+                    "Honeypots",
+                    "Honeytrap",
+                    "Ipphoney",
+                    "Log4pot",
+                    "Mailoney",
+                    "Medpot",
+                    "Miniprint",
+                    "RDPHoneypot",
+                    "Redishoneypot",
+                    "Sentrypeer",
+                    "Wordpot"
+                  ]
                 }
               }
             ]

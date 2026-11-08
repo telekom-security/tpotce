@@ -74,15 +74,19 @@ class FakeResponse(io.BytesIO):
 
 class EventsTest(unittest.TestCase):
 
-    def test_ddospot_targets_are_no_attacks(self):
-        self.assertIn("DdospotTarget", events.NOT_ATTACKS)
-        self.assertNotIn("Ddospot", events.NOT_ATTACKS)
+    def test_only_known_honeypot_types_count_including_sensor_only_services(self):
+        for query in (events.query(), events.sources_query(24, 10)):
+            clause = query["query"]["bool"]["filter"][1]
+            self.assertIn("terms", clause, "use a positive classification, not an infrastructure blacklist")
+            allowed = clause["terms"]["type.keyword"]
+            for kind in ("NGINX", "Suricata", "P0f", "DdospotTarget", "UnknownService", ""):
+                self.assertNotIn(kind, allowed)
+            for kind in ("Cowrie", "Ddospot", "Beelzebub", "Galah", "ConPot", "ElasticPot", "Ipphoney"):
+                self.assertIn(kind, allowed)
 
-    def test_query_leaves_out_the_nsm_tools(self):
-        query = json.dumps(events.query())
-        self.assertIn('"Suricata"', query)
-        self.assertIn('"P0f"', query)
-        self.assertIn("type.keyword", query)
+    def test_query_uses_the_same_exact_hour_for_events_and_sources(self):
+        self.assertEqual(events.query()["aggs"]["hour"]["filter"],
+                         {"range": {"@timestamp": {"gte": "now-1h", "lt": "now"}}})
         self.assertEqual(events.query()["aggs"]["latest"], {"max": {"field": "@timestamp"}})
         self.assertEqual(events.query()["aggs"]["hour"]["aggs"]["sources"],
                          {"cardinality": {"field": "src_ip.keyword"}})     # the field of tpot attackers
@@ -106,6 +110,14 @@ class EventsTest(unittest.TestCase):
         self.assertEqual(attacks.top, [("Cowrie", 99)])
         self.assertAlmostEqual(attacks.latest, 1791460000.123)
         self.assertEqual(attacks.sources, 312)
+
+    def test_hour_total_includes_the_oldest_partial_minute(self):
+        attacks = events.parse({
+            "aggregations": {"hour": {"doc_count": 123,
+                                     "minutes": {"buckets": [{"doc_count": 2}] * 61},
+                                     "sources": {"value": 7}}}})
+        self.assertEqual(getattr(attacks, "last_hour", None), 123)
+        self.assertEqual(attacks.sources, 7)
 
     def test_no_attack_yet(self):
         attacks = events.parse({"hits": {"total": 0}, "aggregations": {"latest": {"value": None}}})
