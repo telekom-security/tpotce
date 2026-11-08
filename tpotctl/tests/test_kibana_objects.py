@@ -2519,6 +2519,16 @@ class CopyTest(unittest.TestCase):
             copy_of = handle.read()
         self.assertTrue(module == copy_of, "run: cp tpotctl/kibana_objects.py docker/tpotinit/dist/bin/")
 
+    def test_kibana_config_opts_out_without_the_improvement_banner(self):
+        source = read("docker", "elk", "kibana", "Dockerfile")
+        command = re.search(r"^RUN (printf .*?)>\s*/usr/share/kibana/config/kibana.yml",
+                            source, re.M | re.S).group(1)
+        result = subprocess.run(["sh", "-c", command], check=True, capture_output=True, text=True)
+        config = dict(line.split(": ", 1) for line in result.stdout.splitlines())
+        self.assertEqual(config.get("telemetry.optIn"), "false")
+        self.assertEqual(config.get("telemetry.banner"), "false")
+        self.assertEqual(config.get("newsfeed.enabled"), "false")
+
 
 class MarkFreshTest(unittest.TestCase):
     """mark-fresh: tpotinit's first run marks the first import as pending, before /data/uuid."""
