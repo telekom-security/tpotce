@@ -455,7 +455,7 @@ SPANS = {"checks": (0.0, 0.02), "packages": (0.02, 0.05), "sudo_prepare": (0.05,
 
 _TASK = re.compile(r"^TASK \[(.*)\]")
 _FAILED = re.compile(r"^(fatal|failed): \[")
-_PULLED = re.compile(r"\b(Pulled|Skipped)\b")
+_PULLED = re.compile(r"^\s*(?:Image\s+)?(\S+)\s+Pulled(?:\s|$)")
 
 
 class Progress:
@@ -470,6 +470,7 @@ class Progress:
         self.task = ""
         self.images = 0
         self.images_done = 0
+        self.completed_images = set()
         self.failed_task = ""
         self.warnings: List[str] = []
         self.lines: deque = deque(maxlen=500)
@@ -477,11 +478,22 @@ class Progress:
     def feed(self, line: str) -> None:
         line = line.rstrip("\n")
         self.lines.append(line)
+        if line == "@@tpot pull" or line.startswith("@@tpot pull "):
+            try:
+                update = runlog.pull_view(line[len("@@tpot pull "):])
+            except (ValueError, RecursionError) as error:
+                self.warnings.append(f"Invalid image progress: {error}")
+                return
+            self.images_done, self.images = update["done"], update["total"] or 0
+            self.task = update["activity"]
+            return
         mark = runlog.parse_mark(line)
         if mark is not None:
             what, words = mark
             value = words[0] if words else ""
             if what == "phase":
+                if value != self.phase and value not in ("failed", "done"):
+                    self.task = ""
                 self.phase = value
                 if value not in ("failed", "done"):
                     self.last = value
@@ -494,6 +506,8 @@ class Progress:
             elif what == "warn" and value == "pull":
                 self.warnings.append("Not all images could be pulled, T-Pot tries again when it starts. "
                                      "The log of the installation shows which.")
+            elif what == "warn" and value == "pull-progress":
+                self.warnings.append(" ".join(words[1:]))
             return
         match = _TASK.match(line)
         if match:
@@ -503,8 +517,10 @@ class Progress:
             return
         if _FAILED.match(line) and "...ignoring" not in line:
             self.failed_task = self.task
-        if self.phase == "pull" and _PULLED.search(line):
-            self.images_done += 1
+        match = _PULLED.match(line)
+        if self.phase == "pull" and match:
+            self.completed_images.add(match.group(1))
+            self.images_done = len(self.completed_images)
 
     @property
     def step(self) -> str:

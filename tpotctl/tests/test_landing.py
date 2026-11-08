@@ -62,15 +62,18 @@ class QueriesTest(unittest.TestCase):
                 self.assertEqual(set(r) & {"overview", "sources", "sensors"}, {"overview", "sources", "sensors"})
                 self.assertGreater(r["points"], 1)
 
-    def test_the_tools_of_the_nsm_are_no_attacks(self):
-        """Suricata and P0f describe the connections the honeypots see; the attacks leave them out, as
-        tpotctl.events does (the sensors count every event they send)."""
+    def test_only_honeypot_events_count_in_every_range(self):
         for r in landing.RANGES:
             for name, query in (("overview", landing.overview(r)), ("sources", landing.sources(r))):
                 with self.subTest(range=r["key"], query=name):
-                    excluded = [d["terms"]["type.keyword"] for d in walk(query)
-                                if "terms" in d and isinstance(d["terms"].get("type.keyword"), list)]
-                    self.assertEqual(excluded, [events.NOT_ATTACKS])
+                    clause = query["query"]["bool"]["filter"][1]
+                    self.assertIn("terms", clause)
+                    allowed = clause["terms"]["type.keyword"]
+                    self.assertIn("Cowrie", allowed)
+                    self.assertIn("Beelzebub", allowed)
+                    for kind in ("NGINX", "Suricata", "P0f", "DdospotTarget", "UnknownService"):
+                        self.assertNotIn(kind, allowed)
+                    self.assertEqual(clause, events.query()["query"]["bool"]["filter"][1])
 
     def test_the_sources_are_the_query_of_the_manager(self):
         self.assertEqual(landing.sources(landing.RANGES[0]), events.sources_query(24, 12))

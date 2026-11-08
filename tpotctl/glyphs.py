@@ -2,7 +2,10 @@
 
 The font is the one of the terminal the user looks at, often on the other end of an
 SSH connection, so the default is plain unicode every font has. Every unicode glyph
-is one cell wide (tests check it), Nerd Font icons come from its Material Design set.
+is one cell wide (tests check it) and comes from a monospaced font of the ISO's terminal,
+Cascadia Mono or DejaVu Sans Mono (the raster test checks it: one only a proportional font
+has is drawn wider than its cell, as ⎇ was for the branch), Nerd Font icons come from its
+Material Design set.
 """
 
 from typing import Dict
@@ -16,7 +19,7 @@ _UNICODE = {
     "bullet": "▸", "changed": "▌", "bar_on": "▰", "bar_off": "▱", "running": "●", "stopped": "○",
     "search": "/", "show": "◉", "hide": "◎",
     # the header: what this T-Pot is and how it is doing
-    "branch": "⎇", "host": "⌂", "web": "↗", "hive_link": "⇢", "uptime": "◷", "containers": "⬢",
+    "branch": "⌥", "host": "⌂", "web": "↗", "hive_link": "⇢", "uptime": "◷", "containers": "⬢",
     "machine": "▣", "load": "≈", "last_attack": "◷",
     "pane_status": "⬢", "pane_edition": "⬢", "pane_settings": "⬢", "pane_users": "⬢",
     "pane_sensors": "⬢", "pane_images": "⬢", "pane_update": "⬢", "pane_llm": "⬢", "pane_checks": "⬢",

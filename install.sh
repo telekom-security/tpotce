@@ -2776,6 +2776,57 @@ run_ansible() {
   fi
 }
 
+install_iso_complete() {
+  [ -f "${TPOT_ISO_SHARE:-/usr/local/share/tpot-iso}/iso.conf" ] || return 0
+  if ! sudo bash "${HOME}/tpotce/installer/iso/prepare.sh" --complete; then
+    myISO_WARNING="ISO completion needs attention; review /var/log/tpot-iso.log."
+    fuUI_WARN "${myISO_WARNING}"
+  fi
+}
+
+install_pull_images() {
+  # install_pull_images: pulls the images of ~/tpotce/docker-compose.yml with the progress reader
+  # of the clone (tpotctl/runlog.py: one status line, the raw output in myPULL_LOG); rc 130 on
+  # Ctrl+C. A clone without that reader (an older branch, -b) pulls under the spinner of before
+  local myHELPER="${HOME}/tpotce/tpotctl/runlog.py" myHELP myRC myINT=0 myTRAP
+  local -a myFORMAT=() myMARK_ARGS=() myRESULT=()
+  if ! python3 "${myHELPER}" pull-output --help 2>/dev/null | grep -q -- '--marks';
+    then
+      # config --images names an image once per service (conpot: nine times), the pull reports
+      # every image once
+      fuUI_MARKS_ON && fuMARK images "$(sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" config --images 2>/dev/null | sort -u | wc -l)"
+      myRC=0
+      fuUI_SPIN "Pulling the images ..." "${myPULL_LOG}" sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" pull || myRC=$?
+      # Ctrl+C (130) and a failed pull go to the caller: it stops with its summary or warns
+      [ "${myRC}" -ne 130 ] || return 130
+      return "${myRC}"
+  fi
+  fuUI_INFO "Pulling the images"
+  fuUI_MARKS_ON && myMARK_ARGS=(--marks)
+  # no spinner reads the key here: Ctrl+C is a SIGINT of the pull and the reader (the foreground
+  # group), the script waits for both to end and then stops with its summary, not the bare trap
+  myTRAP=$(trap -p INT)
+  trap 'myINT=130' INT
+  (
+    myHELP=$(sudo docker compose --help 2>&1) || { myRC=$?; printf '%s\n' "${myHELP}"; exit "${myRC}"; }
+    if printf '%s\n' "${myHELP}" | grep -A 2 -- '--progress' | grep -qw json; then
+      myFORMAT=(--progress json)
+    fi
+    sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" config --format json \
+      | python3 "${myHELPER}" image-plan
+    myRESULT=("${PIPESTATUS[@]}")
+    for myRC in "${myRESULT[@]}"; do [ "${myRC}" -eq 0 ] || exit "${myRC}"; done
+    sudo docker compose "${myFORMAT[@]}" -f "${HOME}/tpotce/docker-compose.yml" pull
+  ) 2>&1 | python3 "${myHELPER}" pull-output "${myPULL_LOG}" "${myMARK_ARGS[@]}"
+  myRESULT=("${PIPESTATUS[@]}")
+  eval "${myTRAP:-trap - INT}"
+  [ "${myINT}" -eq 0 ] || return 130
+  for myRC in "${myRESULT[@]}"; do [ "${myRC}" -ne 130 ] || return 130; done
+  for myRC in "${myRESULT[@]}"; do [ "${myRC}" -eq 0 ] || return "${myRC}"; done
+  fuUI_OK "Images pulled"
+  return 0
+}
+
 install_sudo_mode() {
   local myPLAY="${HOME}/tpotce/installer/install/sudo_mode.yml" myVARS myCLEANUP=false
   [ "$1" != false ] || myCLEANUP=true
@@ -3452,15 +3503,9 @@ fi
 
 # Pull docker images
 mark_phase pull
-if [ -n "${myMARKS}" ];
-  then
-    # config --images names an image once per service (conpot: nine times), the pull reports
-    # every image once
-    fuMARK images "$(sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" config --images 2>/dev/null | sort -u | wc -l)"
-fi
-# A spinner meanwhile, the output goes into its log; in the marks mode it passes through,
-# so the assistant counts the pulled images. The spinner runs it in the background, where
-# sudo cannot ask: a password is asked for now (-B refreshes it from its file)
+# Keep the pull and its sudo wrapper in the shell (install_pull_images). The spinner of an older
+# clone runs it in the background, where sudo cannot ask: a password is asked for now (-B
+# refreshes it from its file)
 if ! fuUI_MARKS_ON && [ -z "${myBECOME_FILE}" ] && sudo_password_required;
   then
     sudo -v
@@ -3468,7 +3513,7 @@ fi
 rm -f "${myPULL_LOG}"
 myPULL_FAILED=""
 myRC=0
-fuUI_SPIN "Pulling the images ..." "${myPULL_LOG}" sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" pull || myRC=$?
+install_pull_images || myRC=$?
 if [ "${myRC}" -eq 130 ];
   then
     # T-Pot is installed by now, only images are missing
@@ -3480,7 +3525,7 @@ if [ "${myRC}" -ne 0 ];
     # not a stop: T-Pot pulls what is missing when it starts (TPOT_PULL_POLICY)
     fuMARK warn pull
     myPULL_FAILED="y"
-    fuUI_WARN "Not all images could be pulled (see above), T-Pot tries again when it starts."
+    fuUI_WARN "Not all images could be pulled (see ${myPULL_LOG}), T-Pot tries again when it starts."
 fi
 echo
 
@@ -3518,6 +3563,8 @@ if ! install_sudo_mode false; then
 fi
 
 # Done: what is installed and what comes next
+myISO_WARNING=""
+install_iso_complete
 mark_phase "done"
 if [ -n "${myCUSTOM_COMPOSE}" ];
   then mySUMMARY=("ok:T-Pot is installed with your own compose file (${myTPOT_TYPE})")
@@ -3526,6 +3573,7 @@ fi
 [ "${myTPOT_TYPE}" = "HIVE" ] && mySUMMARY+=("ok:The web user ${myWEB_USER} is set up")
 [ -n "${myPULL_FAILED}" ] && mySUMMARY+=("warn:Not all images could be pulled, T-Pot tries again when it starts")
 [ -n "${myHOOKS_WARNING}" ] && mySUMMARY+=("warn:${myHOOKS_WARNING}")
+[ -n "${myISO_WARNING}" ] && mySUMMARY+=("warn:${myISO_WARNING}")
 [ -n "${myBECOME_OWN_FILE}" ] && mySUMMARY+=("next:Remove the password file ${myBECOME_OWN_FILE} when it is no longer needed")
 mySUMMARY+=("${myTPOT_ITEM}")
 [ -n "${myINFO}" ] && mySUMMARY+=("info:${myINFO}")

@@ -82,6 +82,110 @@ class TaskScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen["env"]["TPOT_MARKS"], "1")
         self.assertEqual(seen["env"]["TPOT_GUM"], "off")
 
+    async def test_log_and_actions_keep_geometry_during_progress(self):
+        import threading
+        gate = threading.Event()
+
+        class WaitingEngine(FakeEngine):
+            def run(self, line):
+                gate.wait(10)
+                return 130
+
+        for size in ((80, 24), (120, 40)):
+            gate.clear()
+            screen = self.screen()
+            screen.engine_factory = WaitingEngine
+            app = host(screen)
+            async with app.run_test(size=size) as pilot:
+                try:
+                    screen.launch("")
+                    screen.feed("@@tpot phase inventory Reading the honeypots\n")
+                    await pilot.pause(0.2)
+                    log = screen.query_one("#task-log")
+                    before = (log.region, screen.query_one("#task-nav").region)
+                    for n in range(8):
+                        screen.feed(f"@@tpot phase step{n} Phase {n}\n")
+                        screen.feed(f"Line {n}\n")
+                    await pilot.pause(0.2)
+                    self.assertEqual((log.region, screen.query_one("#task-nav").region), before)
+                    phases = screen.query_one("#task-phase-view")
+                    self.assertGreater(phases.max_scroll_y, 0)
+                    self.assertEqual(phases.scroll_y, phases.max_scroll_y)
+                    self.assertGreaterEqual(log.content_region.height, 3)
+                finally:
+                    gate.set()
+                await app.workers.wait_for_complete()
+                self.assertEqual(screen.code, 130)
+                self.assertIn("130", str(screen.query_one("#task-result").render()))
+
+    async def test_scroll_position_survives_new_output_and_keeps_complete_history(self):
+        screen = self.screen()
+        app = host(screen)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.click("#task-run")
+            await app.workers.wait_for_complete()
+            for n in range(2050):
+                screen.feed(f"history {n:04d}\n")
+            await pilot.pause(0.2)
+            log = screen.query_one("#task-log")
+            self.assertTrue(any("history 0000" in line.text for line in log.lines))
+            log.scroll_home(animate=False)
+            await pilot.pause(0.1)
+            before = log.scroll_y
+            screen.feed("later output\n")
+            await pilot.pause(0.2)
+            self.assertEqual(log.scroll_y, before)
+
+    async def test_live_check_rows_have_a_reserved_area_and_plain_details(self):
+        import json
+        from tpotctl.tests.test_runlog import RunTest
+        fixture = RunTest()
+        screen = self.screen(check_progress=True)
+        app = host(screen)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.click("#task-run")
+            await app.workers.wait_for_complete()
+            self.assertTrue(screen.query("#task-live"), "live checks need a dedicated result area")
+            table = screen.query_one("#task-live")
+            self.assertTrue(table.is_on_screen)
+            log = screen.query_one("#task-log")
+            before = log.region
+            start = fixture.check_start()
+            start["names"] += [f"honeypot{number}" for number in range(20)]
+            screen.feed("@@tpot check " + json.dumps(start))
+            row = fixture.check_row()
+            row["row"]["stages"]["log"]["detail"] = "[bold]literal log text[/bold]"
+            screen.feed("@@tpot check " + json.dumps(row))
+            await pilot.pause(0.2)
+            self.assertEqual(log.region, before)
+            self.assertGreaterEqual(log.content_region.height, 3)
+            self.assertEqual(table.row_count, 21)
+            self.assertEqual(len(table.get_row("cowrie")), 8)
+            self.assertEqual(table.max_scroll_x, 0)
+            self.assertGreater(table.max_scroll_y, 0)
+            table.focus()
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertIn("[bold]literal log text[/bold]", str(app.screen.query_one("NavScroll Static").render()))
+
+    async def test_expanding_a_live_check_log_restores_its_viewports(self):
+        screen = self.screen(check_progress=True)
+        app = host(screen)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.click("#task-run")
+            await app.workers.wait_for_complete()
+            await pilot.pause(0.2)
+            log = screen.query_one("#task-log")
+            table = screen.query_one("#task-live")
+            before = (log.region, table.region, screen.query_one("#task-nav").region)
+            await pilot.press("l")
+            await pilot.pause(0.2)
+            self.assertFalse(table.is_on_screen)
+            self.assertGreater(log.region.height, before[0].height)
+            await pilot.press("l")
+            await pilot.pause(0.2)
+            self.assertEqual((log.region, table.region, screen.query_one("#task-nav").region), before)
+
     async def test_password_goes_in_a_file_that_is_gone_after_a_failure(self):
         FakeEngine.code = 3
         app = host(self.screen(sudo="password"))

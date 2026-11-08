@@ -32,8 +32,8 @@ from tpotctl.commands import TpotCommands
 from tpotctl.screens.dialogs import ConfirmDialog, QuitDialog, SensorDialog, UserDialog
 from tpotctl.theme import apply as apply_theme
 from tpotctl.ops import cell_state
-from tpotctl.widgets.comb import Honeycomb
 from tpotctl.widgets.header import TpotHeader, lead
+from tpotctl.widgets.progress import CHECK_STATES, CHECK_STATE_WORDS, check_cell
 
 LAUNCHER = os.path.join(REPO_DIR, "tpot")
 CUSTOM_OUTPUT = os.path.join(REPO_DIR, "docker-compose-custom.yml")
@@ -55,6 +55,9 @@ class Backend:
         # T-Pot's services only, not started ones as placeholders; other containers of the host
         # stay out (tpot ps lists them)
         return ops.tpot_containers(ops.containers(), ops.compose_names())
+
+    def service_groups(self) -> Dict[str, str]:
+        return ops.service_groups()
 
     def images(self) -> List[ops.Image]:
         return ops.images()
@@ -291,13 +294,95 @@ class Runner:
         return code
 
 
-def container_rows(containers: List[ops.Container]):
-    for c in containers:
+SERVICE_GROUPS = ("Honeypots", "NSM", "Infrastructure", "Other")
+
+
+def container_group(container: ops.Container, groups: Dict[str, str]) -> str:
+    return groups.get(container.service or container.name, "Other")
+
+
+def container_rows(containers: List[ops.Container], groups: Dict[str, str]):
+    for c in sorted(containers, key=lambda c: (SERVICE_GROUPS.index(container_group(c, groups)), c.name)):
         glyph, colour = cell_state(c)
         status = Text()
         status.append(f"{glyphs.g(glyph)} ", style=f"bold {theme.color(colour)}")
-        status.append(c.status, style=theme.color(colour) if colour != "ok" else "")
-        yield c.name, (c.name, status, c.ports)
+        status.append(c.health or ("not started" if c.state == ops.ABSENT else c.state),
+                      style=theme.color(colour) if colour != "ok" else "")
+        count = len([port for port in c.ports.split(",") if port.strip()])
+        yield c.name, (container_group(c, groups), c.name, status, str(count) if count else "-")
+
+
+def operation_text(containers: List[ops.Container], groups: Dict[str, str]) -> Text:
+    text = Text(f"{'Operation':<15} Run Healthy Start Fail Stop\n", style=theme.color("mist"))
+    for group in SERVICE_GROUPS:
+        found = [c for c in containers if container_group(c, groups) == group]
+        if not found and group == "Other":
+            continue
+        running = sum(c.state == "running" for c in found)
+        healthy = sum(c.state == "running" and c.health == "healthy" for c in found)
+        starting = sum(c.state == "created" or c.state == "running" and c.health == "starting" for c in found)
+        failed = sum(c.state in ("dead", "restarting") or c.state == "running" and c.health == "unhealthy"
+                     for c in found)
+        stopped = sum(c.state not in ("running", "created", "dead", "restarting") for c in found)
+        text.append(f"{group:<15} {running:>3} {healthy:>7} {starting:>5} {failed:>4} {stopped:>4}\n",
+                    style=theme.color("glass"))
+    text.rstrip()
+    return text
+
+
+def status_problems(state, containers, problem, last_check, check_problem) -> Text:
+    text = Text()
+    current = [f"{c.name}: {c.status}" for c in containers
+               if c.state != "running" or c.health == "unhealthy"]
+    if state is not None and state.service not in ("active", "n/a"):
+        current.insert(0, f"tpot.service: {state.service}")
+    if problem:
+        current.insert(0, problem)
+    if current:
+        text.append("\n".join(current[:3]), style=theme.color("error"))
+        if len(current) > 3:
+            text.append(f"\n{len(current) - 3} more; open Services.", style=theme.color("warn"))
+    else:
+        text.append("No current container problems.", style=theme.color("ok"))
+    if check_problem:
+        text.append(f"\nLast check cannot be read: {check_problem}", style=theme.color("warn"))
+    elif last_check is None:
+        text.append("\nNo check yet. Open Checks to verify the pipeline.", style=theme.color("mist"))
+    else:
+        text.append(f"\nLast check {check_when(last_check['started'])}: {last_check['result']} "
+                    "(historical; details in Checks).", style=theme.color("mist"))
+    return text
+
+
+class ServiceDetailDialog(NavModal):
+    BINDINGS = [Binding("escape", "close", "Back")]
+
+    def __init__(self, container: ops.Container, group: str):
+        super().__init__()
+        self.container, self.group = container, group
+
+    def compose(self) -> ComposeResult:
+        c = self.container
+        with Vertical(classes="dialog"):
+            yield DialogTitle(Text(c.name))
+            with NavScroll():
+                yield Static(Text(f"Group: {self.group}\nState: {c.status}\n"
+                                  f"Healthcheck: {c.health or 'none reported'}\nImage: {c.image or '-'}\n\n"
+                                  "Ports (host -> container)\n" +
+                                  ("\n".join(c.ports.split(", ")) if c.ports else "No published ports.")),
+                             id="service-detail-body")
+            with Horizontal(classes="actions"):
+                yield Button("Back", id="no")
+
+    def on_mount(self) -> None:
+        self.query_one("#no", Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        self.dismiss(None)
+
+    def action_close(self) -> None:
+        self.dismiss(None)
 
 
 def meter(label: str, percent: Optional[float], detail: str = "", width: int = 12) -> Text:
@@ -366,7 +451,7 @@ def honeypot_bars(top, width: int) -> Text:
 
 
 def attacks_text(attacks, width: int, top: int = 5, now: Optional[float] = None, rows: int = 2) -> Text:
-    """The Attacks widget: the last hour per minute (in `rows` rows), the totals, the newest attack, the
+    """Honeypot events: the last hour per minute (in `rows` rows), the totals, the newest event, the
     busiest honeypots of 24 hours (the block's subtitle says so)."""
     from tpotctl import events
     text = Text()
@@ -375,21 +460,21 @@ def attacks_text(attacks, width: int, top: int = 5, now: Optional[float] = None,
     if attacks.problem:
         return Text(attacks.problem, style=theme.color("mist"))
     values = attacks.per_minute[-max(10, width):]
-    if not any(values):
-        text.append("a quiet hour, no attacks\n\n", style=theme.color("mist"))
-    rows = 1 if glyphs.mode() == "ascii" else rows
-    for line in [] if not any(values) else events.sparkline(values, glyphs.spark(), rows=rows):
+    if not attacks.last_hour and rows:
+        text.append("a quiet hour, no honeypot events\n", style=theme.color("mist"))
+    rows = 1 if rows and glyphs.mode() == "ascii" else rows
+    for line in [] if not rows or not any(values) else events.sparkline(values, glyphs.spark(), rows=rows):
         text.append(line, style=theme.color("magenta"))
         text.append("\n")
 
     def figure(count: int, label: str) -> Text:
         return Text.assemble((f"{count:,}".replace(",", " "), "bold"), (label, theme.color("mist")))
-    totals = Text("   ").join([figure(sum(attacks.per_minute), " last hour"), figure(attacks.last_day, " in 24 hours")])
-    sources = figure(attacks.sources, " sources" if attacks.sources != 1 else " source") if attacks.sources else None
+    totals = Text("   ").join([figure(attacks.last_hour, " events/1h"), figure(attacks.last_day, " events/24h")])
+    sources = Text("~") + figure(attacks.sources, " source IPs/1h")
     latest = None
     if attacks.latest is not None:
         now = time.time() if now is None else now
-        latest = Text.assemble((f"{lead('last_attack')}last attack ", theme.color("mist")),
+        latest = Text.assemble((f"{lead('last_attack')}last event ", theme.color("mist")),
                                (ago(now - attacks.latest), "bold"))
     # the sources go with the totals where the line has room, else with the newest attack
     if sources is not None and totals.cell_len + 3 + sources.cell_len <= width:
@@ -407,8 +492,7 @@ def attacks_text(attacks, width: int, top: int = 5, now: Optional[float] = None,
     return text
 
 
-# from this terminal height on the Attacks block has two rows of sparkline and five honeypots and Top
-# attackers ten sources; below one row, three and three: the containers table keeps its rows
+# Taller overviews show more ranking detail; the Services tab has its own viewport.
 SOURCES_TALL = 50
 
 
@@ -430,34 +514,43 @@ def sources_text(sources, limit: int = 10) -> Text:
 class StatusPane(Vertical):
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="dash"):
-            with Vertical(id="hive-block", classes="block"):
-                yield Honeycomb(id="comb")
-            with Vertical(id="side-blocks"):
-                with Horizontal(id="feed"):
+        with TabbedContent(id="status-tabs"):
+            with TabPane("Overview", id="status-overview"):
+                with NavScroll(id="status-summary"):
+                    yield Static("Reading service status ...", id="operation")
+                    yield Static("", id="status-info", classes="info")
                     with Vertical(id="attacks-block", classes="block"):
                         yield Static(attacks_text(None, 40), id="attacks")
+                        yield Static("Honeypot documents indexed here, including sensors; not unique attacks.\n"
+                                     "Source IPs are an estimate. NGINX, NSM and reflection victims are excluded.",
+                                     id="event-scope", classes="info")
+                    with Vertical(id="problems-block", classes="block"):
+                        yield Static("", id="status-problems")
+                        yield Button("Open Checks", id="status-checks")
+                    with Vertical(id="system-block", classes="block"):
+                        yield Static("", id="system")
                     with Vertical(id="sources-block", classes="block"):
                         yield Static("", id="top-attackers")
-                with Vertical(id="system-block", classes="block"):
-                    yield Static("", id="system")
-        yield Static("", id="status-info", classes="info")
-        yield NavDataTable(id="containers", cursor_type="row", zebra_stripes=True)
+            with TabPane("Services", id="status-services"):
+                yield NavDataTable(id="containers", cursor_type="row", zebra_stripes=True)
+                yield Static("Ports: number of mappings; enter shows every mapping and the full status.",
+                             classes="info")
         with Horizontal(classes="actions"):
             yield Button("Start T-Pot", id="svc-start")
             yield Button("Stop T-Pot", id="svc-stop")
             yield Button("Restart T-Pot", id="svc-restart", variant="primary")
 
     def on_mount(self) -> None:
-        self.query_one("#hive-block").border_title = "Hive"
-        self.query_one("#attacks-block").border_title = "Attacks"
-        self.query_one("#sources-block").border_title = "Top attackers, 24 hours"
+        self.query_one("#attacks-block").border_title = "Honeypot events"
+        self.query_one("#sources-block").border_title = "Source IPs by event count, 24 hours"
+        self.query_one("#problems-block").border_title = "Attention"
         self.query_one("#system-block").border_title = "System"
         self.hive = self.app.backend.tpot_type() != "SENSOR"
         self.query_one("#attacks-block").display = self.hive
         self.query_one("#sources-block").display = self.hive
         self.attacks = None
-        self.query_one(DataTable).add_columns("Name", "Status", "Ports")
+        self.groups = {}
+        self.query_one(DataTable).add_columns("Group", "Name", "Status", "Ports")
         self.load()
         self.set_interval(2.0, self.load)
         if self.hive:
@@ -466,6 +559,7 @@ class StatusPane(Vertical):
 
     @work(thread=True, exclusive=True, group="status")
     def load(self) -> None:
+        from tpotctl.checks.run import ResultError
         backend = self.app.backend
         stamp = backend.config_stamp()      # before the read: the header is from this configuration
         try:
@@ -473,10 +567,20 @@ class StatusPane(Vertical):
         except ops.OpsError as err:
             state, containers, problem = None, [], str(err)
         try:
+            groups = backend.service_groups()
+        except ops.OpsError as err:
+            groups = {}
+            problem = "\n".join(part for part in (problem, str(err)) if part)
+        try:
+            last_check, check_problem = backend.check_result(), ""
+        except (ResultError, OSError, RuntimeError) as err:
+            last_check, check_problem = None, str(err)
+        try:
             machine = backend.system()
         except Exception:      # nothing in /proc is worth a crash of the menu
             machine = None
-        self.app.call_from_thread(self.show, state, containers, problem, machine, stamp)
+        self.app.call_from_thread(self.show, state, containers, problem, machine, stamp,
+                                  groups, last_check, check_problem)
 
     @work(thread=True, exclusive=True, group="attacks")
     def load_attacks(self) -> None:
@@ -490,22 +594,22 @@ class StatusPane(Vertical):
         tall = self.app.size.height >= SOURCES_TALL
         short = self.app.size.height < 34
         self.query_one("#attacks", Static).update(attacks_text(attacks, width, 0 if short else 5 if tall else 3,
-                                                               rows=2 if tall else 1))
+                                                               rows=0 if short else 2 if tall else 1))
+        self.query_one("#event-scope", Static).update(
+            "Indexed here incl. sensors; ~IPs estimated." if short else
+            "Honeypot documents indexed here, including sensors; not unique attacks.\n"
+            "Source IPs are an estimate. NGINX, NSM and reflection victims are excluded.")
         busiest = attacks is not None and not attacks.problem and attacks.top
         self.query_one("#attacks-block").border_subtitle = \
             Text("busiest honeypots, 24 hours", style=theme.color("mist")) if busiest else None
         self.query_one("#top-attackers", Static).update(sources_text(sources, 10 if tall else 3))
 
     def on_resize(self) -> None:
-        if getattr(self, "attacks", None) is not None:
-            self.show_attacks(self.attacks, getattr(self, "sources", None))
-        if getattr(self, "shown", None):
-            self.show(*self.shown)
+        self.call_after_refresh(self.repaint)
 
     def repaint(self) -> None:
         """After a change of theme or icons."""
-        self.query_one(Honeycomb).repaint()
-        if self.attacks is not None:
+        if getattr(self, "attacks", None) is not None:
             self.show_attacks(self.attacks, getattr(self, "sources", None))
         if getattr(self, "shown", None):
             self.show(*self.shown)
@@ -530,13 +634,16 @@ class StatusPane(Vertical):
             self.show(*self.shown)
 
     def show(self, state: Optional[ops.Status], containers: List[ops.Container], problem: str,
-             machine=None, stamp=None) -> None:
-        self.shown = (state, containers, problem, machine)
+             machine=None, stamp=None, groups=None, last_check=None, check_problem="") -> None:
+        self.shown = (state, containers, problem, machine, stamp, groups, last_check, check_problem)
+        self.groups = groups or {}
         if state is not None:
             self.app.update_header(state, stamp, containers, machine)
         if getattr(self, "attacks", None) is not None:     # the age of the newest attack goes on
             self.show_attacks(self.attacks, getattr(self, "sources", None))
-        self.query_one(Honeycomb).show(containers)
+        self.query_one("#operation", Static).update(operation_text(containers, self.groups))
+        self.query_one("#status-problems", Static).update(
+            status_problems(state, containers, problem, last_check, check_problem))
         if machine is not None:
             self.query_one("#system", Static).update(system_text(machine, compact=self.app.size.height < 34))
         info = Text()
@@ -549,13 +656,29 @@ class StatusPane(Vertical):
         if getattr(self, "sensor_summary", None) is not None:
             info.append("\n")
             info.append(self.sensor_summary)
-        self.query_one("#status-info", Static).update(info)
+        self.query_one("#status-info", Static).update(
+            getattr(self, "sensor_summary", Text()) if self.app.size.height < 34 else info)
         # every 2 s: only what changed, so the table neither jumps to the top nor flickers
-        self.query_one(NavDataTable).sync_rows(container_rows(containers))
+        table = self.query_one(NavDataTable)
+        room = max(40, (table.content_region.width or self.content_region.width) - 9)
+        widths = (14, max(8, room - 31), 12, 5)
+        for column, width in zip(table.ordered_columns, widths):
+            column.width, column.auto_width = width, False
+        table.sync_rows(container_rows(containers, self.groups))
+        table.refresh(layout=True)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id and event.button.id.startswith("svc-"):
+        if event.button.id == "status-checks":
+            self.app.goto("checks")
+        elif event.button.id and event.button.id.startswith("svc-"):
             self.app.service(event.button.id[4:])
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        event.stop()
+        for container in self.shown[1]:
+            if container.name == event.row_key.value:
+                self.app.push_screen(ServiceDetailDialog(container, container_group(container, self.groups)))
+                break
 
 
 class ImagesPane(Vertical):
@@ -1789,10 +1912,6 @@ class SensorsPane(Vertical):
 
 
 
-# the stages of a check on the Checks page: glyph and colour per state (tpotctl.checks.stages.STATES)
-CHECK_STATES = {"ok": ("stage_ok", "ok"), "failed": ("stage_failed", "error"), "n/a": ("stage_na", "ash"),
-                "not_reached": ("stage_not_reached", "mist")}
-CHECK_STATE_WORDS = {"ok": "ok", "failed": "failed", "n/a": "does not apply", "not_reached": "not reached"}
 NO_CHECK_YET = "No check has run yet."
 CHECK_UNREADABLE = "The last result cannot be read."
 
@@ -1809,12 +1928,6 @@ def check_legend(result: Dict) -> Text:
     parts = [f"{short}: {result['titles'][name]}." for name in result["stages"]
              for short in [check_short_title(result, name)] if short != result["titles"][name]]
     return Text(" ".join(parts), style=theme.color("ash"))
-
-
-def check_cell(state: str) -> Text:
-    glyph, colour = CHECK_STATES[state]
-    return Text(glyphs.g(glyph), style=f"bold {theme.color(colour)}" if state == "failed" else theme.color(colour),
-                justify="center")
 
 
 def check_when(stamp: str) -> str:
@@ -1852,7 +1965,9 @@ def check_cleanup_text(cleanup: Dict) -> Text:
                     style=theme.color("mist"))
         if cleanup.get("left"):
             from tpotctl.checks import run as trun
-            text.append(f"\n{glyphs.g('warn')} {trun.left_text(cleanup['left'], cleanup.get('left_no_source', 0))}; "
+            left = trun.left_text(cleanup["left"], cleanup.get("left_no_source", 0),
+                                  cleanup.get("left_no_source_types", []))
+            text.append(f"\n{glyphs.g('warn')} {left}; "
                         f"Kibana: ", style=theme.color("warn"))
             text.append(cleanup.get("left_kibana") or "-", style=theme.color("glass"))
     elif state == "kept":
@@ -1952,7 +2067,7 @@ def check_detail(result: Dict, row: Dict) -> Text:
     text.append(f"  {result['kibana'] or '-'}\n", style=theme.color("glass"))
     cleanup = check_cleanup_text(result["cleanup"])
     if cleanup.plain:
-        head("Cleanup of this check")
+        head("Whole-run cleanup (all honeypots)")
         for line in cleanup.split("\n"):
             text.append("  ")
             text.append_text(line)
@@ -2245,7 +2360,7 @@ class ChecksPane(Vertical):
             def confirmed(yes: bool) -> None:
                 if yes:
                     self.app.run_task(Task(title, command, cwd=REPO_DIR, become="--become-file", autostart=True,
-                                           done=done), lambda _code: self.load())
+                                           done=done, check_progress=True), lambda _code: self.load())
             self.app.push_screen(ConfirmDialog(f"{title}?", Text(trun.question(options, self.sensor),
                                                                   style=theme.color("glass")),
                                                yes="Start the check", no="Back"), confirmed)

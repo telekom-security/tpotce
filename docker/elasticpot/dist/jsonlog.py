@@ -1,6 +1,5 @@
 """T-Pot JSON output: whole records, safe alongside the check's external appends."""
 
-import fcntl
 import json
 import os
 
@@ -13,8 +12,9 @@ from core.tools import mkdir
 class AppendDailyLogFile(HoneypotDailyLogFile):
     def _openFile(self):
         super()._openFile()
-        fd = self._file.fileno()
-        fcntl.fcntl(fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_APPEND)
+        # Set append mode when opening, including on shared filesystems.
+        self._file.close()
+        self._file = open(self.path, "ab", buffering=0)
 
 
 class Output(output.Output):

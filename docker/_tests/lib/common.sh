@@ -28,21 +28,20 @@ test_ok() {
 }
 
 test_json_log_marker() {
+  if [[ "$1" == append ]]; then
+    # Write as the honeypot's user: a bind-mounted 0664 log need not be writable by the host user.
+    python3 -c 'import json, sys; print(json.dumps({"tpot_smoke_marker": sys.argv[1]}))' "$3" \
+      | docker exec -i "${TEST_CONTAINER_NAME}" sh -c 'test -f "$1" && cat >> "$1"' tpot-marker "$2"
+    return
+  fi
   python3 - "$@" <<'PY'
 import json
-import os
 import sys
 from pathlib import Path
 
 mode, filename, token = sys.argv[1:]
 marker = {"tpot_smoke_marker": token}
-if mode == "append":
-    fd = os.open(filename, os.O_WRONLY | os.O_APPEND)
-    try:
-        os.write(fd, (json.dumps(marker) + "\n").encode())
-    finally:
-        os.close(fd)
-elif mode == "check":
+if mode == "check":
     records = [json.loads(line) for line in Path(filename).read_text().splitlines() if line.strip()]
     if marker not in records:
         raise SystemExit("External JSON log marker was overwritten by a honeypot event")

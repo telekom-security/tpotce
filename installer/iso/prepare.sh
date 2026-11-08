@@ -11,7 +11,8 @@
 # It never stops the Debian installer: what fails is left to the T-Pot installer when it starts
 # (which needs the internet for it then), the log is /var/log/tpot-iso.log. rc 1 when ~/tpotce
 # could not be made. Argument: the user (else the first member of the group sudo); for the tests
-# TPOT_ISO_SHARE, TPOT_ISO_LOG, TPOT_ISO_SSHD and TPOT_ISO_SYSTEMD.
+# TPOT_ISO_SHARE, TPOT_ISO_LOG, TPOT_ISO_SSHD, TPOT_ISO_SYSTEMD and TPOT_ISO_ISSUE.
+# --complete reconciles the login hint and managed terminal after installation, also on update.
 unset CDPATH
 mySHARE="${TPOT_ISO_SHARE:-/usr/local/share/tpot-iso}"
 myLOG="${TPOT_ISO_LOG:-/var/log/tpot-iso.log}"
@@ -140,6 +141,164 @@ fuMANAGER () {
   fi
 }
 
+fuGRUB () (
+  local myGRUB="${TPOT_ISO_GRUB:-/etc/default/grub.d}"
+  local myTHEME="${TPOT_ISO_THEME:-/usr/share/grub/themes/tpot}"
+  local myCREATED="" myFILE
+  [ -d "${mySHARE}/grub" ] || return 0
+  if [ -e "${myGRUB}/90-tpot.cfg" ] || [ -L "${myGRUB}/90-tpot.cfg" ] \
+     || [ -e "${myTHEME}" ] || [ -L "${myTHEME}" ]; then
+    echo "T-Pot ISO: existing GRUB customization kept."
+    return 0
+  fi
+  for myFILE in theme.txt splash.png hl_c.png tpot.cfg; do
+    [ -f "${mySHARE}/grub/${myFILE}" ] || { echo "T-Pot ISO: missing GRUB payload ${myFILE}."; return 1; }
+  done
+  # Only paths created by this invocation are removed on failure.
+  trap 'myRC=$?
+        if [ "${myRC}" -ne 0 ] && [ -n "${myCREATED}" ]; then
+          rm -f -- "${myGRUB}/90-tpot.cfg" "${myTHEME}/theme.txt" "${myTHEME}/splash.png" "${myTHEME}/hl_c.png" || exit 1
+          rmdir -- "${myTHEME}" || exit 1
+        fi
+        exit "${myRC}"' EXIT
+  mkdir -p "${myGRUB}" "$(dirname "${myTHEME}")" && mkdir "${myTHEME}" || return 1
+  myCREATED=1
+  for myFILE in theme.txt splash.png hl_c.png; do
+    cp "${mySHARE}/grub/${myFILE}" "${myTHEME}/${myFILE}" && chmod 0644 "${myTHEME}/${myFILE}" || return 1
+  done
+  cp "${mySHARE}/grub/tpot.cfg" "${myGRUB}/90-tpot.cfg" && chmod 0644 "${myGRUB}/90-tpot.cfg" || return 1
+  if update-grub; then
+    echo "T-Pot ISO: installed GRUB uses T-Pot's name and artwork."
+    return 0
+  fi
+  echo "T-Pot ISO: GRUB appearance could not be applied; restoring Debian's configuration."
+  rm -- "${myGRUB}/90-tpot.cfg" || return 1
+  update-grub || echo "T-Pot ISO: GRUB configuration could not be regenerated; review the boot configuration."
+  return 1
+)
+
+fuCOMPLETE () {
+  # the login hint of the ISO goes once T-Pot is installed, only as late.sh put it there: its sha256
+  # in tpot.issue.sha256, for ISOs from before that record the hints they shipped
+  local myISSUE="${TPOT_ISO_ISSUE:-/etc/issue.d/tpot.issue}" myRECORD="${mySHARE}/tpot.issue.sha256"
+  local myKNOWN="" myHASH=""
+  [ -f "${mySHARE}/iso.conf" ] && [ -f "${mySYSTEMD}/tpot.service" ] || return 0
+  [ -e "${myISSUE}" ] || [ -L "${myISSUE}" ] || return 0
+  if [ ! -e "${myRECORD}" ] && [ ! -L "${myRECORD}" ]; then
+    myKNOWN="4a45f7b3987c735b4d37ab72b5a70df2cef97d6eb67efbe6cf5b81022ed9d3f1
+82491c88d922642f9ef68995a376a4bd20779e77b5fefa636877b529296f62f3
+62d18d6ef994bff6b1b732865918a0e63e4a68b9acf543d9764853d335aa664f"
+  elif [ -f "${myRECORD}" ] && [ ! -L "${myRECORD}" ]; then
+    myKNOWN=$(cat "${myRECORD}") || myKNOWN=""
+    [[ "${myKNOWN}" =~ ^[0-9a-f]{64}$ ]] || myKNOWN=""
+  fi
+  if [ -z "${myKNOWN}" ]; then
+    echo "T-Pot ISO: the record of the ISO login hint ${myRECORD} is invalid; ${myISSUE} kept."
+    return 1
+  fi
+  if [ ! -L "${myISSUE}" ] && [ -f "${myISSUE}" ]; then
+    myHASH=$(sha256sum "${myISSUE}") || myHASH=""
+  fi
+  if [ -z "${myHASH}" ] || ! grep -qxF -- "${myHASH%% *}" <<< "${myKNOWN}"; then
+    echo "T-Pot ISO: ${myISSUE} is not the unmodified T-Pot ISO hint; kept."
+    return 1
+  fi
+  if ! rm -- "${myISSUE}"; then
+    echo "T-Pot ISO: could not remove the obsolete ISO login hint ${myISSUE}."
+    return 1
+  fi
+  echo "T-Pot ISO: obsolete ISO login hint removed."
+}
+
+fuINSTALLED () {
+  # fuINSTALLED <package>: is it installed (dpkg's own state, not just known)?
+  local mySTATE
+  mySTATE=$(dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null) || return 1
+  [ "${mySTATE:0:2}" = "ii" ]
+}
+
+fuTERMINAL_DEPS () {
+  # fuTERMINAL_DEPS <new terminal.sh>: the Debian packages it names that are missing, without their
+  # Recommends (no desktop comes along); rc 1 when it still cannot run, the caller keeps the old one
+  local mySOURCE="$1" myPACKAGE myWHY="" myMISSING=() myLEFT=()
+  local -a myPACKAGES
+  read -r -a myPACKAGES < <(bash "${mySOURCE}" --packages) && [ "${#myPACKAGES[@]}" -gt 0 ] \
+    || { echo "T-Pot ISO: the packages of the new terminal helper cannot be read; the previous terminal helper stays."; return 1; }
+  for myPACKAGE in "${myPACKAGES[@]}"; do
+    fuINSTALLED "${myPACKAGE}" || myMISSING+=("${myPACKAGE}")
+  done
+  if [ "${#myMISSING[@]}" -gt 0 ]; then
+    echo "T-Pot ISO: installing the packages of the graphical terminal: ${myMISSING[*]}"
+    # a stale or broken source must not stop it, the install below says whether it worked
+    DEBIAN_FRONTEND=noninteractive apt-get -q -o DPkg::Lock::Timeout=300 update \
+      || echo "T-Pot ISO: apt-get update failed, trying the install anyway."
+    if ! DEBIAN_FRONTEND=noninteractive apt-get -q -y -o DPkg::Lock::Timeout=300 \
+         install --no-install-recommends "${myMISSING[@]}"; then
+      myWHY="they could not be installed"
+    else
+      for myPACKAGE in "${myMISSING[@]}"; do
+        fuINSTALLED "${myPACKAGE}" || myLEFT+=("${myPACKAGE}")
+      done
+      [ "${#myLEFT[@]}" -eq 0 ] || myWHY="still not installed: ${myLEFT[*]}"
+    fi
+  fi
+  if [ -z "${myWHY}" ] && ! myWHY=$(bash "${mySOURCE}" --ready); then
+    myWHY="${myWHY:-a part} is missing"
+  fi
+  [ -n "${myWHY}" ] || return 0
+  echo "T-Pot ISO: the graphical terminal needs ${myMISSING[*]:-${myPACKAGES[*]}}: ${myWHY}; the previous terminal helper stays."
+  echo "T-Pot ISO: to finish it: sudo apt-get install --no-install-recommends ${myMISSING[*]:-${myPACKAGES[*]}}"
+  echo "T-Pot ISO: then: sudo bash ${BASH_SOURCE[0]} --complete"
+  return 1
+}
+
+fuTERMINAL () {
+  local myTARGET="${mySHARE}/terminal.sh" myRECORD="${mySHARE}/terminal.sha256"
+  local mySOURCE="${BASH_SOURCE[0]%/*}/terminal.sh" myKNOWN myHASH myNEW myTMP myMETA
+  [ -f "${mySHARE}/iso.conf" ] && [ -f "${mySYSTEMD}/tpot.service" ] || return 0
+  if [ -L "${myTARGET}" ] || [ -L "${myRECORD}" ] || [ ! -f "${myTARGET}" ] || [ ! -f "${mySOURCE}" ] \
+     || { [ -e "${myRECORD}" ] && [ ! -f "${myRECORD}" ]; }; then
+    echo "T-Pot ISO: terminal helper or ownership record is missing, non-regular or a link; kept."
+    return 1
+  fi
+  if [ -f "${myRECORD}" ]; then
+    myKNOWN=$(cat "${myRECORD}") || return 1
+  else
+    # The unmodified helper shipped before ISO payloads recorded its digest.
+    myKNOWN="ad20ee0de7e7f6dcc6290eab7999937c92f7257ce724b900a63a03a3d10eb74e"
+  fi
+  myHASH=$(sha256sum "${myTARGET}") || return 1
+  if [[ ! "${myKNOWN}" =~ ^[0-9a-f]{64}$ ]] || [ "${myHASH%% *}" != "${myKNOWN}" ]; then
+    echo "T-Pot ISO: terminal helper was changed or its ownership record is invalid; kept."
+    return 1
+  fi
+  # the managed one is current: nothing to migrate, a package removed on purpose stays removed
+  myNEW=$(sha256sum "${mySOURCE}") || return 1
+  [ "${myNEW%% *}" != "${myKNOWN}" ] || return 0
+  fuTERMINAL_DEPS "${mySOURCE}" || return 1
+  myTMP=$(mktemp "${mySHARE}/.terminal.XXXXXXXX") || return 1
+  myMETA=$(mktemp "${mySHARE}/.terminal.XXXXXXXX") || { rm -f -- "${myTMP}"; return 1; }
+  if install -m 0755 "${mySOURCE}" "${myTMP}" \
+     && myHASH=$(sha256sum "${myTMP}") \
+     && printf '%s\n' "${myHASH%% *}" > "${myMETA}" && chmod 0644 "${myMETA}" \
+     && mv -f -- "${myTMP}" "${myTARGET}" && mv -f -- "${myMETA}" "${myRECORD}"; then
+    echo "T-Pot ISO: managed terminal helper refreshed."
+    return 0
+  fi
+  rm -f -- "${myTMP}" "${myMETA}" || echo "T-Pot ISO: terminal staging files could not be removed."
+  echo "T-Pot ISO: terminal helper could not be refreshed."
+  return 1
+}
+
+if [ "${1:-}" = "--complete" ]; then
+  myRC=0
+  fuCOMPLETE || myRC=1
+  fuTERMINAL || myRC=1
+  exit "${myRC}"
+fi
+
+myRC=0
+fuGRUB || myRC=1
 fuSSHD
 myUSER="${1:-}"
 [ -n "${myUSER}" ] || myUSER=$(getent group sudo 2>/dev/null | cut -d: -f4 | cut -d, -f1)
@@ -151,7 +310,6 @@ if [ -z "${myUSER}" ] || [ "${myUSER}" = "root" ] || [ -z "${myHOME}" ] || [ ! -
     exit 1
 fi
 fuSERVICE
-myRC=0
 if fuTPOT;
   then
     fuGUM

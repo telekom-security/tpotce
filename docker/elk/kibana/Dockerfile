@@ -21,6 +21,7 @@ RUN printf '%s\n' \
         'unifiedSearch.autocomplete.valueSuggestions.timeout: 60000' \
         'unifiedSearch.autocomplete.valueSuggestions.terminateAfter: 1000000' \
         'telemetry.optIn: false' \
+        'telemetry.banner: false' \
         'newsfeed.enabled: false' \
         > /usr/share/kibana/config/kibana.yml && \
     printf '%s\n' "--max-old-space-size=${KIBANA_HEAP_MB}" >> /usr/share/kibana/config/node.options && \

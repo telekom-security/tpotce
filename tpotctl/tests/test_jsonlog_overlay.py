@@ -4,6 +4,8 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import types
 import unittest
@@ -59,6 +61,24 @@ class JsonLogOverlayTest(unittest.TestCase):
         writer.start()
         self.addCleanup(lambda: writer.outfile._file.close())
         return writer
+
+    def test_external_process_append_preserves_probe_lines(self):
+        for service in ("elasticpot", "ipphoney"):
+            with self.subTest(service=service), tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "events.json"
+                path.touch()
+                writer = self.load(service, path)
+                writer.write({"input": "first"})
+                subprocess.run([
+                    sys.executable, "-c",
+                    'import sys; '
+                    'f = open(sys.argv[1], "ab", buffering=0); '
+                    'f.write(b\'{"input":"geo"}\\n\'); f.close()',
+                    str(path),
+                ], check=True)
+                writer.write({"input": "probe"})
+                self.assertEqual([json.loads(line) for line in path.read_text().splitlines()],
+                                 [{"input": "first"}, {"input": "geo"}, {"input": "probe"}])
 
     def test_external_append_survives_next_event_and_rotation(self):
         for service in ("elasticpot", "ipphoney"):

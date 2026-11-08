@@ -62,7 +62,7 @@ ADDRESS_ONLY = ("conpot_ipmi",)
 MAP_WAIT = 30.0
 MAP_SKIPPED = "not shown by the Attack Map (map_data skips events indexed after newer ones)"
 MAP_SILENT = "nothing came on Redis ({channel}) during the check: does map_data run? (docker logs map_data)"
-# the types the Attack Map leaves out (events.NOT_ATTACKS)
+# the types the Attack Map leaves out (not its own honeypot events)
 NOT_ON_THE_MAP = ("Suricata", "P0f", "DdospotTarget")
 # honeypots that never log a destination port (dicompot: only the source in "Connection from"):
 # map_data drops an event without dest_port, so the Attack Map never shows them
@@ -449,24 +449,24 @@ def leftover_query(start: datetime, end: datetime, own: OwnEvents, host: str) ->
 SOURCELESS_TYPES = ("Dicompot",)
 
 
-def _sourceless(own: OwnEvents) -> List[str]:
+def sourceless_types(own: OwnEvents) -> List[str]:
     return sorted(set(_probed(own)) & set(SOURCELESS_TYPES))
 
 
 def sourceless_query(start: datetime, end: datetime, own: OwnEvents) -> Optional[Dict[str, Any]]:
     """The events of the probed types of SOURCELESS_TYPES in the window without a source address:
     they may be the probes' or real ones, so they are counted, never deleted."""
-    if not _sourceless(own):
+    if not sourceless_types(own):
         return None
     return {"query": {"bool": {"filter": [{"range": {"@timestamp": cleanup_window(start, end)}},
-                                          {"terms": {"type.keyword": _sourceless(own)}}],
+                                          {"terms": {"type.keyword": sourceless_types(own)}}],
                                "must_not": [{"exists": {"field": "src_ip"}}]}}}
 
 
 def leftover_kql(own: OwnEvents, host: str) -> str:
     query = f'(src_ip:"{host}" and type:(' + " or ".join(f'"{name}"' for name in _probed(own)) + "))"
-    if _sourceless(own):
-        query += " or (not src_ip:* and type:(" + " or ".join(f'"{name}"' for name in _sourceless(own)) + "))"
+    if sourceless_types(own):
+        query += " or (not src_ip:* and type:(" + " or ".join(f'"{name}"' for name in sourceless_types(own)) + "))"
     return query
 
 

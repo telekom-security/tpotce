@@ -275,12 +275,22 @@ class PreseedTest(unittest.TestCase):
         self.assertEqual(packages, sorted(set(packages)))
         self.assertLessEqual({"ca-certificates", "console-setup", "curl", "fonts-dejavu-core", "keyboard-configuration",
                               "matchbox-window-manager", "sudo", "xauth", "xinit", "xserver-xorg-core",
-                              "xserver-xorg-input-libinput", "xserver-xorg-legacy", "xserver-xorg-video-fbdev",
-                              "xterm"}, set(packages))
+                              "xserver-xorg-input-libinput", "xserver-xorg-legacy", "xserver-xorg-video-fbdev"},
+                             set(packages))
         # the T-Pot installer finds its packages there and installs nothing before its questions
         installer = re.search(r'^myPACKAGES_DEBIAN="([^"]+)"$', base.read("install.sh"), re.M).group(1).split()
         self.assertLessEqual(set(installer), set(packages))
         self.assertFalse({"task-desktop", "gdm3", "lightdm", "sddm"} & set(packages))
+
+    def test_graphical_terminal_packages_cover_the_shared_helper(self):
+        packages = set(self.answers[("pkgsel/include", "string")].split())
+        helper = set(terminal_packages())
+        self.assertLessEqual({"xfce4-terminal", "dbus-daemon", "fontconfig", "fonts-cascadia-code",
+                              "fonts-dejavu-core", "matchbox-window-manager", "x11-utils", "xauth", "xinit"}, helper)
+        self.assertLessEqual(helper, packages, "the ISO brings what terminal.sh needs")
+        self.assertNotIn("xterm", packages)
+        self.assertFalse({"xfce4", "xfce4-session", "xfdesktop4", "xfwm4", "task-desktop", "task-xfce-desktop",
+                          "gdm3", "lightdm", "sddm"} & packages)
 
     def test_the_early_command_is_early_sh_of_the_iso(self):
         self.assertEqual(self.answers[("preseed/early_command", "string")], "sh /cdrom/tpot/early.sh")
@@ -396,7 +406,13 @@ class EarlyTest(EarlyBase):
         for file in self.FILES:
             write(os.path.join(self.root, file), self.before)
         write(os.path.join(self.root, "usr/share/debconf/confmodule"),
-              'db_fget () { test "$*" = "keyboard-configuration/xkb-keymap seen"; RET="$SEEN"; }\n'
+              'db_fget () {\n'
+              '  case "$*" in\n'
+              '    "keyboard-configuration/xkb-keymap seen") RET="$SEEN";;\n'
+              '    "keyboard-configuration/layout seen") RET="${LAYOUT_SEEN:-false}";;\n'
+              '    *) return 1;;\n'
+              '  esac\n'
+              '}\n'
               'db_settitle () { echo "title $*" >>"$TRACE"; }\n')
 
     def test_missed_keyboard_is_asked_and_all_target_hooks_are_repaired(self):
@@ -424,6 +440,17 @@ class EarlyTest(EarlyBase):
         result = self.run_early(SEEN="true")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(os.path.exists(self.trace))
+
+    def test_debian_layout_answer_without_xkb_seen_is_not_asked_again(self):
+        # Debian's simplified question marks layout/variant seen, not necessarily xkb-keymap.
+        for legacy_keyboard in (False, True):
+            with self.subTest(legacy_keyboard=legacy_keyboard):
+                for file in self.FILES:
+                    write(os.path.join(self.root, file),
+                          self.before.replace("return 1", f"return {0 if legacy_keyboard else 1}"))
+                result = self.run_early(SEEN="false", LAYOUT_SEEN="true")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse(os.path.exists(self.trace), "an answered question must not be reconfigured")
 
     def test_headless_mouse_and_power_button_are_not_keyboards(self):
         for devices in ("", "E: ID_INPUT_MOUSE=1", "E: ID_INPUT_KEY=1"):
@@ -607,6 +634,7 @@ class LateTest(unittest.TestCase):
         for name in ("install.sh", "start.sh", "terminal.sh", "prepare.sh", "profile.sh"):
             write(os.path.join(self.src, name), f"# {name}\n", 0o555)
         for name in ("iso.conf", "version", "ui.sh", "tpot.issue", "tpot-iso.service", "preseed.cfg", "tpotce.tar",
+                     "grub/theme.txt", "grub/splash.png", "grub/hl_c.png", "grub/tpot.cfg",
                      "gum_2.0.2_Linux_x86_64.tar.gz", "wheels/textual-1.0-py3-none-any.whl",
                      "wheels/rich-1.0-py3-none-any.whl"):
             write(os.path.join(self.src, name), f"# {name}\n", 0o444)
@@ -622,8 +650,10 @@ class LateTest(unittest.TestCase):
         share = "usr/local/share/tpot-iso/"
         expected = {share + "install.sh": 0o755, share + "start.sh": 0o755, share + "terminal.sh": 0o755,
                     share + "prepare.sh": 0o755, "usr/local/bin/tpot-terminal": 0o755,
+                    share + "terminal.sha256": 0o644, share + "tpot.issue.sha256": 0o644,
                     share + "iso.conf": 0o644, share + "version": 0o644, share + "ui.sh": 0o644,
                     share + "tpotce.tar": 0o644,
+                    **{share + "grub/" + name: 0o644 for name in ("theme.txt", "splash.png", "hl_c.png", "tpot.cfg")},
                     share + "gum_2.0.2_Linux_x86_64.tar.gz": 0o644, share + "wheels/textual-1.0-py3-none-any.whl": 0o644,
                     share + "wheels/rich-1.0-py3-none-any.whl": 0o644,
                     "etc/profile.d/tpot-iso.sh": 0o644, "etc/issue.d/tpot.issue": 0o644,
@@ -637,6 +667,9 @@ class LateTest(unittest.TestCase):
         found = sorted(os.path.relpath(os.path.join(root, name), self.target)
                        for root, _dirs, names in os.walk(self.target) for name in names)
         self.assertEqual(found, sorted(expected))
+        # the hint as it was put there, so that a later T-Pot of another commit still knows it
+        self.assertEqual(base.read(os.path.join(self.target, share + "tpot.issue.sha256")),
+                         hashlib.sha256(b"# tpot.issue\n").hexdigest() + "\n")
         # T-Pot for the user of the Debian installer, in the new system
         self.assertEqual(base.read(self.calls).splitlines(),
                          ["debconf-get passwd/username", "in-target bash /usr/local/share/tpot-iso/prepare.sh tester"])
@@ -678,11 +711,16 @@ class PrepareTest(unittest.TestCase):
         self.share = os.path.join(self.tmp, "share")
         self.sshd = os.path.join(self.tmp, "sshd_config.d")
         self.systemd = os.path.join(self.tmp, "systemd")
+        self.grub = os.path.join(self.tmp, "grub.d")
+        self.theme = os.path.join(self.tmp, "theme")
         self.log = os.path.join(self.tmp, "tpot-iso.log")
         self.bin = os.path.join(self.tmp, "bin")
         self.calls = os.path.join(self.tmp, "calls")
         for folder in (self.home, self.share, self.sshd, os.path.join(self.share, "wheels")):
             os.makedirs(folder)
+        shutil.copy(os.path.join(ISO_DIR, "terminal.sh"), self.share)
+        with open(os.path.join(self.share, "terminal.sh"), "rb") as handle:
+            write(os.path.join(self.share, "terminal.sha256"), hashlib.sha256(handle.read()).hexdigest() + "\n")
         write(os.path.join(self.share, "wheels", "rich-1.0-py3-none-any.whl"), "wheel")
         # late.sh put the unit there
         os.makedirs(self.systemd)
@@ -698,6 +736,23 @@ class PrepareTest(unittest.TestCase):
                                'case "${SSHD_RULE:-ok}" in\n  ok) exit 0 ;;\n  broken) exit 1 ;;\n'
                                '  line) [ ! -e "$SSHD_DIR/tpot.conf" ] ;;\nesac\n')
         stub(self.bin, "uname", 'echo "${MACHINE:-x86_64}"\n')
+        # the packages of the graphical terminal: dpkg-query says ii for those in dpkg.list, apt-get
+        # records its call with the first line of the installed helper at that moment, an install adds
+        # its packages (APT_INSTALL_RC fails it, APT_NOOP installs nothing); fc-list: FONT_MISSING
+        self.dpkg = os.path.join(self.tmp, "dpkg.list")
+        write(self.dpkg, "\n".join(terminal_packages()) + "\n")
+        stub(self.bin, "dpkg-query", 'for last; do :; done\ngrep -qxF -- "$last" "$DPKG_LIST" || exit 1\nprintf "ii "\n')
+        stub(self.bin, "apt-get",
+             'echo "apt-get $* | frontend=${DEBIAN_FRONTEND:-} | helper=$(head -n 1 "$TPOT_ISO_SHARE/terminal.sh")"'
+             ' >> "$CALLS"\n'
+             'mode=""; for arg; do case "$arg" in update|install) mode=$arg ;; esac; done\n'
+             '[ "$mode" != update ] || exit "${APT_UPDATE_RC:-0}"\n'
+             '[ "${APT_INSTALL_RC:-0}" = 0 ] || exit "$APT_INSTALL_RC"\n'
+             '[ -z "${APT_NOOP:-}" ] || exit 0\n'
+             'after=""; for arg; do [ -z "$after" ] || echo "$arg" >> "$DPKG_LIST"\n'
+             '  [ "$arg" != --no-install-recommends ] || after=1; done\n')
+        for name in X_TOOLS:
+            stub(self.bin, name, '[ -z "${FONT_MISSING:-}" ]\n' if name == "fc-list" else "exit 0\n")
         # gum of the ISO and the T-Pot whose ui.sh pins it
         self.gum = os.path.join(self.share, "gum_2.0.2_Linux_x86_64.tar.gz")
         with tarfile.open(self.gum, "w:gz") as tar:
@@ -749,8 +804,11 @@ class PrepareTest(unittest.TestCase):
 
     def run_prepare(self, *args, **env):
         environ = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}", "CALLS": self.calls,
+                   "DPKG_LIST": self.dpkg,
                    "SSHD_DIR": self.sshd, "TPOT_ISO_SHARE": self.share, "TPOT_ISO_LOG": self.log,
-                   "TPOT_ISO_SSHD": self.sshd, "TPOT_ISO_SYSTEMD": self.systemd, **env}
+                   "TPOT_ISO_SSHD": self.sshd, "TPOT_ISO_SYSTEMD": self.systemd,
+                   "TPOT_ISO_ISSUE": os.path.join(self.tmp, "default.issue"), **env}
+        environ.update(TPOT_ISO_GRUB=self.grub, TPOT_ISO_THEME=self.theme)
         result = subprocess.run([BASH, os.path.join(ISO_DIR, "prepare.sh"), *args], capture_output=True,
                                 text=True, timeout=60, env=environ)
         self.assertEqual(result.stdout + result.stderr, "", "everything goes into the log")
@@ -759,6 +817,315 @@ class PrepareTest(unittest.TestCase):
     def setup_call(self):
         path = os.path.join(self.home, "tpot-setup.txt")
         return base.read(path).splitlines() if os.path.exists(path) else None
+
+    def grub_payload(self):
+        for name in ("theme.txt", "splash.png", "hl_c.png"):
+            write(os.path.join(self.share, "grub", name), f"payload {name}\n")
+        write(os.path.join(self.share, "grub", "tpot.cfg"), 'GRUB_DISTRIBUTOR="T-Pot"\n')
+        stub(self.bin, "update-grub",
+             'echo update-grub >> "$CALLS"\n'
+             '[ "${GRUB_FAIL:-0}" = 0 ] || [ ! -e "$TPOT_ISO_GRUB/90-tpot.cfg" ]\n')
+
+    def test_installed_grub_uses_tpot_identity_without_replacing_loaders(self):
+        self.grub_payload()
+        write(os.path.join(self.tmp, "grub.cfg"), "generated Debian menu\n")
+        write(os.path.join(self.tmp, "efi", "BOOTAA64.EFI"), b"signed loader")
+        rc, log = self.run_prepare("tester")
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(base.read(os.path.join(self.grub, "90-tpot.cfg")), 'GRUB_DISTRIBUTOR="T-Pot"\n')
+        self.assertEqual(base.read(os.path.join(self.theme, "theme.txt")), "payload theme.txt\n")
+        self.assertEqual(base.read(os.path.join(self.tmp, "grub.cfg")), "generated Debian menu\n")
+        self.assertEqual(base.read(os.path.join(self.tmp, "efi", "BOOTAA64.EFI")), "signed loader")
+        self.assertEqual(base.read(self.calls).splitlines().count("update-grub"), 1)
+
+    def test_installed_grub_keeps_customizations_and_rolls_back_a_failed_generation(self):
+        self.grub_payload()
+        write(os.path.join(self.grub, "90-tpot.cfg"), "# my boot configuration\n")
+        rc, log = self.run_prepare("tester")
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(base.read(os.path.join(self.grub, "90-tpot.cfg")), "# my boot configuration\n")
+        self.assertNotIn("update-grub", base.read(self.calls))
+        self.assertIn("existing GRUB customization", log)
+        os.remove(os.path.join(self.grub, "90-tpot.cfg"))
+        rc, log = self.run_prepare("tester", GRUB_FAIL="1")
+        self.assertEqual(rc, 1, log)
+        self.assertFalse(os.path.exists(os.path.join(self.grub, "90-tpot.cfg")))
+        self.assertEqual(base.read(self.calls).splitlines().count("update-grub"), 2)
+        self.assertIn("GRUB appearance could not be applied", log)
+
+    def test_completed_install_removes_only_own_iso_login_hint(self):
+        issue = os.path.join(self.tmp, "issue.d", "tpot.issue")
+        original = base.read("installer/iso/tpot.issue")
+        write(issue, original)
+        rc, log = self.run_prepare("--complete", TPOT_ISO_ISSUE=issue)
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(base.read(issue), original, "a failed or unfinished installation keeps the hint")
+
+        write(os.path.join(self.systemd, "tpot.service"), "[Service]\n")
+        rc, log = self.run_prepare("--complete", TPOT_ISO_ISSUE=issue)
+        self.assertEqual(rc, 0, log)
+        self.assertFalse(os.path.exists(issue))
+        self.assertIn("obsolete ISO login hint removed", log)
+        self.assertIsNone(self.setup_call(), "completion must not run preparation again")
+        rc, log = self.run_prepare("--complete", TPOT_ISO_ISSUE=issue)
+        self.assertEqual(rc, 0, log)
+
+    def test_completion_preserves_an_edited_hint_or_a_link(self):
+        write(os.path.join(self.systemd, "tpot.service"), "[Service]\n")
+        issue = os.path.join(self.tmp, "issue")
+        write(issue, "my login message\n")
+        rc, log = self.run_prepare("--complete", TPOT_ISO_ISSUE=issue)
+        self.assertEqual(rc, 1, log)
+        self.assertEqual(base.read(issue), "my login message\n")
+        self.assertIn("not the unmodified T-Pot ISO hint", log)
+        os.remove(issue)
+        target = os.path.join(self.tmp, "foreign")
+        write(target, base.read("installer/iso/tpot.issue"))
+        os.symlink(target, issue)
+        rc, log = self.run_prepare("--complete", TPOT_ISO_ISSUE=issue)
+        self.assertEqual(rc, 1, log)
+        self.assertTrue(os.path.islink(issue))
+        self.assertTrue(os.path.exists(target))
+
+    def test_completion_knows_the_recorded_hint_of_another_commit(self):
+        # late.sh records the hint it put there: a T-Pot of another commit, branch or a later
+        # tpot.issue still removes it, an edited one or a bad record keeps it
+        write(os.path.join(self.systemd, "tpot.service"), "[Service]\n")
+        issue = os.path.join(self.tmp, "issue")
+        record = os.path.join(self.share, "tpot.issue.sha256")
+        other = "The T-Pot ISO of another commit\n"
+        digest = hashlib.sha256(other.encode()).hexdigest() + "\n"
+        for name, content, recorded, expected in (("recorded", other, digest, None),
+                                                  ("edited", "my login message\n", digest, "not the unmodified"),
+                                                  ("invalid record", other, "not a digest\n", "record"),
+                                                  ("empty record", other, "", "record")):
+            with self.subTest(name):
+                write(issue, content)
+                write(record, recorded)
+                rc, log = self.run_prepare("--complete", TPOT_ISO_ISSUE=issue)
+                self.assertEqual(rc, 1 if expected else 0, log)
+                self.assertEqual(os.path.exists(issue), bool(expected), log)
+                if expected:
+                    self.assertEqual(base.read(issue), content)
+                    self.assertIn(expected, log.splitlines()[-1])
+                    os.remove(issue)
+        os.remove(record)
+        elsewhere = os.path.join(self.tmp, "record")
+        write(elsewhere, digest)
+        os.symlink(elsewhere, record)
+        write(issue, other)
+        rc, log = self.run_prepare("--complete", TPOT_ISO_ISSUE=issue)
+        self.assertEqual(rc, 1, log)
+        self.assertEqual(base.read(issue), other)
+        self.assertIn("record", log.splitlines()[-1])
+
+    @unittest.skipUnless(shutil.which("git"), "no git")
+    def test_every_hint_shipped_without_a_record_is_known(self):
+        # ISOs from before the record: the hint of each commit whose late.sh did not record it
+        def git(*args):
+            return subprocess.run(["git", "-C", REPO, *args], capture_output=True, timeout=30)
+        shallow = git("rev-parse", "--is-shallow-repository")
+        if shallow.returncode != 0 or shallow.stdout.strip() != b"false":
+            self.skipTest("needs the history of the checkout")
+        commits = git("log", "--format=%H", "--", "installer/iso/tpot.issue").stdout.decode().split()
+        self.assertTrue(commits)
+        write(os.path.join(self.systemd, "tpot.service"), "[Service]\n")
+        issue = os.path.join(self.tmp, "issue")
+        checked = 0
+        for commit in commits:
+            late = git("show", f"{commit}:installer/iso/late.sh")
+            hint = git("show", f"{commit}:installer/iso/tpot.issue")
+            if hint.returncode != 0 or (late.returncode == 0 and b"tpot.issue.sha256" in late.stdout):
+                continue
+            with self.subTest(commit=commit):
+                write(issue, hint.stdout)
+                rc, log = self.run_prepare("--complete", TPOT_ISO_ISSUE=issue)
+                self.assertEqual(rc, 0, log)
+                self.assertFalse(os.path.exists(issue))
+                checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_completion_refreshes_only_the_recorded_terminal_helper(self):
+        write(os.path.join(self.systemd, "tpot.service"), "[Service]\n")
+        installed = os.path.join(self.share, "terminal.sh")
+        old = "# old managed terminal\n"
+        write(installed, old)
+        write(os.path.join(self.share, "terminal.sha256"), hashlib.sha256(old.encode()).hexdigest() + "\n")
+        rc, log = self.run_prepare("--complete")
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(base.read(installed), base.read("installer/iso/terminal.sh"))
+        self.assertEqual(stat.S_IMODE(os.stat(installed).st_mode), 0o755)
+        with open(installed, "rb") as handle:
+            self.assertEqual(base.read(os.path.join(self.share, "terminal.sha256")).strip(),
+                             hashlib.sha256(handle.read()).hexdigest())
+        write(installed, "# my own terminal\n")
+        rc, log = self.run_prepare("--complete")
+        self.assertEqual(rc, 1, log)
+        self.assertEqual(base.read(installed), "# my own terminal\n")
+        self.assertIn("terminal helper was changed", log)
+        self.assertFalse(any(name.startswith(".terminal.") for name in os.listdir(self.share)))
+
+    def managed_terminal(self, text="# old managed terminal\n"):
+        """An installed helper of an earlier T-Pot with its ownership record; returns path and digest."""
+        installed = os.path.join(self.share, "terminal.sh")
+        if os.path.islink(installed):
+            os.remove(installed)
+        write(installed, text)
+        digest = hashlib.sha256(text.encode()).hexdigest()
+        write(os.path.join(self.share, "terminal.sha256"), digest + "\n")
+        return installed, digest
+
+    def apt_calls(self):
+        return [line for line in base.read(self.calls).splitlines() if line.startswith("apt-get ")] \
+            if os.path.exists(self.calls) else []
+
+    def test_owned_terminal_refresh_installs_missing_dependencies_first(self):
+        write(os.path.join(self.systemd, "tpot.service"), "[Service]\n")
+        source = base.read("installer/iso/terminal.sh")
+        with self.subTest("all there: no apt-get"):
+            installed, _digest = self.managed_terminal()
+            rc, log = self.run_prepare("--complete")
+            self.assertEqual(rc, 0, log)
+            self.assertEqual(self.apt_calls(), [])
+            self.assertEqual(base.read(installed), source)
+        for env in ({}, {"APT_UPDATE_RC": "100"}):
+            with self.subTest("missing", env=env):
+                if os.path.exists(self.calls):
+                    os.remove(self.calls)
+                installed, _digest = self.managed_terminal()
+                write(self.dpkg, "\n".join(name for name in terminal_packages()
+                                           if name not in ("fonts-cascadia-code", "xfce4-terminal")) + "\n")
+                rc, log = self.run_prepare("--complete", **env)
+                self.assertEqual(rc, 0, log)
+                calls = self.apt_calls()
+                self.assertEqual(len(calls), 2, calls)
+                self.assertRegex(calls[0], r"^apt-get .*\bupdate\b")
+                # only the missing ones, no Recommends, before the new helper is published
+                self.assertRegex(calls[1], r"^apt-get .*\binstall --no-install-recommends "
+                                           r"fonts-cascadia-code xfce4-terminal \| ")
+                for call in calls:
+                    self.assertIn("| frontend=noninteractive |", call)
+                    self.assertTrue(call.endswith("| helper=# old managed terminal"), call)
+                self.assertEqual(base.read(installed), source)
+                with open(installed, "rb") as handle:
+                    self.assertEqual(base.read(os.path.join(self.share, "terminal.sha256")).strip(),
+                                     hashlib.sha256(handle.read()).hexdigest())
+                self.assertIn("fonts-cascadia-code xfce4-terminal", log)
+                self.assertIn("managed terminal helper refreshed", log)
+        with self.subTest("current helper: nothing to migrate"):
+            if os.path.exists(self.calls):
+                os.remove(self.calls)
+            write(self.dpkg, "")
+            rc, log = self.run_prepare("--complete")
+            self.assertEqual(rc, 0, log)
+            self.assertEqual(self.apt_calls(), [], "a package removed on purpose stays removed")
+
+    def test_terminal_dependency_failure_keeps_helper_and_digest(self):
+        write(os.path.join(self.systemd, "tpot.service"), "[Service]\n")
+        for env, cause in (({"APT_INSTALL_RC": "100"}, "could not be installed"),
+                           ({"APT_NOOP": "1"}, "still not installed: xfce4-terminal"),
+                           ({"FONT_MISSING": "1"}, "the font Cascadia Mono is missing")):
+            with self.subTest(env=env):
+                installed, digest = self.managed_terminal()
+                write(self.dpkg, "\n".join(name for name in terminal_packages() if name != "xfce4-terminal") + "\n")
+                rc, log = self.run_prepare("--complete", **env)
+                self.assertEqual(rc, 1, log)
+                self.assertEqual(base.read(installed), "# old managed terminal\n")
+                self.assertEqual(base.read(os.path.join(self.share, "terminal.sha256")), digest + "\n")
+                self.assertFalse(any(name.startswith(".terminal.") for name in os.listdir(self.share)))
+                self.assertIn(cause, log)
+                self.assertIn("the previous terminal helper stays", log)
+                # how to finish it by hand
+                self.assertIn("sudo apt-get install --no-install-recommends xfce4-terminal", log)
+                self.assertRegex(log, r"sudo bash \S*prepare\.sh --complete")
+                self.assertNotIn("managed terminal helper refreshed", log)
+
+    def test_foreign_terminal_and_non_iso_hosts_do_not_install_packages(self):
+        foreign = os.path.join(self.tmp, "foreign-terminal.sh")
+        write(foreign, "# old managed terminal\n")
+
+        def edited():
+            write(os.path.join(self.share, "terminal.sh"), "# my own terminal\n")
+
+        def link():
+            os.remove(os.path.join(self.share, "terminal.sh"))
+            os.symlink(foreign, os.path.join(self.share, "terminal.sh"))
+
+        def invalid_record():
+            write(os.path.join(self.share, "terminal.sha256"), "not a digest\n")
+
+        def no_iso():
+            os.rename(os.path.join(self.share, "iso.conf"), os.path.join(self.tmp, "iso.conf"))
+
+        for name, change, completed, expected in (("not completed", None, False, 0), ("non-ISO host", no_iso, True, 0),
+                                                  ("edited helper", edited, True, 1), ("linked helper", link, True, 1),
+                                                  ("invalid record", invalid_record, True, 1)):
+            with self.subTest(name):
+                if os.path.exists(self.calls):
+                    os.remove(self.calls)
+                unit = os.path.join(self.systemd, "tpot.service")
+                if completed:
+                    write(unit, "[Service]\n")
+                elif os.path.exists(unit):
+                    os.remove(unit)
+                self.managed_terminal()
+                write(self.dpkg, "")
+                if change:
+                    change()
+                before = os.readlink(os.path.join(self.share, "terminal.sh")) if name == "linked helper" \
+                    else base.read(os.path.join(self.share, "terminal.sh"))
+                rc, log = self.run_prepare("--complete")
+                self.assertEqual(rc, expected, log)
+                self.assertEqual(self.apt_calls(), [])
+                after = os.readlink(os.path.join(self.share, "terminal.sh")) if name == "linked helper" \
+                    else base.read(os.path.join(self.share, "terminal.sh"))
+                self.assertEqual(after, before)
+                if name == "non-ISO host":
+                    os.rename(os.path.join(self.tmp, "iso.conf"), os.path.join(self.share, "iso.conf"))
+
+    def test_completion_does_not_publish_a_digest_inside_a_directory(self):
+        legacy = subprocess.run(
+            ["git", "-C", REPO, "show",
+             "3094eeef3fb45114a1cfc40cef2b902c15b8f47b:installer/iso/terminal.sh"],
+            capture_output=True, text=True)
+        if legacy.returncode:
+            self.skipTest("the legacy ISO commit is not available in this checkout")
+        installed = os.path.join(self.share, "terminal.sh")
+        write(installed, legacy.stdout)
+        record = os.path.join(self.share, "terminal.sha256")
+        os.remove(record)
+        os.mkdir(record)
+        write(os.path.join(self.systemd, "tpot.service"), "[Service]\n")
+        rc, log = self.run_prepare("--complete")
+        self.assertEqual(rc, 1, log)
+        self.assertEqual(base.read(installed), legacy.stdout)
+        self.assertEqual(os.listdir(record), [])
+        self.assertFalse(any(name.startswith(".terminal.") for name in os.listdir(self.share)))
+
+    def test_install_and_update_reconcile_the_same_owned_hint(self):
+        helper = os.path.join(self.home, "tpotce", "installer", "iso")
+        os.makedirs(helper)
+        for name in ("prepare.sh", "tpot.issue", "terminal.sh"):
+            shutil.copy(os.path.join(ISO_DIR, name), helper)
+        stub(self.bin, "sudo", 'exec "$@"\n')
+        write(os.path.join(self.systemd, "tpot.service"), "[Service]\n")
+        issue = os.path.join(self.tmp, "issue")
+        for script, function in (("install.sh", "install_iso_complete"), ("update.sh", "fuISO_COMPLETE")):
+            with self.subTest(script=script):
+                source = base.read(script)
+                definition = re.search(rf"^(?:function )?{function}\s*\(\)\s*\{{.*?^\}}$", source, re.M | re.S)
+                self.assertIsNotNone(definition)
+                write(issue, base.read("installer/iso/tpot.issue"))
+                result = subprocess.run(
+                    [BASH, "-c", 'fuUI_WARN() { echo "$*"; }\nfuDID() { echo "$*"; }\n' +
+                     definition.group() + "\n" + function],
+                    env={**os.environ, "HOME": self.home, "PATH": f"{self.bin}:{os.environ['PATH']}",
+                         "TPOT_ISO_SHARE": self.share, "TPOT_ISO_LOG": self.log,
+                         "TPOT_ISO_SYSTEMD": self.systemd, "TPOT_ISO_ISSUE": issue},
+                    capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse(os.path.exists(issue))
+                self.assertIn(f"\n{function}\n", source, "the completion hook must actually run")
 
     def test_tpot_gum_and_the_manager_go_to_the_user(self):
         rc, log = self.run_prepare("tester")
@@ -781,7 +1148,7 @@ class PrepareTest(unittest.TestCase):
         self.assertEqual(base.read(drop_in), "AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION\n")
         self.assertEqual(stat.S_IMODE(os.stat(drop_in).st_mode), 0o644)
         # T-Pot and gum are not kept twice, the wheels stay for tpot setup of another branch
-        self.assertEqual(sorted(os.listdir(self.share)), ["iso.conf", "wheels"])
+        self.assertEqual(sorted(os.listdir(self.share)), ["iso.conf", "terminal.sh", "terminal.sha256", "wheels"])
         self.assertIn("T-Pot ISO: gum 2.0.2 is in", log)
         self.assertIn("T-Pot ISO: the T-Pot Manager is set up.", log)
 
@@ -913,7 +1280,9 @@ esac
 """
 
 
-X_TOOLS = ("startx", "xauth", "Xorg", "xterm", "matchbox-window-manager")
+# the parts of the graphical terminal (terminal.sh --ready); fc-list: the font is there
+X_TOOLS = ("startx", "xauth", "Xorg", "dbus-run-session", "xfce4-terminal", "matchbox-window-manager", "xprop",
+           "fc-list")
 # terminal.sh of the tests: start.sh at once, as if X had come up; X does not come up
 TERMINAL_WORKS = 'echo "TERMINAL:${TPOT_ISO_TERMINAL_TRIED}"\n[ "$1" = -- ] || exit 2\nshift\nexec "$@"\n'
 TERMINAL_FAILS = 'echo "TERMINAL:failed"\nexit 1\n'
@@ -975,7 +1344,9 @@ class StartTest(unittest.TestCase):
             stub(self.bin, name, "exit 0\n")
 
     def terminal(self, body):
-        write(os.path.join(self.share, "terminal.sh"), "#!/bin/sh\n" + body, 0o755)
+        # readiness stays the rule of the real terminal.sh
+        ready = f'[ "$1" != --ready ] || exec "{BASH}" "{os.path.join(ISO_DIR, "terminal.sh")}" --ready\n'
+        write(os.path.join(self.share, "terminal.sh"), "#!/bin/sh\n" + ready + body, 0o755)
 
     def gone(self, pidfile):
         """Is the process of the pid in the file gone (a zombie counts as gone)?"""
@@ -1494,6 +1865,23 @@ class StartTest(unittest.TestCase):
         self.assertIn("The graphical terminal of the ISO is missing its packages", out)
         self.assertNotIn("INSTALL", out)
 
+    def test_graphical_readiness_is_the_rule_of_terminal_sh(self):
+        """start.sh asks terminal.sh --ready: one list of the parts of the graphical terminal."""
+        write(os.path.join(self.dev, "fb0"), "")
+        for name in X_TOOLS:
+            stub(self.bin, name, "exit 0\n")
+        stub(self.bin, "fc-list", "exit 1\n")
+        code, out = self.at_terminal(("enter = 2): ", b"3\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("The graphical terminal of the ISO is missing its packages (the font Cascadia Mono).", out)
+        self.assertNotIn("INSTALL", out)
+        stub(self.bin, "fc-list", "exit 0\n")
+        os.remove(os.path.join(self.bin, "xfce4-terminal"))
+        stub(self.bin, "xterm", "exit 0\n")
+        code, out = self.at_terminal(("enter = 2): ", b"3\n"), TPOT_ISO_CONSOLE="1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("missing its packages (xfce4-terminal).", out)
+
     def test_a_login_on_a_vt_watches_the_graphical_terminal_others_keep_their_terminal(self):
         self.screen()
         self.terminal(TERMINAL_FAILS)
@@ -1793,6 +2181,42 @@ class IsotreeFilesTest(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp)
 
+    def test_both_architectures_carry_an_installed_theme_without_iso_paths(self):
+        for arch in ("amd64", "arm64"):
+            with self.subTest(arch=arch):
+                orig, out = os.path.join(self.tmp, arch, "orig"), os.path.join(self.tmp, arch, "out")
+                netinst_tree(orig, arch)
+                written = isotree.patch_tree(arch, orig, out)
+                self.assertIn("tpot/grub/theme.txt", written)
+                theme = base.read(os.path.join(out, "tpot/grub/theme.txt"))
+                self.assertIn('desktop-image: "splash.png"', theme)
+                self.assertNotIn("installer", theme)
+                self.assertNotIn("/boot/grub/tpot", theme)
+                config = os.path.join(out, "tpot/grub/tpot.cfg")
+                # ends in GNU/Linux: 10_linux takes it as is, without appending another one
+                name = "T-Pot on Debian GNU/Linux"
+                # grub-install's fallback without a shell reads the lines that start with GRUB_DISTRIBUTOR=
+                self.assertEqual([line for line in base.read(config).splitlines()
+                                  if line.lstrip().startswith("GRUB_DISTRIBUTOR=")], [])
+                mkconfig, others = ("/usr/sbin/grub-mkconfig", "grub-mkconfig"), (
+                    "sh", "/var/lib/dpkg/info/shim-signed.postinst", "/var/lib/dpkg/info/grub-efi-arm64.postinst")
+                cases = [(caller, debian, name) for caller in mkconfig for debian in (None, "", "Debian", "Debian GNU/Linux")]
+                cases += [(caller, "My appliance", "My appliance") for caller in mkconfig]
+                # grub-install (popen: sh) and the postinsts of grub-efi and shim-signed take the
+                # EFI folder from its first word: EFI/debian, where Debian's signed loaders are
+                cases += [(caller, "Debian GNU/Linux", "Debian GNU/Linux") for caller in others]
+                for caller, distributor, wanted in cases:
+                    env = {**os.environ, "GRUB_THEME": "/my/theme", "GRUB_GFXMODE": "1024x768",
+                           "GRUB_CMDLINE_LINUX": "my options"}
+                    env.pop("GRUB_DISTRIBUTOR", None)
+                    if distributor is not None:
+                        env["GRUB_DISTRIBUTOR"] = distributor
+                    result = subprocess.run(
+                        [SH, "-c", '. "$1"; printf "%s\\n" "$GRUB_DISTRIBUTOR" "$GRUB_THEME" "$GRUB_GFXMODE"',
+                         caller, config], env=env, capture_output=True, text=True, check=True)
+                    with self.subTest(caller=caller, distributor=distributor):
+                        self.assertEqual(result.stdout.splitlines(), [wanted, "/my/theme", "1024x768"])
+
     def test_the_splash_the_logo_top_centre_on_black(self):
         width, height, rows = png_pixels(isotree.splash_png())
         self.assertEqual((width, height), isotree.SPLASH_SIZE)
@@ -1828,7 +2252,8 @@ class IsotreeFilesTest(unittest.TestCase):
         self.assertEqual(written, ["boot/grub/grub.cfg", "boot/grub/theme/1", "boot/grub/theme/1-1",
                                    "boot/grub/theme/hl_c.png", "isolinux/gtk.cfg", "isolinux/menu.cfg",
                                    "isolinux/spkgtk.cfg", "isolinux/splash.png", "isolinux/stdmenu.cfg",
-                                   "isolinux/tpot.cfg"])
+                                   "isolinux/tpot.cfg", "tpot/grub/hl_c.png", "tpot/grub/splash.png",
+                                   "tpot/grub/theme.txt", "tpot/grub/tpot.cfg"])
         self.assertEqual(sorted(isotree.tree_files(out)), written)
         with open(os.path.join(out, "boot/grub/theme/hl_c.png"), "rb") as handle:
             self.assertEqual(isotree.png_size(handle.read()), (20, 20))
@@ -1838,7 +2263,8 @@ class IsotreeFilesTest(unittest.TestCase):
         netinst_tree(orig, "arm64")
         self.assertEqual(isotree.patch_tree("arm64", orig, out),
                          ["boot/grub/grub.cfg", "boot/grub/tpot/hl_c.png",
-                          "boot/grub/tpot/splash.png", "boot/grub/tpot/theme.txt"])
+                          "boot/grub/tpot/splash.png", "boot/grub/tpot/theme.txt",
+                          "tpot/grub/hl_c.png", "tpot/grub/splash.png", "tpot/grub/theme.txt", "tpot/grub/tpot.cfg"])
         with open(os.path.join(out, "boot/grub/grub.cfg")) as handle:
             grub = handle.read()
         self.assertIn("set tpot_font=/boot/grub/font.pf2", grub)
@@ -2076,7 +2502,9 @@ class BuildTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(ISO_DIR, name)), name)
         needed = re.search(r"^for myFILE in ([^;]+); do$", base.read("installer/iso/late.sh"), re.M).group(1).split()
         # build.sh writes iso.conf and tpotce.tar, takes install.sh, version and ui.sh of the checkout
-        self.assertLessEqual(set(needed), set(payload) | {"install.sh", "version", "iso.conf", "tpotce.tar", "ui.sh"})
+        self.assertLessEqual(set(needed), set(payload) | {"install.sh", "version", "iso.conf", "tpotce.tar", "ui.sh",
+                                                        "grub/theme.txt", "grub/splash.png", "grub/hl_c.png",
+                                                        "grub/tpot.cfg"})
         self.assertIn('cp "${myREPO}/installer/lib/ui.sh" "${myWORK}/overlay/tpot/ui.sh"',
                       base.read("installer/iso/build.sh"))
         for name in ("early.sh", "late.sh", "start.sh", "terminal.sh", "prepare.sh", "build.sh"):
@@ -2172,6 +2600,12 @@ if isinstance(data, (dict, list)):
     sys.exit(1)
 print(("true" if data else "false") if isinstance(data, bool) else data)
 '''
+
+
+def terminal_packages():
+    """The Debian packages of the graphical terminal, as terminal.sh --packages names them."""
+    return subprocess.run([BASH, os.path.join(ISO_DIR, "terminal.sh"), "--packages"], capture_output=True,
+                          text=True, check=True, timeout=10).stdout.split()
 
 
 def stub(folder, name, body):

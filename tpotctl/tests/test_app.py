@@ -60,7 +60,8 @@ if textual:
 
         def attacks(self):
             from tpotctl import events
-            return events.Attacks([0, 3, 9, 4] * 15, 1234, [("Cowrie", 900), ("Dionaea", 334)])
+            return events.Attacks([0, 3, 9, 4] * 15, 1234, [("Cowrie", 900), ("Dionaea", 334)],
+                                  sources=21, last_hour=240)
 
         def sudo_mode(self):
             return "passwordless"
@@ -287,6 +288,80 @@ class BackendConfigFreshnessTest(unittest.TestCase):
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
+class OverviewTest(unittest.IsolatedAsyncioTestCase):
+    def backend(self):
+        backend = FakeBackend()
+        backend.containers = lambda: [
+            ops.Container("cowrie", "running", "Up (healthy)", "healthy", "22->22/tcp", "cowrie"),
+            ops.Container("nginx", "running", "Up (healthy)", "healthy",
+                          ", ".join(f"127.0.0.1:{port}->{port}/tcp" for port in range(1000, 1040)), "nginx"),
+            ops.Container("p0f", "running", "Up", "", "", "p0f"),
+        ]
+        return backend
+
+    async def test_overview_separates_operation_and_event_counts(self):
+        app = tapp.TpotApp(backend=self.backend(), runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            self.assertFalse(app.query("#comb"), "no duplicate service honeycomb on the overview")
+            self.assertEqual(app.query_one("#status-tabs").active, "status-overview")
+            self.assertFalse(app.query_one("#containers").is_on_screen)
+            operation = flat(app.query_one("#operation"))
+            for label in ("Honeypots", "NSM", "Infrastructure", "Healthy"):
+                self.assertIn(label, operation)
+            self.assertIn("events/1h", flat(app.query_one("#attacks")))
+            self.assertIn("source IPs/1h", flat(app.query_one("#attacks")))
+            self.assertIn("including sensors", flat(app.query_one("#event-scope")))
+
+    async def test_service_ports_do_not_force_horizontal_scroll(self):
+        for size in ((80, 24), (120, 40), (170, 55)):
+            with self.subTest(size=size):
+                app = tapp.TpotApp(backend=self.backend(), runner=Recorder())
+                async with app.run_test(size=size) as pilot:
+                    await app.workers.wait_for_complete()
+                    await pilot.pause(0.2)
+                    self.assertGreaterEqual(app.query_one("#operation").content_region.height, 4)
+                    if size == (80, 24):
+                        self.assertLessEqual(app.query_one("#system").region.bottom,
+                                             app.query_one("#status-summary").region.bottom,
+                                             [(name, app.query_one("#" + name).region,
+                                               str(app.query_one("#" + name).render()))
+                                              for name in ("operation", "status-info", "attacks", "event-scope",
+                                                           "status-problems", "system")])
+                    app.query_one("#status-tabs").active = "status-services"
+                    await pilot.pause(0.2)
+                    table = app.query_one("#containers")
+                    self.assertEqual(table.max_scroll_x, 0)
+                    self.assertFalse(table.show_horizontal_scrollbar)
+                    self.assertGreaterEqual(table.ordered_columns[0].width, len("Infrastructure"))
+                    self.assertTrue(app.query_one("#svc-restart").is_on_screen)
+                    row = table.get_row("nginx")
+                    self.assertIn("Infrastructure", str(row[0]))
+                    self.assertIn("40", str(row[-1]))
+                    table.move_cursor(row=table.get_row_index("nginx"))
+                    table.focus()
+                    await pilot.press("enter")
+                    await pilot.pause(0.2)
+                    detail = flat(app.screen.query_one("#service-detail-body"))
+                    self.assertIn("127.0.0.1:1000->1000/tcp", detail)
+                    self.assertIn("127.0.0.1:1039->1039/tcp", detail)
+
+    async def test_stale_check_failure_is_dated_not_live_health(self):
+        backend = self.backend()
+        backend.check_result_value = sample_check()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            text = flat(app.query_one("#status-problems"))
+            self.assertIn("No current container problems", text)
+            self.assertIn("Last check", text)
+            self.assertIn(tapp.check_when(backend.check_result_value["started"]), text)
+            self.assertIn("failed", text)
+            self.assertIn("historical", text)
+            self.assertNotIn("dionaea", flat(app.query_one("#operation")))
+
+
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
 class MenuTest(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
@@ -334,13 +409,12 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.query_one("#svc-start").label.plain, "Start T-Pot")
 
     async def test_top_attackers_leave_the_containers_their_rows(self):
-        """Below 50 lines a compact Attacks block and three sources, so the containers table keeps the rows
-        it had next to the pot, with every line of the widget there (the newest attack, five honeypots)."""
+        """Rankings belong to the overview, not above the independently scrollable services."""
         from tpotctl import events
         backend = self.ten_sources()
         backend.attacks = lambda: events.Attacks([0, 3, 9, 4] * 15, 1234,
                                                  [(f"Honeypot{n}", 900 - n) for n in range(5)],
-                                                 latest=1.0, sources=99)
+                                                 latest=1.0, sources=99, last_hour=240)
         app = tapp.TpotApp(backend=backend, runner=Recorder())
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.8)
@@ -348,9 +422,12 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(sum(f"203.0.113.{n}" in text for n in range(10)), 3)
             attacks = str(app.query_one("#attacks").render())
             self.assertEqual(sum(f"Honeypot{n}" in attacks for n in range(5)), 3)
-            self.assertIn("last attack", attacks)
+            self.assertIn("last event", attacks)
             self.assertIn("24 hours", str(app.query_one("#attacks-block").border_subtitle))
             self.assertIn("Sensors: 0 online, 0 offline, 0 behind", str(app.query_one("#status-info").render()))
+            self.assertFalse(app.query_one("#containers").is_on_screen)
+            app.query_one("#status-tabs").active = "status-services"
+            await pilot.pause(0.2)
             self.assertGreaterEqual(app.query_one("#containers").content_region.height, 10)
 
     async def test_a_stopped_tpot_shows_its_services_not_started(self):
@@ -361,9 +438,9 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.8)
             table = app.query_one("#containers")
             self.assertEqual(table.row_count, 2)
-            self.assertIn("not started", str(table.get_row_at(0)[1]))
+            self.assertIn("not started", str(table.get_row_at(0)[2]))
             self.assertIn("0 of 2 up", str(app.query_one("#header-live").render()))
-            self.assertIn("2 not started", str(app.query_one("#comb").render()))
+            self.assertIn("Honeypots 0 0 0 0 2", flat(app.query_one("#operation")))
             self.assertIn("0 of 2 containers running", str(app.query_one("#status-info").render()))
 
     async def test_restart_asks_then_runs_systemctl(self):
@@ -2313,7 +2390,7 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             summary = flat(app.query_one("#check-summary"))
         self.assertIn("1 honeypot(s) with a failed stage: dionaea", summary)
         self.assertIn("Removed 12 test events from Elasticsearch (10 + 2 in two passes).", summary)
-        self.assertIn("3 probe events could not be told apart from real ones and stay; Kibana: "
+        self.assertIn("Across the whole run: 3 possible probe events could not be told apart from real ones and stay; Kibana: "
                       "https://192.0.2.5:64297/kibana/app/discover#/?left", summary)
 
     async def test_the_glyphs_follow_the_icon_set(self):
@@ -2380,8 +2457,11 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(theme.color("ash"), str(table.get_row("glutton")[0].spans))
 
     async def test_enter_on_a_row_shows_its_details(self):
+        from tpotctl.checks import stages as tstages
         backend = FakeBackend()
         backend.check_result_value = sample_check()
+        backend.check_result_value["cleanup"].update(left_no_source=2, left_no_source_types=["Dicompot"])
+        backend.check_result_value["honeypots"].append(tstages.Row("dicompot", logstash_type="Dicompot").as_json())
         app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
         async with app.run_test(size=self.SIZE) as pilot:
             await self.open(pilot, app)
@@ -2397,7 +2477,9 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
                           "logstash-2026.10.17 / abc123", "8.8.8.8:51234", "cowrie/log/cowrie.json",
                           "country United States", "ip_rep known attacker",
                           "https://192.0.2.5:64297/kibana/app/discover#/?_g=(run)",
-                          "Removed 12 test events", "3 probe events", "discover#/?left"):
+                          "Removed 12 test events", "3 possible probe events", "discover#/?left",
+                          "Whole-run cleanup (all honeypots)", "2 of them without a source address",
+                          "searched types: Dicompot"):
                 self.assertIn(words, body)
             await pilot.press("escape")
             await pilot.pause(0.2)
@@ -2524,6 +2606,7 @@ class ChecksPageTest(unittest.IsolatedAsyncioTestCase):
                           [tapp.LAUNCHER, "check", "honeypots", "--dry-run"]])
         self.assertEqual([task.become for task, _then in tasks], ["--become-file", "--become-file", ""])
         self.assertTrue(all(task.autostart and then is not None for task, then in tasks))
+        self.assertEqual([task.check_progress for task, _then in tasks], [True, True, False])
 
     async def test_the_pipeline_asks_and_keeps_with_cleanup_off(self):
         from tpotctl.checks import run as trun

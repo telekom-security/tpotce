@@ -16,17 +16,18 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import (Button, ContentSwitcher, Footer, Input, OptionList, ProgressBar, RichLog,
+from textual.widgets import (Button, ContentSwitcher, Footer, Input, OptionList, ProgressBar,
                              Select, Static)
 from textual.widgets.option_list import Option
 
-from tpotctl import engine, glyphs, installer, logo, theme, users
+from tpotctl import engine, glyphs, installer, logo, runlog, theme, users
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ConfirmDialog
 from tpotctl.theme import apply as apply_theme
 from tpotctl.widgets.fields import TpotSelect
 from tpotctl.widgets.nav import (BINDINGS as NAV_BINDINGS, FIND, FIND_KEY, ArrowNav, NavInput, NavOptionList,
-                                 NavRichLog, NavScroll)
+                                 NavScroll)
+from tpotctl.widgets.progress import ProgressLog
 
 STEPS = [("check", "System check"), ("edition", "Edition"), ("user", "Web user"), ("settings", "Settings"),
          ("review", "Review"), ("install", "Install"), ("done", "Done")]
@@ -89,7 +90,8 @@ class InstallApp(ArrowNav, App):
     CSS_PATH = "../tpot.tcss"
     TITLE = "T-Pot installer"
     COMMAND_PALETTE_BINDING = FIND_KEY
-    BINDINGS = [Binding("q", "leave", "Quit"), Binding("escape", "back", "Back", show=False), FIND,
+    BINDINGS = [Binding("q", "leave", "Quit"), Binding("escape", "back", "Back", show=False),
+                Binding("l", "toggle_log", "Log"), FIND,
                 *NAV_BINDINGS]
 
     def notify(self, message, *args, markup: bool = False, **kwargs):
@@ -164,10 +166,12 @@ class InstallApp(ArrowNav, App):
                 yield NavInput(placeholder="your sudo password", password=True, id="ins-sudo")
                 yield Static("", id="ins-sudo-hint")
             with Vertical(id="step-install", classes="ins-step"):
-                yield Static("", id="install-phase")
+                with NavScroll(id="install-phase-view"):
+                    yield Static("", id="install-phase")
                 yield ProgressBar(total=1000, show_eta=False, id="install-bar")
-                yield Static("", id="install-task")
-                yield NavRichLog(id="install-log", max_lines=2000, wrap=False, markup=False, highlight=False)
+                with NavScroll(id="install-task-view"):
+                    yield Static("", id="install-task")
+                yield ProgressLog(id="install-log")
             with NavScroll(id="step-done", classes="ins-step"):
                 yield Static("", id="done-text")
         with Horizontal(id="ins-nav"):
@@ -259,7 +263,14 @@ class InstallApp(ArrowNav, App):
     def check_action(self, action: str, parameters):
         if action == "leave" and len(self.screen_stack) > 1:
             return False
+        if action == "toggle_log":
+            return (getattr(self, "step", "") in ("install", "done")
+                    and self.query_one("#ins-body", ContentSwitcher).current == "step-install")
         return True
+
+    def action_toggle_log(self) -> None:
+        self.query_one("#step-install").toggle_class("-log-full")
+        self.query_one("#install-log").focus()
 
     # -- 1 system check ------------------------------------------------------
 
@@ -663,8 +674,13 @@ class InstallApp(ArrowNav, App):
         self.call_from_thread(self.finished, code)
 
     def feed(self, line: str) -> None:
+        warnings_before = len(self.progress.warnings)
         self.progress.feed(line)
-        self.query_one("#install-log", RichLog).write(Text(line.rstrip("\n")))
+        log = self.query_one("#install-log", ProgressLog)
+        if runlog.parse_mark(line) is None:
+            log.append(line)
+        for warning in self.progress.warnings[warnings_before:]:
+            log.append(f"Warning: {warning}")
         self.show_progress()
 
     def tick(self) -> None:
@@ -680,9 +696,11 @@ class InstallApp(ArrowNav, App):
         if progress.phase == "playbook" and progress.tasks:
             phase.append(f"   task {min(progress.tasks_done, progress.tasks)} of {progress.tasks}",
                          style=theme.color("ash"))
-        if progress.phase == "pull" and progress.images:
-            phase.append(f"   image {min(progress.images_done, progress.images)} of {progress.images}",
-                         style=theme.color("ash"))
+        if progress.phase == "pull":
+            ready = (f"{progress.images_done} of {progress.images} images ready" if progress.images
+                     else f"{progress.images_done} images ready (total unknown)")
+            phase.append(f"   {ready}", style=theme.color("ash"))
+            phase.append("\nOverall installation progress below, not download bytes.", style=theme.color("ash"))
         self.query_one("#install-phase", Static).update(phase)
         self.query_one("#install-bar", ProgressBar).update(progress=int(progress.fraction * 1000))
         self.query_one("#install-task", Static).update(

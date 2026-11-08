@@ -101,6 +101,9 @@ prepare_elasticpot_harness() {
 
   mkdir -p "${LOG_DIR}"
   chmod 0777 "${LOG_DIR}"
+  # Docker Desktop cannot chmod a bind-mounted file Twisted creates with mode 000.
+  touch "${LOG_DIR}/elasticpot.json"
+  chmod 0666 "${LOG_DIR}/elasticpot.json"
 
   local port_mapping="${TEST_BIND_IP}::9200"
   if [[ -n "${HTTP_PORT}" ]]; then
@@ -380,7 +383,7 @@ main() {
     || test_die "ElasticPot did not log the request from ${PRIVATE_SUBNET} (blacklist of honeypot.cfg)"
   test_ok "ElasticPot logged the request from ${PRIVATE_SUBNET}"
 
-  test_json_log_marker append "${LOG_DIR}/elasticpot.json" "${token}"
+  test_json_log_marker append /opt/elasticpot/log/elasticpot.json "${token}"
   run_elasticsearch_probes_with_retries "${token}-after-append" || test_die "ElasticPot repeat probes failed"
   wait_for_json_log_events "${token}-after-append" || test_die "ElasticPot events after external append are missing"
   test_json_log_marker check "${LOG_DIR}/elasticpot.json" "${token}" || test_die "ElasticPot overwrote an external log record"

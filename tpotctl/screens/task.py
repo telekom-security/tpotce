@@ -15,14 +15,16 @@ from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Input, RichLog, Static
+from textual.widgets import Button, DataTable, Footer, Input, RichLog, Static
 
 from tpotctl import glyphs, installer, runlog, theme
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.engine import Engine
-from tpotctl.widgets.nav import NavInput, NavRichLog, NavScroll
+from tpotctl.screens.dialogs import ConfirmDialog
+from tpotctl.widgets.nav import NavDataTable, NavInput, NavScroll
+from tpotctl.widgets.progress import CHECK_STATE_WORDS, ProgressLog, check_cell
 
 SPINNER = {"unicode": "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", "nerd": "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", "ascii": "|/-\\"}
 
@@ -42,6 +44,7 @@ class Task:
     secrets: Dict[str, str] = field(default_factory=dict, repr=False)
     restart_tpot: bool = False          # the checkout changed, offer to start the T-Pot Manager anew
     autostart: bool = False             # confirmed before, start without asking
+    check_progress: bool = False
 
 
 class TaskScreen(Screen):
@@ -67,15 +70,20 @@ class TaskScreen(Screen):
         self.frame = 0
 
     def compose(self) -> ComposeResult:
-        with NavScroll(id="task-body"):
-            yield Static(Text(self.job.title, style=f"bold {theme.color('magenta')}"), id="task-title")
-            yield Static(self.intro_text(), id="task-intro")
-            yield NavInput(placeholder="your sudo password", password=True, id="task-sudo")
-            yield Static("", id="task-hint")
-            yield Static("", id="task-phases")
-            # long lines wrap (a result line of tpot check cleanup is longer than 80 columns)
-            yield NavRichLog(id="task-log", max_lines=2000, wrap=True, markup=False, highlight=False)
-            yield Static("", id="task-result")
+        with Vertical(id="task-body"):
+            with NavScroll(id="task-heading"):
+                yield Static(Text(self.job.title, style=f"bold {theme.color('magenta')}"), id="task-title")
+                yield Static(self.intro_text(), id="task-intro")
+                yield NavInput(placeholder="your sudo password", password=True, id="task-sudo")
+                yield Static("", id="task-hint")
+            with NavScroll(id="task-phase-view"):
+                yield Static("", id="task-phases")
+            with Vertical(id="task-live-view"):
+                yield NavDataTable(id="task-live", cursor_type="row", fixed_columns=1)
+                yield Static("Live stages, not a completed result. Enter: stage details.", id="task-live-info")
+            yield ProgressLog(id="task-log")
+            with NavScroll(id="task-result-view"):
+                yield Static("", id="task-result")
         with Horizontal(id="task-nav"):
             yield Static("", classes="task-spacer")
             yield Button("Back", id="task-back")
@@ -97,6 +105,13 @@ class TaskScreen(Screen):
         self.query_one("#task-sudo", Input).display = self.needs_password()
         self.query_one("#task-restart", Button).display = False
         self.query_one("#task-log", RichLog).display = False
+        if self.job.check_progress:
+            from tpotctl.checks import stages
+            self.query_one("#task-body").add_class("-check")
+            table = self.query_one("#task-live", NavDataTable)
+            table.add_column("Honeypot", width=20)
+            for name in stages.STAGES:
+                table.add_column(stages.SHORT_TITLES[name], width=len(stages.SHORT_TITLES[name]))
         if self.job.autostart and not self.needs_password():
             self.start()
         elif self.needs_password():
@@ -143,6 +158,7 @@ class TaskScreen(Screen):
             Text(f"{glyphs.g('fail')} sudo does not accept this password", style=theme.color("error")))
 
     def launch(self, password: str) -> None:
+        self.query_one("#task-body").add_class("-started")
         self.query_one("#task-hint", Static).update("")
         self.query_one("#task-sudo", Input).display = False
         self.query_one("#task-run", Button).display = False
@@ -175,9 +191,34 @@ class TaskScreen(Screen):
 
     def feed(self, line: str) -> None:
         if runlog.parse_mark(line) is None:
-            self.query_one("#task-log", RichLog).write(Text(line.rstrip("\n")))
+            self.query_one("#task-log", ProgressLog).append(line)
         self.run_state.feed(line)
         self.show_phases()
+        if self.job.check_progress:
+            self.show_checks()
+
+    def show_checks(self) -> None:
+        from tpotctl.checks import stages
+        table = self.query_one("#task-live", NavDataTable)
+        table.sync_rows((name, [Text(name)] + [check_cell(row["stages"][key]["state"]) for key in stages.STAGES])
+                        for name, row in self.run_state.check_rows.items())
+        if self.run_state.check_problem:
+            self.query_one("#task-live-info", Static).update(
+                Text(self.run_state.check_problem, style=theme.color("warn")))
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.data_table.id != "task-live":
+            return
+        event.stop()
+        from tpotctl.checks import stages
+        row = self.run_state.check_rows[event.row_key.value]
+        text = Text("Live observations; the Checks page shows the completed result.\n", style=theme.color("ash"))
+        for key in stages.STAGES:
+            entry = row["stages"][key]
+            text.append(f"\n{stages.TITLES[key]}: {CHECK_STATE_WORDS[entry['state']]}\n",
+                        style=f"bold {theme.color('glass')}")
+            text.append(entry["detail"] or "No observation yet.", style=theme.color("glass"))
+        self.app.push_screen(ConfirmDialog(f"{row['name']}: live check", text, no="Close", allow_yes=False))
 
     def tick(self) -> None:
         if self.busy:
@@ -202,7 +243,11 @@ class TaskScreen(Screen):
                 text.append(f"{glyphs.g('fail')} {title}\n", style=theme.color("error"))
         if not phases and self.busy:
             text.append(f"{spinner[self.frame % len(spinner)]} running ...", style=theme.color("glass"))
+        view = self.query_one("#task-phase-view", NavScroll)
+        following = view.scroll_y >= view.max_scroll_y
         self.query_one("#task-phases", Static).update(text)
+        if following:
+            view.scroll_end(animate=False)
 
     def finished(self, code: int) -> None:
         self.busy = False
@@ -252,4 +297,6 @@ class TaskScreen(Screen):
 
     def action_toggle_log(self) -> None:
         log = self.query_one("#task-log", RichLog)
-        log.display = not log.display
+        if log.display:
+            self.query_one("#task-body").toggle_class("-log-full")
+            log.focus()

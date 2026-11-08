@@ -53,7 +53,7 @@ def build(system: str) -> Theme:
         # (WAX) in grey, no zebra (half of grey is black)
         few.update({"block-cursor-background": p["WAX"], "input-selection-background": p["COMB_LIT"],
                     "stripe": p["INK"]})
-    # for Rich Text outside of CSS (tables, the honeycomb, the logo)
+    # for Rich Text outside of CSS (tables, the logo)
     STYLE = {
         "magenta": p["MAGENTA"], "petrol": p["PETROL"], "glass": p["GLASS"], "mist": p["MIST"], "key": p["KEY"],
         "ash": p["ASH"], "wax": p["WAX"], "comb": p["COMB_LIT"], "ok": p["OK"], "warn": p["WARN"],
@@ -113,7 +113,7 @@ TPOT_THEME: Theme = build(color_system())
 
 
 def color(name: str) -> str:
-    """The colour of a token for Rich texts (tables, honeycomb, logo)."""
+    """The colour of a token for Rich texts (tables, logo)."""
     return STYLE[name]
 
 

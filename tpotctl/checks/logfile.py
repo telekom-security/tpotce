@@ -6,16 +6,17 @@ written to. Nothing is created: a log that is not there stays missing (a file ro
 lock the honeypot out of its own log).
 
 The module has no imports of tpotctl, so it also runs as a script, as root through sudo when a
-log is not open to the user (`python3 -I logfile.py append|read|size|list DATA REL ...`); the
+log is not open to the user (`python3 -I logfile.py append|read|size|info|list DATA REL ...`); the
 text of `append` is an argument there (with --become-file the stdin of sudo is the password); the
 check uses the same code both ways.
 """
 
 import fnmatch
+import json
 import os
 import stat
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 READ_LIMIT = 4 * 2 ** 20        # bytes of new log text a check reads per file at most
 
@@ -65,16 +66,22 @@ def _open(base: str, rel: str, flags: int, write: bool = False) -> int:
     return fd
 
 
-def size(base: str, rel: str) -> Optional[int]:
-    """The size of a log, None when it is not there."""
+def info(base: str, rel: str) -> Optional[Tuple[int, int, int]]:
+    """Device, inode and size of the safely opened log, None when it is not there."""
     try:
         fd = _open(base, rel, os.O_RDONLY)
     except FileNotFoundError:
         return None
     try:
-        return os.fstat(fd).st_size
+        found = os.fstat(fd)
+        return found.st_dev, found.st_ino, found.st_size
     finally:
         os.close(fd)
+
+
+def size(base: str, rel: str) -> Optional[int]:
+    found = info(base, rel)
+    return found[2] if found is not None else None
 
 
 def read_from(base: str, rel: str, offset: int, limit: int = READ_LIMIT) -> bytes:
@@ -127,7 +134,7 @@ def listing(base: str, rel_dir: str, pattern: str) -> List[str]:
 
 
 def main(argv: List[str]) -> int:
-    """append BASE REL [TEXT] (else stdin) | read BASE REL OFFSET [LIMIT] | size BASE REL |
+    """append BASE REL [TEXT] (else stdin) | read BASE REL OFFSET [LIMIT] | size|info BASE REL |
     list BASE DIR PATTERN; exit 1 with the reason on stderr."""
     try:
         command, base, rel = argv[0], argv[1], argv[2]
@@ -140,12 +147,14 @@ def main(argv: List[str]) -> int:
         elif command == "size":
             found = size(base, rel)
             sys.stdout.write("-\n" if found is None else f"{found}\n")
+        elif command == "info":
+            sys.stdout.write(json.dumps(info(base, rel)) + "\n")
         elif command == "list":
             sys.stdout.write("".join(f"{name}\n" for name in listing(base, rel, argv[3])))
         else:
             raise IndexError(command)
     except (IndexError, ValueError):
-        sys.stderr.write("usage: logfile.py append|read|size|list DATA REL ...\n")
+        sys.stderr.write("usage: logfile.py append|read|size|info|list DATA REL ...\n")
         return 2
     except (LogFileError, OSError) as error:
         sys.stderr.write(f"{error}\n")
