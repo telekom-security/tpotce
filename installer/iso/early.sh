@@ -70,6 +70,10 @@ done
 . "${myROOT}/usr/share/debconf/confmodule"
 db_fget keyboard-configuration/xkb-keymap seen
 if [ "${RET}" != true ]; then
+  # Debian's simplified question marks layout/variant as answered; xkb-keymap can stay unseen.
+  db_fget keyboard-configuration/layout seen
+fi
+if [ "${RET}" != true ]; then
   logger -t tpot-iso "Asking for the layout of the keyboard detected by udev."
   db_settitle debian-installer/console-setup-udeb/title
   # The udeb is already configured, even if its keyboard question was skipped.

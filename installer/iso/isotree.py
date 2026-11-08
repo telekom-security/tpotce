@@ -417,6 +417,19 @@ desktop-image: "/boot/grub/tpot/splash.png"
 }
 """
 
+INSTALLED_GRUB = """# T-Pot ISO: boot appearance only; Debian still generates the menu.
+# Only grub-mkconfig names the entries after T-Pot: grub-install and the postinsts of grub-efi
+# and shim-signed take the EFI folder from GRUB_DISTRIBUTOR, which must stay Debian's.
+case "${0##*/}" in
+  grub-mkconfig)
+    case "${GRUB_DISTRIBUTOR:-}" in
+      ""|Debian|"Debian GNU/Linux") GRUB_DISTRIBUTOR="T-Pot on Debian GNU/Linux" ;;
+    esac ;;
+esac
+GRUB_THEME="${GRUB_THEME:-/usr/share/grub/themes/tpot/theme.txt}"
+GRUB_GFXMODE="${GRUB_GFXMODE:-800x600,auto}"
+"""
+
 
 def patch_theme(text: str, name: str) -> Optional[str]:
     """A theme of /boot/grub/theme with the background (the light ones): the title off the logo, the
@@ -526,6 +539,11 @@ def patch_tree(arch: str, orig: str, out: str) -> List[str]:
             written["boot/grub/theme/hl_c.png"] = solid_png(*png_size(handle.read()))
     elif arch != "arm64":
         raise PatchError(f"unknown architecture {arch}")
+    written["tpot/grub/theme.txt"] = ARM64_THEME.replace(
+        "/boot/grub/tpot/splash.png", "splash.png").replace("T-Pot installer on Debian (UEFI)", "T-Pot").encode()
+    written["tpot/grub/splash.png"] = splash_png()
+    written["tpot/grub/hl_c.png"] = solid_png(20, 20)
+    written["tpot/grub/tpot.cfg"] = INSTALLED_GRUB.encode()
     for rel, data in written.items():
         path = os.path.join(out, *rel.split("/"))
         os.makedirs(os.path.dirname(path), exist_ok=True)

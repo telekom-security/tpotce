@@ -4,7 +4,7 @@
 # installation, the login hook (/etc/profile.d/tpot-iso.sh) at a login, by hand:
 #   bash /usr/local/share/tpot-iso/start.sh [-b <branch>] [-r <repository>]
 # On a screen of this machine (tty8, a login on a VT) it runs again in the graphical terminal of
-# the ISO (terminal.sh: Xorg with one fullscreen xterm, no desktop) and watches it (fuWATCH): X up
+# the ISO (terminal.sh: Xorg with one fullscreen Xfce Terminal, no desktop) and watches it (fuWATCH): X up
 # within 30 s, the key S there within 60 s. Where it cannot start (no graphics device, its packages
 # missing), does not start or its screen stays black it asks on the text console: the graphical
 # terminal again, the text console (kept until the next boot) or later. At a terminal it
@@ -368,13 +368,15 @@ fuVT () {
 
 fuGRAPHICAL () {
   # can the graphical terminal of the ISO start? rc 1 with the reason in myWHY: tools (its
-  # packages, the missing one in myMISSING), device (no /dev/dri/card*, no /dev/fb*; a render
-  # node is no screen), text (the text console chosen in this boot)
-  local myTOOL myDEV
-  for myTOOL in startx xauth Xorg xterm matchbox-window-manager; do
-    if ! command -v "${myTOOL}" >/dev/null 2>&1; then myWHY="tools" myMISSING="${myTOOL}"; return 1; fi
-  done
+  # packages, the missing part in myMISSING: terminal.sh --ready, the one rule), device (no
+  # /dev/dri/card*, no /dev/fb*; a render node is no screen), text (the text console chosen in
+  # this boot)
+  local myDEV
   if [ ! -r "${myDIR}/terminal.sh" ]; then myWHY="tools" myMISSING="${myDIR}/terminal.sh"; return 1; fi
+  if ! myMISSING="$(bash "${myDIR}/terminal.sh" --ready 2>/dev/null)"; then
+    myWHY="tools" myMISSING="${myMISSING:-${myDIR}/terminal.sh --ready}"
+    return 1
+  fi
   myWHY="device"
   for myDEV in "${myDEV_DIR}"/dri/card* "${myDEV_DIR}"/fb*; do
     if [ -e "${myDEV}" ]; then myWHY=""; break; fi

@@ -32,6 +32,14 @@ def run(argv):
         fail("The T-Pot Manager runs on Linux and macOS, not on Windows.")
     if os.geteuid() == 0:
         fail("do not run tpot as root, it calls sudo itself where needed")
+    if (not argv and sys.platform.startswith("linux") and sys.stdin.isatty() and sys.stdout.isatty()
+            and not os.environ.get("TPOT_TERMINAL_CHECKED") and not os.environ.get("TPOT_TERMINAL_ACTIVE")):
+        try:
+            sys.exit(bootstrap.run_child([
+                "bash", os.path.join(REPO_DIR, "installer", "iso", "terminal.sh"), "--auto", "--",
+                sys.executable, os.path.realpath(__file__)]))
+        except OSError as err:
+            fail(f"The local terminal could not be started: {err}", 1)
     # the colours chosen (TPOT_COLORS, prefs) reach Textual before anything imports it
     prefs.apply_color_system(os.environ)
     home = os.path.join(os.path.expanduser("~"), "tpotce")

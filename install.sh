@@ -2776,6 +2776,14 @@ run_ansible() {
   fi
 }
 
+install_iso_complete() {
+  [ -f "${TPOT_ISO_SHARE:-/usr/local/share/tpot-iso}/iso.conf" ] || return 0
+  if ! sudo bash "${HOME}/tpotce/installer/iso/prepare.sh" --complete; then
+    myISO_WARNING="ISO completion needs attention; review /var/log/tpot-iso.log."
+    fuUI_WARN "${myISO_WARNING}"
+  fi
+}
+
 install_sudo_mode() {
   local myPLAY="${HOME}/tpotce/installer/install/sudo_mode.yml" myVARS myCLEANUP=false
   [ "$1" != false ] || myCLEANUP=true
@@ -3518,6 +3526,8 @@ if ! install_sudo_mode false; then
 fi
 
 # Done: what is installed and what comes next
+myISO_WARNING=""
+install_iso_complete
 mark_phase "done"
 if [ -n "${myCUSTOM_COMPOSE}" ];
   then mySUMMARY=("ok:T-Pot is installed with your own compose file (${myTPOT_TYPE})")
@@ -3526,6 +3536,7 @@ fi
 [ "${myTPOT_TYPE}" = "HIVE" ] && mySUMMARY+=("ok:The web user ${myWEB_USER} is set up")
 [ -n "${myPULL_FAILED}" ] && mySUMMARY+=("warn:Not all images could be pulled, T-Pot tries again when it starts")
 [ -n "${myHOOKS_WARNING}" ] && mySUMMARY+=("warn:${myHOOKS_WARNING}")
+[ -n "${myISO_WARNING}" ] && mySUMMARY+=("warn:${myISO_WARNING}")
 [ -n "${myBECOME_OWN_FILE}" ] && mySUMMARY+=("next:Remove the password file ${myBECOME_OWN_FILE} when it is no longer needed")
 mySUMMARY+=("${myTPOT_ITEM}")
 [ -n "${myINFO}" ] && mySUMMARY+=("info:${myINFO}")

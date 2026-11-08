@@ -4279,6 +4279,14 @@ function fuCUSTOMIZER_DEPS () {
 	echo
 }
 
+function fuISO_COMPLETE () {
+	[ -f "${TPOT_ISO_SHARE:-/usr/local/share/tpot-iso}/iso.conf" ] || return 0
+	if ! sudo bash "${HOME}/tpotce/installer/iso/prepare.sh" --complete; then
+	  fuUI_WARN "ISO completion needs attention; review /var/log/tpot-iso.log."
+	  fuDID warn "ISO completion needs attention; review /var/log/tpot-iso.log."
+	fi
+}
+
 # The tpot command: refresh its venv (the pinned packages may have changed with the
 # release) and link it for installations that predate it. Only warns, T-Pot itself
 # does not need it, and pypi.org is not part of the internet check above.
@@ -4972,6 +4980,7 @@ fi
 # release: a rollback here leaves tpot as it was.
 fuCHECK_ELASTIC
 fuTPOT_SETUP
+fuISO_COMPLETE
 fuSSHD_DROPIN
 fuAUTO_UPDATES
 fuMARK phase pull Pulling the images
