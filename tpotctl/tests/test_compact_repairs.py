@@ -65,7 +65,7 @@ class CompactRepairTest(unittest.IsolatedAsyncioTestCase):
                 region = app.query_one(selector).region
                 self.assertLessEqual(region.bottom, 23, selector)
                 self.assertGreater(region.height, 0, selector)
-            self.assertEqual(len(app.query_one("#comb").containers), 38)
+            self.assertEqual(app.query_one("#containers").row_count, 38)
             self.assertEqual(app.query_one("#system").region.height, 1)
 
     async def test_settings_head_has_two_rows_and_first_field_is_visible(self):
