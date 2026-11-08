@@ -15,6 +15,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -689,6 +690,164 @@ class EngineTest(unittest.TestCase):
         progress.feed("@@tpot phase done")
         self.assertEqual(progress.fraction, 1.0)
 
+    def test_repeated_completion_does_not_count_an_image_twice(self):
+        progress = installer.Progress()
+        for line in ("@@tpot phase pull", "@@tpot images 2", " cowrie Pulled", " cowrie Pulled"):
+            progress.feed(line)
+        self.assertEqual(progress.images_done, 1)
+        self.assertAlmostEqual(progress.fraction, 0.895)
+
+    def test_structured_pull_status_uses_completed_images_not_bytes(self):
+        progress = installer.Progress()
+        progress.feed("@@tpot phase pull")
+        progress.feed('@@tpot pull {"version":1,"done":2,"total":3,"activity":"example/a:tag: Extracting"}')
+        self.assertEqual((progress.images_done, progress.images), (2, 3))
+        self.assertIn("Extracting", progress.task)
+        progress.feed('@@tpot pull {"version":1,"done":4,"total":3,"activity":"impossible"}')
+        self.assertEqual((progress.images_done, progress.images), (2, 3))
+        self.assertTrue(progress.warnings)
+
+    def test_truncated_pull_status_warns_and_new_phases_drop_stale_task_text(self):
+        progress = installer.Progress()
+        progress.feed("@@tpot phase playbook")
+        progress.feed("TASK [Ansible setup]")
+        progress.feed("@@tpot phase pull")
+        self.assertEqual(progress.task, "")
+        progress.feed("@@tpot pull")
+        self.assertTrue(progress.warnings)
+
+    @contextmanager
+    def pull_shell(self):
+        with open(INSTALL_SH) as handle:
+            source = handle.read()
+        definition = re.search(r"^install_pull_images\(\) \{.*?^\}", source, re.M | re.S)
+        self.assertIsNotNone(definition)
+        pull = source.split("# Pull docker images\n", 1)[1].split("# Show running services", 1)[0]
+        with tempfile.TemporaryDirectory() as home:
+            helper_dir = os.path.join(home, "tpotce", "tpotctl")
+            os.makedirs(helper_dir)
+            shutil.copyfile(os.path.join(REPO_DIR, "tpotctl", "runlog.py"), os.path.join(helper_dir, "runlog.py"))
+            bindir = os.path.join(home, "bin")
+            os.mkdir(bindir)
+            for name, body in {
+                "sudo": "#!/bin/sh\nexec \"$@\"\n",
+                "python3": f'#!/bin/sh\nexec "{sys.executable}" "$@"\n',
+                "docker": f"""#!{sys.executable}
+import json, os, subprocess, sys
+args = sys.argv[1:]
+if args == ["compose", "--help"]:
+    print("--progress string   auto, tty, plain" + (", json" if os.environ["JSON_PROGRESS"] == "1" else ""))
+elif args[-2:] == ["--format", "json"]:
+    print(json.dumps({{"services": {{"first": {{"image": "example/a:tag"}}}}}}))
+elif args[-1] == "--images":
+    print("example/a:tag")
+elif args[-1] == "pull":
+    if os.environ.get("WAIT_FOR_INTERRUPT"):
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+        with open(os.environ["WAIT_FOR_INTERRUPT"], "w") as out:
+            json.dump([os.getpid(), child.pid], out)
+        print("first Waiting for interrupt", flush=True)
+        try:
+            child.wait()
+        except KeyboardInterrupt:
+            child.wait(timeout=5)
+            sys.exit(130)
+    if "json" in args:
+        for event in ({{"id": "Image example/a:tag", "text": "Pulling", "status": "Working"}},
+                      {{"id": "abcdef012345", "text": "Downloading", "details": "12MB/40MB", "status": "Working"}},
+                      {{"id": "Image example/a:tag", "text": "Pulled", "status": "Done"}}):
+            print(json.dumps(event))
+    else:
+        print(" first Pulling\\n abcdef012345 Downloading 12MB/40MB\\n first Pulled")
+    sys.exit(int(os.environ["PULL_RC"]))
+else:
+    sys.exit(9)
+""",
+            }.items():
+                path = os.path.join(bindir, name)
+                with open(path, "w") as handle:
+                    handle.write(body)
+                os.chmod(path, 0o755)
+            script = (f'source "{UI_SH}"\n' + definition.group() +
+                      '\nmark_phase() { fuMARK phase "$1"; }\n'
+                      'sudo_password_required() { return 1; }\ninstall_stopped() { exit 130; }\n'
+                      'myMARKS=y\nmyPULL_LOG="$HOME/pull.log"\n' + pull +
+                      '\nexit "$myRC"\n')
+            env = dict(os.environ, HOME=home, PATH=bindir + os.pathsep + os.environ["PATH"],
+                       TPOT_GUM="off", TPOT_MARKS="1", JSON_PROGRESS="1", PULL_RC="0")
+            yield home, script, env
+
+    def test_shell_pull_preserves_exit_codes_and_complete_log_without_a_text_flood(self):
+        with self.pull_shell() as (home, script, env):
+            for json_progress in ("0", "1"):
+                for code in (0, 1, 130):
+                    with self.subTest(json_progress=json_progress, code=code):
+                        result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=10,
+                                                env=dict(env, JSON_PROGRESS=json_progress, PULL_RC=str(code)))
+                        self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+                        self.assertNotIn("12MB", result.stdout)
+                        self.assertIn("1 of 1 images ready", result.stdout)
+                        with open(os.path.join(home, "pull.log")) as handle:
+                            self.assertIn("12MB", handle.read())
+
+    def test_shell_pull_does_not_hide_a_renderer_log_failure(self):
+        with self.pull_shell() as (home, script, env):
+            script = script.replace('myPULL_LOG="$HOME/pull.log"', 'myPULL_LOG="$HOME/missing/pull.log"')
+            result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=10, env=env)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Image progress failed", result.stdout + result.stderr)
+            self.assertNotIn("Images ready.", result.stdout)
+
+    @unittest.skipIf(os.name == "nt", "a terminal is Unix-only")
+    def test_ctrl_c_stops_the_pull_process_tree(self):
+        import fcntl
+        import pty
+        import select
+        import signal
+        import struct
+        import termios
+        import time
+        with self.pull_shell() as (home, script, env):
+            marker = os.path.join(home, "pull-pids")
+            env = dict(env, WAIT_FOR_INTERRUPT=marker, TPOT_MARKS="0", COLUMNS="80")
+            script = "trap 'exit 130' INT TERM HUP\n" + script.replace("myMARKS=y", "myMARKS=")
+            master, slave = pty.openpty()
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+
+            def terminal():
+                # Ctrl+C as for a person: not ignored, even when the tests run as `... &` (SIG_IGN inherited)
+                signal.signal(signal.SIGINT, signal.SIG_DFL)
+                os.setsid()
+                fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+            proc = subprocess.Popen(["bash", "-c", script], stdin=slave, stdout=slave, stderr=slave,
+                                    preexec_fn=terminal, env=env)
+            output, interrupted = b"", False
+            deadline = time.monotonic() + 10
+            try:
+                while time.monotonic() < deadline:
+                    if select.select([master], [], [], 0.1)[0]:
+                        output += os.read(master, 8192)
+                    if not interrupted and b"for interrupt" in output:
+                        os.write(master, b"\x03")
+                        interrupted = True
+                    if proc.poll() is not None:
+                        break
+                self.assertTrue(interrupted, output)
+                self.assertEqual(proc.poll(), 130, output)
+                with open(marker) as handle:
+                    for pid in json.load(handle):
+                        with self.assertRaises(ProcessLookupError, msg=f"pull process {pid} survived Ctrl+C"):
+                            os.kill(pid, 0)
+            finally:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.wait(timeout=5)
+                os.close(slave)
+                os.close(master)
+
     def test_final_sudo_phase_preserves_progress_and_names_the_failure(self):
         progress = installer.Progress()
         for line in ("@@tpot phase pull", "@@tpot images 1", " cowrie Pulled", "@@tpot phase sudo",
@@ -783,6 +942,55 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
         return InstallApp(engine=FakeEngine, checks=checks, sudo_mode=sudo,
                           password_ok=lambda pw: pw == "right", run=lambda *a, **k: self.reboots.append(a[0]),
                           repo_dir=self.repo, password_state=password_state)
+
+    async def test_log_and_actions_keep_geometry_during_progress(self):
+        import time
+        for size in ((80, 24), (120, 40)):
+            with self.subTest(size=size):
+                app = self.make_app(sudo="passwordless")
+                async with app.run_test(size=size) as pilot:
+                    await app.workers.wait_for_complete()
+                    app.progress = installer.Progress()
+                    app.started = time.monotonic()
+                    app.goto("install")
+                    app.feed("@@tpot phase playbook\n")
+                    app.feed("TASK [One task]\n")
+                    await pilot.pause(0.2)
+                    log = app.query_one("#install-log")
+                    before = (log.region, app.query_one("#ins-nav").region)
+                    app.feed("TASK [" + "A long task description " * 10 + "]\n")
+                    await pilot.pause(0.2)
+                    self.assertEqual((log.region, app.query_one("#ins-nav").region), before)
+                    self.assertGreaterEqual(log.content_region.height, 3)
+
+    async def test_pull_labels_and_full_log_remain_usable_at_80_columns(self):
+        import time
+        app = self.make_app(sudo="passwordless")
+        async with app.run_test(size=(80, 24)) as pilot:
+            await app.workers.wait_for_complete()
+            app.progress = installer.Progress()
+            app.started = time.monotonic()
+            app.goto("install")
+            app.feed("@@tpot phase pull\n")
+            await pilot.pause(0.2)
+            self.assertIn("total unknown", str(app.query_one("#install-phase").render()))
+            log = app.query_one("#install-log")
+            before = (log.region, app.query_one("#ins-nav").region)
+            app.feed('@@tpot pull {"version":1,"done":2,"total":3,"activity":"example/a:tag: Pulling"}\n')
+            await pilot.pause(0.2)
+            self.assertIn("2 of 3 images ready", str(app.query_one("#install-phase").render()))
+            self.assertIn("Overall installation", str(app.query_one("#install-phase").render()))
+            self.assertEqual((log.region, app.query_one("#ins-nav").region), before)
+            await pilot.press("l")
+            await pilot.pause(0.2)
+            self.assertGreater(log.region.height, before[0].height)
+            await pilot.press("l")
+            await pilot.pause(0.2)
+            self.assertEqual((log.region, app.query_one("#ins-nav").region), before)
+            app.feed("@@tpot pull {\n")
+            await pilot.pause(0.2)
+            self.assertIn("Invalid image progress", "\n".join(line.text for line in log.lines))
+            self.assertIn("2 of 3 images ready", str(app.query_one("#install-phase").render()))
 
     async def test_hive_and_sensor_require_a_deliberate_sudo_choice(self):
         for edition in ("h", "s"):

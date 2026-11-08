@@ -166,10 +166,6 @@ DataTable > .datatable--even-row {
 
 /* status */
 
-#dash {
-    height: auto;
-}
-
 .block {
     height: auto;
     border: round $wax;
@@ -178,60 +174,47 @@ DataTable > .datatable--even-row {
     padding: 0 1;
 }
 
-#hive-block {
-    width: 1fr;
+#status-tabs, #status-summary, #status-overview, #status-services {
+    height: 1fr;
 }
 
-#side-blocks {
-    width: 50;
-    height: auto;
-    margin-left: 1;
-}
-
-/* the room of the pot went to the attacks: a wider Attacks block, Top attackers a block of its own
-   below it (side by side they would need more than the pot gave) */
-#feed {
-    height: auto;
-    layout: vertical;
-}
-
-#sources-block {
-    height: auto;
-}
-
-Screen.-wide #side-blocks {
-    width: 80;
-}
-
-Screen.-narrow #dash {
-    layout: vertical;
-}
-
-Screen.-narrow #side-blocks {
-    width: 1fr;
-    margin-left: 0;
-}
-
-Screen.-short #containers {
-    display: none;
-}
-
-Screen.-short #dash {
-    layout: vertical;
-}
-
-Screen.-short #side-blocks {
-    width: 1fr;
-    margin-left: 0;
-}
-
-Screen.-short .block {
-    border: none;
+#status-overview, #status-services {
     padding: 0;
+}
+
+#status-tabs ContentSwitcher {
+    height: 1fr;
+}
+
+#status-summary .block {
+    margin-top: 1;
+}
+
+#status-checks {
+    margin-top: 1;
+}
+
+#status-summary {
+    overflow-x: hidden;
+}
+
+Screen.-short #status-summary .block {
+    border: none;
+    border-top: solid $wax;
+    padding: 0;
+    margin-top: 0;
+}
+
+Screen.-short #status-info, Screen.-short #event-scope, Screen.-short #status-checks {
+    margin: 0;
 }
 
 Screen.-short #sources-block {
     display: none;
+}
+
+Screen.-short #status-summary #system-block {
+    border: none;
 }
 
 #status-info {
@@ -764,9 +747,8 @@ Toast {
     margin-top: 1;
 }
 
-#install-phase {
-    height: auto;
-    margin-bottom: 1;
+#install-phase-view {
+    height: 3;
 }
 
 #install-bar {
@@ -787,16 +769,23 @@ Toast {
     color: $success;
 }
 
-#install-task {
-    height: auto;
+#install-task-view {
+    height: 2;
     margin-bottom: 1;
 }
 
-#install-log {
+.progress-log {
     height: 1fr;
+    min-height: 3;
     border: round $wax;
     background: $background;
     color: $ash;
+}
+
+#step-install.-log-full #install-phase-view,
+#step-install.-log-full #install-bar,
+#step-install.-log-full #install-task-view {
+    display: none;
 }
 
 #ins-nav {
@@ -868,6 +857,14 @@ Button.-error:disabled {
     padding: 1 2;
 }
 
+#task-heading {
+    height: 1fr;
+}
+
+#task-body.-started #task-heading {
+    height: 3;
+}
+
 #task-intro {
     margin: 1 0;
 }
@@ -876,21 +873,49 @@ Button.-error:disabled {
     width: 60;
 }
 
-#task-phases {
-    margin: 1 0 0 0;
+#task-phase-view, #task-result-view, #task-live-view {
+    display: none;
 }
 
-#task-log {
+#task-body.-started #task-phase-view {
+    display: block;
+    height: 4;
+}
+
+#task-body.-started #task-result-view {
+    display: block;
+    height: 3;
+}
+
+#task-body.-started.-check #task-heading,
+#task-body.-started.-check #task-phase-view,
+#task-body.-started.-check #task-result-view {
+    height: 2;
+}
+
+#task-body.-started.-check #task-live-view {
+    display: block;
+    height: 7;
+}
+
+#task-live {
     height: 1fr;
-    min-height: 8;
-    max-height: 20;
-    margin: 1 0;
-    background: $comb;
-    border: none;
+}
+
+#task-live-info {
+    height: 2;
+    color: $ash;
 }
 
 #task-result {
-    margin-top: 1;
+    margin-top: 0;
+}
+
+#task-body.-started.-log-full #task-heading,
+#task-body.-started.-log-full #task-phase-view,
+#task-body.-started.-log-full #task-live-view,
+#task-body.-started.-log-full #task-result-view {
+    display: none;
 }
 
 #task-nav {

@@ -21,6 +21,11 @@ isolate()   # keeps the user's config out of the tests
 
 from tpotctl import bootstrap, cli, ops  # noqa: E402
 
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
 PS = [
     {"Names": "elasticsearch", "State": "running", "Status": "Up 2 hours (health: starting)",
      "Ports": "127.0.0.1:64298->9200/tcp", "Image": "es"},
@@ -227,6 +232,19 @@ class BootstrapTest(unittest.TestCase):
 
 
 class OpsTest(unittest.TestCase):
+    @unittest.skipUnless(yaml, "PyYAML is missing (use the venv)")
+    def test_service_groups_follow_the_catalogue_not_event_counts(self):
+        groups = ops.service_groups()
+        self.assertEqual({name: groups[name] for name in ("nginx", "cowrie", "p0f", "conpot_ipmi", "beelzebub")},
+                         {"nginx": "Infrastructure", "cowrie": "Honeypots", "p0f": "NSM",
+                          "conpot_ipmi": "Honeypots", "beelzebub": "Honeypots"})
+
+    def test_container_keeps_its_compose_identity_when_renamed(self):
+        container = ops.parse_ps(json.dumps({
+            "Names": "web-entry", "State": "running",
+            "Labels": "com.docker.compose.project=tpot,com.docker.compose.service=nginx,other=value",
+        }))[0]
+        self.assertEqual(container.service, "nginx")
 
     def test_duration(self):
         self.assertEqual(ops.duration(3 * 86400 + 4 * 3600 + 59), "3 d 4 h")

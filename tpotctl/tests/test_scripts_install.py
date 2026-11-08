@@ -61,11 +61,14 @@ STUBS = {
                         "echo 'TASK [Task two] ****'\n"
                         "if [ -n \"$FAKE_PLAYBOOK_RC\" ] && [ \"${1##*/}\" = tpot.yml ]; then echo 'fatal: [127.0.0.1]: FAILED! => {}'; "
                         "exit \"$FAKE_PLAYBOOK_RC\"; fi\necho 'changed: [127.0.0.1]'\n",
-    # config --images names an image once per service (cowrie twice here), the pull of Compose v5 reports
-    # every image once
+    # the plan of the compose file names an image once per service (cowrie twice here), the pull of Compose
+    # v5 reports every image once; a slow pull says when it started ($HOME/pull-started)
     "docker": "#!/bin/sh\necho \"docker $*\" >> \"$HOME/calls\"\ncase \"$*\" in\n"
+              "  *'compose --help'*) echo '      --progress string   Set type of progress output (auto, tty, plain, quiet)' ;;\n"
+              "  *'config --format json'*) echo '{\"services\": {\"cowrie\": {\"image\": \"ghcr.io/t/cowrie:1\"}, "
+              "\"nginx\": {\"image\": \"ghcr.io/t/nginx:1\"}, \"cowrie2\": {\"image\": \"ghcr.io/t/cowrie:1\"}}}' ;;\n"
               "  *'config --images'*) printf 'ghcr.io/t/cowrie:1\\nghcr.io/t/nginx:1\\nghcr.io/t/cowrie:1\\n' ;;\n"
-              "  *' pull'*) if [ -n \"$FAKE_PULL_SLOW\" ]; then sleep 2; touch \"$HOME/marker\"; fi\n"
+              "  *' pull'*) if [ -n \"$FAKE_PULL_SLOW\" ]; then touch \"$HOME/pull-started\"; sleep 2; touch \"$HOME/marker\"; fi\n"
               "             echo ' cowrie Pulled' >&2; echo ' nginx Pulled' >&2; exit \"${FAKE_PULL_RC:-0}\" ;;\n"
               "esac\n",
 }
@@ -185,7 +188,7 @@ class InstallShTest(Scripts):
                   f"# T-Pot: {edition.upper()}\nservices: {{}}\n")
         os.makedirs(os.path.join(self.tpotce, "tpotctl"), exist_ok=True)
         shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.tpotce, "env.example"))
-        for name in ("generated.py", "git_hooks.py"):
+        for name in ("generated.py", "git_hooks.py", "runlog.py"):
             shutil.copy(os.path.join(REPO, "tpotctl", name), os.path.join(self.tpotce, "tpotctl", name))
         write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\nWEB_USER=\n")
         # install.sh as it runs from a download: no clone around it
@@ -496,6 +499,30 @@ PY
                 with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
                     self.assertEqual(handle.read(), "# T-Pot: SENSOR\nservices: {}\n")
 
+    def test_an_older_checkout_without_the_pull_reader_still_pulls(self):
+        """-b an older branch: its tpotctl/runlog.py is missing or has no command line (pull-output), the
+        pull runs under the spinner of before and the assistant still counts the images."""
+        helper = os.path.join(self.tpotce, "tpotctl", "runlog.py")
+        for variant in ("missing", "no command line"):
+            if variant == "missing":
+                os.unlink(helper)
+            else:
+                write(helper, "PREFIX = '@@tpot '\n")
+            for marks in ([], ["-M"]):
+                with self.subTest(variant=variant, marks=marks):
+                    write(os.path.join(self.home, "calls"), "")
+                    result = self.install("-s", "-t", "s", *marks)
+                    self.assertEqual(result.returncode, 0, result.stdout[-800:])
+                    self.assertIn(" pull", self.calls())
+                    self.assertNotIn("can't open file", result.stdout)
+                    self.assertNotIn("Not all images could be pulled", result.stdout)
+                    self.assertIn("### [OK] - Pulling the images", result.stdout)
+                    with open(os.path.join(self.home, "install_tpot_pull.log"), encoding="utf-8") as handle:
+                        self.assertIn(" cowrie Pulled", handle.read())
+                    if marks:
+                        progress = self.feed(result.stdout)
+                        self.assertEqual((progress.images, progress.images_done), (2, 2))
+
     def test_a_failing_present_stamp_helper_is_not_treated_as_an_old_checkout(self):
         write(os.path.join(self.tpotce, "tpotctl", "generated.py"), "raise SystemExit(1)\n")
         result = self.install("-s", "-t", "s")
@@ -739,8 +766,9 @@ PY
         self.assertEqual((progress.phase, progress.tasks, progress.tasks_done), ("done", 2, 2))
         self.assertEqual((progress.images, progress.images_done), (2, 2))
         self.assertEqual((progress.failed_task, progress.warnings, progress.fraction), ("", [], 1.0))
-        # the pull passes through for the assistant, it comes after its mark
-        self.assertLess(result.stdout.index("@@tpot phase pull"), result.stdout.index(" cowrie Pulled"))
+        # the pull progress reaches the assistant after its mark; the raw docker lines only go into the log
+        self.assertLess(result.stdout.index("@@tpot phase pull"), result.stdout.index("@@tpot pull "))
+        self.assertNotIn(" cowrie Pulled", result.stdout)
         self.assertNotIn("\x1b", result.stdout)
         self.assertNotIn("telekom security", result.stdout)
         self.assertLess(result.stdout.index("@@tpot phase done"), result.stdout.index("### T-Pot is installed"))
@@ -785,9 +813,11 @@ PY
         result = self.install("-s", "-t", "s")
         self.assertEqual(result.returncode, 0, result.stdout)
         out = result.stdout
-        self.assertIn("### Pulling the images ...", out)
-        self.assertIn("### [OK] - Pulling the images", out)
-        # the output of the pull is in its log, not on the screen
+        self.assertIn("### Pulling the images", out)
+        self.assertIn("2 of 2 images ready", out)
+        self.assertIn("### [OK] - Images pulled", out)
+        self.assertEqual(out.count("install_tpot_pull.log"), 1, out)   # the log is named once
+        # the raw output of the pull is in its log, not on the screen
         self.assertNotIn("cowrie Pulled", out)
         with open(os.path.join(self.home, "install_tpot_pull.log"), encoding="utf-8") as handle:
             self.assertIn("cowrie Pulled", handle.read())
@@ -1116,6 +1146,22 @@ fi
         self.assertIn(f"[ t-pot {NEW} ]", ui.plain(self.at_terminal(self.script, "-b", "99.3.0")))
 
     def test_ctrl_c_stops_the_pull(self):
+        """A real Ctrl+C at the terminal reaches the pull and its progress reader (no spinner there):
+        the run ends with its own summary, not the bare trap, and nothing goes on."""
+        out = ui.plain(interrupted(self, self.script, "-s", "-t", "s", TPOT_INSTALL_PACKAGES_DONE="1",
+                                   FAKE_PULL_SLOW="1"))
+        self.assertIn("rc=130", out)
+        self.assertIn("The installation was stopped", out)
+        self.assertIn("Stopped during the image pull", out)
+        self.assertNotIn("Traceback", out)
+        self.assertRegex(out, r"(?m)^\W*The installation was stopped")   # not glued to the status line
+        self.assertFalse(re.search(r"^ *T-Pot is installed *$", out, re.M), out[-800:])   # not its summary
+        self.assertNotIn("Not all images could be pulled", out)
+        self.assertNotIn("grc netstat", self.calls())
+        went_no_further(self)
+
+    def test_ctrl_c_stops_the_pull_of_an_older_checkout(self):
+        os.unlink(os.path.join(self.tpotce, "tpotctl", "runlog.py"))
         out = ui.plain(stopped(self, self.script, "-s", "-t", "s", TPOT_INSTALL_PACKAGES_DONE="1",
                                FAKE_GUM_STOP="Pulling the images", FAKE_PULL_SLOW="1"))
         self.assertIn("rc=130", out)
@@ -1130,7 +1176,8 @@ fi
         out = ui.plain(self.at_terminal(self.script, "-s", "-M", "-t", "s", TPOT_INSTALL_PACKAGES_DONE="1"))
         self.assertNotIn("telekom security", out)
         self.assertIn("@@tpot phase done", out)
-        self.assertIn(" cowrie Pulled", out)
+        self.assertIn("@@tpot pull ", out)
+        self.assertIn("2 of 2 images ready", out)
         out = ui.plain(self.at_terminal(self.script, TPOT_MARKS="1"))
         self.assertNotIn("telekom security", out)
         self.assertIn("T-Pot Installer", out)
@@ -1442,6 +1489,57 @@ def stopped(case, script, *args, **env):
     long the run takes otherwise depends on the machine."""
     quoted = " ".join("'" + a.replace("'", "'\\''") + "'" for a in (script,) + args)
     return ui.at_terminal(f'bash {quoted}; echo "rc=$?"', case.env(**env), 120, 49, source="/dev/null", timeout=60)
+
+
+def interrupted(case, script, *args, **env):
+    """The script at a terminal (120 x 49) that is its controlling terminal, so Ctrl+C is a SIGINT
+    of its foreground group as for a person: typed once the slow pull stub has started
+    ($HOME/pull-started, FAKE_PULL_SLOW). Its output and its exit code as rc=<n>."""
+    import fcntl
+    import pty
+    import select
+    import struct
+    import termios
+    started = os.path.join(case.home, "pull-started")
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 49, 120, 0, 0))
+
+    def terminal():
+        # Ctrl+C as for a person: not ignored, even when the tests run as `... &` (SIG_IGN inherited)
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        os.setsid()
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+    proc = subprocess.Popen(["bash", script] + list(args), stdin=slave, stdout=slave, stderr=slave,
+                            preexec_fn=terminal, env=case.env(**env), cwd=case.home)
+    os.close(slave)
+    out, typed = b"", False
+    deadline = time.monotonic() + 60
+    try:
+        while time.monotonic() < deadline:
+            if not typed and os.path.exists(started):
+                os.write(master, b"\x03")
+                typed = True
+            if select.select([master], [], [], 0.1)[0]:
+                try:
+                    data = os.read(master, 65536)
+                except OSError:                     # Linux: EIO once the terminal is closed
+                    break
+                if not data:
+                    break
+                out += data
+            elif proc.poll() is not None:
+                break
+        case.assertTrue(typed, "the pull never started: " + out.decode("utf-8", "replace")[-800:])
+        code = proc.wait(timeout=10)
+    finally:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        proc.wait(timeout=10)
+        os.close(master)
+    return out.decode("utf-8", "replace").replace("\r\n", "\n") + f"\nrc={code}\n"
 
 
 def went_no_further(case):

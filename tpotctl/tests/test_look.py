@@ -664,7 +664,7 @@ class AttacksWidgetTest(unittest.TestCase):
         from tpotctl import events
         values = dict(per_minute=[0, 3, 9, 4] * 15, last_day=18933,
                       top=[("Cowrie", 6120), ("Dionaea", 3010), ("Tanner", 880), ("Honeytrap", 410), ("Conpot", 77)],
-                      latest=1000.0, sources=312)
+                      latest=1000.0, sources=312, last_hour=241)
         values.update(kwargs)
         return events.Attacks(**values)
 
@@ -672,8 +672,8 @@ class AttacksWidgetTest(unittest.TestCase):
         from tpotctl import app as tapp
         lines = tapp.attacks_text(self.attacks(), 76, now=1004.0).plain.split("\n")
         self.assertEqual(len(lines), 2 + 2 + 5)                # two sparkline rows, totals, newest, bars
-        self.assertEqual(lines[2], "240 last hour   18 933 in 24 hours   312 sources")
-        self.assertEqual(lines[3], f"{glyphs.g('last_attack')} last attack 4 s ago")
+        self.assertEqual(lines[2], "241 events/1h   18 933 events/24h   ~312 source IPs/1h")
+        self.assertEqual(lines[3], f"{glyphs.g('last_attack')} last event 4 s ago")
         self.assertTrue(lines[4].startswith("Cowrie") and lines[4].endswith("6 120"), lines[4])
         self.assertTrue(all(len(line) <= 76 for line in lines[4:]))
         self.assertGreater(lines[4].count(glyphs.g("bar_on")), lines[5].count(glyphs.g("bar_on")))
@@ -682,16 +682,17 @@ class AttacksWidgetTest(unittest.TestCase):
     def test_a_narrow_block_moves_the_sources(self):
         from tpotctl import app as tapp
         lines = tapp.attacks_text(self.attacks(), 46, top=3, now=1000.5, rows=1).plain.split("\n")
-        self.assertEqual(lines[1], "240 last hour   18 933 in 24 hours")
-        self.assertIn("last attack just now   312 sources", lines[2])
+        self.assertEqual(lines[1], "241 events/1h   18 933 events/24h")
+        self.assertIn("last event just now   ~312 source IPs/1h", lines[2])
         self.assertEqual(len(lines), 1 + 2 + 3)                # below 50 rows: one sparkline row, three
 
     def test_quiet_and_unreachable(self):
         from tpotctl import app as tapp, events
-        quiet = tapp.attacks_text(self.attacks(per_minute=[0] * 60, latest=None, sources=0, top=[]), 60).plain
-        self.assertIn("a quiet hour, no attacks", quiet)
-        self.assertNotIn("last attack", quiet)
-        self.assertNotIn("sources", quiet)
+        quiet = tapp.attacks_text(self.attacks(per_minute=[0] * 60, last_hour=0,
+                                             latest=None, sources=0, top=[]), 60).plain
+        self.assertIn("a quiet hour, no honeypot events", quiet)
+        self.assertNotIn("last event", quiet)
+        self.assertIn("~0 source IPs/1h", quiet)
         self.assertEqual(tapp.attacks_text(events.Attacks(problem="Elasticsearch is not reachable"), 60).plain,
                          "Elasticsearch is not reachable")
         self.assertIn("asking", tapp.attacks_text(None, 60).plain)

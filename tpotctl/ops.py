@@ -276,6 +276,7 @@ class Container:
     health: str         # healthy, unhealthy, starting or ""
     ports: str
     image: str
+    service: str = ""    # Compose identity, even when container_name was changed
 
 
 @dataclass
@@ -327,6 +328,7 @@ def parse_ps(output: str) -> List[Container]:
         if not line:
             continue
         item = json.loads(line)
+        service = re.search(r"(?:^|,)com\.docker\.compose\.service=([^,]+)", item.get("Labels") or "")
         containers.append(Container(
             name=item.get("Names", ""),
             state=item.get("State", ""),
@@ -334,6 +336,7 @@ def parse_ps(output: str) -> List[Container]:
             health=health_of(item.get("Status", "")),
             ports=compact_ports(item.get("Ports", "")),
             image=item.get("Image", ""),
+            service=service.group(1) if service else "",
         ))
     return sorted(containers, key=lambda c: c.name)
 
@@ -366,6 +369,27 @@ def containers(run: Callable = subprocess.run) -> List[Container]:
 
 _CONTAINER_NAME = re.compile(r"""^\s*container_name:\s*["']?([^"'\s#]+)["']?""", re.M)
 _NAMES: Dict[str, Tuple[Tuple[int, int], List[str]]] = {}
+_GROUPS: Dict[str, Tuple[Tuple[int, int], Dict[str, str]]] = {}
+
+
+def service_groups(repo_dir: str = REPO_DIR) -> Dict[str, str]:
+    """Operational categories from the same catalogue as the customizer and checks."""
+    from tpotctl.checks import CheckError, inventory
+    path = os.path.join(repo_dir, inventory.CATALOGUE)
+    try:
+        info = os.stat(path)
+        stamp = (info.st_mtime_ns, info.st_size)
+        if path in _GROUPS and _GROUPS[path][0] == stamp:
+            return dict(_GROUPS[path][1])
+        groups = {
+            name: ("Honeypots" if group in inventory.HONEYPOT_GROUPS else
+                   "NSM" if group in inventory.PASSIVE_GROUPS else "Infrastructure")
+            for name, group in inventory.catalogue_groups(repo_dir).items() if group
+        }
+    except (OSError, CheckError) as err:
+        raise OpsError(f"Cannot classify the services: {err}") from err
+    _GROUPS[path] = (stamp, groups)
+    return dict(groups)
 
 
 def compose_names(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> List[str]:
