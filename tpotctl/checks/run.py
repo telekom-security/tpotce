@@ -50,7 +50,8 @@ last.json (version 1), for the Checks page:
      "ewsposter": {"state": "held"|"not_here"|"not_running"|"failed"|"none", "detail"},
      "cleanup": {"state": "done"|"kept"|"skipped"|"failed"|"none", "deleted" (the sum),
                  "passes": [first, second], "left" (probe events that stay), "left_no_source" (of them
-                 the events of a probed type without a source address), "left_kibana", "detail"},
+                 the events of a probed type without a source address), "left_no_source_types"
+                 (the types searched for those source-less events), "left_kibana", "detail"},
      "kibana": the Discover link of the run's window and token / sources,
      "stages": the names in order, "titles": name -> column title,
      "honeypots": [{"name", "group", "container", "running", "external", "logstash_type", "ports",
@@ -369,6 +370,20 @@ class Files:
             return None if text in ("", "-") else int(text)
         return found
 
+    def info(self, rel: str) -> Optional[Tuple[int, int, int]]:
+        found = self._do(lambda: logfile.info(self.data_dir, rel), "info", self.data_dir, rel)
+        if isinstance(found, bytes):
+            try:
+                data = json.loads(found)
+            except ValueError:
+                raise CheckError(f"invalid log identity from the privileged helper: {rel}") from None
+            if data is None:
+                return None
+            if not isinstance(data, list) or len(data) != 3 or not all(type(n) is int and n >= 0 for n in data):
+                raise CheckError(f"invalid log identity from the privileged helper: {rel}")
+            return data[0], data[1], data[2]
+        return found
+
     def read_from(self, rel: str, offset: int) -> bytes:
         return self._do(lambda: logfile.read_from(self.data_dir, rel, offset),
                         "read", self.data_dir, rel, str(offset))
@@ -395,6 +410,7 @@ class LogWatch:
     def __init__(self, files: Files):
         self.files = files
         self.position: Dict[str, int] = {}
+        self.identity: Dict[str, Tuple[int, int]] = {}
         self.tail: Dict[str, bytes] = {}
         self.lines: Dict[str, List[str]] = {}
         self.errors: Dict[str, str] = {}
@@ -407,7 +423,10 @@ class LogWatch:
     def mark(self, rel: str) -> None:
         try:
             for name in self.expand(rel):
-                self.position[name] = self.files.size(name) or 0
+                info = self.files.info(name)
+                self.position[name] = info[2] if info is not None else 0
+                if info is not None:
+                    self.identity[name] = info[:2]
         except (CheckError, OSError) as error:
             self.errors[rel] = str(error)
 
@@ -420,12 +439,18 @@ class LogWatch:
             return out
         for name in names:
             try:
-                size = self.files.size(name)
-                if size is None:
+                info = self.files.info(name)
+                if info is None:
+                    self.position[name] = 0
+                    self.tail.pop(name, None)
+                    self.identity.pop(name, None)
                     continue
+                identity, size = info[:2], info[2]
                 position = self.position.get(name, 0)
-                if size < position:          # rotated: the new file from its start
+                if size < position or self.identity.get(name, identity) != identity:
                     position, self.tail[name] = 0, b""
+                self.position[name] = position
+                self.identity[name] = identity
                 if size > position:
                     chunk = self.files.read_from(name, position)
                     self.position[name] = position + len(chunk)
@@ -534,11 +559,13 @@ def probe_address(host_address: Optional[Callable[[], str]] = None, interfaces: 
     raise CheckError("no address of this host found to probe (no route to the internet, no global IPv4 address)")
 
 
-def left_text(left: int, sourceless: int = 0) -> str:
+def left_text(left: int, sourceless: int = 0, sourceless_types: Iterable[str] = ()) -> str:
     """The probe events a cleanup leaves, in words."""
-    text = f"{left} probe events could not be told apart from real ones and stay"
+    text = f"Across the whole run: {left} possible probe events could not be told apart from real ones and stay"
     if sourceless:
-        text += f" ({sourceless} of them without a source address)"
+        scope = ", ".join(sourceless_types)
+        text += f" ({sourceless} of them without a source address"
+        text += (f"; searched types: {scope}" if scope else "") + ")"
     return text
 
 
@@ -690,9 +717,13 @@ def result_view(data: Any) -> Dict[str, Any]:
     passes = cleanup.get("passes", [])
     _form(isinstance(passes, list) and all(isinstance(n, int) and not isinstance(n, bool) for n in passes),
           "cleanup.passes")
+    sourceless_types = cleanup.get("left_no_source_types", [])
+    _form(isinstance(sourceless_types, list) and all(isinstance(n, str) and n for n in sourceless_types),
+          "cleanup.left_no_source_types")
     view["cleanup"] = {"state": _text(cleanup, "state", "cleanup."), "deleted": _number(cleanup, "deleted", "cleanup."),
                        "passes": list(passes), "left": _number(cleanup, "left", "cleanup."),
                        "left_no_source": _number(cleanup, "left_no_source", "cleanup."),
+                       "left_no_source_types": list(sourceless_types),
                        "left_kibana": _text(cleanup, "left_kibana", "cleanup."),
                        "detail": _text(cleanup, "detail", "cleanup.")}
     rows = data.get("honeypots", [])
@@ -741,6 +772,37 @@ def _row_view(row: Any, names: List[str]) -> Dict[str, Any]:
         shown[key] = ", ".join(str(v) for v in values)
     view["geo"]["location"] = shown
     return view
+
+
+def progress_view(text: str) -> Dict[str, Any]:
+    """Validate a versioned live update; it is not a completed result."""
+    _form(len(text.encode("utf-8")) <= 65536, "live update exceeds 64 KiB")
+    data = json.loads(text)
+    _form(isinstance(data, dict), "live update must be an object")
+    _form(type(data.get("version")) is int and data["version"] == 1, "live update version")
+    run_time(data.get("run_id"))
+    kind = data.get("kind")
+    _form(kind in ("start", "row"), "live update kind")
+    if kind == "start":
+        _form(set(data) == {"version", "run_id", "kind", "names"}, "live start fields")
+        names = data["names"]
+        _form(isinstance(names, list) and len(names) <= 128, "live names")
+        _form(all(isinstance(name, str) and 1 <= len(name) <= 64
+                  and all(c.isascii() and (c.isalnum() or c in "_.-") for c in name)
+                  for name in names), "live service name")
+        _form(len(set(names)) == len(names), "duplicate live service")
+    else:
+        _form(set(data) == {"version", "run_id", "kind", "row"}, "live row fields")
+        row = data["row"]
+        _form(isinstance(row, dict) and set(row) == {"name", "stages"}, "live row")
+        found = row["stages"]
+        _form(isinstance(found, dict) and set(found) == set(stages.STAGES), "live stages")
+        _form(all(isinstance(entry, dict) and set(entry) == {"state", "detail"}
+                  for entry in found.values()), "live stage fields")
+        data["row"] = _row_view(row, list(stages.STAGES))
+        _form(all(len(entry["detail"]) <= 1024 for entry in data["row"]["stages"].values()),
+              "live detail exceeds 1024 characters")
+    return data
 
 
 # -- pending cleanups ---------------------------------------------------------------------------
@@ -1006,14 +1068,16 @@ def run_pending(pending: Pending, elastic: "Elastic", warn: Callable[[str], None
     with contextlib.suppress(FileNotFoundError):
         os.unlink(pending.path)
     try:
-        note_cleanup(pending.result_file, pending.run_id, deleted, left, sourceless)
+        note_cleanup(pending.result_file, pending.run_id, deleted, left, sourceless,
+                     sourceless_types=stages.sourceless_types(pending.own))
     except OSError as error:
         # the events are gone all the same; only last.json does not say so
         warn(f"last.json could not note the cleanup of {pending.run_id} ({error.strerror or error})")
     return deleted, left, sourceless
 
 
-def note_cleanup(result_file: Optional[str], run_id: str, deleted: int, left: int, sourceless: int) -> bool:
+def note_cleanup(result_file: Optional[str], run_id: str, deleted: int, left: int, sourceless: int,
+                 *, sourceless_types: Iterable[str] = ()) -> bool:
     """The cleanup of a run done later (tpot check cleanup, the next check): last.json says so when it
     is that run's, so the Checks page no longer says the test events are still there. True when it
     was noted; an unreadable or another run's last.json stays as it is."""
@@ -1028,6 +1092,7 @@ def note_cleanup(result_file: Optional[str], run_id: str, deleted: int, left: in
         return False
     data["cleanup"] = {"state": "done", "deleted": deleted, "passes": [deleted], "left": left,
                        "left_no_source": sourceless, "left_kibana": "",
+                       "left_no_source_types": list(sourceless_types) if sourceless else [],
                        "detail": "removed later (tpot check cleanup or the next check)"}
     folder = os.path.dirname(path)
     handle, temp = tempfile.mkstemp(prefix=".last.", suffix=".json", dir=folder)
@@ -1087,6 +1152,8 @@ class Check:
         self._host = host
         self._addresses = addresses
         self.run_id = run_id or new_run_id()
+        self._progress_started = False
+        self._progress_rows: Dict[str, str] = {}
         self.token = probes.token_for(self.run_id)
         self._say = log
         self._mark = mark
@@ -1189,7 +1256,31 @@ class Check:
             self._out("mark", line)
 
     def phase(self, key: str, title: str) -> None:
+        self.progress()
         self.mark("phase", key, title)
+
+    def progress(self, start: bool = False) -> None:
+        if self._mark is None and os.environ.get("TPOT_MARKS") != "1":
+            return
+        if start:
+            self.mark("check", json.dumps({"version": 1, "run_id": self.run_id, "kind": "start",
+                                           "names": list(self.rows)}))
+            self._progress_started = True
+        if not self._progress_started:
+            return
+        for row in self.rows.values():
+            entries = {}
+            for name in stages.STAGES:
+                entry = row.stages[name]
+                detail = entry.detail
+                if len(detail) > 1024:
+                    detail = detail[:975] + "... (full detail in the completed check)"
+                entries[name] = {"state": entry.state, "detail": detail}
+            text = json.dumps({"version": 1, "run_id": self.run_id, "kind": "row",
+                               "row": {"name": row.name, "stages": entries}}, ensure_ascii=False)
+            if self._progress_rows.get(row.name) != text:
+                self.mark("check", text)
+                self._progress_rows[row.name] = text
 
     # -- what runs --
 
@@ -1334,6 +1425,7 @@ class Check:
                 for name in stages.STAGES[3:]:
                     row.set(name, NOT_APPLICABLE, ON_THE_HIVE)
 
+        self.progress(start=True)
         if not self.sensor:
             self._earlier_cleanups()
 
@@ -1431,7 +1523,8 @@ class Check:
                     continue
                 deleted, left = deleted + removed, left + stay
                 self.log("ok", f"Check {pending.run_id}: {removed} test events removed"
-                               + (f"; {left_text(stay, sourceless)}" if stay else "."))
+                               + (f"; {left_text(stay, sourceless, stages.sourceless_types(pending.own))}"
+                                  if stay else "."))
             self.earlier = {"runs": len(found), "deleted": deleted, "left": left}
         finally:
             lock.__exit__(None, None, None)
@@ -1840,6 +1933,7 @@ class Check:
                 elif now >= map_due.get(honeypot.name, map_end):
                     row.set("attack_map", FAILED, self._map_miss(redis, map_lag.get(honeypot.name)))
                     pending_map.remove(honeypot)
+            self.progress()
             if pending_log or pending_es or pending_geo or pending_map:
                 self.sleep(self.poll)
 
@@ -1953,10 +2047,11 @@ class Check:
             return
         self._drop_pending()
         report.cleanup = {"state": "done", "deleted": sum(passes), "passes": passes, "left": left,
-                          "left_no_source": sourceless, "detail": ""}
+                          "left_no_source": sourceless,
+                          "left_no_source_types": stages.sourceless_types(own) if sourceless else [], "detail": ""}
         self.log("ok", f"{sum(passes)} test events removed from Elasticsearch "
                        f"({' + '.join(str(n) for n in passes)}, the second pass {SECOND_PASS:g} s later).")
         if left:
             link = stages.kibana_link(self.host, port, stages.leftover_kql(own, self.host), self.started, end)
             report.cleanup["left_kibana"] = link
-            self.log("warn", f"{left_text(left, sourceless)}; Kibana: {link}")
+            self.log("warn", f"{left_text(left, sourceless, report.cleanup['left_no_source_types'])}; Kibana: {link}")

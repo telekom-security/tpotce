@@ -89,6 +89,9 @@ prepare_ipphoney_harness() {
 
   mkdir -p "${LOG_DIR}"
   chmod 0777 "${LOG_DIR}"
+  # Docker Desktop cannot chmod a bind-mounted file Twisted creates with mode 000.
+  touch "${JSON_LOG_FILE}"
+  chmod 0666 "${JSON_LOG_FILE}"
 
   # the image's own honeypot.cfg; the probe helper sits on a 192.168.N.0/24 network, which the
   # fallback blacklist of IPPHoney leaves out and T-Pot's honeypot.cfg logs
@@ -299,7 +302,7 @@ main() {
   wait_for_json_log_event "${token}" || test_die "Expected IPPHoney event was not found in ipphoney.json"
   test_ok "IPPHoney logged the request from ${PRIVATE_SUBNET} to ipphoney.json"
 
-  test_json_log_marker append "${JSON_LOG_FILE}" "${token}"
+  test_json_log_marker append /opt/ipphoney/log/ipphoney.json "${token}"
   run_ipphoney_probe "${token}-after-append" || test_die "IPPHoney repeat probe failed"
   wait_for_json_log_event "${token}-after-append" || test_die "IPPHoney event after external append is missing"
   test_json_log_marker check "${JSON_LOG_FILE}" "${token}" || test_die "IPPHoney overwrote an external log record"

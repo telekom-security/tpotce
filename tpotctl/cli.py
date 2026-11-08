@@ -2074,7 +2074,7 @@ def pending_cleanups(args, pending) -> int:
             rc = 1
             continue
         say.ok(f"Check {pending.run_id}: {deleted} test events removed"
-               + (f"; {trun.left_text(left, sourceless)}." if left else "."))
+               + (f"; {trun.left_text(left, sourceless, tstages.sourceless_types(pending.own))}." if left else "."))
     return rc
 
 
@@ -2150,7 +2150,9 @@ def check_summary(report, ascii_only: bool) -> None:
                + (f" ({' + '.join(str(n) for n in passes)} in two passes)." if len(passes) > 1 else "."))
         if cleanup.get("left"):
             from tpotctl.checks import run as trun
-            say.warn(f"{trun.left_text(cleanup['left'], cleanup.get('left_no_source', 0))}; "
+            left = trun.left_text(cleanup["left"], cleanup.get("left_no_source", 0),
+                                  cleanup.get("left_no_source_types", []))
+            say.warn(f"{left}; "
                      f"Kibana: {cleanup.get('left_kibana', '')}")
     elif cleanup.get("state") == "failed":
         error(f"The test events are still in Elasticsearch: {cleanup.get('detail')}")

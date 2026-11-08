@@ -89,7 +89,10 @@ class TopSourcesTest(unittest.TestCase):
         query = json.dumps(seen[0])
         self.assertIn("now-6h", query)
         self.assertIn("src_ip.keyword", query)
-        self.assertIn("Suricata", query)
+        allowed = seen[0]["query"]["bool"]["filter"][1]["terms"]["type.keyword"]
+        self.assertNotIn("Suricata", allowed)
+        self.assertNotIn("NGINX", allowed)
+        self.assertIn("Cowrie", allowed)
         self.assertEqual(seen[0]["aggs"]["sources"]["terms"]["size"], 3)
 
     def test_no_elasticsearch(self):
@@ -298,6 +301,7 @@ class ChecksCliTest(unittest.TestCase):
         self.assertEqual((view["cleanup"]["state"], view["cleanup"]["deleted"]), ("done", 1))
         self.assertEqual(oct(os.stat(result_file).st_mode & 0o777), "0o600")
         self.assertEqual((view["result"], view["exit_code"]), ("failed", 1))
+        self.assertEqual(view["cleanup"].get("left_no_source_types"), [])
         # last.json that cannot be written: the events are gone all the same, a warning says so
         found, _broken = self.widened(lambda data: None)
         warned = []
@@ -1772,6 +1776,11 @@ class CoverageTest(unittest.TestCase):
             self.assertTrue(matches, f"{name}: {path} is no input of logstash.conf")
             self.assertEqual(types[matches[0]], kind, name)
 
+    def test_event_classification_covers_exactly_the_catalogue_honeypots(self):
+        types = {inventory.LOGS[name][0] for name, group in self.groups.items()
+                 if group in inventory.HONEYPOT_GROUPS}
+        self.assertEqual(set(events.HONEYPOT_TYPES), types)
+
     def test_the_conpot_logs_are_those_of_the_catalogue(self):
         for name, group in self.groups.items():
             if group != "conpot":
@@ -2916,6 +2925,10 @@ class FakeFiles:
         self.appended = []
         self.on_append = None
 
+    def info(self, rel):
+        data = self.logs.get(rel)
+        return (0, id(data), len(data)) if data is not None else None
+
     def size(self, rel):
         return len(self.logs[rel]) if rel in self.logs else None
 
@@ -3306,6 +3319,24 @@ class RunTest(unittest.TestCase):
 
     def world(self, names=HONEYPOTS, **options):
         return World(self, [honeypot(name) for name in names], **options)
+
+    def test_live_rows_follow_the_backend_and_last_json_stays_final(self):
+        world = self.world(("cowrie",), run_id="20261017080000a1b2c3")
+        seen = []
+        world.check._mark = lambda line: seen.append((line, os.path.exists(world.result_file)))
+        report = world.run()
+        updates = [(json.loads(line[len("@@tpot check "):]), written)
+                   for line, written in seen if line.startswith("@@tpot check ")]
+        self.assertTrue(updates, "the running check must publish validated row progress")
+        first, written = updates[0]
+        self.assertEqual(first, {"version": 1, "run_id": "20261017080000a1b2c3", "kind": "start",
+                                 "names": ["cowrie"]})
+        self.assertFalse(written)
+        rows = [(data["row"], written) for data, written in updates if data["kind"] == "row"]
+        self.assertTrue(any(row["stages"]["port"]["state"] == "ok" and not written
+                            for row, written in rows))
+        self.assertEqual(rows[-1][0]["stages"], report.rows[0].as_json()["stages"])
+        self.assertTrue(rows[-1][1], "the final held outcome follows the completed result write")
 
     def test_a_honeypot_ewsposter_cannot_hold_is_left_alone(self):
         """hold.ack names the module of redishoneypot: no probe, no geo event, nothing in its log; its
@@ -3898,13 +3929,17 @@ class RunTest(unittest.TestCase):
         world.es.add({"type": "Dicompot", "session": "Finished", "@timestamp": stages.iso(BASE)})
         report = world.run()
         self.assertEqual((report.cleanup["left"], report.cleanup["left_no_source"]), (1, 1))
+        self.assertEqual(report.cleanup.get("left_no_source_types"), ["Dicompot"])
         self.assertTrue(any(doc["_source"].get("session") == "Finished" for doc in world.es.docs))
-        self.assertTrue(any(text.startswith("1 probe events could not be told apart from real ones and stay "
-                                            "(1 of them without a source address); Kibana: ")
+        self.assertTrue(any(text.startswith("Across the whole run: 1 possible probe events could not be told "
+                                            "apart from real ones and stay (1 of them without a source address; "
+                                            "searched types: Dicompot); Kibana: ")
                             for _kind, text in world.said))
         import urllib.parse
         self.assertIn("not src_ip:*", urllib.parse.unquote(report.cleanup["left_kibana"]))
-        self.assertEqual(run_checks.read_result(world.result_file)["cleanup"]["left_no_source"], 1)
+        saved = run_checks.read_result(world.result_file)["cleanup"]
+        self.assertEqual(saved["left_no_source"], 1)
+        self.assertEqual(saved.get("left_no_source_types"), ["Dicompot"])
 
     def test_conpot_ipmi_takes_the_port_it_logs(self):
         """The IPMI line of the probe names the port of an earlier contact: the log stage finds it
@@ -3989,7 +4024,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(world.es.deletes, [])      # nothing it can name
         self.assertEqual(report.cleanup["left"], 1)
         self.assertIn("src_ip", report.cleanup["left_kibana"])
-        self.assertTrue(any(text.startswith("1 probe events could not be told apart from real ones and stay; "
+        self.assertTrue(any(text.startswith("Across the whole run: 1 possible probe events could not be told apart from real ones and stay; "
                                             "Kibana: https://") for _kind, text in world.said))
         self.assertEqual(world.last()["cleanup"]["left"], 1)
 
@@ -4189,7 +4224,8 @@ class ResultViewTest(unittest.TestCase):
         self.assertEqual(cowrie["geo"]["location"], {"lat": "1.5", "country": "United States",
                                                      "ip_rep": "known attacker, mass scanner"})
         self.assertEqual(view["cleanup"], {"state": "done", "deleted": 3, "passes": [2, 1], "left": 0,
-                                           "left_no_source": 0, "left_kibana": "", "detail": ""})
+                                           "left_no_source": 0, "left_no_source_types": [],
+                                           "left_kibana": "", "detail": ""})
         self.assertEqual(view["options"], {"geo": True, "keep": False})
 
     def test_a_stage_the_honeypot_does_not_name_is_not_reached(self):
@@ -4198,6 +4234,16 @@ class ResultViewTest(unittest.TestCase):
         self.write(data)
         self.assertEqual(run_checks.read_result(self.path)["honeypots"][0]["stages"]["log"],
                          {"state": stages.NOT_REACHED, "detail": ""})
+
+    def test_sourceless_scope_is_optional_but_must_be_a_list_of_type_names(self):
+        data = self.report().as_json()
+        data["cleanup"].update(left=2, left_no_source=2, left_no_source_types=["Dicompot"])
+        self.assertEqual(run_checks.result_view(data)["cleanup"].get("left_no_source_types"), ["Dicompot"])
+        for invalid in ("Dicompot", ["Dicompot", 3], [None], [""]):
+            with self.subTest(invalid=invalid):
+                data["cleanup"]["left_no_source_types"] = invalid
+                with self.assertRaisesRegex(run_checks.ResultError, "cleanup.left_no_source_types"):
+                    run_checks.result_view(data)
 
     def test_what_it_cannot_read(self):
         good = self.report().as_json()
@@ -4346,6 +4392,55 @@ class LogFileTest(unittest.TestCase):
             os.symlink(self.log, os.path.join(self.data, "cowrie", "log", "link.json"))
             files.append("cowrie/log/link.json", "x\n")
 
+    def test_existing_elasticpot_and_ipphoney_probes_are_separate_from_geo(self):
+        files = run_checks.Files(self.data, lambda argv: self.fail(f"no sudo needed: {argv}"))
+        for name, port, source_port in (("elasticpot", 9200, 59646), ("ipphoney", 631, 55290)):
+            rel = fixtures.log_file(name)
+            path = os.path.join(self.data, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb"):
+                pass
+            for attempt in (1, 2):
+                with self.subTest(name=name, attempt=attempt):
+                    token = f"{TOKEN}-{attempt}"
+                    watch = run_checks.LogWatch(files)
+                    watch.mark(rel)
+                    probe = fixtures.render(name, BASE, HOST, source_port, port, token)
+                    geo = fixtures.render(name, BASE, "8.8.8.8", 51234, port, token)
+                    result = probes.ProbeResult("open", True, "answered", token_sent=True, src_ports=[source_port])
+                    files.append(rel, geo + "\n")
+                    self.assertEqual(stages.match_line(name, result, watch.new_lines(rel), token, [HOST],
+                                                       skip=[geo]), "")
+                    # The watcher must wait for a whole probe record, not mistake the Geo token for it.
+                    middle = len(probe) // 2
+                    files.append(rel, probe[:middle])
+                    self.assertEqual(stages.match_line(name, result, watch.new_lines(rel), token, [HOST],
+                                                       skip=[geo]), "")
+                    files.append(rel, probe[middle:] + "\n")
+                    self.assertEqual(stages.match_line(name, result, watch.new_lines(rel), token, [HOST],
+                                                       skip=[geo]), probe)
+                    self.assertEqual(watch.errors, {})
+
+    def test_renamed_log_rotation_discards_the_old_offset_and_partial_tail(self):
+        rel = "cowrie/log/cowrie.json"
+        for root in (False, True):
+            files = run_checks.Files(self.data, lambda argv: subprocess.run(argv, capture_output=True, timeout=5))
+            if root:
+                # Exercise the actual privileged helper protocol, replacing only sudo.
+                files._do = lambda _local, *args: files._root(*args)
+            for replacement in ("x\n", "new-row\n", "replacement with a longer complete line\n"):
+                with self.subTest(root=root, replacement=replacement):
+                    with open(self.log, "w") as out:
+                        out.write("old\n")
+                    watch = run_checks.LogWatch(files)
+                    watch.mark(rel)
+                    files.append(rel, "part")
+                    self.assertEqual(watch.new_lines(rel), [])
+                    os.replace(self.log, self.log + ".old")
+                    with open(self.log, "w") as out:
+                        out.write(replacement)
+                    self.assertEqual(watch.new_lines(rel), [replacement.rstrip("\n")])
+
     def test_the_script_appends_its_argument(self):
         result = subprocess.run([sys.executable, "-I", logfile.__file__, "append", self.data,
                                  "cowrie/log/cowrie.json", "two\n"], capture_output=True)
@@ -4357,8 +4452,29 @@ class LogFileTest(unittest.TestCase):
                                 capture_output=True, universal_newlines=True)
         self.assertEqual(result.stdout, "-\n")
 
+    def test_a_replacement_observed_empty_is_read_from_its_start_later(self):
+        rel = "cowrie/log/cowrie.json"
+        files = run_checks.Files(self.data)
+        watch = run_checks.LogWatch(files)
+        watch.mark(rel)
+        os.replace(self.log, self.log + ".old")
+        with open(self.log, "w"):
+            pass
+        self.assertEqual(watch.new_lines(rel), [])
+        files.append(rel, "a longer replacement\n")
+        self.assertEqual(watch.new_lines(rel), ["a longer replacement"])
+
 
 class FilesTest(unittest.TestCase):
+
+    def test_invalid_privileged_log_metadata_is_an_explicit_read_error(self):
+        for data in (b"", b"not-json", b"[]", b"[1, 2]", b"[true, 2, 3]", b"[1, -2, 3]"):
+            with self.subTest(data=data):
+                files = run_checks.Files("/data", lambda argv: subprocess.CompletedProcess(argv, 0, data, b""))
+                with mock.patch.object(logfile, "info", side_effect=PermissionError(13, "denied")):
+                    watch = run_checks.LogWatch(files)
+                    watch.mark("cowrie/log/cowrie.json")
+                    self.assertIn("invalid log identity", watch.errors.get("cowrie/log/cowrie.json", ""))
 
     def test_root_through_sudo_where_the_user_may_not(self):
         calls = []
