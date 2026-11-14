@@ -11,6 +11,7 @@ RUN apk --no-cache -U upgrade && \
 		php83-dev \
 		php83-tokenizer \
 		py3-aiohttp \
+		"py3-brotli>=1.2.1-r0" \
 		python3 \
 		python3-dev \
 		re2c && \
