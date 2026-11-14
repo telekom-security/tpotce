@@ -13,6 +13,7 @@ RUN apk --no-cache -U upgrade && \
 		openssl-dev \
 		linux-headers \
 		py3-aiohttp \
+		"py3-brotli>=1.2.1-r0" \
 		py3-geoip2 \
 		py3-jinja2 \
 		py3-jwt \
