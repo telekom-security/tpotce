@@ -13,6 +13,7 @@ RUN apk --no-cache -U upgrade && \
 		python3-dev \
 		py3-aiohttp \
 		py3-beautifulsoup4 \
+		"py3-brotli>=1.2.1-r0" \
 		py3-gitpython \
 		py3-jinja2 \
 		py3-markupsafe \
