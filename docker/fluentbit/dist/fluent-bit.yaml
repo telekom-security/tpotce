@@ -1,0 +1,64 @@
+# Fluent Bit of a SENSOR: every line of the honeypots' logs goes raw to the HIVE (its Logstash parses
+# it). The tail inputs are generated into inputs.yaml (python3 -m tpotctl.logs_config); the values
+# come from entrypoint.sh.
+service:
+  flush: 1
+  http_server: on
+  http_listen: 127.0.0.1
+  http_port: 2020
+  storage.path: /data/fluentbit/storage
+  json.escape_unicode: off
+
+includes:
+  - inputs.yaml
+
+pipeline:
+  # The heartbeat every 60 s and a one-shot for the first one 2 s after the start. No flush_on_startup:
+  # it emits before storage_backlog takes the chunks, which then frees the heartbeat's chunk a second
+  # time when an input stores on the filesystem (SIGSEGV, v5.1.5).
+  inputs:
+    - name: dummy
+      tag: tpot_heartbeat
+      dummy: '{"type":"TPotSensorHeartbeat"}'
+      interval_sec: 60
+      storage.type: memory
+      mem_buf_limit: 1M
+    - name: dummy
+      tag: tpot_heartbeat
+      dummy: '{"type":"TPotSensorHeartbeat"}'
+      interval_sec: 2
+      samples: 1
+      storage.type: memory
+      mem_buf_limit: 1M
+
+  filters:
+    - name: lua
+      match: tpot.*
+      script: /etc/fluent-bit/tpot.lua
+      call: tag_record
+    - name: lua
+      match: tpot_heartbeat
+      script: /etc/fluent-bit/tpot.lua
+      call: heartbeat
+
+  outputs:
+    - name: http
+      match: '*'
+      host: ${TPOT_HIVE_IP}
+      port: ${TPOT_HIVE_PORT}
+      uri: /
+      format: json
+      json_date_key: '@timestamp'
+      json_date_format: iso8601
+      compress: gzip
+      header:
+        - Authorization Basic ${TPOT_HIVE_USER}
+        - X-TPot-Ingest 2
+      tls: on
+      tls.verify: ${FLB_TLS_VERIFY}
+      tls.verify_hostname: ${FLB_TLS_VERIFY}
+      tls.ca_file: /data/hive.crt
+      tls.vhost: ${TPOT_HIVE_IP}
+      retry_limit: no_limits
+      storage.total_limit_size: ${FLB_STORAGE_LIMIT}
+      workers: 1

@@ -335,6 +335,15 @@ services:
       context: ../elk/kibana/
       <<: *common-build
 
+## Fluent Bit (SENSOR)
+  fluentbit:
+    image: ${TPOT_DOCKER_REPO}/fluentbit:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/fluentbit:${TPOT_VERSION}
+      context: ../fluentbit/
+      <<: *common-build
+
 ## Logstash
   logstash:
     image: ${TPOT_DOCKER_REPO}/logstash:${TPOT_VERSION}

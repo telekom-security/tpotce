@@ -289,6 +289,8 @@ class CliTest(BuilderHarness):
         groups = dict(line.split(None, 1) for line in out.strip().splitlines())
         self.assertEqual(sorted(groups), ["elk", "honeypots", "nsm", "tools"])
         self.assertIn("cowrie", groups["honeypots"].split())
+        # Fluent Bit ships the logs of a SENSOR, it goes with Logstash
+        self.assertEqual(groups["elk"].split(), ["elasticsearch", "fluentbit", "kibana", "logstash", "map", "redis"])
 
     def test_groups_cover_compose(self):
         # every image of the compose file in exactly one group, and no group names one that is not there
@@ -1129,7 +1131,7 @@ class SmokeTest(BuilderHarness):
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
         for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes", "tpotinit_users",
-                     "logstash_fixtures", "logstash_sensor", "logstash_es", "nginx", "glutton", "redis"):
+                     "logstash_fixtures", "logstash_sensor", "logstash_es", "nginx", "glutton", "fluentbit", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
 
@@ -1174,9 +1176,15 @@ class SmokeTest(BuilderHarness):
                            TPOT_BUILDER_TESTS_DIR=self.tests)
         self.assertEqual(result.stdout.splitlines(), ["N redis", "A --image ghcr.io/me/redis:1.0"])
 
+        result = self.bash('myHUB=hub myVER=1.0\nfuSMOKE_PLAN fluentbit\n'
+                           'printf "A %s\\n" "${mySMOKE_ARGS[@]}"; printf "I %s\\n" "${mySMOKE_IMAGES[@]}"',
+                           TPOT_BUILDER_TESTS_DIR=self.tests)
+        self.assertEqual(result.stdout.splitlines(),
+                         ["A --image hub/fluentbit:1.0 --init-image hub/tpotinit:1.0", "I fluentbit", "I tpotinit"])
+
     def test_glutton_needs_tpotinit_once_even_when_selected_later(self):
-        for image in ("glutton", "logstash"):
-            for selection in (image, f"{image} tpotinit", f"tpotinit {image}", "glutton logstash tpotinit"):
+        for image in ("glutton", "logstash", "fluentbit"):
+            for selection in (image, f"{image} tpotinit", f"tpotinit {image}", "glutton logstash fluentbit tpotinit"):
                 result = self.bash(f"myHUB=hub myVER=1.0\nfuSMOKE_PLAN {selection}\n"
                                    'printf "%s\\n" "${mySMOKE_IMAGES[@]}"',
                                    TPOT_BUILDER_TESTS_DIR=self.tests)
@@ -1185,13 +1193,16 @@ class SmokeTest(BuilderHarness):
                 self.assertEqual(images.count("tpotinit"), 1, images)
 
     def test_glutton_host_smoke_builds_its_tpotinit_dependency(self):
-        rc, out = self.builder("-i", "glutton", "-a", "host", "-T",
-                               TPOT_BUILDER_TESTS_DIR=self.tests)
-        self.assertEqual(rc, 0, out)
-        self.assertTrue(any(" build glutton tpotinit " in line and "override-load.yml" in line
-                            for line in self.calls()), self.calls())
-        self.assertTrue(any("test glutton --image " in line and " --init-image " in line
-                            for line in self.calls()), self.calls())
+        for image in ("glutton", "fluentbit"):
+            with self.subTest(image=image):
+                self.calls_reset()
+                rc, out = self.builder("-i", image, "-a", "host", "-T",
+                                       TPOT_BUILDER_TESTS_DIR=self.tests)
+                self.assertEqual(rc, 0, out)
+                self.assertTrue(any(f" build {image} tpotinit " in line and "override-load.yml" in line
+                                    for line in self.calls()), self.calls())
+                self.assertTrue(any(f"test {image} --image " in line and " --init-image " in line
+                                    for line in self.calls()), self.calls())
 
     def test_every_test_the_plan_names_is_in_the_repo(self):
         names = set()

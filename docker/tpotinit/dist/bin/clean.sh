@@ -255,6 +255,18 @@ fuENDLESSH () {
   chown tpot:tpot /data/endlessh -R
 }
 
+# Let's create a function to clean up and prepare fluentbit data
+fuFLUENTBIT () {
+  # The offsets of the tail inputs (offsets.db.<type> each, with their SQLite side files) only
+  # survive a restart of the container itself: emptied on every start, so a log file deleted and
+  # made again with a reused inode is read from its head. The buffer (storage) stays, it holds what
+  # the HIVE has not taken yet.
+  rm -f /data/fluentbit/offsets.db*
+  mkdir -vp /data/fluentbit/storage
+  fuDATA_MODES /data/fluentbit
+  chown tpot:tpot /data/fluentbit -R
+}
+
 # Let's create a function to clean up and prepare galah data
 fuGALAH () {
   # cert/ (the TLS certificate) and cache/ (the answers of the LLM, they save LLM calls) stay, the logs go
@@ -473,6 +485,7 @@ fuDIONAEA
 fuELASTICPOT
 fuELK
 fuENDLESSH
+fuFLUENTBIT
 fuGALAH
 fuGLUTTON
 fuGOPOT

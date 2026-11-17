@@ -1,0 +1,202 @@
+"""The image fluentbit (docker/fluentbit): Fluent Bit on a SENSOR ships the raw log lines of the
+honeypots to the HIVE. Its tail inputs come from the log table (tpotctl.logs_config), the pinned
+values of its configuration are read here as YAML, its Lua filter runs with the lua of the host
+where there is one. The smoke test docker/_tests/tests/fluentbit.sh runs the image against a stub
+HIVE (docker/_tests/lib/hive_stub.py)."""
+
+import contextlib
+import io
+import json
+import re
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+from tpotctl import logs_config
+
+try:
+    import yaml
+except ImportError:  # the python3 of the host; the venv has PyYAML
+    yaml = None
+
+ROOT = Path(__file__).resolve().parents[2]
+IMAGE_DIR = ROOT / "docker" / "fluentbit"
+DIST = IMAGE_DIR / "dist"
+LUA = shutil.which("luajit") or shutil.which("lua")
+
+
+def flb(value):
+    """A value of the YAML as Fluent Bit reads it: text (YAML reads on / true as bool, 1 as int)."""
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    return str(value)
+
+
+def section(entry):
+    return {key: flb(value) for key, value in entry.items()}
+
+
+@unittest.skipUnless(yaml, "needs PyYAML (the venv of the T-Pot Manager)")
+class ConfigTest(unittest.TestCase):
+
+    def load(self, name):
+        with open(DIST / name, encoding="utf-8") as handle:
+            return yaml.safe_load(handle)
+
+    def test_inputs_generated(self):
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(logs_config.main(["--check"]), 0, stderr.getvalue())
+        self.assertIn(DIST / "inputs.yaml", logs_config.TARGETS)
+        text = (DIST / "inputs.yaml").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith(logs_config.HEADER))
+        inputs = self.load("inputs.yaml")["pipeline"]["inputs"]
+        self.assertEqual(len(inputs), len(logs_config.INPUTS))
+        # one offsets db per input: at its init a tail input deletes the rows of every inode it does not
+        # watch, so a shared db would lose the offsets of the others on a restart of the container
+        dbs = [tail["db"] for tail in inputs]
+        self.assertEqual(len(set(dbs)), len(dbs), dbs)
+        for db in dbs:
+            self.assertRegex(db, r"\A/data/fluentbit/offsets\.db\.[a-z0-9_-]+\Z")
+        self.assertEqual(dbs[0], "/data/fluentbit/offsets.db.suricata")
+        self.assertIn("/data/fluentbit/offsets.db.go-pot", dbs)
+        for entry, tail in zip(logs_config.INPUTS, inputs):
+            with self.subTest(type=entry.type):
+                self.assertEqual(section(tail), {
+                    "name": "tail", "tag": f"tpot.{entry.type}", "path": ",".join(entry.paths),
+                    "path_key": "t-pot_log_path", "key": "log",
+                    "read_from_head": "on", "db": tail["db"], "db.locking": "on",
+                    "skip_long_lines": "on", "buffer_chunk_size": "64k", "buffer_max_size": "1M",
+                    "refresh_interval": "10", "storage.type": "filesystem"})
+
+    def test_config_pins(self):
+        config = self.load("fluent-bit.yaml")
+        self.assertEqual(section(config["service"]), {
+            "flush": "1", "http_server": "on", "http_listen": "127.0.0.1", "http_port": "2020",
+            "storage.path": "/data/fluentbit/storage", "json.escape_unicode": "off"})
+        self.assertEqual(config["includes"], ["inputs.yaml"])
+        pipeline = config["pipeline"]
+        # flush_on_startup emits before storage_backlog takes the chunks, which then frees the heartbeat's
+        # chunk twice (v5.1.5): a one-shot dummy gives the first heartbeat instead
+        heartbeat = {"name": "dummy", "tag": "tpot_heartbeat", "dummy": '{"type":"TPotSensorHeartbeat"}',
+                     "storage.type": "memory", "mem_buf_limit": "1M"}
+        self.assertEqual([section(entry) for entry in pipeline["inputs"]], [
+            {**heartbeat, "interval_sec": "60"}, {**heartbeat, "interval_sec": "2", "samples": "1"}])
+        for entry in pipeline["inputs"]:
+            self.assertEqual(json.loads(entry["dummy"]), {"type": "TPotSensorHeartbeat"})
+            self.assertNotIn("flush_on_startup", entry)
+        self.assertEqual([section(entry) for entry in pipeline["filters"]], [
+            {"name": "lua", "match": "tpot.*", "script": "/etc/fluent-bit/tpot.lua", "call": "tag_record"},
+            {"name": "lua", "match": "tpot_heartbeat", "script": "/etc/fluent-bit/tpot.lua", "call": "heartbeat"}])
+        outputs = pipeline["outputs"]
+        self.assertEqual(len(outputs), 1)
+        output = dict(outputs[0])
+        self.assertEqual(output.pop("header"), ["Authorization Basic ${TPOT_HIVE_USER}", "X-TPot-Ingest 2"])
+        self.assertEqual(section(output), {
+            "name": "http", "match": "*", "host": "${TPOT_HIVE_IP}", "port": "${TPOT_HIVE_PORT}", "uri": "/",
+            "format": "json", "json_date_key": "@timestamp", "json_date_format": "iso8601", "compress": "gzip",
+            "tls": "on", "tls.verify": "${FLB_TLS_VERIFY}", "tls.verify_hostname": "${FLB_TLS_VERIFY}",
+            "tls.ca_file": "/data/hive.crt", "tls.vhost": "${TPOT_HIVE_IP}",
+            "retry_limit": "no_limits", "storage.total_limit_size": "${FLB_STORAGE_LIMIT}", "workers": "1"})
+
+    def test_image_pins(self):
+        dockerfile = (IMAGE_DIR / "Dockerfile").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"^FROM (\S+)", dockerfile, re.M), ["debian:trixie-slim"] * 2)
+        self.assertIn("C3C0A28534B9293EAF51FABD9F9DDC083888C1CD", dockerfile)
+        self.assertIn("signed-by=", dockerfile)
+        self.assertIn("https://packages.fluentbit.io/debian/trixie trixie main", dockerfile)
+        self.assertRegex(dockerfile, r"fluent-bit=\$\{FLB_VERSION\}")
+        self.assertRegex(dockerfile, r"(?m)^ARG FLB_VERSION=5\.1\.5$")
+        self.assertRegex(dockerfile, r"(?m)^USER 2000:2000$")
+        self.assertRegex(dockerfile, r"(?m)^HEALTHCHECK CMD test -f /tmp/tpot-waiting \|\| "
+                                     r"curl -fs http://127\.0\.0\.1:2020/api/v1/uptime$")
+        # gnupg checks the key in the first stage only
+        final = dockerfile.rsplit("\nFROM ", 1)[1]
+        self.assertNotIn("gnupg", final)
+        with open(IMAGE_DIR / "docker-compose.yml", encoding="utf-8") as handle:
+            service = yaml.safe_load(handle)["services"]["fluentbit"]
+        version = (ROOT / "version").read_text(encoding="utf-8").strip()
+        self.assertEqual(service["image"], f"ghcr.io/telekom-security/fluentbit:{version}")
+        self.assertTrue(service["read_only"])
+        self.assertEqual(service["mem_limit"], "256m")
+        self.assertIn("/tmp", service["tmpfs"][0])
+
+    def test_entrypoint(self):
+        text = (DIST / "entrypoint.sh").read_text(encoding="utf-8")
+        self.assertIn("/data/tpot/etc/compose/elk_environment", text)
+        self.assertIn("set -o allexport", text)
+        for line in ('TPOT_HIVE_PORT="${TPOT_HIVE_PORT:-64294}"', 'FLB_STORAGE_LIMIT="${FLB_STORAGE_LIMIT:-512M}"'):
+            self.assertIn(line, text)
+        self.assertRegex(text, r"(?m)^exec fluent-bit -c /etc/fluent-bit/fluent-bit\.yaml$")
+
+
+@unittest.skipUnless(LUA, "needs lua or luajit on PATH (the smoke test runs the filter in Fluent Bit)")
+class LuaTest(unittest.TestCase):
+
+    HARNESS = r"""
+dofile(arg[1])
+local function show(label, code, ts, record)
+  local keys = {}
+  for key in pairs(record) do keys[#keys + 1] = key end
+  table.sort(keys)
+  for _, key in ipairs(keys) do
+    local value = record[key]
+    if type(value) == "table" then
+      local inner = {}
+      for name in pairs(value) do inner[#inner + 1] = name end
+      table.sort(inner)
+      for _, name in ipairs(inner) do
+        print(label .. "\t" .. key .. "." .. name .. "\t" .. tostring(value[name]))
+      end
+    else
+      print(label .. "\t" .. key .. "\t" .. tostring(value))
+    end
+  end
+  print(label .. "\tcode\t" .. tostring(code) .. "\t" .. tostring(ts))
+end
+show("tag", tag_record("tpot.Go-pot", 1.5, {log = "line", ["t-pot_log_path"] = "/data/go-pot/log/go-pot.json"}))
+show("beat1", heartbeat("tpot_heartbeat", 2.5, {type = "TPotSensorHeartbeat"}))
+show("beat2", heartbeat("tpot_heartbeat", 3.5, {type = "TPotSensorHeartbeat"}))
+"""
+
+    def run_lua(self, environ):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        harness = Path(folder.name) / "harness.lua"
+        harness.write_text(self.HARNESS, encoding="utf-8")
+        result = subprocess.run([LUA, str(harness), str(DIST / "tpot.lua")], env=environ,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lines = {}
+        for line in result.stdout.splitlines():
+            label, key, value = line.split("\t")[:3]
+            lines.setdefault(label, {})[key] = value
+        return lines
+
+    def test_lua_sets_fields(self):
+        environ = {"MY_HOSTNAME": "sensor-1", "MY_EXTIP": "198.51.100.7", "MY_INTIP": "10.0.0.7",
+                   "MY_VERSION": "24.04.2", "TPOT_FLUENTBIT_START": "2026-11-17T21:00:00Z"}
+        found = self.run_lua(environ)
+        stamped = {"t-pot_hostname": "sensor-1", "t-pot_ip_ext": "198.51.100.7", "t-pot_ip_int": "10.0.0.7"}
+        self.assertEqual(found["tag"], {"log": "line", "t-pot_log_path": "/data/go-pot/log/go-pot.json",
+                                        "type": "Go-pot", "code": "2", **stamped})
+        for number, label in ((1, "beat1"), (2, "beat2")):
+            with self.subTest(heartbeat=number):
+                self.assertEqual(found[label], {
+                    "type": "TPotSensorHeartbeat", "code": "2", **stamped, "heartbeat.sequence": str(number),
+                    "heartbeat.started_at": "2026-11-17T21:00:00Z", "heartbeat.version": "24.04.2"})
+
+    def test_lua_without_values(self):
+        # no value of elk_environment: no empty field (an empty t-pot_ip_ext is no address); an unknown
+        # version goes as empty text, the HIVE decides
+        found = self.run_lua({"TPOT_FLUENTBIT_START": "2026-11-17T21:00:00Z"})
+        self.assertEqual(found["tag"], {"log": "line", "t-pot_log_path": "/data/go-pot/log/go-pot.json",
+                                        "type": "Go-pot", "code": "2"})
+        self.assertEqual(found["beat1"]["heartbeat.version"], "")
+        self.assertNotIn("t-pot_hostname", found["beat1"])
+
+
+if __name__ == "__main__":
+    unittest.main()

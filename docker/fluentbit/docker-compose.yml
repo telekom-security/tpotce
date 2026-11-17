@@ -1,0 +1,18 @@
+services:
+
+## Fluent Bit service (SENSOR: ships the logs to the HIVE)
+  fluentbit:
+    build: .
+    container_name: fluentbit
+    restart: always
+    environment:
+     - TPOT_HIVE_IP=${TPOT_HIVE_IP}
+     - TPOT_HIVE_USER=${TPOT_HIVE_USER}
+     - LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}
+    mem_limit: 256m
+    read_only: true
+    tmpfs:
+     - /tmp:uid=2000,gid=2000
+    image: "ghcr.io/telekom-security/fluentbit:24.04.2"
+    volumes:
+     - $HOME/tpotce/data:/data

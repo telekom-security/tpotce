@@ -303,6 +303,34 @@ class PersistenceTest(unittest.TestCase):
             self.assertFalse((folder / "log").is_symlink())
 
 
+class FluentbitTest(unittest.TestCase):
+    """The offsets of Fluent Bit (offsets.db and its SQLite side files) go at every start, whatever
+    TPOT_PERSISTENCE says (a log deleted and made anew may get the inode of the old one); its buffer
+    in storage/ stays, so lines read while the HIVE was away still go out."""
+
+    run_function = PersistenceTest.run_function
+
+    def test_offsets_go_storage_stays(self):
+        text = CLEAN.read_text()
+        body = re.search(r"^fuFLUENTBIT \(\) \{(.*?)^\}", text, re.M | re.S).group(1)
+        self.assertIn("\nfuENDLESSH\nfuFLUENTBIT\nfuGALAH\n", text)
+        helper = re.search(r"^fuREMOVE_ALL_BUT \(\) \{.*?^\}", text, re.M | re.S).group()
+        for persistence in ("on", "off"):
+            with self.subTest(persistence=persistence), tempfile.TemporaryDirectory() as root:
+                folder = Path(root) / "fluentbit"
+                self.run_function(helper, "fuFLUENTBIT", body, root, persistence)
+                self.assertTrue((folder / "storage").is_dir())
+                (folder / "storage" / "tail.0").mkdir()
+                (folder / "storage" / "tail.0" / "1-chunk.flb").write_text("inert")
+                for name in ("offsets.db", "offsets.db-wal", "offsets.db-shm", "offsets.db-journal",
+                             "offsets.db.cowrie", "offsets.db.cowrie-wal", "offsets.db.cowrie-shm",
+                             "offsets.db.go-pot"):
+                    (folder / name).write_text("inert")
+                self.run_function(helper, "fuFLUENTBIT", body, root, persistence)
+                self.assertEqual(sorted(str(p.relative_to(folder)) for p in folder.rglob("*")),
+                                 ["storage", "storage/tail.0", "storage/tail.0/1-chunk.flb"])
+
+
 class SampleModesTest(unittest.TestCase):
     """The samples of Dionaea in binaries/ are 440 after every start of tpotinit and before clean.sh
     archives them; the folders keep the modes of the data folder, links are neither followed nor changed."""
