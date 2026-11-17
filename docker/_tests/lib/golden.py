@@ -6,7 +6,8 @@ values (time, source address and port, token, the address of the host), feeds th
 pipeline and hands its output here. The golden file keeps one line per fixture,
 {"name": ..., "event": ...}, sorted by name, the event normalised (normalize): without the fields
 that depend on the run or on the way into Logstash (the version, the host, the HTTP headers, the
-sensor and the file it was read from), its tags sorted and the keys of a JSON object Logstash dumped
+sensor and the file it was read from) unless the fixture's own JSON line has them (payload_keys:
+go-pot's host, log4pot's headers), its tags sorted and the keys of a JSON object Logstash dumped
 into a string sorted. It records the behaviour of the pipeline as it is, failures of a fixture
 included, so a change of the pipeline that changes a document shows.
 
@@ -23,6 +24,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -30,9 +32,11 @@ REPO = Path(__file__).resolve().parents[3]
 if str(REPO) not in sys.path:
     sys.path.append(str(REPO))
 
-from tpotctl.checks.inventory import LOGS  # noqa: E402  (standard library only)
+from tpotctl.checks import fixtures  # noqa: E402  (standard library only)
+from tpotctl.checks.inventory import LOGS  # noqa: E402
 
-# the run (version, host), the way in (HTTP headers, sensor) and the file read
+# the run (version, host), the way in (HTTP headers, sensor) and the file read; a key the
+# honeypot logs itself stays (normalize, payload)
 VOLATILE = ("@version", "host", "headers", "t-pot_sensor", "t-pot_log_path")
 # the files the honeypot inputs read (inventory.LOGS, under /data in Logstash); a * stays in its folder
 SOURCE_PATHS = [re.compile(re.escape("/data/" + rel).replace(r"\*", "[^/]*")) for _, rel in LOGS.values()]
@@ -71,16 +75,29 @@ def _sorted_dump(value):
     return json.dumps(parsed, sort_keys=True, **compact)
 
 
-def normalize(event: dict) -> dict:
-    """The event without the fields of the run and the way in, its tags sorted. The file input names
-    the file in [path] only where the honeypot logs no path of its own: only that one goes. A string
-    Logstash dumped from a map (Honeypots data) gets its keys sorted, the dump has no stable order."""
-    out = {key: _sorted_dump(value) for key, value in event.items() if key not in VOLATILE}
+def normalize(event: dict, payload: Iterable[str] = ()) -> dict:
+    """The event without the fields of the run and the way in, its tags sorted; a volatile key named
+    in `payload` (the fixture logs it itself) stays. The file input names the file in [path] only
+    where the honeypot logs no path of its own: only that one goes. A string Logstash dumped from a
+    map (Honeypots data) gets its keys sorted, the dump has no stable order."""
+    keep = set(payload)
+    out = {key: _sorted_dump(value) for key, value in event.items() if key not in VOLATILE or key in keep}
     if is_source_path(out.get("path")):
         del out["path"]
     if isinstance(out.get("tags"), list):
         out["tags"] = sorted(out["tags"], key=str)
     return out
+
+
+def payload_keys(name: str) -> Tuple[str, ...]:
+    """The top-level keys of the fixture's own line when it is a JSON object, the fields the honeypot
+    logs itself; none for a line of another format. From the template, never from the output."""
+    line = fixtures.render(name, datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc), "192.0.2.1", 1, 1, "golden")
+    try:
+        parsed = json.loads(line)
+    except ValueError:
+        return ()
+    return tuple(sorted(parsed)) if isinstance(parsed, dict) else ()
 
 
 def owner(event: dict, expect: Iterable[Tuple[str, str, int]]) -> Optional[str]:
@@ -210,7 +227,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         for line in error.lines:
             print(f"[FAIL] {line}")
         return 1
-    actual = {name: normalize(event) for name, event in found.items()}
+    actual = {name: normalize(event, payload_keys(name)) for name, event in found.items()}
     if args.action == "write":
         missing = sorted(name for name, _, _ in expect if name not in actual)
         if missing:

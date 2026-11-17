@@ -1,5 +1,7 @@
 """The golden Logstash documents of every fixture (docker/_tests/golden, docker/_tests/lib/golden.py)."""
 
+import contextlib
+import io
 import sys
 import tempfile
 import unittest
@@ -39,6 +41,39 @@ class GoldenTest(unittest.TestCase):
         # any other string stays as it is: spaces, an array, a plain text
         for kept in ('{"b": 1, "a": 2}', '[{"b":1,"a":2}]', "{not json", "GET /"):
             self.assertEqual(golden.normalize({"data": kept}), {"data": kept})
+
+    def test_normalize_keeps_a_volatile_key_the_honeypot_logs_itself(self):
+        gopot = {"@version": "1", "host": "192.0.2.1:8085", "src_ip": "8.8.8.8"}
+        self.assertEqual(golden.normalize(gopot, payload=("host", "src_ip")),
+                         {"host": "192.0.2.1:8085", "src_ip": "8.8.8.8"})
+        self.assertEqual(golden.normalize(gopot), {"src_ip": "8.8.8.8"})
+        # the host the file input adds goes, the headers log4pot logs stay
+        log4pot = {"headers": {"Host": "192.0.2.1", "User-Agent": "goldenlog4pot"}, "host": "tpot-fixtures"}
+        self.assertEqual(golden.normalize(log4pot, payload=("client", "headers")),
+                         {"headers": {"Host": "192.0.2.1", "User-Agent": "goldenlog4pot"}})
+        self.assertEqual(golden.normalize(log4pot), {})
+
+    def test_payload_keys_are_the_top_level_keys_of_a_json_fixture(self):
+        self.assertIn("host", golden.payload_keys("go-pot"))
+        self.assertIn("host", golden.payload_keys("honeyaml"))
+        self.assertIn("headers", golden.payload_keys("log4pot"))
+        self.assertNotIn("host", golden.payload_keys("cowrie"))
+        self.assertEqual(golden.payload_keys("endlessh"), ())   # no JSON line
+
+    def test_write_keeps_the_payload_host_of_its_fixture_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            events = [{"type": "Go-pot", "host": "192.0.2.1:8085", "path": "/goldengopot", "@version": "1"},
+                      {"type": "Endlessh", "host": "tpot-fixtures", "src_port": 41000}]
+            (folder / "events.json").write_text("".join(golden.json.dumps(e) + "\n" for e in events))
+            (folder / "expect.tsv").write_text("endlessh\tgoldenendlessh\t41000\ngo-pot\tgoldengopot\t42000\n")
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = golden.main(["write", "--golden", str(folder / "golden.jsonl"),
+                                  "--events", str(folder / "events.json"), "--expect", str(folder / "expect.tsv")])
+            self.assertEqual(rc, 0)
+            self.assertEqual(golden.load(folder / "golden.jsonl"),
+                             {"endlessh": {"type": "Endlessh", "src_port": 41000},
+                              "go-pot": {"type": "Go-pot", "host": "192.0.2.1:8085", "path": "/goldengopot"}})
 
     def test_match_by_token_and_port(self):
         got = golden.match([{"m": "goldencowrie"}, {"src_port": 41000}], [("cowrie", "goldencowrie", 1), ("dicompot", "golden", 41000)])

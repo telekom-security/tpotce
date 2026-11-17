@@ -218,6 +218,8 @@ services:
   logstash:
     image: "${IMAGE}"
     container_name: "${TEST_CONTAINER_NAME}"
+    # the host the file input names where a line has none: the same in every run
+    hostname: tpot-fixtures
     network_mode: none
     environment:
       - MY_EXTIP=${TEST_EXT_IP}

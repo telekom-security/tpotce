@@ -184,8 +184,9 @@ token), so the output of the HIVE pipeline is the same on every run. After the
 checks above it is compared with the golden documents in
 `docker/_tests/golden/logstash_fixtures.jsonl` (`docker/_tests/lib/golden.py`:
 one line per fixture, without the fields of the run such as `@version`, `host`
-and the file it was read from); a field that differs fails the test. A change
-of the pipeline on purpose records them anew with
+and the file it was read from, except where the fixture's own JSON line has
+them, as go-pot's `host` or log4pot's `headers`); a field that differs fails
+the test. A change of the pipeline on purpose records them anew with
 `./docker/_tests/tests/logstash_fixtures.sh --golden write` (only after every
 fixture was read cleanly; `run.sh` takes no options of a test). This mode always
 uses the Listbot stand-ins and the GeoIP database of the image, so a new
