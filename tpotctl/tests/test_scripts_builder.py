@@ -1129,7 +1129,7 @@ class SmokeTest(BuilderHarness):
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
         for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes", "tpotinit_users",
-                     "logstash_fixtures", "logstash_sensor", "nginx", "glutton", "redis"):
+                     "logstash_fixtures", "logstash_sensor", "logstash_es", "nginx", "glutton", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
 
@@ -1144,10 +1144,11 @@ class SmokeTest(BuilderHarness):
         self.assertEqual([line[2:] for line in lines if line.startswith("N ")],
                          ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
                           "tpotinit_users",
-                          "logstash_fixtures", "logstash_sensor", "nginx", "glutton", "redis"])
+                          "logstash_fixtures", "logstash_sensor", "logstash_es", "nginx", "glutton", "redis"])
         self.assertEqual([line[2:] for line in lines if line.startswith("A ")],
                          ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 5
-                         + ["--image hub/logstash:1.0"] * 2 + ["--image hub/nginx:1.0",
+                         + ["--image hub/logstash:1.0"] * 2
+                         + ["--image hub/logstash:1.0 --tpotinit-image hub/tpotinit:1.0", "--image hub/nginx:1.0",
                             "--image hub/glutton:1.0 --init-image hub/tpotinit:1.0",
                             "--image hub/redis:1.0"])
         self.assertEqual([line[2:] for line in lines if line.startswith("I ")],
@@ -1174,13 +1175,14 @@ class SmokeTest(BuilderHarness):
         self.assertEqual(result.stdout.splitlines(), ["N redis", "A --image ghcr.io/me/redis:1.0"])
 
     def test_glutton_needs_tpotinit_once_even_when_selected_later(self):
-        for selection in ("glutton", "glutton tpotinit", "tpotinit glutton"):
-            result = self.bash(f"myHUB=hub myVER=1.0\nfuSMOKE_PLAN {selection}\n"
-                               'printf "%s\\n" "${mySMOKE_IMAGES[@]}"',
-                               TPOT_BUILDER_TESTS_DIR=self.tests)
-            images = result.stdout.splitlines()
-            self.assertEqual(images.count("glutton"), 1, images)
-            self.assertEqual(images.count("tpotinit"), 1, images)
+        for image in ("glutton", "logstash"):
+            for selection in (image, f"{image} tpotinit", f"tpotinit {image}", "glutton logstash tpotinit"):
+                result = self.bash(f"myHUB=hub myVER=1.0\nfuSMOKE_PLAN {selection}\n"
+                                   'printf "%s\\n" "${mySMOKE_IMAGES[@]}"',
+                                   TPOT_BUILDER_TESTS_DIR=self.tests)
+                images = result.stdout.splitlines()
+                self.assertEqual(images.count(image), 1, images)
+                self.assertEqual(images.count("tpotinit"), 1, images)
 
     def test_glutton_host_smoke_builds_its_tpotinit_dependency(self):
         rc, out = self.builder("-i", "glutton", "-a", "host", "-T",
@@ -1234,7 +1236,12 @@ class SmokeTest(BuilderHarness):
         self.assertEqual(rc, 4, out)
         tests = [line for line in self.calls() if line.startswith("test ")]
         self.assertEqual(tests, ["test logstash_fixtures --image hub/logstash:sensor-test",
-                                 "test logstash_sensor --image hub/logstash:sensor-test"])
+                                 "test logstash_sensor --image hub/logstash:sensor-test",
+                                 "test logstash_es --image hub/logstash:sensor-test"
+                                 " --tpotinit-image hub/tpotinit:sensor-test"])
+        # logstash_es takes the tpotinit of the run: built for this host with the logstash image
+        self.assertTrue(any(" build logstash tpotinit " in line and "override-load.yml" in line
+                            for line in self.calls()), self.calls())
 
     def test_smoke_tests_after_build(self):
         rc, out = self.builder("-i", "cowrie,tpotinit", "-T", "--docker-repo", "hub", STUB_TEST_FAIL="tpotinit_env",
