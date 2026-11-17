@@ -353,6 +353,15 @@ PY
   test_ok "(g) the rejected event is a document of stage index in tpot-failures-*"
 }
 
+# the dead letter queue input of failures finds the folder of process on a fresh start: no plugin error
+check_clean_log() {
+  local out
+  out="$(logs_of logstash)"
+  ! grep -q -E "NoSuchFileException|unrecoverable error" <<<"${out}" \
+    || test_die "Logstash logged a plugin error: $(grep -E "NoSuchFileException|unrecoverable error" <<<"${out}" | head -n 3)"
+  test_ok "No plugin error in the log of Logstash"
+}
+
 # R-8a: Listbot is never asked
 check_no_listbot() {
   local out
@@ -387,6 +396,7 @@ main() {
   check_started
   check_overwrite
   check_index_failure
+  check_clean_log
   check_no_listbot
   test_ok "Templates of tpotinit and the wait of Logstash passed"
 }

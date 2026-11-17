@@ -136,6 +136,12 @@ if [ "$TPOT_TYPE" != "SENSOR" ];
     echo
 
     # The ILM policy tpot (TPOT_ES_RETENTION) is set by tpotinit, see its bin/es_retention.sh.
+
+    # The dead letter queue input of the pipeline failures (60-input-failures.conf, the same path)
+    # needs the folder of process before process creates it, or it fails once on a fresh start.
+    # The entrypoint runs as the user of Logstash.
+    myDLQ_PATH="/usr/share/logstash/data/dead_letter_queue"
+    mkdir -p "${myDLQ_PATH}/process" || { echo "Cannot create ${myDLQ_PATH}/process." >&2; exit 1; }
 fi
 echo
 

@@ -125,6 +125,19 @@ class LayoutTest(unittest.TestCase):
                          r'if "_grokparsefailure" not in \[tags\] and "_jsonparsefailure" not in \[tags\] \{'
                          r'\s*http \{')
 
+    def test_entrypoint_creates_the_dead_letter_queue_folder(self):
+        """The HIVE branch of entrypoint.sh creates <path of the dead_letter_queue input>/<its pipeline_id>
+        before Logstash starts: the input of failures would otherwise fail once on a fresh start."""
+        conf = (PIPELINE_DIR / "60-input-failures.conf").read_text(encoding="utf-8")
+        dlq = re.search(r'dead_letter_queue \{(.*?)\}', conf, re.S).group(1)
+        path = re.search(r'path => "([^"]+)"', dlq).group(1)
+        pipeline_id = re.search(r'pipeline_id => "([^"]+)"', dlq).group(1)
+        entry = (DIST / "entrypoint.sh").read_text(encoding="utf-8")
+        hive = entry.split('if [ "$TPOT_TYPE" != "SENSOR" ];', 1)[1].split("\nfi\n", 1)[0]
+        self.assertIn(f'myDLQ_PATH="{path}"', hive)
+        self.assertIn(f'mkdir -p "${{myDLQ_PATH}}/{pipeline_id}"', hive)
+        self.assertLess(entry.index("mkdir -p \"${myDLQ_PATH}"), entry.index("exec /usr/share/logstash/bin/logstash"))
+
     def test_failures_template(self):
         template = json.loads((ROOT / "docker" / "tpotinit" / "dist" / "etc" / "ilm" / "tpot-failures.json")
                               .read_text(encoding="utf-8"))
