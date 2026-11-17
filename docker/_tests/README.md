@@ -299,6 +299,31 @@ The Redis test runs the image of the Attack Map's `map_redis` read-only and
 without a host port, checks PING, SET / GET, uid 2000 and that it keeps its
 data in memory only (`/etc/redis.conf`).
 
+## Load and measurement tools (`perf/`)
+
+Unlike the smoke tests, these run on an installed T-Pot host (HIVE or SENSOR)
+and `perf/load.py` writes into its `data/`, so use them on test hosts only:
+the lines reach Elasticsearch and the Attack Map like real attacks, and
+EWSPoster would send them on (remove it from the compose file or run the load
+under `docker/tpotinit/dist/bin/ews_hold.sh --data DIR run -- ...`).
+
+```bash
+sudo python3 docker/_tests/perf/load.py --rate 50 --seconds 900
+python3 docker/_tests/perf/measure.py --containers logstash --minutes 15 --interval 10 --out idle.csv
+python3 docker/_tests/perf/measure.py --startup --out start.csv
+```
+
+`load.py` appends the fixtures of `tpotctl/checks/fixtures` round-robin to the
+log files their Logstash inputs read (`--data`, default `~/tpotce/data` of the
+user who runs sudo), each with the current time, a token of its own and a
+source from a fixed pool of global IPv4 addresses. Honeypots without a log
+folder are left out and named. `measure.py` samples the largest process's
+RSS (host `/proc` of the PIDs `docker top` names), the memory and CPU of
+`docker stats` and, for Logstash, the used heap of its API into a CSV file and
+prints mean and maximum per container. `--startup` gives the seconds from the
+start of tpotinit to the marks of `STARTUP_MARKS` in the containers' logs and to
+the start of Logstash. Their tests are `tpotctl/tests/test_perf_tools.py`.
+
 ## Conventions
 
 - Put one executable test script per honeypot in `tests/<service>.sh`.
