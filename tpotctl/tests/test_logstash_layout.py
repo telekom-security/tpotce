@@ -153,6 +153,16 @@ class LayoutTest(unittest.TestCase):
                                   ("t-pot_hostname", "${MY_HOSTNAME}")])
         self.assertEqual(re.findall(r'"(t-pot_[^"]+)" =>', text), [f for f, _ in fields])
 
+    def test_file_inputs_start_at_beginning(self):
+        # events a honeypot wrote before Logstash started are kept; the sincedb stays in the container layer
+        text = (PIPELINE_DIR / "10-input-files.conf").read_text(encoding="utf-8")
+        blocks = re.findall(r"^  file \{\n(.*?)^  \}\n", text, re.M | re.S)
+        self.assertGreater(len(blocks), 1)
+        for block in blocks:
+            with self.subTest(block=block.splitlines()[0]):
+                self.assertEqual(block.count('    start_position => "beginning"\n'), 1)
+                self.assertNotIn("sincedb_path", block)
+
     def test_no_monolith(self):
         for name in ("logstash.conf", "http_output.conf", "http_input.conf"):
             with self.subTest(file=name):

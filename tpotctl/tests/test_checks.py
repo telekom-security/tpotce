@@ -2784,7 +2784,7 @@ class FixturesTest(unittest.TestCase):
             text = handle.read()
         for needed in ("fixtures.names()", "fixtures.render(", "fixtures.log_file(", "logstash_conf.pipeline_files(",
                        "network_mode: none", 'endswith("failure")', 'COLUMN = re.compile(r"column\\d+")',
-                       'event.get("src_ip") != want["src_ip"]', "start_position", "sincedb_path"):
+                       'event.get("src_ip") != want["src_ip"]', "sincedb_path"):
             self.assertIn(needed, text)
 
     def test_an_injected_event_takes_an_ipv4_test_ip_only(self):

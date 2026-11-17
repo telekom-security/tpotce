@@ -182,13 +182,13 @@ with open(os.path.join(root, "out", "expect.tsv"), "w", encoding="utf-8") as han
 
 # The pipelines files and process of pipelines.yml (pipelines_sensor.yml) with the part files of
 # this checkout (mounted at IMAGE_DIR) as they are, but two of the test (in TEST_DIR): the file
-# inputs read every file from the start and keep no sincedb, the output of the processing pipeline
-# (Elasticsearch, the HIVE) becomes one file of JSON lines.
+# inputs (which read every file from the start themselves) keep no sincedb, the output of the
+# processing pipeline (Elasticsearch, the HIVE) becomes one file of JSON lines.
 LOGSTASH = "/usr/share/logstash/"
 TEST_DIR = LOGSTASH + "test/"
 inputs = (logstash_conf.PIPELINE_DIR / "10-input-files.conf").read_text(encoding="utf-8")
 count = inputs.count("\n  file {\n")
-inputs = inputs.replace("\n  file {\n", '\n  file {\n    start_position => "beginning"\n    sincedb_path => "/dev/null"\n')
+inputs = inputs.replace("\n  file {\n", '\n  file {\n    sincedb_path => "/dev/null"\n')
 if count < len({entry["path"] for entry in manifest.values()}) - 8:   # conpot: one input, nine files
     sys.exit(f"10-input-files.conf: only {count} file inputs")
 own = {"10-input-files.conf": inputs,

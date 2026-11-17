@@ -70,7 +70,9 @@ def logstash_inputs() -> str:
              "input {", ""]
     for entry in INPUTS:
         paths = ", ".join(f'"{path}"' for path in entry.paths)
-        lines += [f"# {entry.type}", "  file {", f"    path => [{paths}]"]
+        # events written before Logstash starts are kept; it counts only for a file the sincedb (in the
+        # container layer) does not know
+        lines += [f"# {entry.type}", "  file {", f"    path => [{paths}]", '    start_position => "beginning"']
         codec = CODECS[entry.decode]
         if codec:
             lines.append(f"    codec => {codec}")
