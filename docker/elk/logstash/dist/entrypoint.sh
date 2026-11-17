@@ -144,6 +144,41 @@ if [ "$ARCH" = "aarch64" ]; then
   export _JAVA_OPTIONS="-XX:UseSVE=0";
 fi
 
+# HIVE: the index templates are tpotinit's (es_retention.sh), Logstash manages none. It starts once
+# Elasticsearch holds them (logstash of this release), however long that takes; meanwhile the marker
+# keeps the healthcheck healthy.
+function fuWAIT_TEMPLATES () {
+  local myPOLL="${TPOT_TEMPLATE_POLL:-5}" myNAME myANSWER myCODE myHAS myMISSING myLAST=""
+  touch /tmp/tpot-waiting
+  trap 'kill $! 2>/dev/null; exit 143' TERM
+  while true; do
+    myMISSING=""
+    for myNAME in logstash tpot-sensor-status tpot-sensor-heartbeat; do
+      myANSWER="$(curl -s --max-time 5 -w '\n%{http_code}' \
+        "http://elasticsearch:9200/_index_template/${myNAME}?filter_path=index_templates.index_template._meta.tpot_version")"
+      myCODE="${myANSWER##*$'\n'}"
+      if [ "$myCODE" != "200" ]; then
+        myMISSING="${myMISSING:+$myMISSING, }$myNAME"
+      elif [ "$myNAME" = "logstash" ] && [ -n "${MY_VERSION:-}" ] && \
+           ! printf '%s' "$myANSWER" | grep -q -F "\"tpot_version\":\"${MY_VERSION}\""; then
+        myHAS="$(printf '%s' "$myANSWER" | sed -n 's/.*"tpot_version":"\([^"]*\)".*/\1/p')"
+        myMISSING="${myMISSING:+$myMISSING, }logstash has T-Pot ${myHAS:-none}, needs ${MY_VERSION}"
+      fi
+    done
+    if [ -z "$myMISSING" ]; then
+      echo "Index templates in place, starting Logstash."
+      rm -f /tmp/tpot-waiting
+      trap - TERM
+      return 0
+    fi
+    if [ -z "$myLAST" ] || (( SECONDS - myLAST >= 60 )); then
+      echo "Waiting for the index templates of tpotinit (es_retention.sh): ${myMISSING}; see docker logs tpotinit."
+      myLAST=$SECONDS
+    fi
+    sleep "$myPOLL" & wait $!
+  done
+}
+
 if [ "$TPOT_TYPE" = "SENSOR" ]; then
   if [ -z "${MY_VERSION:-}" ]; then
     echo "Warning: sensor heartbeat version is unknown; update tpotinit to provide it in elk_environment." >&2
@@ -156,4 +191,8 @@ if [ "$TPOT_TYPE" = "SENSOR" ]; then
   }
   export TPOT_LOGSTASH_START
 fi
+if [ "$TPOT_TYPE" != "SENSOR" ]; then
+  fuWAIT_TEMPLATES
+fi
+
 exec /usr/share/logstash/bin/logstash --config.reload.automatic

@@ -15,9 +15,9 @@ from tpotctl.tests import logstash_conf
 CONF = logstash_conf.parse_file("ElasticPot")
 HEADER = 'if [type] == "ElasticPot"'
 
-# a date Elasticsearch takes for a field that is mapped as a date (dynamic date detection of
-# tpot-template.json: strict_date_optional_time): one offset, not two of them (as in
-# docker/_tests/tests/logstash_fixtures.sh)
+# a date Elasticsearch takes for a field that is mapped as a date (dynamic date detection of the
+# template logstash, docker/tpotinit/dist/etc/ilm/logstash.json: strict_date_optional_time): one
+# offset, not two of them (as in docker/_tests/tests/logstash_fixtures.sh)
 ES_DATE = re.compile(r"^\d{4}(-\d{2}(-\d{2}(T\d{2}(:\d{2}(:\d{2}([.,]\d{1,9})?)?)?(Z|[+-]\d{2}(:?\d{2})?)?)?)?)?$")
 GSUB = re.compile(r'"timestamp",\s*"((?:[^"\\]|\\.)*)",\s*"((?:[^"\\]|\\.)*)"')
 

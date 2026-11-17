@@ -41,6 +41,8 @@ STARTUP_MARKS = (
     ("elasticsearch", "elasticsearch", r'"message":\s*"started'),
     ("logstash_api", "logstash", r"Successfully started Logstash API endpoint"),
     ("logstash_pipelines", "logstash", r"Pipelines running"),
+    ("templates", "tpotinit", r"# Index template logstash: written"),
+    ("logstash_ready", "logstash", r"Index templates in place"),
 )
 TIME_BASE = "tpotinit"
 LOGSTASH = "logstash"

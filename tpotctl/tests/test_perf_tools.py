@@ -148,9 +148,11 @@ class StartupTest(unittest.TestCase):
                 '2026-11-17T10:02:00.000000000Z {"log.level": "INFO", "message":"starting ..."}\n'
                 '2026-11-17T10:02:30.000000000Z {"log.level": "INFO", "message":"started {es}"}\n'
                 '2026-11-17T10:09:00.000000000Z {"log.level": "INFO", "message":"started again"}\n', ""),
-            "logstash": ("2026-11-17T10:03:01.000000000Z Starting Logstash\n",
+            "logstash": ("2026-11-17T10:03:01.000000000Z Starting Logstash\n"
+                         "2026-11-17T10:03:20.000000000Z Index templates in place, starting Logstash.\n",
                          "2026-11-17T10:04:05.000000000Z [INFO ] Successfully started Logstash API endpoint"
                          " {:port=>9600}\n"),
+            "tpotinit": ("2026-11-17T10:02:40.000000000Z # Index template logstash: written (T-Pot test-release).\n", ""),
         }
         calls = []
 
@@ -168,10 +170,13 @@ class StartupTest(unittest.TestCase):
 
         marks = measure.startup(run=run)
 
-        self.assertEqual(set(marks), {"elasticsearch", "logstash_api", "logstash_pipelines", "logstash_start"})
+        self.assertEqual(set(marks), {"elasticsearch", "logstash_api", "logstash_pipelines", "templates",
+                                      "logstash_ready", "logstash_start"})
         self.assertEqual(marks["elasticsearch"], 150.0)
         self.assertEqual(marks["logstash_api"], 245.0)
         self.assertIsNone(marks["logstash_pipelines"])
+        self.assertEqual(marks["templates"], 160.0)
+        self.assertEqual(marks["logstash_ready"], 200.0)
         self.assertAlmostEqual(marks["logstash_start"], 180.123456)
         self.assertTrue(all(args[args.index("--since") + 1] == started["tpotinit"]
                             for args in calls if args[:2] == ["docker", "logs"]))

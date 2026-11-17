@@ -333,7 +333,7 @@ class WiringTest(unittest.TestCase):
     def test_logstash_no_longer_writes_the_policy(self):
         text = self.read("docker", "elk", "logstash", "dist", "entrypoint.sh")
         self.assertNotIn("_ilm/policy", text)
-        self.assertIn("lifecycle", self.read("docker", "elk", "logstash", "dist", "tpot-template.json"))
+        self.assertIn("lifecycle", self.read("docker", "tpotinit", "dist", "etc", "ilm", "logstash.json"))
 
     @staticmethod
     def text_of(path):
@@ -363,7 +363,7 @@ class WiringTest(unittest.TestCase):
         self.assertIn("sleep 5 & wait $!", script)
         self.assertNotRegex(script, r"(?m)^\s*sleep 5\s*$")
         main = script[script.index('if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then'):]
-        self.assertRegex(main, re.compile(r"trap '[^']*exit 143' TERM\n  fuILM_MAIN", re.S))
+        self.assertRegex(main, re.compile(r"trap '[^']*exit 143' TERM\n  until fuILM_FIND_ES", re.S))
 
     @unittest.skipUnless(shutil.which("bash"), "no bash")
     def test_a_sigterm_during_the_wait_before_autoheal_ends_tpotinit_at_once(self):
@@ -394,31 +394,45 @@ class WiringTest(unittest.TestCase):
             os.kill(ilm, 0)
 
 
-# curl for es_retention.sh: every step in $CALLS; Elasticsearch answers unless MODE=down, the GET of the
-# policy (404) takes GET_SLEEP seconds, the PUT PUT_SLEEP seconds
+# curl for es_retention.sh: every step in $CALLS; Elasticsearch answers unless MODE=down (or for the first
+# DOWN_HEALTH health calls), the GET of the policy (404) takes GET_SLEEP seconds, the PUT PUT_SLEEP seconds;
+# the sensor index templates are there, the first TEMPLATE_FAILS PUTs of the template logstash answer 500
+# (its body in $CALLS.template)
 RETENTION_CURL = """#!/bin/sh
-put=""
-for a in "$@"; do [ "$a" = PUT ] && put=1; done
+put=""; out=/dev/null; prev=""
+for a in "$@"; do
+  [ "$a" = PUT ] && put=1; [ "$prev" = -o ] && out="$a"; prev="$a"
+  case "$a" in *_index_template/*) name="${a##*/_index_template/}"; name="${name%%\\?*}" ;; esac
+done
 case "$*" in
-  *_cluster/health*) echo health >> "$CALLS"; [ "$MODE" = down ] && exit 7; exit 0 ;;
+  *_cluster/health*) echo health >> "$CALLS"; [ "$MODE" = down ] && exit 7
+    [ "$(grep -c health "$CALLS")" -le "${DOWN_HEALTH:-0}" ] && exit 7; exit 0 ;;
   *_ilm/policy/tpot*)
     if [ -n "$put" ]; then
       echo put-start >> "$CALLS"; cat > /dev/null; sleep "$PUT_SLEEP"; echo put-done >> "$CALLS"; exit 0
     fi
     echo get-start >> "$CALLS"; sleep "$GET_SLEEP"; echo get-done >> "$CALLS"; printf 404; exit 0 ;;
   *_cat/indices*) echo cat >> "$CALLS"; echo '[]'; exit 0 ;;
+  *_index_template/logstash*)
+    [ -n "$put" ] || { printf 404; exit 0; }
+    echo template-put >> "$CALLS"; cat > "$CALLS.template"
+    if [ "$(grep -c template-put "$CALLS")" -le "${TEMPLATE_FAILS:-0}" ]; then
+      echo '{"error":"test"}' > "$out"; printf 500
+    else
+      echo '{"acknowledged":true}' > "$out"; printf 200
+    fi
+    exit 0 ;;
+  *_index_template/*)
+    echo "{\\"index_templates\\":[{\\"name\\":\\"$name\\"}]}" > "$out"; printf 200; exit 0 ;;
 esac
 exit 0
 """
 
 
-@unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "needs bash and jq")
-class RetentionStopTest(unittest.TestCase):
-    """es_retention.sh on TERM (tpotinit stops): it ends without a new request, a request in flight finishes."""
+class RetentionRun(unittest.TestCase):
+    """Runs es_retention.sh with RETENTION_CURL; start() lets it run, stop_at() sends TERM at a step."""
 
-    def stop_at(self, mark, mode="up", get_sleep="0", put_sleep="0"):
-        import signal
-        import time
+    def start(self, mode="up", get_sleep="0", put_sleep="0", **extra):
         tmp = tempfile.mkdtemp(prefix="tpot-retention-")
         self.addCleanup(shutil.rmtree, tmp)
         bindir = os.path.join(tmp, "bin")
@@ -430,12 +444,23 @@ class RetentionStopTest(unittest.TestCase):
         open(calls, "w").close()
         env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", CALLS=calls, MODE=mode, GET_SLEEP=get_sleep,
                    PUT_SLEEP=put_sleep, TPOT_ES_URL="http://es.test", TPOT_ES_RETENTION="60",
-                   TPOT_ES_RETENTION_WAIT="600", TMPDIR=tmp)
+                   TPOT_ES_RETENTION_WAIT="600", TMPDIR=tmp, TPOT_VERSION="test-release")
+        env.update(extra)
         log = os.path.join(tmp, "out")
+        # the templates of the checkout where the image has them
+        script = os.path.join(tmp, "es_retention.sh")
+        with open(os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "bin", "es_retention.sh"),
+                  encoding="utf-8") as source, open(script, "w", encoding="utf-8") as copy:
+            copy.write(source.read().replace("/opt/tpot/etc/ilm/",
+                                             os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "etc", "ilm", "")))
         with open(log, "w", encoding="utf-8") as handle:          # a file: a sleep keeps no pipe open
-            proc = subprocess.Popen(["bash", os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "bin",
-                                                          "es_retention.sh")],
-                                    env=env, stdout=handle, stderr=subprocess.STDOUT)
+            proc = subprocess.Popen(["bash", script], env=env, stdout=handle, stderr=subprocess.STDOUT)
+        return proc, calls, log
+
+    def stop_at(self, mark, mode="up", get_sleep="0", put_sleep="0", **extra):
+        import signal
+        import time
+        proc, calls, log = self.start(mode, get_sleep, put_sleep, **extra)
         deadline = time.monotonic() + 15
         while mark not in self.lines(calls):
             if time.monotonic() > deadline or proc.poll() is not None:
@@ -456,6 +481,11 @@ class RetentionStopTest(unittest.TestCase):
         with open(path, encoding="utf-8") as handle:
             return handle.read().split()
 
+
+@unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "needs bash and jq")
+class RetentionStopTest(RetentionRun):
+    """es_retention.sh on TERM (tpotinit stops): it ends without a new request, a request in flight finishes."""
+
     def test_the_wait_for_elasticsearch_ends_at_once(self):
         rc, took, calls, out = self.stop_at("health", mode="down")
         self.assertEqual(rc, 143, out)
@@ -474,6 +504,49 @@ class RetentionStopTest(unittest.TestCase):
         rc, took, calls, out = self.stop_at("put-start", put_sleep="2")
         self.assertEqual(rc, 143, out)
         self.assertEqual(calls[-1], "put-done", calls)    # whole, and nothing after it
+
+
+@unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "needs bash and jq")
+class RetentionRetryTest(RetentionRun):
+    """es_retention.sh waits for Elasticsearch and retries the index templates without a time limit."""
+
+    def finish(self, timeout, **extra):
+        proc, calls, log = self.start(**extra)
+        try:
+            proc.wait(timeout=timeout)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+        return proc.returncode, self.lines(calls), WiringTest.text_of(log), calls + ".template"
+
+    def test_waits_for_elasticsearch_without_limit(self):
+        rc, calls, out, template = self.finish(30, DOWN_HEALTH="2", TPOT_ES_RETENTION_WAIT="1")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("# Warning: Elasticsearch did not answer within 1 s, ILM policies and index templates "
+                      "wait for it.", out)
+        self.assertEqual(calls.count("put-done"), 2, calls)          # both policies
+        self.assertIn("# Index template logstash: written (T-Pot test-release).", out)
+        self.assertNotIn("in place after", out)
+
+    def test_retries_the_templates(self):
+        rc, calls, out, template = self.finish(30, TEMPLATE_FAILS="1", TPOT_ES_TEMPLATE_RETRY="1")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(calls.count("template-put"), 2, calls)
+        self.assertEqual(calls.count("put-start"), 2, calls)         # one PUT of each policy, not retried
+        self.assertEqual(out.count("index template logstash could not be written"), 1, out)
+        self.assertIn("# Index template logstash: written (T-Pot test-release).", out)
+        self.assertIn("# Index templates: in place after 2 attempts.", out)
+        with open(template, encoding="utf-8") as handle:
+            body = json.load(handle)
+        self.assertEqual(body["_meta"]["tpot_version"], "test-release")
+        self.assertEqual(body["index_patterns"], ["logstash-*"])
+
+    def test_term_while_retrying_templates(self):
+        rc, took, calls, out = self.stop_at("template-put", TEMPLATE_FAILS="1000")
+        self.assertEqual(rc, 143, out)
+        self.assertLess(took, 3, out)
+        self.assertIn("tpotinit stops", out)
 
 
 class FakeES:

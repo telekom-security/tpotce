@@ -49,12 +49,11 @@ test_require_image "${INIT_IMAGE}" "cd docker/tpotinit && docker compose build"
 test_prepare_harness "${TEST_NAME}"
 test_enable_cleanup
 
-# The pipeline folder as the Dockerfile builds it (the part files of dist/pipeline/, the script and
-# the templates the part files of the sensor input name there) and a pipelines.yml with only the
-# pipeline sensors of the HIVE as pipelines.yml has it.
+# The pipeline folder as the Dockerfile builds it (the part files of dist/pipeline/ and the script)
+# and a pipelines.yml with only the pipeline sensors of the HIVE as pipelines.yml has it. The index
+# templates come from tpotinit (es_retention.sh), which runs to its end before Logstash starts.
 mkdir -p "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/config"
-cp "${LOGSTASH_DIR}/dist/pipeline/"*.conf "${LOGSTASH_DIR}/dist/sensor_heartbeat.rb" \
-  "${LOGSTASH_DIR}/dist/"tpot-sensor-*.json "${TEST_TMP_ROOT}/pipeline/"
+cp "${LOGSTASH_DIR}/dist/pipeline/"*.conf "${LOGSTASH_DIR}/dist/sensor_heartbeat.rb" "${TEST_TMP_ROOT}/pipeline/"
 PYTHONPATH="${REPO_ROOT}" python3 - "${TEST_TMP_ROOT}/config/pipelines.yml" <<'PY'
 import sys
 
@@ -85,18 +84,20 @@ services:
       LS_JAVA_OPTS: "-Xms512m -Xmx512m"
       XPACK_GEOIP_DOWNLOADER_ENABLED: "false"
     command: ["--pipeline.workers=2"]
+    depends_on:
+      tpotinit:
+        condition: service_completed_successfully
     volumes:
       - "${TEST_TMP_ROOT}/pipeline:/usr/share/logstash/pipeline:ro"
       - "${TEST_TMP_ROOT}/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro"
-      - "${LOGSTASH_DIR}/dist/tpot-template.json:/usr/share/logstash/config/tpot-template.json:ro"
   tpotinit:
     image: "${INIT_IMAGE}"
-    profiles: ["setup"]
     entrypoint: ["/bin/bash", "/opt/tpot/bin/es_retention.sh"]
     environment:
       TPOT_ES_URL: "http://elasticsearch:9200"
       TPOT_ES_RETENTION: "7"
       TPOT_SENSOR_STATUS_RETENTION: "30"
+      TPOT_VERSION: "test-release"
     volumes:
       - "${DOCKER_ROOT}/tpotinit/dist/bin/es_retention.sh:/opt/tpot/bin/es_retention.sh:ro"
       - "${DOCKER_ROOT}/tpotinit/dist/etc/ilm:/opt/tpot/etc/ilm:ro"

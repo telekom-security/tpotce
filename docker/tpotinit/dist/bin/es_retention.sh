@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Event and sensor-history ILM policies, applied by entrypoint.sh on every start of a HIVE.
+# Event and sensor-history ILM policies and the index templates (Logstash waits for them), applied by
+# entrypoint.sh on every start of a HIVE.
 #
 # T-Pot marks the policy it writes with _meta.tpot_retention, a string (a number or null is no
 # marker of T-Pot). A policy whose marker does not match its delete phase (or that has none and is
@@ -213,10 +214,32 @@ function fuILM_MAIN () {
   esac
 }
 
-# Logstash installs the same templates before accepting events; this job also repairs a missing one.
-# Never attach policies to existing unmanaged indices or replace an existing (possibly edited) template.
+# The template of the events (logstash-*) is T-Pot's: written on every start, an edit by hand does not
+# survive it. _meta.tpot_version names the release (TPOT_VERSION, as updateip.sh gives it to Logstash as
+# MY_VERSION), Logstash waits until Elasticsearch holds the template of its own release.
+function fuLOGSTASH_TEMPLATE () {
+  local myCODE myBODY myVERSION="${TPOT_VERSION//[^A-Za-z0-9._+-]/}"
+  myBODY="$(mktemp)" || { echo "# Warning: no temporary file for the index template logstash."; return 1; }
+  myCODE="$(jq -c --arg version "${myVERSION}" '._meta = ((._meta // {}) + {tpot_version: $version})' \
+              /opt/tpot/etc/ilm/logstash.json \
+            | curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' -X PUT \
+              "${myILM_ES}/_index_template/logstash" -H 'Content-Type: application/json' -d @-)"
+  if [[ "${myCODE}" == 200 ]];
+    then
+      echo "# Index template logstash: written (T-Pot ${myVERSION:-unknown})."
+      rm -f "${myBODY}"
+      return 0
+  fi
+  echo "# Warning: index template logstash could not be written (HTTP ${myCODE}): $(cat "${myBODY}")."
+  rm -f "${myBODY}"
+  return 1
+}
+
+# The templates of the sensor status are created once and never replaced (they may be edited); this job
+# also repairs a missing one. Logstash manages no template, it waits for these. Never attach policies to
+# existing unmanaged indices. Returns 1 when a template could not be checked or written.
 function fuILM_TEMPLATES () {
-  local myNAME myCODE myBODY myFILE
+  local myNAME myCODE myBODY myFILE myRC=0
   myBODY="$(mktemp)" || { echo "# Warning: no temporary file for the sensor index templates."; return 1; }
   for myNAME in tpot-sensor-status tpot-sensor-heartbeat; do
     myFILE="/opt/tpot/etc/ilm/${myNAME}.json"
@@ -226,6 +249,7 @@ function fuILM_TEMPLATES () {
         if jq -e --arg name "${myNAME}" '.index_templates | any(.name == $name)' "${myBODY}" >/dev/null 2>&1;
           then echo "# Index template ${myNAME}: kept (never overwritten)."
           else echo "# Warning: Elasticsearch answered without the index template ${myNAME}; nothing was written."
+               myRC=1
         fi ;;
       404)
         myCODE="$(curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' -X PUT \
@@ -233,11 +257,36 @@ function fuILM_TEMPLATES () {
         if [[ "${myCODE}" == 200 ]];
           then echo "# Index template ${myNAME}: created."
           else echo "# Warning: index template ${myNAME} could not be created (HTTP ${myCODE}): $(cat "${myBODY}")."
+               myRC=1
         fi ;;
-      *) echo "# Warning: index template ${myNAME} could not be checked (HTTP ${myCODE}); nothing was written." ;;
+      *) echo "# Warning: index template ${myNAME} could not be checked (HTTP ${myCODE}); nothing was written."
+         myRC=1 ;;
     esac
   done
   rm -f "${myBODY}"
+  return "${myRC}"
+}
+
+# Until every template is in place: Logstash waits for them. Every TPOT_ES_TEMPLATE_RETRY s a new round,
+# its warnings shown on the first failure, then at most once in 10 min.
+function fuILM_TEMPLATES_UNTIL_DONE () {
+  local myILM_RETRY="${TPOT_ES_TEMPLATE_RETRY:-60}" myOUT myROUND=0 mySHOWN=""
+  while true; do
+    myROUND=$(( myROUND + 1 ))
+    if myOUT="$(fuLOGSTASH_TEMPLATE && fuILM_TEMPLATES)";
+      then
+        echo "${myOUT}"
+        (( myROUND == 1 )) || echo "# Index templates: in place after ${myROUND} attempts."
+        return 0
+    fi
+    if [[ -z "${mySHOWN}" ]] || (( SECONDS - mySHOWN >= 600 ));
+      then
+        echo "${myOUT}"
+        mySHOWN=${SECONDS}
+    fi
+    # in the background: a SIGTERM (tpotinit stops) ends the wait at once
+    sleep "${myILM_RETRY}" & wait $!
+  done
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
@@ -245,8 +294,12 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   # command in flight is through, so a PUT already sent (one request, whole or not at all) may finish.
   trap '[[ -z "${myBODY:-}" ]] || rm -f "${myBODY}"; kill $(jobs -p) 2>/dev/null
         echo "# tpotinit stops, the check of the ILM policy tpot ends here."; exit 143' TERM
+  until fuILM_FIND_ES; do
+    echo "# Warning: Elasticsearch did not answer within ${myILM_WAIT} s, ILM policies and index templates wait for it."
+    sleep 5 & wait $!
+  done
   fuILM_MAIN
   fuILM_MAIN "${TPOT_SENSOR_STATUS_RETENTION:-}" TPOT_SENSOR_STATUS_RETENTION \
     tpot-sensor-status 'tpot-sensor-heartbeat-*' 'tpot elastic retention --sensor-history'
-  [[ -z "${myILM_ES}" ]] || fuILM_TEMPLATES
+  fuILM_TEMPLATES_UNTIL_DONE
 fi

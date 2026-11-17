@@ -9,10 +9,8 @@ COPY dist/entrypoint.sh /usr/local/bin/tpot-logstash-entrypoint.sh
 COPY dist/logstash.yml /usr/share/logstash/config/logstash.yml
 COPY dist/pipelines.yml /usr/share/logstash/config/pipelines.yml
 COPY dist/pipelines_sensor.yml /usr/share/logstash/config/pipelines_sensor.yml
-COPY dist/tpot-template.json /usr/share/logstash/config/tpot-template.json
 COPY dist/pipeline/ /usr/share/logstash/pipeline/
 COPY dist/sensor_heartbeat.rb /usr/share/logstash/pipeline/
-COPY dist/tpot-sensor-*.json /usr/share/logstash/pipeline/
 
 RUN rm -f /usr/share/logstash/pipeline/logstash.conf && \
     microdnf install -y \
@@ -38,7 +36,7 @@ RUN rm -f /usr/share/logstash/pipeline/logstash.conf && \
         /usr/share/logstash/data \
         /usr/share/logstash/pipeline
 
-HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
+HEALTHCHECK --retries=10 CMD test -f /tmp/tpot-waiting || curl -s -XGET 'http://127.0.0.1:9600'
 
 USER logstash
 CMD ["/usr/local/bin/tpot-logstash-entrypoint.sh"]

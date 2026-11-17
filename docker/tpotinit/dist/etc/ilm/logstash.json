@@ -153,6 +153,9 @@
         "status": {
           "type": "long",
           "ignore_malformed": true
+        },
+        "t-pot_log_path": {
+          "type": "keyword"
         }
       }
     }

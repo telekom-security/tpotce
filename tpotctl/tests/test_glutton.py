@@ -131,7 +131,7 @@ class RulesTest(unittest.TestCase):
 
 class EventIntegrationTest(unittest.TestCase):
     def test_decoded_frames_and_payload_stay_out_of_the_dynamic_index(self):
-        template = json.loads((ROOT / "docker/elk/logstash/dist/tpot-template.json").read_text())
+        template = json.loads((ROOT / "docker/tpotinit/dist/etc/ilm/logstash.json").read_text())
         properties = template["template"]["mappings"]["properties"]["glutton"]["properties"]
         self.assertFalse(properties["decoded"]["enabled"])
         self.assertFalse(properties["payload"]["index"])

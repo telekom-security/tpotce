@@ -350,7 +350,8 @@ for event in events:
 
 COLUMN = re.compile(r"column\d+")
 # a date Elasticsearch takes for a field that is mapped as date (dynamic date detection of
-# tpot-template.json: strict_date_optional_time): an offset Z, +HH:MM, +HHMM or +HH, not two of them
+# the template logstash, docker/tpotinit/dist/etc/ilm/logstash.json: strict_date_optional_time): an
+# offset Z, +HH:MM, +HHMM or +HH, not two of them
 ES_DATE = re.compile(r"^\d{4}(-\d{2}(-\d{2}(T\d{2}(:\d{2}(:\d{2}([.,]\d{1,9})?)?)?(Z|[+-]\d{2}(:?\d{2})?)?)?)?)?$")
 # failures known and waiting for a decision: honeypot -> (the start of its problem, why)
 KNOWN = {}
