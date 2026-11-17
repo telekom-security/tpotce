@@ -53,7 +53,7 @@ def check(compose, project, timeout):
         raise AssertionError(f"ES/Kibana not ready: {last}")
 
     for name in ("tpot-sensor-status", "tpot-sensor-heartbeat"):
-        template = json.loads((ROOT / f"docker/elk/logstash/dist/{name}.json").read_text())
+        template = json.loads((ROOT / f"docker/tpotinit/dist/etc/ilm/{name}.json").read_text())
         request(ES + "/_index_template/" + name, template, "PUT")
     request(ES + "/_ilm/policy/tpot-sensor-status", {"policy": {"phases": {}}}, "PUT")
     now = datetime.now(timezone.utc)
