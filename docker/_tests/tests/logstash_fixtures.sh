@@ -13,6 +13,9 @@ DEFAULT_IMAGE="ghcr.io/telekom-security/logstash:24.04.2"
 IMAGE=""
 IMAGE_GIVEN="false"
 SENSOR="false"
+# compare / write the golden documents (HIVE pipeline only), off for --sensor
+GOLDEN=""
+GOLDEN_FILE="${TEST_ROOT}/golden/logstash_fixtures.jsonl"
 # the test addresses of the checks (attackmap_pipeline_test.sh), GeoIP knows them
 TEST_SRC_IP="8.8.8.8"
 TEST_EXT_IP="208.67.222.222"
@@ -35,6 +38,13 @@ A known failure (KNOWN in check_events: a defect that waits for a decision) is
 named and does not fail the test; once it no longer fails, the test does, so
 the entry goes.
 
+Every fixture is rendered with fixed values (time 2026-01-02T03:04:05Z, source
+8.8.8.8, a source port and token of its name). The documents of the HIVE
+pipeline are then compared with the golden file
+docker/_tests/golden/logstash_fixtures.jsonl (docker/_tests/lib/golden.py):
+each field that differs fails the test. --golden write records them instead,
+after the checks above passed. Both use the Listbot stand-ins in any image.
+
 The pipeline is docker/elk/logstash/dist/logstash.conf of this checkout with its
 inputs and filters as they are; the inputs read the files from the start and the
 output is a file instead of Elasticsearch. The container has no network.
@@ -45,6 +55,7 @@ image of its Dockerfile (LS_VER). An image without the Listbot dictionaries
 
 Options:
   --sensor          Test the SENSOR pipeline, including the immediate and one-minute heartbeats.
+  --golden MODE      compare (default) or write the golden documents; not with --sensor.
   --image IMAGE      Image to use. Default: docker/elk/logstash/docker-compose.yml,
                      else docker.elastic.co/logstash/logstash:<LS_VER>.
   --timeout SEC      Least time to wait for the events (Logstash gets ${STARTUP_SECONDS} s at least).
@@ -65,10 +76,21 @@ parse_args() {
       --bind-ip=*) TEST_BIND_IP="${1#*=}"; shift ;;
       --keep-artifacts) TEST_KEEP_ARTIFACTS="true"; shift ;;
       --sensor) SENSOR="true"; TEST_NAME="logstash_sensor"; shift ;;
+      --golden) [[ $# -ge 2 ]] || test_die "--golden requires an argument"; GOLDEN="$2"; shift 2 ;;
+      --golden=*) GOLDEN="${1#*=}"; shift ;;
       -h|--help) usage; exit 0 ;;
       *) test_die "Unknown option: $1" ;;
     esac
   done
+  if [[ "${SENSOR}" == "true" ]]; then
+    [[ -z "${GOLDEN}" ]] || test_die "--golden checks the HIVE pipeline, not with --sensor"
+    GOLDEN="off"
+    return 0
+  fi
+  case "${GOLDEN:=compare}" in
+    compare|write) ;;
+    *) test_die "--golden takes compare or write, not: ${GOLDEN}" ;;
+  esac
 }
 
 # the T-Pot image if it is there, else the official image the T-Pot image builds on
@@ -106,22 +128,23 @@ prepare_files() {
   PYTHONPATH="${REPO_ROOT}" python3 - "${REPO_ROOT}" "${TEST_TMP_ROOT}" "${TEST_SRC_IP}" "${SENSOR}" <<'PY'
 import json
 import os
-import secrets
+import re
 import sys
-from datetime import datetime, timedelta, timezone
+import zlib
+from datetime import datetime, timezone
 
 from tpotctl.checks import fixtures, stages
 
 repo, root, src_ip = sys.argv[1], sys.argv[2], sys.argv[3]
 pipeline_name = "http_output.conf" if sys.argv[4] == "true" else "logstash.conf"
 data = os.path.join(root, "data")
-# an hour ago: an event that keeps the time Logstash read it at shows up
-ts = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(microsecond=123456)
-run = secrets.token_hex(4)
+# fixed values, so the documents are the same in every run (the golden file); the time lies before
+# the run: an event that keeps the time Logstash read it at shows up
+ts = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 manifest = {}
 for number, name in enumerate(fixtures.names()):
-    marker = 51234 + number
-    token = f"tpot-check-{run}{number:02d}"   # same length for all: no token is the start of another
+    marker = 40000 + zlib.crc32(name.encode()) % 20000
+    token = "golden" + re.sub("[^a-z0-9]", "", name.lower())
     rel = fixtures.log_file(name)
     path = os.path.join(data, rel)
     os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
@@ -141,6 +164,17 @@ for folder, _, _ in os.walk(data):
     os.chmod(folder, 0o755)
 with open(os.path.join(root, "manifest.json"), "w", encoding="utf-8") as handle:
     json.dump(manifest, handle, indent=1, sort_keys=True)
+# an event belongs to the fixture whose token it carries or whose port it has: no two may share one
+for left in manifest:
+    for right in manifest:
+        if left != right and manifest[left]["token"] in manifest[right]["token"]:
+            sys.exit(f"the token of {left} is part of that of {right}")
+        if left < right and manifest[left]["marker"] == manifest[right]["marker"]:
+            sys.exit(f"{left} and {right} get the same source port {manifest[left]['marker']}")
+# the fixtures for golden.py: name, token, source port
+with open(os.path.join(root, "out", "expect.tsv"), "w", encoding="utf-8") as handle:
+    for name, want in sorted(manifest.items()):
+        handle.write(f"{name}\t{want['token']}\t{want['marker']}\n")
 
 # logstash.conf with its inputs and filters as they are: every file input reads from the start
 # and keeps no sincedb, the output section becomes one file of JSON lines
@@ -171,7 +205,11 @@ PY
 
 write_compose() {
   local listbot_volume=""
-  if ! image_has_listbot; then
+  if [[ "${GOLDEN}" != "off" ]]; then
+    # the golden documents must not depend on the Listbot data of the day
+    test_info "Golden documents: using the Listbot stand-ins"
+    listbot_volume="      - \"${TEST_TMP_ROOT}/listbot:/etc/listbot:ro\""
+  elif ! image_has_listbot; then
     test_info "${IMAGE} has no Listbot dictionaries, using stand-ins"
     listbot_volume="      - \"${TEST_TMP_ROOT}/listbot:/etc/listbot:ro\""
   fi
@@ -355,6 +393,12 @@ sys.exit(1 if failed else 0)
 PY
 }
 
+# write or compare the golden documents of the HIVE pipeline (docker/_tests/lib/golden.py)
+golden() {
+  python3 "${TEST_LIB_DIR}/golden.py" "$1" --golden "${GOLDEN_FILE}" \
+    --events "${TEST_TMP_ROOT}/out/events.json" --expect "${TEST_TMP_ROOT}/out/expect.tsv"
+}
+
 main() {
   parse_args "$@"
   test_check_dependencies
@@ -375,7 +419,21 @@ main() {
   wait_for_events || test_die "Logstash stopped before every fixture was read"
 
   test_info "Checking the events"
-  check_events || test_die "Logstash did not read every fixture cleanly"
+  local checked=0 compared=0
+  check_events || checked=$?
+  case "${GOLDEN}" in
+    write)
+      (( checked == 0 )) || test_die "Logstash did not read every fixture cleanly, ${GOLDEN_FILE} stays as it is"
+      test_info "Writing the golden documents"
+      golden write || test_die "The golden documents were not written"
+      ;;
+    compare)
+      test_info "Comparing the documents with the golden file"
+      golden compare || compared=$?
+      ;;
+  esac
+  (( checked == 0 )) || test_die "Logstash did not read every fixture cleanly"
+  (( compared == 0 )) || test_die "The documents differ from ${GOLDEN_FILE} (a change on purpose: --golden write)"
   test_ok "Logstash fixture checks passed (any known exceptions are listed above)"
 }
 

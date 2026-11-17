@@ -100,6 +100,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/log4pot.sh --image log4pot:alpine-check --http-port 18080
 ./docker/_tests/tests/logstash_fixtures.sh
 ./docker/_tests/tests/logstash_fixtures.sh --image docker.elastic.co/logstash/logstash:9.5.4
+./docker/_tests/tests/logstash_fixtures.sh --golden write
 ./docker/_tests/tests/mailoney.sh
 ./docker/_tests/tests/mailoney.sh --image mailoney:test --smtp-port 10025 --smtps-port 10465 --submission-port 10587
 ./docker/_tests/tests/medpot.sh
@@ -177,6 +178,18 @@ field, have `src_ip`, the token or marker port of the check, the time of the
 line as `@timestamp` and a GeoIP location. It takes the T-Pot Logstash image
 when it is built here, otherwise the official image of its `LS_VER`; an image
 without the Listbot dictionaries gets small stand-ins for them.
+
+The fixtures are rendered with fixed values (time, source address and port,
+token), so the output of the HIVE pipeline is the same on every run. After the
+checks above it is compared with the golden documents in
+`docker/_tests/golden/logstash_fixtures.jsonl` (`docker/_tests/lib/golden.py`:
+one line per fixture, without the fields of the run such as `@version`, `host`
+and the file it was read from); a field that differs fails the test. A change
+of the pipeline on purpose records them anew with
+`./docker/_tests/tests/logstash_fixtures.sh --golden write` (only after every
+fixture was read cleanly; `run.sh` takes no options of a test). This mode always
+uses the Listbot stand-ins and the GeoIP database of the image, so a new
+`LS_VER` may change the GeoIP fields.
 
 `./docker/_tests/run.sh logstash_sensor` runs the same fixtures through the
 SENSOR pipeline (`http_output.conf`). It also measures the immediate first
