@@ -587,6 +587,32 @@ def unreadable_plan(value="30"):
     return elastic.plan(value, opener=es, now=NOW)
 
 
+class FailuresCountTest(unittest.TestCase):
+    """The failures of the last hours in tpot-failures-* (Logstash's parse and index failures)."""
+
+    def test_failures_count(self):
+        es = FakeES({("GET", "/tpot-failures-*/_count"): (200, {"count": 17, "_shards": {"total": 3}})})
+        self.assertEqual(elastic.failures_count(elastic.ES_URL, es), 17)
+        (method, path, body), = es.requests
+        self.assertEqual((method, path), ("GET", "/tpot-failures-*/_count?ignore_unavailable=true&allow_no_indices=true"))
+        self.assertEqual(json.loads(body), {"query": {"range": {"@timestamp": {"gte": "now-24h"}}}})
+        elastic.failures_count(elastic.ES_URL, es, hours=6)
+        self.assertEqual(json.loads(es.requests[-1][2]), {"query": {"range": {"@timestamp": {"gte": "now-6h"}}}})
+
+    def test_failures_count_without_index(self):
+        # no tpot-failures-* yet: allow_no_indices makes Elasticsearch answer 0, no 404
+        es = FakeES({("GET", "/tpot-failures-*/_count"): (200, {"count": 0, "_shards": {"total": 0}})})
+        self.assertEqual(elastic.failures_count(opener=es), 0)
+        self.assertIn("allow_no_indices=true", es.requests[0][1])
+
+    def test_failures_count_errors(self):
+        for es in (FakeES({}), FakeES({("GET", "/tpot-failures-*/_count"): (500, {"error": "x"})}),
+                   FakeES({("GET", "/tpot-failures-*/_count"): (200, {"hits": 1})}),
+                   FakeES({("GET", "/tpot-failures-*/_count"): (200, {"count": True})})):
+            with self.subTest(routes=es.routes), self.assertRaises(elastic.ElasticError):
+                elastic.failures_count(opener=es)
+
+
 class SensorRetentionTest(unittest.TestCase):
     def scope(self):
         self.assertTrue(hasattr(elastic, "SENSOR_HISTORY"), "sensor retention scope is missing")
@@ -1084,6 +1110,7 @@ class RunElasticTest(unittest.TestCase):
                 mock.patch("tpotctl.cli.ask", side_effect=typed), \
                 mock.patch("tpotctl.cli._console", return_value=Console(file=self.out, width=200)), \
                 mock.patch("tpotctl.cli._kibana_status"), \
+                mock.patch("tpotctl.elastic.failures_count", return_value=0), \
                 contextlib.redirect_stderr(self.err):
             if terminal is None:
                 with mock.patch("tpotctl.cli.confirm_data_loss", side_effect=ask):

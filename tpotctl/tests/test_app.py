@@ -132,6 +132,12 @@ if textual:
             from tpotctl import elastic
             return getattr(self, "_retention", elastic.Status("90", "90", "managed", retention=retention))
 
+        def failures_count(self):
+            failures = getattr(self, "_failures", 0)
+            if isinstance(failures, Exception):
+                raise failures
+            return failures
+
         def retention_plan(self, value, force=False, retention=elastic.EVENTS):
             from tpotctl import elastic
             self.calls.append(("plan", value, force))
@@ -1023,6 +1029,26 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
         self.assertIn(("set", "30"), backend.calls)
         self.assertIn(("apply", "update"), backend.calls)
+
+    async def test_elastic_shows_the_failures_of_the_last_day(self):
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._failures = 12
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            self.assertIn("Failures (24 h): 12, Kibana: T-Pot Failures",
+                          str(app.query_one("#elastic-failures").render()))
+            self.assertFalse(app.query_one("#elastic-failures").can_focus)
+            backend._failures = elastic.ElasticError("Elasticsearch is not reachable (connection refused)")
+            app.query_one(tapp.ElasticPane).load()
+            await pilot.pause(0.3)
+            shown = " ".join(str(app.query_one("#elastic-failures").render()).split())
+            self.assertIn("Failures (24 h): unknown", shown)
+            self.assertIn("Elasticsearch is not reachable (connection refused)", shown)
+            self.assertIn("90 days", str(app.query_one("#elastic-status").render()))
 
     async def test_elastic_longer_retention_needs_no_question(self):
         backend = FakeBackend()

@@ -223,6 +223,25 @@ def put_policy(policy: dict, url: str = ES_URL, opener: Callable = urllib.reques
         raise ElasticError(f"the ILM policy {retention.policy} could not be written ({getattr(err, 'reason', err)})")
 
 
+FAILURES = "tpot-failures-*"     # Logstash's parse and index failures (the HIVE pipeline failures)
+
+
+def failures_count(url: str = ES_URL, opener: Callable = urllib.request.urlopen, hours: int = 24) -> int:
+    """The failures of the last `hours`; without a failure index yet Elasticsearch answers 0."""
+    path = f"/{FAILURES}/_count?ignore_unavailable=true&allow_no_indices=true"
+    try:
+        answer = _call("GET", path, url, opener, {"query": {"range": {"@timestamp": {"gte": f"now-{hours}h"}}}})
+    except urllib.error.HTTPError as err:
+        err.close()
+        raise ElasticError(f"Elasticsearch answered {err.code} for the count of {FAILURES}")
+    except _FAILS as err:
+        raise ElasticError(_unreachable(err))
+    count = answer.get("count") if isinstance(answer, dict) else None
+    if isinstance(count, bool) or not isinstance(count, int):
+        raise ElasticError(f"Elasticsearch answered without the count of {FAILURES}")
+    return count
+
+
 @dataclass
 class Index:
     name: str

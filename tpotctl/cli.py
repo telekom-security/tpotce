@@ -624,6 +624,27 @@ def kibana_state(values) -> KibanaState:
         return KibanaState(mode, problem=str(err))
 
 
+FAILURES_SEARCH = "T-Pot Failures"      # the saved search of tpot-failures-* (tpotctl.failure_dashboard)
+FAILURES_UNKNOWN = "Failures (24 h): unknown"
+
+
+def failures_line(count: int) -> str:
+    """The line of tpot elastic status and the Elastic page: Logstash's failures of the last day."""
+    return f"Failures (24 h): {count}, Kibana: {FAILURES_SEARCH}"
+
+
+def _failures_status(console) -> None:
+    """The failures of the last day; a count that cannot be read is told, it changes no exit code."""
+    from tpotctl import elastic
+    try:
+        count = elastic.failures_count()
+    except elastic.ElasticError as err:
+        console.print(FAILURES_UNKNOWN, markup=False)
+        say.warn(str(err), console.file)
+        return
+    console.print(failures_line(count), markup=False)
+
+
 def _kibana_status(values, console) -> None:
     """The line of the Kibana objects in tpot elastic status: the mode and what an import would bring."""
     state = kibana_state(values)
@@ -834,6 +855,7 @@ def run_elastic(args) -> int:
         states = [elastic.status(current.values.get(scope.key, ""), retention=scope) for scope in RETENTIONS]
         for state in states:
             _retention_status(state, console, shown)
+        _failures_status(console)
         _kibana_status(current.values, console)
         return 1 if any(state.state == "unreachable" for state in states) else 0
     state = elastic.status(value, retention=retention)

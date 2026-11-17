@@ -147,6 +147,11 @@ class Backend:
         from tpotctl import elastic
         return elastic.status(self.settings().values.get(retention.key, ""), retention=retention)
 
+    def failures_count(self) -> int:
+        """Logstash's failures of the last day in tpot-failures-* (elastic.ElasticError if unknown)."""
+        from tpotctl import elastic
+        return elastic.failures_count()
+
     def retention_plan(self, value: str, force: bool = False, retention: Retention = EVENTS):
         from tpotctl import elastic
         return elastic.plan(value, force=force, retention=retention)
@@ -2378,6 +2383,8 @@ class ElasticPane(Vertical):
     reload_wanted = False   # a load came in while a read ran: one more read after it
     shows = 0               # the number of the latest show() begun, so that an older answer stays out
     shown = 0               # the number of the show() whose answer the page shows
+    failures_shows = 0      # the same for the failure count, read in show() after the status
+    failures_shown = 0
     # the Kibana objects, the same in their own part: the cli.KibanaState shown, a job (Export, Update,
     # Overwrite all, Remove old T-Pot objects, Restore, Save) under way, a read under way and one wanted
     # after it, the reads begun and the one shown; the mode of .env as read last (empty is keep)
@@ -2398,6 +2405,7 @@ class ElasticPane(Vertical):
                              value=EVENTS.key, allow_blank=False, id="elastic-scope", compact=True)
             yield Static("", id="elastic-info", classes="info")
             yield Static("", id="elastic-status")
+            yield Static("", id="elastic-failures")
             with Horizontal(classes="actions"):
                 yield NavInput(placeholder="days or off", id="elastic-value", compact=True)
                 yield Button("Set", id="elastic-set", variant="primary")
@@ -2498,6 +2506,7 @@ class ElasticPane(Vertical):
             self.status = None
             self.query_one("#elastic-status", Static).update(Text(str(err), style=theme.color("error")))
             self.buttons()
+            await self.show_failures()
             return
         if mine < self.shown or retention != self.retention:
             return
@@ -2537,6 +2546,25 @@ class ElasticPane(Vertical):
         field = self.query_one("#elastic-value", Input)
         if not field.value or (previous is not None and field.value == previous.value):
             field.value = state.value           # not typed in: the value of .env as it is now
+        await self.show_failures()
+
+    async def show_failures(self) -> None:
+        """The line of tpot elastic status: Logstash's failures of the last day, or why they are unknown."""
+        import asyncio
+        from tpotctl import cli
+        from tpotctl.elastic import ElasticError
+        self.failures_shows += 1
+        mine = self.failures_shows
+        try:
+            text = Text(cli.failures_line(await asyncio.to_thread(self.app.backend.failures_count)),
+                        style=theme.color("mist"))
+        except ElasticError as err:
+            text = Text(f"{cli.FAILURES_UNKNOWN} · ", style=theme.color("mist"))
+            text.append(str(err), style=theme.color("wax"))
+        if mine < self.failures_shown:
+            return
+        self.failures_shown = mine
+        self.query_one("#elastic-failures", Static).update(text)
 
     async def write_env(self, change, value: str, *args) -> None:
         """A write of .env of this page (Set of the retention, Save of the mode), one at a time: each loads

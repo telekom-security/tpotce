@@ -43,6 +43,7 @@ class KibanaCliTest(unittest.TestCase):
         self.compose = ["elasticsearch", "kibana", "tpotinit"]
         self.answers = []
         self.asked = []
+        self.failures = lambda: 0
 
     def run_cli(self, *argv, terminal=True, sensor=False, values=None):
         settings = dict(values or {"TPOT_TYPE": "SENSOR" if sensor else "HIVE", "TPOT_ES_RETENTION": "30",
@@ -63,6 +64,7 @@ class KibanaCliTest(unittest.TestCase):
                 mock.patch("tpotctl.ops.kibana_export_dir", return_value=self.site.exports), \
                 mock.patch("urllib.request.urlopen", self.kibana), \
                 mock.patch("tpotctl.elastic.status", return_value=elastic.Status("30", "30", "managed")), \
+                mock.patch("tpotctl.elastic.failures_count", side_effect=self.failures), \
                 mock.patch("tpotctl.cli.ask", side_effect=typed), \
                 mock.patch("tpotctl.cli._console", return_value=Console(file=self.out, width=300)), \
                 mock.patch("sys.stdin", stdin), \
@@ -456,6 +458,23 @@ class KibanaCliTest(unittest.TestCase):
         self.assertEqual((self.kibana.imports(), self.site.files()), ([], []))
         self.assertEqual(self.run_cli(), 0)                       # status is the default
         self.assertIn("TPOT_KIBANA_OBJECTS=update ·", self.out.getvalue())
+
+    def test_status_counts_the_failures_of_the_last_day(self):
+        self.failures = lambda: 7
+        self.assertEqual(self.run_cli("status"), 0)
+        out = self.out.getvalue()
+        self.assertIn("Failures (24 h): 7, Kibana: T-Pot Failures\n", out)
+        self.assertLess(out.rindex("ILM policy"), out.index("Failures (24 h)"))
+        self.assertLess(out.index("Failures (24 h)"), out.index("Kibana objects"))
+
+    def test_status_with_an_unknown_failure_count_keeps_its_exit_code(self):
+        def down():
+            raise elastic.ElasticError("Elasticsearch is not reachable (connection refused)")
+        self.failures = down
+        self.assertEqual(self.run_cli("status"), 0)
+        self.assertIn("Failures (24 h): unknown", self.out.getvalue())
+        self.assertIn("Elasticsearch is not reachable (connection refused)", self.text())
+        self.assertNotIn("Kibana: T-Pot Failures", self.text())
 
     def test_status_reads_kibana_with_the_short_timeout(self):
         seen, kibana = [], self.kibana
