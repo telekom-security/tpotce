@@ -31,9 +31,9 @@ EXTERNAL_HINT = "seen only for traffic from outside (NFQUEUE / TPROXY / passive 
 OWN_PORTS = range(64290, 64310)
 LOCAL_ADDRESSES = ("127.0.0.1", "::1")
 
-# The Logstash input of each honeypot (docker/elk/logstash/dist/pipeline/10-input-files.conf): its
-# type and its path under the data folder (TPOT_DATA_PATH, /data in Logstash). test_checks keeps
-# both in step with 10-input-files.conf. Conpot has one input for conpot/log/*.json, each template its own file.
+# The Logstash input of each honeypot (tpotctl.logs_config.INPUTS): its type and its path under
+# the data folder (TPOT_DATA_PATH, /data in Logstash). test_logs_config keeps both in step with
+# logs_config. Conpot has one input for conpot/log/*.json, each template its own file.
 LOGS: Dict[str, tuple] = {
     "adbhoney": ("Adbhoney", "adbhoney/log/adbhoney.json"),
     "beelzebub": ("Beelzebub", "beelzebub/log/beelzebub.json"),

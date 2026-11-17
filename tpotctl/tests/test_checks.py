@@ -1716,7 +1716,6 @@ class ChecksUnderTheHoldTest(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 CATALOGUE = os.path.join(REPO, "compose", "tpot_services.yml")
-LOGSTASH_INPUTS = logstash_conf.PIPELINE_DIR / "10-input-files.conf"
 TOKEN = probes.token_for("abc123")
 
 
@@ -1762,17 +1761,6 @@ class CoverageTest(unittest.TestCase):
             targets = {(p.target, p.protocol) for p in inventory.published_ports(self.services[name])}
             # a new port of a honeypot needs its handler; a handler of a port it lost goes
             self.assertEqual(set(probe.handlers), targets, name)
-
-    def test_the_logs_are_those_of_logstash(self):
-        inputs = LOGSTASH_INPUTS.read_text(encoding="utf-8")
-        found = re.findall(r'path => \["/data/([^"]+)"\]\s*(?:codec => \S+\s*)?type => "([^"]+)"', inputs)
-        self.assertGreater(len(found), 30)
-        types = dict(found)
-        for name in inventory.honeypot_names(self.groups):
-            kind, path = inventory.LOGS[name]
-            matches = [pattern for pattern in types if fnmatch.fnmatch(path, pattern)]
-            self.assertTrue(matches, f"{name}: {path} is no input of {LOGSTASH_INPUTS.name}")
-            self.assertEqual(types[matches[0]], kind, name)
 
     def test_event_classification_covers_exactly_the_catalogue_honeypots(self):
         types = {inventory.LOGS[name][0] for name, group in self.groups.items()
