@@ -1,10 +1,12 @@
 """The load and measurement tools for Logstash and Fluent Bit (docker/_tests/perf)."""
 
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -63,6 +65,33 @@ class LoadTest(unittest.TestCase):
                 self.assertEqual(lines, [line for n, _, line in rendered if n == name])
             # a honeypot without its log folder is left out, nothing is created for it
             self.assertEqual(sorted(entry.name for entry in data.iterdir()), sorted(present))
+
+    def test_load_refuses_while_a_container_ewsposter_exists(self):
+        def stopped(args, **kwargs):
+            # docker ps names a stopped container only with --all
+            return completed(args, stdout="logstash\newsposter\n" if "--all" in args else "logstash\n")
+
+        def none(args, **kwargs):
+            return completed(args, stdout="logstash\ncowrie\n")
+
+        def down(args, **kwargs):
+            return completed(args, stderr="Cannot connect to the Docker daemon\n", returncode=1)
+
+        def missing(args, **kwargs):
+            raise FileNotFoundError(2, "No such file or directory", "docker")
+
+        for docker, code in ((stopped, 1), (down, 1), (missing, 1), (none, 0)):
+            with self.subTest(docker.__name__), tempfile.TemporaryDirectory() as tmp:
+                log = Path(tmp) / fixtures.log_file("cowrie")
+                log.parent.mkdir(parents=True)
+                err = io.StringIO()
+                with redirect_stdout(io.StringIO()), redirect_stderr(err):
+                    self.assertEqual(load.main(["--data", tmp, "--rate", "1", "--seconds", "1"], docker=docker), code)
+                if code:
+                    self.assertIn("ewsposter", err.getvalue())
+                    self.assertFalse(log.exists())
+                else:
+                    self.assertEqual(len(log.read_text().splitlines()), 1)
 
 
 class SampleTest(unittest.TestCase):

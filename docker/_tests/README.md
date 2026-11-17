@@ -303,9 +303,13 @@ data in memory only (`/etc/redis.conf`).
 
 Unlike the smoke tests, these run on an installed T-Pot host (HIVE or SENSOR)
 and `perf/load.py` writes into its `data/`, so use them on test hosts only:
-the lines reach Elasticsearch and the Attack Map like real attacks, and
-EWSPoster would send them on (remove it from the compose file or run the load
-under `docker/tpotinit/dist/bin/ews_hold.sh --data DIR run -- ...`).
+the lines reach Elasticsearch and the Attack Map like real attacks, from the
+addresses of others. EWSPoster would send them to the community feed, so
+remove it from the compose file and its container (`docker rm -f ewsposter`)
+first; `load.py` refuses to start while a container `ewsposter` exists,
+running or stopped, or Docker cannot tell. The hold of the checks
+(`ews_hold.sh`) is no way around it: it leaves the honeypots of modules it
+cannot hold to its caller, and the load writes to all of them.
 
 ```bash
 sudo python3 docker/_tests/perf/load.py --rate 50 --seconds 900

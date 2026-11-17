@@ -15,9 +15,13 @@ the honeypot itself; a log file is never reached through a link.
     sudo python3 docker/_tests/perf/load.py [--data DIR] --rate N --seconds S
 
 --data is the data folder of T-Pot (default ~/tpotce/data of the user who runs sudo). Only for a
-test host: the events go to Elasticsearch and the Attack Map like real attacks, and ewsposter
-would send them on, so hold it for the run (docker/tpotinit/dist/bin/ews_hold.sh --data DIR
-run -- python3 .../load.py ...). Exit 0, 1 an error, 2 a wrong option, 130 cancelled.
+test host: the events go to Elasticsearch and the Attack Map like real attacks, from the
+addresses of others. ewsposter would send them to the community feed, so load.py refuses to start
+while a container ewsposter exists, running or stopped (a stopped one goes on where its index
+stopped when it starts again), or docker cannot tell. Remove ewsposter from the compose file and
+its container (docker rm -f ewsposter) first. The hold of the checks (ews_hold.sh) is no way
+around it: it leaves the honeypots of the modules it cannot hold to its caller, the load writes to
+all of them. Exit 0, 1 an error or refused, 2 a wrong option, 130 cancelled.
 """
 
 import argparse
@@ -25,6 +29,7 @@ import ipaddress
 import os
 import random
 import stat
+import subprocess
 import sys
 import time
 import uuid
@@ -128,6 +133,21 @@ def run(data: Path, rate: int, seconds: int, clock: Callable[[], float] = time.m
     return total
 
 
+def ewsposter_problem(docker: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> Optional[str]:
+    """Why the load must not start: a container ewsposter exists or docker cannot tell; else None."""
+    try:
+        result = docker(["docker", "ps", "--all", "--format", "{{.Names}}"], capture_output=True, text=True,
+                        errors="replace", timeout=60)
+    except (OSError, subprocess.SubprocessError) as error:
+        return f"docker cannot tell whether a container ewsposter exists ({error})"
+    if result.returncode != 0:
+        detail = (result.stderr or "").strip().splitlines()
+        return "docker cannot tell whether a container ewsposter exists" + (f" ({detail[-1]})" if detail else "")
+    if "ewsposter" in result.stdout.replace(",", " ").split():
+        return "a container ewsposter exists (running or stopped)"
+    return None
+
+
 def default_data() -> Path:
     """~/tpotce/data of the user who runs the tool, also under sudo."""
     user = os.environ.get("SUDO_USER")
@@ -145,13 +165,20 @@ def at_least_one(text: str) -> int:
     return value
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: Optional[List[str]] = None,
+         docker: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> int:
     parser = argparse.ArgumentParser(
         prog="load.py", description="Append the honeypot fixtures to their log files at a fixed rate (test hosts).")
     parser.add_argument("--data", type=Path, help="the data folder of T-Pot (default ~/tpotce/data)")
     parser.add_argument("--rate", type=at_least_one, required=True, help="lines per second")
     parser.add_argument("--seconds", type=at_least_one, required=True, help="how long")
     args = parser.parse_args(argv)
+    problem = ewsposter_problem(docker)
+    if problem:
+        print(f"load.py: {problem}: ewsposter would send the events of the load, from the addresses of "
+              "others, to the community feed. Remove ewsposter from the compose file and its container "
+              "(docker rm -f ewsposter) first.", file=sys.stderr)
+        return 1
     data = args.data or default_data()
     _, skipped = targets(data)
     began = time.monotonic()
