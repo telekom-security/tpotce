@@ -189,6 +189,8 @@ send(batch, "sensor-a")
 send({"type": "Cowrie", "message": "normal-authenticated", "t-pot_sensor": "forged"}, "sensor-a")
 send({"type": "Cowrie", "message": "normal-anonymous", "t-pot_sensor": "forged",
       "@metadata": {"tpot_heartbeat": True, "tpot_heartbeat_history": True}})
+send({"type": "Cowrie", "message": "normal-forged-metadata", "t-pot_sensor": "forged",
+      "@metadata": {"tpot_heartbeat": True}}, "sensor-c")
 
 def initial_results():
     refresh()
@@ -197,7 +199,9 @@ def initial_results():
         "Heartbeat leaked into logstash-*", logs)
     status, history = search("tpot-sensor-status"), search("tpot-sensor-heartbeat-*")
     normal = {hit["_source"].get("message"): hit["_source"] for hit in logs}
-    if len(status) != 1 or len(history) != 2 or len(normal) < 3:
+    assert "sensor-c" not in {hit["_id"] for hit in status}, ("a body's @metadata made a status", status)
+    if len(status) != 1 or len(history) != 2 or not {
+            "normal-authenticated", "normal-anonymous", "normal-forged-metadata"} <= set(normal):
         return None
     if status[0]["_source"]["heartbeat"]["sequence"] != 10:
         return None
@@ -208,6 +212,9 @@ assert status[0]["_id"] == "sensor-a", status
 assert normal["normal-authenticated"]["t-pot_sensor"] == "sensor-a", normal
 assert "x_tpot_sensor" not in normal["normal-authenticated"].get("headers", {}), normal
 assert "t-pot_sensor" not in normal["normal-anonymous"], normal
+assert normal["normal-forged-metadata"]["t-pot_sensor"] == "sensor-c", normal
+for hit in search("logstash-*"):
+    assert not {"headers", "host"}.intersection(hit["_source"]), hit
 assert sorted(hit["_source"]["heartbeat"]["sequence"] for hit in history) == [5, 10], history
 day = sensor_time.strftime("%Y.%m.%d")
 assert {hit["_index"] for hit in history} == {"tpot-sensor-heartbeat-" + day}, history
@@ -220,6 +227,7 @@ for hit in status + history:
     assert value["heartbeat"]["version"] == "test-release", value
     assert value["t-pot_hostname"] == "sensor-host", value
 print("Identity, sensor/HIVE clocks, one status, 1:5 history and normal events OK")
+print("Sensor events without headers and host; a body's @metadata routes nothing")
 
 legacy = copy.deepcopy(base)
 legacy["heartbeat"]["version"] = ""

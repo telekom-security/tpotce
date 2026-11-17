@@ -155,6 +155,18 @@ class LayoutTest(unittest.TestCase):
             "failure": {"properties": {"stage": keyword,
                                        "reason": {"type": "keyword", "ignore_above": 1024}}}})
 
+    def test_sensors_strip_headers(self):
+        # a body's @metadata (json codec) could forge routing flags: gone before sensor_heartbeat.rb reads
+        # the authenticated name from headers; the request ballast headers / host goes after it
+        code = uncommented(PIPELINE_DIR / "20-sensors.conf")
+        metadata = re.search(r'mutate \{\s*remove_field => \["\[@metadata\]"\]\s*\}', code)
+        ruby = code.find('path => "/usr/share/logstash/pipeline/sensor_heartbeat.rb"')
+        ballast = re.search(r'mutate \{\s*remove_field => \["headers", "host"\]\s*\}', code)
+        self.assertIsNotNone(metadata, "the body's @metadata removed")
+        self.assertIsNotNone(ballast, "headers and host removed")
+        self.assertTrue(0 < metadata.end() < ruby < ballast.start(), "@metadata, the ruby filter, headers / host")
+        self.assertEqual(code.count("remove_field"), 2)
+
     def test_process_reads_no_environment(self):
         paths = [path for pattern in ("30-*.conf", "40-*.conf", "50-*.conf")
                  for path in sorted(PIPELINE_DIR.glob(pattern))]
