@@ -20,7 +20,7 @@ RUN rm -f /usr/share/logstash/pipeline/logstash.conf && \
         wget && \
     microdnf clean all && \
     rm -rf /var/cache/dnf /var/cache/yum && \
-    /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
+    LS_JAVA_OPTS="-Xmx2g" /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
     mkdir -p /etc/listbot && \
     cd /etc/listbot && \
     wget -q --user-agent=listbot https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \
