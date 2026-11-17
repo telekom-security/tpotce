@@ -163,6 +163,23 @@ class CatalogTest(unittest.TestCase):
             data = yaml.safe_load(handle)
         self.assertEqual(list(data), ["networks", "services"])
 
+    def test_logstash_heap_equal_in_editions(self):
+        """Every edition with Logstash and the catalogue give it the same heap (measured for its mem_limit)."""
+        heaps = {}
+        for compose in [self.catalog.catalog] + list(self.catalog.editions.values()):
+            with open(compose.path, encoding="utf-8") as handle:
+                service = (yaml.safe_load(handle)["services"] or {}).get("logstash")
+            if service is None:
+                continue
+            environment = service.get("environment") or []
+            if isinstance(environment, dict):
+                environment = [f"{key}={value}" for key, value in environment.items()]
+            heaps[os.path.basename(compose.path)] = [entry.split("=", 1)[1] for entry in environment
+                                                     if entry.startswith("LS_JAVA_OPTS=")]
+        self.assertIn("tpot_services.yml", heaps)
+        self.assertIn("standard.yml", heaps)
+        self.assertEqual(heaps, {name: ["-Xms1024m -Xmx1024m"] for name in heaps})
+
 
 if __name__ == "__main__":
     unittest.main()

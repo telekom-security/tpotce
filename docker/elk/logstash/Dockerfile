@@ -12,13 +12,17 @@ COPY dist/pipelines_sensor.yml /usr/share/logstash/config/pipelines_sensor.yml
 COPY dist/pipeline/ /usr/share/logstash/pipeline/
 COPY dist/sensor_heartbeat.rb /usr/share/logstash/pipeline/
 
+# Logstash takes JVM flags from config/jvm.options only; an unknown -XX option would stop the JVM, so the
+# build fails unless the JDK knows the trim flag as a product flag
 RUN rm -f /usr/share/logstash/pipeline/logstash.conf && \
     microdnf install -y \
         bzip2 \
         wget && \
     microdnf clean all && \
     rm -rf /var/cache/dnf /var/cache/yum && \
-    LS_JAVA_OPTS="-Xmx2g" /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
+    /usr/share/logstash/jdk/bin/java -XX:+PrintFlagsFinal -version | grep -q ' TrimNativeHeapInterval.*{product}' && \
+    printf '\n# T-Pot: give freed native memory back to the system every 60 s\n-XX:TrimNativeHeapInterval=60000\n' \
+        >> /usr/share/logstash/config/jvm.options && \
     mkdir -p /etc/listbot && \
     cd /etc/listbot && \
     wget -q --user-agent=listbot https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \

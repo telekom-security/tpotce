@@ -134,7 +134,7 @@ class EntrypointTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         data = json.loads(self.captured.read_text())
         self.assertEqual(data["version"], "test-release")
-        self.assertEqual(data["args"], ["--config.reload.automatic"])
+        self.assertEqual(data["args"], [])
         self.assertIsInstance(data["started"], str)
         started = datetime.fromisoformat(data["started"].replace("Z", "+00:00"))
         self.assertLessEqual(before, started)

@@ -1,8 +1,10 @@
 # SENSOR: the file inputs and the heartbeat, processed as on the HIVE (the same part files) and sent
 # to the HIVE. The part files are in pipeline/.
+# Workers: files one (light), process Logstash's default, one per core.
 - pipeline.id: files
   path.config: "/usr/share/logstash/pipeline/{10-input-files,12-files,13-input-heartbeat}.conf"
   pipeline.ecs_compatibility: disabled
+  pipeline.workers: 1
 - pipeline.id: process
   path.config: "/usr/share/logstash/pipeline/{14-input-process,30-decode,40-parse-*,50-enrich,91-output-http}.conf"
   pipeline.ecs_compatibility: disabled

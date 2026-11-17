@@ -201,4 +201,4 @@ if [ "$TPOT_TYPE" != "SENSOR" ]; then
   fuWAIT_TEMPLATES
 fi
 
-exec /usr/share/logstash/bin/logstash --config.reload.automatic
+exec /usr/share/logstash/bin/logstash

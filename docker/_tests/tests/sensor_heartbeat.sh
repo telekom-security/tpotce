@@ -83,6 +83,7 @@ services:
     environment:
       LS_JAVA_OPTS: "-Xms512m -Xmx512m"
       XPACK_GEOIP_DOWNLOADER_ENABLED: "false"
+    # pipeline.workers: 1 of the sensors pipeline in pipelines.yml wins over this
     command: ["--pipeline.workers=2"]
     depends_on:
       tpotinit:

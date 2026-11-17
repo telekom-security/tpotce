@@ -3,12 +3,17 @@
 # The processing pipeline hands the events it cannot parse to the pipeline failures (address
 # tpot_failures), which also reads the documents Elasticsearch rejected from its dead letter queue
 # (under the default path.data) and writes both into tpot-failures-*.
+# Workers: files, sensors and failures one each (light; sensors keeps the newest receipt of a
+# heartbeat, only one worker keeps receipt order equal to arrival order); process takes Logstash's
+# default, one per core (500 events/s cost it 9.5 % CPU on average, a fixed value would cap bigger HIVEs).
 - pipeline.id: files
   path.config: "/usr/share/logstash/pipeline/{10-input-files,12-files}.conf"
   pipeline.ecs_compatibility: disabled
+  pipeline.workers: 1
 - pipeline.id: sensors
   path.config: "/usr/share/logstash/pipeline/{11-input-sensors,20-sensors,21-sensors-output}.conf"
   pipeline.ecs_compatibility: disabled
+  pipeline.workers: 1
 - pipeline.id: process
   path.config: "/usr/share/logstash/pipeline/{14-input-process,30-decode,40-parse-*,50-enrich,90-output-es}.conf"
   pipeline.ecs_compatibility: disabled

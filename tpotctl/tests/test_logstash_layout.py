@@ -253,6 +253,50 @@ class LayoutTest(unittest.TestCase):
         self.assertIn("\nCOPY dist/pipeline/ /usr/share/logstash/pipeline/\n", dockerfile)
         self.assertNotIn("dist/*.conf", dockerfile)
 
+    def test_pipeline_workers(self):
+        # files and sensors run with one worker (sensors: the newest receipt of a heartbeat wins, only
+        # one worker keeps receipt order equal to arrival order), process with the default of Logstash
+        for sensor in (False, True):
+            with self.subTest(sensor=sensor):
+                found = logstash_conf.pipelines(sensor)
+                self.assertEqual({key: value for key, value in found["files"].items() if key != "path.config"},
+                                 {"pipeline.id": "files", "pipeline.ecs_compatibility": "disabled",
+                                  "pipeline.workers": "1"})
+                self.assertNotIn("pipeline.workers", found["process"])
+        self.assertEqual({key: value for key, value in logstash_conf.pipelines()["sensors"].items()
+                          if key != "path.config"},
+                         {"pipeline.id": "sensors", "pipeline.ecs_compatibility": "disabled",
+                          "pipeline.workers": "1"})
+
+    def test_no_legacy_settings(self):
+        settings = (DIST / "logstash.yml").read_text(encoding="utf-8")
+        self.assertEqual([line for line in settings.splitlines() if line and not line.startswith("#")],
+                         ['api.http.host: "127.0.0.1"'])
+        self.assertNotIn("xpack.monitoring", settings)
+        entrypoint = (DIST / "entrypoint.sh").read_text(encoding="utf-8")
+        self.assertNotIn("--config.reload.automatic", entrypoint)
+        self.assertIn("\nexec /usr/share/logstash/bin/logstash\n", entrypoint)
+        dockerfile = (DIST.parent / "Dockerfile").read_text(encoding="utf-8")
+        self.assertNotIn("logstash-output-syslog", dockerfile)
+        self.assertNotIn("logstash-plugin install", dockerfile)
+        for path in sorted(PIPELINE_DIR.glob("*.conf")):
+            with self.subTest(file=path.name):
+                self.assertNotRegex(path.read_text(encoding="utf-8"), r"(?i)syslog")
+
+    def test_jvm_trims_native_heap(self):
+        # Logstash's launcher reads config/jvm.options and LS_JAVA_OPTS only, never jvm.options.d; the
+        # build stops when the JDK no longer knows the flag as a product flag
+        dockerfile = (DIST.parent / "Dockerfile").read_text(encoding="utf-8")
+        self.assertNotIn("jvm.options.d", dockerfile)
+        self.assertEqual(re.findall(r"TrimNativeHeapInterval\S*", dockerfile),
+                         ["TrimNativeHeapInterval.*{product}'", "TrimNativeHeapInterval=60000\\n'"])
+        self.assertRegex(dockerfile, r"/usr/share/logstash/jdk/bin/java -XX:\+PrintFlagsFinal -version \| "
+                                     r"grep -q ' TrimNativeHeapInterval\.\*\{product\}' && \\\n")
+        # the jvm.options of the image ends without a newline
+        self.assertIn("    printf '\\n# T-Pot: give freed native memory back to the system every 60 s"
+                      "\\n-XX:TrimNativeHeapInterval=60000\\n' \\\n"
+                      "        >> /usr/share/logstash/config/jvm.options && \\\n", dockerfile)
+
 
 def uncommented(path):
     """The text of a part file without its comment lines."""
