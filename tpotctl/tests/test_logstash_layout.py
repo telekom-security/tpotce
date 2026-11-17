@@ -117,6 +117,16 @@ class LayoutTest(unittest.TestCase):
         # a honeypot without a message of its own gets none (the raw line would be one)
         self.assertNotIn("message", golden["glutton"])
 
+    def test_blank_json_line_gives_no_event(self):
+        # as the json codec did: a blank line (empty or whitespace only) of a JSON type is no event
+        text = DECODE.read_text(encoding="utf-8")
+        moved = text.find('rename => { "message" => "[@metadata][raw]" }')
+        blank = text.find('    if [@metadata][raw] =~ /\\A\\s*\\z/ {\n      drop {}\n    }\n')
+        parsed = text.find("json {")
+        self.assertTrue(0 < moved < blank < parsed, "the blank raw line dropped before the json filter")
+        self.assertEqual(text.count("drop"), 1)
+        self.assertLess(text.find("if [type] in ["), blank, "only in the branch of the JSON types")
+
     def test_file_source_path_does_not_clobber_payload_path(self):
         text = DECODE.read_text(encoding="utf-8")
         moved = re.search(r'^  if \[path\] and !\[t-pot_log_path\] \{\n    mutate \{\n'
