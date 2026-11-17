@@ -47,14 +47,18 @@ class LayoutTest(unittest.TestCase):
                 self.assertEqual(sorted(blocks), sorted(set(inputs)))
 
     def test_pipelines_resolve(self):
-        expected = {False: ["files", "process", "sensors"], True: ["files", "process"]}
+        expected = {False: ["failures", "files", "process", "sensors"], True: ["files", "process"]}
+        addresses = {False: {"tpot_process", "tpot_failures"}, True: {"tpot_process"}}
         used = set()
         for sensor in (False, True):
             found = logstash_conf.pipelines(sensor)
             self.assertEqual(sorted(found), expected[sensor])
             if yaml:
                 with open(logstash_conf.PIPELINES_YML[sensor], encoding="utf-8") as handle:
-                    self.assertEqual({entry["pipeline.id"]: entry for entry in yaml.safe_load(handle)}, found)
+                    # logstash_conf reads every value as text (true, 1), YAML as bool / int
+                    self.assertEqual({entry["pipeline.id"]: {key: str(value).lower() if isinstance(value, bool)
+                                                             else str(value) for key, value in entry.items()}
+                                      for entry in yaml.safe_load(handle)}, found)
             sends, listens = set(), []
             for pipeline_id, settings in found.items():
                 with self.subTest(sensor=sensor, pipeline=pipeline_id):
@@ -68,7 +72,7 @@ class LayoutTest(unittest.TestCase):
                     sends.update(SEND_TO.findall(text))
                     listens.extend(ADDRESS.findall(text))
             with self.subTest(sensor=sensor):
-                self.assertEqual(sends, {"tpot_process"})
+                self.assertEqual(sends, addresses[sensor])
                 self.assertEqual(sorted(listens), sorted(sends), "one pipeline listens on each address")
                 self.assertEqual(ADDRESS.findall(logstash_conf.pipeline_text("process", sensor)), ["tpot_process"])
         self.assertEqual(sorted(set(PIPELINE_DIR.glob("*.conf")) - used), [], "part files no pipeline reads")
@@ -85,6 +89,58 @@ class LayoutTest(unittest.TestCase):
         # one source: the two differ in their output only
         self.assertEqual(sorted(set(hive) ^ set(sensor)),
                          [PIPELINE_DIR / "90-output-es.conf", PIPELINE_DIR / "91-output-http.conf"])
+
+    def test_failures_pipeline(self):
+        # HIVE: parse failures (pipeline-to-pipeline) and the events Elasticsearch rejected (the dead
+        # letter queue of process) go to tpot-failures-*, nothing is dropped silently
+        hive = logstash_conf.pipelines()
+        self.assertEqual({key: value for key, value in hive["failures"].items() if key != "path.config"},
+                         {"pipeline.id": "failures", "pipeline.ecs_compatibility": "disabled",
+                          "pipeline.workers": "1"})
+        self.assertEqual([path.name for path in logstash_conf.pipeline_files("failures")],
+                         ["60-input-failures.conf", "61-failures.conf", "92-output-failures.conf"])
+        self.assertEqual({key: value for key, value in hive["process"].items() if key.startswith("dead_letter")},
+                         {"dead_letter_queue.enable": "true", "dead_letter_queue.max_bytes": "256mb",
+                          "dead_letter_queue.storage_policy": "drop_older"})
+        for sensor in (False, True):
+            for settings in logstash_conf.pipelines(sensor).values():
+                with self.subTest(sensor=sensor, pipeline=settings["pipeline.id"]):
+                    self.assertNotIn("path.data", settings)
+                    self.assertNotIn("path.dead_letter_queue", settings)
+        # the SENSOR as before: no failures pipeline, no dead letter queue
+        for settings in logstash_conf.pipelines(sensor=True).values():
+            self.assertEqual([key for key in settings if key.startswith("dead_letter")], [])
+        code = uncommented(PIPELINE_DIR / "60-input-failures.conf")
+        self.assertRegex(code, r'pipeline \{\s*address => "tpot_failures"\s*\}')
+        self.assertRegex(code, r'dead_letter_queue \{[^}]*pipeline_id => "process"[^}]*\}')
+        self.assertRegex(code, r'dead_letter_queue \{[^}]*commit_offsets => true[^}]*\}')
+        output = uncommented(PIPELINE_DIR / "90-output-es.conf")
+        self.assertRegex(output, r'if "_grokparsefailure" in \[tags\] or "_jsonparsefailure" in \[tags\] \{'
+                                 r'\s*pipeline \{\s*send_to => \["tpot_failures"\]\s*\}\s*\} else \{'
+                                 r'\s*elasticsearch \{[^}]*index => "logstash-%\{\+YYYY\.MM\.dd\}"')
+        self.assertIn('index => "tpot-failures-%{+YYYY.MM.dd}"', uncommented(PIPELINE_DIR / "92-output-failures.conf"))
+        # no silent drop of a parse failure anywhere; the SENSOR keeps not sending them (91-output-http.conf)
+        self.assertNotIn("drop", uncommented(PIPELINE_DIR / "50-enrich.conf"))
+        self.assertRegex(uncommented(PIPELINE_DIR / "91-output-http.conf"),
+                         r'if "_grokparsefailure" not in \[tags\] and "_jsonparsefailure" not in \[tags\] \{'
+                         r'\s*http \{')
+
+    def test_failures_template(self):
+        template = json.loads((ROOT / "docker" / "tpotinit" / "dist" / "etc" / "ilm" / "tpot-failures.json")
+                              .read_text(encoding="utf-8"))
+        self.assertEqual(template["index_patterns"], ["tpot-failures-*"])
+        self.assertEqual(template["priority"], 100)
+        self.assertEqual(template["template"]["settings"], {"index.lifecycle.name": "tpot",
+                                                            "index.number_of_shards": 1,
+                                                            "index.number_of_replicas": 0})
+        mappings = template["template"]["mappings"]
+        self.assertIs(mappings["dynamic"], False)
+        keyword = {"type": "keyword"}
+        self.assertEqual(mappings["properties"], {
+            "@timestamp": {"type": "date"}, "type": keyword, "t-pot_sensor": keyword,
+            "t-pot_hostname": keyword, "t-pot_log_path": keyword,
+            "failure": {"properties": {"stage": keyword,
+                                       "reason": {"type": "keyword", "ignore_above": 1024}}}})
 
     def test_process_reads_no_environment(self):
         paths = [path for pattern in ("30-*.conf", "40-*.conf", "50-*.conf")
@@ -171,6 +227,12 @@ class LayoutTest(unittest.TestCase):
         dockerfile = (DIST.parent / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn("\nCOPY dist/pipeline/ /usr/share/logstash/pipeline/\n", dockerfile)
         self.assertNotIn("dist/*.conf", dockerfile)
+
+
+def uncommented(path):
+    """The text of a part file without its comment lines."""
+    return "".join(line for line in path.read_text(encoding="utf-8").splitlines(True)
+                   if not line.lstrip().startswith("#"))
 
 
 def golden_documents():

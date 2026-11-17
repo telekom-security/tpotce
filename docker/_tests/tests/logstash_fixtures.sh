@@ -34,6 +34,11 @@ marker port as src_port where the honeypot logs one), dest_port where the Attack
 Map needs it, a timestamp field Elasticsearch takes as a date, the time of the
 event as @timestamp and a GeoIP location.
 
+The HIVE pipeline also gets two lines it cannot parse (a broken JSON line in
+cowrie.json, an Endlessh line its grok does not match): each must come out of
+the pipeline failures once, as a document of stage parse with the raw line, and
+never among the events. They are no fixtures (not in the golden file).
+
 A known failure (KNOWN in check_events: a defect that waits for a decision) is
 named and does not fail the test; once it no longer fails, the test does, so
 the entry goes.
@@ -47,9 +52,10 @@ after the checks above passed. Both use the Listbot stand-ins in any image.
 
 The pipelines are those of docker/elk/logstash/dist/pipelines.yml (with --sensor
 pipelines_sensor.yml) on the part files of dist/pipeline/ of this checkout as
-they are, but the file inputs read the files from the start and the output is a
-file instead of Elasticsearch (or the HIVE). The sensors pipeline of the HIVE is
-left out (sensor_heartbeat tests it). The container has no network.
+they are, but the file inputs read the files from the start and the outputs are
+files instead of Elasticsearch (or the HIVE): the events in events.json, the
+documents of the pipeline failures in failures.json. The sensors pipeline of the
+HIVE is left out (sensor_heartbeat tests it). The container has no network.
 
 The T-Pot Logstash image is used when it exists locally, otherwise the official
 image of its Dockerfile (LS_VER). An image without the Listbot dictionaries
@@ -164,6 +170,19 @@ for number, name in enumerate(fixtures.names()):
                       # map_data drops an event without dest_port (the check says n/a for these)
                       "map": (fixtures.logstash_type(name) not in stages.NOT_ON_THE_MAP
                               and name not in stages.NO_DEST_PORT)}
+# HIVE: two lines the pipeline cannot parse, after the fixture of their file; they must end in failures.json
+broken = [] if sensor else [
+    {"name": "cowrie", "reason": "_jsonparsefailure",
+     "line": '{"eventid": "cowrie.session.connect", "src_ip": "8.8.8.8", "tpotfailure": "broken json'},
+    {"name": "endlessh", "reason": "_grokparsefailure",
+     "line": "2026-01-02T03:04:05.000Z TPOTFAILURE no line of Endlessh"},
+]
+for entry in broken:
+    entry.update(path="/data/" + fixtures.log_file(entry["name"]), type=fixtures.logstash_type(entry["name"]))
+    with open(os.path.join(data, fixtures.log_file(entry["name"])), "a", encoding="utf-8") as handle:
+        handle.write(entry["line"] + "\n")
+with open(os.path.join(root, "failures-expect.json"), "w", encoding="utf-8") as handle:
+    json.dump(broken, handle, indent=1)
 for folder, _, _ in os.walk(data):
     os.chmod(folder, 0o755)
 with open(os.path.join(root, "manifest.json"), "w", encoding="utf-8") as handle:
@@ -180,10 +199,11 @@ with open(os.path.join(root, "out", "expect.tsv"), "w", encoding="utf-8") as han
     for name, want in sorted(manifest.items()):
         handle.write(f"{name}\t{want['token']}\t{want['marker']}\n")
 
-# The pipelines files and process of pipelines.yml (pipelines_sensor.yml) with the part files of
-# this checkout (mounted at IMAGE_DIR) as they are, but two of the test (in TEST_DIR): the file
-# inputs (which read every file from the start themselves) keep no sincedb, the output of the
-# processing pipeline (Elasticsearch, the HIVE) becomes one file of JSON lines.
+# The pipelines files, process and (HIVE) failures of pipelines.yml (pipelines_sensor.yml) with the
+# part files of this checkout (mounted at IMAGE_DIR) as they are, but some of the test (in TEST_DIR):
+# the file inputs (which read every file from the start themselves) keep no sincedb, the output of
+# the processing pipeline keeps its routing, but its Elasticsearch (the HIVE) becomes a file of JSON
+# lines, and so does the output of the failures pipeline.
 LOGSTASH = "/usr/share/logstash/"
 TEST_DIR = LOGSTASH + "test/"
 inputs = (logstash_conf.PIPELINE_DIR / "10-input-files.conf").read_text(encoding="utf-8")
@@ -191,18 +211,35 @@ count = inputs.count("\n  file {\n")
 inputs = inputs.replace("\n  file {\n", '\n  file {\n    sincedb_path => "/dev/null"\n')
 if count < len({entry["path"] for entry in manifest.values()}) - 8:   # conpot: one input, nine files
     sys.exit(f"10-input-files.conf: only {count} file inputs")
-own = {"10-input-files.conf": inputs,
-       "99-output-file.conf": ('# Output section (test)\noutput {\n'
-                               '  file {\n    path => "/out/events.json"\n    codec => json_lines\n  }\n}\n')}
+# the one output of the processing pipeline with its plugin (elasticsearch, http) as a file
+outputs = [path for path in logstash_conf.pipeline_files("process", sensor)
+           if re.fullmatch(r"9\d-output-[a-z]+\.conf", path.name)]
+if len(outputs) != 1:
+    sys.exit(f"the processing pipeline has the outputs {outputs}, not one")
+output, plugins = re.subn(
+    r"^( *)(?:elasticsearch|http) \{\n.*?^\1\}\n",
+    lambda found: (f'{found[1]}file {{\n{found[1]}  path => "/out/events.json"\n'
+                   f'{found[1]}  codec => json_lines\n{found[1]}}}\n'),
+    outputs[0].read_text(encoding="utf-8"), flags=re.M | re.S)
+if plugins != 1:
+    sys.exit(f"{outputs[0].name}: {plugins} elasticsearch / http outputs, not one")
+own = {"10-input-files.conf": inputs, "99-output-file.conf": "# Output section (test)\n" + output}
+# every pipeline but sensors (sensor_heartbeat tests it)
+pipeline_ids = [pipeline_id for pipeline_id in logstash_conf.pipelines(sensor) if pipeline_id != "sensors"]
+if "failures" in pipeline_ids:
+    own["99-output-failures.conf"] = ('# Output section of the failures (test)\noutput {\n'
+                                      '  file {\n    path => "/out/failures.json"\n    codec => json_lines\n  }\n}\n')
 for name, text in own.items():
     with open(os.path.join(root, "pipeline", name), "w", encoding="utf-8") as handle:
         handle.write(text)
 yml, used = ["# T-Pot's pipelines with the file inputs and the output of the test"], []
-for pipeline_id in ("files", "process"):
+for pipeline_id in pipeline_ids:
     paths = []
     for path in logstash_conf.pipeline_files(pipeline_id, sensor):
         if path.name == "10-input-files.conf":
             paths.append(TEST_DIR + path.name)
+        elif path.name == "92-output-failures.conf":
+            paths.append(TEST_DIR + "99-output-failures.conf")
         elif re.fullmatch(r"9\d-output-[a-z]+\.conf", path.name):
             paths.append(TEST_DIR + "99-output-file.conf")
         else:
@@ -213,10 +250,10 @@ for pipeline_id in ("files", "process"):
     settings["path.config"] = '"' + LOGSTASH + "{" + ",".join(path[len(LOGSTASH):] for path in paths) + '}"'
     yml += [("- " if number == 0 else "  ") + f"{key}: {value}" for number, (key, value) in enumerate(settings.items())]
 if sorted(used) != [TEST_DIR + name for name in sorted(own)]:
-    sys.exit(f"the pipelines take {used} of the test, not its input and its output once each")
+    sys.exit(f"the pipelines take {used} of the test, not its input and its outputs once each")
 with open(os.path.join(root, "config", "pipelines.yml"), "w", encoding="utf-8") as handle:
     handle.write("\n".join(yml) + "\n")
-print(f"{len(manifest)} fixtures rendered, {count} file inputs")
+print(f"{len(manifest)} fixtures rendered, {len(broken)} lines that cannot be parsed, {count} file inputs")
 PY
   # stand-ins for the Listbot dictionaries of the T-Pot image (translate needs a readable file)
   printf '"192.0.2.1": "stand-in"\n' > "${TEST_TMP_ROOT}/listbot/iprep.yaml"
@@ -267,8 +304,9 @@ EOF
 
 # waits until every fixture has come out of the pipeline, or Logstash stopped, or the time is up
 wait_for_events() {
-  local expected seconds deadline got state beats
+  local expected broken seconds deadline got state beats failures
   expected="$(python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "${TEST_TMP_ROOT}/manifest.json")"
+  broken="$(python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "${TEST_TMP_ROOT}/failures-expect.json")"
   seconds=$(( TEST_TIMEOUT > STARTUP_SECONDS ? TEST_TIMEOUT : STARTUP_SECONDS ))
   deadline=$(( SECONDS + seconds ))
   while (( SECONDS < deadline )); do
@@ -279,7 +317,9 @@ wait_for_events() {
       if [[ "${SENSOR}" == "true" ]]; then
         beats="$(grep -c '"type":"TPotSensorHeartbeat"' "${TEST_TMP_ROOT}/out/events.json" || true)"
       fi
-      if [[ "${SENSOR}" != "true" ]] || (( beats >= 2 )); then
+      failures=0
+      [[ -f "${TEST_TMP_ROOT}/out/failures.json" ]] && failures="$(grep -c . "${TEST_TMP_ROOT}/out/failures.json" || true)"
+      if { [[ "${SENSOR}" == "true" ]] && (( beats >= 2 )); } || { [[ "${SENSOR}" != "true" ]] && (( failures >= broken )); }; then
         sleep 5   # a fixture Logstash splits into more events shows up as well
         return 0
       fi
@@ -426,6 +466,59 @@ sys.exit(1 if failed else 0)
 PY
 }
 
+# HIVE: every line the pipeline cannot parse is one document of the pipeline failures (stage parse, the
+# raw line, the fields of the input and nothing else) and no event
+check_failures() {
+  python3 - "${TEST_TMP_ROOT}/failures-expect.json" "${TEST_TMP_ROOT}/out/failures.json" \
+    "${TEST_TMP_ROOT}/out/events.json" <<'PY'
+import json
+import sys
+
+
+def documents(path):
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return [json.loads(line) for line in handle if line.strip()]
+    except FileNotFoundError:
+        return []
+
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    expected = json.load(handle)
+failures, events = documents(sys.argv[2]), documents(sys.argv[3])
+problems = []
+for want in expected:
+    found = [doc for doc in failures if (doc.get("failure") or {}).get("original") == want["line"]]
+    if len(found) != 1:
+        problems.append(f"{want['name']}: {len(found)} failure documents with the raw line, expected one")
+    for doc in found:
+        failure = doc.get("failure") or {}
+        if failure.get("stage") != "parse" or failure.get("reason") != want["reason"]:
+            problems.append(f"{want['name']}: stage {failure.get('stage')!r}, reason {failure.get('reason')!r},"
+                            f" expected parse, {want['reason']}")
+        if (doc.get("type"), doc.get("t-pot_log_path"), doc.get("t-pot_hostname")) != \
+                (want["type"], want["path"], "tpot-fixtures"):
+            problems.append(f"{want['name']}: type, t-pot_log_path, t-pot_hostname of the input missing: {doc}")
+        others = sorted(set(doc) - {"@timestamp", "type", "t-pot_sensor", "t-pot_hostname", "t-pot_log_path",
+                                    "failure"})
+        if others or sorted(failure) != ["original", "reason", "stage"]:
+            problems.append(f"{want['name']}: fields beyond those of a failure document: {others} {sorted(failure)}")
+    leaked = [event for event in events if want["line"] in json.dumps(event)
+              or "tpotfailure" in json.dumps(event).lower()]
+    if leaked:
+        problems.append(f"{want['name']}: {len(leaked)} events of the line that cannot be parsed")
+if len(failures) != len(expected):
+    problems.append(f"{len(failures)} failure documents, expected {len(expected)}")
+for problem in problems:
+    print("[FAIL] " + problem)
+for doc in failures:
+    print("       " + json.dumps(doc, sort_keys=True)[:1500])
+if not problems:
+    print(f"{len(expected)} lines that cannot be parsed: one failure document each, no event")
+sys.exit(1 if problems else 0)
+PY
+}
+
 # write or compare the golden documents of the HIVE pipeline (docker/_tests/lib/golden.py)
 golden() {
   python3 "${TEST_LIB_DIR}/golden.py" "$1" --golden "${GOLDEN_FILE}" \
@@ -452,8 +545,12 @@ main() {
   wait_for_events || test_die "Logstash stopped before every fixture was read"
 
   test_info "Checking the events"
-  local checked=0 compared=0
+  local checked=0 compared=0 failed=0
   check_events || checked=$?
+  if [[ "${SENSOR}" != "true" ]]; then
+    test_info "Checking the documents of the pipeline failures"
+    check_failures || failed=$?
+  fi
   case "${GOLDEN}" in
     write)
       (( checked == 0 )) || test_die "Logstash did not read every fixture cleanly, ${GOLDEN_FILE} stays as it is"
@@ -466,6 +563,7 @@ main() {
       ;;
   esac
   (( checked == 0 )) || test_die "Logstash did not read every fixture cleanly"
+  (( failed == 0 )) || test_die "The lines that cannot be parsed did not end as failure documents"
   (( compared == 0 )) || test_die "The documents differ from ${GOLDEN_FILE} (a change on purpose: --golden write)"
   test_ok "Logstash fixture checks passed (any known exceptions are listed above)"
 }

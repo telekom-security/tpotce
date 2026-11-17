@@ -1,0 +1,29 @@
+{
+  "index_patterns": ["tpot-failures-*"],
+  "priority": 100,
+  "version": 1,
+  "_meta": {"managed": true, "description": "T-Pot events that could not be parsed or indexed"},
+  "template": {
+    "settings": {
+      "index.number_of_shards": 1,
+      "index.number_of_replicas": 0,
+      "index.lifecycle.name": "tpot"
+    },
+    "mappings": {
+      "dynamic": false,
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "type": {"type": "keyword"},
+        "t-pot_sensor": {"type": "keyword"},
+        "t-pot_hostname": {"type": "keyword"},
+        "t-pot_log_path": {"type": "keyword"},
+        "failure": {
+          "properties": {
+            "stage": {"type": "keyword"},
+            "reason": {"type": "keyword", "ignore_above": 1024}
+          }
+        }
+      }
+    }
+  }
+}

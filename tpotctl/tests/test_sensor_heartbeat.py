@@ -43,7 +43,8 @@ class MetadataTest(unittest.TestCase):
         self.assertEqual(sorted(path.name for path in LOGSTASH.glob("*.json")), [])
         self.assertNotIn(".json", (LOGSTASH.parent / "Dockerfile").read_text())
         self.assertEqual(sorted(path.name for path in ILM.glob("*.json")),
-                         ["logstash.json", "tpot-sensor-heartbeat.json", "tpot-sensor-status.json"])
+                         ["logstash.json", "tpot-failures.json", "tpot-sensor-heartbeat.json",
+                          "tpot-sensor-status.json"])
 
     def test_log_path_is_a_keyword_in_the_logstash_template(self):
         template = json.loads((ILM / "logstash.json").read_text())
@@ -176,6 +177,17 @@ class EntrypointTest(unittest.TestCase):
         self.assertFalse(self.marker.exists())
         self.assertFalse(json.loads(self.captured.read_text())["waiting"])
 
+    def test_waits_for_the_failures_template(self):
+        self.hive("late-failures")
+        done = self.run_entrypoint()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        failures = [call for call in self.requests() if "/_index_template/tpot-failures?" in call["url"]]
+        self.assertEqual([call["code"] for call in failures], ["404"] * 3 + ["200"])
+        self.assertIn("Waiting for the index templates of tpotinit (es_retention.sh): tpot-failures; "
+                      "see docker logs tpotinit.", done.stdout)
+        self.assertIn("Index templates in place, starting Logstash.", done.stdout)
+        self.assertFalse(json.loads(self.captured.read_text())["waiting"])
+
     def test_wrong_template_version_keeps_waiting(self):
         self.hive("wrong")
         log = self.root / "out"
@@ -208,11 +220,15 @@ CURL_STUB = """import json, os, sys
 args = sys.argv[1:]
 url = [arg for arg in args if arg.startswith("http")][-1]
 fmt = args[args.index("-w") + 1] if "-w" in args else ""
-count = 0
+count = failures = 0
 if os.path.exists({calls!r}):
     with open({calls!r}) as handle:
-        count = sum("/_index_template/logstash?" in line for line in handle)
+        lines = handle.readlines()
+    count = sum("/_index_template/logstash?" in line for line in lines)
+    failures = sum("/_index_template/tpot-failures?" in line for line in lines)
 code, body = "200", "{{}}"
+if "/_index_template/tpot-failures?" in url and os.environ.get("CURL_MODE") == "late-failures" and failures < 3:
+    code = "404"
 if "/_index_template/logstash?" in url:
     late = os.environ.get("CURL_MODE") == "late" and count < 5
     version = "old-release" if os.environ.get("CURL_MODE") == "wrong" else "test-release"

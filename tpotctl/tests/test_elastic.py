@@ -396,7 +396,7 @@ class WiringTest(unittest.TestCase):
 
 # curl for es_retention.sh: every step in $CALLS; Elasticsearch answers unless MODE=down (or for the first
 # DOWN_HEALTH health calls), the GET of the policy (404) takes GET_SLEEP seconds, the PUT PUT_SLEEP seconds;
-# the sensor index templates are there, the first TEMPLATE_FAILS PUTs of the template logstash answer 500
+# the create-only index templates are there, the first TEMPLATE_FAILS PUTs of the template logstash answer 500
 # (its body in $CALLS.template)
 RETENTION_CURL = """#!/bin/sh
 put=""; out=/dev/null; prev=""
@@ -537,6 +537,8 @@ class RetentionRetryTest(RetentionRun):
         self.assertEqual(out.count("index template logstash could not be written"), 1, out)
         self.assertIn("# Index template logstash: written (T-Pot test-release).", out)
         self.assertIn("# Index templates: in place after 2 attempts.", out)
+        for name in ("tpot-sensor-status", "tpot-sensor-heartbeat", "tpot-failures"):
+            self.assertIn(f"# Index template {name}: kept (never overwritten).", out)
         with open(template, encoding="utf-8") as handle:
             body = json.load(handle)
         self.assertEqual(body["_meta"]["tpot_version"], "test-release")

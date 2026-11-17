@@ -14,7 +14,9 @@ INIT_IMAGE=""
 # Logstash and Elasticsearch need a while to start; --timeout of the runner is the least each wait gets
 STARTUP_SECONDS=300
 VERSION="test-release"
-TEMPLATES="logstash tpot-sensor-heartbeat tpot-sensor-status"
+TEMPLATES="logstash tpot-failures tpot-sensor-heartbeat tpot-sensor-status"
+# a Cowrie line whose geoip.ip Elasticsearch rejects (an ip field of the template logstash)
+REJECTED='{"eventid":"cowrie.session.connect","session":"logstash_es_index","geoip":{"ip":"no-address"}}'
 
 usage() {
   cat <<EOF
@@ -31,7 +33,9 @@ Dockerfile (every 5 s), es_retention.sh of this checkout runs in the tpotinit im
   (b) then Logstash starts,
   (c) the template logstash carries _meta.tpot_version,
   (e) Logstash created no template of its own,
-  (d) a template logstash changed by hand is overwritten by the next run.
+  (d) a template logstash changed by hand is overwritten by the next run,
+  (g) an event Elasticsearch rejects (a mapping conflict) goes through the dead
+      letter queue of process into tpot-failures-* as a document of stage index.
 
 The network is internal: nothing outside it is reached, Listbot least of all (a fresh
 cache and stand-in dictionaries, the log must show no download). Nothing is published,
@@ -69,7 +73,8 @@ parse_args() {
 # fresh Listbot cache (no download is tried), stand-in dictionaries for /etc/listbot
 prepare_files() {
   mkdir -p "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/listbot" "${TEST_TMP_ROOT}/data/tpot/etc/compose" \
-    "${TEST_TMP_ROOT}/data/elk/listbot"
+    "${TEST_TMP_ROOT}/data/elk/listbot" "${TEST_TMP_ROOT}/data/cowrie/log"
+  printf '%s\n' "${REJECTED}" > "${TEST_TMP_ROOT}/data/cowrie/log/cowrie.json"
   cp "${LOGSTASH_DIR}/dist/pipeline/"*.conf "${LOGSTASH_DIR}/dist/sensor_heartbeat.rb" "${TEST_TMP_ROOT}/pipeline/"
   printf '"192.0.2.1": "stand-in"\n' > "${TEST_TMP_ROOT}/listbot/iprep.yaml"
   printf '"0": "stand-in"\n' > "${TEST_TMP_ROOT}/listbot/cve.yaml"
@@ -213,7 +218,8 @@ check_late_elasticsearch() {
   [[ "${state}" == "exited 0" ]] || test_die "(f) es_retention.sh did not end with 0: ${state}; ${out}"
   for code in "ILM policy tpot: created" "ILM policy tpot-sensor-status: created" \
               "# Index template logstash: written (T-Pot ${VERSION})." \
-              "# Index template tpot-sensor-status: created." "# Index template tpot-sensor-heartbeat: created."; do
+              "# Index template tpot-sensor-status: created." "# Index template tpot-sensor-heartbeat: created." \
+              "# Index template tpot-failures: created."; do
     grep -q -F -- "${code}" <<<"${out}" || test_die "(f) no '${code}' in the log of es_retention.sh: ${out}"
   done
   test_ok "(f) policies and templates written once Elasticsearch answered"
@@ -300,6 +306,53 @@ PY
   test_ok "(d) the template changed by hand was overwritten"
 }
 
+# (g) the Cowrie line of the test (REJECTED) is rejected by Elasticsearch and kept in tpot-failures-*
+check_index_failure() {
+  local deadline answer="" found=""
+  test_info "(g) an event Elasticsearch rejects lands in tpot-failures-*"
+  deadline=$(( SECONDS + WAIT_SECONDS ))
+  while (( SECONDS < deadline )); do
+    es POST '/tpot-failures-*/_refresh' >/dev/null || true
+    answer="$(es GET '/tpot-failures-*/_search?q=failure.stage:index&size=10' || true)"
+    if grep -q '"value":[1-9]' <<<"${answer}"; then
+      found=1
+      break
+    fi
+    sleep 3
+  done
+  [[ -n "${found}" ]] || test_die "(g) no document of stage index in tpot-failures-* after ${WAIT_SECONDS} s: ${answer}"
+  python3 - "${answer}" "$(es GET '/tpot-failures-*/_settings?flat_settings=true')" \
+    "$(es GET '/logstash-*/_search?q=session:logstash_es_index&size=0')" "${REJECTED}" <<'PY' \
+    || test_die "(g) the document of stage index is not as expected: ${answer}"
+import json
+import sys
+
+answer, settings, events = (json.loads(value) for value in sys.argv[1:4])
+rejected = json.loads(sys.argv[4])
+hits = answer["hits"]["hits"]
+assert len(hits) == 1, hits
+doc = hits[0]["_source"]
+print(json.dumps(doc, sort_keys=True))
+failure = doc["failure"]
+assert failure["stage"] == "index", failure
+# the reason of the dead letter queue: the 400 of Elasticsearch on geoip.ip (document_parsing_exception,
+# older releases: mapper_parsing_exception)
+assert "status: 400" in failure["reason"] and "_parsing_exception" in failure["reason"] \
+    and "[geoip.ip]" in failure["reason"], failure["reason"]
+original = json.loads(failure["original"])
+assert original["session"] == rejected["session"] and original["geoip"] == rejected["geoip"], original
+assert "@metadata" not in original, original
+assert doc["type"] == "Cowrie" and doc["t-pot_log_path"] == "/data/cowrie/log/cowrie.json", doc
+assert doc["t-pot_hostname"] == "tpot-logstash-es", doc
+assert sorted(doc) == ["@timestamp", "failure", "t-pot_hostname", "t-pot_log_path", "type"], sorted(doc)
+assert sorted(failure) == ["original", "reason", "stage"], sorted(failure)
+for index, value in settings.items():
+    assert value["settings"].get("index.lifecycle.name") == "tpot", (index, value["settings"])
+assert events["hits"]["total"]["value"] == 0, events
+PY
+  test_ok "(g) the rejected event is a document of stage index in tpot-failures-*"
+}
+
 # R-8a: Listbot is never asked
 check_no_listbot() {
   local out
@@ -333,6 +386,7 @@ main() {
   check_late_elasticsearch
   check_started
   check_overwrite
+  check_index_failure
   check_no_listbot
   test_ok "Templates of tpotinit and the wait of Logstash passed"
 }

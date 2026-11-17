@@ -1,5 +1,8 @@
 # HIVE (STANDARD): the file inputs and the sensor input; the files pipeline hands its events to the
 # processing pipeline (pipeline-to-pipeline, address tpot_process). The part files are in pipeline/.
+# The processing pipeline hands the events it cannot parse to the pipeline failures (address
+# tpot_failures), which also reads the documents Elasticsearch rejected from its dead letter queue
+# (under the default path.data) and writes both into tpot-failures-*.
 - pipeline.id: files
   path.config: "/usr/share/logstash/pipeline/{10-input-files,12-files}.conf"
   pipeline.ecs_compatibility: disabled
@@ -9,3 +12,10 @@
 - pipeline.id: process
   path.config: "/usr/share/logstash/pipeline/{14-input-process,30-decode,40-parse-*,50-enrich,90-output-es}.conf"
   pipeline.ecs_compatibility: disabled
+  dead_letter_queue.enable: true
+  dead_letter_queue.max_bytes: 256mb
+  dead_letter_queue.storage_policy: drop_older
+- pipeline.id: failures
+  path.config: "/usr/share/logstash/pipeline/{60-input-failures,61-failures,92-output-failures}.conf"
+  pipeline.ecs_compatibility: disabled
+  pipeline.workers: 1

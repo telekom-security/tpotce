@@ -153,7 +153,7 @@ function fuWAIT_TEMPLATES () {
   trap 'kill $! 2>/dev/null; exit 143' TERM
   while true; do
     myMISSING=""
-    for myNAME in logstash tpot-sensor-status tpot-sensor-heartbeat; do
+    for myNAME in logstash tpot-sensor-status tpot-sensor-heartbeat tpot-failures; do
       myANSWER="$(curl -s --max-time 5 -w '\n%{http_code}' \
         "http://elasticsearch:9200/_index_template/${myNAME}?filter_path=index_templates.index_template._meta.tpot_version")"
       myCODE="${myANSWER##*$'\n'}"

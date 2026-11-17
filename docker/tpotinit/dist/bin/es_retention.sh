@@ -235,13 +235,14 @@ function fuLOGSTASH_TEMPLATE () {
   return 1
 }
 
-# The templates of the sensor status are created once and never replaced (they may be edited); this job
-# also repairs a missing one. Logstash manages no template, it waits for these. Never attach policies to
-# existing unmanaged indices. Returns 1 when a template could not be checked or written.
+# The templates of the sensor status and of the failures are created once and never replaced (they may
+# be edited); this job also repairs a missing one. Logstash manages no template, it waits for these.
+# Never attach policies to existing unmanaged indices. Returns 1 when a template could not be checked or
+# written.
 function fuILM_TEMPLATES () {
   local myNAME myCODE myBODY myFILE myRC=0
-  myBODY="$(mktemp)" || { echo "# Warning: no temporary file for the sensor index templates."; return 1; }
-  for myNAME in tpot-sensor-status tpot-sensor-heartbeat; do
+  myBODY="$(mktemp)" || { echo "# Warning: no temporary file for the create-only index templates."; return 1; }
+  for myNAME in tpot-sensor-status tpot-sensor-heartbeat tpot-failures; do
     myFILE="/opt/tpot/etc/ilm/${myNAME}.json"
     myCODE="$(curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' "${myILM_ES}/_index_template/${myNAME}")"
     case "${myCODE}" in
