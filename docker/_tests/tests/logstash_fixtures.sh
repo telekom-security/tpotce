@@ -334,15 +334,15 @@ if sys.argv[3] == "true":
     print(f"Sensor heartbeats: first after {delay}s, interval {interval}s, metadata correct")
 
 # An event belongs to the fixture whose token or marker port it carries, or else to the file it
-# came from. The file input names the file in [path] only where the event has no path of its own
-# (Glutton, Go-pot, Honeyaml and Wordpot log the request path as path).
+# came from: 30-decode.conf moves the file the input names in [path] to t-pot_log_path, [path] is
+# the honeypot's own (Go-pot, Honeyaml and Wordpot log the request path as path).
 by_name, stray = {}, []
 for event in events:
     text = json.dumps(event, sort_keys=True)
     owners = [name for name, want in manifest.items()
               if want["token"] in text or event.get("src_port") == want["marker"]]
     if not owners:
-        owners = [name for name, want in manifest.items() if event.get("path") == want["path"]]
+        owners = [name for name, want in manifest.items() if event.get("t-pot_log_path") == want["path"]]
     if len(owners) == 1:
         by_name.setdefault(owners[0], []).append(event)
     else:
@@ -363,6 +363,10 @@ for name, want in sorted(manifest.items()):
                         else f"{len(found)} events from {want['path']}, expected one")
     for event in found:
         text = json.dumps(event, sort_keys=True)
+        if event.get("t-pot_log_path") != want["path"]:
+            problems.append(f"t-pot_log_path {event.get('t-pot_log_path')!r}, expected {want['path']!r}")
+        if str(event.get("path", "")).startswith("/data/"):
+            problems.append(f"path {event['path']!r}: the source file stayed in path")
         if event.get("type") != want["type"]:
             problems.append(f"type {event.get('type')!r}, expected {want['type']!r}")
         tags = [tag for tag in event.get("tags") or [] if str(tag).endswith("failure")]

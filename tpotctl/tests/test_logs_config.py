@@ -3,6 +3,7 @@
 import contextlib
 import fnmatch
 import io
+import re
 import unittest
 
 from tpotctl import logs_config
@@ -53,6 +54,25 @@ class LogsConfigTest(unittest.TestCase):
                     self.assertTrue(path.startswith("/data/"))
                     for token in ("**", "{", "[", '"'):
                         self.assertNotIn(token, path)
+
+    def test_decode_lists_json_types(self):
+        text = (logs_config.PIPELINE_DIR / "30-decode.conf").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith(logs_config.HEADER))
+        found = re.search(r"^  if \[type\] in \[(.*?)\] \{$", text, re.M | re.S)
+        self.assertIsNotNone(found, "no list of the JSON types")
+        listed = re.findall(r'"([^"]+)"', found[1])
+        self.assertEqual(listed, [entry.type for entry in logs_config.INPUTS if entry.decode == "json"])
+
+    def test_json_inputs_have_no_codec(self):
+        text = (logs_config.PIPELINE_DIR / "10-input-files.conf").read_text(encoding="utf-8")
+        blocks = re.findall(r"^  file \{\n(.*?)^  \}", text, re.M | re.S)
+        self.assertEqual(len(blocks), len(logs_config.INPUTS))
+        for entry, block in zip(logs_config.INPUTS, blocks):
+            with self.subTest(type=entry.type):
+                self.assertIn(f'type => "{entry.type}"', block)
+                # the plain codec keeps the source file in [path] until 30-decode.conf moves it
+                codecs = re.findall(r"codec => (\S+)", block)
+                self.assertEqual(codecs, ["plain"] if entry.decode == "plain" else [])
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 INPUTS names, per Logstash type, the log files of a honeypot (or NSM tool) under the data folder
 (TPOT_DATA_PATH, /data in Logstash) and how a line of them is decoded. TARGETS are the files
-written from it; the tests run --check:
+written from it (the file inputs and the decoding of the processing pipeline); the tests run --check:
 
     python3 -m tpotctl.logs_config [--check]
 """
@@ -59,8 +59,9 @@ INPUTS: Tuple[LogInput, ...] = (
     LogInput("Wordpot", ("/data/wordpot/log/wordpot.json",), "json"),
 )
 
-# The codec of the Logstash file input per decode; Heralding's CSV is split by its parse file
-CODECS = {"json": "json", "plain": "plain", "csv": None}
+# The codec of the Logstash file input per decode: none (plain) for JSON, 30-decode.conf parses it
+# after the source file went to t-pot_log_path; Heralding's CSV is split by its parse file
+CODECS = {"json": None, "plain": "plain", "csv": None}
 
 
 def logstash_inputs() -> str:
@@ -78,9 +79,44 @@ def logstash_inputs() -> str:
     return "\n".join(lines) + "\n"
 
 
+def logstash_decode() -> str:
+    """30-decode.conf: the source file into t-pot_log_path, then the lines of the JSON types parsed."""
+    types = [entry.type for entry in INPUTS if entry.decode == "json"]
+    lines = [HEADER.rstrip("\n"),
+             "# The first filter of the processing pipeline. The file input names the file it read in [path]",
+             "# (its events carry nothing else yet): it goes to t-pot_log_path, a t-pot_log_path the event",
+             "# brings (a sensor's) stays, so [path] is left to the honeypots. A line of a JSON type is",
+             "# parsed into the event: its keys win over those of the input; a line that is no JSON stays",
+             "# in message with the tag _jsonparsefailure. The raw line is in [@metadata][raw].",
+             "filter {",
+             "  if [path] and ![t-pot_log_path] {",
+             "    mutate {",
+             '      rename => { "path" => "t-pot_log_path" }',
+             "    }",
+             "  }",
+             "  if [type] in ["]
+    lines += [f'    "{name}"' + ("," if number < len(types) - 1 else "") for number, name in enumerate(types)]
+    lines += ["  ] {",
+              "    mutate {",
+              '      rename => { "message" => "[@metadata][raw]" }',
+              "    }",
+              "    json {",
+              '      source => "[@metadata][raw]"',
+              "    }",
+              '    if "_jsonparsefailure" in [tags] {',
+              "      mutate {",
+              '        copy => { "[@metadata][raw]" => "message" }',
+              "      }",
+              "    }",
+              "  }",
+              "}"]
+    return "\n".join(lines) + "\n"
+
+
 # Generated file -> its text
 TARGETS: Dict[Path, Callable[[], str]] = {
     PIPELINE_DIR / "10-input-files.conf": logstash_inputs,
+    PIPELINE_DIR / "30-decode.conf": logstash_decode,
 }
 
 

@@ -7,5 +7,5 @@
   path.config: "/usr/share/logstash/pipeline/{11-input-sensors,20-sensors,21-sensors-output}.conf"
   pipeline.ecs_compatibility: disabled
 - pipeline.id: process
-  path.config: "/usr/share/logstash/pipeline/{14-input-process,40-parse-*,50-enrich,90-output-es}.conf"
+  path.config: "/usr/share/logstash/pipeline/{14-input-process,30-decode,40-parse-*,50-enrich,90-output-es}.conf"
   pipeline.ecs_compatibility: disabled
