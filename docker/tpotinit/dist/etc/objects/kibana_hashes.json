@@ -179,6 +179,9 @@
    "8a93760e7d180021649950104c7d3093a98a1769fe3b070cef1f195c6a624fbf",
    "fb95c279fc5052af4a93ba302fda61f29ba7e3a1deb06188ccd4b0304b5afc5e"
   ],
+  "index-pattern:tpot-failures-view": [
+   "4f1c297376deecab0475ddc5ca90021573cc288a141520ac3b4b1bc3ab81e6a1"
+  ],
   "index-pattern:tpot-sensors-history-view": [
    "140fd796ea369b9841b6328781127def4be51a52b0276b424e9b09ecdf7b64e6"
   ],
@@ -1255,6 +1258,9 @@
   ],
   "search:f0ea3d80-7300-11ec-9e1e-29d5d4b58b2b": [
    "467ee0336afc40080a9acdf70df57f45ebb0ba46fb5625525f32743e6b1c2db3"
+  ],
+  "search:tpot-failures-search": [
+   "623df44cb82b59fb1c56ec71b4b22c2c70fa6886c90a7e698c67cea611adf281"
   ],
   "search:tpot-sensors-status": [
    "fbdaba3c039f2342248a4ba7a6e204c9e0a99f47a368a0ed51b414582970e6e3"
