@@ -109,8 +109,13 @@ class EntrypointTest(unittest.TestCase):
         curl.write_text(f"#!{sys.executable}\n" + CURL_STUB.format(calls=str(self.calls), marker=str(self.marker)))
         curl.chmod(0o755)
         text = (LOGSTASH / "entrypoint.sh").read_text()
-        for prefix in ("/data/", "/etc/listbot/", "/usr/share/logstash/", "/tmp/"):
-            text = text.replace(prefix, str(self.root) + prefix)
+        prefixes = ("/data/", "/etc/listbot/", "/usr/share/logstash/", "/tmp/")
+        # One pass: a root under /tmp/ must not be rewritten a second time.
+        text = re.sub(
+            "|".join(re.escape(prefix) for prefix in prefixes),
+            lambda match: str(self.root) + match.group(0),
+            text,
+        )
         self.script = self.root / "entrypoint.sh"
         self.script.write_text(text)
         self.env = dict(os.environ, TPOT_TYPE="SENSOR", TPOT_HIVE_IP="192.0.2.2",
