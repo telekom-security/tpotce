@@ -5,6 +5,8 @@ from pathlib import Path
 import unittest
 import zipfile
 
+from tpotctl.tests import logstash_conf
+
 ROOT = Path(__file__).resolve().parents[2]
 EXPORT = ROOT / 'docker/tpotinit/dist/etc/objects/kibana_export.ndjson'
 
@@ -19,14 +21,16 @@ class CiscoasaIntegrationTest(unittest.TestCase):
         self.assertNotIn('-path /data/ciscoasa -prune', text)
 
     def test_both_logstash_pipelines_decode_json_without_kv(self):
-        for name in ('logstash.conf', 'http_output.conf'):
-            text = (ROOT / 'docker/elk/logstash/dist' / name).read_text()
-            block = text.split('# Ciscoasa', 1)[1].split('# Citrix', 1)[0]
-            self.assertIn('/data/ciscoasa/log/ciscoasa.json', block)
-            self.assertIn('codec => json', block)
-            block = text.split('filter {', 1)[1].split('# Ciscoasa', 1)[1].split('# Citrix', 1)[0]
-            self.assertNotIn('kv {', block)
-            self.assertIn('ISO8601', block)
+        text = (logstash_conf.PIPELINE_DIR / '10-input-files.conf').read_text()
+        block = text.split('# Ciscoasa', 1)[1].split('# Citrix', 1)[0]
+        self.assertIn('/data/ciscoasa/log/ciscoasa.json', block)
+        self.assertIn('codec => json', block)
+        conf = logstash_conf.parse_file('Ciscoasa')
+        for sensor in (False, True):
+            self.assertIn(conf, logstash_conf.pipeline_files('process', sensor))
+        block = conf.read_text()
+        self.assertNotIn('kv {', block)
+        self.assertIn('ISO8601', block)
 
     def test_dashboard_panels_reference_imported_objects(self):
         objects = [json.loads(line) for line in EXPORT.read_text().splitlines()]

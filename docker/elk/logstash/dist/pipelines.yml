@@ -1,6 +1,11 @@
-- pipeline.id: logstash
-  path.config: "/usr/share/logstash/pipeline/logstash.conf"
+# HIVE (STANDARD): the file inputs and the sensor input; the files pipeline hands its events to the
+# processing pipeline (pipeline-to-pipeline, address tpot_process). The part files are in pipeline/.
+- pipeline.id: files
+  path.config: "/usr/share/logstash/pipeline/{10-input-files,12-files}.conf"
   pipeline.ecs_compatibility: disabled
-- pipeline.id: http_input
-  path.config: "/usr/share/logstash/pipeline/http_input.conf"
+- pipeline.id: sensors
+  path.config: "/usr/share/logstash/pipeline/{11-input-sensors,20-sensors,21-sensors-output}.conf"
+  pipeline.ecs_compatibility: disabled
+- pipeline.id: process
+  path.config: "/usr/share/logstash/pipeline/{14-input-process,40-parse-*,50-enrich,90-output-es}.conf"
   pipeline.ecs_compatibility: disabled

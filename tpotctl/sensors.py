@@ -2,14 +2,14 @@
 
 Access is LS_WEB_USER in .env (base64 of name:htpasswd hash per sensor), from which
 tpotinit builds data/nginx/conf/lswebpasswd for the ingest on 64294. The sensor
-sends with TPOT_HIVE_USER (base64 of name:password, http_output.conf) and checks
+sends with TPOT_HIVE_USER (base64 of name:password, Logstash 91-output-http.conf) and checks
 the HIVE against its copy of data/nginx/cert/nginx.crt (data/hive.crt).
 
 The registry data/sensors.json only holds what the HIVE cannot know otherwise
 (address, SSH user, when, which version) and no secrets. It is built from
 LS_WEB_USER where it is missing (installations before tpot, a lost file), so the
 sensors of 24.04.1 come along. nginx hands the sensor user to Logstash, which puts
-it into t-pot_sensor of every event (lsweb.conf, http_input.conf), that is how the
+it into t-pot_sensor of every event (lsweb.conf, Logstash 20-sensors.conf), that is how the
 status ties events to sensors.
 
 A sensor of lswebpasswd that LS_WEB_USER does not name is kept by tpotinit in
@@ -200,7 +200,7 @@ def new_password(length: int = 32) -> str:
 
 
 def hive_user(name: str, password: str) -> str:
-    """TPOT_HIVE_USER of the sensor: base64 of name:password, the basic auth of http_output.conf."""
+    """TPOT_HIVE_USER of the sensor: base64 of name:password, the basic auth of 91-output-http.conf."""
     return base64.b64encode(f"{name}:{password}".encode()).decode()
 
 

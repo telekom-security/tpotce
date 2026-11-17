@@ -1,17 +1,16 @@
-"""The Logstash csv filter for Heralding (docker/elk/logstash/dist): auth.csv of the T-Pot fork
+"""The Logstash csv filter for Heralding (docker/elk/logstash/dist/pipeline): auth.csv of the T-Pot fork
 has one column per field, so the filter must name every column in the order of the fork, or the
 last value lands in a field `column11` and a new column of the fork shifts nothing into place.
 """
 
 import csv
 import io
-import os
 import re
 import unittest
-from pathlib import Path
 
-ROOT = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-CONFS = [ROOT / "docker" / "elk" / "logstash" / "dist" / name for name in ("logstash.conf", "http_output.conf")]
+from tpotctl.tests import logstash_conf
+
+CONF = logstash_conf.parse_file("Heralding")
 
 # The header of auth.csv as the fork writes it: AUTH_FIELDS of heralding/reporting/file_sink.py,
 # github.com/telekom-security/heralding v2.0.0 3ad0110dad7bfd2b23bd1a30278f76368c8a8772.
@@ -43,30 +42,25 @@ def columns(conf):
 class HeraldingCsvTest(unittest.TestCase):
 
     def test_every_column_of_the_fork_has_its_name(self):
-        expected = [FIELDS.get(name, name) for name in HEADER]
-        for conf in CONFS:
-            with self.subTest(conf=conf.name):
-                self.assertEqual(columns(conf), expected)
+        self.assertEqual(columns(CONF), [FIELDS.get(name, name) for name in HEADER])
 
     def test_rows_fill_the_named_fields_only(self):
-        for conf in CONFS:
-            names = columns(conf)
-            for row in list(csv.reader(io.StringIO(SAMPLE)))[1:]:
-                with self.subTest(conf=conf.name, row=row[1]):
-                    self.assertEqual(len(row), len(names))
-                    event = dict(zip(names, row))
-                    self.assertEqual(event["proto"], row[7])
-                    self.assertEqual(event["password_hash"], row[10])
+        names = columns(CONF)
+        for row in list(csv.reader(io.StringIO(SAMPLE)))[1:]:
+            with self.subTest(row=row[1]):
+                self.assertEqual(len(row), len(names))
+                event = dict(zip(names, row))
+                self.assertEqual(event["proto"], row[7])
+                self.assertEqual(event["password_hash"], row[10])
 
     def test_the_header_row_is_dropped(self):
-        for conf in CONFS:
-            with self.subTest(conf=conf.name):
-                header = next(csv.reader(io.StringIO(SAMPLE)))
-                self.assertEqual(dict(zip(columns(conf), header))["timestamp"], "timestamp")
-                self.assertRegex(heralding_block(conf), r'if \[timestamp\] == "timestamp" \{\s*drop \{\}')
+        header = next(csv.reader(io.StringIO(SAMPLE)))
+        self.assertEqual(dict(zip(columns(CONF), header))["timestamp"], "timestamp")
+        self.assertRegex(heralding_block(CONF), r'if \[timestamp\] == "timestamp" \{\s*drop \{\}')
 
-    def test_both_pipelines_agree(self):
-        self.assertEqual(*(heralding_block(conf) for conf in CONFS))
+    def test_one_filter_for_both_pipelines(self):
+        for sensor in (False, True):
+            self.assertIn(CONF, logstash_conf.pipeline_files("process", sensor))
 
 
 if __name__ == "__main__":

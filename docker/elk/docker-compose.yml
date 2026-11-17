@@ -53,7 +53,7 @@ services:
     image: "ghcr.io/telekom-security/logstash:24.04.2"
     volumes:
      - $HOME/tpotce/data:/data
-#     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+#     - /root/tpotce/docker/elk/logstash/dist/pipeline/10-input-files.conf:/usr/share/logstash/pipeline/10-input-files.conf
 
 # Map Redis Service
   map_redis:

@@ -19,11 +19,13 @@ import time
 import unittest
 from pathlib import Path
 
+from tpotctl.tests import logstash_conf
+
 ROOT = Path(__file__).resolve().parents[2]
 ENTRYPOINT = ROOT / "docker" / "ewsposter" / "dist" / "entrypoint.sh"
 EWS_CFG = ROOT / "docker" / "ewsposter" / "dist" / "ews.cfg"
 TPOTINIT = ROOT / "docker" / "tpotinit" / "dist" / "entrypoint.sh"
-LOGSTASH = ROOT / "docker" / "elk" / "logstash" / "dist" / "logstash.conf"
+LOGSTASH = logstash_conf.PIPELINE_DIR / "10-input-files.conf"
 CLEAN = ROOT / "docker" / "tpotinit" / "dist" / "bin" / "clean.sh"
 
 SHELLS = [shell for shell in ("/bin/sh", "/bin/dash", shutil.which("busybox") and "busybox-ash")
@@ -976,9 +978,8 @@ class TpotinitClearTest(unittest.TestCase):
 
 
 def logstash_paths():
-    """{type in lower case: [paths]} of the file inputs of logstash.conf."""
-    text = LOGSTASH.read_text()
-    inputs = text[:text.index("\nfilter {")]
+    """{type in lower case: [paths]} of the file inputs of Logstash (10-input-files.conf)."""
+    inputs = LOGSTASH.read_text()
     paths = {}
     for block in re.findall(r"file\s*\{(.*?)\n  \}", inputs, re.S):
         found = re.search(r'path => \["([^"]+)"\]', block)

@@ -45,9 +45,11 @@ docker/_tests/golden/logstash_fixtures.jsonl (docker/_tests/lib/golden.py):
 each field that differs fails the test. --golden write records them instead,
 after the checks above passed. Both use the Listbot stand-ins in any image.
 
-The pipeline is docker/elk/logstash/dist/logstash.conf of this checkout with its
-inputs and filters as they are; the inputs read the files from the start and the
-output is a file instead of Elasticsearch. The container has no network.
+The pipelines are those of docker/elk/logstash/dist/pipelines.yml (with --sensor
+pipelines_sensor.yml) on the part files of dist/pipeline/ of this checkout as
+they are, but the file inputs read the files from the start and the output is a
+file instead of Elasticsearch (or the HIVE). The sensors pipeline of the HIVE is
+left out (sensor_heartbeat tests it). The container has no network.
 
 The T-Pot Logstash image is used when it exists locally, otherwise the official
 image of its Dockerfile (LS_VER). An image without the Listbot dictionaries
@@ -108,7 +110,7 @@ choose_image() {
   [[ -n "${version}" ]] || test_die "No ARG LS_VER in ${LOGSTASH_DIR}/Dockerfile"
   official="docker.elastic.co/logstash/logstash:${version}"
   if docker image inspect "${official}" >/dev/null 2>&1; then
-    test_info "${IMAGE} is not built here, using ${official} with the T-Pot pipeline"
+    test_info "${IMAGE} is not built here, using ${official} with the T-Pot pipelines"
     IMAGE="${official}"
     return 0
   fi
@@ -121,11 +123,12 @@ image_has_listbot() {
     'test -s /etc/listbot/iprep.yaml && test -s /etc/listbot/cve.yaml' >/dev/null 2>&1
 }
 
-# the data folder with one rendered fixture per honeypot, the manifest and the test pipeline
+# the data folder with one rendered fixture per honeypot, the manifest and the pipelines of the test
 prepare_files() {
-  mkdir -p "${TEST_TMP_ROOT}/data" "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/out" "${TEST_TMP_ROOT}/listbot"
+  mkdir -p "${TEST_TMP_ROOT}/data" "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/config" "${TEST_TMP_ROOT}/out" \
+    "${TEST_TMP_ROOT}/listbot"
   chmod 0777 "${TEST_TMP_ROOT}/out"
-  PYTHONPATH="${REPO_ROOT}" python3 - "${REPO_ROOT}" "${TEST_TMP_ROOT}" "${TEST_SRC_IP}" "${SENSOR}" <<'PY'
+  PYTHONPATH="${REPO_ROOT}" python3 - "${TEST_TMP_ROOT}" "${TEST_SRC_IP}" "${SENSOR}" <<'PY'
 import json
 import os
 import re
@@ -134,9 +137,10 @@ import zlib
 from datetime import datetime, timezone
 
 from tpotctl.checks import fixtures, stages
+from tpotctl.tests import logstash_conf
 
-repo, root, src_ip = sys.argv[1], sys.argv[2], sys.argv[3]
-pipeline_name = "http_output.conf" if sys.argv[4] == "true" else "logstash.conf"
+root, src_ip = sys.argv[1], sys.argv[2]
+sensor = sys.argv[3] == "true"
 data = os.path.join(root, "data")
 # fixed values, so the documents are the same in every run (the golden file); the time lies before
 # the run: an event that keeps the time Logstash read it at shows up
@@ -176,31 +180,49 @@ with open(os.path.join(root, "out", "expect.tsv"), "w", encoding="utf-8") as han
     for name, want in sorted(manifest.items()):
         handle.write(f"{name}\t{want['token']}\t{want['marker']}\n")
 
-# logstash.conf with its inputs and filters as they are: every file input reads from the start
-# and keeps no sincedb, the output section becomes one file of JSON lines
-with open(os.path.join(repo, "docker", "elk", "logstash", "dist", pipeline_name), encoding="utf-8") as handle:
-    conf = handle.read()
-head, marker_text, _ = conf.partition("\n# Output section\n")
-if not marker_text:
-    sys.exit("logstash.conf has no '# Output section'")
-inputs, filter_text, filters = head.partition("\n# Filter Section\n")
-if not filter_text:
-    sys.exit("logstash.conf has no '# Filter Section'")
+# The pipelines files and process of pipelines.yml (pipelines_sensor.yml) with the part files of
+# this checkout (mounted at IMAGE_DIR) as they are, but two of the test (in TEST_DIR): the file
+# inputs read every file from the start and keep no sincedb, the output of the processing pipeline
+# (Elasticsearch, the HIVE) becomes one file of JSON lines.
+LOGSTASH = "/usr/share/logstash/"
+TEST_DIR = LOGSTASH + "test/"
+inputs = (logstash_conf.PIPELINE_DIR / "10-input-files.conf").read_text(encoding="utf-8")
 count = inputs.count("\n  file {\n")
 inputs = inputs.replace("\n  file {\n", '\n  file {\n    start_position => "beginning"\n    sincedb_path => "/dev/null"\n')
 if count < len({entry["path"] for entry in manifest.values()}) - 8:   # conpot: one input, nine files
-    sys.exit(f"logstash.conf: only {count} file inputs")
-pipeline = (inputs + filter_text + filters + "\n# Output section (test)\noutput {\n"
-            '  file {\n    path => "/out/events.json"\n    codec => json_lines\n  }\n}\n')
-with open(os.path.join(root, "pipeline", "logstash.conf"), "w", encoding="utf-8") as handle:
-    handle.write(pipeline)
+    sys.exit(f"10-input-files.conf: only {count} file inputs")
+own = {"10-input-files.conf": inputs,
+       "99-output-file.conf": ('# Output section (test)\noutput {\n'
+                               '  file {\n    path => "/out/events.json"\n    codec => json_lines\n  }\n}\n')}
+for name, text in own.items():
+    with open(os.path.join(root, "pipeline", name), "w", encoding="utf-8") as handle:
+        handle.write(text)
+yml, used = ["# T-Pot's pipelines with the file inputs and the output of the test"], []
+for pipeline_id in ("files", "process"):
+    paths = []
+    for path in logstash_conf.pipeline_files(pipeline_id, sensor):
+        if path.name == "10-input-files.conf":
+            paths.append(TEST_DIR + path.name)
+        elif re.fullmatch(r"9\d-output-[a-z]+\.conf", path.name):
+            paths.append(TEST_DIR + "99-output-file.conf")
+        else:
+            paths.append(logstash_conf.IMAGE_DIR + path.name)
+    used += [path for path in paths if path.startswith(TEST_DIR)]
+    # Logstash reads the files sorted by their path: the output of the test comes last as the real one
+    settings = dict(logstash_conf.pipelines(sensor)[pipeline_id])
+    settings["path.config"] = '"' + LOGSTASH + "{" + ",".join(path[len(LOGSTASH):] for path in paths) + '}"'
+    yml += [("- " if number == 0 else "  ") + f"{key}: {value}" for number, (key, value) in enumerate(settings.items())]
+if sorted(used) != [TEST_DIR + name for name in sorted(own)]:
+    sys.exit(f"the pipelines take {used} of the test, not its input and its output once each")
+with open(os.path.join(root, "config", "pipelines.yml"), "w", encoding="utf-8") as handle:
+    handle.write("\n".join(yml) + "\n")
 print(f"{len(manifest)} fixtures rendered, {count} file inputs")
 PY
   # stand-ins for the Listbot dictionaries of the T-Pot image (translate needs a readable file)
   printf '"192.0.2.1": "stand-in"\n' > "${TEST_TMP_ROOT}/listbot/iprep.yaml"
   printf '"0": "stand-in"\n' > "${TEST_TMP_ROOT}/listbot/cve.yaml"
-  chmod 0755 "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/listbot"
-  chmod 0644 "${TEST_TMP_ROOT}/pipeline/logstash.conf" "${TEST_TMP_ROOT}/listbot/"*.yaml
+  chmod 0755 "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/config" "${TEST_TMP_ROOT}/listbot"
+  chmod 0644 "${TEST_TMP_ROOT}/pipeline/"*.conf "${TEST_TMP_ROOT}/config/pipelines.yml" "${TEST_TMP_ROOT}/listbot/"*.yaml
 }
 
 write_compose() {
@@ -230,11 +252,14 @@ services:
       - TZ=UTC
       - XPACK_GEOIP_DOWNLOADER_ENABLED=false
       - LS_JAVA_OPTS=-Xms512m -Xmx512m
-    # the entrypoint of the image (env2yaml for the settings above, then logstash with these options)
-    command: ["-f","/pipeline/logstash.conf", "--pipeline.ecs_compatibility=disabled", "--pipeline.workers=1"]
+    # the entrypoint of the image (env2yaml for the settings above, then logstash with these options
+    # and the pipelines of the pipelines.yml of the test)
+    command: ["--pipeline.workers=1"]
     volumes:
       - "${TEST_TMP_ROOT}/data:/data:ro"
-      - "${TEST_TMP_ROOT}/pipeline:/pipeline:ro"
+      - "${LOGSTASH_DIR}/dist/pipeline:/usr/share/logstash/pipeline:ro"
+      - "${TEST_TMP_ROOT}/pipeline:/usr/share/logstash/test:ro"
+      - "${TEST_TMP_ROOT}/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro"
       - "${TEST_TMP_ROOT}/out:/out"
 ${listbot_volume}
 EOF
@@ -292,8 +317,9 @@ if sys.argv[3] == "true":
     def stamp(value):
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     with open(sys.argv[4], encoding="utf-8") as handle:
-        started = re.search(r"^\[([0-9T:.,-]+)\].*Pipeline started", handle.read(), re.M)
-    assert started, "Logstash did not report its pipeline start"
+        # the heartbeat input is in the pipeline files
+        started = re.search(r'^\[([0-9T:.,-]+)\].*Pipeline started \{"pipeline\.id"\s*=>\s*"files"\}', handle.read(), re.M)
+    assert started, "Logstash did not report the start of the pipeline files"
     pipeline_start = stamp(started[1].replace(",", ".")).replace(tzinfo=timezone.utc)
     delay = (stamp(beats[0]["@timestamp"]) - pipeline_start).total_seconds()
     assert -5 <= delay <= 10, f"first heartbeat not immediate: {delay}s after pipeline start"
@@ -411,7 +437,7 @@ main() {
   test_enable_cleanup
   TEST_ARTIFACT_LOG_DIR="${TEST_TMP_ROOT}/out"
 
-  test_info "Rendering the fixtures and the test pipeline"
+  test_info "Rendering the fixtures and the pipelines of the test"
   prepare_files
   write_compose
 

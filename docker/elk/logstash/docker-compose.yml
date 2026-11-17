@@ -15,6 +15,6 @@ services:
     image: "ghcr.io/telekom-security/logstash:24.04.2"
     volumes:
      - $HOME/tpotce/data:/data
-#     - /$HOME/tpotce/docker/elk/logstash/dist/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
-#     - /$HOME/tpotce/docker/elk/logstash/dist/http_input.conf:/usr/share/logstash/pipeline/http_input.conf
+#     - /$HOME/tpotce/docker/elk/logstash/dist/pipeline/10-input-files.conf:/usr/share/logstash/pipeline/10-input-files.conf
+#     - /$HOME/tpotce/docker/elk/logstash/dist/pipeline/50-enrich.conf:/usr/share/logstash/pipeline/50-enrich.conf
 #     - /$HOME/tpotce/docker/elk/logstash/dist/logstash.yml:/usr/share/logstash/config/logstash.yml

@@ -49,6 +49,26 @@ test_require_image "${INIT_IMAGE}" "cd docker/tpotinit && docker compose build"
 test_prepare_harness "${TEST_NAME}"
 test_enable_cleanup
 
+# The pipeline folder as the Dockerfile builds it (the part files of dist/pipeline/, the script and
+# the templates the part files of the sensor input name there) and a pipelines.yml with only the
+# pipeline sensors of the HIVE as pipelines.yml has it.
+mkdir -p "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/config"
+cp "${LOGSTASH_DIR}/dist/pipeline/"*.conf "${LOGSTASH_DIR}/dist/sensor_heartbeat.rb" \
+  "${LOGSTASH_DIR}/dist/"tpot-sensor-*.json "${TEST_TMP_ROOT}/pipeline/"
+PYTHONPATH="${REPO_ROOT}" python3 - "${TEST_TMP_ROOT}/config/pipelines.yml" <<'PY'
+import sys
+
+from tpotctl.tests import logstash_conf
+
+settings = logstash_conf.pipelines()["sensors"]
+settings["path.config"] = '"' + settings["path.config"] + '"'
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    handle.write("".join(("- " if number == 0 else "  ") + f"{key}: {value}\n"
+                         for number, (key, value) in enumerate(settings.items())))
+PY
+chmod 0755 "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/config"
+chmod 0644 "${TEST_TMP_ROOT}/pipeline/"* "${TEST_TMP_ROOT}/config/pipelines.yml"
+
 cat > "${TEST_HARNESS_COMPOSE}" <<EOF
 services:
   elasticsearch:
@@ -64,9 +84,10 @@ services:
     environment:
       LS_JAVA_OPTS: "-Xms512m -Xmx512m"
       XPACK_GEOIP_DOWNLOADER_ENABLED: "false"
-    command: ["-f", "/usr/share/logstash/pipeline/http_input.conf", "--pipeline.ecs_compatibility=disabled", "--pipeline.workers=2"]
+    command: ["--pipeline.workers=2"]
     volumes:
-      - "${LOGSTASH_DIR}/dist:/usr/share/logstash/pipeline:ro"
+      - "${TEST_TMP_ROOT}/pipeline:/usr/share/logstash/pipeline:ro"
+      - "${TEST_TMP_ROOT}/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro"
       - "${LOGSTASH_DIR}/dist/tpot-template.json:/usr/share/logstash/config/tpot-template.json:ro"
   tpotinit:
     image: "${INIT_IMAGE}"

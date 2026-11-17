@@ -1,20 +1,18 @@
-"""The Logstash filter for ElasticPot (docker/elk/logstash/dist): the honeypot writes its timestamp with
-two offsets in a row (2026-11-07T10:00:00.123456+00:00Z), which is no date Elasticsearch takes. Both
-pipelines have to normalise it before they parse it, the HIVE one (logstash.conf) and the SENSOR one
-(http_output.conf): a sensor that sent it on as it was left a timestamp field of no date format.
+"""The Logstash filter for ElasticPot (docker/elk/logstash/dist/pipeline/40-parse-elasticpot.conf): the
+honeypot writes its timestamp with two offsets in a row (2026-11-07T10:00:00.123456+00:00Z), which is no
+date Elasticsearch takes. The filter has to normalise it before it parses it, on the HIVE and on a SENSOR
+(both process with the same file): a sensor that sent it on as it was left a timestamp field of no date format.
 """
 
 import json
-import os
 import re
 import unittest
 from datetime import datetime
-from pathlib import Path
 
 from tpotctl.checks import fixtures
+from tpotctl.tests import logstash_conf
 
-ROOT = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-CONFS = [ROOT / "docker" / "elk" / "logstash" / "dist" / name for name in ("logstash.conf", "http_output.conf")]
+CONF = logstash_conf.parse_file("ElasticPot")
 HEADER = 'if [type] == "ElasticPot"'
 
 # a date Elasticsearch takes for a field that is mapped as a date (dynamic date detection of
@@ -53,22 +51,20 @@ class ElasticPotTimestampTest(unittest.TestCase):
         self.assertEqual(stamp, "2026-11-07T10:00:00.123456+00:00Z")
         self.assertIsNone(ES_DATE.match(stamp), "Elasticsearch takes this date; the filters are not needed")
 
-    def test_both_pipelines_fix_it_before_they_parse_it(self):
-        for conf in CONFS:
-            with self.subTest(conf=conf.name):
-                text = block(conf)
-                fixes = GSUB.findall(text)
-                self.assertTrue(fixes, f"{conf.name} leaves the timestamp of ElasticPot as it is")
-                self.assertLess(text.index("gsub"), text.index("date {"), "the date is parsed before the fix")
-                stamp = written_timestamp()
-                for pattern, replacement in fixes:
-                    stamp = re.sub(pattern, replacement, stamp)
-                self.assertEqual(stamp, "2026-11-07T10:00:00.123456+00:00")
-                self.assertTrue(ES_DATE.match(stamp))
+    def test_the_filter_fixes_it_before_it_parses_it(self):
+        text = block(CONF)
+        fixes = GSUB.findall(text)
+        self.assertTrue(fixes, f"{CONF.name} leaves the timestamp of ElasticPot as it is")
+        self.assertLess(text.index("gsub"), text.index("date {"), "the date is parsed before the fix")
+        stamp = written_timestamp()
+        for pattern, replacement in fixes:
+            stamp = re.sub(pattern, replacement, stamp)
+        self.assertEqual(stamp, "2026-11-07T10:00:00.123456+00:00")
+        self.assertTrue(ES_DATE.match(stamp))
 
-    def test_both_pipelines_agree(self):
-        blocks = [" ".join(block(conf).split()) for conf in CONFS]
-        self.assertEqual(*blocks)
+    def test_one_filter_for_both_pipelines(self):
+        for sensor in (False, True):
+            self.assertIn(CONF, logstash_conf.pipeline_files("process", sensor))
 
 
 if __name__ == "__main__":

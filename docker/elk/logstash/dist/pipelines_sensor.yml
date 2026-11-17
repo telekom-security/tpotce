@@ -1,3 +1,8 @@
-- pipeline.id: http_output
-  path.config: "/usr/share/logstash/pipeline/http_output.conf"
+# SENSOR: the file inputs and the heartbeat, processed as on the HIVE (the same part files) and sent
+# to the HIVE. The part files are in pipeline/.
+- pipeline.id: files
+  path.config: "/usr/share/logstash/pipeline/{10-input-files,12-files,13-input-heartbeat}.conf"
+  pipeline.ecs_compatibility: disabled
+- pipeline.id: process
+  path.config: "/usr/share/logstash/pipeline/{14-input-process,40-parse-*,50-enrich,91-output-http}.conf"
   pipeline.ecs_compatibility: disabled

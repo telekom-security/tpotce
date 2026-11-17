@@ -1,15 +1,14 @@
-"""The Logstash grok for Endlessh (docker/elk/logstash/dist): every ACCEPT and CLOSE line of
+"""The Logstash grok for Endlessh (docker/elk/logstash/dist/pipeline): every ACCEPT and CLOSE line of
 endlessh.log must match, as a line that does not is dropped (_grokparsefailure). A tarpit keeps
 clients for minutes or hours, so the duration of a CLOSE line is far beyond 60 seconds.
 """
 
-import os
 import re
 import unittest
-from pathlib import Path
 
-ROOT = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-CONFS = [ROOT / "docker" / "elk" / "logstash" / "dist" / name for name in ("logstash.conf", "http_output.conf")]
+from tpotctl.tests import logstash_conf
+
+CONF = logstash_conf.parse_file("Endlessh")
 
 # the grok patterns the Endlessh block uses, as Logstash defines them (TIMESTAMP_ISO8601 shortened)
 GROK = {
@@ -47,20 +46,18 @@ def to_regex(pattern):
 class EndlesshGrokTest(unittest.TestCase):
 
     def test_every_line_matches(self):
-        for conf in CONFS:
-            patterns = [to_regex(p) for p in endlessh_patterns(conf)]
-            self.assertEqual(len(patterns), 2, conf.name)
-            for line in LINES:
-                with self.subTest(conf=conf.name, line=line):
-                    self.assertTrue(any(p.match(line) for p in patterns), f"{conf.name} drops: {line}")
+        patterns = [to_regex(p) for p in endlessh_patterns(CONF)]
+        self.assertEqual(len(patterns), 2, CONF.name)
+        for line in LINES:
+            with self.subTest(line=line):
+                self.assertTrue(any(p.match(line) for p in patterns), f"{CONF.name} drops: {line}")
 
     def test_duration_is_a_number(self):
-        for conf in CONFS:
-            with self.subTest(conf=conf.name):
-                self.assertIn("time=%{NUMBER:duration:float}", " ".join(endlessh_patterns(conf)))
+        self.assertIn("time=%{NUMBER:duration:float}", " ".join(endlessh_patterns(CONF)))
 
-    def test_both_pipelines_agree(self):
-        self.assertEqual(*(endlessh_patterns(conf) for conf in CONFS))
+    def test_one_grok_for_both_pipelines(self):
+        for sensor in (False, True):
+            self.assertIn(CONF, logstash_conf.pipeline_files("process", sensor))
 
 
 if __name__ == "__main__":

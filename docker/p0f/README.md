@@ -25,7 +25,7 @@ The `p0f` service in the T-Pot compose files runs with `network_mode: host` and 
   ```
 
   The filter drops outgoing SYNs without ACK by the packet direction of the kernel, so new or changed addresses (DHCP, SLAAC) are covered. p0f only tracks connections it saw the SYN of, so connections the host opens itself are not fingerprinted at all: neither the SYN+ACK nor the HTTP response of those servers. The host's own SYN+ACKs stay in, p0f needs them to follow incoming connections.
-- **Logstash** (`docker/elk/logstash/dist/logstash.conf`, `type: P0f`) parses the timestamp and renames `client_ip` / `client_port` / `server_ip` / `server_port` to `src_ip` / `src_port` / `dest_ip` / `dest_port`. Nothing else is changed: every field below comes from p0f itself.
+- **Logstash** (`docker/elk/logstash/dist/pipeline/40-parse-p0f.conf`, `type: P0f`) parses the timestamp and renames `client_ip` / `client_port` / `server_ip` / `server_port` to `src_ip` / `src_port` / `dest_ip` / `dest_port`. Nothing else is changed: every field below comes from p0f itself.
 
 ## Offline mode: pcap to JSON
 

@@ -170,9 +170,10 @@ option `max_size`, samples `0440`).
 
 The Logstash fixture test renders the sample event of every honeypot
 (`tpotctl/checks/fixtures`, the line a `tpot check` writes into the honeypot's
-log) and feeds each through `docker/elk/logstash/dist/logstash.conf` of the
-checkout, with its inputs and filters as they are and a file as output, in a
-container without network. Every event must keep the type of its input, carry
+log) and feeds each through the pipelines `files` and `process` of
+`docker/elk/logstash/dist/pipelines.yml` on the part files of `dist/pipeline/`
+of the checkout, with its inputs and filters as they are and a file as output,
+in a container without network. Every event must keep the type of its input, carry
 no tag ending in `failure` (grok, json, csv, date, GeoIP) and no `columnNN`
 field, have `src_ip`, the token or marker port of the check, the time of the
 line as `@timestamp` and a GeoIP location. It takes the T-Pot Logstash image
@@ -193,7 +194,7 @@ uses the Listbot stand-ins and the GeoIP database of the image, so a new
 `LS_VER` may change the GeoIP fields.
 
 `./docker/_tests/run.sh logstash_sensor` runs the same fixtures through the
-SENSOR pipeline (`http_output.conf`). It also measures the immediate first
+SENSOR pipelines (`pipelines_sensor.yml`). It also measures the immediate first
 heartbeat and the next one after 60 seconds, checking sequence numbers,
 version and Logstash process-start metadata. This test replaces only the
 HTTP output with a file; the HIVE routing is tested separately. Known

@@ -27,7 +27,7 @@ try:
 except ImportError:
     fcntl = None
 
-from tpotctl.tests import isolate
+from tpotctl.tests import isolate, logstash_conf
 
 isolate()
 
@@ -1716,7 +1716,7 @@ class ChecksUnderTheHoldTest(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 CATALOGUE = os.path.join(REPO, "compose", "tpot_services.yml")
-LOGSTASH_CONF = os.path.join(REPO, "docker", "elk", "logstash", "dist", "logstash.conf")
+LOGSTASH_INPUTS = logstash_conf.PIPELINE_DIR / "10-input-files.conf"
 TOKEN = probes.token_for("abc123")
 
 
@@ -1764,16 +1764,14 @@ class CoverageTest(unittest.TestCase):
             self.assertEqual(set(probe.handlers), targets, name)
 
     def test_the_logs_are_those_of_logstash(self):
-        with open(LOGSTASH_CONF, encoding="utf-8") as handle:
-            text = handle.read()
-        inputs = text[:text.index("\nfilter {")]
+        inputs = LOGSTASH_INPUTS.read_text(encoding="utf-8")
         found = re.findall(r'path => \["/data/([^"]+)"\]\s*(?:codec => \S+\s*)?type => "([^"]+)"', inputs)
         self.assertGreater(len(found), 30)
         types = dict(found)
         for name in inventory.honeypot_names(self.groups):
             kind, path = inventory.LOGS[name]
             matches = [pattern for pattern in types if fnmatch.fnmatch(path, pattern)]
-            self.assertTrue(matches, f"{name}: {path} is no input of logstash.conf")
+            self.assertTrue(matches, f"{name}: {path} is no input of {LOGSTASH_INPUTS.name}")
             self.assertEqual(types[matches[0]], kind, name)
 
     def test_event_classification_covers_exactly_the_catalogue_honeypots(self):
@@ -2669,11 +2667,8 @@ class FixturesTest(unittest.TestCase):
         with open(FIXTURE_SMOKE, encoding="utf-8") as handle:
             smoke = handle.read()
         self.assertIn("KNOWN = {}", smoke)
-        with open(os.path.join(REPO, "docker", "elk", "logstash", "dist", "logstash.conf"),
-                  encoding="utf-8") as handle:
-            conf = handle.read()
+        conf = logstash_conf.parse_file("ElasticPot").read_text(encoding="utf-8")
         block = conf[conf.index('  if [type] == "ElasticPot" {'):]
-        block = block[:block.index("\n# ")]
         self.assertLess(block.index('"timestamp", "\\+00:00Z$", "+00:00"'), block.index("date {"))
 
     def test_the_ports_the_attack_map_needs(self):
@@ -2782,25 +2777,24 @@ class FixturesTest(unittest.TestCase):
                 self.assertNotIn(word, text, name)
 
     def test_glutton_takes_session_and_legacy_times_in_both_pipelines(self):
-        blocks = []
-        for conf in ("logstash.conf", "http_output.conf"):
-            with open(os.path.join(os.path.dirname(LOGSTASH_CONF), conf), encoding="utf-8") as handle:
-                text = handle.read()
-            start = text.index('  if [type] == "Glutton" {')
-            blocks.append(text[start:text.index("\n  }\n", start) + 4])
-        self.assertEqual(blocks[0], blocks[1])
-        self.assertIn('match => [ "time", "ISO8601" ]', blocks[0])
-        self.assertIn('match => [ "ts", "UNIX" ]', blocks[0])
-        self.assertIn('match => [ "timestamp", "ISO8601" ]', blocks[0])
+        conf = logstash_conf.parse_file("Glutton")
+        for sensor in (False, True):
+            self.assertIn(conf, logstash_conf.pipeline_files("process", sensor))
+        text = conf.read_text(encoding="utf-8")
+        start = text.index('  if [type] == "Glutton" {')
+        block = text[start:text.index("\n  }\n", start) + 4]
+        self.assertIn('match => [ "time", "ISO8601" ]', block)
+        self.assertIn('match => [ "ts", "UNIX" ]', block)
+        self.assertIn('match => [ "timestamp", "ISO8601" ]', block)
         self.assertIn('"timestamp":"{ts:', fixtures.template("glutton"))
         for field in ("srcHost", "dstPort", "handlers", "decoded", "tls"):
-            self.assertIn('"' + field + '" =>', blocks[0])
+            self.assertIn('"' + field + '" =>', block)
 
     def test_the_smoke_test_feeds_every_fixture_through_logstash(self):
         self.assertTrue(os.access(FIXTURE_SMOKE, os.X_OK))
         with open(FIXTURE_SMOKE, encoding="utf-8") as handle:
             text = handle.read()
-        for needed in ("fixtures.names()", "fixtures.render(", "fixtures.log_file(", "logstash.conf",
+        for needed in ("fixtures.names()", "fixtures.render(", "fixtures.log_file(", "logstash_conf.pipeline_files(",
                        "network_mode: none", 'endswith("failure")', 'COLUMN = re.compile(r"column\\d+")',
                        'event.get("src_ip") != want["src_ip"]', "start_position", "sincedb_path"):
             self.assertIn(needed, text)
