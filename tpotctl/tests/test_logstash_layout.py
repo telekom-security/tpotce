@@ -81,6 +81,22 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual(sorted(set(hive) ^ set(sensor)),
                          [PIPELINE_DIR / "90-output-es.conf", PIPELINE_DIR / "91-output-http.conf"])
 
+    def test_process_reads_no_environment(self):
+        paths = [path for pattern in ("30-*.conf", "40-*.conf", "50-*.conf")
+                 for path in sorted(PIPELINE_DIR.glob(pattern))]
+        self.assertGreater(len(paths), 30)
+        for path in paths:
+            with self.subTest(file=path.name):
+                self.assertNotIn("${", path.read_text(encoding="utf-8"))
+
+    def test_files_sets_tpot_fields(self):
+        text = (PIPELINE_DIR / "12-files.conf").read_text(encoding="utf-8")
+        fields = re.findall(r'^\s*"(t-pot_[^"]+)" => "([^"]*)"', text, re.M)
+        self.assertEqual(fields, [("t-pot_ip_ext", "${MY_EXTIP}"),
+                                  ("t-pot_ip_int", "${MY_INTIP}"),
+                                  ("t-pot_hostname", "${MY_HOSTNAME}")])
+        self.assertEqual(re.findall(r'"(t-pot_[^"]+)" =>', text), [f for f, _ in fields])
+
     def test_no_monolith(self):
         for name in ("logstash.conf", "http_output.conf", "http_input.conf"):
             with self.subTest(file=name):
