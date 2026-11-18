@@ -252,6 +252,46 @@ class HeartbeatTest(unittest.TestCase):
         self.assertEqual(self.observed(heartbeat).host, "observed-host")
         self.assertEqual(self.observed(heartbeat, sensors.Sensor("sensor-one", host="ssh-alias")).host, "ssh-alias")
 
+    def refused(self, refused_age, heartbeat=None, sensor=None):
+        status = sensors.Status(refused={"sensor-one": self.NOW - refused_age})
+        if heartbeat:
+            status.heartbeats["sensor-one"] = heartbeat
+        return sensors.observe(sensor or sensors.Sensor("sensor-one"), status, "new-release", now=self.NOW)
+
+    def test_refused_newer_than_heartbeat(self):
+        observed = self.refused(10, self.heartbeat(60, version="new-release"))
+        self.assertEqual(observed.state, "refused")
+        self.assertTrue(observed.behind)
+        self.assertEqual(observed.version, "new-release")
+
+    def test_refused_older_than_window(self):
+        observed = self.refused(sensors.REFUSED_WINDOW, self.heartbeat(1000))
+        self.assertEqual(observed.state, "offline")
+        self.assertFalse(observed.behind)
+        self.assertEqual(self.refused(sensors.REFUSED_WINDOW).state, "unknown")
+        self.assertEqual(self.refused(sensors.REFUSED_WINDOW - 0.001).state, "refused")
+
+    def test_heartbeat_after_refusal(self):
+        observed = self.refused(10, self.heartbeat(5))
+        self.assertEqual(observed.state, "online")
+        self.assertFalse(observed.behind)
+        self.assertEqual(self.refused(10, self.heartbeat(10)).state, "online")
+
+    def test_refused_without_heartbeat(self):
+        observed = self.refused(0)
+        self.assertEqual(observed.state, "refused")
+        self.assertTrue(observed.behind)
+        self.assertEqual(self.refused(-60).state, "refused")             # clock step: still in the window
+        sensor = sensors.Sensor("sensor-one", access=False)
+        self.assertEqual(self.refused(0, sensor=sensor).state, "no access")
+
+    @unittest.skipUnless(textual, "Rich is not installed, run with the venv of tpot")
+    def test_refused_row_says_update_needed(self):
+        observed = self.refused(0)
+        (_name, cells), = sensors.table_rows([(sensors.Sensor("sensor-one"), "sensor-one", observed)])
+        self.assertTrue(cells[5].plain.endswith(" update needed (events refused)"))
+        self.assertEqual(cells[2].plain, "unknown (behind)")
+
     def test_cache_date_round_trip_and_legacy_registry_compatibility(self):
         repo = checkout(self)
         registry = sensors.Registry(repo)
@@ -313,6 +353,41 @@ class HeartbeatApiTest(unittest.TestCase):
         self.assertEqual((heartbeat.sensor_at, heartbeat.version, heartbeat.hostname),
                          ("2020-01-01T10:00:00Z", "old-release", "edge"))
         self.assertEqual(status.sensors["sensor-one"].last, "2026-11-01T12:00:00Z")
+
+    @staticmethod
+    def refused_hit(name="sensor-two", last_at="2026-11-01T12:01:00.123Z"):
+        return {"_id": name, "sort": [name], "_source": {"t-pot_sensor": name, "refused": {"last_at": last_at}}}
+
+    def test_refused_only_doc(self):
+        self.assertIsNone(sensors._heartbeat(self.refused_hit()))
+        both = self.hit()
+        both["_source"]["refused"] = {"last_at": "2026-11-01T12:05:00+00:00"}
+        status = self.fetch(self.answer([self.hit("sensor-a"), self.refused_hit(), both]))
+        self.assertEqual(status.problem, "")
+        self.assertEqual(set(status.heartbeats), {"sensor-a", "sensor-one"})
+        self.assertEqual(status.refused, {"sensor-two": 1793534460.123, "sensor-one": 1793534700})
+
+    def test_malformed_refusal_is_reported(self):
+        mutations = (
+            lambda hit: hit.update(_id="other"),
+            lambda hit: hit["_source"].update({"t-pot_sensor": "bad name"}),
+            lambda hit: hit["_source"].update(refused=None),
+            lambda hit: hit["_source"].update(refused="2026-11-01T12:00:00Z"),
+            lambda hit: hit["_source"].update(refused={}),
+            lambda hit: hit["_source"]["refused"].update(last_at="2026-11-01T12:00:00"),
+            lambda hit: hit["_source"]["refused"].update(last_at=5),
+            lambda hit: hit["_source"].pop("refused"),
+        )
+        for mutate in mutations:
+            hit = self.refused_hit("sensor-one")
+            mutate(hit)
+            with self.subTest(hit=hit):
+                status = self.fetch(self.answer([hit]))
+                self.assertIn("heartbeat", status.problem.lower())
+                self.assertEqual((status.heartbeats, status.refused), ({}, {}))
+        both = self.hit()
+        both["_source"]["refused"] = {"last_at": "not a date"}
+        self.assertIn("heartbeat", self.fetch(self.answer([both])).problem.lower())
 
     def test_failed_heartbeat_is_visible_without_losing_attack_events(self):
         status = self.fetch(OSError("heartbeat unavailable"))
@@ -780,6 +855,15 @@ class CliTest(unittest.TestCase):
             self.assertIn(word, text)
         self.assertNotIn("sending", text)
 
+    def test_list_shows_refused_sensor_as_update_needed(self):
+        status = sensors.Status(refused={"sensor-old-lynx": HeartbeatTest.NOW - 60})
+        with mock.patch.object(sensors, "fetch_status", return_value=status), \
+                mock.patch("time.time", return_value=HeartbeatTest.NOW), mock.patch.dict(os.environ, COLUMNS="220"):
+            code, text = self.run_cli("sensors", "list")
+        self.assertEqual(code, 0, text)
+        self.assertIn("update needed (events refused)", text)
+        self.assertIn("(behind)", text)
+
     def test_last_event_is_displayed_in_utc(self):
         status = sensors.Status(sensors={"sensor-old-otter": sensors.Seen("2026-11-01T12:00:00+02:00")})
         with mock.patch.object(sensors, "fetch_status", return_value=status), mock.patch.dict(os.environ, COLUMNS="220"):
@@ -1180,6 +1264,33 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(table.scroll_x, horizontal)
                 self.assertIn("offline since", table.get_row("sensor-old-otter")[5].plain)
                 self.assertIn("Sensors: 0 online, 1 offline, 1 behind", str(app.query_one("#status-info").render()))
+
+    async def test_refused_sensor_row_and_status_count(self):
+        from tpotctl import app as tapp, theme
+        repo, backend = self.heartbeat_backend()
+        backend.status_value.refused = {"sensor-old-lynx": HeartbeatTest.NOW - 60}
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        with mock.patch("tpotctl.sensors.time.time", return_value=HeartbeatTest.NOW) as now:
+            async with app.run_test(size=(80, 24)) as pilot:
+                await pilot.pause(0.5)
+                app.goto("sensors")
+                await pilot.pause(0.4)
+                table = app.query_one("#sensors-table")
+                lynx = table.get_row("sensor-old-lynx")
+                self.assertIn("update needed (events refused)", lynx[5].plain)
+                self.assertEqual(lynx[5].style, theme.color("warn"))
+                self.assertIn("(behind)", lynx[2].plain)
+                info = app.query_one("#status-info").render()
+                self.assertIn("Sensors: 1 online, 0 offline, 2 behind (1 refused)", str(info))
+                backend.status_value = sensors.Status(refused=backend.status_value.refused)
+                app.query_one("#sensors").load()
+                await pilot.pause(0.6)
+                self.assertIn("Sensors: 0 online, 0 offline, 1 behind (1 refused, 1 unknown)",
+                              str(app.query_one("#status-info").render()))
+                now.return_value = HeartbeatTest.NOW - 60 + sensors.REFUSED_WINDOW
+                await pilot.pause(2.2)
+                self.assertIn("unknown", table.get_row("sensor-old-lynx")[5].plain)
+                self.assertIn("(2 unknown)", str(app.query_one("#status-info").render()))
 
     async def test_heartbeat_errors_and_partial_removal_are_visible(self):
         from tpotctl import app as tapp

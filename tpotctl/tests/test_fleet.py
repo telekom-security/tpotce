@@ -35,6 +35,11 @@ class SelectionTest(unittest.TestCase):
         selected = fleet.select_targets(self.registry, self.status)
         self.assertEqual([sensor.name for sensor in selected], ["sensor-cache", "sensor-heartbeat"])
 
+    def test_refused_sensor_is_behind_and_selected(self):
+        self.status.refused["sensor-unknown"] = 1000
+        selected = fleet.select_targets(self.registry, self.status, now=1060)
+        self.assertEqual([sensor.name for sensor in selected], ["sensor-cache", "sensor-heartbeat", "sensor-unknown"])
+
     def test_all_selects_every_accessible_sensor(self):
         selected = fleet.select_targets(self.registry, self.status, all_sensors=True)
         self.assertEqual([sensor.name for sensor in selected],

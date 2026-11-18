@@ -549,6 +549,22 @@ mapping = request(es + "/tpot-sensor-status/_mapping")["tpot-sensor-status"]["ma
 assert mapping["refused"] == {"properties": {"last_at": {"type": "date"}}}, mapping["refused"]
 print("Old format: 100 events in 2 s, one refused.last_at, heartbeat and spoofed marker refused, no document")
 
+# the Manager reads refusals next to the heartbeats of the other sensors (R-16i)
+def manager_status():
+    observed = sensors.fetch_status(url=es, opener=manager_open)
+    assert not observed.problem, observed.problem
+    assert observed.heartbeats["batch-sensor-0000"].hostname == "", observed.heartbeats.get("batch-sensor-0000")
+    assert len([name for name in observed.heartbeats if name.startswith("batch-sensor-")]) == 1001
+    assert "sensor-fresh" not in observed.heartbeats and "sensor-old" in observed.heartbeats
+    assert observed.refused["sensor-fresh"] > 0 and observed.refused["sensor-old"] == utc(refused_at).timestamp()
+    return observed
+
+observed = manager_status()
+for name in ("sensor-old", "sensor-fresh"):
+    row = sensors.observe(sensors.Sensor(name), observed, "hive-release")
+    assert row.state == "refused" and row.behind, (name, row)
+print("Manager: refused sensors are update needed, the other sensors keep their heartbeats")
+
 # E1, case 5: a heartbeat of the new format keeps refused and is newer
 send(dict(heartbeat, heartbeat=dict(heartbeat["heartbeat"], sequence=2)), "sensor-old")
 wait_for(lambda: request(es + "/tpot-sensor-status/_doc/sensor-old")["_source"]["heartbeat"]["sequence"] == 2,
@@ -557,6 +573,12 @@ latest = request(es + "/tpot-sensor-status/_doc/sensor-old")["_source"]
 assert latest["refused"] == {"last_at": refused_at}, latest
 assert utc(latest["heartbeat"]["received_at"]) > utc(first["_source"]["heartbeat"]["received_at"]), latest
 print("A heartbeat after the refusal keeps refused.last_at")
+observed = manager_status()
+received = observed.heartbeats["sensor-old"].received_at
+assert received > observed.refused["sensor-old"], observed.heartbeats["sensor-old"]
+assert sensors.observe(sensors.Sensor("sensor-old"), observed, "hive-release", now=received).state == "online"
+assert sensors.observe(sensors.Sensor("sensor-fresh"), observed, "hive-release").state == "refused"
+print("Manager: a heartbeat after the refusal is online again")
 
 # E1, case 6: without a sensor name nothing stays, in neither format
 status_count = request(es + "/tpot-sensor-status/_count")["count"]

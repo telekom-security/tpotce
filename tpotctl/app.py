@@ -627,9 +627,12 @@ class StatusPane(Vertical):
             offline = sum(item.state == "offline" for item in active)
             behind = sum(item.behind for item in active)
             unknown = sum(item.state == "unknown" for item in active)
+            refused = sum(item.state == "refused" for item in active)
             info.append(f"Sensors: {online} online, {offline} offline, {behind} behind")
-            if unknown:
-                info.append(f" ({unknown} unknown)", style=theme.color("warn"))
+            notes = [text for count, text in ((refused, f"{refused} refused"), (unknown, f"{unknown} unknown"))
+                     if count]
+            if notes:
+                info.append(f" ({', '.join(notes)})", style=theme.color("warn"))
         else:
             info.append("Sensors: unknown", style=theme.color("warn"))
         if problem:

@@ -45,6 +45,7 @@ from tpotctl.envfile import EnvError, EnvFile
 SSH_PORT = 64295
 ES_URL = "http://127.0.0.1:64298"
 HEARTBEAT_TIMEOUT = 180
+REFUSED_WINDOW = 900        # seconds a refusal of the old format counts after its receipt
 SENSOR_NAME = re.compile(r"[A-Za-z0-9_.-]{1,512}")
 VERSION_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+-]{0,127}")
 COLUMNS = ("Sensor", "Host", "Version", "Heartbeat", "Last event", "State")
@@ -102,6 +103,7 @@ class Status:
     unlinked: Dict[str, Seen] = field(default_factory=dict)   # hostnames of events without t-pot_sensor
     problem: str = ""
     heartbeats: Dict[str, Heartbeat] = field(default_factory=dict)
+    refused: Dict[str, float] = field(default_factory=dict)    # HIVE receipt of the last refused old-format event
 
 
 @dataclass(frozen=True)
@@ -125,15 +127,19 @@ def observe(sensor: Sensor, status: Status, hive_version: str, *, takeable: bool
     # Old registries cached the HIVE's version, not a version read from the sensor.
     verified = heartbeat is not None or bool(checked_at)
     behind = bool(verified and version and hive_version and version != hive_version)
+    now = time.time() if now is None else now
+    refused_at = status.refused.get(sensor.name)
     if takeable:
         state = "to take over"
     elif not sensor.access:
         state = "no access"
+    elif (refused_at is not None and (heartbeat is None or refused_at > heartbeat.received_at)
+          and now - refused_at < REFUSED_WINDOW):
+        state, behind = "refused", True
     elif heartbeat is None:
         state = "unknown"
     else:
-        age = (time.time() if now is None else now) - heartbeat.received_at
-        state = "online" if age < HEARTBEAT_TIMEOUT else "offline"
+        state = "online" if now - heartbeat.received_at < HEARTBEAT_TIMEOUT else "offline"
     host = sensor.host or (heartbeat.hostname if heartbeat else "") or seen.hostname or sensor.hostname
     return Observation(host, version, heartbeat is None, checked_at, behind, heartbeat, seen.last, state)
 
@@ -158,7 +164,8 @@ def table_rows(observed: Iterable[Tuple[Sensor, str, Observation]]):
     from rich.text import Text
     from tpotctl import glyphs, theme
     styles = {"online": ("running", "ok"), "offline": ("stopped", "error"), "unknown": ("warn", "warn"),
-              "no access": ("fail", "error"), "to take over": ("warn", "warn")}
+              "no access": ("fail", "error"), "to take over": ("warn", "warn"), "refused": ("warn", "warn")}
+    texts = {"refused": "update needed (events refused)"}
     for sensor, label, item in observed:
         version = item.version or "unknown"
         if item.version and item.cached:
@@ -168,7 +175,7 @@ def table_rows(observed: Iterable[Tuple[Sensor, str, Observation]]):
         version = Text(version, style=theme.color("warn") if item.behind or not item.version else "")
         heartbeat = _time_text(item.heartbeat.received_at) if item.heartbeat else "-"
         icon, color = styles[item.state]
-        state = item.state
+        state = texts.get(item.state, item.state)
         if item.state == "offline" and item.heartbeat is not None:
             state += " since " + _time_text(item.heartbeat.received_at + HEARTBEAT_TIMEOUT)
         yield sensor.name, (label, item.host or "-", version, heartbeat,
@@ -661,12 +668,31 @@ def _search(url: str, query: dict, opener: Callable) -> dict:
     return answer
 
 
-def _heartbeat(hit: dict) -> Heartbeat:
+def _status_source(hit: dict) -> dict:
+    source = hit["_source"]
+    name = source["t-pot_sensor"]
+    if not isinstance(name, str) or not SENSOR_NAME.fullmatch(name) or hit["_id"] != name:
+        raise ValueError("invalid sensor identity")
+    return source
+
+
+def _refused(hit: dict) -> Optional[float]:
     try:
-        source = hit["_source"]
-        name = source["t-pot_sensor"]
-        if not isinstance(name, str) or not SENSOR_NAME.fullmatch(name) or hit["_id"] != name:
-            raise ValueError("invalid sensor identity")
+        if "refused" not in hit["_source"]:
+            return None
+        data = _status_source(hit)["refused"]
+        if not isinstance(data, dict):
+            raise ValueError("invalid refusal")
+        return _timestamp(data["last_at"])
+    except (KeyError, TypeError) as err:
+        raise ValueError("invalid refusal document") from err
+
+
+def _heartbeat(hit: dict) -> Optional[Heartbeat]:
+    try:
+        source = _status_source(hit)
+        if "heartbeat" not in source and "refused" in source:
+            return None
         data = source["heartbeat"]
         version, sequence = data["version"], data["sequence"]
         if not isinstance(version, str) or (version and not VERSION_TAG.fullmatch(version)):
@@ -685,9 +711,11 @@ def _heartbeat(hit: dict) -> Heartbeat:
         raise ValueError("invalid heartbeat document") from err
 
 
-def _heartbeats(url: str, opener: Callable) -> Dict[str, Heartbeat]:
+def _heartbeats(url: str, opener: Callable) -> Tuple[Dict[str, Heartbeat], Dict[str, float]]:
     query = {"size": 1000, "sort": [{"t-pot_sensor": "asc"}], "track_total_hits": False}
     result: Dict[str, Heartbeat] = {}
+    refused: Dict[str, float] = {}
+    seen = set()
     while True:
         answer = _search(f"{url}/tpot-sensor-status/_search?ignore_unavailable=true", query, opener)
         hits = answer.get("hits")
@@ -695,13 +723,17 @@ def _heartbeats(url: str, opener: Callable) -> Dict[str, Heartbeat]:
             raise ValueError("invalid heartbeat search response")
         page = hits["hits"]
         for hit in page:
-            heartbeat = _heartbeat(hit)
+            heartbeat, refused_at = _heartbeat(hit), _refused(hit)
             name = hit["_id"]
-            if name in result:
+            if name in seen:
                 raise ValueError("duplicate heartbeat document during pagination")
-            result[name] = heartbeat
+            seen.add(name)
+            if heartbeat is not None:
+                result[name] = heartbeat
+            if refused_at is not None:
+                refused[name] = refused_at
         if len(page) < query["size"]:
-            return result
+            return result, refused
         after = page[-1].get("sort")
         if after != [page[-1]["_id"]] or (query.get("search_after") and after <= query["search_after"]):
             raise ValueError("invalid heartbeat pagination")
@@ -716,7 +748,7 @@ def fetch_status(days: int = 7, url: str = ES_URL, opener: Callable = urllib.req
     except (OSError, ValueError) as err:
         problems.append(f"Elasticsearch events on {url} cannot be asked ({err})")
     try:
-        status.heartbeats = _heartbeats(url, opener)
+        status.heartbeats, status.refused = _heartbeats(url, opener)
     except (OSError, ValueError) as err:
         problems.append(f"Sensor heartbeats on {url} cannot be asked ({err})")
     status.problem = "\n".join(problems)
