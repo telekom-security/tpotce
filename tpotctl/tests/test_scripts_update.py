@@ -3241,7 +3241,8 @@ class ComposeAdoptTest(Scripts):
 
     def test_sensor_with_another_compose_file_only_warns(self):
         """TPOT_DOCKER_COMPOSE names another file: never written, the warning names it and a command that
-        adapts it (compose/customizer.py --adopt reads the file before it writes -o, so -o may be the file)."""
+        writes the adapted file next to it with the Python of the venv (the file itself stays the only copy
+        until the user puts the new one in place), every path quoted."""
         self.sensor()
         mine = "services:\n  logstash:\n    image: mine\n"
         self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=SENSOR\nTPOT_DOCKER_COMPOSE=./my-sensor.yml\n")
@@ -3253,9 +3254,19 @@ class ComposeAdoptTest(Scripts):
         self.assertEqual(self.adopt_calls(), [])
         self.assertEqual(self.read(os.path.join(self.tpotce, "my-sensor.yml")), mine)
         text = ("This SENSOR still runs Logstash: the HIVE refuses its events until ./my-sensor.yml uses fluentbit "
-                "(cd ~/tpotce && python3 compose/customizer.py --adopt ./my-sensor.yml --tpot-type SENSOR "
-                "-o ./my-sensor.yml).")
+                f"(cd ~/tpotce && '{self.python}' compose/customizer.py --adopt './my-sensor.yml' --tpot-type SENSOR "
+                "-o './my-sensor.yml.fluentbit' writes the adapted file next to it; check it, then put it in place "
+                "of ./my-sensor.yml).")
         self.assertIn(f"### [WARNING] - {text}", self.summary(result.stdout))
+        # a path with a space and a quote, under ~/: quoted after the ~/, which the shell expands
+        odd = "my sensor's.yml"
+        self.write(os.path.join(self.tpotce, ".env"), f"TPOT_TYPE=SENSOR\nTPOT_DOCKER_COMPOSE=~/{odd}\n")
+        self.write(os.path.join(self.home, odd), mine)
+        result = self.source_update('myRUNNING=1\nfuSENSOR_SHIPPER\nexit 0\n')
+        self.assertIn("--adopt ~/'my sensor'\\''s.yml' --tpot-type SENSOR -o ~/'my sensor'\\''s.yml.fluentbit' ",
+                      "\n".join(self.summary(result.stdout)))
+        self.assertEqual(self.read(os.path.join(self.home, odd)), mine)
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=SENSOR\nTPOT_DOCKER_COMPOSE=./my-sensor.yml\n")
         # the same file without logstash: nothing
         self.write(os.path.join(self.tpotce, "my-sensor.yml"), "services:\n  fluentbit:\n    image: x\n")
         result = self.source_update('myRUNNING=1\nfuSENSOR_SHIPPER\nexit 0\n')

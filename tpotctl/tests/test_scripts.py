@@ -1100,6 +1100,31 @@ class RestoreSensorShipperTest(RestoreScriptHarness):
         self.assertNotIn("ASKED:", out)
         self.assertIn(f"### [WARNING] - The configuration (.env and docker-compose.yml): {self.E9}", out)
 
+    def test_another_compose_file_with_logstash_only_warns(self):
+        """The restored .env names another compose file (never written by restore.sh): one that still runs
+        Logstash gets the summary warning of update.sh with its command, one without nothing."""
+        mine = "services:\n  logstash:\n    image: mine\n"
+        path = os.path.join(self.tpotce, "my-sensor.yml")
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(mine)
+        env = "TPOT_TYPE=SENSOR\nTPOT_DOCKER_COMPOSE=./my-sensor.yml\n"
+        python = os.path.join(self.home, "data", "tpotce", "venv", "bin", "python3")
+        text = ("This SENSOR still runs Logstash: the HIVE refuses its events until ./my-sensor.yml uses fluentbit "
+                f"(cd ~/tpotce && '{python}' compose/customizer.py --adopt './my-sensor.yml' --tpot-type SENSOR "
+                "-o './my-sensor.yml.fluentbit' writes the adapted file next to it; check it, then put it in place "
+                "of ./my-sensor.yml).")
+        for compose in (self.LOGSTASH, "# T-Pot: SENSOR\nservices:\n  fluentbit:\n    image: x\n"):
+            with self.subTest(compose=compose):
+                out = self.restore(env=env, compose=compose, terminal=True)
+                self.assertIn(f"### [WARNING] - The configuration (.env and docker-compose.yml): {text}", out)
+                self.assertNotIn("ASKED:", out)
+                self.assertEqual(self.calls(), "")
+                with open(path, encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), mine)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write("services:\n  fluentbit:\n    image: x\n")
+        self.assertNotIn("Logstash", self.restore(env=env, terminal=True))
+
     def test_nothing_to_do(self):
         """A HIVE with logstash, a SENSOR with fluentbit, a checkout without fluentbit: no question, no warning."""
         fluent = "# T-Pot: SENSOR\nservices:\n  fluentbit:\n    image: x\n"

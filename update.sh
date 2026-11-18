@@ -4141,14 +4141,29 @@ function fuSENSOR_RUNS_LOGSTASH () {   # $1 = compose file, $2 = TPOT_TYPE
 	[ "$2" == "SENSOR" ] && grep -qE "^  logstash:" "$1" 2>/dev/null
 }
 
+# A word for a command line shown to the user: in single quotes, a leading ~/ stays outside for the shell
+function fuSHELL_WORD () {   # $1 = word
+	local myWORD="$1" myHEAD=""
+	if [ "${myWORD:0:2}" == "~/" ];
+	  then
+	    myHEAD="~/"
+	    myWORD="${myWORD:2}"
+	fi
+	printf "%s'%s'" "${myHEAD}" "${myWORD//\'/\'\\\'\'}"
+}
+
 # The warning of E9 for a compose file ($1 as the .env names it); another file than docker-compose.yml gets
-# the command that adapts it (compose/customizer.py reads the whole file before it writes -o).
+# the command that writes the adapted file next to it with the Python of fuCUSTOMIZER_PYTHON (the file stays
+# the only copy of the user until they put the new one in place).
 function fuSENSOR_E9 () {   # $1 = compose file
+	local myPYTHON=""
 	if [ "$1" == "docker-compose.yml" ];
 	  then
 	    echo "This SENSOR still runs Logstash: the HIVE refuses its events until docker-compose.yml uses fluentbit (tpot customize or update.sh --adapt-compose)."
 	  else
-	    echo "This SENSOR still runs Logstash: the HIVE refuses its events until $1 uses fluentbit (cd ~/tpotce && python3 compose/customizer.py --adopt $1 --tpot-type SENSOR -o $1)."
+	    myPYTHON=$(fuCUSTOMIZER_PYTHON)
+	    [ "${myPYTHON}" == "python3" ] || myPYTHON=$(fuSHELL_WORD "${myPYTHON}")
+	    echo "This SENSOR still runs Logstash: the HIVE refuses its events until $1 uses fluentbit (cd ~/tpotce && ${myPYTHON} compose/customizer.py --adopt $(fuSHELL_WORD "$1") --tpot-type SENSOR -o $(fuSHELL_WORD "$1.fluentbit") writes the adapted file next to it; check it, then put it in place of $1)."
 	fi
 }
 

@@ -672,25 +672,52 @@ function fuDO_GIT () {
 	fi
 }
 
+# A word for a command line shown to the user: in single quotes, a leading ~/ stays outside for the shell
+# (the same as fuSHELL_WORD of update.sh)
+function fuSHELL_WORD () {   # $1 = word
+	local myWORD="$1" myHEAD=""
+	if [ "${myWORD:0:2}" == "~/" ];
+	  then
+	    myHEAD="~/"
+	    myWORD="${myWORD:2}"
+	fi
+	printf "%s'%s'" "${myHEAD}" "${myWORD//\'/\'\\\'\'}"
+}
+
 # E9: a SENSOR sends with Fluent Bit from this release on, the HIVE refuses the events of Logstash. A
 # restored docker-compose.yml of a SENSOR that still runs Logstash (an archive of 24.04.1; the one test of
 # update.sh fuSENSOR_RUNS_LOGSTASH and tpotinit: TPOT_TYPE SENSOR of the restored .env, a service logstash)
 # is offered the adaptation of compose/customizer.py --adopt (fluentbit in its place) at a terminal, no is
 # the default and -y does not adapt (it may lose content of the file); the archive keeps the original. Kept,
-# or not adaptable: the summary warns. Not where the checkout has no fluentbit (an older release) or the
-# .env names another compose file (restore.sh never writes that one).
+# or not adaptable: the summary warns. Not where the checkout has no fluentbit (an older release). The .env
+# naming another compose file (restore.sh never writes that one): one that runs Logstash only gets the
+# summary warning of update.sh (fuSENSOR_E9 there) with the command that adapts it next to it.
 function fuSENSOR_SHIPPER () {
-	local myFILE="${myTPOTDIR}/docker-compose.yml" myCONFIG="" myPYTHON="" myLINE="" myRC=0
+	local myFILE="${myTPOTDIR}/docker-compose.yml" myCONFIG="" myPYTHON="" myLINE="" myRC=0 myOTHER=""
 	local myE9="This SENSOR still runs Logstash: the HIVE refuses its events until docker-compose.yml uses fluentbit (tpot customize or update.sh --adapt-compose)."
 	[ "$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_TYPE)" == "SENSOR" ] || return 0
-	grep -qE "^  logstash:" "${myFILE}" 2>/dev/null || return 0
 	grep -qE "^  fluentbit:" "${myTPOTDIR}/compose/tpot_services.yml" 2>/dev/null || return 0
-	myCONFIG=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_DOCKER_COMPOSE)
-	[ -z "${myCONFIG}" ] || [ "$(basename "${myCONFIG}")" == "docker-compose.yml" ] || return 0
-	fuUI_WARN "This SENSOR runs Logstash: from this release on a SENSOR sends with Fluent Bit and the HIVE refuses the events of Logstash. The adaptation puts fluentbit in its place."
 	# the Python of compose/customizer.py: the venv of the T-Pot Manager, else python3 with PyYAML
 	myPYTHON="${XDG_DATA_HOME:-$HOME/.local/share}/tpotce/venv/bin/python3"
 	[ -x "${myPYTHON}" ] || myPYTHON="python3"
+	myCONFIG=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_DOCKER_COMPOSE)
+	if [ -n "${myCONFIG}" ] && [ "$(basename "${myCONFIG}")" != "docker-compose.yml" ];
+	  then
+	    case "${myCONFIG}" in
+	      /*) myOTHER="${myCONFIG}" ;;
+	      "~/"*) myOTHER="$HOME/${myCONFIG#\~/}" ;;
+	      *) myOTHER="${myTPOTDIR}/${myCONFIG#./}" ;;
+	    esac
+	    grep -qE "^  logstash:" "${myOTHER}" 2>/dev/null || return 0
+	    myLINE="python3"
+	    [ "${myPYTHON}" == "python3" ] || myLINE=$(fuSHELL_WORD "${myPYTHON}")
+	    myE9="This SENSOR still runs Logstash: the HIVE refuses its events until ${myCONFIG} uses fluentbit (cd ~/tpotce && ${myLINE} compose/customizer.py --adopt $(fuSHELL_WORD "${myCONFIG}") --tpot-type SENSOR -o $(fuSHELL_WORD "${myCONFIG}.fluentbit") writes the adapted file next to it; check it, then put it in place of ${myCONFIG})."
+	    fuUI_WARN "${myE9}"
+	    fuWARNED config "${myE9}"
+	    return 0
+	fi
+	grep -qE "^  logstash:" "${myFILE}" 2>/dev/null || return 0
+	fuUI_WARN "This SENSOR runs Logstash: from this release on a SENSOR sends with Fluent Bit and the HIVE refuses the events of Logstash. The adaptation puts fluentbit in its place."
 	if ! "${myPYTHON}" -c "import yaml" > /dev/null 2>&1;
 	  then
 	    fuUI_HINT "It cannot be adapted here: compose/customizer.py needs PyYAML (tpot setup builds the venv of the T-Pot Manager with it)."
