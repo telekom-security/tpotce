@@ -120,7 +120,7 @@ class SchemaTest(unittest.TestCase):
     def test_messages_match_tpotinit(self):
         values = example_values()
         values.update({"TPOT_PERSISTENCE": "true", "TPOT_PULL_POLICY": "sometimes", "WEB_USER": ""})
-        texts = {p.key: p.text for p in self.envschema.validate(values, [], self.schema)}
+        texts = {p.key: p.text for p in self.envschema.validate(values, ["nginx"], self.schema)}
         self.assertEqual(texts["TPOT_PERSISTENCE"], 'invalid value "true", allowed: on off.')
         self.assertEqual(texts["TPOT_PULL_POLICY"], 'invalid value "sometimes", allowed: always missing never '
                                                     'build daily weekly every_<duration>.')

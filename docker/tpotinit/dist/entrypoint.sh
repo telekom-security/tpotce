@@ -301,7 +301,7 @@ fi
 echo
 if ! fuENV_REPORT;
   then
-    if [ "${TPOT_TYPE}" != "SENSOR" ] && [ -z "${WEB_USER//[[:space:]]/}" ];
+    if [ "${TPOT_TYPE}" != "SENSOR" ] && [ -z "${WEB_USER//[[:space:]]/}" ] && fuCOMPOSE_HAS nginx;
       then
         web_users_hint /data
     fi

@@ -13,17 +13,24 @@ cases:
     services: [tpotinit, suricata, p0f, logstash]
     warnings: [LS_WEB_USER]
   - name: hive without web user
+    services: [nginx]
     set: {WEB_USER: ""}
     errors: [WEB_USER]
     warnings: [LS_WEB_USER]
   - name: web user not base64
+    services: [nginx]
     set: {WEB_USER: "not*base64"}
     errors: [WEB_USER]
     warnings: [LS_WEB_USER]
   - name: web user without htpasswd hash
+    services: [nginx]
     # base64 of user:password
     set: {WEB_USER: dXNlcjpwYXNzd29yZA==}
     errors: [WEB_USER]
+    warnings: [LS_WEB_USER]
+  - name: hive without nginx needs no web user (mobile)
+    services: [tpotinit, ciscoasa, cowrie, dionaea, elasticsearch, logstash, ewsposter]
+    set: {WEB_USER: ""}
     warnings: [LS_WEB_USER]
   - name: two web users and a sensor user
     set:
