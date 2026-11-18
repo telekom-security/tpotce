@@ -155,17 +155,81 @@ class LayoutTest(unittest.TestCase):
             "failure": {"properties": {"stage": keyword,
                                        "reason": {"type": "keyword", "ignore_above": 1024}}}})
 
-    def test_sensors_strip_headers(self):
-        # a body's @metadata (json codec) could forge routing flags: gone before sensor_heartbeat.rb reads
-        # the authenticated name from headers; the request ballast headers / host goes after it
-        code = uncommented(PIPELINE_DIR / "20-sensors.conf")
-        metadata = re.search(r'mutate \{\s*remove_field => \["\[@metadata\]"\]\s*\}', code)
-        ruby = code.find('path => "/usr/share/logstash/pipeline/sensor_heartbeat.rb"')
-        ballast = re.search(r'mutate \{\s*remove_field => \["headers", "host"\]\s*\}', code)
-        self.assertIsNotNone(metadata, "the body's @metadata removed")
-        self.assertIsNotNone(ballast, "headers and host removed")
-        self.assertTrue(0 < metadata.end() < ruby < ballast.start(), "@metadata, the ruby filter, headers / host")
-        self.assertEqual(code.count("remove_field"), 2)
+    def test_sensors_filter_order(self):
+        # the probe leaves no trace; a body's @metadata (json codec) could forge routing flags: gone before
+        # the marker of the request is read and before sensor_heartbeat.rb reads the authenticated name
+        # from headers; an event without a sensor name goes; the request ballast headers / host after that
+        blocks = filter_blocks(uncommented(PIPELINE_DIR / "20-sensors.conf"))
+        roles = [
+            ("probe", r'if \[@metadata\]\[tpot_probe\] \{\s*drop \{\}\s*\}'),
+            ("@metadata", r'mutate \{\s*remove_field => \["\[@metadata\]"\]\s*\}'),
+            ("marker", r'if \[headers\]\[x_tpot_ingest\] == "2" \{\s*mutate \{\s*'
+                       r'add_field => \{ "\[@metadata\]\[tpot_ingest\]" => "2" \}\s*\}\s*\}'),
+            ("sensor name", r'ruby \{\s*path => "/usr/share/logstash/pipeline/sensor_heartbeat\.rb"\s*\}'),
+            ("no sensor name", r'if !\[t-pot_sensor\] \{\s*ruby \{.*\}\s*drop \{\}\s*\}'),
+            ("headers / host", r'mutate \{\s*remove_field => \["headers", "host"\]\s*\}'),
+            ("format", r'if \[@metadata\]\[tpot_ingest\] == "2" \{.*\} else \{.*\}'),
+        ]
+        self.assertEqual(len(blocks), len(roles), blocks)
+        for block, (role, pattern) in zip(blocks, roles):
+            with self.subTest(role=role):
+                self.assertRegex(block, re.compile(r"\A\s*" + pattern + r"\s*\Z", re.S))
+
+    def test_sensors_route_by_marker(self):
+        # E1: the new format (X-TPot-Ingest 2) goes on to the processing pipeline, its raw line in message;
+        # the old one is refused: per sensor at most one scripted upsert of refused.last_at a minute into
+        # tpot-sensor-status, nothing else of it reaches an index
+        blocks = filter_blocks(uncommented(PIPELINE_DIR / "20-sensors.conf"))
+        unnamed = re.search(r'ruby \{\s*init => "@warned_at = nil"\s*code => \'(.*?)\'\s*\}', blocks[4], re.S)
+        self.assertIsNotNone(unnamed, "one warning at most a minute for the events without a sensor name")
+        self.assertIn("now - @warned_at >= 60", unnamed.group(1))
+        self.assertIn("logger.warn(", unnamed.group(1))
+        branch = re.fullmatch(r'\s*if \[@metadata\]\[tpot_ingest\] == "2" \{\s*mutate \{\s*'
+                              r'rename => \{ "log" => "message" \}\s*\}\s*\} else \{(.*)\}\s*', blocks[6], re.S)
+        self.assertIsNotNone(branch, "the new format: log becomes message")
+        old = branch.group(1)
+        reduce = old.find("ruby {")
+        throttle = re.search(r"throttle \{\n(.*?)^\s*\}\n", old, re.S | re.M)
+        dropped = re.search(r'if "throttled" in \[tags\] \{\s*drop \{\}\s*\}', old)
+        self.assertTrue(0 <= reduce < throttle.start() < dropped.start(), old)
+        # the reduction first: the sender's own tags and @timestamp cannot steer the throttle
+        self.assertIn('unless ["t-pot_sensor", "@timestamp"].include?(key)', old)
+        self.assertIn('event.set("[refused][last_at]", now.to_s)', old)
+        self.assertIn("event.timestamp = now", old)
+        self.assertEqual(dict(re.findall(r"^\s*(\w+) => (.+?)\s*$", throttle.group(1), re.M)),
+                         {"key": '"%{[t-pot_sensor]}"', "after_count": "1", "period": "60", "max_age": "120",
+                          "add_tag": '"throttled"'})
+
+        output = uncommented(PIPELINE_DIR / "21-sensors-output.conf")
+        route = re.fullmatch(r'\s*output \{\s*if \[@metadata\]\[tpot_ingest\] == "2" \{\s*'
+                             r'if \[type\] == "TPotSensorHeartbeat" \{(.*)\} else \{\s*'
+                             r'pipeline \{\s*send_to => \["tpot_process"\]\s*\}\s*\}\s*'
+                             r'\} else \{\s*elasticsearch \{(.*)\}\s*\}\s*\}\s*', output, re.S)
+        self.assertIsNotNone(route, "marked: heartbeats to the status, the rest to tpot_process; else refused")
+        self.assertNotIn("logstash-", output)
+        heartbeat, refused = route.groups()
+        self.assertIn("def refused = ctx._source.refused;\n", heartbeat)
+        self.assertRegex(heartbeat, r"ctx\._source = params\.event;\s*if \(refused != null\) \{\s*"
+                                    r"ctx\._source\.refused = refused;\s*\}")
+        self.assertIn("ctx.op = 'noop';", heartbeat)
+        settings = dict(re.findall(r"^\s*(\w+) => (\S.*?)\s*$", refused.split("script =>")[0], re.M))
+        self.assertEqual(settings, {"id": '"tpot_sensor_refused"', "hosts": '["elasticsearch:9200"]',
+                                    "index": '"tpot-sensor-status"', "document_id": '"%{[t-pot_sensor]}"',
+                                    "action": '"update"', "scripted_upsert": "true", "retry_on_conflict": "5"})
+        script = re.search(r'script => "(.*?)"', refused, re.S).group(1)
+        self.assertEqual([line.strip() for line in script.strip().splitlines()],
+                         ["if (ctx.op == 'create') {",
+                          "ctx._source['t-pot_sensor'] = params.event['t-pot_sensor'];",
+                          "}",
+                          "ctx._source.refused = params.event.refused;"])
+
+        template = json.loads((ROOT / "docker" / "tpotinit" / "dist" / "etc" / "ilm" / "tpot-sensor-status.json")
+                              .read_text(encoding="utf-8"))
+        self.assertEqual(template["version"], 2)
+        self.assertEqual(template["template"]["mappings"]["properties"]["refused"],
+                         {"properties": {"last_at": {"type": "date"}}})
+        self.assertIn("{11-input-sensors,20-sensors,21-sensors-output}.conf",
+                      logstash_conf.pipelines()["sensors"]["path.config"])
 
     def test_sensors_ingest_probe(self):
         # E2: the capability probe of a SENSOR (nginx /tpot-ingest) is an input of the sensors pipeline
@@ -185,7 +249,8 @@ class LayoutTest(unittest.TestCase):
         code = uncommented(PIPELINE_DIR / "20-sensors.conf")
         first = re.match(r"\s*filter \{\s*if \[@metadata\]\[tpot_probe\] \{\s*drop \{\}\s*\}\s*\}", code)
         self.assertIsNotNone(first, "the drop of the probe is the first filter of the sensors pipeline")
-        self.assertEqual(code.count("drop"), 1)
+        # the probe, the events without a sensor name, the throttled refusals
+        self.assertEqual(code.count("drop"), 3)
         # container network only: never published by a compose file
         composes = [ROOT / "docker-compose.yml", *sorted((ROOT / "compose").glob("*.yml")),
                     *sorted((ROOT / "docker").glob("*/docker-compose.yml")),
@@ -330,6 +395,18 @@ def uncommented(path):
     """The text of a part file without its comment lines."""
     return "".join(line for line in path.read_text(encoding="utf-8").splitlines(True)
                    if not line.lstrip().startswith("#"))
+
+
+def filter_blocks(code):
+    """The bodies of the top-level filter {} sections of a part file (without comments), in order."""
+    blocks = []
+    for found in re.finditer(r"^filter \{", code, re.M):
+        depth, position = 1, found.end()
+        while depth:
+            depth += {"{": 1, "}": -1}.get(code[position], 0)
+            position += 1
+        blocks.append(code[found.end():position - 1])
+    return blocks
 
 
 def golden_documents():

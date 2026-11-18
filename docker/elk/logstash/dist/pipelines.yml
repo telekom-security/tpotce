@@ -1,5 +1,7 @@
-# HIVE (STANDARD): the file inputs and the sensor input; the files pipeline hands its events to the
-# processing pipeline (pipeline-to-pipeline, address tpot_process). The part files are in pipeline/.
+# HIVE (STANDARD): the file inputs and the sensor input; the files pipeline and the sensors pipeline
+# (the raw lines of a SENSOR's Fluent Bit, X-TPot-Ingest 2; the old format it refuses) hand their
+# events to the processing pipeline (pipeline-to-pipeline, address tpot_process). The part files are
+# in pipeline/.
 # The processing pipeline hands the events it cannot parse to the pipeline failures (address
 # tpot_failures), which also reads the documents Elasticsearch rejected from its dead letter queue
 # (under the default path.data) and writes both into tpot-failures-*.

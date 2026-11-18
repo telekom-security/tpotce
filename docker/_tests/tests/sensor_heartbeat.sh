@@ -15,9 +15,14 @@ Usage: $0 [--image IMAGE] [--tpotinit-image IMAGE] [--timeout SEC] [--bind-ip IP
 
 Test the HIVE's actual HTTP input and Elasticsearch outputs in an isolated
 Docker network. Verify authenticated identity, status replacement, sampling,
-sensor/receive clocks, malformed frames and unchanged normal-event routing.
+sensor/receive clocks, malformed frames and the routing of sensor events:
+the new format (X-TPot-Ingest 2, gzipped JSON arrays as Fluent Bit sends
+them) through the processing pipeline into logstash-* as the golden
+documents, the old format (no marker) refused per sensor in the status
+(refused.last_at, at most once a minute), events without a sensor name gone.
 Uses local official images at the versions of the Dockerfiles; never builds
-or pulls. No ports are published; requests run inside the isolated network.
+or pulls. No ports are published; requests run inside the isolated network,
+which is internal: Listbot is never reached (stand-in dictionaries).
 --image overrides Logstash; --tpotinit-image provides bash/jq for the ILM job.
 The temporary Elasticsearch data is removed.
 --bind-ip is accepted for runner compatibility.
@@ -50,23 +55,30 @@ test_prepare_harness "${TEST_NAME}"
 test_enable_cleanup
 
 # The pipeline folder as the Dockerfile builds it (the part files of dist/pipeline/ and the script)
-# and a pipelines.yml with only the pipeline sensors of the HIVE as pipelines.yml has it. The index
-# templates come from tpotinit (es_retention.sh), which runs to its end before Logstash starts.
-mkdir -p "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/config"
+# and a pipelines.yml with the pipelines a sensor event reaches on the HIVE as pipelines.yml has them:
+# sensors, process (address tpot_process) and failures. The index templates come from tpotinit
+# (es_retention.sh), which runs to its end before Logstash starts. Stand-ins for the Listbot
+# dictionaries of the T-Pot image (translate of 50-enrich.conf needs a readable file).
+mkdir -p "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/config" "${TEST_TMP_ROOT}/listbot"
 cp "${LOGSTASH_DIR}/dist/pipeline/"*.conf "${LOGSTASH_DIR}/dist/sensor_heartbeat.rb" "${TEST_TMP_ROOT}/pipeline/"
 PYTHONPATH="${REPO_ROOT}" python3 - "${TEST_TMP_ROOT}/config/pipelines.yml" <<'PY'
 import sys
 
 from tpotctl.tests import logstash_conf
 
-settings = logstash_conf.pipelines()["sensors"]
-settings["path.config"] = '"' + settings["path.config"] + '"'
+lines = []
+for pipeline_id in ("sensors", "process", "failures"):
+    settings = dict(logstash_conf.pipelines()[pipeline_id])
+    settings["path.config"] = '"' + settings["path.config"] + '"'
+    lines += [("- " if number == 0 else "  ") + f"{key}: {value}\n"
+              for number, (key, value) in enumerate(settings.items())]
 with open(sys.argv[1], "w", encoding="utf-8") as handle:
-    handle.write("".join(("- " if number == 0 else "  ") + f"{key}: {value}\n"
-                         for number, (key, value) in enumerate(settings.items())))
+    handle.write("".join(lines))
 PY
-chmod 0755 "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/config"
-chmod 0644 "${TEST_TMP_ROOT}/pipeline/"* "${TEST_TMP_ROOT}/config/pipelines.yml"
+printf '"192.0.2.1": "stand-in"\n' > "${TEST_TMP_ROOT}/listbot/iprep.yaml"
+printf '"0": "stand-in"\n' > "${TEST_TMP_ROOT}/listbot/cve.yaml"
+chmod 0755 "${TEST_TMP_ROOT}/pipeline" "${TEST_TMP_ROOT}/config" "${TEST_TMP_ROOT}/listbot"
+chmod 0644 "${TEST_TMP_ROOT}/pipeline/"* "${TEST_TMP_ROOT}/config/pipelines.yml" "${TEST_TMP_ROOT}/listbot/"*.yaml
 
 cat > "${TEST_HARNESS_COMPOSE}" <<EOF
 services:
@@ -83,14 +95,18 @@ services:
     environment:
       LS_JAVA_OPTS: "-Xms512m -Xmx512m"
       XPACK_GEOIP_DOWNLOADER_ENABLED: "false"
-    # pipeline.workers: 1 of the sensors pipeline in pipelines.yml wins over this
-    command: ["--pipeline.workers=2"]
+      # the HIVE's own address: a sensor event keeps the sensor's (12-files.conf is not in these pipelines)
+      MY_EXTIP: "192.0.2.10"
+    # the folder of the dead letter queue input of failures, as the T-Pot entrypoint makes it; then the
+    # entrypoint of the image: pipeline.workers: 1 of the sensors pipeline in pipelines.yml wins over 2
+    entrypoint: ["/bin/bash", "-c", "mkdir -p /usr/share/logstash/data/dead_letter_queue/process && exec /usr/local/bin/docker-entrypoint --pipeline.workers=2"]
     depends_on:
       tpotinit:
         condition: service_completed_successfully
     volumes:
       - "${TEST_TMP_ROOT}/pipeline:/usr/share/logstash/pipeline:ro"
       - "${TEST_TMP_ROOT}/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro"
+      - "${TEST_TMP_ROOT}/listbot:/etc/listbot:ro"
   tpotinit:
     image: "${INIT_IMAGE}"
     entrypoint: ["/bin/bash", "/opt/tpot/bin/es_retention.sh"]
@@ -108,20 +124,28 @@ networks:
 EOF
 
 test_info "Starting isolated Logstash and Elasticsearch"
+STARTED="${SECONDS}"
 test_compose up -d >/dev/null
 python3 - "${TEST_HARNESS_COMPOSE}" "${TEST_PROJECT_NAME}" "${TEST_TIMEOUT}" "${DOCKER_ROOT}/.." <<'PY'
 import copy
+import gzip
 import io
 import json
+import os
+import re
 import sys
 import time
 import subprocess
 import urllib.error
+import zlib
 from datetime import datetime, timedelta, timezone
 
 compose, project, timeout, root = sys.argv[1:]
 sys.path.insert(0, root)
+sys.path.insert(0, os.path.join(root, "docker", "_tests", "lib"))
+import golden
 from tpotctl import sensors
+from tpotctl.checks import fixtures
 http = "http://logstash:64305"
 es = "http://127.0.0.1:9200"
 timeout = max(180, int(timeout))
@@ -165,8 +189,32 @@ def refresh():
     request(es + "/_refresh", method="POST")
 
 def send(events, sensor=None):
-    headers = {} if sensor is None else {"X-TPot-Sensor": sensor}
-    request(http, events, headers=headers)
+    # the new format as Fluent Bit sends it: a gzipped JSON array with the marker X-TPot-Ingest 2
+    deliver(gzip.compress(json.dumps(events if isinstance(events, list) else [events]).encode()),
+            {"Content-Encoding": "gzip", "X-TPot-Ingest": "2"}, sensor)
+
+def send_old(events, sensor=None):
+    # the old format of a 24.04.1 SENSOR (Logstash json_batch): no marker
+    deliver(json.dumps(events).encode(), {}, sensor)
+
+def deliver(body, headers, sensor):
+    command = ["docker", "compose", "-f", compose, "-p", project, "exec", "-T", "elasticsearch",
+               "curl", "--noproxy", "*", "-sS", "--max-time", "10", "-o", "/dev/null", "-w", "%{http_code}",
+               "-H", "content-type: application/json"]
+    for key, value in dict(headers, **({} if sensor is None else {"X-TPot-Sensor": sensor})).items():
+        command += ["-H", f"{key}: {value}"]
+    done = subprocess.run(command + ["--data-binary", "@-", http], input=body, capture_output=True, timeout=20)
+    assert done.returncode == 0 and done.stdout == b"200", (done.stdout, done.stderr)
+
+def line(message, **fields):
+    # a Cowrie line of a SENSOR: the raw JSON line in log, as Fluent Bit reads it
+    return dict({"type": "Cowrie", "log": json.dumps({"eventid": "cowrie.test", "message": message})}, **fields)
+
+def processed(message):
+    def probe():
+        refresh()
+        return any(hit["_source"].get("message") == message for hit in search("logstash-*"))
+    wait_for(probe, f"the event {message} did not reach logstash-*")
 
 def utc(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -187,11 +235,12 @@ for number in range(1, 11):
     event["heartbeat"]["sequence"] = number
     batch.append(event)
 send(batch, "sensor-a")
-send({"type": "Cowrie", "message": "normal-authenticated", "t-pot_sensor": "forged"}, "sensor-a")
-send({"type": "Cowrie", "message": "normal-anonymous", "t-pot_sensor": "forged",
-      "@metadata": {"tpot_heartbeat": True, "tpot_heartbeat_history": True}})
-send({"type": "Cowrie", "message": "normal-forged-metadata", "t-pot_sensor": "forged",
-      "@metadata": {"tpot_heartbeat": True}}, "sensor-c")
+send(line("normal-authenticated", **{"t-pot_sensor": "forged"}), "sensor-a")
+# without a sensor name the event goes (R-15d)
+send(line("normal-anonymous", **{"t-pot_sensor": "forged",
+                                 "@metadata": {"tpot_heartbeat": True, "tpot_heartbeat_history": True}}))
+send(line("normal-forged-metadata", **{"t-pot_sensor": "forged", "@metadata": {"tpot_heartbeat": True}}),
+     "sensor-c")
 
 def initial_results():
     refresh()
@@ -202,7 +251,7 @@ def initial_results():
     normal = {hit["_source"].get("message"): hit["_source"] for hit in logs}
     assert "sensor-c" not in {hit["_id"] for hit in status}, ("a body's @metadata made a status", status)
     if len(status) != 1 or len(history) != 2 or not {
-            "normal-authenticated", "normal-anonymous", "normal-forged-metadata"} <= set(normal):
+            "normal-authenticated", "normal-forged-metadata"} <= set(normal):
         return None
     if status[0]["_source"]["heartbeat"]["sequence"] != 10:
         return None
@@ -212,7 +261,7 @@ status, history, normal = wait_for(initial_results, "expected one status, two hi
 assert status[0]["_id"] == "sensor-a", status
 assert normal["normal-authenticated"]["t-pot_sensor"] == "sensor-a", normal
 assert "x_tpot_sensor" not in normal["normal-authenticated"].get("headers", {}), normal
-assert "t-pot_sensor" not in normal["normal-anonymous"], normal
+assert "normal-anonymous" not in normal, normal
 assert normal["normal-forged-metadata"]["t-pot_sensor"] == "sensor-c", normal
 for hit in search("logstash-*"):
     assert not {"headers", "host"}.intersection(hit["_source"]), hit
@@ -253,13 +302,8 @@ def counts():
 counted = counts()
 assert probe_input("GET") == (204, ["2"]), probe_input("GET")
 assert probe_input("POST", batch[:5] + [{"type": "Cowrie", "message": "through-the-probe"}]) == (204, ["2"])
-send({"type": "Cowrie", "message": "after-the-probe"}, "sensor-a")
-
-def after_probe():
-    refresh()
-    return any(hit["_source"].get("message") == "after-the-probe" for hit in search("logstash-*"))
-
-wait_for(after_probe, "normal event after the probe not processed")
+send(line("after-the-probe"), "sensor-a")
+processed("after-the-probe")
 expected = dict(counted, **{"logstash-*": counted["logstash-*"] + 1})
 assert counts() == expected, (counts(), expected)
 assert not [hit for hit in search("*") if hit["_source"].get("message") == "through-the-probe"]
@@ -295,13 +339,8 @@ send(bad, "invalid-sensor")
 unauthenticated = copy.deepcopy(base)
 unauthenticated["headers"] = {"x_tpot_sensor": "forged"}
 send(unauthenticated)
-send({"type": "Cowrie", "message": "after-invalid"}, "sensor-a")
-
-def invalid_processed():
-    refresh()
-    return any(hit["_source"].get("message") == "after-invalid" for hit in search("logstash-*"))
-
-wait_for(invalid_processed, "normal event after invalid frames not processed")
+send(line("after-invalid"), "sensor-a")
+processed("after-invalid")
 refresh()
 assert sorted(hit["_id"] for hit in search("tpot-sensor-status")) == ["sensor-a", "sensor-b"]
 assert len(search("tpot-sensor-heartbeat-*")) == 2
@@ -415,8 +454,128 @@ refresh()
 assert all(hit["_id"] != "sensor-a" for hit in search("tpot-sensor-status"))
 assert history_documents() == history_before
 print("Manager reads 1004 real status documents, separates clocks/events and removes status without history")
+
+# E1, cases 1-3: Fluent Bit records of fixtures (raw line in log, the sensor's own t-pot fields and
+# file) through tpot_process: the documents of the HIVE (golden), the sensor's address, its file
+names = fixtures.names()
+golden_documents = golden.load(os.path.join(root, "docker", "_tests", "golden", "logstash_fixtures.jsonl"))
+
+def record(name, ext="208.67.222.222", token=None):
+    number = names.index(name)
+    marker = 40000 + zlib.crc32(name.encode()) % 20000
+    token = token or "golden" + re.sub("[^a-z0-9]", "", name.lower())
+    return {"@timestamp": datetime.now(timezone.utc).isoformat(), "type": fixtures.logstash_type(name),
+            "log": fixtures.render(name, datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc), "8.8.8.8",
+                                   marker, 8080 + number, token),
+            "t-pot_log_path": "/data/" + fixtures.log_file(name), "t-pot_ip_ext": ext,
+            "t-pot_ip_int": "172.20.0.1", "t-pot_hostname": "tpot-fixtures"}
+
+send([record("cowrie"), record("cowrie", ext="9.9.9.9", token="extcowrie"), record("wordpot")], "sensor-golden")
+
+def golden_results():
+    refresh()
+    found = {}
+    for hit in search("logstash-*"):
+        text = json.dumps(hit["_source"])
+        for key, token in (("cowrie", "goldencowrie"), ("ext", "extcowrie"), ("wordpot", "goldenwordpot")):
+            if token in text:
+                found[key] = hit["_source"]
+    return found if len(found) == 3 else None
+
+found = wait_for(golden_results, "the fixtures of the sensor did not reach logstash-*")
+for key, name in (("cowrie", "cowrie"), ("wordpot", "wordpot")):
+    assert found[key]["t-pot_sensor"] == "sensor-golden", found[key]
+    problems = golden.compare({name: golden_documents[name]},
+                              {name: golden.normalize(found[key], golden.payload_keys(name))})
+    assert not problems, problems
+assert found["ext"]["t-pot_ip_ext"] == "9.9.9.9", found["ext"]
+assert found["ext"]["geoip_ext"]["ip"] == "9.9.9.9", found["ext"]
+assert found["ext"]["geoip_ext"] != golden_documents["cowrie"]["geoip_ext"], found["ext"]
+assert found["wordpot"]["t-pot_log_path"] == "/data/" + fixtures.log_file("wordpot"), found["wordpot"]
+assert found["wordpot"]["path"] == golden_documents["wordpot"]["path"] == "/goldenwordpot", found["wordpot"]
+print("New format: the golden documents, the sensor's own address and geoip_ext, its file and path")
+
+# E1, case 4: the old format is refused: 100 unmarked events of one sensor within 2 s (among them a
+# valid heartbeat and one that forges the marker in its body, R-15b/c) give one update of
+# refused.last_at in its status and nothing else
+heartbeat = copy.deepcopy(base)
+heartbeat["heartbeat"]["sequence"] = 1
+send(heartbeat, "sensor-old")
+wait_for(lambda: request(es + "/tpot-sensor-status/_doc/sensor-old")["found"], "no status of sensor-old")
+first = request(es + "/tpot-sensor-status/_doc/sensor-old")
+refresh()
+history_before = history_documents()
+old_heartbeat = copy.deepcopy(base)
+old_heartbeat["heartbeat"]["sequence"] = 5
+spoof = {"type": "Cowrie", "message": "refusedtoken spoof", "log": "refusedtoken spoof",
+         "@metadata": {"tpot_ingest": "2", "tpot_heartbeat": True}, "headers": {"x_tpot_ingest": "2"}}
+bodies = [[{"type": "Cowrie", "message": f"refusedtoken {number}", "log": f"refusedtoken {number}",
+            "tags": ["throttled"] if number == 3 else []} for number in range(start, start + 10)]
+          for start in range(0, 90, 10)]
+bodies.append([{"type": "Cowrie", "message": f"refusedtoken {number}", "log": f"refusedtoken {number}"}
+               for number in range(90, 98)] + [old_heartbeat])
+bodies.append(spoof)
+assert sum(len(body) if isinstance(body, list) else 1 for body in bodies) == 100
+script = ('start=$(date +%s%N); while IFS= read -r body; do '
+          'code=$(printf "%s" "$body" | curl --noproxy "*" -sS --max-time 10 -o /dev/null -w "%{http_code}" '
+          '-H "content-type: application/json" -H "X-TPot-Sensor: sensor-old" --data-binary @- '
+          + http + ') || exit 1; [ "$code" = 200 ] || exit 1; done; echo $(( ($(date +%s%N) - start) / 1000000 ))')
+before_refusal = datetime.now(timezone.utc)
+done = subprocess.run(["docker", "compose", "-f", compose, "-p", project, "exec", "-T", "elasticsearch",
+                       "bash", "-c", script], input="".join(json.dumps(body) + "\n" for body in bodies),
+                      capture_output=True, text=True, timeout=60)
+assert done.returncode == 0, done.stdout + done.stderr
+assert int(done.stdout.split()[-1]) <= 2000, ("the 100 events took longer than 2 s", done.stdout)
+send_old({"type": "Cowrie", "message": "refusedtoken fresh", "log": "refusedtoken fresh"}, "sensor-fresh")
+send(line("after-refused"), "sensor-a")
+processed("after-refused")
+refresh()
+after = request(es + "/tpot-sensor-status/_doc/sensor-old")
+assert after["_seq_no"] == first["_seq_no"] + 1, (first, after)
+refused_at = after["_source"]["refused"]["last_at"]
+assert before_refusal - timedelta(seconds=5) <= utc(refused_at) <= datetime.now(timezone.utc), after
+assert after["_source"]["heartbeat"] == first["_source"]["heartbeat"], (first, after)
+assert set(after["_source"]) == set(first["_source"]) | {"refused"}, after
+assert after["_source"]["refused"] == {"last_at": refused_at}, after
+assert history_documents() == history_before
+fresh = request(es + "/tpot-sensor-status/_doc/sensor-fresh")["_source"]
+assert set(fresh) == {"t-pot_sensor", "refused"} and fresh["t-pot_sensor"] == "sensor-fresh", fresh
+assert set(fresh["refused"]) == {"last_at"}, fresh
+for pattern in ("logstash-*", "tpot-failures-*", "tpot-sensor-heartbeat-*"):
+    assert not [hit for hit in search(pattern) if "refusedtoken" in json.dumps(hit)], pattern
+assert request(es + "/_count?ignore_unavailable=true", {"query": {"query_string": {"query": "refusedtoken"}}},
+               method="POST")["count"] == 0
+mapping = request(es + "/tpot-sensor-status/_mapping")["tpot-sensor-status"]["mappings"]["properties"]
+assert mapping["refused"] == {"properties": {"last_at": {"type": "date"}}}, mapping["refused"]
+print("Old format: 100 events in 2 s, one refused.last_at, heartbeat and spoofed marker refused, no document")
+
+# E1, case 5: a heartbeat of the new format keeps refused and is newer
+send(dict(heartbeat, heartbeat=dict(heartbeat["heartbeat"], sequence=2)), "sensor-old")
+wait_for(lambda: request(es + "/tpot-sensor-status/_doc/sensor-old")["_source"]["heartbeat"]["sequence"] == 2,
+         "the heartbeat after the refusal did not arrive")
+latest = request(es + "/tpot-sensor-status/_doc/sensor-old")["_source"]
+assert latest["refused"] == {"last_at": refused_at}, latest
+assert utc(latest["heartbeat"]["received_at"]) > utc(first["_source"]["heartbeat"]["received_at"]), latest
+print("A heartbeat after the refusal keeps refused.last_at")
+
+# E1, case 6: without a sensor name nothing stays, in neither format
+status_count = request(es + "/tpot-sensor-status/_count")["count"]
+send(line("nosensortoken new"))
+send_old({"type": "Cowrie", "message": "nosensortoken old", "log": "nosensortoken old"})
+send(line("after-nosensor"), "sensor-a")
+processed("after-nosensor")
+refresh()
+assert request(es + "/_count?ignore_unavailable=true", {"query": {"query_string": {"query": "nosensortoken"}}},
+               method="POST")["count"] == 0
+assert request(es + "/tpot-sensor-status/_count")["count"] == status_count
+print("Events without a sensor name leave no document")
 PY
 docker logs "${TEST_CONTAINER_NAME}" > "${TEST_TMP_ROOT}/logstash.log" 2>&1
 REJECTED="$(grep -c -F 'Rejected sensor heartbeat' "${TEST_TMP_ROOT}/logstash.log" || true)"
 (( REJECTED >= 20 )) || test_die "Malformed heartbeat rejections were not explicitly logged"
+# at most one warning a minute for the events without a sensor name (readiness pings, case 6)
+UNNAMED="$(grep -c -F 'Dropped sensor events without an authenticated sensor name' "${TEST_TMP_ROOT}/logstash.log" || true)"
+(( UNNAMED >= 1 && UNNAMED <= (SECONDS - STARTED) / 60 + 1 )) \
+  || test_die "Expected one warning a minute at most for events without a sensor name, got ${UNNAMED}"
+! grep -q -F 'Downloading latest' "${TEST_TMP_ROOT}/logstash.log" || test_die "Logstash tried to reach Listbot"
 test_ok "HIVE heartbeat HTTP/Elasticsearch integration passed"

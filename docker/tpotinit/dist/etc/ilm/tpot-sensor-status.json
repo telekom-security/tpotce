@@ -1,7 +1,7 @@
 {
   "index_patterns": ["tpot-sensor-status"],
   "priority": 100,
-  "version": 1,
+  "version": 2,
   "_meta": {"managed": true, "description": "T-Pot current sensor status (no expiry)"},
   "template": {
     "settings": {"index.number_of_shards": 1, "index.number_of_replicas": 0},
@@ -21,6 +21,11 @@
             "sequence": {"type": "long"},
             "started_at": {"type": "date"},
             "received_at": {"type": "date"}
+          }
+        },
+        "refused": {
+          "properties": {
+            "last_at": {"type": "date"}
           }
         }
       }

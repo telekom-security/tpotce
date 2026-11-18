@@ -238,12 +238,14 @@ assert m["tpot_version"] == sys.argv[1], m' "${VERSION}" <<<"$(es GET /_index_te
     || test_die "(c) the template logstash has no _meta.tpot_version ${VERSION}"
   test_ok "(c) the template logstash carries _meta.tpot_version ${VERSION}"
 
-  # one event through the sensors pipeline of the HIVE: the outputs run, the index takes T-Pot's template
-  event='{"type":"Cowrie","message":"logstash_es","src_ip":"192.0.2.1"}'
+  # one event of a SENSOR (the new format, its raw line in log) through the sensors pipeline of the
+  # HIVE into the processing pipeline: the outputs run, the index takes T-Pot's template
+  event='{"type":"Cowrie","log":"{\"message\":\"logstash_es\",\"src_ip\":\"192.0.2.1\"}"}'
   deadline=$(( SECONDS + WAIT_SECONDS ))
   while (( SECONDS < deadline )); do
     test_compose exec -T elasticsearch curl -s -o /dev/null -X POST "http://logstash:64305" \
-      -H 'Content-Type: application/json' --data-binary "${event}" || true
+      -H 'Content-Type: application/json' -H 'X-TPot-Ingest: 2' -H 'X-TPot-Sensor: logstash-es' \
+      --data-binary "${event}" || true
     es POST /logstash-*/_refresh >/dev/null || true
     if es GET '/logstash-*/_search?q=message:logstash_es&size=0' | grep -q '"value":[1-9]'; then
       found=1
