@@ -631,10 +631,12 @@ class RestoreChoiceTest(Scripts):
     def test_no_question_left_in_restore_sh(self):
         text = base.read("restore.sh")
         rest = text.replace(text[text.index("# >>> plain fallback"):text.index("# <<< plain fallback")], "")
-        # the groups are one list; the only yes / no left is the one before a loss of data (default no)
+        # the groups are one list; the only yes / no left are the one before a loss of data and the one
+        # that adapts a SENSOR still running Logstash (E9), both default no
         calls = [line.strip() for line in rest.splitlines()
                  if "fuUI_CONFIRM" in line and not line.lstrip().startswith("#")]
-        self.assertEqual(calls, ['fuUI_CONFIRM --default no "${3:-Accept this loss of data?}"'])
+        self.assertEqual(calls, ['fuUI_CONFIRM --default no "${3:-Accept this loss of data?}"',
+                                 'elif fuUI_CONFIRM --default no "Adapt docker-compose.yml for Fluent Bit?";'])
         loss = rest[rest.index("function fuLOSS_CONFIRM ()"):]
         self.assertIn("fuUI_CONFIRM --default no", loss[:loss.index("\n}\n")])
         self.assertIn("fuUI_CHOOSE_MANY --all", rest)
@@ -3101,6 +3103,192 @@ class ComposeAdoptTest(Scripts):
         self.assertTrue(self.compose().startswith("# T-Pot: CUSTOM\n# customizer: version=2 base=STANDARD\n"),
                         self.compose()[:200])
         self.assertIn("rebuilt for this release", out)
+
+    # --- E9: a SENSOR whose compose file still runs Logstash ---------------------------------------------
+
+    E9 = ("This SENSOR still runs Logstash: the HIVE refuses its events until docker-compose.yml uses fluentbit "
+          "(tpot customize or update.sh --adapt-compose).")
+    REASON = ("This SENSOR runs Logstash: from this release on a SENSOR sends with Fluent Bit and the HIVE refuses "
+              "the events of Logstash. The adaptation puts fluentbit in its place.")
+    SWAP = "logstash replaced by fluentbit: a SENSOR sends its logs with Fluent Bit"
+    # a customizer file of a SENSOR, edited by hand since (its checksum does not match): put back as it was
+    SENSOR_CUSTOM = ("# T-Pot: CUSTOM\n# customizer: version=2 base=SENSOR\n# customizer: sha256=" + "0" * 64
+                     + "\nservices:\n  logstash:\n    image: mine\n")
+    FLUENT = "# T-Pot: CUSTOM\n# customizer: version=2 base=SENSOR\nservices:\n  fluentbit:\n    image: x\n"
+
+    def sensor(self, catalogue=True):
+        """A SENSOR whose release has fluentbit in its catalogue (catalogue=False: an older release)."""
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=SENSOR\n")
+        self.write(os.path.join(self.tpotce, "compose", "tpot_services.yml"),
+                   "services:\n  fluentbit:\n    image: x\n  logstash:\n    image: x\n" if catalogue
+                   else "services:\n  logstash:\n    image: x\n")
+        self.write(os.path.join(self.home, "adopt_out"), self.FLUENT)
+        self.write(os.path.join(self.home, "adopt_report"), f"info: {self.SWAP}\n")
+
+    def adopt_calls(self):
+        return [line for line in self.calls().splitlines() if line.startswith("customizer ")]
+
+    def custom_run(self, extra=""):
+        """The CUSTOM file edited by hand on a SENSOR: put back as it was, then fuSENSOR_SHIPPER."""
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), self.SENSOR_CUSTOM)
+        archive = self.archive(self.SENSOR_CUSTOM, env="TPOT_TYPE=SENSOR\n")
+        return archive, (f'myRUNNING=1 {extra}\nfuCHECK_EDITION\nmyARCHIVE="{archive}"\nfuRESTORE_EDITION\n'
+                         'fuSENSOR_SHIPPER\necho "went on kept=${myCOMPOSE_KEPT}"\nexit 0\n')
+
+    def test_sensor_custom_with_logstash_and_adapt_compose_gets_fluentbit(self):
+        self.sensor()
+        archive, script = self.custom_run("myADAPT_COMPOSE=1")
+        result = self.source_update(script)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on kept=\n", result.stdout)          # stamped as a customizer file from now on
+        self.assertEqual(self.compose(), self.FLUENT)
+        calls = self.adopt_calls()
+        self.assertEqual(len(calls), 1, calls)
+        self.assertIn("--tpot-type SENSOR", calls[0])
+        self.assertNotIn("--dry-run", calls[0])
+        self.assertEqual(self.read(os.path.join(self.home, "adopted_input")), self.SENSOR_CUSTOM)
+        self.assertIn(self.REASON, out)
+        self.assertLess(out.index(self.SWAP), out.index("--adapt-compose: back up"))   # the info: line, shown
+        summary = self.summary(result.stdout)
+        self.assertIn("### [OK] - Your docker-compose.yml now sends with Fluent Bit instead of Logstash "
+                      f"(compose/customizer.py --adopt), the backup {archive} keeps your file.", summary)
+        self.assertIn(f"### {self.SWAP}", result.stdout.splitlines())          # an info of the summary
+        self.assertFalse([line for line in summary if "is put back as it was" in line], summary)   # adapted now
+        self.assertFalse([line for line in summary if self.E9 in line], summary)
+        self.assertFalse([line for line in summary if "Not carried over" in line], summary)   # info is no loss
+
+    def test_sensor_custom_with_logstash_without_tty_warns_and_goes_on(self):
+        self.sensor()
+        _archive, script = self.custom_run()
+        result = self.source_update(script)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertEqual(self.compose(), self.SENSOR_CUSTOM)                 # the file stays
+        self.assertIn("Not adapted: no terminal. ./update.sh -y --adapt-compose adapts it, -y does not.", out)
+        self.assertIn(f"### [WARNING] - {self.E9}", self.summary(result.stdout))
+        self.assertNotIn("Not updated", out)                                  # no cancel, no rollback
+        # a failed adoption: the same warning, the update goes on as well
+        for name in ("calls", "adopt_out"):
+            os.remove(os.path.join(self.home, name))
+        self.write(os.path.join(self.home, "adopt_rc"), "3\n")
+        _archive, script = self.custom_run("myADAPT_COMPOSE=1")
+        result = self.source_update(script)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertEqual(self.compose(), self.SENSOR_CUSTOM)
+        self.assertIn("compose/customizer.py --adopt ended with 3", out)
+        self.assertIn(f"### [WARNING] - {self.E9}", self.summary(result.stdout))
+
+    def test_sensor_custom_with_logstash_at_tty(self):
+        """At a terminal the question; enter keeps the file (the warning), 1 adapts."""
+        self.sensor()
+        _archive, script = self.custom_run()
+        out = self.pty(script, b"\r")
+        self.assertIn("Choice (1-2, enter = 2)", out)
+        self.assertIn("went on", out)
+        self.assertEqual(self.compose(), self.SENSOR_CUSTOM)
+        self.assertIn(f"### [WARNING] - {self.E9}", out)
+        os.remove(os.path.join(self.home, "calls"))
+        _archive, script = self.custom_run()
+        out = self.pty(script, b"1\r")
+        self.assertIn("went on", out)
+        self.assertEqual(self.compose(), self.FLUENT)
+        self.assertIn("Your docker-compose.yml now sends with Fluent Bit instead of Logstash", out)
+        self.assertNotIn(f"### [WARNING] - {self.E9}", out)
+
+    def test_sensor_shipper_is_silent_where_nothing_is_to_do(self):
+        """An edition copy with fluentbit, a HIVE with logstash, a release without fluentbit, an older
+        checkout: no question, no customizer, no warning."""
+        logstash = "# T-Pot: SENSOR\nservices:\n  logstash:\n    image: x\n"
+        cases = (("edition copy with fluentbit", "# T-Pot: SENSOR\nservices:\n  fluentbit:\n    image: x\n",
+                  "TPOT_TYPE=SENSOR\n", True, ""),
+                 ("HIVE", logstash, "TPOT_TYPE=HIVE\n", True, ""),
+                 ("no fluentbit in the release", logstash, "TPOT_TYPE=SENSOR\n", False, ""),
+                 ("older checkout", logstash, "TPOT_TYPE=SENSOR\n", True, "myOLDER_CHECKOUT=1"),
+                 ("backup only", logstash, "TPOT_TYPE=SENSOR\n", True, "myBACKUP_ONLY=1"))
+        for name, compose, env, catalogue, extra in cases:
+            with self.subTest(name):
+                self.sensor(catalogue)
+                self.write(os.path.join(self.tpotce, ".env"), env)
+                self.write(os.path.join(self.tpotce, "docker-compose.yml"), compose)
+                if os.path.exists(os.path.join(self.home, "calls")):
+                    os.remove(os.path.join(self.home, "calls"))
+                result = self.source_update(f'myRUNNING=1 {extra}\nfuSENSOR_SHIPPER\necho "went on"\nexit 0\n')
+                out = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 0, out)
+                self.assertIn("went on", out)
+                self.assertEqual(self.adopt_calls(), [])
+                self.assertNotIn("Logstash", out)
+                self.assertEqual(self.compose(), compose)
+
+    def test_sensor_edition_copy_of_the_release_asks_nothing(self):
+        """The SENSOR edition of the release has fluentbit: the copy after the update asks nothing."""
+        self.sensor()
+        fluent = "# T-Pot: SENSOR\nservices:\n  fluentbit:\n    image: x\n"
+        self.write(os.path.join(self.tpotce, "compose", "sensor.yml"), fluent)
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), fluent)
+        archive = self.archive(fluent, env="TPOT_TYPE=SENSOR\n")
+        result = self.source_update(f'myRUNNING=1\nfuCHECK_EDITION\nmyARCHIVE="{archive}"\nfuRESTORE_EDITION\n'
+                                    'fuSENSOR_SHIPPER\necho "went on"\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertEqual(self.adopt_calls(), [])
+        self.assertNotIn("Logstash", out)
+        self.assertEqual(self.compose(), fluent)
+
+    def test_sensor_with_another_compose_file_only_warns(self):
+        """TPOT_DOCKER_COMPOSE names another file: never written, the warning names it and a command that
+        adapts it (compose/customizer.py --adopt reads the file before it writes -o, so -o may be the file)."""
+        self.sensor()
+        mine = "services:\n  logstash:\n    image: mine\n"
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=SENSOR\nTPOT_DOCKER_COMPOSE=./my-sensor.yml\n")
+        self.write(os.path.join(self.tpotce, "my-sensor.yml"), mine)
+        result = self.source_update('myRUNNING=1 myADAPT_COMPOSE=1\nfuSENSOR_SHIPPER\necho "went on"\nexit 0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertEqual(self.adopt_calls(), [])
+        self.assertEqual(self.read(os.path.join(self.tpotce, "my-sensor.yml")), mine)
+        text = ("This SENSOR still runs Logstash: the HIVE refuses its events until ./my-sensor.yml uses fluentbit "
+                "(cd ~/tpotce && python3 compose/customizer.py --adopt ./my-sensor.yml --tpot-type SENSOR "
+                "-o ./my-sensor.yml).")
+        self.assertIn(f"### [WARNING] - {text}", self.summary(result.stdout))
+        # the same file without logstash: nothing
+        self.write(os.path.join(self.tpotce, "my-sensor.yml"), "services:\n  fluentbit:\n    image: x\n")
+        result = self.source_update('myRUNNING=1\nfuSENSOR_SHIPPER\nexit 0\n')
+        self.assertNotIn("Logstash", result.stdout + result.stderr)
+
+    def test_own_sensor_with_logstash_names_the_reason_and_e9_on_cancel(self):
+        self.sensor()
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), "services:\n  logstash:\n    image: mine\n")
+        result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\necho "went on"\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertNotIn("went on", out)
+        self.assertIn(self.REASON, out)
+        self.assertLess(out.index(self.REASON), out.index("Not adapted: no terminal"))
+        self.assertIn(self.SWAP, out)                                         # the info: line before the choice
+        summary = self.summary(result.stdout)
+        self.assertIn(f"### [WARNING] - {self.E9}", summary)
+        self.assertIn("### [FAILED] - Not updated: your docker-compose.yml is a compose file of your own and was "
+                      "not adapted, nothing was changed.", summary)
+        # a HIVE with its own file: neither text
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\n")
+        result = self.source_update('myRUNNING=1\nfuCHECK_EDITION\n')
+        self.assertNotIn(self.REASON, result.stdout + result.stderr)
+        self.assertNotIn(self.E9, result.stdout)
+
+    def test_info_lines_of_the_report_are_no_loss(self):
+        result = self.source_update('myADOPT_LINES=("info: a note" "kept-out: x: y" "dropped: z")\nfuADOPT_LOSSES\n')
+        self.assertEqual(result.stdout.splitlines(), ["x: y", "the service z"], result.stderr)
+
+    def test_sensor_shipper_runs_after_the_edition_before_the_pull(self):
+        main = base.read("update.sh").split("################\n# Main section #\n################", 1)[1]
+        self.assertIn("fuRESTORE_EDITION\nfuSENSOR_SHIPPER\n", main)
+        self.assertLess(main.index("fuSENSOR_SHIPPER\n"), main.index("fuUPDATER\n"))
 
 
 class BackupReportTest(Scripts):

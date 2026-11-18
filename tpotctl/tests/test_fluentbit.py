@@ -7,6 +7,7 @@ HIVE (docker/_tests/lib/hive_stub.py)."""
 import contextlib
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -204,6 +205,35 @@ show("beat2", heartbeat("tpot_heartbeat", 3.5, {type = "TPotSensorHeartbeat"}))
                                         "type": "Go-pot", "code": "2"})
         self.assertEqual(found["beat1"]["heartbeat.version"], "")
         self.assertNotIn("t-pot_hostname", found["beat1"])
+
+
+class TpotinitShipperTest(unittest.TestCase):
+    """E9: tpotinit warns about a SENSOR whose compose file still runs Logstash, or no fluentbit; the start goes on."""
+
+    E9 = ("# Warning: This SENSOR still runs Logstash: the HIVE refuses its events until docker-compose.yml uses "
+          "fluentbit (tpot customize or update.sh --adapt-compose).")
+    NONE = "# Warning: This SENSOR runs no fluentbit service: no logs are sent to the HIVE."
+    TPOTINIT = ROOT / "docker" / "tpotinit" / "dist"
+
+    def test_entrypoint_warns_for_a_sensor_and_goes_on(self):
+        text = (self.TPOTINIT / "entrypoint.sh").read_text(encoding="utf-8")
+        self.assertRegex(text, r'(?m)^if \[ "\$\{TPOT_TYPE\}" == "SENSOR" \];\n  then\n    fuSENSOR_SHIPPER\nfi$')
+        self.assertLess(text.index("if ! fuENV_REPORT;"), text.index("    fuSENSOR_SHIPPER\n"))
+
+    @unittest.skipUnless(shutil.which("bash"), "needs bash")
+    def test_warnings(self):
+        script = self.TPOTINIT / "bin" / "env_validate.sh"
+        for services, expected in ((["logstash"], self.E9), (["fluentbit"], ""), (["cowrie"], self.NONE),
+                                   (["fluentbit", "logstash"], self.E9)):
+            with self.subTest(services=services), tempfile.TemporaryDirectory() as folder:
+                compose = Path(folder) / "docker-compose.yml"
+                compose.write_text("services:\n" + "".join(f"  {s}:\n    image: x\n" for s in services),
+                                   encoding="utf-8")
+                result = subprocess.run([shutil.which("bash"), "-c", 'source "$1"; fuSENSOR_SHIPPER', "x", str(script)],
+                                        env={"PATH": os.environ.get("PATH", ""), "COMPOSE": str(compose)},
+                                        capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), expected)
 
 
 if __name__ == "__main__":

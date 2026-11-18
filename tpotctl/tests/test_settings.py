@@ -93,6 +93,30 @@ class SettingsTest(unittest.TestCase):
         values = self.load().values
         self.assertEqual((values["TPOT_BLACKHOLE"], values["TPOT_PERSISTENCE_CYCLES"]), ("ENABLED", "60"))
 
+    LOGSTASH_ON_SENSOR = ("This SENSOR runs Logstash instead of Fluent Bit: the HIVE refuses its events until the "
+                          "compose file uses fluentbit (tpot customize or update.sh --adapt-compose).")
+
+    def test_logstash_on_sensor(self):
+        """E9: a SENSOR whose compose file still names logstash gets a warning on TPOT_TYPE, a HIVE with
+        logstash and a SENSOR with fluentbit none; the warning never blocks a change."""
+        self.assertEqual(self.settings.logstash_on_sensor({"TPOT_TYPE": "SENSOR"}, {"logstash", "cowrie"}),
+                         self.LOGSTASH_ON_SENSOR)
+        self.assertEqual(self.settings.logstash_on_sensor({"TPOT_TYPE": "HIVE"}, {"logstash"}), "")
+        self.assertEqual(self.settings.logstash_on_sensor({"TPOT_TYPE": "SENSOR"}, {"fluentbit"}), "")
+        self.assertEqual(self.settings.logstash_on_sensor({}, {"logstash"}), "")
+        path = os.path.join(self.repo, "docker-compose.yml")
+        for compose, kind, found in (("services:\n  logstash:\n    image: x\n", "SENSOR", True),
+                                     ("services:\n  logstash:\n    image: x\n", "HIVE", False),
+                                     ("services:\n  fluentbit:\n    image: x\n", "SENSOR", False)):
+            with self.subTest(compose=compose, kind=kind):
+                with open(path, "w", encoding="utf-8") as out:
+                    out.write(compose)
+                current = self.load()
+                values = dict(current.values, TPOT_TYPE=kind)
+                warnings = [p for p in current.problems(values) if p.text == self.LOGSTASH_ON_SENSOR]
+                self.assertEqual([(p.level, p.key) for p in warnings], [("warning", "TPOT_TYPE")] if found else [])
+                self.assertEqual(current.blocking(warnings, {"TPOT_TYPE": kind}), [])
+
     def test_self_managed_compose_allows_saving_but_warns_in_validation_and_result(self):
         path = os.path.join(self.repo, "docker-compose.yml")
         with open(path, "w", encoding="utf-8") as out:

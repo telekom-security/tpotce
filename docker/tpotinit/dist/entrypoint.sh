@@ -308,6 +308,11 @@ if ! fuENV_REPORT;
     echo "# Aborting"
     exit 1
 fi
+# A SENSOR that still runs Logstash, or no fluentbit: a warning, the start goes on
+if [ "${TPOT_TYPE}" == "SENSOR" ];
+  then
+    fuSENSOR_SHIPPER
+fi
 echo
 
 # Data folder management

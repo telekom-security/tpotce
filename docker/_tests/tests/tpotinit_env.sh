@@ -141,6 +141,23 @@ if [[ "${cycles}" == "30:0" ]]; then
 else
   echo "FAIL sourced validation sets the default cycles (${cycles})"; failed=1
 fi
+
+# E9: the log shipper of a SENSOR, a warning only (rc 0, the start goes on)
+myE9='# Warning: This SENSOR still runs Logstash: the HIVE refuses its events until docker-compose.yml uses fluentbit (tpot customize or update.sh --adapt-compose).'
+myNONE='# Warning: This SENSOR runs no fluentbit service: no logs are sent to the HIVE.'
+for shipper in "logstash:${myE9}" "fluentbit:" "cowrie:${myNONE}" "fluentbit logstash:${myE9}"; do
+  services="${shipper%%:*}" expected="${shipper#*:}"
+  out="$(printf 'services:\n' > /tmp/shipper.yml
+         for service in ${services}; do printf '  %s:\n    image: x\n' "${service}" >> /tmp/shipper.yml; done
+         COMPOSE=/tmp/shipper.yml; source "${VALIDATE}"; set -e; fuSENSOR_SHIPPER; echo "rc=$?")"
+  lines="$(grep -c '^# Warning' <<<"${out}" || true)"
+  if grep -qx 'rc=0' <<<"${out}" && { [[ -z "${expected}" && "${lines}" -eq 0 ]] \
+       || { grep -qxF -- "${expected}" <<<"${out}" && [[ "${lines}" -eq 1 ]]; }; }; then
+    echo "ok   SENSOR shipper with ${services}"
+  else
+    echo "FAIL SENSOR shipper with ${services}: ${out}"; failed=1
+  fi
+done
 exit "${failed}"
 EOF
   chmod 0755 "${TEST_TMP_ROOT}/run.sh"

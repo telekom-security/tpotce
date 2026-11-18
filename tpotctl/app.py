@@ -75,6 +75,12 @@ class Backend:
     def tpot_type(self) -> str:
         return ops.env_values().get("TPOT_TYPE", "HIVE")
 
+    def shipper_problem(self) -> str:
+        """E9: the warning of a SENSOR whose compose file still runs Logstash, "" for none."""
+        from tpotctl import envschema, settings
+        env = ops.env_values()
+        return settings.logstash_on_sensor(env, envschema.compose_services(ops.compose_path(env=env)))
+
     def users(self):
         from tpotctl import users
         return users.load()
@@ -576,6 +582,11 @@ class StatusPane(Vertical):
         except ops.OpsError as err:
             groups = {}
             problem = "\n".join(part for part in (problem, str(err)) if part)
+        try:
+            shipper = backend.shipper_problem()
+        except Exception:      # a .env or compose file that cannot be read leaves Status as it is
+            shipper = ""
+        problem = "\n".join(part for part in (problem, shipper) if part)
         try:
             last_check, check_problem = backend.check_result(), ""
         except (ResultError, OSError, RuntimeError) as err:

@@ -672,6 +672,64 @@ function fuDO_GIT () {
 	fi
 }
 
+# E9: a SENSOR sends with Fluent Bit from this release on, the HIVE refuses the events of Logstash. A
+# restored docker-compose.yml of a SENSOR that still runs Logstash (an archive of 24.04.1; the one test of
+# update.sh fuSENSOR_RUNS_LOGSTASH and tpotinit: TPOT_TYPE SENSOR of the restored .env, a service logstash)
+# is offered the adaptation of compose/customizer.py --adopt (fluentbit in its place) at a terminal, no is
+# the default and -y does not adapt (it may lose content of the file); the archive keeps the original. Kept,
+# or not adaptable: the summary warns. Not where the checkout has no fluentbit (an older release) or the
+# .env names another compose file (restore.sh never writes that one).
+function fuSENSOR_SHIPPER () {
+	local myFILE="${myTPOTDIR}/docker-compose.yml" myCONFIG="" myPYTHON="" myLINE="" myRC=0
+	local myE9="This SENSOR still runs Logstash: the HIVE refuses its events until docker-compose.yml uses fluentbit (tpot customize or update.sh --adapt-compose)."
+	[ "$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_TYPE)" == "SENSOR" ] || return 0
+	grep -qE "^  logstash:" "${myFILE}" 2>/dev/null || return 0
+	grep -qE "^  fluentbit:" "${myTPOTDIR}/compose/tpot_services.yml" 2>/dev/null || return 0
+	myCONFIG=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_DOCKER_COMPOSE)
+	[ -z "${myCONFIG}" ] || [ "$(basename "${myCONFIG}")" == "docker-compose.yml" ] || return 0
+	fuUI_WARN "This SENSOR runs Logstash: from this release on a SENSOR sends with Fluent Bit and the HIVE refuses the events of Logstash. The adaptation puts fluentbit in its place."
+	# the Python of compose/customizer.py: the venv of the T-Pot Manager, else python3 with PyYAML
+	myPYTHON="${XDG_DATA_HOME:-$HOME/.local/share}/tpotce/venv/bin/python3"
+	[ -x "${myPYTHON}" ] || myPYTHON="python3"
+	if ! "${myPYTHON}" -c "import yaml" > /dev/null 2>&1;
+	  then
+	    fuUI_HINT "It cannot be adapted here: compose/customizer.py needs PyYAML (tpot setup builds the venv of the T-Pot Manager with it)."
+	    myRC=1
+	  else
+	    "${myPYTHON}" "${myTPOTDIR}/compose/customizer.py" --adopt "${myFILE}" --tpot-type SENSOR \
+	      -o "${myTMPDIR}/adopted.yml" --report < /dev/null > "${myTMPDIR}/adopt_report" || myRC=$?
+	    [ "${myRC}" -eq 0 ] || fuUI_HINT "It cannot be adapted automatically: compose/customizer.py --adopt ended with ${myRC}."
+	fi
+	if [ "${myRC}" -eq 0 ];
+	  then
+	    fuUI_HINT "The adaptation builds your docker-compose.yml anew from its services with fluentbit in place of logstash, the archive keeps the file it restored:"
+	    while IFS= read -r myLINE || [ -n "${myLINE}" ];
+	      do
+	        case "${myLINE}" in
+	          "") ;;
+	          "info: "*) fuUI_HINT "  ${myLINE#info: }" ;;
+	          "kept-out: "*) fuUI_HINT "  not carried over: ${myLINE#kept-out: }" ;;
+	          *) fuUI_HINT "  ${myLINE}" ;;
+	        esac
+	      done < "${myTMPDIR}/adopt_report"
+	    if [ ! -t 0 ];
+	      then
+	        fuUI_HINT "Not adapted: no terminal. tpot customize or update.sh --adapt-compose adapts it later, -y does not."
+	    elif fuUI_CONFIRM --default no "Adapt docker-compose.yml for Fluent Bit?";
+	      then
+	        if cp "${myTMPDIR}/adopted.yml" "${myFILE}";
+	          then
+	            fuUI_OK "docker-compose.yml now sends with Fluent Bit instead of Logstash (compose/customizer.py --adopt), the archive keeps the file it restored."
+	            return 0
+	        fi
+	        fuUI_ERROR "The adapted docker-compose.yml could not be put in place."
+	    fi
+	fi
+	fuUI_WARN "${myE9}"
+	fuWARNED config "${myE9}"
+	return 0
+}
+
 function fuDO_CONFIG () {
 	local myFILE="" myOLD="" myNEW="" myWAS=""
 	[ -z "${myDO_CONFIG}" ] && return
@@ -702,6 +760,7 @@ function fuDO_CONFIG () {
 	       && cp "${myTMPDIR}/docker-compose.yml" "${myTPOTDIR}/docker-compose.yml";
 	      then
 	        fuUI_OK "Wrote ${myTPOTDIR}/docker-compose.yml ($(head -1 "${myTPOTDIR}/docker-compose.yml"))."
+	        fuSENSOR_SHIPPER
 	      else
 	        fuUI_ERROR "Could not restore docker-compose.yml."
 	        fuFAILED config

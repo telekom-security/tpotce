@@ -1012,6 +1012,111 @@ class RestoreRetentionTest(RestoreScriptHarness):
         self.assertIn("--nonsense", result.stdout + result.stderr)
 
 
+# compose/customizer.py --adopt for restore.sh: the call into HOME/calls, the report on stdout, a SENSOR file
+# with fluentbit in -o (exit code from HOME/adopt_rc)
+RESTORE_ADOPT_STUB = textwrap.dedent('''\
+    import os, sys
+    home = os.environ["HOME"]
+    args = sys.argv[1:]
+    with open(os.path.join(home, "calls"), "a") as out:
+        out.write("customizer " + " ".join(args) + "\\n")
+    rc = int(open(os.path.join(home, "adopt_rc")).read()) if os.path.exists(os.path.join(home, "adopt_rc")) else 0
+    print("info: logstash replaced by fluentbit: a SENSOR sends its logs with Fluent Bit")
+    print("kept-out: logstash: environment X=1")
+    if rc == 0:
+        with open(args[args.index("-o") + 1], "w") as out:
+            out.write("# T-Pot: CUSTOM\\n# customizer: version=2 base=SENSOR\\nservices:\\n  fluentbit:\\n    image: x\\n")
+    sys.exit(rc)
+''')
+
+
+class RestoreSensorShipperTest(RestoreScriptHarness):
+    """E9: an archive of a SENSOR whose docker-compose.yml runs Logstash (24.04.1): restore.sh offers the
+    adaptation to fluentbit at a terminal (no is the default, -y does not adapt), otherwise the restored file
+    stays and the summary warns."""
+
+    E9 = ("This SENSOR still runs Logstash: the HIVE refuses its events until docker-compose.yml uses fluentbit "
+          "(tpot customize or update.sh --adapt-compose).")
+    LOGSTASH = "# T-Pot: SENSOR\nservices:\n  logstash:\n    image: dtagdevsec/logstash:24.04.1\n"
+
+    def setUp(self):
+        super().setUp()
+        compose = os.path.join(self.tpotce, "compose")
+        os.makedirs(compose)
+        with open(os.path.join(compose, "customizer.py"), "w", encoding="utf-8") as out:
+            out.write(RESTORE_ADOPT_STUB)
+        with open(os.path.join(compose, "tpot_services.yml"), "w", encoding="utf-8") as out:
+            out.write("services:\n  fluentbit:\n    image: x\n  logstash:\n    image: x\n")
+        # the venv of the T-Pot Manager: this Python
+        venv = os.path.join(self.home, "data", "tpotce", "venv", "bin")
+        os.makedirs(venv)
+        with open(os.path.join(venv, "python3"), "w", encoding="utf-8") as out:
+            out.write(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} \"$@\"\n")
+        os.chmod(os.path.join(venv, "python3"), 0o755)
+
+    def restore(self, env="TPOT_TYPE=SENSOR\n", compose=LOGSTASH, terminal=False):
+        manifest = MANIFEST.replace("24.04.2", "24.04.1")
+        archive = make_backup(self.home, {"MANIFEST": manifest, "env": env, "docker-compose.yml": compose})
+        result = self.bash(f"export XDG_DATA_HOME=\"$HOME/data\"\nmyARCHIVE='{archive}' myDO_CONFIG=1\n"
+                           "fuTMPDIR; fuTOC\nfuDO_CONFIG\nfuEND\n", terminal=terminal)
+        return result.stdout + result.stderr
+
+    def compose(self):
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
+            return handle.read()
+
+    def calls(self):
+        path = os.path.join(self.home, "calls")
+        if not os.path.exists(path):
+            return ""
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_at_a_terminal_yes_adapts_to_fluentbit(self):
+        open(os.path.join(self.home, "yes"), "w").close()
+        out = self.restore(terminal=True)
+        self.assertIn("ASKED: --default no", out)
+        self.assertIn("  fluentbit:", self.compose())
+        self.assertNotIn("logstash", self.compose())
+        self.assertIn("--tpot-type SENSOR", self.calls())
+        self.assertIn("logstash replaced by fluentbit: a SENSOR sends its logs with Fluent Bit", out)
+        self.assertIn("not carried over: logstash: environment X=1", out)
+        self.assertIn("docker-compose.yml now sends with Fluent Bit instead of Logstash", out)
+        self.assertNotIn(f"[WARNING] - The configuration (.env and docker-compose.yml): {self.E9}", out)
+
+    def test_no_at_a_terminal_or_no_terminal_keeps_the_file_and_warns(self):
+        for terminal in (True, False):
+            with self.subTest(terminal=terminal):
+                out = self.restore(terminal=terminal)
+                self.assertEqual(self.compose(), self.LOGSTASH)
+                self.assertEqual("ASKED: --default no" in out, terminal, out)
+                self.assertIn(f"### [WARNING] - The configuration (.env and docker-compose.yml): {self.E9}", out)
+        # the customizer fails: the same warning
+        with open(os.path.join(self.home, "adopt_rc"), "w", encoding="utf-8") as out:
+            out.write("3")
+        open(os.path.join(self.home, "yes"), "w").close()
+        out = self.restore(terminal=True)
+        self.assertEqual(self.compose(), self.LOGSTASH)
+        self.assertNotIn("ASKED:", out)
+        self.assertIn(f"### [WARNING] - The configuration (.env and docker-compose.yml): {self.E9}", out)
+
+    def test_nothing_to_do(self):
+        """A HIVE with logstash, a SENSOR with fluentbit, a checkout without fluentbit: no question, no warning."""
+        fluent = "# T-Pot: SENSOR\nservices:\n  fluentbit:\n    image: x\n"
+        for name, env, compose, catalogue in (("HIVE", "TPOT_TYPE=HIVE\n", self.LOGSTASH, True),
+                                              ("fluentbit", "TPOT_TYPE=SENSOR\n", fluent, True),
+                                              ("older checkout", "TPOT_TYPE=SENSOR\n", self.LOGSTASH, False)):
+            with self.subTest(name):
+                if not catalogue:
+                    with open(os.path.join(self.tpotce, "compose", "tpot_services.yml"), "w",
+                              encoding="utf-8") as out:
+                        out.write("services:\n  logstash:\n    image: x\n")
+                out = self.restore(env=env, compose=compose, terminal=True)
+                self.assertEqual(self.compose(), compose)
+                self.assertEqual(self.calls(), "")
+                self.assertNotIn("Logstash", out)
+
+
 # tar for restore.sh: what extracts data/* is recorded in HOME/tar_calls and does nothing, the rest
 # is the real tar
 REAL_TAR = shutil.which("tar") or "/usr/bin/tar"
@@ -2476,14 +2581,16 @@ class DataLossTest(Harness):
         self.assertTrue(re.search(r"^  --adapt-compose  ", result.stdout, re.M), result.stdout)
         flat = " ".join(result.stdout.split())
         self.assertIn("[--accept-data-loss-file <file>] [--adapt-compose]", flat)
-        self.assertIn("For a docker-compose.yml of your own (no edition, not built by compose/customizer.py): back "
-                      "up your compose file and adapt it to this release without a question; what the run lists "
-                      "as kept-out is not carried over. At a terminal the run asks (default: cancel), -y does not "
-                      "choose.", flat)
+        self.assertIn("For a docker-compose.yml of your own (no edition, not built by compose/customizer.py), and "
+                      "on a SENSOR whose compose file still runs Logstash (adapted to fluentbit): back up your "
+                      "compose file and adapt it to this release without a question; what the run lists as "
+                      "kept-out is not carried over. At a terminal the run asks (default: cancel, on the SENSOR: "
+                      "keep), -y does not choose.", flat)
         self.assertIn("A file of the customizer before v2 (# T-Pot: CUSTOM EDITION) is rebuilt without a question.",
                       flat)
         cli = " ".join(read("tpotctl/cli.py").split())
-        self.assertIn('"your own it adapts after a yes, without a terminal with --adapt-compose)"', cli)
+        self.assertIn('"your own, or one of a SENSOR that still runs Logstash, it adapts after a yes, " '
+                      '"without a terminal with --adapt-compose)"', cli)
         app = " ".join(read("tpotctl/app.py").split())
         self.assertIn("Adapt lets update.sh back up your compose file and adapt it to this release (update.sh "
                       '" "--adapt-compose)', app)

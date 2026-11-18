@@ -66,6 +66,20 @@ fuCOMPOSE_HAS() {
     grep -qE "^  (${myPATTERN}):" "${COMPOSE}" 2>/dev/null
 }
 
+# E9: a SENSOR sends its logs with fluentbit, the HIVE refuses the events of Logstash. Called by the
+# entrypoint on a SENSOR after the validation; it only warns (always rc 0), the start goes on. The same
+# test as update.sh / restore.sh (fuSENSOR_RUNS_LOGSTASH) and tpotctl.settings.logstash_on_sensor.
+fuSENSOR_SHIPPER() {
+    if fuCOMPOSE_HAS logstash;
+      then
+        echo "# Warning: This SENSOR still runs Logstash: the HIVE refuses its events until docker-compose.yml uses fluentbit (tpot customize or update.sh --adapt-compose)."
+    elif ! fuCOMPOSE_HAS fluentbit;
+      then
+        echo "# Warning: This SENSOR runs no fluentbit service: no logs are sent to the HIVE."
+    fi
+    return 0
+}
+
 # A htpasswd line T-Pot takes: name:hash with a hash of bcrypt, apr1, SHA-256 / SHA-512 crypt or SHA-1
 # (the SCHEMES of tpotctl/users.py); the entrypoint counts the lines of a .lost file with it too
 myENV_HTPASSWD='^([^:[:space:]]+):(\$apr1\$|\$2[aby]\$|\$5\$|\$6\$|\{SHA\})'

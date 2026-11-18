@@ -73,9 +73,12 @@ myACCEPT_FILE=""
 myLOSSES=0
 
 # --adapt-compose: a docker-compose.yml of your own (no edition, not built by compose/customizer.py) is
-# backed up and adapted to the release without a question (fuADOPT_COMPOSE); at a terminal the run asks,
+# backed up and adapted to the release without a question (fuADOPT_COMPOSE), and so is the compose file of
+# a SENSOR that still runs Logstash (fuSENSOR_SHIPPER: fluentbit in its place); at a terminal the run asks,
 # the choice "adapt" sets it as well, so a restarted update.sh gets it (fuRESTART_ARGS). -y never does.
 myADAPT_COMPOSE=""
+# a file of your own on a SENSOR that still runs Logstash (fuADOPT_COMPOSE): a cancel names E9 as well
+mySENSOR_LOGSTASH=""
 # the report lines of the last compose/customizer.py --adopt (fuADOPT_RUN), set once the question was
 # answered in this run (fuADOPT_COMPOSE), and a Ctrl+C at that question (a no)
 myADOPT_LINES=()
@@ -434,10 +437,11 @@ hands one over), keys backups, elastic, elastic-step, images.
 A loss it does not name, or older backups it does not all
 name, is not confirmed." \
 	  --opt "--adapt-compose" "For a docker-compose.yml of your own (no edition, not built by
-compose/customizer.py): back up your compose file and adapt it to
-this release without a question; what the run lists as kept-out
-is not carried over. At a terminal the run asks (default: cancel),
--y does not choose." \
+compose/customizer.py), and on a SENSOR whose compose file still
+runs Logstash (adapted to fluentbit): back up your compose file
+and adapt it to this release without a question; what the run
+lists as kept-out is not carried over. At a terminal the run asks
+(default: cancel, on the SENSOR: keep), -y does not choose." \
 	  --opt "-h" "Show this help message" \
 	  --example "./update.sh -y" "Update from the branch of ~/tpotce, T-Pot stays stopped afterwards" \
 	  --example "./update.sh -y -s --full" "Update with all of data/ in the backup and start T-Pot again" \
@@ -458,7 +462,9 @@ or the checkout goes back where it can and T-Pot starts again where tpot.service
 (compose/customizer.py --adopt, the backup keeps your file) only after a yes at a terminal or with
 --adapt-compose; otherwise it stops with exit 1 before it changes anything (after a handover the
 checkout goes back and T-Pot starts again where tpot.service is enabled). A file of the customizer
-before v2 (# T-Pot: CUSTOM EDITION) is rebuilt without a question." \
+before v2 (# T-Pot: CUSTOM EDITION) is rebuilt without a question. A SENSOR whose compose file
+still runs Logstash is offered the same adaptation (fluentbit in its place); kept, the run goes
+on and its summary warns: the HIVE refuses the events of Logstash." \
 	  --note "Exit 5 is every refusal of the Elasticsearch checks, also one that loses nothing (no room
 for the step's images, a failed pull, a step that did not go through). The step waits up to
 20 min, TPOT_ES_STEP_WAIT=<seconds> (60 to 86400) sets another bound."
@@ -3821,7 +3827,8 @@ function fuADOPT_WHY () {   # $1 = exit code
 	fi
 }
 
-# The report lines of the adaptation, one hint each: what the release removed (dropped), what it keeps of
+# The report lines of the adaptation, one hint each: a note of the customizer (info, e.g. the swap of
+# logstash for fluentbit on a SENSOR; never a loss), what the release removed (dropped), what it keeps of
 # yours (port), what the release changes (moved), what is new in it (new), and last what it does not carry
 # over (fuADOPT_LOSSES). $1 = before (the question: says so where nothing is lost) | after (the adaptation)
 function fuADOPT_REPORT () {
@@ -3829,6 +3836,7 @@ function fuADOPT_REPORT () {
 	for myLINE in ${myADOPT_LINES[@]+"${myADOPT_LINES[@]}"};
 	  do
 	    case "${myLINE}" in
+	      "info: "*) fuUI_HINT "  ${myLINE#info: }" ;;
 	      "dropped: "*" (removed in this release)") fuUI_HINT "  dropped: ${myLINE#dropped: }" ;;
 	      "port: "*) fuUI_HINT "  your host port, kept: ${myLINE#port: }" ;;
 	      "moved: "*) fuUI_HINT "  changed by the release: ${myLINE#moved: }" ;;
@@ -3847,16 +3855,21 @@ function fuADOPT_REPORT () {
 	fi
 }
 
+# The TPOT_TYPE in effect: after a handover the one of the env of the archive, else the one of the .env.
+function fuADOPT_TYPE () {
+	if [ -n "${myPREPARED}" ] && [ -n "${myARCHIVE}" ];
+	  then
+	    fuARCHIVE_ENV "${myARCHIVE}" TPOT_TYPE
+	  else
+	    fuENV_VALUE "$HOME/tpotce/.env" TPOT_TYPE
+	fi
+}
+
 # The ways to adapt a compose file of your own yourself, for the cancel: an edition, the customizer, or
 # your file edited along the diff and the points the adaptation leaves out.
 function fuADOPT_WAYS () {
 	local myLINE="" myBASE="standard"
-	if [ -n "${myPREPARED}" ] && [ -n "${myARCHIVE}" ];
-	  then
-	    [ "$(fuARCHIVE_ENV "${myARCHIVE}" TPOT_TYPE)" != "SENSOR" ] || myBASE="sensor"
-	  else
-	    [ "$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_TYPE)" != "SENSOR" ] || myBASE="sensor"
-	fi
+	[ "$(fuADOPT_TYPE)" != "SENSOR" ] || myBASE="sensor"
 	fuUI_HINT "Adapt it yourself, then run the update again:"
 	fuUI_HINT "  an edition of the release: tpot edition set <edition>, or cp compose/<edition>.yml docker-compose.yml"
 	fuUI_HINT "  your selection of services: compose/customizer.py"
@@ -3876,6 +3889,7 @@ function fuADOPT_WAYS () {
 function fuADOPT_CANCEL () {   # $1 = check | restore
 	local myRC=0
 	trap - INT
+	[ -z "${mySENSOR_LOGSTASH}" ] || fuDID warn "$(fuSENSOR_E9 docker-compose.yml)"
 	echo
 	if [ "$1" == "check" ];
 	  then
@@ -4015,9 +4029,10 @@ function fuADOPT_GREW () {
 # The adopted file in place of ~/tpotce/docker-compose.yml, with what it did: the report, the diff against
 # your file in the archive, each item it did not carry over in the summary (the ones not in the list shown
 # before the choice say so). rc 1 when it could not be copied.
-function fuADOPT_WRITE () {   # $1 = v1 | own
+function fuADOPT_WRITE () {   # $1 = v1 | own | sensor
 	local myLINE="" myITEM="" myNOTE="" myWHAT="Your docker-compose.yml is adapted to this release"
 	[ "$1" != "v1" ] || myWHAT="Your docker-compose.yml of the customizer before v2 is rebuilt for this release"
+	[ "$1" != "sensor" ] || myWHAT="Your docker-compose.yml now sends with Fluent Bit instead of Logstash"
 	if ! cp "${myTMPDIR}/adopted.yml" "$HOME/tpotce/docker-compose.yml";
 	  then
 	    fuUI_ERROR "The adapted docker-compose.yml could not be put in place."
@@ -4029,6 +4044,10 @@ function fuADOPT_WRITE () {   # $1 = v1 | own
 	fuDID ok "${myWHAT} (compose/customizer.py --adopt), the backup ${myARCHIVE} keeps your file."
 	# in the summary as well: it names the archive by its final name (fuARCHIVE_RENAMED)
 	fuDID info "Compare it with: tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml"
+	for myLINE in ${myADOPT_LINES[@]+"${myADOPT_LINES[@]}"};
+	  do
+	    [ "${myLINE#info: }" == "${myLINE}" ] || fuDID info "${myLINE#info: }"
+	  done
 	while IFS= read -r myLINE;
 	  do
 	    [ -n "${myLINE}" ] || continue
@@ -4083,6 +4102,11 @@ function fuADOPT_COMPOSE () {   # $1 = the compose file before the update, $2 = 
 	    myRC=0
 	    fuADOPT_RUN "$1" "${myTMPDIR}/adopted.yml" "${myCUSTOMIZER}" --dry-run || myRC=$?
 	    fuUI_WARN "Your docker-compose.yml is a compose file of your own: the changes of this release do not reach it (mem_limit, volumes, new and removed services), T-Pot may not run properly with it."
+	    if fuSENSOR_RUNS_LOGSTASH "$1" "$(fuADOPT_TYPE)";
+	      then
+	        fuUI_WARN "${mySENSOR_REASON}"
+	        mySENSOR_LOGSTASH="1"
+	    fi
 	    if [ "${myRC}" -ne 0 ];
 	      then
 	        fuUI_HINT "It cannot be adapted automatically: $(fuADOPT_WHY "${myRC}"), see above."
@@ -4105,6 +4129,101 @@ function fuADOPT_COMPOSE () {   # $1 = the compose file before the update, $2 = 
 	fi
 	fuADOPT_GREW || fuADOPT_CANCEL restore
 	fuADOPT_WRITE own || fuADOPT_CANCEL restore
+	return 0
+}
+
+# E9: a SENSOR sends with Fluent Bit from this release on, the HIVE refuses the events of Logstash. The one
+# test (tpotinit's fuCOMPOSE_HAS, tpotctl.settings.logstash_on_sensor): TPOT_TYPE SENSOR and a service
+# logstash in the compose file. rc 0 for such a SENSOR.
+myCUSTOM_KEPT_TEXT="Your custom docker-compose.yml is put back as it was, the changes of this release are not in it: run compose/customizer.py again."
+mySENSOR_REASON="This SENSOR runs Logstash: from this release on a SENSOR sends with Fluent Bit and the HIVE refuses the events of Logstash. The adaptation puts fluentbit in its place."
+function fuSENSOR_RUNS_LOGSTASH () {   # $1 = compose file, $2 = TPOT_TYPE
+	[ "$2" == "SENSOR" ] && grep -qE "^  logstash:" "$1" 2>/dev/null
+}
+
+# The warning of E9 for a compose file ($1 as the .env names it); another file than docker-compose.yml gets
+# the command that adapts it (compose/customizer.py reads the whole file before it writes -o).
+function fuSENSOR_E9 () {   # $1 = compose file
+	if [ "$1" == "docker-compose.yml" ];
+	  then
+	    echo "This SENSOR still runs Logstash: the HIVE refuses its events until docker-compose.yml uses fluentbit (tpot customize or update.sh --adapt-compose)."
+	  else
+	    echo "This SENSOR still runs Logstash: the HIVE refuses its events until $1 uses fluentbit (cd ~/tpotce && python3 compose/customizer.py --adopt $1 --tpot-type SENSOR -o $1)."
+	fi
+}
+
+# After fuRESTORE_EDITION, before the pull (the image of fluentbit comes in the same run): a SENSOR whose
+# compose file still runs Logstash (an edition copy of another type, a customizer file edited by hand, a
+# file of an older release) is offered the adaptation of compose/customizer.py --adopt, which puts
+# fluentbit in place of logstash. --adapt-compose adapts, at a terminal the question (default: keep), no
+# terminal keeps; -y never chooses. A kept file or a failed adaptation only warns, the update goes on: the
+# honeypots keep running. A TPOT_DOCKER_COMPOSE of another file is never written, only warned about. Not
+# with --backup-only, on an older checkout or a release without fluentbit in its catalogue.
+function fuSENSOR_SHIPPER () {
+	local myCONFIG="" myFILE="$HOME/tpotce/docker-compose.yml" myRC=0 myADAPT="" myITEM=""
+	local myKEEP=()
+	[ -z "${myOLDER_CHECKOUT}" ] && [ -z "${myBACKUP_ONLY}" ] || return 0
+	grep -qE "^  fluentbit:" "$HOME/tpotce/compose/tpot_services.yml" 2>/dev/null || return 0
+	[ "$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_TYPE)" == "SENSOR" ] || return 0
+	myCONFIG=$(fuENV_VALUE "$HOME/tpotce/.env" TPOT_DOCKER_COMPOSE)
+	if [ -n "${myCONFIG}" ] && [ "$(basename "${myCONFIG}")" != "docker-compose.yml" ];
+	  then
+	    case "${myCONFIG}" in
+	      /*) myFILE="${myCONFIG}" ;;
+	      "~/"*) myFILE="$HOME/${myCONFIG#\~/}" ;;
+	      *) myFILE="$HOME/tpotce/${myCONFIG#./}" ;;
+	    esac
+	    if fuSENSOR_RUNS_LOGSTASH "${myFILE}" SENSOR;
+	      then
+	        fuUI_WARN "$(fuSENSOR_E9 "${myCONFIG}")"
+	        fuDID warn "$(fuSENSOR_E9 "${myCONFIG}")"
+	    fi
+	    return 0
+	fi
+	fuSENSOR_RUNS_LOGSTASH "${myFILE}" SENSOR || return 0
+	echo
+	fuUI_INFO "Checking the log shipper of this SENSOR ..."
+	fuUI_WARN "${mySENSOR_REASON}"
+	fuTMPDIR
+	myADOPT_NEW=()
+	fuADOPT_RUN "${myFILE}" "${myTMPDIR}/adopted.yml" "$(fuADOPT_CUSTOMIZER restore)" || myRC=$?
+	if [ "${myRC}" -ne 0 ];
+	  then
+	    fuUI_HINT "It cannot be adapted automatically: $(fuADOPT_WHY "${myRC}"), see above."
+	  else
+	    fuUI_HINT "Back up and adapt it for Fluent Bit: your file goes into the backup of the update, compose/customizer.py builds it anew from your services with fluentbit in place of logstash. This may lose changes of yours, the list below is not carried over."
+	    fuADOPT_REPORT before
+	    if [ -n "${myADAPT_COMPOSE}" ];
+	      then
+	        fuUI_HINT "--adapt-compose: back up your compose file and adapt it for Fluent Bit; the kept-out list above is not carried over."
+	        myADAPT="1"
+	    elif [ ! -t 0 ];
+	      then
+	        fuUI_HINT "Not adapted: no terminal. $(fuADAPT_COMMAND) adapts it, -y does not."
+	    elif fuADOPT_ASK "What should the update do with the compose file of this SENSOR?" \
+	           "Back up and adapt it for Fluent Bit" "Keep it, adapt it myself";
+	      then
+	        myADAPT="1"
+	    fi
+	    if [ -n "${myADAPT}" ] && fuADOPT_WRITE sensor;
+	      then
+	        # the adopted file is a customizer file of this release: stamped as such, and the warning of
+	        # fuRESTORE_CUSTOM that the release is not in it no longer holds
+	        if [ -n "${myCOMPOSE_KEPT}" ];
+	          then
+	            myCOMPOSE_KEPT=""
+	            myKEEP=()
+	            for myITEM in ${myDONE[@]+"${myDONE[@]}"};
+	              do
+	                [ "${myITEM}" == "warn:${myCUSTOM_KEPT_TEXT}" ] || myKEEP+=("${myITEM}")
+	              done
+	            myDONE=(${myKEEP[@]+"${myKEEP[@]}"})
+	        fi
+	        return 0
+	    fi
+	fi
+	fuUI_WARN "$(fuSENSOR_E9 docker-compose.yml)"
+	fuDID warn "$(fuSENSOR_E9 docker-compose.yml)"
 	return 0
 }
 
@@ -4418,7 +4537,7 @@ function fuRESTORE_CUSTOM () {
 	fuUI_OK "Your docker-compose.yml is restored from the backup."
 	fuUI_WARN "The changes of this release were not applied to it. Run the customizer again to build it anew:"
 	fuUI_HINT "  cd $HOME/tpotce/compose && python3 customizer.py"
-	fuDID warn "Your custom docker-compose.yml is put back as it was, the changes of this release are not in it: run compose/customizer.py again."
+	fuDID warn "${myCUSTOM_KEPT_TEXT}"
 }
 
 function fuSTAMP_RUNTIME_ENV () {
@@ -4995,6 +5114,7 @@ fuSTAMP_RUNTIME_ENV || exit 1
 # them either way
 fuCUSTOMIZER_DEPS
 fuRESTORE_EDITION
+fuSENSOR_SHIPPER
 fuREMOVE_DROPPED_SERVICES
 fuSTAMP_RUNTIME_COMPOSE || exit 1
 

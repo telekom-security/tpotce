@@ -21,6 +21,19 @@ MANAGED_BY = {
 }
 
 
+LOGSTASH_ON_SENSOR = ("This SENSOR runs Logstash instead of Fluent Bit: the HIVE refuses its events until the "
+                      "compose file uses fluentbit (tpot customize or update.sh --adapt-compose).")
+
+
+def logstash_on_sensor(values: Dict[str, str], services: Iterable[str]) -> str:
+    """E9: a SENSOR sends with Fluent Bit, the HIVE refuses the events of Logstash. The warning for a SENSOR
+    whose compose file still names logstash (the rule of tpotinit's fuCOMPOSE_HAS, envschema.compose_services),
+    "" otherwise."""
+    if values.get("TPOT_TYPE", "") == "SENSOR" and "logstash" in set(services):
+        return LOGSTASH_ON_SENSOR
+    return ""
+
+
 class SettingsError(Exception):
     """A change that is not written."""
 
@@ -65,6 +78,9 @@ class Settings:
         state = generated.configuration_status(os.path.dirname(os.path.abspath(self.path)),
                                                values.get("TPOT_DOCKER_COMPOSE", ""))
         found += [envschema.Problem("warning", "TPOT_DOCKER_COMPOSE", text) for text in state.warnings]
+        shipper = logstash_on_sensor(values, self.services)
+        if shipper:
+            found.append(envschema.Problem("warning", "TPOT_TYPE", shipper))
         if values.get("TPOT_DOCKER_COMPOSE", "") != self.values.get("TPOT_DOCKER_COMPOSE", ""):
             found += [envschema.Problem("error", "TPOT_DOCKER_COMPOSE",
                       f"{name} is missing, unreadable or out of date with this checkout. "

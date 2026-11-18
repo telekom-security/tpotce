@@ -104,6 +104,12 @@ if textual:
 
         refused_value = []
 
+        # E9: the warning of a SENSOR that still runs Logstash ("" for none)
+        shipper_value = ""
+
+        def shipper_problem(self):
+            return self.shipper_value
+
         def pending_checks(self):
             return self.pending_value, list(self.refused_value)
 
@@ -351,6 +357,17 @@ class OverviewTest(unittest.IsolatedAsyncioTestCase):
                     detail = flat(app.screen.query_one("#service-detail-body"))
                     self.assertIn("127.0.0.1:1000->1000/tcp", detail)
                     self.assertIn("127.0.0.1:1039->1039/tcp", detail)
+
+    async def test_status_names_a_sensor_that_still_runs_logstash(self):
+        backend = self.backend()
+        backend.shipper_value = ("This SENSOR runs Logstash instead of Fluent Bit: the HIVE refuses its events "
+                                 "until the compose file uses fluentbit (tpot customize or update.sh "
+                                 "--adapt-compose).")
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            text = flat(app.query_one("#status-problems"))
+            self.assertIn("This SENSOR runs Logstash instead of Fluent Bit", text)
 
     async def test_stale_check_failure_is_dated_not_live_health(self):
         backend = self.backend()
