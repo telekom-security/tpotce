@@ -58,9 +58,8 @@ class HeraldingCsvTest(unittest.TestCase):
         self.assertEqual(dict(zip(columns(CONF), header))["timestamp"], "timestamp")
         self.assertRegex(heralding_block(CONF), r'if \[timestamp\] == "timestamp" \{\s*drop \{\}')
 
-    def test_one_filter_for_both_pipelines(self):
-        for sensor in (False, True):
-            self.assertIn(CONF, logstash_conf.pipeline_files("process", sensor))
+    def test_one_filter_in_the_processing_pipeline(self):
+        self.assertIn(CONF, logstash_conf.pipeline_files("process"))
 
 
 if __name__ == "__main__":

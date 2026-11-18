@@ -1131,7 +1131,7 @@ class SmokeTest(BuilderHarness):
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
         for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes", "tpotinit_users",
-                     "logstash_fixtures", "logstash_sensor", "logstash_es", "nginx", "glutton", "fluentbit", "redis"):
+                     "logstash_fixtures", "logstash_es", "nginx", "glutton", "fluentbit", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
 
@@ -1146,10 +1146,10 @@ class SmokeTest(BuilderHarness):
         self.assertEqual([line[2:] for line in lines if line.startswith("N ")],
                          ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
                           "tpotinit_users",
-                          "logstash_fixtures", "logstash_sensor", "logstash_es", "nginx", "glutton", "redis"])
+                          "logstash_fixtures", "logstash_es", "nginx", "glutton", "redis"])
         self.assertEqual([line[2:] for line in lines if line.startswith("A ")],
                          ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 5
-                         + ["--image hub/logstash:1.0"] * 2
+                         + ["--image hub/logstash:1.0"]
                          + ["--image hub/logstash:1.0 --tpotinit-image hub/tpotinit:1.0", "--image hub/nginx:1.0",
                             "--image hub/glutton:1.0 --init-image hub/tpotinit:1.0",
                             "--image hub/redis:1.0"])
@@ -1241,16 +1241,15 @@ class SmokeTest(BuilderHarness):
         self.assertEqual(sorted(set(self.IMAGELESS) - present), [])
         self.assertEqual(sorted(set(self.IMAGELESS) & planned), [])
 
-    def test_sensor_pipeline_runs_on_the_built_logstash_image(self):
-        rc, out = self.builder("-i", "logstash", "-a", "host", "-T", "-t", "sensor-test",
+    def test_logstash_tests_run_on_the_built_logstash_image(self):
+        rc, out = self.builder("-i", "logstash", "-a", "host", "-T", "-t", "logstash-test",
                                "--docker-repo", "hub", TPOT_BUILDER_TESTS_DIR=self.tests,
-                               STUB_TEST_FAIL="logstash_sensor")
+                               STUB_TEST_FAIL="logstash_es")
         self.assertEqual(rc, 4, out)
         tests = [line for line in self.calls() if line.startswith("test ")]
-        self.assertEqual(tests, ["test logstash_fixtures --image hub/logstash:sensor-test",
-                                 "test logstash_sensor --image hub/logstash:sensor-test",
-                                 "test logstash_es --image hub/logstash:sensor-test"
-                                 " --tpotinit-image hub/tpotinit:sensor-test"])
+        self.assertEqual(tests, ["test logstash_fixtures --image hub/logstash:logstash-test",
+                                 "test logstash_es --image hub/logstash:logstash-test"
+                                 " --tpotinit-image hub/tpotinit:logstash-test"])
         # logstash_es takes the tpotinit of the run: built for this host with the logstash image
         self.assertTrue(any(" build logstash tpotinit " in line and "override-load.yml" in line
                             for line in self.calls()), self.calls())

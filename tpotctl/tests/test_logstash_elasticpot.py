@@ -62,9 +62,8 @@ class ElasticPotTimestampTest(unittest.TestCase):
         self.assertEqual(stamp, "2026-11-07T10:00:00.123456+00:00")
         self.assertTrue(ES_DATE.match(stamp))
 
-    def test_one_filter_for_both_pipelines(self):
-        for sensor in (False, True):
-            self.assertIn(CONF, logstash_conf.pipeline_files("process", sensor))
+    def test_one_filter_in_the_processing_pipeline(self):
+        self.assertIn(CONF, logstash_conf.pipeline_files("process"))
 
 
 if __name__ == "__main__":

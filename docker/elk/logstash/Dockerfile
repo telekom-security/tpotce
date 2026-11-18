@@ -8,7 +8,6 @@ USER root
 COPY dist/entrypoint.sh /usr/local/bin/tpot-logstash-entrypoint.sh
 COPY dist/logstash.yml /usr/share/logstash/config/logstash.yml
 COPY dist/pipelines.yml /usr/share/logstash/config/pipelines.yml
-COPY dist/pipelines_sensor.yml /usr/share/logstash/config/pipelines_sensor.yml
 COPY dist/pipeline/ /usr/share/logstash/pipeline/
 COPY dist/sensor_heartbeat.rb /usr/share/logstash/pipeline/
 

@@ -2,9 +2,9 @@
 
 Access is LS_WEB_USER in .env (base64 of name:htpasswd hash per sensor), from which
 tpotinit builds data/nginx/conf/lswebpasswd for the ingest on 64294. The sensor
-sends with TPOT_HIVE_USER (base64 of name:password, Fluent Bit; Logstash 91-output-http.conf on a
-SENSOR before SHIPPER_SINCE) and checks the HIVE against its copy of data/nginx/cert/nginx.crt
-(data/hive.crt).
+sends with TPOT_HIVE_USER (base64 of name:password, the basic auth of the http output of Fluent Bit,
+docker/fluentbit/dist/fluent-bit.yaml; Logstash sent it on a SENSOR before SHIPPER_SINCE) and checks
+the HIVE against its copy of data/nginx/cert/nginx.crt (data/hive.crt).
 
 The registry data/sensors.json only holds what the HIVE cannot know otherwise
 (address, SSH user, when, which version) and no secrets. It is built from
@@ -211,7 +211,7 @@ def new_password(length: int = 32) -> str:
 
 
 def hive_user(name: str, password: str) -> str:
-    """TPOT_HIVE_USER of the sensor: base64 of name:password, the basic auth of 91-output-http.conf."""
+    """TPOT_HIVE_USER of the sensor: base64 of name:password, the basic auth of Fluent Bit's http output."""
     return base64.b64encode(f"{name}:{password}".encode()).decode()
 
 

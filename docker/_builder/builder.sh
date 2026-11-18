@@ -1453,9 +1453,9 @@ fuSMOKE_PLAN () {
   # mySMOKE_NAMES / mySMOKE_ARGS (one string each), the images they need into
   # mySMOKE_IMAGES (once each) and what has none into mySMOKE_NOTES. A test has the name
   # of its image, tpotinit has tpotinit_env, tpotinit_ilm, tpotinit_kibana,
-  # tpotinit_modes and tpotinit_users, logstash has logstash_fixtures, logstash_sensor and
-  # logstash_es; Elasticsearch, Kibana and the Attack Map have none. glutton, fluentbit
-  # and logstash_es also take the tpotinit of the run (--init-image, --tpotinit-image),
+  # tpotinit_modes and tpotinit_users, logstash has logstash_fixtures and logstash_es;
+  # Elasticsearch, Kibana and the Attack Map have none. glutton, fluentbit and
+  # logstash_es also take the tpotinit of the run (--init-image, --tpotinit-image),
   # which is then built for them too
   local myI myT myHAS
   local -a myTESTS
@@ -1463,7 +1463,7 @@ fuSMOKE_PLAN () {
   for myI in "$@"; do
     case "${myI}" in
       elasticsearch|kibana|map) continue ;;
-      logstash) myTESTS=(logstash_fixtures logstash_sensor logstash_es) ;;
+      logstash) myTESTS=(logstash_fixtures logstash_es) ;;
       tpotinit) myTESTS=(tpotinit_env tpotinit_ilm tpotinit_kibana tpotinit_modes tpotinit_users) ;;
       *) myTESTS=("${myI}") ;;
     esac

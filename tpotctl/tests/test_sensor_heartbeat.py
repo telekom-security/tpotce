@@ -92,7 +92,6 @@ class EntrypointTest(unittest.TestCase):
         self.environment = self.root / "data/tpot/etc/compose/elk_environment"
         self.environment.write_text(
             "MY_VERSION=test-release\nHONEY_UUID=00000000-0000-0000-0000-000000000000\n")
-        (self.root / "usr/share/logstash/config/pipelines_sensor.yml").write_text("sensor pipeline\n")
         self.captured = self.root / "captured.json"
         self.marker = self.root / "tmp/tpot-waiting"
         logstash = self.root / "usr/share/logstash/bin/logstash"
@@ -100,7 +99,6 @@ class EntrypointTest(unittest.TestCase):
             f"#!{sys.executable}\nimport json, os, sys\n"
             f"with open({str(self.captured)!r}, 'w') as handle:\n"
             "    json.dump({'version': os.environ.get('MY_VERSION'),\n"
-            "               'started': os.environ.get('TPOT_LOGSTASH_START'),\n"
             f"               'waiting': os.path.exists({str(self.marker)!r}),\n"
             "               'args': sys.argv[1:]}, handle)\n")
         logstash.chmod(0o755)
@@ -118,8 +116,7 @@ class EntrypointTest(unittest.TestCase):
         )
         self.script = self.root / "entrypoint.sh"
         self.script.write_text(text)
-        self.env = dict(os.environ, TPOT_TYPE="SENSOR", TPOT_HIVE_IP="192.0.2.2",
-                        TPOT_LOGSTASH_START="2000-01-01T00:00:00Z",
+        self.env = dict(os.environ, TPOT_TYPE="HIVE",
                         PATH=str(self.root / "bin") + os.pathsep + os.environ["PATH"])
         self.env.pop("MY_VERSION", None)
 
@@ -127,36 +124,23 @@ class EntrypointTest(unittest.TestCase):
         return subprocess.run(["bash", str(self.script)], env=self.env,
                               capture_output=True, text=True, timeout=10)
 
-    def test_version_and_process_start_reach_logstash(self):
-        before = datetime.now(timezone.utc).replace(microsecond=0)
+    def test_sensor_exits_with_hint(self):
+        # a stale cache: a run that reached the Listbot block would ask curl for listbot.sicherheitstacho.eu
+        (self.root / "data/elk/listbot/iprep.yaml.bz2").unlink()
+        tracked = self.root / "tracked"
+        for name in ("curl", "wget"):
+            stub = self.root / "bin" / name
+            stub.write_text(f"#!/bin/sh\necho {name} \"$@\" >> {tracked}\nexit 1\n")
+            stub.chmod(0o755)
+        self.env["TPOT_TYPE"] = "SENSOR"
         done = self.run_entrypoint()
-        after = datetime.now(timezone.utc)
-        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        data = json.loads(self.captured.read_text())
-        self.assertEqual(data["version"], "test-release")
-        self.assertEqual(data["args"], [])
-        self.assertIsInstance(data["started"], str)
-        started = datetime.fromisoformat(data["started"].replace("Z", "+00:00"))
-        self.assertLessEqual(before, started)
-        self.assertLessEqual(started, after)
-
-    def test_old_tpotinit_warns_but_does_not_disable_transport(self):
-        self.environment.write_text("HONEY_UUID=00000000-0000-0000-0000-000000000000\n")
-        done = self.run_entrypoint()
-        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertTrue(self.captured.exists())
-        self.assertIn("version", done.stderr.lower())
-        self.assertIn("tpotinit", done.stderr.lower())
-        self.assertEqual(json.loads(self.captured.read_text())["version"], "")
-
-    def test_missing_clock_is_a_startup_failure_not_success(self):
-        date = self.root / "bin/date"
-        date.write_text("#!/bin/sh\nexit 1\n")
-        date.chmod(0o755)
-        done = self.run_entrypoint()
-        self.assertNotEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertFalse(self.captured.exists())
-        self.assertIn("start", done.stderr.lower())
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertEqual(done.stderr, "Logstash does not run on a SENSOR: Fluent Bit sends its logs, adapt "
+                                      "docker-compose.yml (tpot customize or update.sh --adapt-compose).\n")
+        self.assertFalse(self.captured.exists(), "Logstash started")
+        self.assertFalse(tracked.exists(), "no Listbot, no Elasticsearch")
+        self.assertEqual(sorted((self.root / "etc/listbot").iterdir()), [])
+        self.assertFalse(self.marker.exists())
 
     def hive(self, mode):
         self.env.update(TPOT_TYPE="HIVE", TPOT_TEMPLATE_POLL="0.1", CURL_MODE=mode)
@@ -209,14 +193,6 @@ class EntrypointTest(unittest.TestCase):
             proc.terminate()
             proc.wait(timeout=10)
         self.assertIn("logstash has T-Pot old-release, needs test-release", log.read_text())
-
-    def test_sensor_does_not_wait(self):
-        self.env["TPOT_TEMPLATE_POLL"] = "0.1"
-        done = self.run_entrypoint()
-        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertEqual(self.requests(), [])
-        self.assertNotIn("index templates", done.stdout.lower())
-        self.assertFalse(json.loads(self.captured.read_text())["waiting"])
 
 
 # curl for the wait of the Logstash entrypoint: logs each call, Elasticsearch has the sensor templates;

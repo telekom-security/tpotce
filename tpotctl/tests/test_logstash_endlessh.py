@@ -55,9 +55,8 @@ class EndlesshGrokTest(unittest.TestCase):
     def test_duration_is_a_number(self):
         self.assertIn("time=%{NUMBER:duration:float}", " ".join(endlessh_patterns(CONF)))
 
-    def test_one_grok_for_both_pipelines(self):
-        for sensor in (False, True):
-            self.assertIn(CONF, logstash_conf.pipeline_files("process", sensor))
+    def test_one_grok_in_the_processing_pipeline(self):
+        self.assertIn(CONF, logstash_conf.pipeline_files("process"))
 
 
 if __name__ == "__main__":

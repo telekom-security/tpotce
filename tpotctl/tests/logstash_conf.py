@@ -1,7 +1,7 @@
 """Test helper: the Logstash pipelines of T-Pot and their part files (docker/elk/logstash/dist).
 
-pipelines.yml (HIVE) and pipelines_sensor.yml (SENSOR) name the part files of each pipeline in its
-path.config, as paths in the image: the Dockerfile copies dist/pipeline/ to /usr/share/logstash/pipeline/.
+pipelines.yml names the part files of each pipeline in its path.config, as paths in the image: the
+Dockerfile copies dist/pipeline/ to /usr/share/logstash/pipeline/.
 Logstash expands a path.config with Ruby's Dir.glob (braces and wildcards) and reads the files sorted by
 their path, a file named twice twice; pipeline_files() does the same with the files of this checkout.
 
@@ -18,15 +18,15 @@ DIST = ROOT / "docker" / "elk" / "logstash" / "dist"
 PIPELINE_DIR = DIST / "pipeline"
 # where the Dockerfile puts PIPELINE_DIR
 IMAGE_DIR = "/usr/share/logstash/pipeline/"
-PIPELINES_YML = {False: DIST / "pipelines.yml", True: DIST / "pipelines_sensor.yml"}
+PIPELINES_YML = DIST / "pipelines.yml"
 
 # the lines of a pipelines.yml this reader takes: `- key: value` starts a pipeline, `  key: value` goes on
 SETTING = re.compile(r"(- |  )([A-Za-z_.]+):[ \t]*(.*?)[ \t]*")
 
 
-def pipelines(sensor: bool = False) -> Dict[str, Dict[str, str]]:
-    """{pipeline.id: {setting: value}} of pipelines.yml, or of pipelines_sensor.yml with `sensor`."""
-    path = PIPELINES_YML[sensor]
+def pipelines() -> Dict[str, Dict[str, str]]:
+    """{pipeline.id: {setting: value}} of pipelines.yml."""
+    path = PIPELINES_YML
     entries: List[Dict[str, str]] = []
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip() or line.lstrip().startswith("#"):
@@ -75,9 +75,9 @@ def expand_braces(pattern: str) -> List[str]:
     raise ValueError(f"an unclosed brace in {pattern!r}")
 
 
-def patterns(pipeline_id: str, sensor: bool = False) -> List[str]:
+def patterns(pipeline_id: str) -> List[str]:
     """The glob patterns of the path.config of a pipeline, braces expanded, as paths of this checkout."""
-    config = pipelines(sensor)[pipeline_id]["path.config"]
+    config = pipelines()[pipeline_id]["path.config"]
     result = []
     for pattern in expand_braces(config):
         if not pattern.startswith(IMAGE_DIR):
@@ -86,15 +86,15 @@ def patterns(pipeline_id: str, sensor: bool = False) -> List[str]:
     return result
 
 
-def pipeline_files(pipeline_id: str, sensor: bool = False) -> List[Path]:
+def pipeline_files(pipeline_id: str) -> List[Path]:
     """The part files Logstash reads for a pipeline, in its order (sorted by path, duplicates kept)."""
-    found = [path for pattern in patterns(pipeline_id, sensor) for path in glob.glob(pattern)]
+    found = [path for pattern in patterns(pipeline_id) for path in glob.glob(pattern)]
     return [Path(path) for path in sorted(found) if Path(path).is_file()]
 
 
-def pipeline_text(pipeline_id: str, sensor: bool = False) -> str:
+def pipeline_text(pipeline_id: str) -> str:
     """The configuration of a pipeline as Logstash puts it together: its part files one after another."""
-    return "\n".join(path.read_text(encoding="utf-8") for path in pipeline_files(pipeline_id, sensor))
+    return "\n".join(path.read_text(encoding="utf-8") for path in pipeline_files(pipeline_id))
 
 
 def parse_file(type_name: str) -> Path:

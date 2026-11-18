@@ -1,6 +1,7 @@
-"""The layout of T-Pot's Logstash pipelines (docker/elk/logstash/dist/pipeline): the HIVE and the SENSOR
-put their pipelines together from the same part files, one parse file per type, the files and the sensor
-input hand their events to the one processing pipeline (pipeline-to-pipeline, address tpot_process).
+"""The layout of T-Pot's Logstash pipelines (docker/elk/logstash/dist/pipeline): the HIVE puts its pipelines
+together from part files, one parse file per type, the files and the sensor input hand their events to the
+one processing pipeline (pipeline-to-pipeline, address tpot_process). Logstash has no SENSOR mode: Fluent Bit
+sends the logs of a SENSOR.
 """
 
 import glob
@@ -42,55 +43,46 @@ class LayoutTest(unittest.TestCase):
                 self.assertEqual(path, logstash_conf.parse_file(types[0]))
                 parsed[types[0]] = path
         self.assertEqual(sorted(parsed), sorted(set(inputs)))
-        for sensor in (False, True):
-            with self.subTest(sensor=sensor):
-                # each type is parsed once in the processing pipeline, in its own file only
-                blocks = TYPE_BLOCK.findall(logstash_conf.pipeline_text("process", sensor))
-                self.assertEqual(sorted(blocks), sorted(set(inputs)))
+        # each type is parsed once in the processing pipeline, in its own file only
+        blocks = TYPE_BLOCK.findall(logstash_conf.pipeline_text("process"))
+        self.assertEqual(sorted(blocks), sorted(set(inputs)))
 
     def test_pipelines_resolve(self):
-        expected = {False: ["failures", "files", "process", "sensors"], True: ["files", "process"]}
-        addresses = {False: {"tpot_process", "tpot_failures"}, True: {"tpot_process"}}
         used = set()
-        for sensor in (False, True):
-            found = logstash_conf.pipelines(sensor)
-            self.assertEqual(sorted(found), expected[sensor])
-            if yaml:
-                with open(logstash_conf.PIPELINES_YML[sensor], encoding="utf-8") as handle:
-                    # logstash_conf reads every value as text (true, 1), YAML as bool / int
-                    self.assertEqual({entry["pipeline.id"]: {key: str(value).lower() if isinstance(value, bool)
-                                                             else str(value) for key, value in entry.items()}
-                                      for entry in yaml.safe_load(handle)}, found)
-            sends, listens = set(), []
-            for pipeline_id, settings in found.items():
-                with self.subTest(sensor=sensor, pipeline=pipeline_id):
-                    self.assertEqual(settings.get("pipeline.ecs_compatibility"), "disabled")
-                    for pattern in logstash_conf.patterns(pipeline_id, sensor):
-                        self.assertTrue(glob.glob(pattern), f"{pattern} matches no file")
-                    files = logstash_conf.pipeline_files(pipeline_id, sensor)
-                    self.assertEqual(len(files), len(set(files)), "Logstash would read a file twice")
-                    used.update(files)
-                    text = logstash_conf.pipeline_text(pipeline_id, sensor)
-                    sends.update(SEND_TO.findall(text))
-                    listens.extend(ADDRESS.findall(text))
-            with self.subTest(sensor=sensor):
-                self.assertEqual(sends, addresses[sensor])
-                self.assertEqual(sorted(listens), sorted(sends), "one pipeline listens on each address")
-                self.assertEqual(ADDRESS.findall(logstash_conf.pipeline_text("process", sensor)), ["tpot_process"])
+        found = logstash_conf.pipelines()
+        self.assertEqual(sorted(found), ["failures", "files", "process", "sensors"])
+        if yaml:
+            with open(logstash_conf.PIPELINES_YML, encoding="utf-8") as handle:
+                # logstash_conf reads every value as text (true, 1), YAML as bool / int
+                self.assertEqual({entry["pipeline.id"]: {key: str(value).lower() if isinstance(value, bool)
+                                                         else str(value) for key, value in entry.items()}
+                                  for entry in yaml.safe_load(handle)}, found)
+        sends, listens = set(), []
+        for pipeline_id, settings in found.items():
+            with self.subTest(pipeline=pipeline_id):
+                self.assertEqual(settings.get("pipeline.ecs_compatibility"), "disabled")
+                for pattern in logstash_conf.patterns(pipeline_id):
+                    self.assertTrue(glob.glob(pattern), f"{pattern} matches no file")
+                files = logstash_conf.pipeline_files(pipeline_id)
+                self.assertEqual(len(files), len(set(files)), "Logstash would read a file twice")
+                used.update(files)
+                text = logstash_conf.pipeline_text(pipeline_id)
+                sends.update(SEND_TO.findall(text))
+                listens.extend(ADDRESS.findall(text))
+        self.assertEqual(sends, {"tpot_process", "tpot_failures"})
+        self.assertEqual(sorted(listens), sorted(sends), "one pipeline listens on each address")
+        self.assertEqual(ADDRESS.findall(logstash_conf.pipeline_text("process")), ["tpot_process"])
         self.assertEqual(sorted(set(PIPELINE_DIR.glob("*.conf")) - used), [], "part files no pipeline reads")
 
-    def test_process_shared_by_hive_and_sensor(self):
-        hive = logstash_conf.pipeline_files("process")
-        sensor = logstash_conf.pipeline_files("process", sensor=True)
+    def test_process_files(self):
+        process = logstash_conf.pipeline_files("process")
         shared = [DECODE] + sorted(PIPELINE_DIR.glob("40-*.conf")) + [PIPELINE_DIR / "50-enrich.conf"]
         self.assertGreater(len(shared), 30)
         for path in shared:
             with self.subTest(file=path.name):
-                self.assertIn(path, hive)
-                self.assertIn(path, sensor)
-        # one source: the two differ in their output only
-        self.assertEqual(sorted(set(hive) ^ set(sensor)),
-                         [PIPELINE_DIR / "90-output-es.conf", PIPELINE_DIR / "91-output-http.conf"])
+                self.assertIn(path, process)
+        self.assertEqual([path for path in process if path.name.startswith("9")],
+                         [PIPELINE_DIR / "90-output-es.conf"])
 
     def test_failures_pipeline(self):
         # HIVE: parse failures (pipeline-to-pipeline) and the events Elasticsearch rejected (the dead
@@ -104,14 +96,10 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual({key: value for key, value in hive["process"].items() if key.startswith("dead_letter")},
                          {"dead_letter_queue.enable": "true", "dead_letter_queue.max_bytes": "256mb",
                           "dead_letter_queue.storage_policy": "drop_older"})
-        for sensor in (False, True):
-            for settings in logstash_conf.pipelines(sensor).values():
-                with self.subTest(sensor=sensor, pipeline=settings["pipeline.id"]):
-                    self.assertNotIn("path.data", settings)
-                    self.assertNotIn("path.dead_letter_queue", settings)
-        # the SENSOR as before: no failures pipeline, no dead letter queue
-        for settings in logstash_conf.pipelines(sensor=True).values():
-            self.assertEqual([key for key in settings if key.startswith("dead_letter")], [])
+        for settings in hive.values():
+            with self.subTest(pipeline=settings["pipeline.id"]):
+                self.assertNotIn("path.data", settings)
+                self.assertNotIn("path.dead_letter_queue", settings)
         code = uncommented(PIPELINE_DIR / "60-input-failures.conf")
         self.assertRegex(code, r'pipeline \{\s*address => "tpot_failures"\s*\}')
         self.assertRegex(code, r'dead_letter_queue \{[^}]*pipeline_id => "process"[^}]*\}')
@@ -121,24 +109,22 @@ class LayoutTest(unittest.TestCase):
                                  r'\s*pipeline \{\s*send_to => \["tpot_failures"\]\s*\}\s*\} else \{'
                                  r'\s*elasticsearch \{[^}]*index => "logstash-%\{\+YYYY\.MM\.dd\}"')
         self.assertIn('index => "tpot-failures-%{+YYYY.MM.dd}"', uncommented(PIPELINE_DIR / "92-output-failures.conf"))
-        # no silent drop of a parse failure anywhere; the SENSOR keeps not sending them (91-output-http.conf)
+        # no silent drop of a parse failure anywhere
         self.assertNotIn("drop", uncommented(PIPELINE_DIR / "50-enrich.conf"))
-        self.assertRegex(uncommented(PIPELINE_DIR / "91-output-http.conf"),
-                         r'if "_grokparsefailure" not in \[tags\] and "_jsonparsefailure" not in \[tags\] \{'
-                         r'\s*http \{')
 
     def test_entrypoint_creates_the_dead_letter_queue_folder(self):
-        """The HIVE branch of entrypoint.sh creates <path of the dead_letter_queue input>/<its pipeline_id>
-        before Logstash starts: the input of failures would otherwise fail once on a fresh start."""
+        """entrypoint.sh creates <path of the dead_letter_queue input>/<its pipeline_id> before Logstash
+        starts: the input of failures would otherwise fail once on a fresh start."""
         conf = (PIPELINE_DIR / "60-input-failures.conf").read_text(encoding="utf-8")
         dlq = re.search(r'dead_letter_queue \{(.*?)\}', conf, re.S).group(1)
         path = re.search(r'path => "([^"]+)"', dlq).group(1)
         pipeline_id = re.search(r'pipeline_id => "([^"]+)"', dlq).group(1)
         entry = (DIST / "entrypoint.sh").read_text(encoding="utf-8")
-        hive = entry.split('if [ "$TPOT_TYPE" != "SENSOR" ];', 1)[1].split("\nfi\n", 1)[0]
-        self.assertIn(f'myDLQ_PATH="{path}"', hive)
-        self.assertIn(f'mkdir -p "${{myDLQ_PATH}}/{pipeline_id}"', hive)
-        self.assertLess(entry.index("mkdir -p \"${myDLQ_PATH}"), entry.index("exec /usr/share/logstash/bin/logstash"))
+        # unconditional: at the top level of the script, after the SENSOR stopped, before exec
+        self.assertIn(f'\nmyDLQ_PATH="{path}"\n', entry)
+        mkdir = entry.index(f'\nmkdir -p "${{myDLQ_PATH}}/{pipeline_id}" || ')
+        self.assertLess(entry.index("Logstash does not run on a SENSOR"), mkdir)
+        self.assertLess(mkdir, entry.index("\nexec /usr/share/logstash/bin/logstash\n"))
 
     def test_failures_template(self):
         template = json.loads((ROOT / "docker" / "tpotinit" / "dist" / "etc" / "ilm" / "tpot-failures.json")
@@ -271,11 +257,9 @@ class LayoutTest(unittest.TestCase):
                 self.assertNotIn("${", path.read_text(encoding="utf-8"))
 
     def test_decode_before_parse(self):
-        for sensor in (False, True):
-            with self.subTest(sensor=sensor):
-                names = [path.name for path in logstash_conf.pipeline_files("process", sensor)]
-                self.assertEqual(names[:2], ["14-input-process.conf", "30-decode.conf"])
-                self.assertTrue(names[2].startswith("40-parse-"))
+        names = [path.name for path in logstash_conf.pipeline_files("process")]
+        self.assertEqual(names[:2], ["14-input-process.conf", "30-decode.conf"])
+        self.assertTrue(names[2].startswith("40-parse-"))
 
     def test_honeypot_message_survives(self):
         # the raw line leaves message before the JSON goes into the event, so Cowrie's own message stays
@@ -366,6 +350,24 @@ class LayoutTest(unittest.TestCase):
                 self.assertEqual(block.count('    start_position => "beginning"\n'), 1)
                 self.assertNotIn("sincedb_path", block)
 
+    def test_no_http_output(self):
+        # no SENSOR mode any more: Fluent Bit sends a SENSOR's logs, no pipeline sends events over http
+        # (the http inputs of 11-input-sensors.conf take them on the HIVE)
+        for path in sorted(PIPELINE_DIR.glob("*.conf")):
+            with self.subTest(file=path.name):
+                for output in top_level_blocks(uncommented(path), "output"):
+                    self.assertNotRegex(output, r"(?m)^\s*http\s*\{")
+        self.assertFalse((DIST / "pipelines_sensor.yml").exists())
+        self.assertFalse((PIPELINE_DIR / "13-input-heartbeat.conf").exists())
+
+    def test_dockerfile_copies_exist(self):
+        dockerfile = (DIST.parent / "Dockerfile").read_text(encoding="utf-8")
+        sources = re.findall(r"^COPY (dist/\S*) ", dockerfile, re.M)
+        self.assertGreater(len(sources), 4)
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertTrue((DIST.parent / source).exists(), f"{source} is not in the checkout")
+
     def test_no_monolith(self):
         for name in ("logstash.conf", "http_output.conf", "http_input.conf"):
             with self.subTest(file=name):
@@ -378,14 +380,12 @@ class LayoutTest(unittest.TestCase):
     def test_pipeline_workers(self):
         # files and sensors run with one worker (sensors: the newest receipt of a heartbeat wins, only
         # one worker keeps receipt order equal to arrival order), process with the default of Logstash
-        for sensor in (False, True):
-            with self.subTest(sensor=sensor):
-                found = logstash_conf.pipelines(sensor)
-                self.assertEqual({key: value for key, value in found["files"].items() if key != "path.config"},
-                                 {"pipeline.id": "files", "pipeline.ecs_compatibility": "disabled",
-                                  "pipeline.workers": "1"})
-                self.assertNotIn("pipeline.workers", found["process"])
-        self.assertEqual({key: value for key, value in logstash_conf.pipelines()["sensors"].items()
+        found = logstash_conf.pipelines()
+        self.assertEqual({key: value for key, value in found["files"].items() if key != "path.config"},
+                         {"pipeline.id": "files", "pipeline.ecs_compatibility": "disabled",
+                          "pipeline.workers": "1"})
+        self.assertNotIn("pipeline.workers", found["process"])
+        self.assertEqual({key: value for key, value in found["sensors"].items()
                           if key != "path.config"},
                          {"pipeline.id": "sensors", "pipeline.ecs_compatibility": "disabled",
                           "pipeline.workers": "1"})
@@ -428,8 +428,13 @@ def uncommented(path):
 
 def filter_blocks(code):
     """The bodies of the top-level filter {} sections of a part file (without comments), in order."""
+    return top_level_blocks(code, "filter")
+
+
+def top_level_blocks(code, section):
+    """The bodies of the top-level sections (input, filter, output) of a part file, in order."""
     blocks = []
-    for found in re.finditer(r"^filter \{", code, re.M):
+    for found in re.finditer(r"^" + section + r" \{", code, re.M):
         depth, position = 1, found.end()
         while depth:
             depth += {"{": 1, "}": -1}.get(code[position], 0)

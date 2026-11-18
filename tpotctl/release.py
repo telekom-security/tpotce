@@ -97,8 +97,8 @@ PLACES = (
           "the default image of the p0f confidence builder"),
     Place(("docker/_tests/tests/*.sh",), r'^DEFAULT_\w*IMAGE="' + IMAGE + r'"\s*$',
           "the image a smoke test checks by default (it does not read the compose file)",
-          skip=("docker/_tests/tests/logstash_sensor.sh",    # delegates to logstash_fixtures.sh
-                "docker/_tests/tests/sensor_heartbeat.sh",   # reads Dockerfile/compose image versions
+          skip=("docker/_tests/tests/sensor_heartbeat.sh",   # reads Dockerfile/compose image versions
+                "docker/_tests/tests/sensor_parity.sh",      # reads Dockerfile/compose image versions
                 "docker/_tests/tests/logstash_es.sh",        # reads Dockerfile/compose image versions
                 "docker/_tests/tests/sensor_dashboard.sh")), # reads Dockerfile image versions
     Place(SMOKE_HELP, r"Defaults to " + IMAGE, "the default image in the help of a smoke test"),

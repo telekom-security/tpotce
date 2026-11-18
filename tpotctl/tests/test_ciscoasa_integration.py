@@ -29,8 +29,7 @@ class CiscoasaIntegrationTest(unittest.TestCase):
         decode = (logstash_conf.PIPELINE_DIR / '30-decode.conf').read_text()
         self.assertIn('    "Ciscoasa",\n', decode)
         conf = logstash_conf.parse_file('Ciscoasa')
-        for sensor in (False, True):
-            self.assertIn(conf, logstash_conf.pipeline_files('process', sensor))
+        self.assertIn(conf, logstash_conf.pipeline_files('process'))
         block = conf.read_text()
         self.assertNotIn('kv {', block)
         self.assertIn('ISO8601', block)

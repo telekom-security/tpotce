@@ -2764,10 +2764,9 @@ class FixturesTest(unittest.TestCase):
             for word in ("/dev/tcp", "pty.spawn", "/bin/sh", "jndi:", "wget ", "curl "):
                 self.assertNotIn(word, text, name)
 
-    def test_glutton_takes_session_and_legacy_times_in_both_pipelines(self):
+    def test_glutton_takes_session_and_legacy_times(self):
         conf = logstash_conf.parse_file("Glutton")
-        for sensor in (False, True):
-            self.assertIn(conf, logstash_conf.pipeline_files("process", sensor))
+        self.assertIn(conf, logstash_conf.pipeline_files("process"))
         text = conf.read_text(encoding="utf-8")
         start = text.index('  if [type] == "Glutton" {')
         block = text[start:text.index("\n  }\n", start) + 4]

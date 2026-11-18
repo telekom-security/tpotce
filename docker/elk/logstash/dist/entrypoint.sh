@@ -12,8 +12,14 @@ if [ -f "/data/tpot/etc/compose/elk_environment" ];
     echo "Found .env, now exporting ..."
     set -o allexport
     source "/data/tpot/etc/compose/elk_environment"
-    LS_SSL_VERIFICATION="${LS_SSL_VERIFICATION:-full}"
     set +o allexport
+fi
+
+# Fluent Bit sends the logs of a SENSOR; it never asks Listbot or touches /etc/listbot
+if [ "$TPOT_TYPE" == "SENSOR" ];
+  then
+    echo "Logstash does not run on a SENSOR: Fluent Bit sends its logs, adapt docker-compose.yml (tpot customize or update.sh --adapt-compose)." >&2
+    exit 1
 fi
 
 # Identify requests to Listbot by user agent and T-Pot UUID (only if the UUID is valid)
@@ -113,36 +119,19 @@ for myFILE in $myLISTBOTFILES;
     fi
 done
 
-# Distributed T-Pot installation needs a different pipeline config 
-if [ "$TPOT_TYPE" == "SENSOR" ];
-  then
-    echo
-    echo "Distributed T-Pot setup, sending T-Pot logs to $TPOT_HIVE_IP."
-    echo
-    echo "T-Pot type: $TPOT_TYPE"
-    echo "Hive IP: $TPOT_HIVE_IP"
-    echo "SSL verification: $LS_SSL_VERIFICATION"
-    echo
-   # Ensure correct file permissions for private keyfile or SSH will ask for password
-    cp /usr/share/logstash/config/pipelines_sensor.yml /usr/share/logstash/config/pipelines.yml
-fi
+echo
+echo "This is a T-Pot STANDARD / HIVE installation."
+echo
+echo "T-Pot type: $TPOT_TYPE"
+echo
 
-if [ "$TPOT_TYPE" != "SENSOR" ];
-  then
-    echo
-    echo "This is a T-Pot STANDARD / HIVE installation."
-    echo
-    echo "T-Pot type: $TPOT_TYPE"
-    echo
+# The ILM policy tpot (TPOT_ES_RETENTION) is set by tpotinit, see its bin/es_retention.sh.
 
-    # The ILM policy tpot (TPOT_ES_RETENTION) is set by tpotinit, see its bin/es_retention.sh.
-
-    # The dead letter queue input of the pipeline failures (60-input-failures.conf, the same path)
-    # needs the folder of process before process creates it, or it fails once on a fresh start.
-    # The entrypoint runs as the user of Logstash.
-    myDLQ_PATH="/usr/share/logstash/data/dead_letter_queue"
-    mkdir -p "${myDLQ_PATH}/process" || { echo "Cannot create ${myDLQ_PATH}/process." >&2; exit 1; }
-fi
+# The dead letter queue input of the pipeline failures (60-input-failures.conf, the same path)
+# needs the folder of process before process creates it, or it fails once on a fresh start.
+# The entrypoint runs as the user of Logstash.
+myDLQ_PATH="/usr/share/logstash/data/dead_letter_queue"
+mkdir -p "${myDLQ_PATH}/process" || { echo "Cannot create ${myDLQ_PATH}/process." >&2; exit 1; }
 echo
 
 ARCH=$(arch)
@@ -150,7 +139,7 @@ if [ "$ARCH" = "aarch64" ]; then
   export _JAVA_OPTIONS="-XX:UseSVE=0";
 fi
 
-# HIVE: the index templates are tpotinit's (es_retention.sh), Logstash manages none. It starts once
+# The index templates are tpotinit's (es_retention.sh), Logstash manages none. It starts once
 # Elasticsearch holds them (logstash of this release), however long that takes; meanwhile the marker
 # keeps the healthcheck healthy.
 function fuWAIT_TEMPLATES () {
@@ -185,20 +174,6 @@ function fuWAIT_TEMPLATES () {
   done
 }
 
-if [ "$TPOT_TYPE" = "SENSOR" ]; then
-  if [ -z "${MY_VERSION:-}" ]; then
-    echo "Warning: sensor heartbeat version is unknown; update tpotinit to provide it in elk_environment." >&2
-    export MY_VERSION=""
-  fi
-  # A pipeline reload must keep the process start, rather than report a restart.
-  TPOT_LOGSTASH_START=$(date -u +%Y-%m-%dT%H:%M:%SZ) || {
-    echo "Cannot determine the Logstash start time." >&2
-    exit 1
-  }
-  export TPOT_LOGSTASH_START
-fi
-if [ "$TPOT_TYPE" != "SENSOR" ]; then
-  fuWAIT_TEMPLATES
-fi
+fuWAIT_TEMPLATES
 
 exec /usr/share/logstash/bin/logstash
