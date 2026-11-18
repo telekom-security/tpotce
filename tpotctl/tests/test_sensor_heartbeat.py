@@ -9,7 +9,6 @@ import sys
 import tempfile
 import time
 import unittest
-from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[2]
 LOGSTASH = ROOT / "docker/elk/logstash/dist"
