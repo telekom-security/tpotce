@@ -172,6 +172,7 @@
    "c82e417051e579b5a9b35e712ca9e86e29a8fe22d0342100655e0d206c2ff374"
   ],
   "dashboard:tpot-sensors-dashboard": [
+   "a74a375e2d866b31829ef59c181e16589832afa2db745592cfb72d246be929e4",
    "f3b0d1b629858c921ce9580ad038066aee60819ea1bb34de7c15408e6bffe071"
   ],
   "index-pattern:logstash-*": [
@@ -1113,6 +1114,7 @@
    "8df050ce6f92c73bc9d12196fb4052ca742ae38a5d68a172f8e27c82074085c9"
   ],
   "lens:tpot-sensors-starts": [
+   "bb36db4a50dc21d66409a2230f84267d16baa1c69af4be9a99a17b9218204ef5",
    "bf954d5b4b1dde17e3c8673ecd6c016ce7b6f02d3e7c998f7ffb7228c825159a"
   ],
   "lens:tpot-sensors-timeline": [
@@ -1872,7 +1874,8 @@
    "527be26dba27387e1db9d379e262cb8c4459f4991e136c5f2f099e5b18375c63"
   ],
   "visualization:tpot-sensors-about": [
-   "32581b754d34d7f8155236a6c0f5035f70027efe03841289f2c12c7aae008267"
+   "32581b754d34d7f8155236a6c0f5035f70027efe03841289f2c12c7aae008267",
+   "8a1db803676a5130ed3abe13ec18bd58f377f5c77b7696ebf4f409051c2d3dfc"
   ]
  },
  "rules": 2
