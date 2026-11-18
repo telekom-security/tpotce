@@ -6,10 +6,14 @@ certificate of a test CA, every request recorded as one JSON line.
         DIR/ca.crt and ca.key (made once), DIR/NAME.crt and NAME.key signed by it with the
         subjectAltName entries given (IP:127.0.0.1, DNS:hive.test); needs openssl.
     hive_stub.py serve --cert F --key F --log F [--bind IP] [--port N] [--status N | --status-file F]
+                       [--probe-file F]
         Answers every request with the status given; --status-file is read on each request (an
         integer, a missing or unreadable file means --status). The record: time, method, path,
         headers (names in lowercase), status, gzip (Content-Encoding gzip) and body (the text,
-        gunzipped).
+        gunzipped). The capability probe /tpot-ingest gets its own answer, --probe-file read on
+        each request: 204 (also a missing or unreadable file) with X-TPot-Ingest 2 as a HIVE that
+        takes the format, any other status without the marker (401 an old HIVE, 503 its Logstash
+        not ready); it is recorded too.
 
 Standard library only (it runs with the python3 of the tpotinit image)."""
 
@@ -57,6 +61,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     log_path = ""
     status = 200
     status_file = ""
+    probe_file = ""
 
     def current_status(self):
         if self.status_file:
@@ -66,6 +71,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except (OSError, ValueError):
                 pass
         return self.status
+
+    def probe_status(self):
+        if self.probe_file:
+            try:
+                with open(self.probe_file, encoding="utf-8") as handle:
+                    return int(handle.read().strip())
+            except (OSError, ValueError):
+                pass
+        return 204
 
     def read_body(self):
         if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
@@ -84,13 +98,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         raw = self.read_body()
         compressed = self.headers.get("Content-Encoding", "").lower() == "gzip"
         body = gzip.decompress(raw) if compressed and raw else raw
-        status = self.current_status()
+        probe = self.path.split("?", 1)[0] == "/tpot-ingest"
+        status = self.probe_status() if probe else self.current_status()
         record = {"time": time.time(), "method": self.command, "path": self.path,
                   "headers": {key.lower(): value for key, value in self.headers.items()},
                   "status": status, "gzip": compressed, "body": body.decode("utf-8", "surrogateescape")}
         line = json.dumps(record, ensure_ascii=True) + "\n"
         with self.lock, open(self.log_path, "a", encoding="utf-8") as handle:
             handle.write(line)
+        if probe:
+            self.send_response(status)
+            if status == 204:
+                self.send_header("X-TPot-Ingest", "2")
+            else:
+                self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         answer = b'{"ok":true}' if status < 300 else b'{"ok":false}'
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -108,6 +131,7 @@ def serve(args):
     Handler.log_path = args.log
     Handler.status = args.status
     Handler.status_file = args.status_file or ""
+    Handler.probe_file = args.probe_file or ""
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(args.cert, args.key)
     server = http.server.ThreadingHTTPServer((args.bind, args.port), Handler)
@@ -132,6 +156,7 @@ def main(argv=None):
     server.add_argument("--port", type=int, default=64294)
     server.add_argument("--status", type=int, default=200)
     server.add_argument("--status-file")
+    server.add_argument("--probe-file")
     args = parser.parse_args(argv)
     if args.command == "certs":
         make_certs(args.folder, args.name, args.san)

@@ -13,7 +13,7 @@ DEFAULT_IMAGE="ghcr.io/telekom-security/fluentbit:24.04.2"
 DEFAULT_INIT_IMAGE="ghcr.io/telekom-security/tpotinit:24.04.2"
 IMAGE=""
 INIT_IMAGE=""
-CASES="1,2,3,4,5,6,7,8,9"
+CASES="1,2,3,4,5,6,7,8,9,10,11,12"
 # what tpotinit writes into elk_environment of a SENSOR, and the access of the sensor at the HIVE
 SMOKE_HOSTNAME="sensor-smoke"
 SMOKE_EXTIP="198.51.100.7"
@@ -23,6 +23,7 @@ SMOKE_AUTH="$(printf '%s' 'sensor-smoke:not-a-secret' | base64)"
 CERTS=""
 RUN_DIR=""
 RUN_START=""
+HEALTH_INTERVAL=""
 
 usage() {
   cat <<EOF
@@ -30,7 +31,8 @@ Usage: $0 [options]
 
 Runs the Fluent Bit image of a SENSOR against a stub of the HIVE's ingest endpoint
 (docker/_tests/lib/hive_stub.py: HTTPS with a test CA, every request recorded,
-answers 200 or what its status file says). The stub runs in the tpotinit image
+answers 200 or what its status file says; its capability probe /tpot-ingest 204
+with X-TPot-Ingest 2 or what its probe file says). The stub runs in the tpotinit image
 without a network, Fluent Bit shares its network namespace (127.0.0.1, and
 hive.test through the hosts file of the stub). Cases:
 
@@ -53,7 +55,13 @@ hive.test through the hosts file of the stub). Cases:
      certificate without the address delivers nothing and the log names it.
   9  uid 2000, a read-only root, healthy, the plugins tail, dummy, lua and
      http, and the entrypoint refuses an empty TPOT_HIVE_IP / TPOT_HIVE_USER
-     or a wrong LS_SSL_VERIFICATION.
+     or a wrong LS_SSL_VERIFICATION or FLB_PROBE_INTERVAL.
+ 10  The HIVE answers 401 on /tpot-ingest (an old HIVE): no POST, the message
+     names it, the container stays healthy for 3 checks in a row.
+ 11  Then 503 without the marker (its Logstash not ready): no POST, the message
+     names it.
+ 12  Then 204 with X-TPot-Ingest 2 (FLB_PROBE_INTERVAL=5): every line written
+     before arrives within 15 s, once each.
 
 All cases take about six minutes (heartbeat interval, 503 and retries).
 
@@ -61,7 +69,7 @@ Options:
   --image IMAGE       Fluent Bit image to test. Defaults to docker/fluentbit/docker-compose.yml.
   --init-image IMAGE  Image the stub runs in (python3 with ssl, openssl). Defaults to
                       docker/tpotinit/docker-compose.yml.
-  --cases LIST        Only these cases (comma separated numbers). Default: all.
+  --cases LIST        Only these cases (comma separated numbers 1-12). Default: all.
   --timeout SEC       Time to wait for a delivery (at least 120 s are used).
   --bind-ip IP        Accepted for runner compatibility; nothing is published.
   --keep-artifacts    Keep the temporary files for debugging.
@@ -87,7 +95,11 @@ parse_args() {
       *) test_die "Unknown option: $1" ;;
     esac
   done
-  [[ "${CASES}" =~ ^[1-9](,[1-9])*$ ]] || test_die "--cases takes numbers 1-9, comma separated: ${CASES}"
+  local case
+  [[ "${CASES}" =~ ^[0-9]+(,[0-9]+)*$ ]] || test_die "--cases takes numbers 1-12, comma separated: ${CASES}"
+  for case in ${CASES//,/ }; do
+    (( 10#${case} >= 1 && 10#${case} <= 12 )) || test_die "--cases takes numbers 1-12, comma separated: ${CASES}"
+  done
 }
 
 wanted() {
@@ -303,7 +315,8 @@ def append(path, kind, prefix, count="1"):
     os.chmod(path, 0o644)
 
 
-def expect_tokens(run, once, settle, *tokens):
+def expect_tokens(run, once, settle, *tokens, timeout=None):
+    timeout = timeout or TIMEOUT
     wanted = set(tokens)
 
     def there(events):
@@ -313,10 +326,10 @@ def expect_tokens(run, once, settle, *tokens):
     def missing():
         return sorted(wanted - {token_of(event) for _, event in delivered(run)})
 
-    deadline = time.monotonic() + TIMEOUT
+    deadline = time.monotonic() + timeout
     while not there(delivered(run)):
         if time.monotonic() > deadline:
-            fail(f"{len(missing())} lines missing after {TIMEOUT} s, e.g. {missing()[:5]}")
+            fail(f"{len(missing())} lines missing after {timeout} s, e.g. {missing()[:5]}")
         time.sleep(0.5)
     if once == "once":
         time.sleep(float(settle))
@@ -354,6 +367,35 @@ def nothing(run, seconds):
     print(f"no request reached the stub in {seconds} s")
 
 
+def within(run, seconds, *tokens):
+    """expect once, within SECONDS from now (a delivery after the probe of the HIVE succeeded)."""
+    start = time.monotonic()
+    expect_tokens(run, "once", "2", *tokens, timeout=float(seconds))
+    print(f"within {time.monotonic() - start:.1f} s")
+
+
+def posts(run, count):
+    """The number of POSTs of events (not the probes /tpot-ingest) is COUNT."""
+    found = [request for request in requests(run) if request["path"] != "/tpot-ingest"]
+    if len(found) != int(count):
+        fail(f"{len(found)} requests of events reached the stub, expected {count}")
+    print(f"{len(found)} requests of events")
+
+
+def probes(run, status):
+    """Waits for a probe /tpot-ingest the stub answered with STATUS."""
+    deadline = time.monotonic() + TIMEOUT
+    while not any(r["path"] == "/tpot-ingest" and r["status"] == int(status) for r in requests(run)):
+        if time.monotonic() > deadline:
+            fail(f"no probe answered {status} after {TIMEOUT} s")
+        time.sleep(0.5)
+    found = [r for r in requests(run) if r["path"] == "/tpot-ingest"]
+    bad = [r for r in found if r["method"] != "GET" or r["body"]]
+    if bad:
+        fail(f"a probe is no GET without a body: {bad[0]}")
+    print(f"{len(found)} probes so far")
+
+
 def statuses(run, status):
     """Waits for a request the stub answered with STATUS (Fluent Bit tried to deliver)."""
     deadline = time.monotonic() + TIMEOUT
@@ -365,7 +407,7 @@ def statuses(run, status):
 
 COMMANDS = {"folders": folders, "prepare-fixtures": prepare_fixtures, "fixtures": case_fixtures, "heartbeats": case_heartbeats,
             "append": append, "expect": expect_tokens, "long": case_long, "invalid": case_invalid,
-            "nothing": nothing, "status": statuses}
+            "nothing": nothing, "status": statuses, "within": within, "posts": posts, "probes": probes}
 COMMANDS[sys.argv[1]](*sys.argv[2:])
 PY
 }
@@ -390,7 +432,7 @@ write_compose() {
     printf '    user: "%s:%s"\n' "$(id -u)" "$(id -g)"
     printf '    network_mode: none\n'
     printf '    extra_hosts: ["hive.test:127.0.0.1"]\n'
-    printf '    entrypoint: ["python3", "/stub-lib/hive_stub.py", "serve", "--cert", "/certs/%s.crt", "--key", "/certs/%s.key", "--log", "/stub/requests.jsonl", "--status-file", "/stub/status"]\n' "${cert}" "${cert}"
+    printf '    entrypoint: ["python3", "/stub-lib/hive_stub.py", "serve", "--cert", "/certs/%s.crt", "--key", "/certs/%s.key", "--log", "/stub/requests.jsonl", "--status-file", "/stub/status", "--probe-file", "/stub/probe"]\n' "${cert}" "${cert}"
     printf '    volumes:\n'
     printf '      - "%s:/stub-lib:ro"\n' "${TEST_LIB_DIR}"
     printf '      - "%s:/certs:ro"\n' "${CERTS}"
@@ -403,6 +445,10 @@ write_compose() {
     printf '    read_only: true\n'
     printf '    tmpfs: ["/tmp:uid=2000,gid=2000"]\n'
     printf '    mem_limit: 256m\n'
+    if [[ -n "${HEALTH_INTERVAL}" ]]; then
+      printf '    healthcheck:\n'
+      printf '      interval: %s\n' "${HEALTH_INTERVAL}"
+    fi
     printf '    environment:\n'
     for key in "${keys[@]}"; do
       printf '      %s: "%s"\n' "${key}" "${env[${key}]}"
@@ -444,7 +490,9 @@ start_run() {
   local cert="$1"
   shift
   open_data
-  write_compose "${cert}" "TPOT_HIVE_IP=127.0.0.1" "TPOT_HIVE_USER=${SMOKE_AUTH}" "LS_SSL_VERIFICATION=full" "$@"
+  # FLB_PROBE_INTERVAL=2: a first probe before the stub listens must not hold a run for 300 s
+  write_compose "${cert}" "TPOT_HIVE_IP=127.0.0.1" "TPOT_HIVE_USER=${SMOKE_AUTH}" "LS_SSL_VERIFICATION=full" \
+    "FLB_PROBE_INTERVAL=2" "$@"
   test_compose up -d --force-recreate --remove-orphans >/dev/null 2>&1 || test_die "Could not start the run $(basename "${RUN_DIR}")"
   RUN_START="$(python3 -c 'import time; print(time.time())')"
   test_wait_for_container || test_die "Fluent Bit did not start"
@@ -592,6 +640,8 @@ run_tls() {
   start_run wrong
   checker nothing "${RUN_DIR}" 15
   flb_logs | grep -i -E "tls|certificate|verify" >/dev/null || test_die "No TLS error in the log of Fluent Bit"
+  flb_logs | grep -i -E "The HIVE is not reachable \(curl: \([0-9]+\).*(certificate|ssl|tls)" >/dev/null \
+    || test_die "The probe does not name the TLS error of curl"
   test_ok "8 TLS: 127.0.0.1 and hive.test deliver; a wrong certificate: $(flb_logs | grep -i -E 'tls|certificate|verify' | head -n 1)"
   stop_run
 }
@@ -603,14 +653,79 @@ run_image() {
   for plugin in tail dummy lua http; do
     grep -E "^[[:space:]]+${plugin}[[:space:]]" <<< "${help}" >/dev/null || test_die "fluent-bit -h does not list ${plugin}"
   done
-  for setting in "TPOT_HIVE_IP=" "TPOT_HIVE_USER=" "LS_SSL_VERIFICATION=sometimes"; do
+  for setting in "TPOT_HIVE_IP=" "TPOT_HIVE_USER=" "LS_SSL_VERIFICATION=sometimes" "FLB_PROBE_INTERVAL=0"; do
     rc=0
     out="$(docker run --rm --network none --read-only -e TPOT_HIVE_IP=127.0.0.1 -e "TPOT_HIVE_USER=${SMOKE_AUTH}" \
       -e "${setting}" "${IMAGE}" 2>&1)" || rc=$?
     [[ "${rc}" -eq 1 ]] || test_die "The entrypoint takes ${setting} (rc ${rc}): ${out}"
     grep -F "${setting%%=*}" <<< "${out}" >/dev/null || test_die "The entrypoint does not name ${setting%%=*}: ${out}"
   done
-  test_ok "9 plugins tail, dummy, lua, http; the entrypoint refuses an empty HIVE address or user and a wrong verification"
+  test_ok "9 plugins tail, dummy, lua, http; the entrypoint refuses an empty HIVE address or user, a wrong verification or probe interval"
+}
+
+# The healthy checks in a row at the end of the health log of Fluent Bit
+healthy_streak() {
+  local code streak=0
+  for code in $(docker inspect -f '{{if .State.Health}}{{range .State.Health.Log}}{{.ExitCode}} {{end}}{{end}}' "${TEST_CONTAINER_NAME}"); do
+    if [[ "${code}" == "0" ]]; then streak=$((streak + 1)); else streak=0; fi
+  done
+  printf '%s\n' "${streak}"
+}
+
+wait_for_log() {
+  # wait_for_log <text> <seconds>
+  local deadline=$((SECONDS + $2))
+  until flb_logs | grep -F -- "$1" >/dev/null; do
+    (( SECONDS < deadline )) || test_die "Fluent Bit did not log within $2 s: $1"
+    sleep 1
+  done
+}
+
+# Run probe (E2): a HIVE that does not take the format (401), then its Logstash not ready (503 without
+# the marker), then one that takes it; Fluent Bit reads and sends nothing until then
+run_probe() {
+  local data n deadline
+  local tokens=()
+  prepare_run probe
+  data="${RUN_DIR}/data"
+  echo 401 > "${RUN_DIR}/stub/probe"
+  checker append "${data}/cowrie/log/cowrie.json" lines held-cowrie 5
+  checker append "${data}/dionaea/log/dionaea.json" lines held-dionaea 5
+  HEALTH_INTERVAL=2s start_run hive FLB_PROBE_INTERVAL=5
+  checker probes "${RUN_DIR}" 401
+  wait_for_log "The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here." 30
+  checker append "${data}/cowrie/log/cowrie.json" lines waiting-cowrie 5
+  if wanted 10; then
+    deadline=$((SECONDS + 60))
+    until [[ "$(healthy_streak)" -ge 3 ]]; do
+      (( SECONDS < deadline )) || test_die "Fluent Bit was not healthy for 3 checks in a row while it waits: $(docker inspect -f '{{json .State.Health}}' "${TEST_CONTAINER_NAME}")"
+      sleep 1
+    done
+    [[ "$(docker inspect -f '{{.State.Health.Status}}' "${TEST_CONTAINER_NAME}")" == "healthy" ]] \
+      || test_die "Fluent Bit is not healthy while it waits"
+    checker posts "${RUN_DIR}" 0
+    test_ok "10 401 on /tpot-ingest: no POST, healthy for $(healthy_streak) checks in a row, the message names it"
+  fi
+  echo 503 > "${RUN_DIR}/stub/probe"
+  checker probes "${RUN_DIR}" 503
+  wait_for_log "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here." 30
+  checker append "${data}/dionaea/log/dionaea.json" lines waiting-dionaea 5
+  checker posts "${RUN_DIR}" 0
+  if wanted 11; then
+    test_ok "11 503 without the marker: no POST, the message names it"
+  fi
+  echo 204 > "${RUN_DIR}/stub/probe"
+  for n in $(seq -f '%05g' 0 4); do
+    tokens+=("held-cowrie-${n}" "held-dionaea-${n}" "waiting-cowrie-${n}" "waiting-dionaea-${n}")
+  done
+  checker within "${RUN_DIR}" 15 "${tokens[@]}"
+  if wanted 12; then
+    test_ok "12 204 with X-TPot-Ingest 2: all ${#tokens[@]} lines written before arrive within 15 s, once each"
+  fi
+  if flb_logs | grep -E "\[ *(error|warn)\]" >&2; then
+    test_die "Fluent Bit logged errors or warnings (above)"
+  fi
+  stop_run
 }
 
 make_certs() {
@@ -641,6 +756,7 @@ main() {
   if wanted 5; then run_retry; fi
   if wanted 7; then run_limit; fi
   if wanted 8; then run_tls; fi
+  if wanted 10 || wanted 11 || wanted 12; then run_probe; fi
   if wanted 9; then run_image; fi
   test_ok "fluentbit smoke test passed (cases ${CASES})"
 }

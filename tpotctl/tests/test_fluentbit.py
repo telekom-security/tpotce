@@ -130,6 +130,14 @@ class ConfigTest(unittest.TestCase):
         for line in ('TPOT_HIVE_PORT="${TPOT_HIVE_PORT:-64294}"', 'FLB_STORAGE_LIMIT="${FLB_STORAGE_LIMIT:-512M}"'):
             self.assertIn(line, text)
         self.assertRegex(text, r"(?m)^exec fluent-bit -c /etc/fluent-bit/fluent-bit\.yaml$")
+        # E2: the probe of the HIVE before Fluent Bit starts (the smoke test runs every answer)
+        self.assertLess(text.index("\nfuPROBE\n"), text.index("\nexec fluent-bit"))
+        for message in ("The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here.",
+                        "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here.",
+                        "The HIVE is not reachable ("):
+            self.assertIn(message, text)
+        self.assertIn("https://${TPOT_HIVE_IP}:${TPOT_HIVE_PORT}/tpot-ingest", text)
+        self.assertIn('"${FLB_PROBE_INTERVAL:-300}"', text)
 
 
 @unittest.skipUnless(LUA, "needs lua or luajit on PATH (the smoke test runs the filter in Fluent Bit)")

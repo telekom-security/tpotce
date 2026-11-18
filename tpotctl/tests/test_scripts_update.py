@@ -3189,6 +3189,87 @@ class BackupReportTest(Scripts):
         self.assertTrue(Path(self.archive).is_file())
 
 
+class HiveIngestTest(Scripts):
+    """E2: after the update a SENSOR asks its HIVE (nginx 64294, /tpot-ingest) whether its Logstash
+    takes the format of this release; every answer but 204 with X-TPot-Ingest 2 is a warning in the
+    summary, never a failed update. A HIVE asks nothing. The curl stub prints $HOME/answer as the
+    headers of -D - and ends with $HOME/rc (an error
+    line of curl's own on stderr)."""
+
+    NOT_YET = "The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here."
+    NOT_READY = "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here."
+
+    def setUp(self):
+        super().setUp()
+        self.stub("curl", '#!/bin/sh\necho "curl $*" >> "$HOME/calls"\n'
+                          'rc="$(cat "$HOME/rc" 2>/dev/null || echo 0)"\n'
+                          '[ ! -f "$HOME/answer" ] || cat "$HOME/answer"\n'
+                          '[ "$rc" = 0 ] || echo "curl: ($rc) stub error" >&2\nexit "$rc"\n')
+
+    def env_file(self, kind="SENSOR", verification=None):
+        lines = [f"TPOT_TYPE={kind}", "TPOT_DATA_PATH=/srv/tpot-data", "TPOT_HIVE_IP=192.0.2.10"]
+        if verification:
+            lines.append(f'LS_SSL_VERIFICATION: "{verification}"')
+        Path(self.tpotce, ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def answer(self, headers, rc=0):
+        Path(self.home, "answer").write_text("".join(line + "\r\n" for line in headers) + "\r\n", encoding="utf-8")
+        Path(self.home, "rc").write_text(f"{rc}\n", encoding="utf-8")
+
+    def probe(self):
+        result = self.source_update('myDONE=()\nfuHIVE_INGEST\necho "rc=$?"\n'
+                                    'for myITEM in "${myDONE[@]}"; do echo "done ${myITEM}"; done')
+        self.assertIn("rc=0", result.stdout, result.stdout + result.stderr)
+        return [line[5:] for line in result.stdout.splitlines() if line.startswith("done ")]
+
+    def test_a_hive_that_takes_the_format_is_no_warning(self):
+        self.env_file()
+        for marker in ("X-TPot-Ingest: 2", "x-tpot-ingest:2"):
+            with self.subTest(marker=marker):
+                self.answer(["HTTP/2 204", "server: nginx", marker])
+                self.assertEqual(self.probe(), [])
+        calls = self.calls()
+        self.assertIn("--max-time 10", calls)
+        self.assertIn("--cacert /srv/tpot-data/hive.crt", calls)
+        self.assertIn("https://192.0.2.10:64294/tpot-ingest", calls)
+        self.assertNotIn(" -k", calls)
+
+    def test_every_other_answer_is_a_warning(self):
+        self.env_file()
+        for headers, rc, text in (
+                (["HTTP/2 401", "www-authenticate: Basic realm=\"closed site\""], 0, self.NOT_YET),
+                (["HTTP/2 503"], 0, self.NOT_READY),
+                (["HTTP/2 503", "X-TPot-Ingest: 2"], 0, "The HIVE is not reachable (HTTP 503)."),
+                (["HTTP/2 204"], 0, "The HIVE is not reachable (HTTP 204)."),
+                ([], 28, "The HIVE is not reachable (curl: (28) stub error)."),
+                ([], 60, "The HIVE is not reachable (curl: (60) stub error).")):
+            with self.subTest(headers=headers, rc=rc):
+                self.answer(headers, rc)
+                self.assertEqual(self.probe(), ["warn:" + text])
+
+    def test_verification_none_skips_the_certificate(self):
+        self.env_file(verification="none")
+        self.answer(["HTTP/1.1 204 No Content", "X-TPot-Ingest: 2"])
+        self.assertEqual(self.probe(), [])
+        self.assertIn(" -k ", self.calls())
+        self.assertNotIn("--cacert", self.calls())
+
+    def test_a_hive_asks_nothing(self):
+        for kind in ("HIVE", ""):
+            with self.subTest(kind=kind):
+                self.env_file(kind)
+                self.answer(["HTTP/2 401"])
+                self.assertEqual(self.probe(), [])
+                self.assertEqual(self.calls(), "")
+
+    def test_after_the_start(self):
+        text = Path(UPDATE_SH).read_text(encoding="utf-8")
+        main = text[text.index('\nfuMARK phase check Checking the version and the source\n'):]
+        self.assertEqual(main.count("fuHIVE_INGEST"), 1)
+        self.assertLess(main.index('fuDID ok "T-Pot is started."'), main.index("fuHIVE_INGEST"))
+        self.assertLess(main.index('(update.sh -s does it for you)."'), main.index("fuHIVE_INGEST"))
+
+
 class UpdateLockTest(Scripts):
 
     def setUp(self):

@@ -9,8 +9,14 @@ source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="nginx"
 DEFAULT_IMAGE="dtagdevsec/nginx:24.04.2"
+DEFAULT_INIT_IMAGE="ghcr.io/telekom-security/tpotinit:24.04.2"
 IMAGE=""
+INIT_IMAGE=""
 HTTPS_PORT=""
+STATE_DIR=""
+MAPPED_INGEST_PORT=""
+LS_USER="sensor-smoke"
+LS_PASSWORD=""
 CERT_DIR=""
 LOG_DIR=""
 PASSWD_FILE=""
@@ -24,10 +30,14 @@ usage() {
 Usage: $0 [options]
 
 Run an isolated post-build smoke test for the Nginx image: the landing page behind
-the login, its security headers and caching, and the neutral error page.
+the login, its security headers and caching, and the neutral error page; the ingest
+listener of a HIVE (64294) with a stand-in for Logstash: the login, large batches and
+the capability probe /tpot-ingest of the SENSORs against a new and an old Logstash.
 
 Options:
   --image IMAGE      Image to test. Defaults to docker/nginx/docker-compose.yml.
+  --init-image IMAGE Image the Logstash stand-in runs in (python3). Defaults to
+                     docker/tpotinit/docker-compose.yml.
   --https-port PORT  Host TCP port for the web UI (64297 in T-Pot). Default: dynamic loopback port.
   --timeout SEC      Timeout for startup and checks. Default: 30.
   --bind-ip IP       Host IP to bind. Default: 127.0.0.1.
@@ -46,6 +56,15 @@ parse_args() {
         ;;
       --image=*)
         IMAGE="${1#*=}"
+        shift
+        ;;
+      --init-image)
+        [[ $# -ge 2 ]] || test_die "--init-image requires an argument"
+        INIT_IMAGE="$2"
+        shift 2
+        ;;
+      --init-image=*)
+        INIT_IMAGE="${1#*=}"
         shift
         ;;
       --https-port|--port)
@@ -105,9 +124,11 @@ prepare_nginx_harness() {
   LOG_DIR="${TEST_TMP_ROOT}/log"
   PASSWD_FILE="${TEST_TMP_ROOT}/nginxpasswd"
   LSPASSWD_FILE="${TEST_TMP_ROOT}/lswebpasswd"
+  STATE_DIR="${TEST_TMP_ROOT}/state"
   TEST_ARTIFACT_LOG_DIR="${LOG_DIR}"
 
-  mkdir -p "${CERT_DIR}" "${LOG_DIR}"
+  mkdir -p "${CERT_DIR}" "${LOG_DIR}" "${STATE_DIR}"
+  chmod 0777 "${STATE_DIR}"
   chmod 0755 "${CERT_DIR}"
   chmod 0777 "${LOG_DIR}"
 
@@ -124,13 +145,19 @@ prepare_nginx_harness() {
 import base64, hashlib, sys
 print(f"{sys.argv[1]}:{{SHA}}" + base64.b64encode(hashlib.sha1(sys.argv[2].encode()).digest()).decode())
 PY
-  : > "${LSPASSWD_FILE}"
+  LS_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')"
+  python3 - "${LS_USER}" "${LS_PASSWORD}" > "${LSPASSWD_FILE}" <<'PY'
+import base64, hashlib, sys
+print(f"{sys.argv[1]}:{{SHA}}" + base64.b64encode(hashlib.sha1(sys.argv[2].encode()).digest()).decode())
+PY
   chmod 0644 "${PASSWD_FILE}" "${LSPASSWD_FILE}"
+  write_logstash_standin
 
   local port_mapping="${TEST_BIND_IP}::64297"
   if [[ -n "${HTTPS_PORT}" ]]; then
     port_mapping="${TEST_BIND_IP}:${HTTPS_PORT}:64297"
   fi
+  local ingest_mapping="${TEST_BIND_IP}::64294"
 
   cat > "${TEST_HARNESS_COMPOSE}" <<EOF
 services:
@@ -149,11 +176,19 @@ services:
       - /var/lib/nginx/tmp:uid=100,gid=82
     ports:
       - "${port_mapping}"
+      - "${ingest_mapping}"
     volumes:
       - "${CERT_DIR}:/etc/nginx/cert:ro"
       - "${PASSWD_FILE}:/etc/nginx/nginxpasswd:ro"
       - "${LSPASSWD_FILE}:/etc/nginx/lswebpasswd:ro"
       - "${LOG_DIR}:/var/log/nginx"
+  logstash:
+    image: "${INIT_IMAGE}"
+    container_name: "${TEST_CONTAINER_NAME}-logstash"
+    restart: "no"
+    entrypoint: ["python3", "-u", "/state/logstash.py"]
+    volumes:
+      - "${STATE_DIR}:/state"
 networks:
   default:
     name: "${TEST_PROJECT_NAME}_net"
@@ -255,6 +290,227 @@ if failures:
 PY
 }
 
+# A stand-in for Logstash under the name logstash: 64305 (the sensors input) records every request
+# and answers 200; 64306 (the probe input of a new Logstash) records too and answers 204 with the
+# marker and headers that must not reach the client. /state/mode: "new" (default), "200" (the probe
+# port answers 200 with the marker and a body), "old" (no listener on 64306, as a Logstash before it)
+write_logstash_standin() {
+  cat > "${STATE_DIR}/logstash.py" <<'PY'
+import http.server
+import json
+import threading
+import time
+
+lock = threading.Lock()
+
+
+def mode():
+    try:
+        with open("/state/mode", encoding="utf-8") as handle:
+            return handle.read().strip() or "new"
+    except OSError:
+        return "new"
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def record(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        entry = {"port": self.server.server_address[1], "method": self.command, "path": self.path,
+                 "headers": {k.lower(): v for k, v in self.headers.items()}, "length": len(body)}
+        with lock, open("/state/requests", "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry) + "\n")
+
+    def answer(self):
+        self.record()
+        if self.server.server_address[1] == 64305:
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"ok")
+        elif mode() == "200":
+            self.send_response(200)
+            self.send_header("X-TPot-Ingest", "2")
+            self.send_header("Content-Length", "9")
+            self.end_headers()
+            self.wfile.write(b"LEAK-BODY")
+        else:
+            self.send_response(204)
+            self.send_header("X-TPot-Ingest", "2")
+            self.send_header("X-Leak", "stand-in")
+            self.send_header("Set-Cookie", "leak=1")
+            self.end_headers()
+
+    do_GET = do_POST = do_HEAD = do_PUT = answer
+
+    def log_message(self, *args):
+        pass
+
+
+def serve(port):
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+serve(64305)
+probe = None
+while True:
+    if mode() == "old" and probe:
+        probe.shutdown()
+        probe.server_close()
+        probe = None
+    elif mode() != "old" and not probe:
+        probe = serve(64306)
+    with open("/state/probe-port", "w", encoding="utf-8") as handle:
+        handle.write("closed" if probe is None else "open")
+    time.sleep(0.2)
+PY
+}
+
+run_ingest_checks() {
+  python3 - "${TEST_BIND_IP}" "${MAPPED_INGEST_PORT}" "${LS_USER}" "${LS_PASSWORD}" "${TEST_TIMEOUT}" \
+    "${CERT_DIR}/nginx.crt" "${STATE_DIR}" <<'PY'
+import base64
+import http.client
+import json
+import os
+import ssl
+import sys
+import time
+
+host, port, user, password, timeout = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5])
+context = ssl.create_default_context(cafile=sys.argv[6])
+state = sys.argv[7]
+auth = "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
+failures = []
+
+
+def ask(method, path, login=False, body=None, headers=None):
+    conn = http.client.HTTPSConnection(host, port, timeout=timeout, context=context)
+    sent = dict(headers or {})
+    if login:
+        sent["Authorization"] = auth
+    conn.request(method, path, body=body, headers=sent)
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    return response.status, response.headers, data
+
+
+def check(what, ok):
+    print(("ok   " if ok else "FAIL ") + what)
+    if not ok:
+        failures.append(what)
+
+
+def requests():
+    try:
+        with open(os.path.join(state, "requests"), encoding="utf-8") as handle:
+            return [json.loads(line) for line in handle if line.strip()]
+    except OSError:
+        return []
+
+
+def set_mode(value):
+    with open(os.path.join(state, "mode"), "w", encoding="utf-8") as handle:
+        handle.write(value)
+    want = "closed" if value == "old" else "open"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with open(os.path.join(state, "probe-port"), encoding="utf-8") as handle:
+                if handle.read().strip() == want:
+                    time.sleep(0.5)
+                    return
+        except OSError:
+            pass
+        time.sleep(0.2)
+    raise SystemExit(f"FAIL the stand-in did not switch to {value}")
+
+
+def probe(method="GET", headers=None):
+    # one request a second: the probe is limited to 1 r/s per address (burst 5)
+    time.sleep(1.1)
+    return ask(method, "/tpot-ingest", headers=headers)
+
+
+# wait until nginx and the stand-in answer
+set_mode("new")
+deadline = time.monotonic() + timeout
+while True:
+    try:
+        ask("GET", "/", login=True)
+        break
+    except OSError as exc:
+        if time.monotonic() > deadline:
+            print(f"FAIL nginx does not answer on {host}:{port}: {exc}")
+            sys.exit(1)
+        time.sleep(1)
+
+# the ingest itself: only with the login of a sensor (the test runs from outside the container)
+status, _, _ = ask("GET", "/")
+check("ingest: 401 without a login", status == 401)
+before = len(requests())
+status, _, _ = ask("POST", "/", login=True, body=b"x" * (3 * 1024 * 1024),
+                   headers={"Content-Type": "application/json"})
+new = requests()[before:]
+check("ingest: a 3 MB batch with the login is passed on (not 413)",
+      status == 200 and any(r["port"] == 64305 and r["length"] == 3 * 1024 * 1024 for r in new))
+check("ingest: the sensor user goes to Logstash",
+      any(r["headers"].get("x-tpot-sensor") == user for r in new))
+
+# new Logstash: 204 with the marker, without a login, nothing of the client or of Logstash passed on
+before = len(requests())
+status, headers, body = probe(headers={"Authorization": auth, "X-Client": "secret", "Cookie": "c=1"})
+check("probe, new Logstash: 204", status == 204)
+check("probe, new Logstash: X-TPot-Ingest 2, once", headers.get_all("X-TPot-Ingest") == ["2"])
+check("probe, new Logstash: no body", body == b"")
+check("probe, new Logstash: no header of the stand-in",
+      headers.get("X-Leak") is None and headers.get("Set-Cookie") is None)
+new = requests()[before:]
+check("probe, new Logstash: one GET on 64306, nothing on 64305",
+      [(r["port"], r["method"]) for r in new] == [(64306, "GET")])
+check("probe, new Logstash: no header or body of the client reaches Logstash",
+      all(not ({"authorization", "x-client", "cookie", "x-tpot-sensor"} & set(r["headers"])) and r["length"] == 0
+          for r in new))
+status, headers, body = probe(headers={"X-Client": "secret"})
+check("probe, new Logstash: 204 without any login", status == 204 and headers.get("X-TPot-Ingest") == "2")
+status, headers, _ = probe("HEAD")
+check("probe: HEAD works too", status == 204 and headers.get("X-TPot-Ingest") == "2")
+before = len(requests())
+status, headers, _ = ask("POST", "/tpot-ingest", body=b"{}", headers={"Content-Type": "application/json"})
+check("probe: 405 for POST, nothing to Logstash",
+      status == 405 and headers.get("X-TPot-Ingest") is None and requests()[before:] == [])
+
+# a probe port that answers anything but 204: 503 without the marker, no body of Logstash
+set_mode("200")
+status, headers, body = probe()
+check("probe, 200 of Logstash: 503 without the marker",
+      status == 503 and headers.get("X-TPot-Ingest") is None and b"LEAK" not in body)
+
+# old Logstash (no probe input): 503 without the marker, and no event could be made
+set_mode("old")
+before = len(requests())
+status, headers, body = probe(headers={"Authorization": auth})
+check("probe, old Logstash: 503", status == 503)
+check("probe, old Logstash: no marker", headers.get("X-TPot-Ingest") is None)
+check("probe, old Logstash: says the pipeline is not ready", body == b"ingest pipeline not ready\n")
+check("probe, old Logstash: nothing reached the 64305 input", requests()[before:] == [])
+
+# the probe is open without a login: a few a second per address, then 429
+set_mode("new")
+time.sleep(6)
+codes = [ask("GET", "/tpot-ingest")[0] for _ in range(12)]
+check(f"probe: 429 beyond the burst ({codes})", 429 in codes and codes[0] == 204)
+
+if failures:
+    print(f"{len(failures)} check(s) failed")
+    sys.exit(1)
+PY
+}
+
 main() {
   parse_args "$@"
   validate_args
@@ -264,9 +520,13 @@ main() {
   if [[ -z "${IMAGE}" ]]; then
     IMAGE="$(test_read_compose_image "${TEST_NAME}" "${DEFAULT_IMAGE}")"
   fi
+  if [[ -z "${INIT_IMAGE}" ]]; then
+    INIT_IMAGE="$(test_read_compose_image tpotinit "${DEFAULT_INIT_IMAGE}")"
+  fi
 
   test_info "Using image: ${IMAGE}"
   test_require_image "${IMAGE}" "docker compose -f docker/${TEST_NAME}/docker-compose.yml build ${TEST_NAME}"
+  test_require_image "${INIT_IMAGE}" "docker compose -f docker/tpotinit/docker-compose.yml build tpotinit"
 
   if [[ -n "${HTTPS_PORT}" ]]; then
     test_ensure_port_free "${TEST_BIND_IP}" "${HTTPS_PORT}" || test_die "${TEST_BIND_IP}:${HTTPS_PORT} is already in use. Try --https-port <free-port>."
@@ -283,6 +543,9 @@ main() {
   test_info "Nginx is listening on https://${TEST_BIND_IP}:${MAPPED_HTTPS_PORT}"
 
   run_checks || test_die "Nginx checks failed"
+  MAPPED_INGEST_PORT="$(test_get_mapped_port nginx 64294)" || test_die "Could not resolve the mapped ingest port"
+  test_info "The ingest listener is on https://${TEST_BIND_IP}:${MAPPED_INGEST_PORT}"
+  run_ingest_checks || test_die "Nginx ingest checks failed"
   test_ok "Nginx smoke test passed"
 }
 

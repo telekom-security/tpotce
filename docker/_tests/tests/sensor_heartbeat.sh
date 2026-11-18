@@ -230,6 +230,41 @@ for hit in status + history:
 print("Identity, sensor/HIVE clocks, one status, 1:5 history and normal events OK")
 print("Sensor events without headers and host; a body's @metadata routes nothing")
 
+# E2: the capability probe input of the sensors pipeline (64306, what nginx /tpot-ingest asks) answers
+# 204 with X-TPot-Ingest 2 and leaves nothing behind: no document, no status, no history entry - also
+# not for a request with a body and the header of a sensor (nginx sends neither)
+def probe_input(method, body=None):
+    command = ["docker", "compose", "-f", compose, "-p", project, "exec", "-T", "elasticsearch",
+               "curl", "--noproxy", "*", "-sS", "--max-time", "10", "-o", "/dev/null", "-D", "-", "-X", method]
+    if body is not None:
+        command += ["-H", "content-type: application/json", "-H", "X-TPot-Sensor: sensor-probe",
+                    "--data-binary", "@-"]
+    done = subprocess.run(command + ["http://logstash:64306/tpot-ingest-logstash"], capture_output=True,
+                          text=True, timeout=20, input=None if body is None else json.dumps(body))
+    assert done.returncode == 0, done.stderr
+    lines = done.stdout.replace("\r", "").splitlines()
+    marks = [line.split(":", 1)[1].strip() for line in lines if line.lower().startswith("x-tpot-ingest:")]
+    return int(lines[0].split()[1]), marks
+
+def counts():
+    refresh()
+    return {pattern: len(search(pattern)) for pattern in ("logstash-*", "tpot-sensor-status", "tpot-sensor-heartbeat-*")}
+
+counted = counts()
+assert probe_input("GET") == (204, ["2"]), probe_input("GET")
+assert probe_input("POST", batch[:5] + [{"type": "Cowrie", "message": "through-the-probe"}]) == (204, ["2"])
+send({"type": "Cowrie", "message": "after-the-probe"}, "sensor-a")
+
+def after_probe():
+    refresh()
+    return any(hit["_source"].get("message") == "after-the-probe" for hit in search("logstash-*"))
+
+wait_for(after_probe, "normal event after the probe not processed")
+expected = dict(counted, **{"logstash-*": counted["logstash-*"] + 1})
+assert counts() == expected, (counts(), expected)
+assert not [hit for hit in search("*") if hit["_source"].get("message") == "through-the-probe"]
+print("Probe input 64306: 204 with X-TPot-Ingest 2, no document, status or history")
+
 legacy = copy.deepcopy(base)
 legacy["heartbeat"]["version"] = ""
 legacy.update({"t-pot_hostname": None, "t-pot_ip_ext": None, "t-pot_ip_int": None})

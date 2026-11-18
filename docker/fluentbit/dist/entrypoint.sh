@@ -44,6 +44,67 @@ fi
 
 export TPOT_FLUENTBIT_START FLB_TLS_VERIFY TPOT_HIVE_IP TPOT_HIVE_PORT TPOT_HIVE_USER FLB_STORAGE_LIMIT MY_VERSION
 
-# Task 14: the E2 guard (fuPROBE) goes here, before Fluent Bit starts
+# E2: Fluent Bit starts only once the HIVE takes this SENSOR's format (nginx /tpot-ingest answers 204 with
+# X-TPot-Ingest 2 while its Logstash runs the sensors pipeline). Until then nothing is read or sent: the logs
+# wait on the disk, /tmp/tpot-waiting keeps the container healthy, the probe runs again every interval
+FLB_PROBE_INTERVAL="${FLB_PROBE_INTERVAL:-300}"
+case "$FLB_PROBE_INTERVAL" in
+  ''|*[!0-9]*|0)
+    echo "FLB_PROBE_INTERVAL is '$FLB_PROBE_INTERVAL'; it takes the seconds between two probes of the HIVE (default 300)." >&2
+    exit 1
+    ;;
+esac
+
+myCHILD=""
+fuSTOP () {
+  [ -n "$myCHILD" ] && kill "$myCHILD" 2>/dev/null
+  exit 143
+}
+# bash as PID 1 ignores a signal without a handler: docker stop must not wait for the probe or the sleep
+trap fuSTOP TERM INT
+
+fuPROBE () {
+  local myTLS myCODE myMARK myERROR
+  if [ "$LS_SSL_VERIFICATION" = "none" ]; then
+    myTLS=(-k)
+  else
+    myTLS=(--cacert /data/hive.crt)
+  fi
+  touch /tmp/tpot-waiting
+  while true; do
+    rm -f /tmp/tpot-probe.headers /tmp/tpot-probe.err
+    curl -sS --max-time 10 "${myTLS[@]}" -o /dev/null -D /tmp/tpot-probe.headers \
+      "https://${TPOT_HIVE_IP}:${TPOT_HIVE_PORT}/tpot-ingest" 2>/tmp/tpot-probe.err &
+    myCHILD=$!
+    wait "$myCHILD"
+    myCHILD=""
+    myCODE=$(tr -d '\r' < /tmp/tpot-probe.headers 2>/dev/null | awk '/^HTTP\//{code=$2} END{print code}')
+    myMARK=$(tr -d '\r' < /tmp/tpot-probe.headers 2>/dev/null \
+      | awk 'tolower($0) ~ /^x-tpot-ingest:/{sub(/^[^:]*:[ \t]*/, ""); sub(/[ \t]+$/, ""); mark=$0} END{print mark}')
+    if [ "$myCODE" = "204" ] && [ "$myMARK" = "2" ]; then
+      rm -f /tmp/tpot-waiting /tmp/tpot-probe.headers /tmp/tpot-probe.err
+      echo "The HIVE takes this SENSOR's format; Fluent Bit starts."
+      return 0
+    fi
+    if [ "$myCODE" = "401" ]; then
+      echo "The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here." >&2
+    elif [ "$myCODE" = "503" ] && [ -z "$myMARK" ]; then
+      echo "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here." >&2
+    elif [ -n "$myCODE" ] && [ "$myCODE" != "000" ]; then
+      echo "The HIVE is not reachable (HTTP $myCODE)." >&2
+    else
+      # curl's own line: a TLS error adds lines of advice after it
+      myERROR=$(awk '/^curl: /{line=$0} END{print line}' /tmp/tpot-probe.err 2>/dev/null)
+      echo "The HIVE is not reachable (${myERROR:-no answer})." >&2
+    fi
+    sleep "${FLB_PROBE_INTERVAL}" &
+    myCHILD=$!
+    wait "$myCHILD"
+    myCHILD=""
+  done
+}
+
+fuPROBE
+trap - TERM INT
 
 exec fluent-bit -c /etc/fluent-bit/fluent-bit.yaml

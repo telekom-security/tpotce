@@ -1584,6 +1584,49 @@ function fuSTART_TPOT () {
 	return 1
 }
 
+# E2: does the HIVE of this SENSOR take its format? The same probe as the Fluent Bit of the SENSOR
+# (docker/fluentbit/dist/entrypoint.sh fuPROBE): nginx /tpot-ingest of the HIVE answers 204 with
+# X-TPot-Ingest 2 only while its Logstash runs the sensors pipeline. Anything else is a warning in the
+# summary - Fluent Bit keeps the logs on this SENSOR until then - and never fails the update.
+function fuHIVE_INGEST () {
+	local myENVFILE="$HOME/tpotce/.env"
+	local myHIVE myTLS myANSWER myCODE myMARK myTEXT myRC=0
+	[ "$(fuENV_VALUE "${myENVFILE}" TPOT_TYPE)" = "SENSOR" ] || return 0
+	myHIVE=$(fuENV_VALUE "${myENVFILE}" TPOT_HIVE_IP)
+	if [ "$(fuENV_VALUE "${myENVFILE}" LS_SSL_VERIFICATION)" = "none" ];
+	  then
+	    myTLS=(-k)
+	  else
+	    myTLS=(--cacert "$(fuDATA_PATH)/hive.crt")
+	fi
+	# the headers (-D -) and the error line of curl (curl: (N) ...) in one answer
+	myANSWER=$(curl -sS --max-time 10 "${myTLS[@]}" -o /dev/null -D - \
+	  "https://${myHIVE}:64294/tpot-ingest" 2>&1) || myRC=$?
+	myCODE=$(printf '%s\n' "${myANSWER}" | tr -d '\r' | awk '/^HTTP\//{code=$2} END{print code}')
+	myMARK=$(printf '%s\n' "${myANSWER}" | tr -d '\r' \
+	  | awk 'tolower($0) ~ /^x-tpot-ingest:/{sub(/^[^:]*:[ \t]*/, ""); sub(/[ \t]+$/, ""); mark=$0} END{print mark}')
+	if [ "${myRC}" = "0" ] && [ "${myCODE}" = "204" ] && [ "${myMARK}" = "2" ];
+	  then
+	    return 0
+	fi
+	if [ "${myCODE}" = "401" ];
+	  then
+	    myTEXT="The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here."
+	elif [ "${myCODE}" = "503" ] && [ -z "${myMARK}" ];
+	  then
+	    myTEXT="The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here."
+	elif [ -n "${myCODE}" ] && [ "${myCODE}" != "000" ];
+	  then
+	    myTEXT="The HIVE is not reachable (HTTP ${myCODE})."
+	  else
+	    myTEXT=$(printf '%s\n' "${myANSWER}" | tr -d '\r' | grep -E '^curl: ' | tail -n 1)
+	    myTEXT="The HIVE is not reachable (${myTEXT:-no answer, curl ${myRC}})."
+	fi
+	fuUI_WARN "${myTEXT}"
+	fuDID warn "${myTEXT}"
+	return 0
+}
+
 # Where the data folder really is: TPOT_DATA_PATH of ~/tpotce/.env (KEY=value or KEY: "value"),
 # relative to ~/tpotce unless it is absolute or starts with ~, without a trailing slash. From
 # `local myPATH` on the same code as fuDATA_PATH of restore.sh (a test compares them).
@@ -5014,3 +5057,5 @@ if [ -n "${mySTART}" ];
     fuMARK phase "done" Done
     fuDID next "Start T-Pot with 'sudo systemctl start tpot' or 'docker compose up -d' (update.sh -s does it for you)."
 fi
+# E2: on a SENSOR, may it send to its HIVE (a warning in the summary, the update is through either way)
+fuHIVE_INGEST

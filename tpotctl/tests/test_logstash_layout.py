@@ -167,6 +167,34 @@ class LayoutTest(unittest.TestCase):
         self.assertTrue(0 < metadata.end() < ruby < ballast.start(), "@metadata, the ruby filter, headers / host")
         self.assertEqual(code.count("remove_field"), 2)
 
+    def test_sensors_ingest_probe(self):
+        # E2: the capability probe of a SENSOR (nginx /tpot-ingest) is an input of the sensors pipeline
+        # itself, so only a Logstash that runs this pipeline answers 204 with the marker; its event is
+        # dropped by the first filter (no document, status, history)
+        inputs = re.findall(r"^  http \{\n(.*?)^  \}\n", uncommented(PIPELINE_DIR / "11-input-sensors.conf"),
+                            re.M | re.S)
+        self.assertEqual(len(inputs), 2)
+        probe = [block for block in inputs if 'id => "tpot_ingest_probe"' in block]
+        self.assertEqual(len(probe), 1)
+        settings = dict(re.findall(r"^\s*(\w+) => (.+?)\s*$", probe[0], re.M))
+        self.assertEqual(settings, {"id": '"tpot_ingest_probe"', "host": '"0.0.0.0"', "port": "64306",
+                                    "response_code": "204",
+                                    "response_headers": '{ "X-TPot-Ingest" => "2" }',
+                                    "add_field": '{ "[@metadata][tpot_probe]" => "true" }',
+                                    "ecs_compatibility": "disabled"})
+        code = uncommented(PIPELINE_DIR / "20-sensors.conf")
+        first = re.match(r"\s*filter \{\s*if \[@metadata\]\[tpot_probe\] \{\s*drop \{\}\s*\}\s*\}", code)
+        self.assertIsNotNone(first, "the drop of the probe is the first filter of the sensors pipeline")
+        self.assertEqual(code.count("drop"), 1)
+        # container network only: never published by a compose file
+        composes = [ROOT / "docker-compose.yml", *sorted((ROOT / "compose").glob("*.yml")),
+                    *sorted((ROOT / "docker").glob("*/docker-compose.yml")),
+                    *sorted((ROOT / "docker").glob("*/*/docker-compose.yml"))]
+        for path in composes:
+            if path.exists():
+                with self.subTest(file=str(path.relative_to(ROOT))):
+                    self.assertNotIn("64306", path.read_text(encoding="utf-8"))
+
     def test_process_reads_no_environment(self):
         paths = [path for pattern in ("30-*.conf", "40-*.conf", "50-*.conf")
                  for path in sorted(PIPELINE_DIR.glob(pattern))]
