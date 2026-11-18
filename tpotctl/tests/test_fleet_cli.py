@@ -1,5 +1,6 @@
 """CLI contract for controlled sensor fleet updates."""
 
+import importlib.util
 import io
 from types import SimpleNamespace
 import unittest
@@ -209,6 +210,40 @@ class FleetCommandTest(unittest.TestCase):
             accepted_losses={"sensor-a": ["@@tpot loss Elasticsearch data"]},
             password="",
         )
+
+    def failed_run(self, previous):
+        return {
+            "run_id": "9" * 32, "phase": "paused", "version": "24.04.2",
+            "targets": [{
+                "name": "sensor-a", "phase": "failed", "previous_version": previous,
+                "archive": "/tmp/fleet-backup", "last_error": "update failed", "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+
+    def decide(self, previous):
+        from rich.console import Console
+        state = self.failed_run(previous)
+        aborted = dict(state, phase="aborted")
+        coordinator = Mock()
+        coordinator.store.read.return_value = state
+        coordinator.resolve_failure.return_value = aborted
+        out = io.StringIO()
+        tty = io.StringIO()
+        tty.isatty = lambda: True
+        with patch.object(cli.sys, "stdin", tty), patch.object(cli, "ask", return_value="abort") as ask:
+            code = cli._fleet_monitor(coordinator, state["run_id"], "", self.args(), Console(file=out, width=200))
+        self.assertEqual(code, 1)
+        self.assertIn("rollback", ask.call_args.args[0])
+        return out.getvalue()
+
+    @unittest.skipUnless(importlib.util.find_spec("rich"), "needs rich (the venv of tpot)")
+    def test_rollback_option_warns_about_a_logstash_release(self):
+        text = self.decide("24.04.1")
+        self.assertIn("Rolling sensor-a back to 24.04.1: This SENSOR runs Logstash: the HIVE refuses its events "
+                      "until it is updated (tpot sensors update).", " ".join(text.split()))
+        self.assertNotIn("runs Logstash", self.decide("24.04.2"))
+        self.assertNotIn("runs Logstash", self.decide(""))
 
     def test_discard_requires_a_saved_stopped_run_and_removes_it(self):
         stopped = {

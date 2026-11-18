@@ -440,6 +440,14 @@ class HardCodedTest(unittest.TestCase):
         if found:
             self.skipTest("green after integration of W2/W4: " + ", ".join(found))
 
+    def test_shipper_since_is_excluded_with_its_reason(self):
+        excluded = [ex for ex in release.EXCLUDED if "tpotctl/sensors.py" in ex.paths]
+        self.assertEqual(len(excluded), 1)
+        self.assertEqual(excluded[0].why, "first release with Fluent Bit on SENSORs")
+        self.assertIn("SHIPPER_SINCE", excluded[0].pattern)
+        self.assertEqual([hit for hit in release.literals_in_scripts(ROOT, version="24.04.2")
+                          if hit.startswith("tpotctl/sensors.py")], [])
+
     def test_pending_readers_are_still_pending(self):
         # once a reader reads the file `version`, it leaves PENDING_READERS (and the skip above ends)
         for reader in release.PENDING_READERS:

@@ -191,7 +191,8 @@ def build_parser() -> argparse.ArgumentParser:
                       help="an IP or name of this HIVE the certificate has to cover, repeatable")
     cert.add_argument("--renew", action="store_true", help="issue it anew for its addresses and the --add ones")
     cert.add_argument("--distribute", nargs="*", metavar="NAME",
-                      help="copy it to these registered sensors (all if no NAME) and restart their Logstash")
+                      help="copy it to these registered sensors (all if no NAME) and restart their Fluent Bit "
+                           "(Logstash on an older SENSOR)")
     cert.add_argument("--no-restart", action="store_true", help="do not restart T-Pot after --renew")
     cert.add_argument("--no-become-pass", action="store_true", help="sudo on the sensors needs no password")
     cert.add_argument("-y", "--yes", action="store_true", help="do not ask")
@@ -1284,7 +1285,7 @@ def _fleet_show(state, console):
 
 
 def _fleet_monitor(coordinator, run_id, password, args, console) -> int:
-    from tpotctl import sensors as tsensors
+    from tpotctl import fleet as tfleet, sensors as tsensors
     extension_prompted = {}
     while True:
         state = coordinator.store.read(run_id)
@@ -1326,6 +1327,10 @@ def _fleet_monitor(coordinator, run_id, password, args, console) -> int:
                 options = ["retry", "skip", "abort"]
                 if failed.get("archive"):
                     options.insert(2, "rollback")
+                    warning = tfleet.rollback_warning(failed["previous_version"])
+                    if warning:
+                        say.warn(f"Rolling {failed['name']} back to {failed['previous_version']}: {warning}",
+                                 console.file)
                 choice = ask(f"{failed['name']} failed; choose {', '.join(options)}: ").lower()
                 if choice not in options:
                     console.print("No valid failure action was selected.")
@@ -1789,6 +1794,8 @@ def run_sensor_add(args, registry, console) -> int:
     try:
         version = tsensors.read_version(host, user, port)
         checked_at = datetime.now(timezone.utc).isoformat()
+        if tsensors.runs_logstash(version):
+            say.warn(tsensors.LOGSTASH_SENSOR, console.file)
     except tsensors.SensorsError as err:
         say.warn(f"{err}. Its version stays unknown until a heartbeat reports it.", console.file)
     name = tsensors.new_name(set(registry.records))

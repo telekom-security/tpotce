@@ -481,6 +481,8 @@ class FleetUpdateScreen(Screen):
                 self.resolve_with_credentials("retry")
         elif button in ("fleet-skip", "fleet-rollback", "fleet-abort"):
             choice = button.removeprefix("fleet-")
+            if choice == "rollback" and self.rollback_warned():
+                return
             if choice == "abort" or (choice == "skip" and not self.has_pending_target()):
                 self.resolve_with_busy(choice)
             else:
@@ -491,6 +493,18 @@ class FleetUpdateScreen(Screen):
                 self.busy = True
                 self.update_actions()
                 self.extend_worker(target["name"])
+
+    def rollback_warned(self) -> bool:
+        """A rollback to a release whose SENSOR sends with Logstash: ask first (it warns, never blocks)."""
+        target = self.selected_target()
+        warning = tfleet.rollback_warning(target["previous_version"]) if target is not None else None
+        if not warning:
+            return False
+        self.app.push_screen(
+            ConfirmDialog(f"Roll {target['name']} back to {target['previous_version']}?", warning, yes="Roll back"),
+            lambda yes: self.resolve_with_credentials("rollback") if yes else None,
+        )
+        return True
 
     def selected_target(self):
         if self.state is None or not self.state["targets"]:

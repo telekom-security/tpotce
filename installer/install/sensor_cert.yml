@@ -3,7 +3,9 @@
 # T-Pot Sensors - New HIVE certificate  #
 #########################################
 # Run by `tpot sensors cert --distribute` on the HIVE after the certificate of the
-# HIVE was renewed: the sensors verify the HIVE against their copy of it.
+# HIVE was renewed: the sensors verify the HIVE against their copy of it. Their shipper
+# reads it only at its start: Fluent Bit, Logstash on a SENSOR of a release before
+# tpot_shipper_since (an extra var of tpotctl.sensors.distribute_command, SHIPPER_SINCE).
 
 - name: T-Pot - Update the HIVE certificate on the sensors
   hosts: all
@@ -13,6 +15,13 @@
     remote_cert_path: "{{ ansible_facts.user_dir }}/tpotce/data/hive.crt"
 
   tasks:
+    - name: Check the first release with Fluent Bit on SENSORs
+      ansible.builtin.assert:
+        that:
+          - tpot_shipper_since is defined
+          - tpot_shipper_since | string | length > 0
+        fail_msg: "tpot_shipper_since is missing, run this play with tpot sensors cert --distribute"
+
     - name: Copy the HIVE certificate to the sensor
       # tpotinit hands data/ to tpot:tpot with 770 on every start, the old copy is
       # not the user's any more
@@ -24,7 +33,72 @@
         group: tpot
         mode: '0770'
 
-    - name: Restart Logstash, it reads the certificate on start
+    - name: Read the version of the sensor
+      ansible.builtin.slurp:
+        src: "{{ ansible_facts.user_dir }}/tpotce/version"
+      register: tpot_version_file
+      failed_when: false
+
+    - name: Read the settings of the sensor
+      ansible.builtin.slurp:
+        src: "{{ ansible_facts.user_dir }}/tpotce/.env"
+      register: tpot_env_file
+      failed_when: false
+
+    - name: Find the compose file in use (TPOT_DOCKER_COMPOSE, relative to ~/tpotce)
+      ansible.builtin.set_fact:
+        tpot_compose_file: >-
+          {{ ((tpot_env_file.content | default('') | b64decode
+               | regex_findall('^TPOT_DOCKER_COMPOSE[ \t]*[=:][ \t]*["\x27]?([^"\x27\r\n]*)', multiline=True)
+               | last | default('', true) | trim)
+              or './docker-compose.yml') }}
+
+    - name: Read the compose file in use
+      ansible.builtin.slurp:
+        src: "{{ tpot_compose_file if tpot_compose_file.startswith('/')
+                 else ansible_facts.user_dir ~ '/tpotce/' ~ tpot_compose_file }}"
+      register: tpot_compose
+
+    # the rule of tpotinit's fuCOMPOSE_HAS: every name indented by two spaces; an unknown version
+    # (no file, no number) counts as a legacy SENSOR, it only decides where logstash is named
+    - name: Find the services and the release of the sensor
+      ansible.builtin.set_fact:
+        tpot_services: >-
+          {{ tpot_compose.content | b64decode | regex_findall('^  ([A-Za-z0-9_.-]+):', multiline=True) }}
+        tpot_sensor_release: >-
+          {{ (tpot_version_file.content | default('') | b64decode | trim)
+             | regex_search('^[0-9]+([.][0-9]+)*') | default('', true) }}
+
+    - name: Decide whether the sensor is of a release before Fluent Bit
+      ansible.builtin.set_fact:
+        tpot_legacy_sensor: >-
+          {{ tpot_sensor_release is none or tpot_sensor_release == ''
+             or tpot_sensor_release is version(tpot_shipper_since, '<') }}
+
+    - name: Restart Fluent Bit, it reads the certificate on start
+      ansible.builtin.command:
+        cmd: docker restart fluentbit
+      changed_when: true
+      when: "'fluentbit' in tpot_services"
+
+    - name: Restart Logstash of a legacy SENSOR, it reads the certificate on start
       ansible.builtin.command:
         cmd: docker restart logstash
       changed_when: true
+      when:
+        - "'logstash' in tpot_services"
+        - tpot_legacy_sensor | bool
+
+    - name: Warn about a compose file that still names logstash
+      ansible.builtin.debug:
+        msg: "This SENSOR still runs Logstash: the HIVE refuses its events until {{ tpot_compose_file | regex_replace('^[.]/', '') }} uses fluentbit (tpot customize or update.sh --adapt-compose)."
+      when:
+        - "'logstash' in tpot_services"
+        - not tpot_legacy_sensor | bool
+
+    - name: Warn about a sensor without a shipper
+      ansible.builtin.debug:
+        msg: "This SENSOR runs no fluentbit service: no logs are sent to the HIVE."
+      when:
+        - "'fluentbit' not in tpot_services"
+        - "'logstash' not in tpot_services"

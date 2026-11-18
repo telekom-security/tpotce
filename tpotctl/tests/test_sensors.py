@@ -150,6 +150,20 @@ class HelpersTest(unittest.TestCase):
         self.assertIn("--ask-become-pass", sensors.distribute_command("/tmp/inv"))
         self.assertNotIn("--ask-become-pass", sensors.distribute_command("/tmp/inv", become_pass=False))
 
+    def test_distribute_hands_the_shipper_release_to_the_play(self):
+        command = sensors.distribute_command("/tmp/inv")
+        self.assertIn(f"tpot_shipper_since={sensors.SHIPPER_SINCE}", command)
+        self.assertEqual(command[command.index(f"tpot_shipper_since={sensors.SHIPPER_SINCE}") - 1], "-e")
+
+    def test_runs_logstash(self):
+        self.assertEqual(sensors.SHIPPER_SINCE, "24.04.2")
+        for version in ("24.04.1", "24.04", "23.12.1", "24.04.1-rc1", "22.04.0"):
+            self.assertTrue(sensors.runs_logstash(version), version)
+        for version in ("24.04.2", "24.04.10", "24.4.2", "24.11", "25.01.0", None, "", "dev", "v24.04.1",
+                        "sensor-release"):
+            self.assertFalse(sensors.runs_logstash(version), version)
+        self.assertIn("tpot sensors update", sensors.LOGSTASH_SENSOR)
+
     def test_inventory(self):
         text = sensors.inventory_text([sensors.Sensor("sensor-a-b", host="10.0.0.5", ssh_user="debian")])
         self.assertIn("sensor-a-b ansible_host=10.0.0.5 ansible_user=debian ansible_port=64295", text)
@@ -889,6 +903,17 @@ class CliTest(unittest.TestCase):
         self.assertLess(abs(datetime.now(timezone.utc).timestamp() -
                             datetime.fromisoformat(added[0].version_checked_at).timestamp()), 10)
         self.assertEqual(len(children), 1)
+
+    def test_add_warns_old_sensor(self):
+        with mock.patch.object(sensors, "read_version", return_value="24.04.1"):
+            code, text, children = self.add_with(0)
+        self.assertEqual(code, 0, text)
+        self.assertEqual(len(children), 1)                   # it warns, the deployment goes on
+        self.assertIn("This SENSOR runs Logstash: the HIVE refuses its events until it is updated "
+                      "(tpot sensors update).", " ".join(text.split()))
+        code, text, _ = self.add_with(0)                     # "sensor-release": no claim, no warning
+        self.assertEqual(code, 0, text)
+        self.assertNotIn("runs Logstash", text)
 
     def test_missing_sensor_version_warns_but_does_not_invent_the_hive_version(self):
         with mock.patch.object(sensors, "read_version", side_effect=sensors.SensorsError("version unavailable")):
@@ -1751,6 +1776,83 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
             actions = app.screen.query_one("#fleet-actions")
             self.assertLessEqual(actions.virtual_size.width, actions.size.width)
 
+    async def test_fleet_rollback_to_a_logstash_release_warns_first(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.dialogs import ConfirmDialog
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        paused = {
+            "run_id": "f" * 32,
+            "phase": "paused",
+            "version": "24.04.2",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "failed", "previous_version": "24.04.1",
+                "archive": "/tmp/fleet-backup", "last_error": "update failed",
+                "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = [paused]
+        coordinator.store.read.return_value = paused
+        coordinator.resume.return_value = paused
+        coordinator.resolve_failure.return_value = paused
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            app.push_screen(FleetUpdateScreen(
+                FleetRequest([], False, 1, passwordless=True), backend.sensors(), run_id=paused["run_id"],
+                coordinator_factory=lambda **_kwargs: coordinator))
+            await pilot.pause(0.5)
+            await pilot.click("#fleet-rollback")
+            await pilot.pause(0.2)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIn(sensors.LOGSTASH_SENSOR, app.screen.body)
+            self.assertIn("24.04.1", app.screen.title_text)
+            coordinator.resolve_failure.assert_not_called()
+            await pilot.click("#no")
+            await pilot.pause(0.2)
+            coordinator.resolve_failure.assert_not_called()
+            await pilot.click("#fleet-rollback")
+            await pilot.pause(0.2)
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            coordinator.resolve_failure.assert_called_once()
+            self.assertEqual(coordinator.resolve_failure.call_args.args[1:], ("sensor-old-otter", "rollback"))
+
+    async def test_fleet_rollback_to_a_fluent_bit_release_asks_nothing(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.dialogs import ConfirmDialog
+        from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
+        _repo, backend = self.heartbeat_backend()
+        paused = {
+            "run_id": "f" * 32,
+            "phase": "paused",
+            "version": "24.04.3",
+            "targets": [{
+                "name": "sensor-old-otter", "phase": "failed", "previous_version": "24.04.2",
+                "archive": "/tmp/fleet-backup", "last_error": "update failed",
+                "losses": [], "warnings": [],
+            }],
+            "warnings": [],
+        }
+        coordinator = mock.Mock()
+        coordinator.store.list_runs.return_value = [paused]
+        coordinator.store.read.return_value = paused
+        coordinator.resume.return_value = paused
+        coordinator.resolve_failure.return_value = paused
+        app = tapp.TpotApp(backend=backend, runner=lambda *args, **kwargs: 0)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            app.push_screen(FleetUpdateScreen(
+                FleetRequest([], False, 1, passwordless=True), backend.sensors(), run_id=paused["run_id"],
+                coordinator_factory=lambda **_kwargs: coordinator))
+            await pilot.pause(0.5)
+            await pilot.click("#fleet-rollback")
+            await pilot.pause(0.4)
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+            coordinator.resolve_failure.assert_called_once()
+
     async def test_fleet_active_run_offers_abort(self):
         from tpotctl import app as tapp
         from tpotctl.screens.fleet import FleetRequest, FleetUpdateScreen
@@ -2170,3 +2272,80 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SensorCertPlayTest(unittest.TestCase):
+    """installer/install/sensor_cert.yml: the certificate goes over, the shipper of the SENSOR restarts."""
+
+    PLAY = os.path.join(REPO_DIR, "installer", "install", "sensor_cert.yml")
+
+    def setUp(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("needs PyYAML")
+        with open(self.PLAY, encoding="utf-8") as handle:
+            self.tasks = yaml.safe_load(handle)[0]["tasks"]
+
+    def task(self, needle):
+        found = [task for task in self.tasks if needle in str(task.get("ansible.builtin.command", {}))
+                 or needle in str(task.get("ansible.builtin.debug", {}))]
+        self.assertEqual(len(found), 1, needle)
+        return found[0]
+
+    @staticmethod
+    def when(task):
+        when = task.get("when", [])
+        return " and ".join(when) if isinstance(when, list) else str(when)
+
+    def test_sensor_cert_restarts_fluentbit(self):
+        restart = self.task("docker restart fluentbit")
+        self.assertEqual(self.when(restart).replace(" ", ""), "'fluentbit'intpot_services")
+        names = [task.get("name", "") for task in self.tasks]
+        copy = names.index("Copy the HIVE certificate to the sensor")
+        self.assertLess(copy, names.index(restart["name"]))
+        self.assertTrue(any("tpot_shipper_since" in str(task.get("ansible.builtin.assert", {}))
+                            for task in self.tasks[:copy]), "the play checks its extra var first")
+
+    def test_sensor_cert_legacy_fallback_only_for_old_release(self):
+        legacy = self.task("docker restart logstash")
+        self.assertIn("legacy SENSOR", legacy["name"])
+        condition = self.when(legacy).replace(" ", "")
+        self.assertIn("'logstash'intpot_services", condition)
+        self.assertIn("tpot_legacy_sensor", condition)
+        self.assertNotIn("fluentbit", condition)
+        facts = next(task["ansible.builtin.set_fact"] for task in self.tasks
+                     if "tpot_legacy_sensor" in task.get("ansible.builtin.set_fact", {}))
+        rule = str(facts["tpot_legacy_sensor"]).replace(" ", "")
+        self.assertIn("version(tpot_shipper_since,'<')", rule)
+        self.assertIn("isnone", rule)                        # an unknown version is a legacy SENSOR
+
+        e9 = self.task("still runs Logstash")
+        condition = self.when(e9).replace(" ", "")
+        self.assertIn("'logstash'intpot_services", condition)
+        self.assertIn("nottpot_legacy_sensor", condition)
+        from tpotctl import settings
+        self.assertIn("This SENSOR still runs Logstash: the HIVE refuses its events until ",
+                      e9["ansible.builtin.debug"]["msg"])
+        self.assertIn("uses fluentbit (tpot customize or update.sh --adapt-compose).",
+                      e9["ansible.builtin.debug"]["msg"])
+        self.assertTrue(settings.LOGSTASH_ON_SENSOR)
+
+        none = self.task("runs no fluentbit service")
+        self.assertEqual(none["ansible.builtin.debug"]["msg"],
+                         "This SENSOR runs no fluentbit service: no logs are sent to the HIVE.")
+        condition = self.when(none).replace(" ", "")
+        self.assertIn("'fluentbit'notintpot_services", condition)
+        self.assertIn("'logstash'notintpot_services", condition)
+
+    def test_sensor_cert_reads_the_sensor_itself(self):
+        text = open(self.PLAY, encoding="utf-8").read()
+        self.assertIn("{{ ansible_facts.user_dir }}/tpotce/version", text)
+        self.assertIn("TPOT_DOCKER_COMPOSE", text)
+        self.assertNotIn(sensors.SHIPPER_SINCE, text)        # only sensors.py names the release
+
+    @unittest.skipUnless(shutil.which("ansible-playbook"), "needs ansible-playbook")
+    def test_sensor_cert_syntax(self):
+        done = subprocess.run(["ansible-playbook", "--syntax-check", "-i", "localhost,", self.PLAY],
+                              capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)

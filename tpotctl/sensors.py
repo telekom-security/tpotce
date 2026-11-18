@@ -2,8 +2,9 @@
 
 Access is LS_WEB_USER in .env (base64 of name:htpasswd hash per sensor), from which
 tpotinit builds data/nginx/conf/lswebpasswd for the ingest on 64294. The sensor
-sends with TPOT_HIVE_USER (base64 of name:password, Logstash 91-output-http.conf) and checks
-the HIVE against its copy of data/nginx/cert/nginx.crt (data/hive.crt).
+sends with TPOT_HIVE_USER (base64 of name:password, Fluent Bit; Logstash 91-output-http.conf on a
+SENSOR before SHIPPER_SINCE) and checks the HIVE against its copy of data/nginx/cert/nginx.crt
+(data/hive.crt).
 
 The registry data/sensors.json only holds what the HIVE cannot know otherwise
 (address, SSH user, when, which version) and no secrets. It is built from
@@ -48,6 +49,9 @@ HEARTBEAT_TIMEOUT = 180
 REFUSED_WINDOW = 900        # seconds a refusal of the old format counts after its receipt
 SENSOR_NAME = re.compile(r"[A-Za-z0-9_.-]{1,512}")
 VERSION_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+-]{0,127}")
+# the first release whose SENSORs send with Fluent Bit; the HIVE refuses the events of an older one (Logstash)
+SHIPPER_SINCE = "24.04.2"
+LOGSTASH_SENSOR = "This SENSOR runs Logstash: the HIVE refuses its events until it is updated (tpot sensors update)."
 COLUMNS = ("Sensor", "Host", "Version", "Heartbeat", "Last event", "State")
 WORDS = (os.path.join("installer", "install", "a.txt"), os.path.join("installer", "install", "n.txt"))
 # the same as tpotinit uses for the first certificate (entrypoint.sh)
@@ -484,6 +488,17 @@ def read_version(host: str, user: str, port: int = SSH_PORT, run: Callable = sub
     return version
 
 
+def _release(version: str) -> Tuple[int, ...]:
+    match = re.match(r"\d+(?:\.\d+)*", version)
+    return tuple(int(part) for part in match.group(0).split(".")) if match else ()
+
+
+def runs_logstash(version: Optional[str]) -> bool:
+    """A SENSOR of a release before SHIPPER_SINCE; an unknown version is no claim."""
+    release = _release(version or "")
+    return bool(release) and release < _release(SHIPPER_SINCE)
+
+
 def copy_id_command(host: str, user: str, port: int = SSH_PORT) -> List[str]:
     return ["ssh-copy-id", "-p", str(check_port(port)), f"{check_user(user)}@{check_address(host)}"]
 
@@ -513,7 +528,8 @@ def deploy_env(hive_user_value: str, hive_address: str, repo_dir: str = REPO_DIR
 
 
 def distribute_command(inventory: str, become_pass: bool = True, repo_dir: str = REPO_DIR) -> List[str]:
-    command = ["ansible-playbook", os.path.join(repo_dir, "installer", "install", "sensor_cert.yml"), "-i", inventory]
+    command = ["ansible-playbook", os.path.join(repo_dir, "installer", "install", "sensor_cert.yml"), "-i", inventory,
+               "-e", f"tpot_shipper_since={SHIPPER_SINCE}"]
     return command + (["--ask-become-pass"] if become_pass else [])
 
 

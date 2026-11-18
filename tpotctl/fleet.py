@@ -296,6 +296,11 @@ class RunStore:
             raise FleetError("The fleet run directory could not be removed.") from err
 
 
+def rollback_warning(version: str) -> Optional[str]:
+    """The warning before a rollback to a release whose SENSOR still sends with Logstash."""
+    return sensors.LOGSTASH_SENSOR if sensors.runs_logstash(version) else None
+
+
 def select_targets(registry, status: sensors.Status, *, names: Sequence[str] = (),
                    all_sensors: bool = False, now: Optional[float] = None) -> List[sensors.Sensor]:
     if names and all_sensors:

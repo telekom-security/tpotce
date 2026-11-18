@@ -57,6 +57,17 @@ class SelectionTest(unittest.TestCase):
             fleet.select_targets(self.registry, self.status, names=["sensor-current"], all_sensors=True)
 
 
+class RollbackWarningTest(unittest.TestCase):
+
+    def test_rollback_warns(self):
+        self.assertEqual(fleet.rollback_warning("24.04.1"), sensors.LOGSTASH_SENSOR)
+        self.assertEqual(fleet.rollback_warning("24.04.1"),
+                         "This SENSOR runs Logstash: the HIVE refuses its events until it is updated "
+                         "(tpot sensors update).")
+        for version in ("24.04.2", "24.11.0", "", "dev"):
+            self.assertIsNone(fleet.rollback_warning(version), version)
+
+
 class RunStoreTest(unittest.TestCase):
 
     def setUp(self):
