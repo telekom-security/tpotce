@@ -24,8 +24,8 @@ class CiscoasaIntegrationTest(unittest.TestCase):
         text = (logstash_conf.PIPELINE_DIR / '10-input-files.conf').read_text()
         block = text.split('# Ciscoasa', 1)[1].split('# Citrix', 1)[0]
         self.assertIn('/data/ciscoasa/log/ciscoasa.json', block)
-        # no codec: 30-decode.conf parses the JSON lines of the type
-        self.assertNotIn('codec', block)
+        # no json codec: 30-decode.conf parses the JSON lines of the type
+        self.assertEqual(re.findall(r'codec => (\w+)', block), ['plain'])
         decode = (logstash_conf.PIPELINE_DIR / '30-decode.conf').read_text()
         self.assertIn('    "Ciscoasa",\n', decode)
         conf = logstash_conf.parse_file('Ciscoasa')

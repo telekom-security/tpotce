@@ -62,9 +62,11 @@ INPUTS: Tuple[LogInput, ...] = (
     LogInput("Wordpot", ("/data/wordpot/log/wordpot.json",), "json"),
 )
 
-# The codec of the Logstash file input per decode: none (plain) for JSON, 30-decode.conf parses it
-# after the source file went to t-pot_log_path; Heralding's CSV is split by its parse file
-CODECS = {"json": None, "plain": "plain", "csv": None}
+# The codec of every Logstash file input: plain (30-decode.conf parses JSON after the source file went to
+# t-pot_log_path, Heralding's CSV is split by its parse file) in ISO-8859-1, which keeps every byte; with
+# UTF-8 Logstash would turn a line with an invalid byte into escaped text no JSON parser takes.
+# 12-files.conf makes UTF-8 of it again, an invalid byte U+FFFD as Fluent Bit sends it from a SENSOR
+CODEC = 'plain { charset => "ISO-8859-1" }'
 
 
 def logstash_inputs() -> str:
@@ -75,11 +77,8 @@ def logstash_inputs() -> str:
         paths = ", ".join(f'"{path}"' for path in entry.paths)
         # events written before Logstash starts are kept; it counts only for a file the sincedb (in the
         # container layer) does not know
-        lines += [f"# {entry.type}", "  file {", f"    path => [{paths}]", '    start_position => "beginning"']
-        codec = CODECS[entry.decode]
-        if codec:
-            lines.append(f"    codec => {codec}")
-        lines += [f'    type => "{entry.type}"', "  }", ""]
+        lines += [f"# {entry.type}", "  file {", f"    path => [{paths}]", '    start_position => "beginning"',
+                  f"    codec => {CODEC}", f'    type => "{entry.type}"', "  }", ""]
     lines.append("}")
     return "\n".join(lines) + "\n"
 

@@ -6,6 +6,8 @@ input hand their events to the one processing pipeline (pipeline-to-pipeline, ad
 import glob
 import json
 import re
+import shutil
+import subprocess
 import unittest
 from datetime import datetime, timezone
 
@@ -326,6 +328,33 @@ class LayoutTest(unittest.TestCase):
                                   ("t-pot_ip_int", "${MY_INTIP}"),
                                   ("t-pot_hostname", "${MY_HOSTNAME}")])
         self.assertEqual(re.findall(r'"(t-pot_[^"]+)" =>', text), [f for f, _ in fields])
+
+    def test_files_restores_utf8(self):
+        # the file inputs read ISO-8859-1; 12-files.conf gives back the bytes of the file as UTF-8, an invalid
+        # byte as U+FFFD, as Fluent Bit sends the line of a SENSOR (json.escape_unicode off)
+        if not shutil.which("ruby"):
+            self.skipTest("no ruby")
+        text = (PIPELINE_DIR / "12-files.conf").read_text(encoding="utf-8")
+        codes = re.findall(r"^\s*ruby \{\n\s*code => '(.*?)'\n\s*\}", text, re.M | re.S)
+        self.assertEqual(len(codes), 1)
+        script = (
+            "class Event\n  def initialize(value); @data = {'message' => value}; end\n"
+            "  def get(key); @data[key]; end\n  def set(key, value); @data[key] = value; end\nend\n"
+            "STDIN.binmode\n"
+            "STDIN.read.split(\"\\n\", -1).each do |line|\n"
+            "  event = Event.new(line.force_encoding(Encoding::BINARY).encode(Encoding::UTF_8,"
+            " Encoding::ISO_8859_1))\n"
+            + codes[0] +
+            "\n  value = event.get('message')\n"
+            "  raise 'not valid UTF-8' unless value.encoding == Encoding::UTF_8 && value.valid_encoding?\n"
+            "  STDOUT.write(value.b + \"\\n\")\nend\n")
+        lines = ['{"password":"tpot-check"}'.encode(), '{"user":"\u0436\u20ac\U0001F600"}'.encode(),
+                 b'{"password":"tpot-\xffcheck"}', b'{"cut":"\xe2\x82"}', b"\xc3"]
+        result = subprocess.run(["ruby", "-e", script], input=b"\n".join(lines), capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
+        self.assertEqual(result.stdout.split(b"\n")[:-1], [
+            lines[0], lines[1], '{"password":"tpot-\ufffdcheck"}'.encode(), '{"cut":"\ufffd"}'.encode(),
+            "\ufffd".encode()])
 
     def test_file_inputs_start_at_beginning(self):
         # events a honeypot wrote before Logstash started are kept; the sincedb stays in the container layer

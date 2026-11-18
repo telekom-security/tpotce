@@ -63,16 +63,18 @@ class LogsConfigTest(unittest.TestCase):
         listed = re.findall(r'"([^"]+)"', found[1])
         self.assertEqual(listed, [entry.type for entry in logs_config.INPUTS if entry.decode == "json"])
 
-    def test_json_inputs_have_no_codec(self):
+    def test_inputs_read_every_byte(self):
         text = (logs_config.PIPELINE_DIR / "10-input-files.conf").read_text(encoding="utf-8")
         blocks = re.findall(r"^  file \{\n(.*?)^  \}", text, re.M | re.S)
         self.assertEqual(len(blocks), len(logs_config.INPUTS))
         for entry, block in zip(logs_config.INPUTS, blocks):
             with self.subTest(type=entry.type):
                 self.assertIn(f'type => "{entry.type}"', block)
-                # the plain codec keeps the source file in [path] until 30-decode.conf moves it
-                codecs = re.findall(r"codec => (\S+)", block)
-                self.assertEqual(codecs, ["plain"] if entry.decode == "plain" else [])
+                # the plain codec keeps the source file in [path] until 30-decode.conf moves it; ISO-8859-1
+                # keeps every byte (UTF-8 would turn a line with an invalid byte into escaped text),
+                # 12-files.conf makes UTF-8 of it again
+                codecs = re.findall(r"^    codec => (.*)$", block, re.M)
+                self.assertEqual(codecs, ['plain { charset => "ISO-8859-1" }'])
 
 
 if __name__ == "__main__":
