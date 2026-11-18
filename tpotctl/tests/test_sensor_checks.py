@@ -79,7 +79,7 @@ class SensorAddressTest(unittest.TestCase):
         self.assertEqual(len(stamps), 1, "deployment must stamp the compose file it replaces")
         index, argv = stamps[0]
         copy_index = next(i for i, task in enumerate(tasks)
-                          if task.get("ansible.builtin.command", {}).get("cmd", "").startswith("cp "))
+                          if task.get("name") == "Put the sensor compose file in place")
         self.assertGreater(index, copy_index)
         with tempfile.TemporaryDirectory() as root:
             os.makedirs(os.path.join(root, "compose"))

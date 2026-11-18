@@ -2325,6 +2325,124 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class DeployComposeTest(unittest.TestCase):
+    """installer/install/deploy.yml: a customizer file of the SENSOR is rebuilt, not replaced by sensor.yml."""
+
+    PLAY = os.path.join(REPO_DIR, "installer", "install", "deploy.yml")
+    NAME = "Put the sensor compose file in place"
+
+    def setUp(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("needs PyYAML")
+        with open(self.PLAY, encoding="utf-8") as handle:
+            self.tasks = yaml.safe_load(handle)[0]["tasks"]
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.checkout = os.path.join(self.tmp, "tpotce")
+        os.makedirs(self.checkout)
+        for name in ("compose", "tpotctl"):
+            shutil.copytree(os.path.join(REPO_DIR, name), os.path.join(self.checkout, name),
+                            ignore=shutil.ignore_patterns("__pycache__", "tests"))
+        for name in ("version", "env.example"):
+            shutil.copy(os.path.join(REPO_DIR, name), self.checkout)
+        self.sensor = os.path.join(self.checkout, "compose", "sensor.yml")
+        self.compose = os.path.join(self.checkout, "docker-compose.yml")
+        self.bin = os.path.join(self.tmp, "bin")
+        os.makedirs(self.bin)
+        os.symlink(sys.executable, os.path.join(self.bin, "python3"))
+        self.env = dict(os.environ, XDG_DATA_HOME=os.path.join(self.tmp, "data"),
+                        PATH=self.bin + os.pathsep + os.environ.get("PATH", ""))
+
+    def task(self, name):
+        found = [task for task in self.tasks if task.get("name") == name]
+        self.assertEqual(len(found), 1, name)
+        return found[0]
+
+    def run_task(self):
+        task = self.task(self.NAME)
+        self.assertEqual(task["args"]["executable"], "/bin/bash")
+        self.assertNotIn("become", task)
+        script = (task["ansible.builtin.shell"]
+                  .replace("{{ remote_sensor_yml_path }}", self.sensor)
+                  .replace("{{ remote_docker_compose_path }}", self.compose)
+                  .replace("~/tpotce", self.checkout))
+        self.assertNotIn("{{", script)
+        proc = subprocess.run(["bash", "-c", script], env=self.env, capture_output=True, text=True,
+                              timeout=120, check=False)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual([name for name in os.listdir(self.checkout) if name.startswith(".")], [],
+                         "no temp file is left")
+        return proc.stdout.strip()
+
+    def customize(self, base, *args):
+        proc = subprocess.run([sys.executable, os.path.join(self.checkout, "compose", "customizer.py"),
+                               "--base", base, *args, "-o", self.compose],
+                              env=self.env, capture_output=True, text=True, timeout=120,
+                              stdin=subprocess.DEVNULL, check=False)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        with open(self.compose, encoding="utf-8") as handle:
+            return handle.read()
+
+    def read(self, path):
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_plain_compose_is_replaced(self):
+        with open(self.compose, "w", encoding="utf-8") as handle:
+            handle.write("services:\n  mine:\n    image: busybox\n")
+        self.assertEqual(self.run_task(), "copied")
+        self.assertEqual(self.read(self.compose), self.read(self.sensor))
+
+    def test_sensor_customizer_file_is_rebuilt(self):
+        self.assertIn("\n  ewsposter:\n", self.read(self.sensor))
+        self.customize("SENSOR", "--remove", "ewsposter")
+        self.assertEqual(self.run_task(), "rebuilt")
+        text = self.read(self.compose)
+        self.assertNotIn("\n  ewsposter:\n", text)
+        self.assertRegex(text, r"(?m)^# customizer: version=\S+ base=SENSOR$")
+
+    def test_edited_customizer_file_is_kept(self):
+        text = self.customize("SENSOR", "--remove", "ewsposter").replace("restart: always", "restart: no", 1)
+        with open(self.compose, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        self.assertEqual(self.run_task(), "kept-edited")
+        self.assertEqual(self.read(self.compose), text)
+
+    def test_hive_customizer_file_is_replaced(self):
+        self.assertIn("base=STANDARD", self.customize("STANDARD", "--remove", "ewsposter"))
+        self.assertEqual(self.run_task(), "copied")
+        self.assertEqual(self.read(self.compose), self.read(self.sensor))
+
+    def test_rebuild_failure_keeps_the_file(self):
+        text = self.customize("SENSOR", "--remove", "ewsposter")
+        os.unlink(os.path.join(self.bin, "python3"))
+        with open(os.path.join(self.bin, "python3"), "w", encoding="utf-8") as handle:
+            handle.write("#!/bin/sh\nexit 1\n")
+        os.chmod(os.path.join(self.bin, "python3"), 0o755)
+        self.assertEqual(self.run_task(), "kept-failed")
+        self.assertEqual(self.read(self.compose), text)
+
+    def test_only_a_written_file_is_stamped_and_a_kept_one_warned_about(self):
+        compose = self.task(self.NAME)
+        register = compose["register"]
+        self.assertIn("rebuilt", str(compose["changed_when"]))
+        self.assertIn("copied", str(compose["changed_when"]))
+        names = [task.get("name") for task in self.tasks]
+        stamp = self.task("Stamp the generated compose file on the sensor")
+        self.assertLess(names.index(self.NAME), names.index(stamp["name"]))
+        when = " and ".join(stamp["when"]) if isinstance(stamp["when"], list) else stamp["when"]
+        self.assertIn("my_sensor_generated.stat.isreg", when)
+        self.assertIn(register, when)
+        self.assertIn("['rebuilt', 'copied']", when)
+        warn = [task for task in self.tasks if "ansible.builtin.debug" in task
+                and register in str(task.get("when", ""))]
+        self.assertEqual(len(warn), 1)
+        self.assertIn("kept-", str(warn[0]["when"]))
+        self.assertIn("T-Pot runs it as it is", str(warn[0]["ansible.builtin.debug"]))
+
+
 class SensorCertPlayTest(unittest.TestCase):
     """installer/install/sensor_cert.yml: the certificate goes over, the shipper of the SENSOR restarts."""
 

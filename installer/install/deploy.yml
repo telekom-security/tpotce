@@ -73,9 +73,60 @@
         state: stopped
       failed_when: false
 
-    - name: Copy sensor.yml to docker-compose.yml on the remote host
-      ansible.builtin.command:
-        cmd: "cp {{ remote_sensor_yml_path }} {{ remote_docker_compose_path }}"
+    - name: Put the sensor compose file in place
+      # A SENSOR compose file of compose/customizer.py is rebuilt from its header
+      # (as update.sh fuRESTORE_CUSTOM does), one edited by hand or that cannot be
+      # rebuilt is kept; anything else becomes sensor.yml. Prints the one word.
+      ansible.builtin.shell: |
+        mySENSOR="{{ remote_sensor_yml_path }}"
+        mySENSOR="${mySENSOR/#\~/$HOME}"
+        myCOMPOSE="{{ remote_docker_compose_path }}"
+        myCOMPOSE="${myCOMPOSE/#\~/$HOME}"
+        myCUSTOMIZER=~/tpotce/compose/customizer.py
+        myTMP=""
+        trap '[ -n "${myTMP}" ] && rm -f "${myTMP}"' EXIT
+        myLINE=$(awk '/^[[:space:]]*$/ { next } !/^[[:space:]]*#/ { exit } /^# T-Pot:/ { sub(/^# T-Pot:[[:space:]]*/, ""); sub(/[[:space:]]+$/, ""); print NR " " $0; exit }' "${myCOMPOSE}" 2>/dev/null)
+        myHEADER=""
+        if [ "${myLINE#* }" == "CUSTOM" ];
+          then
+            myHEADER=$(sed -n "$((${myLINE%% *} + 1))p" "${myCOMPOSE}")
+        fi
+        if [[ ! "${myHEADER}" =~ ^"# customizer: version=" ]] || [[ ! " ${myHEADER} " =~ " base=SENSOR " ]];
+          then
+            cp "${mySENSOR}" "${myCOMPOSE}" || exit 1
+            echo copied
+            exit 0
+        fi
+        mySUM=$(sed -n 's/^# customizer: sha256=\([0-9a-f]\{64\}\)$/\1/p' "${myCOMPOSE}" | head -1)
+        if [ -z "${mySUM}" ] || [ "$(sed '1,/^# customizer: sha256=/d' "${myCOMPOSE}" | sha256sum | awk '{ print $1 }')" != "${mySUM}" ];
+          then
+            echo kept-edited
+            exit 0
+        fi
+        myPYTHON="${XDG_DATA_HOME:-$HOME/.local/share}/tpotce/venv/bin/python3"
+        [ -x "${myPYTHON}" ] || myPYTHON="python3"
+        if myTMP=$(mktemp "$(dirname "${myCOMPOSE}")/.docker-compose.XXXXXX") \
+           && "${myPYTHON}" "${myCUSTOMIZER}" --rebuild "${myCOMPOSE}" -o "${myTMP}" </dev/null >&2 \
+           && [ -s "${myTMP}" ] \
+           && mv -f "${myTMP}" "${myCOMPOSE}";
+          then
+            myTMP=""
+            echo rebuilt
+          else
+            echo kept-failed
+        fi
+      args:
+        executable: /bin/bash
+      register: my_sensor_compose
+      changed_when: my_sensor_compose.stdout | trim in ['rebuilt', 'copied']
+
+    - name: Warn that the compose file of the sensor was kept
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'The sensor deployment kept the docker-compose.yml of the sensor, it was edited by hand; T-Pot runs it as it is.'
+             if my_sensor_compose.stdout | trim == 'kept-edited' else
+             'The sensor deployment kept the docker-compose.yml of the sensor, it could not be rebuilt; T-Pot runs it as it is.' }}
+      when: my_sensor_compose.stdout | trim in ['kept-edited', 'kept-failed']
 
     - name: Stamp the generated compose file on the sensor
       ansible.builtin.command:
@@ -87,7 +138,9 @@
           - "{{ remote_docker_compose_path }}"
           - --root
           - "~/tpotce"
-      when: my_sensor_generated.stat.isreg | default(false)
+      when:
+        - my_sensor_generated.stat.isreg | default(false)
+        - my_sensor_compose.stdout | trim in ['rebuilt', 'copied']
 
     - name: Explain compatibility with an older sensor
       ansible.builtin.debug:
