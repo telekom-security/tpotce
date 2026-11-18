@@ -21,6 +21,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh elasticpot
 ./docker/_tests/run.sh endlessh
 ./docker/_tests/run.sh ewsposter
+./docker/_tests/run.sh fluentbit
 ./docker/_tests/run.sh glutton
 ./docker/_tests/run.sh go-pot
 ./docker/_tests/run.sh h0neytr4p
@@ -30,6 +31,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh honeypots
 ./docker/_tests/run.sh honeytrap
 ./docker/_tests/run.sh log4pot
+./docker/_tests/run.sh logstash_es
 ./docker/_tests/run.sh logstash_fixtures
 ./docker/_tests/run.sh mailoney
 ./docker/_tests/run.sh medpot
@@ -39,6 +41,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh redis
 ./docker/_tests/run.sh redishoneypot
 ./docker/_tests/run.sh rdphoneypot
+./docker/_tests/run.sh sensor_parity
 ./docker/_tests/run.sh sentrypeer
 ./docker/_tests/run.sh suricata
 ./docker/_tests/run.sh tpotinit_env
@@ -177,8 +180,9 @@ in a container without network. Every event must keep the type of its input, car
 no tag ending in `failure` (grok, json, csv, date, GeoIP) and no `columnNN`
 field, have `src_ip`, the token or marker port of the check, the time of the
 line as `@timestamp` and a GeoIP location. It takes the T-Pot Logstash image
-when it is built here, otherwise the official image of its `LS_VER`; an image
-without the Listbot dictionaries gets small stand-ins for them.
+when it is built here, otherwise the official image of its `LS_VER`. Both modes
+of the test use small stand-ins for the Listbot dictionaries in any image, so
+the output does not depend on the Listbot data of the day.
 
 The fixtures are rendered with fixed values (time, source address and port,
 token), so the output of the HIVE pipeline is the same on every run. After the
@@ -193,14 +197,38 @@ fixture was read cleanly; `run.sh` takes no options of a test). This mode always
 uses the Listbot stand-ins and the GeoIP database of the image, so a new
 `LS_VER` may change the GeoIP fields.
 
-`./docker/_tests/run.sh logstash_sensor` runs the same fixtures through the
-SENSOR pipelines (`pipelines_sensor.yml`). It also measures the immediate first
-heartbeat and the next one after 60 seconds, checking sequence numbers,
-version and Logstash process-start metadata. This test replaces only the
-HTTP output with a file; the HIVE routing is tested separately. Known
-pre-existing fixture failures are printed explicitly, never silently skipped.
-The image builder's `-T` runs both `logstash_fixtures` and `logstash_sensor`
-against the Logstash image it just built.
+`./docker/_tests/run.sh logstash_es` checks that the index templates come from
+tpotinit and that Logstash waits for them. The HIVE pipelines of the checkout
+run through its Logstash entrypoint in the official Logstash image (`--image`
+for another), `es_retention.sh` of the checkout in the tpotinit image
+(`--tpotinit-image`). Its cases: (a) Logstash without templates waits, stays
+healthy and names the missing ones; (f) `es_retention.sh` started while
+Elasticsearch is still down writes the policies and templates once it answers;
+(b) then Logstash starts; (c) the template `logstash` carries
+`_meta.tpot_version`; (e) Logstash created no template of its own; (d) a
+template `logstash` changed by hand is overwritten by the next run; (g) an
+event Elasticsearch rejects goes through the dead letter queue of `process`
+into `tpot-failures-*` as a document of stage `index`. The network is internal,
+Listbot is never reached (a fresh cache and stand-in dictionaries).
+
+`./docker/_tests/run.sh fluentbit` runs the Fluent Bit image of a SENSOR
+against a stub of the HIVE's ingest endpoint (`docker/_tests/lib/hive_stub.py`,
+HTTPS with a test CA, in the tpotinit image, `--init-image` for another). Its
+cases 1–12 cover: every fixture arrives once as its raw line with its type and
+`t-pot_log_path`, gzipped, with Basic auth and `X-TPot-Ingest: 2`; the first
+two heartbeats; a 2 MB line skipped with a log line; an invalid byte as U+FFFD;
+503 answers and a restart without loss or duplicates; files made after the
+start; `FLB_STORAGE_LIMIT` reached; TLS verification by address and name; uid
+2000, a read-only root and the entrypoint's refusals; and the probe of
+`/tpot-ingest` (an old HIVE, a HIVE whose Logstash is not ready, then one that
+takes the format). `--cases 3,7` runs only some. All cases take about six
+minutes.
+
+The image builder's `-T` runs `logstash_fixtures` and `logstash_es` against the
+Logstash image it just built and `fluentbit` against its Fluent Bit image.
+`glutton`, `fluentbit` and `logstash_es` also take the tpotinit image of the run
+(`--init-image`, `--tpotinit-image`), which the builder then builds for them
+too.
 
 `./docker/_tests/run.sh sensor_heartbeat` tests the HIVE's real HTTP input and
 Elasticsearch outputs with the local official images pinned by the Dockerfiles,

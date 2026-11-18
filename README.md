@@ -67,6 +67,8 @@ env bash -c '
 - [First Start](#first-start)
   - [Standalone First Start](#standalone-first-start)
   - [Distributed Deployment](#distributed-deployment)
+    - [Sensor Logs](#sensor-logs)
+    - [Sensor Heartbeats](#sensor-heartbeats)
     - [Planning and Certificates](#planning-and-certificates)
     - [Deploying Sensors](#deploying-sensors)
     - [Sensor Status](#sensor-status)
@@ -200,10 +202,11 @@ T-Pot offers a number of services which are basically divided into five groups:
     * SSH for secure remote access.
 2. Elastic Stack
     * Elasticsearch for storing events.
-    * Logstash for ingesting, receiving and sending events to Elasticsearch.
+    * Logstash (on the hive) for ingesting the events of the hive and of its sensors into Elasticsearch.
     * Kibana for displaying events on beautifully rendered dashboards.
 3. Tools
     * NGINX provides secure remote access (reverse proxy) to Kibana, CyberChef, Elasticvue, GeoIP AttackMap and allows for T-Pot sensors to securely transmit event data to the T-Pot hive.
+    * Fluent Bit sends the honeypot logs and a heartbeat of a T-Pot sensor to the T-Pot hive.
     * CyberChef a web app for encryption, encoding, compression and data analysis.
     * Elasticvue a web front end for browsing and interacting with an Elasticsearch cluster.
     * T-Pot Attack Map a beautifully animated attack map for T-Pot.
@@ -239,6 +242,8 @@ Use a dedicated host or VM, preferably Debian 13, without unrelated production s
 |:-----------|:-----|:----------|:-------------------------------------------------------------------------------------------------|
 | Hive       | 16GB | 256GB SSD | As a rule of thumb, the more honeypots, sensors & data, the more RAM and storage is needed.      |
 | Sensor     | 8GB  | 128GB SSD | Since honeypot logs are persisted (~/tpotce/data) for 30 days, storage depends on attack volume. |
+
+A **Sensor** no longer runs Logstash, whose Java process alone took about 1.6 GiB of RAM there. Fluent Bit sends its logs instead, within a container limit of 256 MB, and keeps what the **Hive** has not taken yet on disk (up to 512 MB, see [Sensor Logs](#sensor-logs)). The **Hive** now parses and enriches the events of its sensors as well, so its CPU load grows with the event rate of its sensors.
 
 T-Pot does require ...
 - an IPv4 address via DHCP or statically assigned
@@ -281,7 +286,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 80, 443                                                                                                                                             | tcp      | outgoing  | T-Pot Management: Install, Updates, Logs (i.e. OS, GitHub, DockerHub, Sicherheitstacho, etc.        |
 | 11434                                                                                                                                               | tcp      | outgoing  | LLM based honeypots: Access your Ollama installation                                                |
 | 853                                                                                                                                                 | tcp      | outgoing  | Ddospot DNS over TLS to Quad9 (with DDOSPOT_DNS_RECURSION=on, the default)                          |
-| 64294                                                                                                                                               | tcp      | incoming  | T-Pot Management: Sensor data transmission to hive (through NGINX reverse proxy) to 127.0.0.1:64305 |
+| 64294                                                                                                                                               | tcp      | incoming  | T-Pot Management: Sensor data transmission (Fluent Bit) to hive (through NGINX reverse proxy) to 127.0.0.1:64305 |
 | 64295                                                                                                                                               | tcp      | incoming  | T-Pot Management: Access to SSH                                                                     |
 | 64297                                                                                                                                               | tcp      | incoming  | T-Pot Management Access to NGINX reverse proxy                                                      |
 | 5555                                                                                                                                                | tcp      | incoming  | Honeypot: ADBHoney                                                                                  |
@@ -446,7 +451,7 @@ did not provide that metadata; scanner attribution is heuristic, not verified
 identity. Logstash keeps the complete decoded frames in `glutton.decoded` in
 `_source`, but does not dynamically index their protocol-dependent shapes.
 Base64 payloads and raw TLS ClientHello bytes are likewise not indexed.
-The sensor and HIVE pipelines accept the structured format and drain legacy logs.
+Logstash on the HIVE accepts the structured format, from its own logs and from its sensors, and drains legacy logs.
 
 **ewsposter rollout dependency:** the new session format requires
 [telekom-security/ewsposter#33](https://github.com/telekom-security/ewsposter/pull/33).
@@ -837,6 +842,7 @@ A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the *
 
 The **Hive** keeps a list of its sensors in `~/tpotce/data/sensors.json` (names, addresses, SSH user, date and version, no passwords). Sensors deployed with an earlier release are taken over from `LS_WEB_USER` the first time `tpot sensors` runs, add their addresses with `tpot sensors set` to manage them as well.
 
+Update the **Hive** before its sensors, see [Sensor Logs](#sensor-logs).
 Fleet updates precheck every selected sensor before starting. They run sequentially by default; parallel updates
 start only after a successful canary. The *Sensors* page presents the same flow, with per-sensor progress,
 failure decisions, resume and discard. `-y` confirms starting or resuming, but never approves reported data loss
@@ -848,12 +854,39 @@ run can be discarded without them; credentials are requested only for prechecks 
 Once a sensor's update completes, the HIVE waits up to 15 minutes for a fresh heartbeat with the target version;
 this extendable window starts after the update, not when it begins.
 
+### Sensor Logs
+Fluent Bit on a **Sensor** reads the logs of its honeypots and sends every line unchanged over HTTPS to
+`https://<hive>:64294`, with the access of the sensor (`TPOT_HIVE_USER`). Logstash on the **Hive** parses and
+enriches these lines like the logs of the **Hive** itself, so a sensor's events in `logstash-*` look the same.
+Every event names its sensor in `t-pot_sensor` and the log file it came from in `t-pot_log_path`.
+
+Before it sends anything, Fluent Bit asks the **Hive** whether it takes this format. An older **Hive**, or one whose
+Logstash is not ready yet, gets nothing: the logs wait on the **Sensor**, Fluent Bit asks again every 5 minutes and
+`docker logs fluentbit` says why it waits. While the **Hive** cannot be reached, Fluent Bit keeps the lines on the
+disk of the **Sensor** (`~/tpotce/data/fluentbit/storage`, up to 512 MB, or `FLB_STORAGE_LIMIT` in the environment
+of the `fluentbit` service) and retries without a limit. Beyond that limit the oldest lines are dropped. A single
+burst of lines larger than the limit before the first send loses its newest lines, the log of Fluent Bit names it
+(`no available chunk`).
+Lines longer than 1 MB are skipped, each with a line in `docker logs fluentbit`; Logstash had no such limit.
+
+**Update the Hive first.** A **Sensor** of 24.04.1 still sends with Logstash in the old format. The **Hive** refuses
+these events, they are not stored, and the *Sensors* page and `tpot sensors list` show the sensor as **update
+needed (events refused)** until 15 minutes after the last refusal; the *Status* page counts it as refused. Update such sensors right
+after the **Hive** (`tpot sensors update`, or `update.sh` on the **Sensor**). The update puts `fluentbit` in the place
+of `logstash` in the **Sensor** edition; a `docker-compose.yml` of your own that still runs Logstash is adapted after
+a question at a terminal, with `update.sh --adapt-compose` or with `tpot customize`. Kept as it is, its honeypots go
+on running and T-Pot warns that the **Hive** refuses its events. A **Sensor** of this release does not send to an
+older **Hive**, its logs wait until the **Hive** is updated.
+
 ### Sensor Heartbeats
 The *Sensors* page and `tpot sensors list` show **Sensor | Host | Version | Heartbeat | Last event | State**.
-Logstash on a sensor sends a heartbeat every minute, even without attacks. **Online** means the Hive received
+Fluent Bit on a sensor sends a heartbeat every minute, even without attacks. **Online** means the Hive received
 one less than 180 seconds ago; exactly 180 seconds is **offline**. The offline time starts at that threshold.
 No heartbeat means **unknown**, not offline, even if attack events are present. **No access** and **to take over**
-take precedence. Online confirms the Logstash-to-Hive connection, **not** that every honeypot is healthy.
+take precedence. Online confirms the connection from the sensor's Fluent Bit to the Hive, **not** that every
+honeypot is healthy. **update needed (events refused)** means the Hive refused events of the sensor in the old
+format of 24.04.1 (see [Sensor Logs](#sensor-logs)); it is shown while that refusal is newer than the last
+heartbeat and less than 15 minutes old.
 
 Reachability uses the Hive's receive time, not the sensor's clock; a backlog can therefore appear online when
 delivery resumes. Table timestamps are UTC. *Last event* is independent, using the last seven days by default
@@ -867,25 +900,25 @@ A heartbeat's version takes precedence over the registry cache. Without a heartb
 **not checked**: older Managers copied the Hive's version there. A known version different from the Hive's
 configured runtime version is yellow and marked **behind** (including newer or custom tags).
 An older sensor without `~/tpotce/version` can still be deployed; the read failure is reported and its version
-stays unknown until a heartbeat supplies it. Updated Logstash and tpotinit images are needed for heartbeats.
+stays unknown until a heartbeat supplies it. Heartbeats need the Fluent Bit and tpotinit images of this release.
 
 Removing a sensor deletes only its current document in `tpot-sensor-status`, not heartbeat history or attack
 events. A failed status deletion is reported as a partial removal; access stays revoked. Heartbeat history has
 its own [retention](#log-persistence).
 
 Kibana's **T-Pot Sensors** dashboard has current status, a heartbeat timeline, versions over time,
-observed Logstash process starts and attack events per sensor. Its status table is independent of the
+observed Fluent Bit starts and attack events per sensor. Its status table is independent of the
 time picker, so an old offline sensor does not disappear. It includes only sensors that have sent
 heartbeats; use the Manager for sensors with no heartbeat or no access.
 The charts show their top 20 series. Heartbeat history contains every fifth heartbeat and uses the
-sensor's clock; process starts use the Logstash start time and count distinct starts, not samples.
-Short-lived processes without a fifth heartbeat cannot appear in that history. Attack charts still use
+sensor's clock; Fluent Bit starts use the time Fluent Bit started on the sensor and count distinct starts, not
+samples. Short-lived processes without a fifth heartbeat cannot appear in that history. Attack charts still use
 `logstash-*`; heartbeats never enter those indices.
 With `TPOT_KIBANA_OBJECTS=keep`, add the dashboard explicitly with `tpot elastic import --mode add`
 or the *Elastic* page. This adds missing objects without overwriting yours.
 
 ### Planning and Certificates
-The **Sensor** checks the **Hive** against a copy of its certificate (`~/tpotce/data/hive.crt` on the **Sensor**), so the certificate has to cover the address the **Sensor** connects to. **T-Pot Init** only creates a self-signed certificate for one IP of the **Hive** host, which suits simple setups. A **Hive** reachable on more than one address (i.e. RFC 1918 and a public NAT IP) or a domain name needs these as SANs (Subject Alternative Name), otherwise Logstash on the **Sensor** cannot validate the connection. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).
+The **Sensor** checks the **Hive** against a copy of its certificate (`~/tpotce/data/hive.crt` on the **Sensor**), so the certificate has to cover the address the **Sensor** connects to. **T-Pot Init** only creates a self-signed certificate for one IP of the **Hive** host, which suits simple setups. A **Hive** reachable on more than one address (i.e. RFC 1918 and a public NAT IP) or a domain name needs these as SANs (Subject Alternative Name), otherwise Fluent Bit on the **Sensor** cannot validate the connection. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).
 
 `tpot sensors add` checks this for the address you give and offers to renew the certificate if it is missing. To do it ahead of time:
 ```
@@ -893,7 +926,7 @@ tpot sensors cert                                            # the addresses it 
 tpot sensors cert --renew --add my.primary.domain --add 1.2.3.4
 tpot sensors cert --distribute                               # copy it to the sensors you have
 ```
-`--renew` keeps the addresses the certificate has, adds the ones of `--add` and those the sensors use, keeps the old certificate as `nginx.crt.bak-<time>` and restarts T-Pot. Every sensor needs the new certificate afterwards, `--distribute` copies it over SSH and restarts Logstash there (it asks for the sudo password on the sensors, `--no-become-pass` if they need none).
+`--renew` keeps the addresses the certificate has, adds the ones of `--add` and those the sensors use, keeps the old certificate as `nginx.crt.bak-<time>` and restarts T-Pot. Every sensor needs the new certificate afterwards, `--distribute` copies it over SSH and restarts Fluent Bit there (Logstash on a sensor of an older release; it warns about a sensor of this release whose `docker-compose.yml` still runs Logstash; it asks for the sudo password on the sensors, `--no-become-pass` if they need none).
 
 Without `tpot` the certificate can be changed by hand:
 ```
@@ -916,8 +949,8 @@ sudo chown tpot:tpot $HOME/tpotce/data/nginx/cert/*
 sudo systemctl start tpot
 ```
 
-The T-Pot configuration file (`.env`) does allow to disable the SSL verification for logstash connections from **Sensor** to the **Hive** by setting `LS_SSL_VERIFICATION=none`. For security reasons this is only recommended for lab or test environments.<br><br>
-If you choose to use a valid certificate for the **Hive** signed by a CA (i.e. Let's Encrypt), logstash, and therefore the **Sensor**, should have no problems to connect and transmit its logs to the **Hive**.
+The T-Pot configuration file (`.env`) does allow to disable the SSL verification of the connections from Fluent Bit on the **Sensor** to the **Hive** by setting `LS_SSL_VERIFICATION=none` on the **Sensor** (the default is `full`). For security reasons this is only recommended for lab or test environments.<br><br>
+If you choose to use a valid certificate for the **Hive** signed by a CA (i.e. Let's Encrypt), Fluent Bit, and therefore the **Sensor**, should have no problems to connect and transmit its logs to the **Hive**.
 
 ### Deploying Sensors
 Once you have rebooted the **Sensor** as instructed by the installer, log into the **Hive** and run:
@@ -937,7 +970,7 @@ If the deployment fails the access is taken back, the log is in `~/tpotce/data/d
 <br><br>
 
 ### Sensor Status
-`tpot sensors` shows for every sensor whether it may send (`LS_WEB_USER`), its hostname and when its last event arrived (from Elasticsearch on the **Hive**, the last 7 days, `--days` for more). The **Hive** knows which sensor sent an event because its nginx passes the sensor user on and Logstash stores it as `t-pot_sensor` with every event, this works for sensors of earlier releases as well. Events from before that carry no sensor name, `tpot sensors` lists their hostnames separately.
+`tpot sensors` shows for every sensor whether it may send (`LS_WEB_USER`), its hostname and when its last event arrived (from Elasticsearch on the **Hive**, the last 7 days, `--days` for more). The **Hive** knows which sensor sent an event because its nginx passes the sensor user on and Logstash stores it as `t-pot_sensor` with every event. The **Hive** refuses the events of a sensor of 24.04.1 until it is updated (see [Sensor Logs](#sensor-logs)). Events the **Hive** stored before its update to this release carry no sensor name, `tpot sensors` lists their hostnames separately.
 <br><br>
 
 ### Removing Sensors
@@ -1655,6 +1688,7 @@ All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will b
 | `dicompot/images` | the DICOM images you put there for Dicompot |
 | `elk/data`, `elk/listbot` | the Elasticsearch data (its retention is `TPOT_ES_RETENTION`) and the translation maps Logstash caches |
 | `endlessh/identity` | the identity of Endlessh |
+| `fluentbit/storage` | on a **Sensor**, the log lines Fluent Bit has not sent to the **Hive** yet, see [Sensor Logs](#sensor-logs) |
 | `galah/cache`, `galah/cert` | the answers of the LLM Galah caches (they save LLM calls) and its TLS certificate |
 | `miniprint/data` | the printer identity of this installation |
 | `nginx/cert`, `nginx/conf` | the certificate of the web UI and the passwords of its users and sensors |
@@ -1667,7 +1701,9 @@ T-Pot never shortens the retention by itself. Change it on the *Elastic* page of
 <br>
 Sensor heartbeat history has its own retention: `TPOT_SENSOR_STATUS_RETENTION=<1-3650|off>` (default 30 days, HIVE only). Choose *Sensor history* on the *Elastic* page or add `--sensor-history` to `tpot elastic retention`; the same safeguards, `--adopt`, `--force` and separate data-loss confirmation apply. Its policy `tpot-sensor-status` applies only to `tpot-sensor-heartbeat-*`, never to the single current-status document per sensor in `tpot-sensor-status` or to attack events in `logstash-*`. `tpot elastic status` shows both policies. When both retentions are shortened on the Settings page, **all** deletion questions must be accepted before any setting or policy is written; declining either saves nothing.
 <br>
-The heartbeat templates are installed before Logstash accepts events, and tpotinit also creates them if missing. Existing templates are kept, not overwritten; existing unmanaged history indices are not enrolled into deletion automatically. `off` retains history indefinitely; empty leaves an existing policy unchanged, as for event retention.
+T-Pot Init writes the index template `logstash` on every start of a HIVE and creates the templates `tpot-sensor-status`, `tpot-sensor-heartbeat` and `tpot-failures` if they are missing; existing ones of these three are kept, not overwritten. Logstash on the HIVE waits for all four before it takes any event, without a time limit, and `docker logs logstash` names the ones it still waits for. Existing unmanaged history indices are not enrolled into deletion automatically. `off` retains history indefinitely; empty leaves an existing policy unchanged, as for event retention.
+<br>
+Logstash on the HIVE writes the events it cannot parse, and those Elasticsearch rejects, into `tpot-failures-*` instead of dropping them. Each document has `failure.stage` (`parse` or `index`), `failure.reason`, `failure.original` (the line as read, or the rejected event), and `type`, `t-pot_sensor` and `t-pot_log_path` of the event. These indices follow the policy `tpot`, so `TPOT_ES_RETENTION` applies to them too. Kibana has the data view and saved search *T-Pot Failures* for them; `tpot elastic status` and the *Elastic* page show their count of the last 24 hours (`Failures (24 h): N, Kibana: T-Pot Failures`).
 <br>
 A shorter value that gets into `.env` any other way (by hand, `tpot env set`, `restore.sh`) waits: T-Pot warns about it on every start and keeps the policy as it is until `tpot elastic retention --force` or the *Elastic* page applies it, both ask first. If the policy is missing and `TPOT_ES_RETENTION` is empty, T-Pot creates it to keep everything (`off`). If the value would delete older events that exist, the policy is created to keep everything as well and the value waits.
 <br>
@@ -1781,6 +1817,10 @@ docker-compose -f ~/tpotce/docker-compose.yml down -v
 The Elastic Stack is hungry for RAM, specifically `logstash` and `elasticsearch`. If the Elastic Stack is unavailable, does not receive any logs or simply keeps crashing it is most likely a RAM or storage issue.<br>
 While T-Pot keeps trying to restart the services / containers run `docker logs -f <container_name>` (either `logstash` or `elasticsearch`) and check if there are any warnings or failures involving RAM.
 
+Logstash runs only on the **Hive**. A **Sensor** sends its logs with Fluent Bit (`docker logs fluentbit`), see [Sensor Logs](#sensor-logs).
+
+Logstash reads the logs of the **Hive** from their beginning. If only its container is recreated without a start of T-Pot (i.e. `docker compose up -d` after a change of the `logstash` service alone), it reads the logs since the last start of T-Pot again and Elasticsearch stores those events twice. Restart T-Pot (`sudo systemctl restart tpot`) instead.
+
 Elasticsearch runs with a 2 GB heap (`ES_JAVA_OPTS`) inside a `mem_limit` of 4 GB. On hosts with many CPU cores (about 28 or more) raise both, otherwise free text searches in Kibana over a daily index that holds close to its limit of 3000 fields may fail with `field expansion matches too many fields`. Elasticsearch derives that limit from the heap size and the number of search threads.
 
 Dionaea uses the [T-Pot maintained fork](https://github.com/telekom-security/dionaea), pinned to release 0.12.5. Outbound connections from emulated socket calls and profile-shell callbacks follow the configured download destination policy; rejected connections produce no parent-child connection link. JSON keys and value types and the SQLite schema remain compatible.
@@ -1833,6 +1873,7 @@ The software that T-Pot is built on uses the following licenses.
 [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE),
 [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE),
 [elasticsearch](https://github.com/elastic/elasticsearch/blob/master/LICENSE.txt),
+[fluent-bit](https://github.com/fluent/fluent-bit/blob/master/LICENSE),
 [go-pot](https://github.com/ryanolee/go-pot?tab=License-1-ov-file#readme),
 [h0neytr4p](https://github.com/telekom-security/h0neytr4p/blob/main/LICENSE),
 [logstash](https://github.com/elastic/logstash/blob/main/LICENSE.txt),
@@ -1888,6 +1929,7 @@ Without open source and the development community we are proud to be a part of, 
 [elasticvue](https://github.com/cars10/elasticvue/graphs/contributors),
 [endlessh](https://github.com/skeeto/endlessh/graphs/contributors),
 [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors),
+[fluent-bit](https://github.com/fluent/fluent-bit/graphs/contributors),
 [galah](https://github.com/0x4D31/galah/graphs/contributors),
 [glutton](https://github.com/mushorg/glutton/graphs/contributors),
 [go-pot](https://github.com/ryanolee/go-pot/graphs/contributors),
