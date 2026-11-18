@@ -1773,12 +1773,18 @@ def run_sensor_add(args, registry, console) -> int:
         return 1
     say.ok(f"SSH to {user}@{host} works.", console.file)
 
-    # 2. the sensor checks this HIVE against its certificate
+    # 2. the sensor checks this HIVE against its certificate; T-Pot restarts only after the grant (step 3),
+    # a restart before it would leave nginx without the access of the new sensor
+    restart = False
     if not tsensors.covers(hive, tsensors.cert_sans(registry.cert)):
         console.print(Text(f"The certificate of this HIVE does not cover {hive}, the sensor would not trust it.",
                            style="yellow"))
-        if not renew_certificate(registry, registry.hive_addresses() + [hive], console, args.yes, True):
+        if not renew_certificate(registry, registry.hive_addresses() + [hive], console, args.yes, False):
             return 1
+        restart = linux_host_ok() and confirm(
+            "Restart T-Pot after the access is granted, so that nginx uses the new certificate?", args.yes)
+        if not restart:
+            say.warn("nginx uses the new certificate after: tpot restart", console.file)
         others = [s.name for s in registry.sensors()]
         if others:
             console.print(Text(f"Remember: {', '.join(others)} need the new certificate as well: "
@@ -1804,7 +1810,13 @@ def run_sensor_add(args, registry, console) -> int:
     with bootstrap.sigint_to(lambda signum, _frame: interrupts.append(signum)):
         note = registry.grant(name, password)
         code = None
+        restarted = False
         try:
+            if restart and not interrupts:
+                restarted = call(ops.service_command("restart")) == 0
+                if not restarted:
+                    say.warn("T-Pot could not be restarted, nginx uses the new certificate after: "
+                             "sudo systemctl restart tpot.service", console.file)
             if not interrupts:
                 console.print(f"Deploying {name} to {host}, this reboots the sensor.")
                 proc = subprocess.Popen(tsensors.deploy_command(host, user, not args.no_become_pass, port=port),
@@ -1834,7 +1846,8 @@ def run_sensor_add(args, registry, console) -> int:
             say.warn(f"{name} could not be noted ({err}), its access stays. Add where it is with: "
                      f"tpot sensors set {name} --host {host} --ssh-user {user} --ssh-port {port} "
                      f"--hive-address {hive}", console.file)
-    if "restart" in note:          # lswebpasswd could not be written in place, nginx refuses it until then
+    # lswebpasswd could not be written in place, nginx refuses it until a restart (none of this run's)
+    if "restart" in note and not restarted:
         say.warn(f"{name} is deployed to {host}. nginx takes its access from the next start of T-Pot on "
                  f"(tpot restart), it sends to {hive} after that.", console.file)
     else:

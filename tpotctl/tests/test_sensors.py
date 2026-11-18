@@ -1189,6 +1189,57 @@ class CliTest(unittest.TestCase):
         self.assertIn("taken back", text)
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 3)      # 2 migrated + 1 deployed
 
+    def add_renewing(self, linux=True, restart_code=0, note=None):
+        """sensors add --yes with a certificate that lacks the hive address; the steps in their order."""
+        from tpotctl import cli, ops
+        steps = []
+        popen, _children = fake_popen(0)
+        grant = self.Registry.grant
+
+        def call(argv, **_kwargs):
+            steps.append("restart" if argv == ops.service_command("restart") else argv)
+            return restart_code
+
+        def deploy(command, **kwargs):
+            steps.append("deploy")
+            return popen(command, **kwargs)
+
+        def granted(registry, *args, **kwargs):
+            steps.append("grant")
+            granted_note = grant(registry, *args, **kwargs)
+            return granted_note if note is None else note
+
+        with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
+                mock.patch.object(sensors, "cert_sans", return_value=[]), \
+                mock.patch.object(sensors, "renew_cert", side_effect=lambda *_a: steps.append("renew") or "stamp"), \
+                mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
+                mock.patch.object(self.Registry, "grant", granted), \
+                mock.patch.object(cli, "linux_host_ok", return_value=linux), \
+                mock.patch.object(cli, "call", side_effect=call), \
+                mock.patch("subprocess.Popen", side_effect=deploy):
+            code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
+                                      "--hive-address", "192.168.1.2", "--yes")
+        return code, text, steps
+
+    def test_add_renews_grants_then_restarts_once(self):
+        code, text, steps = self.add_renewing(note="nginx takes it after a restart")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(steps, ["renew", "grant", "restart", "deploy"])
+        self.assertNotIn("next start of T-Pot", text)           # the restart of this run covers the access
+
+    def test_add_without_restart_warns(self):
+        code, text, steps = self.add_renewing(linux=False, note="nginx takes it after a restart")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(steps, ["renew", "grant", "deploy"])
+        self.assertIn("nginx uses the new certificate after: tpot restart", text)
+        self.assertIn("next start of T-Pot", text)
+
+    def test_add_restart_failure_goes_on(self):
+        code, text, steps = self.add_renewing(restart_code=1)
+        self.assertEqual(code, 0, text)
+        self.assertEqual(steps, ["renew", "grant", "restart", "deploy"])
+        self.assertIn("sudo systemctl restart tpot.service", text)
+
     def test_add_stops_without_ssh_and_with_uncovered_certificate(self):
         with mock.patch.object(sensors, "check_ssh", return_value="unreachable"):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
