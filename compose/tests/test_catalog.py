@@ -20,7 +20,8 @@ ALLOWED = {"ports", "networks", "depends_on"}
 # the rest keep a network of their own
 SHARED = "honeypot_local"
 OWN_NETWORK = {"nginx_local", "ewsposter_local", "tpotinit_local", "suricata_local", "default"}
-META_KEYS = {"group", "description", "required", "requires", "conflicts", "hidden", "hive_only", "edition"}
+META_KEYS = {"group", "description", "required", "requires", "conflicts", "hidden", "hive_only", "sensor_only",
+             "edition"}
 
 
 class CatalogTest(unittest.TestCase):
@@ -53,6 +54,24 @@ class CatalogTest(unittest.TestCase):
                 for key in ("requires", "conflicts"):
                     for other in meta.get(key) or []:
                         self.assertIn(other, self.catalog.catalog.services, f"{key} {other}")
+
+    def test_sensor_only_and_hive_only_exclude_each_other(self):
+        for name, meta in self.catalog.meta.items():
+            with self.subTest(service=name):
+                self.assertFalse(meta.get("sensor_only") and meta.get("hive_only"))
+        self.assertTrue(self.catalog.flag("fluentbit", "sensor_only"))
+        self.assertTrue(self.catalog.flag("logstash", "hive_only"))
+
+    def test_shipper_per_edition(self):
+        """A SENSOR ships its logs with Fluent Bit, every other edition runs Logstash."""
+        for edition, compose in self.catalog.editions.items():
+            with self.subTest(edition=edition):
+                if core.sensor_base(edition):
+                    self.assertIn("fluentbit", compose.services)
+                    self.assertNotIn("logstash", compose.services)
+                else:
+                    self.assertIn("logstash", compose.services)
+                    self.assertNotIn("fluentbit", compose.services)
 
     def test_conflicts_are_symmetric(self):
         for name in self.catalog.order:

@@ -6,11 +6,13 @@
 # ignores it and the customizer strips it from what it writes:
 #   group        honeypots, conpot, nsm, elk, tools or core, the customizer groups by it
 #   description  one line shown next to the service
-#   required     always part of the configuration (tpotinit, logstash)
+#   required     always part of the configuration where it is offered (tpotinit; logstash on a HIVE,
+#                fluentbit on a SENSOR)
 #   requires     services that have to come along, beyond depends_on
 #   conflicts    services that cannot run next to this one
 #   hidden       helper, only selected through depends_on / requires
 #   hive_only    not offered when starting from the SENSOR edition
+#   sensor_only  not offered when starting from a HIVE edition
 # Run `python3 -m unittest discover compose/tests` after changes.
 
 networks:
@@ -1103,7 +1105,7 @@ services:
 
 ## Logstash service
   logstash:
-    x-tpot: {group: elk, description: "Logstash, collects the honeypot logs", required: true}
+    x-tpot: {group: elk, description: "Logstash, collects the honeypot logs", required: true, hive_only: true}
     container_name: logstash
     restart: always
     depends_on:
@@ -1124,6 +1126,28 @@ services:
     pull_policy: ${TPOT_PULL_POLICY}
     volumes:
      - ${TPOT_DATA_PATH}:/data
+
+## Fluent Bit service (SENSOR: sends the honeypot logs to the HIVE)
+  fluentbit:
+    x-tpot: {group: elk, description: "Fluent Bit, sends the honeypot logs of a SENSOR to its HIVE", required: true, sensor_only: true}
+    container_name: fluentbit
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    environment:
+     - TPOT_HIVE_USER=${TPOT_HIVE_USER}
+     - TPOT_HIVE_IP=${TPOT_HIVE_IP}
+     - LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}
+    mem_limit: 256m
+    read_only: true
+    tmpfs:
+     - /tmp:uid=2000,gid=2000
+    image: ${TPOT_REPO}/fluentbit:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    volumes:
+     - ${TPOT_DATA_PATH}:/data:ro
+     - ${TPOT_DATA_PATH}/fluentbit:/data/fluentbit
 
 ## Map Redis Service
   map_redis:

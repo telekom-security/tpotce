@@ -733,26 +733,26 @@ services:
 
 #### ELK
 
-## Logstash service
-  logstash:
-    container_name: logstash
+## Fluent Bit service (SENSOR: sends the honeypot logs to the HIVE)
+  fluentbit:
+    container_name: fluentbit
     restart: always
     depends_on:
       tpotinit:
         condition: service_healthy
     environment:
-     - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
-     - TPOT_TYPE=${TPOT_TYPE:-HIVE}
      - TPOT_HIVE_USER=${TPOT_HIVE_USER}
      - TPOT_HIVE_IP=${TPOT_HIVE_IP}
      - LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}
-    ports:
-     - "127.0.0.1:64305:64305"
-    mem_limit: 2g
-    image: ${TPOT_REPO}/logstash:${TPOT_VERSION}
+    mem_limit: 256m
+    read_only: true
+    tmpfs:
+     - /tmp:uid=2000,gid=2000
+    image: ${TPOT_REPO}/fluentbit:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     volumes:
-     - ${TPOT_DATA_PATH}:/data
+     - ${TPOT_DATA_PATH}:/data:ro
+     - ${TPOT_DATA_PATH}/fluentbit:/data/fluentbit
 
 #### /ELK
 

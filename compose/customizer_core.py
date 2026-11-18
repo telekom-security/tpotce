@@ -40,6 +40,11 @@ GROUPS = [
 ]
 GROUP_TITLES = dict(GROUPS)
 EDITION_ORDER = ["STANDARD", "SENSOR", "LLM", "MINI", "MOBILE", "TARPIT"]
+SENSOR_EDITION = "SENSOR"
+# what ships the honeypot logs: Logstash on a HIVE, Fluent Bit on a SENSOR
+HIVE_SHIPPER = "logstash"
+SENSOR_SHIPPER = "fluentbit"
+SHIPPER_SWAP = f"{HIVE_SHIPPER} replaced by {SENSOR_SHIPPER}: a SENSOR sends its logs with Fluent Bit"
 # editions of earlier releases: a configuration built from one names why it cannot be rebuilt
 REMOVED_EDITIONS = {"MAC_WIN": "the MAC_WIN edition (Docker Desktop on macOS and Windows) is gone, T-Pot runs on "
                                 "Linux only: build the configuration again from another edition, e.g. STANDARD"}
@@ -51,6 +56,15 @@ _EDITION_RE = re.compile(r"^# T-Pot:\s*([A-Z_]+)\s*$")      # also without the s
 _PORT_RE = re.compile(
     r"^(?:(?P<ip>\d{1,3}(?:\.\d{1,3}){3}):)?(?P<host>\d+):(?P<cont>\d+)(?:/(?P<proto>tcp|udp))?$")
 _XTPOT_RE = re.compile(r"^    x-tpot:")
+
+
+def sensor_base(base: str) -> bool:
+    """Does a configuration built from this base edition make a SENSOR?"""
+    return base == SENSOR_EDITION
+
+
+def role_of(base: str) -> str:
+    return "SENSOR" if sensor_base(base) else "HIVE"
 
 
 def edition_line(lines: List[str]) -> int:
@@ -202,9 +216,15 @@ class Catalog:
             return False
         if name in self.editions[base].services:
             return True
-        if base == "SENSOR" and self.flag(name, "hive_only"):
+        if sensor_base(base) and self.flag(name, "hive_only"):
+            return False
+        if not sensor_base(base) and self.flag(name, "sensor_only"):
             return False
         return True
+
+    def required(self, base: str, name: str) -> bool:
+        """Always part of a configuration from this base (where it is offered at all)."""
+        return self.flag(name, "required") and self.offered(base, name)
 
 
 # ---------------------------------------------------------------------------
@@ -377,8 +397,8 @@ def env_value(key: str, repo_dir: str = REPO_DIR) -> str:
 
 @dataclass
 class Finding:
-    level: str                         # error | warning
-    kind: str                          # service | dependency | conflict | port | network | env
+    level: str                         # error | warning | info
+    kind: str                          # service | dependency | conflict | port | network | env | base | shipper
     text: str
     services: Tuple[str, ...] = ()
 
@@ -403,7 +423,7 @@ class Result:
         return [f for f in self.findings if f.level == "warning"]
 
     def role(self) -> str:
-        return "SENSOR" if self.selection.base == "SENSOR" else "HIVE"
+        return role_of(self.selection.base)
 
     def problems_of(self, name: str, kind: Optional[str] = None) -> List[Finding]:
         return [f for f in self.errors if name in f.services and kind in (None, f.kind)]
@@ -437,6 +457,11 @@ def resolve(catalog: Catalog, selection: Selection, max_networks: int = DEFAULT_
     for name in selection.add:
         if name not in catalog.catalog.services:
             findings.append(Finding(unknown_level, "service", f"{name} is not a T-Pot service, left out", (name,)))
+        elif not catalog.offered(base, name) and catalog.flag(name, "required"):
+            role = role_of(base)
+            shipper = SENSOR_SHIPPER if sensor_base(base) else HIVE_SHIPPER
+            findings.append(Finding("error", "base", f"{name} does not run on the {base} edition, "
+                                                     f"a {role} sends its logs with {shipper}", (name,)))
         elif not catalog.offered(base, name):
             findings.append(Finding("error", "service", f"a {base} has no {name}", (name,)))
         else:
@@ -444,14 +469,14 @@ def resolve(catalog: Catalog, selection: Selection, max_networks: int = DEFAULT_
     for name in selection.remove:
         if name not in catalog.catalog.services and name not in catalog.editions[base].services:
             findings.append(Finding(unknown_level, "service", f"{name} is not a T-Pot service, nothing to remove", (name,)))
-        elif catalog.flag(name, "required"):
+        elif catalog.required(base, name):
             findings.append(Finding("error", "dependency", f"{name} is required and cannot be removed", (name,)))
         else:
             remove.append(name)
     selection = Selection(base, add, remove, dict(selection.ports))
 
     wanted = [n for n in catalog.editions[base].services if n not in remove] + add
-    wanted += [n for n in catalog.order if catalog.flag(n, "required") and n not in wanted]
+    wanted += [n for n in catalog.order if catalog.required(base, n) and n not in wanted]
     chosen: List[str] = []
     needed_by: Dict[str, List[str]] = {}
     queue = list(wanted)
@@ -550,7 +575,7 @@ def resolve(catalog: Catalog, selection: Selection, max_networks: int = DEFAULT_
             f"{max_networks}; remove services or raise the limit with --max-networks if you "
             "configured more default-address-pools"))
 
-    role = "SENSOR" if base == "SENSOR" else "HIVE"
+    role = role_of(base)
     tpot_type = env_value("TPOT_TYPE")
     if tpot_type and tpot_type != role:
         findings.append(Finding("warning", "env", f"TPOT_TYPE in .env is {tpot_type}, this configuration is a {role}"))
@@ -809,6 +834,7 @@ class Adoption:
     v1: bool                           # built by the customizer of an earlier release
     moved: List[str] = field(default_factory=list)   # host ports the release moved, "svc: C/PROTO host A -> B"
     new: List[str] = field(default_factory=list)     # services of the base the file does not have
+    findings: List[Finding] = field(default_factory=list)   # info: what the release swapped (shipper)
 
 
 def _show(value) -> str:
@@ -1110,8 +1136,11 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optio
 
     dropped: List[str] = []
     kept: List[str] = []
+    findings: List[Finding] = []
     for name in data["services"]:
-        if name in DROPPED_SERVICES:
+        if name == HIVE_SHIPPER and sensor_base(base):
+            findings.append(Finding("info", "shipper", SHIPPER_SWAP))
+        elif name in DROPPED_SERVICES:
             dropped.append(f"{name} (removed in this release)")
         elif name not in catalog.catalog.services and name not in edition.services:
             dropped.append(f"{name} (not a T-Pot service)")
@@ -1122,7 +1151,7 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optio
 
     # everything the kept services need comes along, the base keeps only that
     wanted: List[str] = []
-    queue = kept + [n for n in catalog.order if catalog.flag(n, "required")]
+    queue = kept + [n for n in catalog.order if catalog.required(base, n)]
     while queue:
         name = queue.pop(0)
         if name in wanted:
@@ -1181,7 +1210,26 @@ def adopt(catalog: Catalog, text: str, tpot_type: str = "HIVE", old_ports: Optio
            for n in remove if not catalog.flag(n, "hidden")
            and (old_ports is None or n not in old_ports)]       # what the old catalogue had is your choice
     selection = normalize(catalog, Selection(base, add, remove, ports))
-    return Adoption(selection, dropped, not_carried, v1, moved, new)
+    return Adoption(selection, dropped, not_carried, v1, moved, new, findings)
+
+
+def swap_shipper(selection: Selection, text: str) -> Tuple[Selection, List[Finding]]:
+    """--rebuild of a SENSOR file of an earlier release: Fluent Bit takes the place of Logstash."""
+    if not sensor_base(selection.base):
+        return selection, []
+    try:
+        data = load_text_ports(text)
+    except yaml.YAMLError:
+        data = None
+    services = data.get("services") if isinstance(data, dict) else None
+    named = selection.add + selection.remove + [key[0] for key in selection.ports]
+    if HIVE_SHIPPER not in named and not (isinstance(services, dict) and HIVE_SHIPPER in services):
+        return selection, []
+    swapped = Selection(selection.base,
+                        [n for n in selection.add if n != HIVE_SHIPPER],
+                        [n for n in selection.remove if n not in (HIVE_SHIPPER, SENSOR_SHIPPER)],
+                        {k: v for k, v in selection.ports.items() if k[0] != HIVE_SHIPPER})
+    return swapped, [Finding("info", "shipper", SHIPPER_SWAP)]
 
 
 def adopt_type(text: str, env_type: str = "") -> str:
@@ -1190,7 +1238,7 @@ def adopt_type(text: str, env_type: str = "") -> str:
     if env_type.strip():
         return "SENSOR" if env_type.strip().upper() == "SENSOR" else "HIVE"
     selection = parse_header(text)
-    if edition_of(text.split("\n")) == "SENSOR" or (selection and selection.base == "SENSOR"):
+    if edition_of(text.split("\n")) == "SENSOR" or (selection and sensor_base(selection.base)):
         return "SENSOR"
     return "HIVE"
 

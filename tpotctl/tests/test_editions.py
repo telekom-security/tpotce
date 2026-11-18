@@ -174,6 +174,21 @@ class EditionsTest(unittest.TestCase):
         editions.switch(plan, self.repo, run=Calls(), linux=True)
         self.assertIn("TPOT_TYPE=HIVE\n", self.read(env))
 
+    @unittest.skipUnless(yaml, "the compose file is read with PyYAML")
+    def test_shipper_follows_the_switch(self):
+        """HIVE -> SENSOR brings Fluent Bit, SENSOR -> HIVE Logstash: the copied edition decides."""
+        def services():
+            return set(yaml.safe_load(self.read(self.compose()))["services"])
+
+        self.assertIn("logstash", services())
+        editions.switch(self.plan("sensor"), self.repo, run=Calls(), linux=True)
+        self.assertIn("fluentbit", services())
+        self.assertNotIn("logstash", services())
+        editions.switch(self.plan("standard", env={"TPOT_TYPE": "SENSOR"}, users_ok=True), self.repo,
+                        run=Calls(), linux=True)
+        self.assertIn("logstash", services())
+        self.assertNotIn("fluentbit", services())
+
     def test_web_user_is_added_before_the_start(self):
         calls = Calls()
         order = []

@@ -82,9 +82,46 @@ class CoreTest(unittest.TestCase):
     def test_sensor_has_no_hive_services(self):
         result = self.resolve("SENSOR")
         self.assertNotIn("elasticsearch", result.services)
-        self.assertIn("logstash", result.services)
+        self.assertIn("fluentbit", result.services)
         self.assertFalse(self.catalog.offered("SENSOR", "kibana"))
         self.assertTrue(errors(self.resolve("SENSOR", add=["kibana"]), "service"))
+
+    def test_sensor_base_gets_fluentbit(self):
+        self.assertTrue(core.sensor_base("SENSOR"))
+        self.assertFalse(core.sensor_base("STANDARD"))
+        result = self.resolve("SENSOR")
+        self.assertIn("fluentbit", result.services)
+        self.assertNotIn("logstash", result.services)
+        self.assertTrue(self.catalog.offered("SENSOR", "fluentbit"))
+        self.assertFalse(self.catalog.offered("SENSOR", "logstash"))
+
+    def test_hive_base_gets_logstash(self):
+        for base in ("STANDARD", "MINI", "LLM", "MOBILE", "TARPIT"):
+            with self.subTest(base=base):
+                result = self.resolve(base)
+                self.assertIn("logstash", result.services)
+                self.assertNotIn("fluentbit", result.services)
+                self.assertFalse(self.catalog.offered(base, "fluentbit"))
+
+    def test_logstash_on_sensor_is_error(self):
+        result = self.resolve("SENSOR", add=["logstash"])
+        self.assertEqual(errors(result, "base"),
+                         ["logstash does not run on the SENSOR edition, a SENSOR sends its logs with fluentbit"])
+        self.assertEqual(errors(result, "service"), [])
+
+    def test_fluentbit_on_hive_is_error(self):
+        result = self.resolve("STANDARD", add=["fluentbit"])
+        self.assertEqual(errors(result, "base"),
+                         ["fluentbit does not run on the STANDARD edition, a HIVE sends its logs with logstash"])
+
+    def test_required_scoped_to_base(self):
+        self.assertEqual(errors(self.resolve("STANDARD", remove=["fluentbit"])), [])
+        self.assertEqual(errors(self.resolve("SENSOR", remove=["logstash"])), [])
+        self.assertTrue(errors(self.resolve("SENSOR", remove=["fluentbit"]), "dependency"))
+        self.assertTrue(errors(self.resolve("STANDARD", remove=["logstash"]), "dependency"))
+        self.assertTrue(self.catalog.required("SENSOR", "fluentbit"))
+        self.assertFalse(self.catalog.required("SENSOR", "logstash"))
+        self.assertFalse(self.catalog.required("STANDARD", "fluentbit"))
 
     def test_attack_map_brings_its_helpers(self):
         result = self.resolve("STANDARD", remove=["map_data", "map_redis"])
@@ -191,7 +228,7 @@ class CoreTest(unittest.TestCase):
 
     def test_network_limit_counts_default_network(self):
         result = self.resolve("SENSOR")
-        self.assertIn("default", result.networks)                 # logstash has no networks there
+        self.assertIn("default", result.networks)                 # fluentbit has no networks there
         self.assertTrue(errors(self.resolve("SENSOR", max_networks=len(result.networks) - 1), "network"))
         self.assertEqual(errors(self.resolve("SENSOR", max_networks=len(result.networks))), [])
 
@@ -624,11 +661,30 @@ class AdoptTest(unittest.TestCase):
         self.assertEqual(adoption.selection.base, "SENSOR")
         self.assertIn("kibana (a SENSOR has no kibana)", adoption.dropped)
         self.assertIn("elasticsearch (a SENSOR has no elasticsearch)", adoption.dropped)
+        self.assertFalse([item for item in adoption.dropped if item.startswith("logstash")])
         result = core.resolve(self.catalog, adoption.selection)
         self.assertEqual(errors(result), [])
         self.assertIn("cowrie", result.services)
         self.assertNotIn("dionaea", result.services)
         self.assertEqual(core.adopt(self.catalog, text, "HIVE").selection.base, "STANDARD")
+
+    def test_sensor_adopt_swaps_logstash(self):
+        text = v1_file(["tpotinit", "logstash", "cowrie"])
+        adoption = core.adopt(self.catalog, text, "SENSOR")
+        swap = "logstash replaced by fluentbit: a SENSOR sends its logs with Fluent Bit"
+        self.assertEqual(adoption.findings, [core.Finding("info", "shipper", swap)])
+        self.assertEqual(adoption.dropped, [])
+        self.assertNotIn("logstash", adoption.selection.add)
+        result = core.resolve(self.catalog, adoption.selection)
+        self.assertEqual(errors(result), [])
+        self.assertIn("fluentbit", result.services)
+        self.assertNotIn("logstash", result.services)
+        self.assertEqual(core.adopt(self.catalog, text, "HIVE").findings, [])
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out, err = self.run_cli("--adopt", self.write(tmp, text), "--tpot-type", "SENSOR",
+                                          "--report", "--dry-run")
+            self.assertEqual(code, 0, out + err)
+            self.assertIn(f"info: {swap}", out.splitlines())
 
     def test_unreadable_file_exits_2_and_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -787,6 +843,34 @@ class CliTest(unittest.TestCase):
                 self.assertEqual(handle.read(), first)
             standard = self.run_cli("--rebuild", os.path.join(core.COMPOSE_DIR, "standard.yml"))
             self.assertEqual(standard[0], 2)
+
+    def test_rebuild_reports_swap(self):
+        catalog = core.Catalog()
+        sensor = core.render(catalog, core.resolve(catalog, core.Selection("SENSOR", add=["glutton"],
+                                                                                      remove=["honeytrap"])))
+        self.assertIn("\n  fluentbit:\n", sensor)
+        # a SENSOR file of an earlier release: Logstash where Fluent Bit is now
+        old = sensor.replace("\n  fluentbit:\n", "\n  logstash:\n", 1)
+        swap = "logstash replaced by fluentbit: a SENSOR sends its logs with Fluent Bit"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "custom.yml")
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(old)
+            code, text = self.run_cli("--rebuild", path)
+            self.assertEqual(code, 0, text)
+            self.assertIn(swap, text)
+            with open(path, encoding="utf-8") as handle:
+                rebuilt = yaml.safe_load(handle)["services"]
+            self.assertIn("fluentbit", rebuilt)
+            self.assertNotIn("logstash", rebuilt)
+            hive = core.render(catalog, core.resolve(catalog, core.Selection("STANDARD", remove=["cowrie"])))
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(hive)
+            code, text = self.run_cli("--rebuild", path)
+            self.assertEqual(code, 0, text)
+            self.assertNotIn(swap, text)
+            with open(path, encoding="utf-8") as handle:
+                self.assertEqual(generated.without_stamp(handle.read()), hive)
 
     def test_text_mode_quits_on_eof(self):
         code, text = self.run_cli("--text")

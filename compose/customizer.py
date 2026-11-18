@@ -59,9 +59,10 @@ if __name__ == "__main__":
 
 import customizer_core as core  # noqa: E402
 
-def report(result):
-    for finding in result.findings:
-        (say.error if finding.level == "error" else say.warn)(finding.text, sys.stderr)
+def report(findings):
+    for finding in findings:
+        show = {"error": say.error, "info": say.info}.get(finding.level, say.warn)
+        show(finding.text, sys.stderr)
 
 
 def names(value):
@@ -92,7 +93,7 @@ def parse_args(argv):
                              "differs from it is yours and carried, without it no host port is carried")
     parser.add_argument("--report", action="store_true",
                         help="with --adopt: the report as plain lines on stdout "
-                             "(dropped:, port:, moved:, new:, kept-out:)")
+                             "(info:, dropped:, port:, moved:, new:, kept-out:)")
     parser.add_argument("--dry-run", action="store_true",
                         help="with --adopt: print the report only, write nothing")
     parser.add_argument("-o", "--output", metavar="FILE",
@@ -129,7 +130,8 @@ def write(catalog, result, path):
 
 def adoption_lines(adoption):
     """The report of --adopt, one item per line, made for update.sh to read."""
-    return ([f"dropped: {item}" for item in adoption.dropped]
+    return ([f"info: {finding.text}" for finding in adoption.findings]
+            + [f"dropped: {item}" for item in adoption.dropped]
             + [f"port: {item}" for item in core.override_items(adoption.selection.ports)]
             + [f"moved: {item}" for item in adoption.moved]
             + [f"new: {item}" for item in adoption.new]
@@ -165,6 +167,8 @@ def adopt(catalog, args):
         for line in adoption_lines(adoption):
             print(line, flush=True)
     else:
+        for finding in adoption.findings:
+            say.info(finding.text)
         for item in adoption.dropped:
             say.warn(f"Dropped: {item}")
         for item in core.override_items(adoption.selection.ports):
@@ -175,7 +179,7 @@ def adopt(catalog, args):
             say.info(f"New: {item}")
         for item in adoption.not_carried:
             say.warn(f"Left out: {item}")
-    report(result)
+    report(result.findings)
     if result.errors:
         say.error(f"The selection of {args.adopt} has conflicts, nothing written.")
         return 3
@@ -216,12 +220,14 @@ def main(argv=None):
             return adopt(catalog, args)
         if args.rebuild:
             with open(args.rebuild, encoding="utf-8") as handle:
-                selection = core.parse_header(handle.read())
+                text = handle.read()
+            selection = core.parse_header(text)
             if selection is None:
                 say.error(f"{args.rebuild} was not built by this customizer.")
                 return 2
+            selection, swapped = core.swap_shipper(selection, text)
             result = core.resolve(catalog, selection, args.max_networks, strict=False)
-            report(result)
+            report(swapped + result.findings)
             if result.errors:
                 return 1
             write(catalog, result, args.output or args.rebuild)
@@ -236,7 +242,7 @@ def main(argv=None):
             selection.remove += [n for n in names(args.remove) if n not in selection.remove]
             selection.ports.update(core.parse_overrides(args.port))
             result = core.resolve(catalog, selection, args.max_networks, strict=True)
-            report(result)
+            report(result.findings)
             if result.errors:
                 return 1
         else:
@@ -251,7 +257,7 @@ def main(argv=None):
                 say.info("Nothing written.")
                 return 0
             result = core.resolve(catalog, chosen, args.max_networks, strict=True)
-            report(result)
+            report(result.findings)
             if result.errors:
                 return 1
         write(catalog, result, output)

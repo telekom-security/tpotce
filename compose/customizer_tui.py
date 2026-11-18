@@ -59,7 +59,7 @@ class State:
 
     def locked(self, name: str) -> str:
         """Why the service cannot be switched off, empty if it can."""
-        if self.catalog.flag(name, "required"):
+        if self.catalog.required(self.selection.base, name):
             return f"{name} is always part of T-Pot"
         users = [n for n in self.result.needed_by.get(name, []) if n in self.result.services]
         if users and name not in self.selection.add and name not in self.base_services:
