@@ -57,6 +57,20 @@ class SensorDashboardTest(unittest.TestCase):
                 for ref in obj.get("references", []):
                     self.assertIn((ref["type"], ref["id"]), by_key)
 
+    def test_texts_name_fluent_bit_as_the_sender_of_the_heartbeat(self):
+        _, _, built = self.build()
+        for obj in built:
+            if str(obj.get("id", "")).startswith("tpot-sensors-"):
+                attributes = obj["attributes"]
+                texts = [attributes.get("title", ""), attributes.get("description", "")]
+                if "visState" in attributes:
+                    texts.append(json.loads(attributes["visState"])["params"].get("markdown", ""))
+                for text in texts:
+                    self.assertNotIn("Logstash", text.replace("logstash-*", ""), obj["id"])
+        by_key = {(obj.get("type"), obj.get("id")): obj for obj in built}
+        self.assertEqual(by_key["lens", "tpot-sensors-starts"]["attributes"]["title"],
+                         "T-Pot Sensors: Fluent Bit starts")
+
     def test_current_status_is_not_filtered_by_the_dashboard_time_window(self):
         _, _, built = self.build()
         by_key = {(obj.get("type"), obj.get("id")): obj for obj in built}

@@ -113,20 +113,22 @@ def build(objects: list) -> list:
         _histogram(lens_template, "versions", "T-Pot Sensors: versions over time", PREFIX + "history-view",
                    "heartbeat.sensor_version",
                    description="Sensor / version series by sensor time; top 20 combinations."),
-        _histogram(lens_template, "starts", "T-Pot Sensors: Logstash process starts", PREFIX + "starts-view",
+        _histogram(lens_template, "starts", "T-Pot Sensors: Fluent Bit starts", PREFIX + "starts-view",
                    "t-pot_sensor", clock="heartbeat.started_at", unique="heartbeat.started_at",
-                   description="Distinct starts, not heartbeats. Short-lived processes without a fifth heartbeat "
-                               "are not in history. Top 20 sensors."),
+                   description="Distinct Fluent Bit starts, not heartbeats. Short-lived processes without a fifth "
+                               "heartbeat are not in history. Top 20 sensors."),
         _histogram(lens_template, "attacks", "T-Pot Sensors: attack events", "logstash-*", "t-pot_sensor.keyword",
                    description="Attack events from logstash-*, not heartbeats. Top 20 sensors."),
     ])
     note = (
-        "**Online**: the HIVE received a heartbeat less than 180 seconds ago. This confirms the Logstash "
-        "connection, not honeypot health. The status table includes only sensors that have sent a heartbeat "
-        "and ignores the time picker; use `tpot sensors list` for access and sensors with no heartbeat.\n\n"
+        "**Online**: the HIVE received a heartbeat less than 180 seconds ago. This confirms the connection "
+        "from the sensor's Fluent Bit, not honeypot health. The status table includes only sensors that have "
+        "sent a heartbeat and ignores the time picker; use `tpot sensors list` for access and sensors with no "
+        "heartbeat.\n\n"
         "History contains every fifth heartbeat. Timeline and versions use the sensor clock; a delivery "
-        "backlog can look online while its sensor timestamps are old. Process starts use Logstash's start "
-        "clock and count each observed process once. Charts show their top 20 series."
+        "backlog can look online while its sensor timestamps are old. Fluent Bit starts use the time "
+        "Fluent Bit started on the sensor and count each observed start once. Charts show their top 20 "
+        "series."
     )
     generated.append(_object(markdown_template, "about", {
         "title": "T-Pot Sensors: about", "description": "", "uiStateJSON": "{}",
@@ -146,7 +148,7 @@ def build(objects: list) -> list:
         references.append({"type": kind, "id": PREFIX + name, "name": name + ":" + reference})
     attrs = copy.deepcopy(dashboard_template["attributes"])
     attrs.update(title="T-Pot Sensors",
-                 description="Sensor heartbeat status, history, versions, Logstash starts and attack events.",
+                 description="Sensor heartbeat status, history, versions, Fluent Bit starts and attack events.",
                  panelsJSON=_json(panels), timeRestore=True, timeFrom="now-24h", timeTo="now",
                  refreshInterval={"pause": False, "value": 30000},
                  kibanaSavedObjectMeta={"searchSourceJSON": _json({"query": {"language": "kuery", "query": ""},

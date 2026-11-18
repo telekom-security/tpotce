@@ -1,4 +1,8 @@
-"""Generate the T-Pot Failures saved objects (tpot-failures-*), preserving all unrelated export lines."""
+"""Generate the T-Pot Failures saved objects (tpot-failures-*), preserving all unrelated export lines.
+
+This is the only generator of the tpot-failures-* objects; tpotctl.sensor_dashboard stays limited to
+tpot-sensors-*. Run python3 -m tpotctl.failure_dashboard after a change (--check compares).
+"""
 
 import argparse
 import copy
