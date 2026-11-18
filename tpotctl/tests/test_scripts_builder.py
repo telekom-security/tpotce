@@ -1223,6 +1223,7 @@ class SmokeTest(BuilderHarness):
     IMAGELESS = {
         "sensor_heartbeat": "Cross-service source integration against pinned upstream images and an ILM tool image",
         "sensor_dashboard": "Saved-object integration against pinned upstream Elasticsearch and Kibana images",
+        "sensor_parity": "Cross-service parity of Fluent Bit, nginx and the official Logstash image against the golden file",
     }
 
     def test_every_test_of_the_repo_is_in_the_plan(self):

@@ -227,9 +227,24 @@ It uses a disposable internal network with no published ports and ignores local 
 Startup has a minimum allowance of 240 seconds. The browser check is separate: open *T-Pot Sensors*, verify
 all five views, and choose a one-minute range; old status rows must remain while old history disappears.
 
-`sensor_heartbeat` and `sensor_dashboard` are cross-service source integration tests, not image-builder
-smokes: run them separately with the pinned upstream images available locally. The builder's `-T`
-does not pull those additional images or run these two tests.
+`./docker/_tests/run.sh sensor_parity` checks that a SENSOR's logs reach the HIVE as the HIVE's own: the
+39 fixtures go into a HIVE and a SENSOR data folder, the official Logstash image at the Dockerfile version
+(the shipped pipelines, the Elasticsearch outputs as files) reads the HIVE's, the local Fluent Bit and nginx
+images (`--fluentbit-image`, `--nginx-image`) send the SENSOR's through `lsweb.conf`, and both ways must
+equal `golden/logstash_fixtures.jsonl`. Every special case is its own `[OK]` line: lines written before
+the HIVE took the SENSOR's format, new files of the ddospot / honeypots globs, Heralding's CSV header, a
+2 MB line (skipped, named by Fluent Bit), an invalid byte (U+FFFD on both ways), a 3 MB batch (no 413 /
+429), Logstash stopped for 60 s, Fluent Bit and Logstash restarted alone, and a T-Pot start with the
+rotation of `clean.sh`, with and without persistence; each line arrives exactly once. A run takes about
+6 minutes; `--cases 4,6` runs only some of the cases 1–8 (the early lines and the golden compare always
+run). For the other platform build the two images with `docker buildx build --platform linux/amd64
+--load -t <test tag>` (never onto the release tags) and pass them with the two options; under emulation
+only the timing differs. Docker Desktop on macOS shares only some folders: run it with `TMPDIR` under
+your home folder.
+
+`sensor_heartbeat`, `sensor_dashboard` and `sensor_parity` are cross-service source integration tests,
+not image-builder smokes: run them separately with the pinned upstream images available locally. The
+builder's `-T` does not pull those additional images or run these three tests.
 
 The Conpot test starts all nine deployed templates in one Docker network on
 dynamic loopback ports (`--<key>-port` pins one, see `--help`). The probes
