@@ -17,7 +17,7 @@ RUN apt-get update && \
     gpg --dearmor < /fluentbit.key > /fluentbit.gpg
 
 FROM debian:trixie-slim
-ARG FLB_VERSION=5.1.5
+ARG FLB_VERSION=5.2.0
 COPY --from=key /fluentbit.gpg /usr/share/keyrings/fluentbit.gpg
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl && \

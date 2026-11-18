@@ -15,7 +15,7 @@ includes:
 pipeline:
   # The heartbeat every 60 s and a one-shot for the first one 2 s after the start. No flush_on_startup:
   # it emits before storage_backlog takes the chunks, which then frees the heartbeat's chunk a second
-  # time when an input stores on the filesystem (SIGSEGV, v5.1.5).
+  # time when an input stores on the filesystem (SIGSEGV, v5.1.5 and v5.2.0).
   inputs:
     - name: dummy
       tag: tpot_heartbeat

@@ -80,7 +80,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config["includes"], ["inputs.yaml"])
         pipeline = config["pipeline"]
         # flush_on_startup emits before storage_backlog takes the chunks, which then frees the heartbeat's
-        # chunk twice (v5.1.5): a one-shot dummy gives the first heartbeat instead
+        # chunk twice (v5.1.5, v5.2.0): a one-shot dummy gives the first heartbeat instead
         heartbeat = {"name": "dummy", "tag": "tpot_heartbeat", "dummy": '{"type":"TPotSensorHeartbeat"}',
                      "storage.type": "memory", "mem_buf_limit": "1M"}
         self.assertEqual([section(entry) for entry in pipeline["inputs"]], [
@@ -111,7 +111,7 @@ class ConfigTest(unittest.TestCase):
         self.assertIn("signed-by=", dockerfile)
         self.assertIn("https://packages.fluentbit.io/debian/trixie trixie main", dockerfile)
         self.assertRegex(dockerfile, r"fluent-bit=\$\{FLB_VERSION\}")
-        self.assertRegex(dockerfile, r"(?m)^ARG FLB_VERSION=5\.1\.5$")
+        self.assertRegex(dockerfile, r"(?m)^ARG FLB_VERSION=5\.2\.0$")
         self.assertRegex(dockerfile, r"(?m)^USER 2000:2000$")
         self.assertRegex(dockerfile, r"(?m)^HEALTHCHECK CMD test -f /tmp/tpot-waiting \|\| "
                                      r"curl -fs http://127\.0\.0\.1:2020/api/v1/uptime$")
