@@ -180,9 +180,10 @@ in a container without network. Every event must keep the type of its input, car
 no tag ending in `failure` (grok, json, csv, date, GeoIP) and no `columnNN`
 field, have `src_ip`, the token or marker port of the check, the time of the
 line as `@timestamp` and a GeoIP location. It takes the T-Pot Logstash image
-when it is built here, otherwise the official image of its `LS_VER`. Both modes
-of the test use small stand-ins for the Listbot dictionaries in any image, so
-the output does not depend on the Listbot data of the day.
+when it is built here, otherwise the official image of its `LS_VER`. It always
+uses small stand-ins for the Listbot dictionaries, in any image, so the output
+does not depend on the Listbot data of the day. The SENSOR side (Fluent Bit) has
+tests of its own, `fluentbit` and `sensor_parity` below.
 
 The fixtures are rendered with fixed values (time, source address and port,
 token), so the output of the HIVE pipeline is the same on every run. After the
@@ -193,9 +194,9 @@ and the file it was read from, except where the fixture's own JSON line has
 them, as go-pot's `host` or log4pot's `headers`); a field that differs fails
 the test. A change of the pipeline on purpose records them anew with
 `./docker/_tests/tests/logstash_fixtures.sh --golden write` (only after every
-fixture was read cleanly; `run.sh` takes no options of a test). This mode always
-uses the Listbot stand-ins and the GeoIP database of the image, so a new
-`LS_VER` may change the GeoIP fields.
+fixture was read cleanly; `run.sh` takes no options of a test). Both compare
+and write use the GeoIP database of the image, so a new `LS_VER` may change the
+GeoIP fields.
 
 `./docker/_tests/run.sh logstash_es` checks that the index templates come from
 tpotinit and that Logstash waits for them. The HIVE pipelines of the checkout
@@ -216,7 +217,7 @@ against a stub of the HIVE's ingest endpoint (`docker/_tests/lib/hive_stub.py`,
 HTTPS with a test CA, in the tpotinit image, `--init-image` for another). Its
 cases 1–12 cover: every fixture arrives once as its raw line with its type and
 `t-pot_log_path`, gzipped, with Basic auth and `X-TPot-Ingest: 2`; the first
-two heartbeats; a 2 MB line skipped with a log line; an invalid byte as U+FFFD;
+two heartbeats; a 2 MB line skipped with a warning; an invalid byte as U+FFFD;
 503 answers and a restart without loss or duplicates; files made after the
 start; `FLB_STORAGE_LIMIT` reached; TLS verification by address and name; uid
 2000, a read-only root and the entrypoint's refusals; and the probe of

@@ -95,8 +95,10 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(len(outputs), 1)
         output = dict(outputs[0])
         self.assertEqual(output.pop("header"), ["Authorization Basic ${TPOT_HIVE_USER}", "X-TPot-Ingest 2"])
+        # warn on the output only: no info lines per flush (HTTP status=200, ok), the warnings of the tail
+        # inputs (skipped long lines) and of the storage stay
         self.assertEqual(section(output), {
-            "name": "http", "match": "*", "host": "${TPOT_HIVE_IP}", "port": "${TPOT_HIVE_PORT}", "uri": "/",
+            "name": "http", "match": "*", "log_level": "warn", "host": "${TPOT_HIVE_IP}", "port": "${TPOT_HIVE_PORT}", "uri": "/",
             "format": "json", "json_date_key": "@timestamp", "json_date_format": "iso8601", "compress": "gzip",
             "tls": "on", "tls.verify": "${FLB_TLS_VERIFY}", "tls.verify_hostname": "${FLB_TLS_VERIFY}",
             "tls.ca_file": "/data/hive.crt", "tls.vhost": "${TPOT_HIVE_IP}",

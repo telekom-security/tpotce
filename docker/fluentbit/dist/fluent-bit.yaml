@@ -42,8 +42,10 @@ pipeline:
       call: heartbeat
 
   outputs:
+    # warn: no info lines per flush (HTTP status=200, ok); the tail warnings and storage errors stay
     - name: http
       match: '*'
+      log_level: warn
       host: ${TPOT_HIVE_IP}
       port: ${TPOT_HIVE_PORT}
       uri: /

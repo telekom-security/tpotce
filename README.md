@@ -861,13 +861,15 @@ enriches these lines like the logs of the **Hive** itself, so a sensor's events 
 Every event names its sensor in `t-pot_sensor` and the log file it came from in `t-pot_log_path`.
 
 Before it sends anything, Fluent Bit asks the **Hive** whether it takes this format. An older **Hive**, or one whose
-Logstash is not ready yet, gets nothing: the logs wait on the **Sensor**, Fluent Bit asks again every 5 minutes and
-`docker logs fluentbit` says why it waits. While the **Hive** cannot be reached, Fluent Bit keeps the lines on the
-disk of the **Sensor** (`~/tpotce/data/fluentbit/storage`, up to 512 MB, or `FLB_STORAGE_LIMIT` in the environment
-of the `fluentbit` service) and retries without a limit. Beyond that limit the oldest lines are dropped. A single
-burst of lines larger than the limit before the first send loses its newest lines, the log of Fluent Bit names it
-(`no available chunk`).
-Lines longer than 1 MB are skipped, each with a line in `docker logs fluentbit`; Logstash had no such limit.
+Logstash is not ready yet, gets nothing: Fluent Bit reads no logs meanwhile, asks again every 5 minutes and
+`docker logs fluentbit` says why it waits. Only the logs since the last T-Pot start wait on the **Sensor**: every
+T-Pot start (also the daily reboot) rotates the logs, so a restart of the **Sensor** before the **Hive** answers
+leaves the earlier lines in the rotated log files on the **Sensor**, they are not sent.
+While the **Hive** cannot be reached once Fluent Bit sends, it keeps the lines on the disk of the **Sensor**
+(`~/tpotce/data/fluentbit/storage`, up to 512 MB) and retries without a limit. Beyond 512 MB the oldest lines are
+dropped. A single burst of lines larger than the limit before the first send loses its newest lines, the log of
+Fluent Bit names it (`no available chunk`).
+Lines longer than 1 MB are skipped, each with a warning in `docker logs fluentbit`; Logstash had no such limit.
 
 **Update the Hive first.** A **Sensor** of 24.04.1 still sends with Logstash in the old format. The **Hive** refuses
 these events, they are not stored, and the *Sensors* page and `tpot sensors list` show the sensor as **update
@@ -876,7 +878,8 @@ after the **Hive** (`tpot sensors update`, or `update.sh` on the **Sensor**). Th
 of `logstash` in the **Sensor** edition; a `docker-compose.yml` of your own that still runs Logstash is adapted after
 a question at a terminal, with `update.sh --adapt-compose` or with `tpot customize`. Kept as it is, its honeypots go
 on running and T-Pot warns that the **Hive** refuses its events. A **Sensor** of this release does not send to an
-older **Hive**, its logs wait until the **Hive** is updated.
+older **Hive**: the logs since its last T-Pot start wait until the **Hive** is updated, earlier lines stay in the
+rotated log files on the **Sensor** and are not sent.
 
 ### Sensor Heartbeats
 The *Sensors* page and `tpot sensors list` show **Sensor | Host | Version | Heartbeat | Last event | State**.
