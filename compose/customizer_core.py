@@ -791,6 +791,12 @@ EARLIER_NETWORKS = [
     "redishoneypot_local", "sentrypeer_local", "spiderfoot_local", "suricata_local", "tanner_local",
     "tpotinit_local", "wordpot_local",
 ]
+# Environment entries of earlier releases (24.04.1) that this one gave up: the HIVE's logstash reads them
+# no more (a SENSOR sends with fluentbit). With these values they are no loss and not named.
+EARLIER_ENVIRONMENT = {
+    "logstash": {"TPOT_HIVE_USER": "${TPOT_HIVE_USER}", "TPOT_HIVE_IP": "${TPOT_HIVE_IP}",
+                 "LS_SSL_VERIFICATION": "${LS_SSL_VERIFICATION:-full}"},
+}
 V1_EDITION_LINE = "# T-Pot: CUSTOM EDITION"           # the customizer of 24.04.1 and earlier
 # where the images of T-Pot come from; repository and tag of these are the release's business
 _TPOT_REPOS = ("${TPOT_REPO}", "dtagdevsec", "docker.io/dtagdevsec", "ghcr.io/telekom-security")
@@ -1075,7 +1081,8 @@ def _not_carried(name: str, old: dict, new: dict) -> List[str]:
             for var, val in _environment(mine).items():
                 shown = var if val is None else f"{var}={val}"
                 if var not in have:
-                    lost.append(f"{name}: environment {shown}")
+                    if EARLIER_ENVIRONMENT.get(name, {}).get(var, object()) != val:
+                        lost.append(f"{name}: environment {shown}")
                 elif not _same_value(val, have[var]):
                     other = var if have[var] is None else f"{var}={have[var]}"
                     lost.append(f"{name}: environment {_show(shown)} (the release has {_show(other)})")

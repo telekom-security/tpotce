@@ -627,6 +627,15 @@ class AdoptTest(unittest.TestCase):
         adoption = core.adopt(self.catalog, v1_file(["tpotinit", "logstash", "elasticsearch", "kibana"]), "HIVE")
         self.assertEqual(adoption.not_carried, ["kibana: mem_limit 1g (the release has 2g)"])
 
+    def test_the_hive_logstash_settings_the_release_gave_up_are_no_loss(self):
+        # 24.04.1 handed the SENSOR settings to the HIVE's logstash too: as shipped no loss, changed named
+        text = v1_file(["tpotinit", "logstash", "elasticsearch"])
+        self.assertIn("LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}", text)
+        self.assertEqual(core.adopt(self.catalog, text, "HIVE").not_carried, [])
+        changed = text.replace("LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}", "LS_SSL_VERIFICATION=none")
+        self.assertEqual(core.adopt(self.catalog, changed, "HIVE").not_carried,
+                         ["logstash: environment LS_SSL_VERIFICATION=none"])
+
     def test_old_network_of_a_service_and_a_new_default_are_no_loss(self):
         # cowrie_local became honeypot_local, ${X} became ${X:-default}: nothing to name
         cowrie = {k: v for k, v in self.catalog.catalog.services["cowrie"].items() if k != "x-tpot"}
