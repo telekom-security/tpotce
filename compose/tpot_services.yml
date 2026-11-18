@@ -1137,6 +1137,10 @@ services:
      - TPOT_HIVE_IP=${TPOT_HIVE_IP}
      - LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}
     mem_limit: 256m
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     read_only: true
     tmpfs:
      - /tmp:uid=2000,gid=2000

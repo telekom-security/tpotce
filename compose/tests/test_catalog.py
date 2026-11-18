@@ -199,6 +199,17 @@ class CatalogTest(unittest.TestCase):
         self.assertIn("standard.yml", heaps)
         self.assertEqual(heaps, {name: ["-Xms1024m -Xmx1024m"] for name in heaps})
 
+    def test_fluentbit_has_a_file_limit(self):
+        """Every pending retry of Fluent Bit holds a file: a HIVE outage under load must not reach the
+        soft limit of 1024 a Debian docker gives a container."""
+        paths = [self.catalog.catalog.path, os.path.join(core.COMPOSE_DIR, "sensor.yml"),
+                 os.path.join(os.path.dirname(core.COMPOSE_DIR), "docker", "fluentbit", "docker-compose.yml")]
+        for path in paths:
+            with self.subTest(compose=path):
+                with open(path, encoding="utf-8") as handle:
+                    service = yaml.safe_load(handle)["services"]["fluentbit"]
+                self.assertEqual(service.get("ulimits"), {"nofile": {"soft": 65536, "hard": 65536}})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,7 +13,10 @@ DEFAULT_IMAGE="ghcr.io/telekom-security/fluentbit:24.04.2"
 DEFAULT_INIT_IMAGE="ghcr.io/telekom-security/tpotinit:24.04.2"
 IMAGE=""
 INIT_IMAGE=""
-CASES="1,2,3,4,5,6,7,8,9,10,11,12"
+# case 13: under a soft limit of 1024 (Docker Desktop) 120 s of load lost no line, 240 s only now and
+# then; the files of Fluent Bit reach the limit after about 240 s, so 360 s
+OUTAGE_SECONDS=360
+CASES="1,2,3,4,5,6,7,8,9,10,11,12,13"
 # what tpotinit writes into elk_environment of a SENSOR, and the access of the sensor at the HIVE
 SMOKE_HOSTNAME="sensor-smoke"
 SMOKE_EXTIP="198.51.100.7"
@@ -24,6 +27,10 @@ CERTS=""
 RUN_DIR=""
 RUN_START=""
 HEALTH_INTERVAL=""
+# the file limit of Fluent Bit: that of compose/sensor.yml, else what a Debian docker gives a container
+NOFILE_SOFT=""
+NOFILE_HARD=""
+NOFILE_SOURCE=""
 
 usage() {
   cat <<EOF
@@ -62,14 +69,22 @@ hive.test through the hosts file of the stub). Cases:
      names it.
  12  Then 204 with X-TPot-Ingest 2 (FLB_PROBE_INTERVAL=5): every line written
      before arrives within 15 s, once each.
+ 13  The HIVE stops answering (its stub paused) while 500 lines/s go into the
+     log of every input for 360 s; 30 s after the load it answers again: every
+     line arrives (duplicates allowed), the log has no "Too many open files".
 
-All cases take about six minutes (heartbeat interval, 503 and retries).
+Fluent Bit runs with the file limit (ulimits nofile) of compose/sensor.yml; where
+it has none, with soft 1024 / hard 524288, what a Debian docker gives a container
+(Docker Desktop gives 1048576 and would hide a leak of files).
+
+All cases take about 22 minutes (heartbeat interval, 503 and retries; case 13
+alone about 17: 6 min of load, then up to 15 min until the retries delivered).
 
 Options:
   --image IMAGE       Fluent Bit image to test. Defaults to docker/fluentbit/docker-compose.yml.
   --init-image IMAGE  Image the stub runs in (python3 with ssl, openssl). Defaults to
                       docker/tpotinit/docker-compose.yml.
-  --cases LIST        Only these cases (comma separated numbers 1-12). Default: all.
+  --cases LIST        Only these cases (comma separated numbers 1-13). Default: all.
   --timeout SEC       Time to wait for a delivery (at least 120 s are used).
   --bind-ip IP        Accepted for runner compatibility; nothing is published.
   --keep-artifacts    Keep the temporary files for debugging.
@@ -96,9 +111,9 @@ parse_args() {
     esac
   done
   local case
-  [[ "${CASES}" =~ ^[0-9]+(,[0-9]+)*$ ]] || test_die "--cases takes numbers 1-12, comma separated: ${CASES}"
+  [[ "${CASES}" =~ ^[0-9]+(,[0-9]+)*$ ]] || test_die "--cases takes numbers 1-13, comma separated: ${CASES}"
   for case in ${CASES//,/ }; do
-    (( 10#${case} >= 1 && 10#${case} <= 12 )) || test_die "--cases takes numbers 1-12, comma separated: ${CASES}"
+    (( 10#${case} >= 1 && 10#${case} <= 13 )) || test_die "--cases takes numbers 1-13, comma separated: ${CASES}"
   done
 }
 
@@ -405,9 +420,95 @@ def statuses(run, status):
         time.sleep(0.5)
 
 
+def flood(data, prefix, rate, seconds, manifest_path):
+    """Appends RATE lines per second for SECONDS seconds in the format of `append ... lines`, round-robin
+    to the log file of every fixture whose folder exists (paced like docker/_tests/perf/load.py), one
+    write per line; MANIFEST gets the tokens per file."""
+    from tpotctl.checks import fixtures
+    rate, seconds = int(rate), int(seconds)
+    paths = []
+    for name in fixtures.names():
+        path = Path(data) / fixtures.log_file(name)
+        if path.parent.is_dir():
+            paths.append(path)
+    if not paths:
+        fail(f"no log folder of a fixture under {data}")
+    files = {}
+    manifest = {}
+    try:
+        for path in paths:
+            if path not in files:
+                files[path] = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o644)
+                os.chmod(path, 0o644)
+                manifest["/data/" + str(path.relative_to(data))] = []
+        start = time.monotonic()
+        for number in range(rate * seconds):
+            pause = start + number / rate - time.monotonic()
+            if pause > 0:
+                time.sleep(pause)
+            path = paths[number % len(paths)]
+            token = f"{prefix}-{number:05d}"
+            os.write(files[path], (json.dumps({"token": token, "pad": "x" * 64}) + "\n").encode())
+            manifest["/data/" + str(path.relative_to(data))].append(token)
+        took = time.monotonic() - start
+    finally:
+        for fd in files.values():
+            os.close(fd)
+    with open(manifest_path, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle)
+    print(f"{rate * seconds} lines into {len(files)} files in {took:.1f} s")
+
+
+def outage_count(run, manifest_path, timeout):
+    """Waits until every token of MANIFEST arrived in a request answered below 300, at least 900 s (a
+    chunk Fluent Bit retried 6 times during the outage waits up to 640 s for its next retry); fails
+    with the number missing per file and the first 5 missing tokens; reports duplicates."""
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    wanted = {token for tokens in manifest.values() for token in tokens}
+    timeout = max(int(timeout), 900)
+    counts = {}
+    log = Path(run) / "stub" / "requests.jsonl"
+    offset = 0
+    start = time.monotonic()
+    while True:
+        try:
+            with open(log, "rb") as handle:
+                handle.seek(offset)
+                chunk = handle.read()
+        except FileNotFoundError:
+            chunk = b""
+        # only whole lines, a line the stub is still writing waits for the next round
+        end = chunk.rfind(b"\n") + 1
+        offset += end
+        for line in chunk[:end].splitlines():
+            try:
+                request = json.loads(line)
+            except ValueError:
+                continue
+            if request.get("status", 999) >= 300 or request.get("path") != "/":
+                continue
+            for event in json.loads(request["body"] or "[]"):
+                token = token_of(event)
+                if token in wanted:
+                    counts[token] = counts.get(token, 0) + 1
+        if len(counts) == len(wanted):
+            break
+        if time.monotonic() - start > timeout:
+            missing = {path: [token for token in tokens if token not in counts] for path, tokens in manifest.items()}
+            per_file = ", ".join(f"{path} {len(tokens)}" for path, tokens in sorted(missing.items()) if tokens)
+            first = sorted(token for tokens in missing.values() for token in tokens)[:5]
+            fail(f"{len(wanted) - len(counts)} of {len(wanted)} lines missing after {timeout} s ({per_file}), "
+                 f"e.g. {first}")
+        time.sleep(2)
+    twice = sum(1 for count in counts.values() if count > 1)
+    print(f"all {len(wanted)} lines arrived {time.monotonic() - start:.0f} s after the HIVE answered again, "
+          f"{twice} of them more than once ({sum(counts.values()) - len(counts)} duplicates)")
+
+
 COMMANDS = {"folders": folders, "prepare-fixtures": prepare_fixtures, "fixtures": case_fixtures, "heartbeats": case_heartbeats,
             "append": append, "expect": expect_tokens, "long": case_long, "invalid": case_invalid,
-            "nothing": nothing, "status": statuses, "within": within, "posts": posts, "probes": probes}
+            "nothing": nothing, "status": statuses, "within": within, "posts": posts, "probes": probes,
+            "flood": flood, "outage-count": outage_count}
 COMMANDS[sys.argv[1]](*sys.argv[2:])
 PY
 }
@@ -445,6 +546,10 @@ write_compose() {
     printf '    read_only: true\n'
     printf '    tmpfs: ["/tmp:uid=2000,gid=2000"]\n'
     printf '    mem_limit: 256m\n'
+    printf '    ulimits:\n'
+    printf '      nofile:\n'
+    printf '        soft: %s\n' "${NOFILE_SOFT}"
+    printf '        hard: %s\n' "${NOFILE_HARD}"
     if [[ -n "${HEALTH_INTERVAL}" ]]; then
       printf '    healthcheck:\n'
       printf '      interval: %s\n' "${HEALTH_INTERVAL}"
@@ -728,6 +833,53 @@ run_probe() {
   stop_run
 }
 
+# Run outage (G): the HIVE stops answering while the honeypots write 500 lines/s for 360 s; every
+# pending retry of Fluent Bit holds a file (a timer) until the HIVE answers again
+run_outage() {
+  local data manifest result paused errors
+  prepare_run outage
+  data="${RUN_DIR}/data"
+  manifest="${RUN_DIR}/flood.json"
+  checker append "${data}/cowrie/log/cowrie.json" lines first 1
+  start_run hive
+  checker expect "${RUN_DIR}" any 0 first-00000
+  test_compose pause hive >/dev/null 2>&1 || test_die "Could not pause the stub of the HIVE"
+  paused="${SECONDS}"
+  result="$(checker flood "${data}" flood 500 "${OUTAGE_SECONDS}" "${manifest}")"
+  test_info "13 HIVE paused, 500 lines/s for ${OUTAGE_SECONDS} s: ${result}"
+  sleep 30
+  test_compose unpause hive >/dev/null 2>&1 || test_die "Could not unpause the stub of the HIVE"
+  test_info "13 HIVE answers again after $((SECONDS - paused)) s"
+  result="$(checker outage-count "${RUN_DIR}" "${manifest}" "${TEST_TIMEOUT}")" || {
+    errors="$(flb_logs | grep -c "Too many open files" || true)"
+    test_die "13 lines lost after the outage (\"Too many open files\" ${errors} times in the log of Fluent Bit)"
+  }
+  test_info "13 ${result}"
+  errors="$(flb_logs | grep -c "Too many open files" || true)"
+  [[ "${errors}" == "0" ]] || test_die "13 every line arrived, but the log of Fluent Bit has \"Too many open files\" ${errors} times"
+  test_ok "13 outage under load: every line arrived after $((SECONDS - paused)) s, no \"Too many open files\""
+  stop_run
+}
+
+# The file limit of Fluent Bit in compose/sensor.yml (yq of the tpotinit image, the host may lack PyYAML)
+read_nofile() {
+  local json
+  json="$(docker run --rm --network none -v "${REPO_ROOT}/compose:/c:ro" --entrypoint yq "${INIT_IMAGE}" \
+    -o json -I 0 '.services.fluentbit.ulimits.nofile // {}' /c/sensor.yml)" \
+    || test_die "Could not read the file limit of fluentbit in compose/sensor.yml"
+  if [[ "${json}" == "{}" ]]; then
+    NOFILE_SOFT=1024
+    NOFILE_HARD=524288
+    NOFILE_SOURCE="default of a Debian docker, compose/sensor.yml has none"
+  else
+    read -r NOFILE_SOFT NOFILE_HARD < <(python3 -c 'import json, sys; n = json.loads(sys.argv[1]); print(n["soft"], n["hard"])' "${json}") \
+      || test_die "compose/sensor.yml: no soft and hard in the file limit of fluentbit: ${json}"
+    [[ "${NOFILE_SOFT}" =~ ^[0-9]+$ && "${NOFILE_HARD}" =~ ^[0-9]+$ ]] \
+      || test_die "compose/sensor.yml: the file limit of fluentbit is no number: ${json}"
+    NOFILE_SOURCE="compose/sensor.yml"
+  fi
+}
+
 make_certs() {
   local name="$1"
   shift
@@ -751,13 +903,16 @@ main() {
   mkdir -p "${CERTS}"
   make_certs hive --san IP:127.0.0.1 --san DNS:hive.test
   make_certs wrong --san DNS:other.test
+  read_nofile
   test_info "Testing ${IMAGE} (stub in ${INIT_IMAGE}), cases ${CASES}"
+  test_info "File limit of Fluent Bit ${NOFILE_SOFT}/${NOFILE_HARD} (${NOFILE_SOURCE})"
   if wanted 1 || wanted 2 || wanted 3 || wanted 4 || wanted 6 || wanted 9; then run_main; fi
   if wanted 5; then run_retry; fi
   if wanted 7; then run_limit; fi
   if wanted 8; then run_tls; fi
   if wanted 10 || wanted 11 || wanted 12; then run_probe; fi
   if wanted 9; then run_image; fi
+  if wanted 13; then run_outage; fi
   test_ok "fluentbit smoke test passed (cases ${CASES})"
 }
 
