@@ -1224,6 +1224,7 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(1.0)
             self.assertEqual(app.step, "done")
             self.assertIn("tpot sensors add", str(app.query_one("#done-text").render()))
+            self.assertIn("The honeypots start only after the SENSOR is added on the HIVE.", str(app.query_one("#done-text").render()))
         command = FakeEngine.runs[0]
         self.assertEqual(command[command.index("-t") + 1], "s")
         self.assertNotIn("-B", command)

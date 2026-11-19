@@ -748,7 +748,8 @@ class InstallApp(ArrowNav, App):
         if answers.needs_web_user:
             lines.append(f"The web UI is https://<host>:64297, sign in as {answers.web_user}.")
         if answers.edition.letter == "s":
-            lines.append("Join it to your HIVE: on the HIVE run tpot sensors add.")
+            lines.append("Join it to your HIVE: on the HIVE run tpot sensors add."
+                         " The honeypots start only after the SENSOR is added on the HIVE.")
         launcher = os.path.join(self.repo_dir, "tpot")       # the checkout this assistant installs
         if installer.tpot_on_path(self.repo_dir):
             lines.append("Afterwards run the T-Pot Manager: tpot (i.e. tpot status), it shows and changes everything.")

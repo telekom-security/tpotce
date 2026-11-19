@@ -852,6 +852,7 @@ PY
         self.assertIn("### [OK] - T-Pot sensor is installed (SENSOR)", summary)
         self.assertIn("### [NEXT] - Reboot, then re-connect via SSH on tcp/64295", summary)
         self.assertIn("tpot sensors add", summary)
+        self.assertIn("The honeypots start only after the SENSOR is added on the HIVE.", summary)
         self.assertIn("grc netstat -tulpen", self.calls())
 
     def test_a_failed_playbook_ends_with_a_summary(self):

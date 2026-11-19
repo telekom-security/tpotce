@@ -3466,7 +3466,7 @@ case "${myTPOT_TYPE}" in
   h) myTPOT_TYPE="HIVE";   myEDITION="standard" ;;
   s) myTPOT_TYPE="SENSOR"; myEDITION="sensor"
      myINFO="Make sure to deploy SSH keys to this SENSOR and disable SSH password authentication."
-     myNEXT="On the HIVE run 'tpot sensors add' to join this SENSOR to the HIVE." ;;
+     myNEXT="On the HIVE run 'tpot sensors add' to join this SENSOR to the HIVE. The honeypots start only after the SENSOR is added on the HIVE." ;;
   l) myTPOT_TYPE="HIVE";   myEDITION="llm"
      myNEXT="Adjust the T-Pot config file (.env) for Ollama / ChatGPT settings, i.e. with 'tpot llm'." ;;
   i) myTPOT_TYPE="HIVE";   myEDITION="mini" ;;
