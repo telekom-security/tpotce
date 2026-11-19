@@ -98,6 +98,9 @@ fuPROBE () {
       echo "The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here." >&2
     elif [ "$myCODE" = "503" ] && [ -z "$myMARK" ]; then
       echo "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here." >&2
+    elif [ "$myCODE" = "429" ]; then
+      # C4: the HIVE limits the probes of all its SENSORs together
+      echo "The HIVE is busy (HTTP 429), next probe in ${FLB_PROBE_INTERVAL} s." >&2
     elif [ -n "$myCODE" ] && [ "$myCODE" != "000" ]; then
       echo "The HIVE is not reachable (HTTP $myCODE)." >&2
     else

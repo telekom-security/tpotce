@@ -201,6 +201,21 @@ class HelpersTest(unittest.TestCase):
         failing = mock.Mock(side_effect=OSError("connection refused"))
         self.assertIn("cannot be asked", sensors.fetch_status(opener=failing).problem)
 
+    def test_ingest_probe_is_limited_per_address_and_in_total(self):
+        # C4: the open probe of the SENSORs is limited per address and over all addresses together
+        with open(os.path.join(REPO_DIR, "docker", "nginx", "dist", "conf", "lsweb.conf")) as handle:
+            text = handle.read()
+        self.assertIn("limit_req_zone $binary_remote_addr zone=tpot_ingest:1m rate=1r/s;", text)
+        self.assertIn("limit_req_zone $server_name zone=tpot_ingest_all:1m rate=10r/s;", text)
+        probe = text[text.index("location = /tpot-ingest {"):]
+        probe = probe[:probe.index("\n    }\n")]
+        self.assertIn("limit_req zone=tpot_ingest burst=5 nodelay;", probe)
+        self.assertIn("limit_req zone=tpot_ingest_all burst=20 nodelay;", probe)
+        self.assertIn("limit_req_status 429;", probe)
+        root = text[text.index("location / {"):]
+        root = root[:root.index("\n    }\n")]
+        self.assertNotIn("tpot_ingest_all", root)
+
 
 class HeartbeatTest(unittest.TestCase):
     NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc).timestamp()

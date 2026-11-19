@@ -146,6 +146,10 @@ class ConfigTest(unittest.TestCase):
                         "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here.",
                         "The HIVE is not reachable ("):
             self.assertIn(message, text)
+        # C4: a busy HIVE (its global limit of /tpot-ingest) has its own line, before the generic one
+        busy = "The HIVE is busy (HTTP 429), next probe in ${FLB_PROBE_INTERVAL} s."
+        self.assertIn(busy, text)
+        self.assertLess(text.index(busy), text.index("The HIVE is not reachable (HTTP"))
         self.assertIn("https://${TPOT_HIVE_IP}:${TPOT_HIVE_PORT}/tpot-ingest", text)
         self.assertIn('"${FLB_PROBE_INTERVAL:-300}"', text)
 

@@ -32,7 +32,8 @@ Usage: $0 [options]
 Run an isolated post-build smoke test for the Nginx image: the landing page behind
 the login, its security headers and caching, and the neutral error page; the ingest
 listener of a HIVE (64294) with a stand-in for Logstash: the login, large batches and
-the capability probe /tpot-ingest of the SENSORs against a new and an old Logstash.
+the capability probe /tpot-ingest of the SENSORs against a new and an old Logstash, and
+its limit over all addresses (30 senders in containers of their own, the init image).
 
 Options:
   --image IMAGE      Image to test. Defaults to docker/nginx/docker-compose.yml.
@@ -125,9 +126,10 @@ prepare_nginx_harness() {
   PASSWD_FILE="${TEST_TMP_ROOT}/nginxpasswd"
   LSPASSWD_FILE="${TEST_TMP_ROOT}/lswebpasswd"
   STATE_DIR="${TEST_TMP_ROOT}/state"
+  BURST_DIR="${TEST_TMP_ROOT}/burst"
   TEST_ARTIFACT_LOG_DIR="${LOG_DIR}"
 
-  mkdir -p "${CERT_DIR}" "${LOG_DIR}" "${STATE_DIR}"
+  mkdir -p "${CERT_DIR}" "${LOG_DIR}" "${STATE_DIR}" "${BURST_DIR}"
   chmod 0777 "${STATE_DIR}"
   chmod 0755 "${CERT_DIR}"
   chmod 0777 "${LOG_DIR}"
@@ -152,6 +154,7 @@ print(f"{sys.argv[1]}:{{SHA}}" + base64.b64encode(hashlib.sha1(sys.argv[2].encod
 PY
   chmod 0644 "${PASSWD_FILE}" "${LSPASSWD_FILE}"
   write_logstash_standin
+  write_burst_sender
 
   local port_mapping="${TEST_BIND_IP}::64297"
   if [[ -n "${HTTPS_PORT}" ]]; then
@@ -189,6 +192,16 @@ services:
     entrypoint: ["python3", "-u", "/state/logstash.py"]
     volumes:
       - "${STATE_DIR}:/state"
+  # the senders of the burst on /tpot-ingest (run_ingest_burst): only with the profile burst
+  sender:
+    image: "${INIT_IMAGE}"
+    profiles: ["burst"]
+    restart: "no"
+    user: "$(id -u):$(id -g)"
+    entrypoint: ["python3", "-u", "/burst/sender.py"]
+    volumes:
+      - "${BURST_DIR}:/burst"
+      - "${CERT_DIR}:/cert:ro"
 networks:
   default:
     name: "${TEST_PROJECT_NAME}_net"
@@ -369,6 +382,53 @@ while True:
 PY
 }
 
+# A sender of the burst: one container, one source address, one GET /tpot-ingest. It says it runs
+# (ready/), opens its TLS connection once armed (connected/; nginx closes an idle one after 10 s, so
+# not before), sends its request once the go file is there and writes the status (result/)
+write_burst_sender() {
+  mkdir -p "${BURST_DIR}/ready" "${BURST_DIR}/connected" "${BURST_DIR}/result"
+  cat > "${BURST_DIR}/sender.py" <<'PY'
+import http.client
+import os
+import socket
+import ssl
+import time
+
+name = socket.gethostname()
+
+
+def mark(folder, text=""):
+    with open(f"/burst/{folder}/{name}", "w", encoding="utf-8") as handle:
+        handle.write(text)
+
+
+def wait_for(path):
+    deadline = time.monotonic() + 120
+    while not os.path.exists(path):
+        if time.monotonic() > deadline:
+            raise SystemExit(f"no {path} within 120 s")
+        time.sleep(0.005)
+
+
+mark("ready")
+wait_for("/burst/arm")
+context = ssl.create_default_context(cafile="/cert/nginx.crt")
+context.check_hostname = False
+conn = http.client.HTTPSConnection("nginx", 64294, timeout=30, context=context)
+conn.connect()
+mark("connected")
+wait_for("/burst/go")
+try:
+    conn.request("GET", "/tpot-ingest")
+    status = str(conn.getresponse().status)
+except OSError as error:
+    status = f"error {error}"
+mark("result", status)
+PY
+  chmod 0777 "${BURST_DIR}" "${BURST_DIR}/ready" "${BURST_DIR}/connected" "${BURST_DIR}/result"
+  chmod 0644 "${BURST_DIR}/sender.py"
+}
+
 run_ingest_checks() {
   python3 - "${TEST_BIND_IP}" "${MAPPED_INGEST_PORT}" "${LS_USER}" "${LS_PASSWORD}" "${TEST_TIMEOUT}" \
     "${CERT_DIR}/nginx.crt" "${STATE_DIR}" <<'PY'
@@ -511,6 +571,56 @@ if failures:
 PY
 }
 
+# C4: /tpot-ingest is also limited over all addresses (10 r/s, burst 20): 30 senders with an address
+# of their own each (so the limit per address, 1 r/s burst 5, lets each one through) send one GET at
+# the same time; the first 21 pass, the rest beyond what the 10 r/s refill in the meantime gets 429
+run_ingest_burst() {
+  local senders=30 rc=0
+  # the senders belong to the project: the down of the cleanup takes them too
+  export COMPOSE_PROFILES=burst
+  test_info "Starting ${senders} senders for the burst on /tpot-ingest"
+  test_compose up -d --no-build --no-deps --scale "sender=${senders}" sender >/dev/null \
+    || test_die "Could not start the senders of the burst"
+  python3 - "${BURST_DIR}" "${senders}" "${TEST_TIMEOUT}" <<'PY' || rc=$?
+import os
+import sys
+import time
+
+burst, senders, timeout = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+# the checks before have run up to 20 requests beyond the 10 r/s of the zone over all addresses: those
+# drain within 2 s, so the bucket is full again 2.5 s after the last of them (this script starts later)
+full = time.monotonic() + 2.5
+
+
+def wait_for(folder, seconds):
+    deadline = time.monotonic() + seconds
+    while len(os.listdir(os.path.join(burst, folder))) < senders:
+        if time.monotonic() > deadline:
+            raise SystemExit(f"FAIL only {len(os.listdir(os.path.join(burst, folder)))} of {senders} senders "
+                             f"in {folder}/ after {seconds} s")
+        time.sleep(0.05)
+
+
+wait_for("ready", timeout)
+open(os.path.join(burst, "arm"), "w").close()
+# nginx closes a connection without a request after 10 s (client_header_timeout)
+wait_for("connected", 8)
+time.sleep(max(0.0, full - time.monotonic()))
+open(os.path.join(burst, "go"), "w").close()
+wait_for("result", timeout)
+codes = []
+for name in sorted(os.listdir(os.path.join(burst, "result"))):
+    with open(os.path.join(burst, "result", name), encoding="utf-8") as handle:
+        codes.append(handle.read())
+counts = {code: codes.count(code) for code in sorted(set(codes))}
+ok = codes.count("204") >= 20 and codes.count("429") > 0 and codes.count("204") + codes.count("429") == senders
+print(("ok   " if ok else "FAIL ") + f"probe: {senders} senders at once, 204 at least 20 times, some 429 ({counts})")
+sys.exit(0 if ok else 1)
+PY
+  test_compose rm -sf sender >/dev/null 2>&1 || true
+  return "${rc}"
+}
+
 main() {
   parse_args "$@"
   validate_args
@@ -546,6 +656,7 @@ main() {
   MAPPED_INGEST_PORT="$(test_get_mapped_port nginx 64294)" || test_die "Could not resolve the mapped ingest port"
   test_info "The ingest listener is on https://${TEST_BIND_IP}:${MAPPED_INGEST_PORT}"
   run_ingest_checks || test_die "Nginx ingest checks failed"
+  run_ingest_burst || test_die "Nginx ingest limit over all addresses failed"
   test_ok "Nginx smoke test passed"
 }
 

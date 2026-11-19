@@ -3440,6 +3440,7 @@ class HiveIngestTest(Scripts):
                 (["HTTP/2 503"], 0, self.NOT_READY),
                 (["HTTP/2 503", "X-TPot-Ingest: 2"], 0, "The HIVE is not reachable (HTTP 503)."),
                 (["HTTP/2 204"], 0, "The HIVE is not reachable (HTTP 204)."),
+                (["HTTP/2 429"], 0, "The HIVE is busy (HTTP 429)."),
                 ([], 28, "The HIVE is not reachable (curl: (28) stub error)."),
                 ([], 60, "The HIVE is not reachable (curl: (60) stub error).")):
             with self.subTest(headers=headers, rc=rc):

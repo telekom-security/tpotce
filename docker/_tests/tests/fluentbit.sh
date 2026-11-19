@@ -67,8 +67,8 @@ hive.test through the hosts file of the stub). Cases:
      or a wrong LS_SSL_VERIFICATION, FLB_PROBE_INTERVAL or FLB_STORAGE_LIMIT.
  10  The HIVE answers 401 on /tpot-ingest (an old HIVE): no POST, the message
      names it, the container stays healthy for 3 checks in a row.
- 11  Then 503 without the marker (its Logstash not ready): no POST, the message
-     names it.
+ 11  Then 503 without the marker (its Logstash not ready), then 429 (a busy
+     HIVE): no POST, the messages name them.
  12  Then 204 with X-TPot-Ingest 2 (FLB_PROBE_INTERVAL=5): every line written
      before arrives within 15 s, once each.
  13  The HIVE stops answering (its stub paused) while 500 lines/s go into the
@@ -863,7 +863,7 @@ wait_for_log() {
 }
 
 # Run probe (E2): a HIVE that does not take the format (401), then its Logstash not ready (503 without
-# the marker), then one that takes it; Fluent Bit reads and sends nothing until then
+# the marker), then a busy one (429), then one that takes it; Fluent Bit reads and sends nothing until then
 run_probe() {
   local data n deadline
   local tokens=()
@@ -892,8 +892,13 @@ run_probe() {
   wait_for_log "The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here." 30
   checker append "${data}/dionaea/log/dionaea.json" lines waiting-dionaea 5
   checker posts "${RUN_DIR}" 0
+  # C4: a HIVE that limits the probes of all its SENSORs together answers 429
+  echo 429 > "${RUN_DIR}/stub/probe"
+  checker probes "${RUN_DIR}" 429
+  wait_for_log "The HIVE is busy (HTTP 429), next probe in 5 s." 30
+  checker posts "${RUN_DIR}" 0
   if wanted 11; then
-    test_ok "11 503 without the marker: no POST, the message names it"
+    test_ok "11 503 without the marker and 429: no POST, the messages name them"
   fi
   echo 204 > "${RUN_DIR}/stub/probe"
   for n in $(seq -f '%05g' 0 4); do

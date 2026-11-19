@@ -1621,6 +1621,9 @@ function fuHIVE_INGEST () {
 	elif [ "${myCODE}" = "503" ] && [ -z "${myMARK}" ];
 	  then
 	    myTEXT="The HIVE's Logstash pipeline is not ready for this SENSOR format; logs wait here."
+	elif [ "${myCODE}" = "429" ];
+	  then
+	    myTEXT="The HIVE is busy (HTTP 429)."
 	elif [ -n "${myCODE}" ] && [ "${myCODE}" != "000" ];
 	  then
 	    myTEXT="The HIVE is not reachable (HTTP ${myCODE})."
