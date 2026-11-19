@@ -78,13 +78,16 @@ class Settings:
         state = generated.configuration_status(os.path.dirname(os.path.abspath(self.path)),
                                                values.get("TPOT_DOCKER_COMPOSE", ""))
         found += [envschema.Problem("warning", "TPOT_DOCKER_COMPOSE", text) for text in state.warnings]
+        found += [envschema.Problem("error", "TPOT_DOCKER_COMPOSE", generated.unreadable_text(name, reason))
+                  for name, reason in state.unreadable.items()]
         shipper = logstash_on_sensor(values, self.services)
         if shipper:
             found.append(envschema.Problem("warning", "TPOT_TYPE", shipper))
         if values.get("TPOT_DOCKER_COMPOSE", "") != self.values.get("TPOT_DOCKER_COMPOSE", ""):
             found += [envschema.Problem("error", "TPOT_DOCKER_COMPOSE",
                       f"{name} is missing, unreadable or out of date with this checkout. "
-                      "Apply the current sources before selecting this compose file.") for name in state.drift]
+                      "Apply the current sources before selecting this compose file.")
+                      for name in state.drift if name not in state.unreadable]
         if offered:
             defaults = {key: rule.default for key, rule in self.schema.items()}
             for rule in self.schema.values():

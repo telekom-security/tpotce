@@ -86,10 +86,9 @@ def config_drift(repo_dir: str = REPO_DIR) -> List[str]:
 
 def require_config_current(repo_dir: str = REPO_DIR) -> None:
     """Stop a write that combines this checkout with an out-of-date runtime configuration."""
-    drift = config_drift(repo_dir)
-    if drift:
-        files = " and ".join(dict.fromkeys(drift))
-        raise ConfigDriftError(f"{files} is out of date with this checkout. Run tpot update first.")
+    status = generated.configuration_status(repo_dir)
+    if status.drift:
+        raise ConfigDriftError(generated.drift_text(status))
 
 
 def compose_path(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> str:

@@ -134,6 +134,42 @@ class SettingsTest(unittest.TestCase):
         with self.assertRaisesRegex(self.settings.SettingsError, "Run tpot update first"):
             self.load().change({"TPOT_BLACKHOLE": "DISABLED"})
 
+    def assert_unreadable_compose_blocks(self, make_unreadable):
+        path = os.path.join(self.repo, "docker-compose.yml")
+        env_path = os.path.join(self.repo, ".env")
+        with open(env_path, encoding="utf-8") as handle:
+            before = handle.read()
+        make_unreadable(path)
+        current = self.load()
+        errors = [p for p in current.problems() if p.key == "TPOT_DOCKER_COMPOSE" and p.level == "error"]
+        self.assertEqual(len(errors), 1)
+        self.assertIn("docker-compose.yml cannot be read (", errors[0].text)
+        self.assertIn("fix its owner or mode, then try again.", errors[0].text)
+        with self.assertRaises(self.settings.SettingsError) as caught:
+            current.change({"TPOT_BLACKHOLE": "ENABLED"})
+        self.assertIn("cannot be read", str(caught.exception))
+        self.assertNotIn("Run tpot update first", str(caught.exception))
+        with open(env_path, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), before)
+
+    def test_unreadable_compose_blocks_with_its_reason(self):
+        def folder(path):
+            os.unlink(path)
+            os.mkdir(path)
+        self.assert_unreadable_compose_blocks(folder)
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root reads a file of mode 000")
+    def test_compose_of_mode_000_blocks_with_its_reason(self):
+        def no_access(path):
+            os.chmod(path, 0)
+            self.addCleanup(os.chmod, path, 0o644)
+        self.assert_unreadable_compose_blocks(no_access)
+
+    def test_missing_compose_still_asks_for_an_update(self):
+        os.unlink(os.path.join(self.repo, "docker-compose.yml"))
+        with self.assertRaisesRegex(self.settings.SettingsError, "Run tpot update first"):
+            self.load().change({"TPOT_BLACKHOLE": "ENABLED"})
+
     def test_change_refuses_configuration_behind_the_checkout(self):
         env_path = os.path.join(self.repo, ".env")
         with open(env_path, encoding="utf-8") as handle:

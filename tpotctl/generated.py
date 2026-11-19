@@ -7,7 +7,7 @@ import re
 import stat
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
 STAMP_PREFIX = "# T-Pot sources sha256: "
@@ -29,6 +29,20 @@ class UnmanagedCompose(GeneratedError):
 class ConfigurationStatus:
     drift: list[str]
     warnings: list[str]
+    unreadable: dict[str, str] = field(default_factory=dict)
+
+
+def unreadable_text(name: str, reason: str) -> str:
+    return f"{name} cannot be read ({reason}); fix its owner or mode, then try again."
+
+
+def drift_text(status: ConfigurationStatus) -> str:
+    """The one sentence that names why runtime configuration blocks a write."""
+    parts = [unreadable_text(name, reason) for name, reason in status.unreadable.items()]
+    stale = [name for name in dict.fromkeys(status.drift) if name not in status.unreadable]
+    if stale:
+        parts.append(f"{' and '.join(stale)} is out of date with this checkout. Run tpot update first.")
+    return " ".join(parts)
 
 
 def leading_comments(text: str) -> list[str]:
@@ -173,6 +187,7 @@ def configuration_status(root: str, compose_setting: Optional[str] = None) -> Co
         return ConfigurationStatus([".env"], [])
     drift = []
     warnings = []
+    unreadable = {}
     try:
         if not configuration_is_current(env_text, root, "env"):
             drift.append(".env")
@@ -180,11 +195,15 @@ def configuration_status(root: str, compose_setting: Optional[str] = None) -> Co
         drift.append(".env")
 
     compose_path = os.path.normpath(os.path.join(root, compose_setting or "./docker-compose.yml"))
+    compose_name = os.path.basename(compose_path) or "docker-compose.yml"
     try:
         with open(compose_path, encoding="utf-8") as handle:
             compose_text = handle.read()
-    except (OSError, UnicodeDecodeError):
-        drift.append(os.path.basename(compose_path) or "docker-compose.yml")
+    except (FileNotFoundError, UnicodeDecodeError):
+        drift.append(compose_name)
+    except OSError as err:
+        drift.append(compose_name)
+        unreadable[compose_name] = err.strerror or str(err)
     else:
         notice = unmanaged_notice(compose_text, os.path.basename(compose_path))
         if notice:
@@ -192,10 +211,10 @@ def configuration_status(root: str, compose_setting: Optional[str] = None) -> Co
         else:
             try:
                 if not configuration_is_current(compose_text, root, "compose"):
-                    drift.append(os.path.basename(compose_path) or "docker-compose.yml")
+                    drift.append(compose_name)
             except GeneratedError:
-                drift.append(os.path.basename(compose_path) or "docker-compose.yml")
-    return ConfigurationStatus(drift, warnings)
+                drift.append(compose_name)
+    return ConfigurationStatus(drift, warnings, unreadable)
 
 
 def configuration_drift(root: str) -> list[str]:
@@ -260,8 +279,7 @@ def main(argv=None) -> int:
         for warning in status.warnings:
             print(f"[WARNING] - {warning}", file=sys.stderr)
         if status.drift:
-            print(f"{' and '.join(dict.fromkeys(status.drift))} is out of date with this checkout. "
-                  "Run tpot update first.", file=sys.stderr)
+            print(drift_text(status), file=sys.stderr)
             return 1
         return 0
     kind = "env" if args.command == "stamp-env" else "compose"

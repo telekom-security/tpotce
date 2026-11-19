@@ -160,6 +160,27 @@ class GeneratedTest(unittest.TestCase):
                 out.write("TPOT_REPO=example\n")
             self.assertEqual(generated.configuration_drift(tmp), [".env"])
 
+    def test_check_names_an_unreadable_compose(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "compose"))
+            with open(os.path.join(root, "env.example"), "w", encoding="utf-8") as out:
+                out.write("TPOT_VERSION=1\n")
+            with open(os.path.join(root, "compose", "standard.yml"), "w", encoding="utf-8") as out:
+                out.write("# T-Pot: STANDARD\nservices: {}\n")
+            with open(os.path.join(root, ".env"), "w", encoding="utf-8") as out:
+                out.write("TPOT_VERSION=local\n")
+            generated.stamp_file(os.path.join(root, ".env"), root, kind="env")
+            os.mkdir(os.path.join(root, "docker-compose.yml"))
+
+            status = generated.configuration_status(root)
+            self.assertEqual(status.drift, ["docker-compose.yml"])
+            self.assertIn("docker-compose.yml", status.unreadable)
+            stream = io.StringIO()
+            with redirect_stderr(stream):
+                self.assertEqual(generated.main(["check", "--root", root]), 1)
+            self.assertIn("docker-compose.yml cannot be read (", stream.getvalue())
+            self.assertNotIn("Run tpot update first", stream.getvalue())
+
     def test_unmanaged_compose_warns_without_bypassing_env_drift(self):
         with tempfile.TemporaryDirectory() as root:
             for name in ("env.example", ".env"):
