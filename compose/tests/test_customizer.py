@@ -650,6 +650,14 @@ class AdoptTest(unittest.TestCase):
         self.assertEqual(core.adopt(self.catalog, changed, "HIVE").not_carried,
                          ["logstash: environment LS_SSL_VERIFICATION=none"])
 
+    def test_adopt_equal_earlier_value_is_no_loss(self):
+        # ${X} is the earlier ${X:-full} without its default: the same value, no loss
+        text = v1_file(["tpotinit", "logstash", "elasticsearch"])
+        equal = text.replace("LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}",
+                             "LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION}")
+        self.assertIn("LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION}\n", equal)
+        self.assertEqual(core.adopt(self.catalog, equal, "HIVE").not_carried, [])
+
     def test_old_network_of_a_service_and_a_new_default_are_no_loss(self):
         # cowrie_local became honeypot_local, ${X} became ${X:-default}: nothing to name
         cowrie = {k: v for k, v in self.catalog.catalog.services["cowrie"].items() if k != "x-tpot"}

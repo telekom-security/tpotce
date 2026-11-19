@@ -1078,10 +1078,11 @@ def _not_carried(name: str, old: dict, new: dict) -> List[str]:
                 lost.append(f"{name}: {key} {_show(mine)}" + _release_has(new, key))
         elif key == "environment":
             have = _environment(theirs)
+            earlier = EARLIER_ENVIRONMENT.get(name, {})
             for var, val in _environment(mine).items():
                 shown = var if val is None else f"{var}={val}"
                 if var not in have:
-                    if EARLIER_ENVIRONMENT.get(name, {}).get(var, object()) != val:
+                    if not (var in earlier and _same_value(val, earlier[var])):
                         lost.append(f"{name}: environment {shown}")
                 elif not _same_value(val, have[var]):
                     other = var if have[var] is None else f"{var}={have[var]}"
