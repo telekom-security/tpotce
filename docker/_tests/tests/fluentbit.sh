@@ -79,7 +79,9 @@ it has none, with soft 1024 / hard 524288, what a Debian docker gives a containe
 (Docker Desktop gives 1048576 and would hide a leak of files).
 
 All cases take about 22 minutes (heartbeat interval, 503 and retries; case 13
-alone about 17: 6 min of load, then up to 15 min until the retries delivered).
+alone about 17: 6 min of load, then until the retries delivered). Case 13
+waits as long as Fluent Bit holds chunks of the outage, up to 35 min after it:
+a chunk retried often during the outage waits up to 2000 s for its next retry.
 
 Options:
   --image IMAGE       Fluent Bit image to test. Defaults to docker/fluentbit/docker-compose.yml.
@@ -87,7 +89,8 @@ Options:
                       docker/tpotinit/docker-compose.yml.
   --cases LIST        Only these cases (comma separated numbers 1-13). Default: all.
   --timeout SEC       Time to wait for a delivery (at least 120 s are used; case 13
-                      waits at least 900 s for the lines of its outage).
+                      waits for the lines of its outage while Fluent Bit holds
+                      chunks, at least 2100 s).
   --bind-ip IP        Accepted for runner compatibility; nothing is published.
   --keep-artifacts    Keep the temporary files for debugging.
   -h, --help          Show this help message.
@@ -133,7 +136,7 @@ test_release_artifacts() {
 checker() {
   SMOKE_HOSTNAME="${SMOKE_HOSTNAME}" SMOKE_EXTIP="${SMOKE_EXTIP}" SMOKE_INTIP="${SMOKE_INTIP}" \
     SMOKE_VERSION="${SMOKE_VERSION}" SMOKE_AUTH="${SMOKE_AUTH}" SMOKE_TIMEOUT="${TEST_TIMEOUT}" \
-    PYTHONPATH="${REPO_ROOT}" python3 "${TEST_TMP_ROOT}/check.py" "$@"
+    SMOKE_CONTAINER="${TEST_CONTAINER_NAME}" PYTHONPATH="${REPO_ROOT}" python3 "${TEST_TMP_ROOT}/check.py" "$@"
 }
 
 write_checker() {
@@ -142,6 +145,7 @@ write_checker() {
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -461,18 +465,60 @@ def flood(data, prefix, rate, seconds, manifest_path):
     print(f"{rate * seconds} lines into {len(files)} files in {took:.1f} s")
 
 
+def pending_chunks():
+    """The chunk files Fluent Bit still holds (a chunk leaves its storage once the HIVE took it), read in
+    its container: on the host the folders of the storage are 0770 for uid 2000."""
+    container = os.environ["SMOKE_CONTAINER"]
+    try:
+        result = subprocess.run(["docker", "exec", container, "find", "/data/fluentbit/storage", "-type", "f",
+                                 "-name", "*.flb"], capture_output=True, text=True, timeout=60, check=False)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        fail(f"could not count the chunks of Fluent Bit in {container}: {error}")
+    if result.returncode != 0:
+        fail(f"could not count the chunks of Fluent Bit in {container}: {result.stderr.strip()}")
+    return len(result.stdout.split())
+
+
+# a retry of Fluent Bit waits up to 2001 s (scheduler.cap 2000 s, its default, + 1 s); a retry that ran
+# into the connect timeout (10 s) just after the HIVE answered again waits as long from then on
+RETRY_BOUND = 2100
+CHUNK_EVERY = 10
+
+
+def missing_text(manifest, counts):
+    """N of M lines (the number missing per file; e.g. the first 5 missing tokens)."""
+    missing = {path: [token for token in tokens if token not in counts] for path, tokens in manifest.items()}
+    per_file = ", ".join(f"{path} {len(tokens)}" for path, tokens in sorted(missing.items()) if tokens)
+    first = sorted(token for tokens in missing.values() for token in tokens)[:5]
+    total = sum(len(tokens) for tokens in manifest.values())
+    return f"{sum(len(tokens) for tokens in missing.values())} of {total} lines ({per_file}; e.g. {first})"
+
+
 def outage_count(run, manifest_path, timeout):
-    """Waits until every token of MANIFEST arrived in a request answered below 300, at least 900 s (a
-    chunk Fluent Bit retried 6 times during the outage waits up to 640 s for its next retry); fails
-    with the number missing per file and the first 5 missing tokens; reports duplicates."""
+    """Waits until every token of MANIFEST arrived in a request answered below 300, as long as Fluent Bit
+    still holds chunks (at most max(TIMEOUT, RETRY_BOUND) s: retry n of a chunk waits up to min(2000, 5 * 2^n)
+    + 1 s). A token still missing when Fluent Bit held no chunk for CHUNK_EVERY s is lost (hive_stub.py
+    records a request before it answers, so a chunk Fluent Bit removed is in requests.jsonl). Fails with
+    the number missing per file and the first 5 missing tokens; reports duplicates."""
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     wanted = {token for tokens in manifest.values() for token in tokens}
-    timeout = max(int(timeout), 900)
+    bound = max(int(timeout), RETRY_BOUND)
     counts = {}
     log = Path(run) / "stub" / "requests.jsonl"
     offset = 0
     start = time.monotonic()
+    checked = empty_since = None
+    told = 0
     while True:
+        now = time.monotonic()
+        if checked is None or now - checked >= CHUNK_EVERY:
+            # before the log is read: what Fluent Bit no longer holds is in the log by then
+            chunks = pending_chunks()
+            checked = now
+            if chunks:
+                empty_since = None
+            elif empty_since is None:
+                empty_since = now
         try:
             with open(log, "rb") as handle:
                 handle.seek(offset)
@@ -495,12 +541,19 @@ def outage_count(run, manifest_path, timeout):
                     counts[token] = counts.get(token, 0) + 1
         if len(counts) == len(wanted):
             break
-        if time.monotonic() - start > timeout:
-            missing = {path: [token for token in tokens if token not in counts] for path, tokens in manifest.items()}
-            per_file = ", ".join(f"{path} {len(tokens)}" for path, tokens in sorted(missing.items()) if tokens)
-            first = sorted(token for tokens in missing.values() for token in tokens)[:5]
-            fail(f"{len(wanted) - len(counts)} of {len(wanted)} lines missing after {timeout} s ({per_file}), "
-                 f"e.g. {first}")
+        took = time.monotonic() - start
+        missing = len(wanted) - len(counts)
+        if empty_since is not None and time.monotonic() - empty_since >= CHUNK_EVERY:
+            fail(f"{missing_text(manifest, counts)} lost: Fluent Bit holds no chunk any more, {took:.0f} s after "
+                 f"the HIVE answered again")
+        held = f"{chunks} chunk{'' if chunks == 1 else 's'}"
+        if took > bound:
+            fail(f"{missing_text(manifest, counts)} still missing after {bound} s: Fluent Bit still holds {held} "
+                 f"(a retry waits up to 2000 s)")
+        if took - told >= 300:
+            told = took
+            print(f"... {missing} lines missing, Fluent Bit holds {held}, {took:.0f} s after the HIVE "
+                  f"answered again", file=sys.stderr)
         time.sleep(2)
     twice = sum(1 for count in counts.values() if count > 1)
     print(f"all {len(wanted)} lines arrived {time.monotonic() - start:.0f} s after the HIVE answered again, "
@@ -854,7 +907,7 @@ run_outage() {
   test_info "13 HIVE answers again after $((SECONDS - paused)) s"
   result="$(checker outage-count "${RUN_DIR}" "${manifest}" "${TEST_TIMEOUT}")" || {
     errors="$(flb_logs | grep -c "Too many open files" || true)"
-    test_die "13 lines lost after the outage (\"Too many open files\" ${errors} times in the log of Fluent Bit)"
+    test_die "13 not every line arrived after the outage (above; \"Too many open files\" ${errors} times in the log of Fluent Bit)"
   }
   test_info "13 ${result}"
   errors="$(flb_logs | grep -c "Too many open files" || true)"

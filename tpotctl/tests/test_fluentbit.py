@@ -12,8 +12,10 @@ import re
 import shutil
 import subprocess
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tpotctl import logs_config
 
@@ -236,6 +238,116 @@ class TpotinitShipperTest(unittest.TestCase):
                                         capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout.strip(), expected)
+
+
+class OutageCountTest(unittest.TestCase):
+    """Case 13 of the smoke test after the outage: a chunk Fluent Bit retried during it waits up to 2001 s
+    for its next retry (scheduler.cap, 2000 s by default), so the check waits while Fluent Bit holds chunks
+    and calls lines lost only when it holds none. The checker of fluentbit.sh runs with a clock of its own,
+    docker is a stub that lists the chunk files of the file `chunks`."""
+
+    SMOKE = ROOT / "docker" / "_tests" / "tests" / "fluentbit.sh"
+    CONTAINER = "tpot-smoke-fluentbit"
+    MANIFEST = {"/data/cowrie/log/cowrie.json": ["flood-00000", "flood-00002"],
+                "/data/dionaea/log/dionaea.json": ["flood-00001"]}
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.folder = Path(folder.name)
+        self.run_dir = self.folder / "outage"
+        (self.run_dir / "stub").mkdir(parents=True)
+        self.manifest = self.folder / "flood.json"
+        self.manifest.write_text(json.dumps(self.MANIFEST), encoding="utf-8")
+        self.chunks = self.folder / "chunks"
+        self.bin = self.folder / "bin"
+        self.bin.mkdir()
+        docker = self.bin / "docker"
+        docker.write_text(
+            "#!/bin/sh\n"
+            f'[ "$*" = "exec {self.CONTAINER} find /data/fluentbit/storage -type f -name *.flb" ] || exit 1\n'
+            f'cat "{self.chunks}" || exit 1\n', encoding="utf-8")
+        docker.chmod(0o755)
+
+    def hold(self, count):
+        self.chunks.write_text("".join(f"/data/fluentbit/storage/tail.{n}/1-1.{n}.flb\n" for n in range(count)),
+                               encoding="utf-8")
+
+    def deliver(self, *tokens):
+        """A request as hive_stub.py records it, answered 200."""
+        body = json.dumps([{"log": json.dumps({"token": token, "pad": "x" * 64}), "type": "Cowrie"}
+                           for token in tokens])
+        record = {"time": 0, "method": "POST", "path": "/", "headers": {"x-tpot-ingest": "2"}, "status": 200,
+                  "gzip": True, "body": body}
+        with open(self.run_dir / "stub" / "requests.jsonl", "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\n")
+
+    def run_check(self, events=(), timeout="120"):
+        """outage-count of the checker; EVENTS: (seconds after its start, action). Returns the exit code,
+        the seconds it ran, stdout and stderr."""
+        source = self.SMOKE.read_text(encoding="utf-8").split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+        body, call = source.rsplit("\n", 1)
+        self.assertTrue(call.startswith("COMMANDS[sys.argv[1]]"), call)
+        clock = [0.0]
+        pending = sorted(events, key=lambda event: event[0])
+
+        def sleep(seconds):
+            clock[0] += seconds
+            while pending and pending[0][0] <= clock[0]:
+                pending.pop(0)[1]()
+
+        env = {"SMOKE_HOSTNAME": "sensor-smoke", "SMOKE_EXTIP": "198.51.100.7", "SMOKE_INTIP": "10.0.0.7",
+               "SMOKE_VERSION": "24.04.2", "SMOKE_AUTH": "eA==", "SMOKE_TIMEOUT": timeout,
+               "SMOKE_CONTAINER": self.CONTAINER, "PATH": f"{self.bin}{os.pathsep}{os.environ.get('PATH', '')}"}
+        namespace = {"__name__": "check"}
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            exec(compile(body, str(self.SMOKE), "exec"), namespace)  # noqa: S102 - the checker of the smoke test
+            namespace["time"] = types.SimpleNamespace(monotonic=lambda: clock[0], sleep=sleep)
+            try:
+                namespace["outage_count"](str(self.run_dir), str(self.manifest), timeout)
+                code = 0
+            except SystemExit as stop:
+                code = stop.code
+        return code, clock[0], out.getvalue(), err.getvalue()
+
+    def test_waits_while_fluent_bit_holds_chunks(self):
+        self.deliver("flood-00000", "flood-00001")
+        self.hold(1)
+        code, took, out, err = self.run_check([(1500, lambda: (self.deliver("flood-00002"), self.hold(0)))])
+        self.assertEqual(code, 0, err)
+        self.assertGreaterEqual(took, 1500)
+        self.assertIn("all 3 lines arrived", out)
+
+    def test_lost_when_fluent_bit_holds_no_chunk(self):
+        self.deliver("flood-00000", "flood-00001")
+        self.hold(0)
+        code, took, _out, err = self.run_check()
+        self.assertEqual(code, 1)
+        self.assertLess(took, 60)
+        self.assertIn("lost", err)
+        self.assertIn("flood-00002", err)
+
+    def test_gives_up_while_chunks_are_still_held(self):
+        for timeout, bound in (("120", 2100), ("3000", 3000)):
+            with self.subTest(timeout=timeout):
+                (self.run_dir / "stub" / "requests.jsonl").unlink(missing_ok=True)
+                self.deliver("flood-00000", "flood-00001")
+                self.hold(3)
+                code, took, _out, err = self.run_check(timeout=timeout)
+                self.assertEqual(code, 1)
+                self.assertGreaterEqual(took, bound)
+                self.assertLess(took, bound + 20)
+                self.assertIn("3 chunks", err)
+                self.assertNotIn("lost", err)
+
+    def test_fails_when_docker_cannot_count_the_chunks(self):
+        self.deliver("flood-00000", "flood-00001")
+        code, took, _out, err = self.run_check()
+        self.assertEqual(code, 1)
+        self.assertLess(took, 60)
+        self.assertIn("could not count the chunks", err)
+        self.assertNotIn("lost", err)
 
 
 if __name__ == "__main__":
