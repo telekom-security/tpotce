@@ -13,8 +13,9 @@ DEFAULT_IMAGE="ghcr.io/telekom-security/fluentbit:24.04.2"
 DEFAULT_INIT_IMAGE="ghcr.io/telekom-security/tpotinit:24.04.2"
 IMAGE=""
 INIT_IMAGE=""
-# case 13: under a soft limit of 1024 (Docker Desktop) 120 s of load lost no line, 240 s only now and
-# then; the files of Fluent Bit reach the limit after about 240 s, so 360 s
+# case 13: under a soft limit of 1024 (what read_nofile sets where compose/sensor.yml has none, the default
+# of a Debian docker) 120 s of load lost no line, 240 s only now and then; the files of Fluent Bit reach
+# the limit after about 240 s, so 360 s
 OUTAGE_SECONDS=360
 CASES="1,2,3,4,5,6,7,8,9,10,11,12,13"
 # what tpotinit writes into elk_environment of a SENSOR, and the access of the sensor at the HIVE
@@ -85,7 +86,8 @@ Options:
   --init-image IMAGE  Image the stub runs in (python3 with ssl, openssl). Defaults to
                       docker/tpotinit/docker-compose.yml.
   --cases LIST        Only these cases (comma separated numbers 1-13). Default: all.
-  --timeout SEC       Time to wait for a delivery (at least 120 s are used).
+  --timeout SEC       Time to wait for a delivery (at least 120 s are used; case 13
+                      waits at least 900 s for the lines of its outage).
   --bind-ip IP        Accepted for runner compatibility; nothing is published.
   --keep-artifacts    Keep the temporary files for debugging.
   -h, --help          Show this help message.
