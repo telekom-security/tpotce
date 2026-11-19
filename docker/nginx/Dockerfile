@@ -28,7 +28,7 @@ FROM alpine:${ALPINE_VERSION}
 # Install packages
 RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add \
-      nginx \
+      'nginx>=1.30.7-r0' \
       nginx-mod-http-brotli \
       nginx-mod-http-headers-more && \
     rm -rf /etc/nginx/conf.d/* /usr/share/nginx/html/*
