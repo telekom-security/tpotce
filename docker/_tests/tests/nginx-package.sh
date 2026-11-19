@@ -6,6 +6,7 @@ unset CDPATH
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
+DEFAULT_IMAGE="ghcr.io/telekom-security/nginx:24.04.2"
 IMAGE=""
 
 while [[ $# -gt 0 ]]; do
@@ -33,7 +34,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 test_check_dependencies
-IMAGE="${IMAGE:-$(test_read_compose_image nginx "ghcr.io/telekom-security/nginx:24.04.1")}"
+IMAGE="${IMAGE:-$(test_read_compose_image nginx "${DEFAULT_IMAGE}")}"
 test_require_image "${IMAGE}" "docker compose -f docker/nginx/docker-compose.yml build nginx"
 
 docker run --rm --entrypoint apk "${IMAGE}" info -e 'nginx>=1.30.7-r0' \
