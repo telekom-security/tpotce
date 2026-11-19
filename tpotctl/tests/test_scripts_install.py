@@ -188,7 +188,7 @@ class InstallShTest(Scripts):
                   f"# T-Pot: {edition.upper()}\nservices: {{}}\n")
         os.makedirs(os.path.join(self.tpotce, "tpotctl"), exist_ok=True)
         shutil.copy(os.path.join(REPO, "env.example"), os.path.join(self.tpotce, "env.example"))
-        for name in ("generated.py", "git_hooks.py", "runlog.py"):
+        for name in ("generated.py", "git_hooks.py", "runlog.py", "__init__.py", "bootstrap.py", "requirements.txt"):
             shutil.copy(os.path.join(REPO, "tpotctl", name), os.path.join(self.tpotce, "tpotctl", name))
         write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\nWEB_USER=\n")
         # install.sh as it runs from a download: no clone around it
@@ -474,6 +474,33 @@ PY
         self.assertEqual(result.returncode, 0, result.stdout)
         summary = result.stdout[result.stdout.rindex("T-Pot is installed"):]
         self.assertIn("Git freshness hooks could not be installed", summary)
+
+    def link_manager(self):
+        """tpot on PATH is the launcher of this checkout, as the playbook links it."""
+        write(os.path.join(self.tpotce, "tpot"), "#!/bin/sh\nexit 0\n", 0o755)
+        os.symlink(os.path.join(self.tpotce, "tpot"), os.path.join(self.bin, "tpot"))
+
+    def test_manager_without_venv_warns(self):
+        self.link_manager()
+        result = self.install("-s", "-t", "s")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        summary = result.stdout[result.stdout.rindex("T-Pot is installed"):]
+        self.assertNotIn("The T-Pot Manager is ready", summary)
+        self.assertIn("### [WARNING] - The T-Pot Manager is linked, but its Python environment is not ready. "
+                      "Run: tpot setup", summary)
+        self.assertNotIn("Traceback", result.stdout)
+
+    def test_manager_with_venv_is_ready(self):
+        self.link_manager()
+        venv = os.path.join(self.data, "tpotce", "venv")
+        write(os.path.join(venv, "bin", "python3"), "#!/bin/sh\nexit 0\n", 0o755)
+        with open(os.path.join(self.tpotce, "tpotctl", "requirements.txt"), "rb") as handle:
+            write(os.path.join(venv, "tpot-requirements.sha256"), hashlib.sha256(handle.read()).hexdigest() + "\n")
+        result = self.install("-s", "-t", "s")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        summary = result.stdout[result.stdout.rindex("T-Pot is installed"):]
+        self.assertIn("The T-Pot Manager is ready, run it with: tpot", summary)
+        self.assertNotIn("Python environment is not ready", summary)
 
     def test_installing_a_checkout_without_generated_configuration_helpers(self):
         for name in ("generated.py", "git_hooks.py"):

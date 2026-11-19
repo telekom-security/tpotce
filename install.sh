@@ -3544,7 +3544,15 @@ fi
 myTPOT_FOUND=$(command -v tpot)
 if [ -n "${myTPOT_FOUND}" ] && [ "$(readlink -f "${myTPOT_FOUND}")" = "$(readlink -f "${HOME}/tpotce/tpot")" ];
   then
-    myTPOT_ITEM="ok:The T-Pot Manager is ready, run it with: tpot"
+    # a failed tpot setup leaves the link without its venv
+    if command -v python3 >/dev/null 2>&1 && \
+       python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from tpotctl import bootstrap; sys.exit(0 if bootstrap.venv_current(bootstrap.venv_dir()) else 1)' \
+         "${HOME}/tpotce" >/dev/null 2>&1;
+      then
+        myTPOT_ITEM="ok:The T-Pot Manager is ready, run it with: tpot"
+      else
+        myTPOT_ITEM="warn:The T-Pot Manager is linked, but its Python environment is not ready. Run: tpot setup"
+    fi
   elif [ -n "${myTPOT_FOUND}" ];
   then
     myTPOT_ITEM="warn:The command tpot is ${myTPOT_FOUND}, not this T-Pot Manager. Run ${HOME}/tpotce/tpot, or link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
