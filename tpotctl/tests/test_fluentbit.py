@@ -137,6 +137,8 @@ class ConfigTest(unittest.TestCase):
         self.assertRegex(text, r"(?m)^exec fluent-bit -c /etc/fluent-bit/fluent-bit\.yaml$")
         # C2: the storage limit comes from TPOT_SENSOR_BUFFER_MB, a wrong one stops the start
         self.assertIn("^[1-9][0-9]*[KMG]?$", text)
+        # tpotinit takes leading zeros (0512): they go before the check (the smoke test runs 0512M)
+        self.assertLess(text.index("^0+([0-9][0-9]*[KMG]?)$"), text.index("^[1-9][0-9]*[KMG]?$"))
         self.assertRegex(text, r"FLB_STORAGE_LIMIT is .*TPOT_SENSOR_BUFFER_MB")
         # E2: the probe of the HIVE before Fluent Bit starts (the smoke test runs every answer)
         self.assertLess(text.index("\nfuPROBE\n"), text.index("\nexec fluent-bit"))

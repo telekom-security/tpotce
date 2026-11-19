@@ -809,20 +809,39 @@ run_tls() {
 
 # Case 9 without a HIVE: the plugins and the checks of the entrypoint
 run_image() {
-  local help out rc setting plugin
+  local help out rc setting plugin stub
   help="$(docker run --rm --network none --entrypoint fluent-bit "${IMAGE}" -h 2>&1)" || true
   for plugin in tail dummy lua http; do
     grep -E "^[[:space:]]+${plugin}[[:space:]]" <<< "${help}" >/dev/null || test_die "fluent-bit -h does not list ${plugin}"
   done
   for setting in "TPOT_HIVE_IP=" "TPOT_HIVE_USER=" "LS_SSL_VERIFICATION=sometimes" "FLB_PROBE_INTERVAL=0" \
-    "FLB_STORAGE_LIMIT=512MB"; do
+    "FLB_STORAGE_LIMIT=512MB" "FLB_STORAGE_LIMIT=000" "FLB_STORAGE_LIMIT=0M"; do
     rc=0
     out="$(docker run --rm --network none --read-only -e TPOT_HIVE_IP=127.0.0.1 -e "TPOT_HIVE_USER=${SMOKE_AUTH}" \
       -e "${setting}" "${IMAGE}" 2>&1)" || rc=$?
     [[ "${rc}" -eq 1 ]] || test_die "The entrypoint takes ${setting} (rc ${rc}): ${out}"
     grep -F "${setting%%=*}" <<< "${out}" >/dev/null || test_die "The entrypoint does not name ${setting%%=*}: ${out}"
   done
-  test_ok "9 plugins tail, dummy, lua, http; the entrypoint refuses an empty HIVE address or user, a wrong verification, probe interval or storage limit"
+  # tpotinit takes TPOT_SENSOR_BUFFER_MB=0512: curl answers as a HIVE that takes the format, fluent-bit
+  # prints the limit it would get
+  stub="${TEST_TMP_ROOT}/image-stub"
+  mkdir -p "${stub}"
+  cat > "${stub}/curl" <<'EOF'
+#!/bin/bash
+while [ $# -gt 0 ]; do
+  [ "$1" = "-D" ] && printf 'HTTP/1.1 204 No Content\r\nX-TPot-Ingest: 2\r\n\r\n' > "$2"
+  shift
+done
+EOF
+  printf '#!/bin/bash\necho "limit=${FLB_STORAGE_LIMIT}"\n' > "${stub}/fluent-bit"
+  chmod 0755 "${stub}" "${stub}/curl" "${stub}/fluent-bit"
+  rc=0
+  out="$(docker run --rm --network none --read-only --tmpfs /tmp:uid=2000,gid=2000 -v "${stub}:/stub:ro" \
+    -e PATH=/stub:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin -e TPOT_HIVE_IP=127.0.0.1 \
+    -e "TPOT_HIVE_USER=${SMOKE_AUTH}" -e FLB_STORAGE_LIMIT=0512M "${IMAGE}" 2>&1)" || rc=$?
+  [[ "${rc}" -eq 0 ]] || test_die "The entrypoint refuses FLB_STORAGE_LIMIT=0512M (rc ${rc}): ${out}"
+  grep -x "limit=512M" <<< "${out}" >/dev/null || test_die "Fluent Bit does not get 512M for 0512M: ${out}"
+  test_ok "9 plugins tail, dummy, lua, http; the entrypoint refuses an empty HIVE address or user, a wrong verification, probe interval or storage limit and takes 0512M as 512M"
 }
 
 # The healthy checks in a row at the end of the health log of Fluent Bit

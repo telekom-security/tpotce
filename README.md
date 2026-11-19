@@ -866,12 +866,12 @@ Logstash is not ready yet, gets nothing: Fluent Bit reads no logs meanwhile, ask
 T-Pot start (also the daily reboot) rotates the logs, so a restart of the **Sensor** before the **Hive** answers
 leaves the earlier lines in the rotated log files on the **Sensor**, they are not sent.
 While the **Hive** cannot be reached once Fluent Bit sends, it keeps the lines on the disk of the **Sensor**
-(`~/tpotce/data/fluentbit/storage`, up to `TPOT_SENSOR_BUFFER_MB`, 512 MB by default) and retries without a limit. Beyond it the oldest lines are
-dropped. A single burst of lines larger than the limit before the first send loses its newest lines, the log of
-Fluent Bit names it (`no available chunk`). When the **Hive** answers again, most of the lines wait no longer than a
-few minutes; lines Fluent Bit already retried often during a long outage wait for their next retry and can arrive
-up to about 35 minutes later (each retry waits longer, at most 2000 s, which spares a **Hive** that comes back under
-load).
+(`~/tpotce/data/fluentbit/storage`, up to `TPOT_SENSOR_BUFFER_MB`, 512 MB by default) and retries without a limit.
+Beyond it the oldest lines are dropped. A single burst of lines larger than the limit before the first send loses
+its newest lines, the log of Fluent Bit names it (`no available chunk`). When the **Hive** answers again, most of
+the lines wait no longer than a few minutes; lines Fluent Bit already retried often during a long outage wait for
+their next retry and can arrive up to about 35 minutes later (each retry waits longer, at most 2000 s, which spares
+a **Hive** that comes back under load).
 Lines longer than 1 MB are skipped, each with a warning in `docker logs fluentbit`; Logstash had no such limit.
 
 **Update the Hive first.** A **Sensor** of 24.04.1 still sends with Logstash in the old format. The **Hive** refuses

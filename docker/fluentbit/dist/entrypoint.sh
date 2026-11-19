@@ -27,6 +27,10 @@ esac
 
 TPOT_HIVE_PORT="${TPOT_HIVE_PORT:-64294}"
 FLB_STORAGE_LIMIT="${FLB_STORAGE_LIMIT:-512M}"
+# tpotinit takes TPOT_SENSOR_BUFFER_MB=0512: 0512M becomes 512M, 0M and 000 stay refused below
+if [[ "${FLB_STORAGE_LIMIT}" =~ ^0+([0-9][0-9]*[KMG]?)$ ]]; then
+  FLB_STORAGE_LIMIT="${BASH_REMATCH[1]}"
+fi
 if [[ ! "${FLB_STORAGE_LIMIT}" =~ ^[1-9][0-9]*[KMG]?$ ]]; then
   echo "FLB_STORAGE_LIMIT is '${FLB_STORAGE_LIMIT}'; it takes a number with K, M or G (TPOT_SENSOR_BUFFER_MB in ~/tpotce/.env sets it)." >&2
   exit 1
