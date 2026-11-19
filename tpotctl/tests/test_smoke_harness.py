@@ -3,6 +3,7 @@ and are not run here: only the path handling of run.sh, lib/common.sh and the te
 
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -87,6 +88,67 @@ trap test_cleanup EXIT
                 self.assertEqual(os.path.isdir(root), result != 0)
                 if result:
                     self.assertIn("Could not release test artifacts", done.stderr)
+
+
+class QuickTest(unittest.TestCase):
+    """run.sh --quick exports TPOT_SMOKE_QUICK=1, test_quick_cases leaves out the long cases a test names."""
+
+    NOTE = "Quick run: case 13 skipped; --cases 13 runs it."
+
+    def quick_cases(self, given, env=None):
+        script = f"source docker/_tests/lib/common.sh\ntest_quick_cases 1,2,13 {given} 13\n"
+        done = run(["-c", script], env=env)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done
+
+    def test_quick_drops_the_long_case(self):
+        done = self.quick_cases("no", env={"TPOT_SMOKE_QUICK": "1"})
+        self.assertEqual(done.stdout, "1,2\n")
+        self.assertIn(self.NOTE, done.stderr)
+
+    def test_named_case_wins_over_quick(self):
+        done = self.quick_cases("yes", env={"TPOT_SMOKE_QUICK": "1"})
+        self.assertEqual(done.stdout, "1,2,13\n")
+        self.assertNotIn("Quick run", done.stderr)
+
+    def test_without_quick_nothing_changes(self):
+        full = dict(os.environ)
+        full.pop("TPOT_SMOKE_QUICK", None)
+        script = "source docker/_tests/lib/common.sh\ntest_quick_cases 1,2,13 no 13\n"
+        done = subprocess.run(["bash", "-c", script], cwd=REPO, env=full, capture_output=True, text=True,
+                              timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout, "1,2,13\n")
+        self.assertNotIn("Quick run", done.stderr)
+
+    def test_run_passes_quick_on(self):
+        with tempfile.TemporaryDirectory() as folder:
+            tests = os.path.join(folder, "_tests")
+            shutil.copytree(TESTS, tests)
+            probe = os.path.join(tests, "tests", "quickprobe.sh")
+            with open(probe, "w") as handle:
+                handle.write('#!/usr/bin/env bash\nprintf \'quick=%s\\n\' "${TPOT_SMOKE_QUICK:-}"\n')
+            os.chmod(probe, 0o755)
+            stubs = os.path.join(folder, "bin")
+            os.mkdir(stubs)
+            docker = os.path.join(stubs, "docker")
+            with open(docker, "w") as handle:
+                handle.write("#!/bin/sh\nexit 0\n")
+            os.chmod(docker, 0o755)
+            full = dict(os.environ)
+            full.pop("CDPATH", None)
+            full.pop("TPOT_SMOKE_QUICK", None)
+            full["PATH"] = stubs + os.pathsep + full["PATH"]
+            for args, expected in ((["--quick"], "quick=1"), ([], "quick=")):
+                with self.subTest(args=args):
+                    done = subprocess.run(["bash", os.path.join(tests, "run.sh"), *args, "quickprobe"], cwd=folder,
+                                          env=full, capture_output=True, text=True, timeout=60)
+                    self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+                    self.assertIn(expected, done.stdout.split())
+
+    def test_fluentbit_marks_case_13_long(self):
+        with open(os.path.join(TESTS, "tests", "fluentbit.sh"), encoding="utf-8") as handle:
+            self.assertIn('test_quick_cases "${CASES}" "${CASES_GIVEN}" 13', handle.read())
 
 
 class CdpathTest(unittest.TestCase):

@@ -23,6 +23,25 @@ test_info() {
   printf '==> %s\n' "$*"
 }
 
+# test_quick_cases CASES GIVEN LONG...: CASES (comma list) without the LONG cases when TPOT_SMOKE_QUICK=1 and
+# the cases were not given (GIVEN no); a case named with --cases always runs
+test_quick_cases() {
+  local cases="$1" given="$2" case="" kept=()
+  shift 2
+  if [[ "${TPOT_SMOKE_QUICK:-}" != "1" || "${given}" != "no" ]]; then
+    printf '%s\n' "${cases}"
+    return 0
+  fi
+  for case in ${cases//,/ }; do
+    if [[ " $* " == *" ${case} "* ]]; then
+      printf 'Quick run: case %s skipped; --cases %s runs it.\n' "${case}" "${case}" >&2
+    else
+      kept+=("${case}")
+    fi
+  done
+  (IFS=,; printf '%s\n' "${kept[*]:-}")
+}
+
 test_ok() {
   printf '[OK] %s\n' "$*"
 }

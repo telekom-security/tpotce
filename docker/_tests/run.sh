@@ -25,12 +25,14 @@ Options:
   --timeout SEC      Timeout passed to each test. Default: 30.
   --bind-ip IP       Host IP used by tests for loopback bindings. Default: 127.0.0.1.
   --keep-artifacts   Keep temporary compose files and logs for failed or passed tests.
+  --quick            Skip the long cases of a test (fluentbit case 13).
   -h, --help         Show this help message.
 
 Examples:
   $0 --list
   $0
   $0 adbhoney
+  $0 --quick fluentbit
 EOF
 }
 
@@ -91,6 +93,10 @@ parse_args() {
         ;;
       --keep-artifacts)
         TEST_KEEP_ARTIFACTS="true"
+        shift
+        ;;
+      --quick)
+        export TPOT_SMOKE_QUICK=1
         shift
         ;;
       -h|--help)

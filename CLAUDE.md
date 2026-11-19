@@ -17,7 +17,7 @@ T-Pot is a multi-honeypot platform: ~30 honeypots plus NSM tools (Suricata, p0f)
 Post-build container tests; they require the image to already exist locally and never build.
 - All: `./docker/_tests/run.sh`; list: `./docker/_tests/run.sh --list`
 - One: `./docker/_tests/run.sh cowrie` or directly `./docker/_tests/tests/cowrie.sh [--image ...] [--<proto>-port ...]`
-- Options: `--timeout SEC`, `--bind-ip IP`, `--keep-artifacts`
+- Options: `--timeout SEC`, `--bind-ip IP`, `--keep-artifacts`, `--quick` (skips the long cases: fluentbit 13, `TPOT_SMOKE_QUICK=1`; `--cases 13` still runs it)
 - Log pipeline (details in `docker/_tests/README.md`): `logstash_fixtures` (the fixtures through `files` + `process`, compared with `golden/logstash_fixtures.jsonl`; after a change on purpose `./docker/_tests/tests/logstash_fixtures.sh --golden write`), `logstash_es` (tpotinit's templates, Logstash's wait, the failure index), `fluentbit` (the SENSOR image against a stub HIVE, about 6 min); the builder's `-T` runs these. `sensor_heartbeat`, `sensor_dashboard` and `sensor_parity` (SENSOR → HIVE equals the HIVE's own, about 6 min) are source integration tests with local upstream images, not part of `-T`.
 - Cowrie personas (no Docker): `python3 -m unittest discover -s docker/cowrie/tests -t docker/cowrie`
 - `run.sh`, `lib/common.sh` and every `tests/*.sh` clear CDPATH before their first `cd` (`tpotctl/tests/test_smoke_harness.py`, which also checks every `*.sh` of the checkout that captures `$(cd …)`); a new test starts with `unset CDPATH` before its `SCRIPT_DIR` line.

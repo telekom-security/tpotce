@@ -54,7 +54,10 @@ Common options:
 ```bash
 ./docker/_tests/run.sh --timeout 45 --bind-ip 127.0.0.1
 ./docker/_tests/run.sh --keep-artifacts adbhoney
+./docker/_tests/run.sh --quick fluentbit
 ```
+
+`--quick` skips the long cases of a test (fluentbit case 13, about 10 minutes); a case named with `--cases` still runs.
 
 The runner checks common and test-specific dependencies before starting
 containers, and fails early with a list of missing tools.

@@ -18,6 +18,7 @@ INIT_IMAGE=""
 # the limit after about 240 s, so 360 s
 OUTAGE_SECONDS=360
 CASES="1,2,3,4,5,6,7,8,9,10,11,12,13"
+CASES_GIVEN=no
 # what tpotinit writes into elk_environment of a SENSOR, and the access of the sensor at the HIVE
 SMOKE_HOSTNAME="sensor-smoke"
 SMOKE_EXTIP="198.51.100.7"
@@ -104,8 +105,8 @@ parse_args() {
       --image=*) IMAGE="${1#*=}"; shift ;;
       --init-image) [[ $# -ge 2 ]] || test_die "--init-image requires an argument"; INIT_IMAGE="$2"; shift 2 ;;
       --init-image=*) INIT_IMAGE="${1#*=}"; shift ;;
-      --cases) [[ $# -ge 2 ]] || test_die "--cases requires an argument"; CASES="$2"; shift 2 ;;
-      --cases=*) CASES="${1#*=}"; shift ;;
+      --cases) [[ $# -ge 2 ]] || test_die "--cases requires an argument"; CASES="$2"; CASES_GIVEN=yes; shift 2 ;;
+      --cases=*) CASES="${1#*=}"; CASES_GIVEN=yes; shift ;;
       --timeout) [[ $# -ge 2 ]] || test_die "--timeout requires an argument"; TEST_TIMEOUT="$2"; shift 2 ;;
       --timeout=*) TEST_TIMEOUT="${1#*=}"; shift ;;
       --bind-ip) [[ $# -ge 2 ]] || test_die "--bind-ip requires an argument"; TEST_BIND_IP="$2"; shift 2 ;;
@@ -945,6 +946,7 @@ make_certs() {
 
 main() {
   parse_args "$@"
+  CASES="$(test_quick_cases "${CASES}" "${CASES_GIVEN}" 13)"
   test_validate_timeout
   test_check_dependencies
   IMAGE="${IMAGE:-$(test_read_compose_image fluentbit "${DEFAULT_IMAGE}")}"
