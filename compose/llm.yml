@@ -22,6 +22,11 @@ services:
     env_file:
       - .env
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     stop_grace_period: 60s
     tmpfs:
       - /tmp/etc:uid=2000,gid=2000
@@ -46,6 +51,11 @@ services:
   beelzebub:
     container_name: beelzebub
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -85,6 +95,11 @@ services:
   galah:
     container_name: galah
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -120,6 +135,11 @@ services:
   p0f:
     container_name: p0f
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -136,6 +156,11 @@ services:
   suricata:
     container_name: suricata
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -166,6 +191,11 @@ services:
   elasticsearch:
     container_name: elasticsearch
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -196,6 +226,11 @@ services:
   kibana:
     container_name: kibana
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -211,6 +246,11 @@ services:
   logstash:
     container_name: logstash
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -231,6 +271,11 @@ services:
   map_redis:
     container_name: map_redis
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -246,6 +291,11 @@ services:
   map_web:
     container_name: map_web
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -264,6 +314,11 @@ services:
   map_data:
     container_name: map_data
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -283,6 +338,11 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -307,6 +367,11 @@ services:
   nginx:
     container_name: nginx
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy

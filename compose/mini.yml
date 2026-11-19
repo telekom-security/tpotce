@@ -22,6 +22,11 @@ services:
     env_file:
       - .env
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     stop_grace_period: 60s
     tmpfs:
       - /tmp/etc:uid=2000,gid=2000
@@ -46,6 +51,11 @@ services:
   adbhoney:
     container_name: adbhoney
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -64,6 +74,11 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -85,6 +100,11 @@ services:
   conpot_IEC104:
     container_name: conpot_iec104
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -113,6 +133,11 @@ services:
   conpot_guardian_ast:
     container_name: conpot_guardian_ast
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -139,6 +164,11 @@ services:
   conpot_ipmi:
     container_name: conpot_ipmi
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -165,6 +195,11 @@ services:
   conpot_kamstrup_382:
     container_name: conpot_kamstrup_382
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -192,6 +227,11 @@ services:
   conpot_beckhoff_cx:
     container_name: conpot_beckhoff_cx
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -220,6 +260,11 @@ services:
   conpot_building_automation:
     container_name: conpot_building_automation
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -247,6 +292,11 @@ services:
   conpot_hart_gateway:
     container_name: conpot_hart_gateway
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -273,6 +323,11 @@ services:
   conpot_iccp:
     container_name: conpot_iccp
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -299,6 +354,11 @@ services:
   conpot_plc_modbus:
     container_name: conpot_plc_modbus
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -328,6 +388,11 @@ services:
   dicompot:
     container_name: dicompot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -349,6 +414,11 @@ services:
     stdin_open: true
     tty: true
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -397,6 +467,11 @@ services:
   honeytrap:
     container_name: honeytrap
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -417,6 +492,11 @@ services:
   medpot:
     container_name: medpot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -439,6 +519,11 @@ services:
   p0f:
     container_name: p0f
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -455,6 +540,11 @@ services:
   suricata:
     container_name: suricata
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -485,6 +575,11 @@ services:
   elasticsearch:
     container_name: elasticsearch
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -515,6 +610,11 @@ services:
   kibana:
     container_name: kibana
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -530,6 +630,11 @@ services:
   logstash:
     container_name: logstash
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -550,6 +655,11 @@ services:
   map_redis:
     container_name: map_redis
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -565,6 +675,11 @@ services:
   map_web:
     container_name: map_web
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -583,6 +698,11 @@ services:
   map_data:
     container_name: map_data
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -602,6 +722,11 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -626,6 +751,11 @@ services:
   nginx:
     container_name: nginx
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy

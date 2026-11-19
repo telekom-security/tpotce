@@ -271,6 +271,20 @@ class CoreTest(unittest.TestCase):
                     self.assertEqual(service.get(key), value, key)
                 self.assertIn("/tmp:uid=2000,gid=2000,size=16m", service.get("tmpfs") or [])
 
+    def test_customizer_output_limits_every_log(self):
+        expected = {"driver": "json-file", "options": {"max-size": "10m", "max-file": "3"}}
+        for base, add, remove in (("SENSOR", [], ["ewsposter"]), ("STANDARD", ["ddospot"], [])):
+            with self.subTest(base=base, add=add, remove=remove):
+                result = self.resolve(base, add=add, remove=remove)
+                self.assertEqual(errors(result), [])
+                services = yaml.safe_load(core.render(self.catalog, result))["services"]
+                for name in add:
+                    self.assertIn(name, services)
+                for name in remove:
+                    self.assertNotIn(name, services)
+                for name, service in services.items():
+                    self.assertEqual(service.get("logging"), expected, name)
+
     def test_split_entries(self):
         lines = ["#### Banner", "# Alpha", "  alpha:", "    image: a", "#    x: 1", "    y: 2", "", "# trailing",
                  "", "## Beta", "  beta:", "    image: b", "#### /End", ""]

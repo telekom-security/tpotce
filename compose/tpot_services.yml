@@ -39,6 +39,11 @@ services:
     env_file:
       - .env
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     stop_grace_period: 60s
     tmpfs:
       - /tmp/etc:uid=2000,gid=2000
@@ -63,6 +68,11 @@ services:
     x-tpot: {group: honeypots, description: "Android Debug Bridge"}
     container_name: adbhoney
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -82,6 +92,11 @@ services:
     x-tpot: {group: honeypots, description: "Cisco ASA/FTD WebVPN, AnyConnect, ASDM, IKE"}
     container_name: ciscoasa
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -104,6 +119,11 @@ services:
     x-tpot: {group: honeypots, description: "Citrix ADC (CVE-2019-19781)"}
     container_name: citrixhoneypot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -122,6 +142,11 @@ services:
     x-tpot: {group: conpot, description: "Siemens S7-300 RTU: IEC 104, DNP3, SNMP"}
     container_name: conpot_iec104
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -151,6 +176,11 @@ services:
     x-tpot: {group: conpot, description: "Guardian AST tank gauge"}
     container_name: conpot_guardian_ast
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -178,6 +208,11 @@ services:
     x-tpot: {group: conpot, description: "Supermicro BMC: IPMI"}
     container_name: conpot_ipmi
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -205,6 +240,11 @@ services:
     x-tpot: {group: conpot, description: "Kamstrup 382 smart meter"}
     container_name: conpot_kamstrup_382
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -233,6 +273,11 @@ services:
     x-tpot: {group: conpot, description: "Beckhoff CX PLC: ADS, OPC UA"}
     container_name: conpot_beckhoff_cx
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -262,6 +307,11 @@ services:
     x-tpot: {group: conpot, description: "LOYTEC building automation: KNXnet/IP, BACnet/IP"}
     container_name: conpot_building_automation
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -290,6 +340,11 @@ services:
     x-tpot: {group: conpot, description: "WirelessHART gateway: HART-IP"}
     container_name: conpot_hart_gateway
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -317,6 +372,11 @@ services:
     x-tpot: {group: conpot, description: "Control center: ICCP / TASE.2"}
     container_name: conpot_iccp
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -344,6 +404,11 @@ services:
     x-tpot: {group: conpot, description: "Schneider M340 PLC: Modbus, UMAS"}
     container_name: conpot_plc_modbus
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -371,6 +436,11 @@ services:
     x-tpot: {group: honeypots, description: "SSH and Telnet"}
     container_name: cowrie
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -399,6 +469,11 @@ services:
     x-tpot: {group: honeypots, description: "DDoS reflection services: CHARGEN, DNS, NTP, SSDP"}
     container_name: ddospot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -426,6 +501,11 @@ services:
     x-tpot: {group: honeypots, description: "DICOM medical imaging"}
     container_name: dicompot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -446,6 +526,11 @@ services:
     x-tpot: {group: honeypots, description: "Malware capture: SMB, FTP, MSSQL, MySQL, MQTT and more"}
     container_name: dionaea
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -492,6 +577,11 @@ services:
     x-tpot: {group: honeypots, description: "Elasticsearch"}
     container_name: elasticpot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -510,6 +600,11 @@ services:
     x-tpot: {group: honeypots, description: "SSH tarpit"}
     container_name: endlessh
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -533,6 +628,11 @@ services:
     x-tpot: {group: honeypots, description: "TCP/UDP catch-all for unused ports (native nftables TPROXY)", conflicts: [honeytrap]}
     container_name: glutton
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     stop_grace_period: 30s
     depends_on:
       tpotinit:
@@ -558,6 +658,11 @@ services:
     x-tpot: {group: honeypots, description: "HTTP tarpit"}
     container_name: go-pot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -576,6 +681,11 @@ services:
     x-tpot: {group: honeypots, description: "HTTP and HTTPS with trap definitions"}
     container_name: h0neytr4p
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -597,6 +707,11 @@ services:
     x-tpot: {group: honeypots, description: "HTTP tarpit"}
     container_name: hellpot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -615,6 +730,11 @@ services:
     x-tpot: {group: honeypots, description: "Credential catcher for many protocols"}
     container_name: heralding
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -653,6 +773,11 @@ services:
     x-tpot: {group: honeypots, description: "API honeypot from YAML definitions"}
     container_name: honeyaml
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -673,6 +798,11 @@ services:
     stdin_open: true
     tty: true
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -721,6 +851,11 @@ services:
     x-tpot: {group: honeypots, description: "Catch-all for every port without a honeypot (NFQ)", conflicts: [glutton]}
     container_name: honeytrap
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -742,6 +877,11 @@ services:
     x-tpot: {group: honeypots, description: "Internet Printing Protocol"}
     container_name: ipphoney
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -760,6 +900,11 @@ services:
     x-tpot: {group: honeypots, description: "Log4Shell (CVE-2021-44228)"}
     container_name: log4pot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -787,6 +932,11 @@ services:
     stdin_open: true
     tty: true
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -807,6 +957,11 @@ services:
     x-tpot: {group: honeypots, description: "HL7 / FHIR medical"}
     container_name: medpot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -825,6 +980,11 @@ services:
     x-tpot: {group: honeypots, description: "Network printer (PJL, web admin)"}
     container_name: miniprint
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -848,6 +1008,11 @@ services:
     x-tpot: {group: honeypots, description: "RDP"}
     container_name: rdphoneypot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -867,6 +1032,11 @@ services:
     x-tpot: {group: honeypots, description: "Redis"}
     container_name: redishoneypot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -888,6 +1058,11 @@ services:
     x-tpot: {group: honeypots, description: "SIP"}
     container_name: sentrypeer
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -908,6 +1083,11 @@ services:
     x-tpot: {group: honeypots, description: "WordPress"}
     container_name: wordpot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -933,6 +1113,11 @@ services:
     x-tpot: {group: llm, edition: LLM, description: "SSH, HTTP, TCP and more answered by an LLM"}
     container_name: beelzebub
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -976,6 +1161,11 @@ services:
     x-tpot: {group: llm, edition: LLM, description: "Web honeypot answered by an LLM"}
     container_name: galah
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -1013,6 +1203,11 @@ services:
     x-tpot: {group: nsm, description: "Passive OS fingerprinting"}
     container_name: p0f
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -1030,6 +1225,11 @@ services:
     x-tpot: {group: nsm, description: "Network IDS"}
     container_name: suricata
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -1061,6 +1261,11 @@ services:
     x-tpot: {group: elk, description: "Elasticsearch, stores all events", hive_only: true}
     container_name: elasticsearch
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -1092,6 +1297,11 @@ services:
     x-tpot: {group: elk, description: "Kibana dashboards", requires: [nginx], hive_only: true}
     container_name: kibana
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -1108,6 +1318,11 @@ services:
     x-tpot: {group: elk, description: "Logstash, collects the honeypot logs", required: true, hive_only: true}
     container_name: logstash
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -1129,6 +1344,11 @@ services:
     x-tpot: {group: elk, description: "Fluent Bit, sends the honeypot logs of a SENSOR to its HIVE", required: true, sensor_only: true}
     container_name: fluentbit
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -1155,6 +1375,11 @@ services:
     x-tpot: {group: elk, description: "Redis for the Attack Map", hidden: true, hive_only: true}
     container_name: map_redis
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -1171,6 +1396,11 @@ services:
     x-tpot: {group: elk, description: "Attack Map", requires: [map_data, map_redis, nginx], hive_only: true}
     container_name: map_web
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -1190,6 +1420,11 @@ services:
     x-tpot: {group: elk, description: "Attack Map data feed", hidden: true, hive_only: true}
     container_name: map_data
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -1210,6 +1445,11 @@ services:
     x-tpot: {group: tools, description: "Sends events to the T-Pot community backend"}
     container_name: ewsposter
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -1235,6 +1475,11 @@ services:
     x-tpot: {group: tools, description: "Web UI and sensor ingest on 64297 / 64294", hive_only: true}
     container_name: nginx
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy

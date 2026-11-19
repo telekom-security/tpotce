@@ -211,5 +211,14 @@ class CatalogTest(unittest.TestCase):
                 self.assertEqual(service.get("ulimits"), {"nofile": {"soft": 65536, "hard": 65536}})
 
 
+    def test_every_service_limits_its_docker_log(self):
+        """json-file without options grows without end: every service keeps at most 3 files of 10 MB."""
+        expected = {"driver": "json-file", "options": {"max-size": "10m", "max-file": "3"}}
+        for compose in [self.catalog.catalog, *self.catalog.editions.values()]:
+            for name, service in compose.services.items():
+                with self.subTest(compose=os.path.basename(compose.path), service=name):
+                    self.assertEqual(service.get("logging"), expected)
+
+
 if __name__ == "__main__":
     unittest.main()

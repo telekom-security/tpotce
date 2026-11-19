@@ -25,6 +25,11 @@ services:
     env_file:
       - .env
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     stop_grace_period: 60s
     tmpfs:
       - /tmp/etc:uid=2000,gid=2000
@@ -48,6 +53,11 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -69,6 +79,11 @@ services:
   conpot_IEC104:
     container_name: conpot_iec104
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -97,6 +112,11 @@ services:
   conpot_ipmi:
     container_name: conpot_ipmi
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -123,6 +143,11 @@ services:
   conpot_kamstrup_382:
     container_name: conpot_kamstrup_382
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -150,6 +175,11 @@ services:
   conpot_beckhoff_cx:
     container_name: conpot_beckhoff_cx
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -178,6 +208,11 @@ services:
   conpot_building_automation:
     container_name: conpot_building_automation
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -205,6 +240,11 @@ services:
   conpot_hart_gateway:
     container_name: conpot_hart_gateway
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -231,6 +271,11 @@ services:
   conpot_iccp:
     container_name: conpot_iccp
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -257,6 +302,11 @@ services:
   conpot_plc_modbus:
     container_name: conpot_plc_modbus
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -283,6 +333,11 @@ services:
   cowrie:
     container_name: cowrie
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -313,6 +368,11 @@ services:
   dicompot:
     container_name: dicompot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -332,6 +392,11 @@ services:
   dionaea:
     container_name: dionaea
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -380,6 +445,11 @@ services:
   elasticpot:
     container_name: elasticpot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -397,6 +467,11 @@ services:
   h0neytr4p:
     container_name: h0neytr4p
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -417,6 +492,11 @@ services:
   heralding:
     container_name: heralding
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -455,6 +535,11 @@ services:
   honeyaml:
     container_name: honeyaml
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -472,6 +557,11 @@ services:
   honeytrap:
     container_name: honeytrap
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -492,6 +582,11 @@ services:
   ipphoney:
     container_name: ipphoney
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -509,6 +604,11 @@ services:
   log4pot:
     container_name: log4pot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -535,6 +635,11 @@ services:
     stdin_open: true
     tty: true
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -554,6 +659,11 @@ services:
   medpot:
     container_name: medpot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -571,6 +681,11 @@ services:
   miniprint:
     container_name: miniprint
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -593,6 +708,11 @@ services:
   rdphoneypot:
     container_name: rdphoneypot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -611,6 +731,11 @@ services:
   redishoneypot:
     container_name: redishoneypot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -631,6 +756,11 @@ services:
   sentrypeer:
     container_name: sentrypeer
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -650,6 +780,11 @@ services:
   wordpot:
     container_name: wordpot
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
@@ -675,6 +810,11 @@ services:
   elasticsearch:
     container_name: elasticsearch
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       tpotinit:
         condition: service_healthy
@@ -703,6 +843,11 @@ services:
   logstash:
     container_name: logstash
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -722,6 +867,11 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       logstash:
         condition: service_healthy
