@@ -758,7 +758,7 @@ function fuSENSOR_SHIPPER () {
 }
 
 function fuDO_CONFIG () {
-	local myFILE="" myOLD="" myNEW="" myWAS=""
+	local myFILE="" myOLD="" myNEW="" myWAS="" myENV_OK="" myCOMPOSE_OK=1
 	[ -z "${myDO_CONFIG}" ] && return
 	fuMARK phase config Restoring the configuration
 	echo
@@ -769,6 +769,7 @@ function fuDO_CONFIG () {
 	if tar xf "${myARCHIVE}" -C "${myTMPDIR}" env 2>/dev/null && cp "${myTMPDIR}/env" "${myTPOTDIR}/.env";
 	  then
 	    fuUI_OK "Wrote ${myTPOTDIR}/.env."
+	    myENV_OK=1
 	    # T-Pot never shortens the ILM policy on its own: a shorter value of the backup waits
 	    myNEW=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_ES_RETENTION)
 	    if fuRETENTION_SHORTER "${myOLD}" "${myNEW}";
@@ -787,12 +788,15 @@ function fuDO_CONFIG () {
 	       && cp "${myTMPDIR}/docker-compose.yml" "${myTPOTDIR}/docker-compose.yml";
 	      then
 	        fuUI_OK "Wrote ${myTPOTDIR}/docker-compose.yml ($(head -1 "${myTPOTDIR}/docker-compose.yml"))."
-	        fuSENSOR_SHIPPER
 	      else
 	        fuUI_ERROR "Could not restore docker-compose.yml."
 	        fuFAILED config
+	        myCOMPOSE_OK=""
 	    fi
 	fi
+	# also for an archive without docker-compose.yml: the .env may name a compose file that runs Logstash
+	[ -n "${myENV_OK}" ] && [ -n "${myCOMPOSE_OK}" ] && fuSENSOR_SHIPPER
+	return 0
 }
 
 # tracked.patch covers changes to tracked files (including .env while it is tracked).

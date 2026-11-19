@@ -1056,7 +1056,10 @@ class RestoreSensorShipperTest(RestoreScriptHarness):
 
     def restore(self, env="TPOT_TYPE=SENSOR\n", compose=LOGSTASH, terminal=False):
         manifest = MANIFEST.replace("24.04.2", "24.04.1")
-        archive = make_backup(self.home, {"MANIFEST": manifest, "env": env, "docker-compose.yml": compose})
+        members = {"MANIFEST": manifest, "env": env}
+        if compose is not None:
+            members["docker-compose.yml"] = compose
+        archive = make_backup(self.home, members)
         result = self.bash(f"export XDG_DATA_HOME=\"$HOME/data\"\nmyARCHIVE='{archive}' myDO_CONFIG=1\n"
                            "fuTMPDIR; fuTOC\nfuDO_CONFIG\nfuEND\n", terminal=terminal)
         return result.stdout + result.stderr
@@ -1090,7 +1093,8 @@ class RestoreSensorShipperTest(RestoreScriptHarness):
                 out = self.restore(terminal=terminal)
                 self.assertEqual(self.compose(), self.LOGSTASH)
                 self.assertEqual("ASKED: --default no" in out, terminal, out)
-                self.assertIn(f"### [WARNING] - The configuration (.env and docker-compose.yml): {self.E9}", out)
+                self.assertEqual(out.count(f"### [WARNING] - The configuration (.env and docker-compose.yml): "
+                                           f"{self.E9}"), 1, out)
         # the customizer fails: the same warning
         with open(os.path.join(self.home, "adopt_rc"), "w", encoding="utf-8") as out:
             out.write("3")
@@ -1098,7 +1102,8 @@ class RestoreSensorShipperTest(RestoreScriptHarness):
         out = self.restore(terminal=True)
         self.assertEqual(self.compose(), self.LOGSTASH)
         self.assertNotIn("ASKED:", out)
-        self.assertIn(f"### [WARNING] - The configuration (.env and docker-compose.yml): {self.E9}", out)
+        self.assertEqual(out.count(f"### [WARNING] - The configuration (.env and docker-compose.yml): {self.E9}"),
+                         1, out)
 
     def test_another_compose_file_with_logstash_only_warns(self):
         """The restored .env names another compose file (never written by restore.sh): one that still runs
@@ -1116,7 +1121,8 @@ class RestoreSensorShipperTest(RestoreScriptHarness):
         for compose in (self.LOGSTASH, "# T-Pot: SENSOR\nservices:\n  fluentbit:\n    image: x\n"):
             with self.subTest(compose=compose):
                 out = self.restore(env=env, compose=compose, terminal=True)
-                self.assertIn(f"### [WARNING] - The configuration (.env and docker-compose.yml): {text}", out)
+                self.assertEqual(out.count(f"### [WARNING] - The configuration (.env and docker-compose.yml): {text}"),
+                                 1, out)
                 self.assertNotIn("ASKED:", out)
                 self.assertEqual(self.calls(), "")
                 with open(path, encoding="utf-8") as handle:
@@ -1124,6 +1130,19 @@ class RestoreSensorShipperTest(RestoreScriptHarness):
         with open(path, "w", encoding="utf-8") as out:
             out.write("services:\n  fluentbit:\n    image: x\n")
         self.assertNotIn("Logstash", self.restore(env=env, terminal=True))
+
+    def test_env_only_archive_warns(self):
+        """An archive with .env but no docker-compose.yml: the .env naming a compose file that runs Logstash
+        still gets the summary warning, once."""
+        with open(os.path.join(self.tpotce, "other.yml"), "w", encoding="utf-8") as out:
+            out.write("services:\n  logstash:\n    image: mine\n")
+        python = os.path.join(self.home, "data", "tpotce", "venv", "bin", "python3")
+        text = ("This SENSOR still runs Logstash: the HIVE refuses its events until ./other.yml uses fluentbit "
+                f"(cd ~/tpotce && '{python}' compose/customizer.py --adopt './other.yml' --tpot-type SENSOR "
+                "-o './other.yml.fluentbit' writes the adapted file next to it; check it, then put it in place "
+                "of ./other.yml).")
+        out = self.restore(env="TPOT_TYPE=SENSOR\nTPOT_DOCKER_COMPOSE=./other.yml\n", compose=None)
+        self.assertEqual(out.count(f"### [WARNING] - The configuration (.env and docker-compose.yml): {text}"), 1, out)
 
     def test_nothing_to_do(self):
         """A HIVE with logstash, a SENSOR with fluentbit, a checkout without fluentbit: no question, no warning."""
