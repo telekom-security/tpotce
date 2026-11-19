@@ -171,6 +171,13 @@ create_web_users() {
     local myDATA="${1:-/data}" myKEEP="yes"
     echo
     echo "# Creating passwd files based on T-Pot .env config ..."
+    # A HIVE without nginx (a custom selection) has nothing that reads them; a compose file that
+    # cannot be read writes them as before
+    if [ "${TPOT_TYPE}" != "SENSOR" ] && [ -r "${COMPOSE}" ] && ! fuCOMPOSE_HAS nginx;
+      then
+        echo "# No nginx in docker-compose.yml, the web users are left as they are."
+        return 0
+    fi
     # A SENSOR has no nginx (WEB_USER is emptied for it above, LS_WEB_USER is a key of the HIVE): its
     # files are written as before, nothing is kept and nothing is said
     if [ "${TPOT_TYPE}" == "SENSOR" ];

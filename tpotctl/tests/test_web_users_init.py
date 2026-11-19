@@ -30,7 +30,9 @@ def entry(line):
 def functions():
     text = ENTRYPOINT.read_text()
     # the hash formats T-Pot takes, as the entrypoint has them from env_validate.sh
-    found = [re.search(r"^myENV_HTPASSWD=.*$", ENV_VALIDATE.read_text(), re.M).group()]
+    validate = ENV_VALIDATE.read_text()
+    found = [re.search(r"^myENV_HTPASSWD=.*$", validate, re.M).group(),
+             re.search(r"^fuCOMPOSE_HAS\(\) \{.*?^\}", validate, re.M | re.S).group()]
     for name in FUNCTIONS:
         match = re.search(rf"^{name}\(\) \{{.*?^\}}", text, re.M | re.S)
         assert match, name
@@ -55,11 +57,13 @@ class WebUsersInitTest(unittest.TestCase):
         stub.write_text(f"#!/bin/sh\nexec {sys.executable} -c 'import base64,sys; "
                         f"sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))'\n")
         stub.chmod(0o755)
+        self.compose = Path(folder.name) / "docker-compose.yml"
+        self.compose.write_text("services:\n  nginx:\n    image: x\n")
 
-    def run_init(self, web="", lsweb="", kind="HIVE", command=None, code=0):
+    def run_init(self, web="", lsweb="", kind="HIVE", command=None, code=0, compose=None):
         script = functions() + "\n" + (command or f'create_web_users "{self.data}"') + "\n"
         environ = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", WEB_USER=web, LS_WEB_USER=lsweb,
-                       TPOT_TYPE=kind)
+                       TPOT_TYPE=kind, COMPOSE=str(compose or self.compose))
         done = subprocess.run(["bash", "-c", script], env=environ, capture_output=True, text=True)
         self.assertEqual(done.returncode, code, done.stdout + done.stderr)
         return done.stdout
@@ -164,7 +168,25 @@ class WebUsersInitTest(unittest.TestCase):
         self.assertEqual(self.lost(self.nginx), f"{BOB}\n")
         self.assertIn("nginxpasswd.lost holds 1 web user(s)", out)
 
+    def test_a_hive_without_nginx_leaves_the_files(self):
+        self.compose.write_text("services:\n  cowrie:\n    image: x\n")
+        self.nginx.write_text(f"{BOB}\n")
+        self.lsweb.write_text(f"{LYNX}\n")
+        out = self.run_init(web=entry(ALICE))
+        self.assertEqual((self.nginx.read_text(), self.lsweb.read_text()), (f"{BOB}\n", f"{LYNX}\n"))
+        self.assertIsNone(self.lost(self.nginx))
+        self.assertIsNone(self.lost(self.lsweb))
+        self.assertIn("No nginx in docker-compose.yml, the web users are left as they are.", out)
+
+    def test_an_unreadable_compose_writes_as_before(self):
+        out = self.run_init(web=f"{entry(ALICE)} {entry(BOB)}", lsweb=entry(OTTER),
+                            compose=self.compose.parent / "missing.yml")
+        self.assertEqual(self.nginx.read_text(), f"{ALICE}\n{BOB}\n")
+        self.assertEqual(self.lsweb.read_text(), f"{OTTER}\n")
+        self.assertNotIn("No nginx", out)
+
     def test_a_sensor_keeps_nothing_and_says_nothing(self):
+        self.compose.write_text("services:\n  fluentbit:\n    image: x\n")
         self.nginx.write_text(f"{ALICE}\n")
         self.lsweb.write_text(f"{OTTER}\n")
         out = self.run_init(kind="SENSOR")
@@ -172,6 +194,7 @@ class WebUsersInitTest(unittest.TestCase):
         self.assertIsNone(self.lost(self.nginx))
         self.assertIsNone(self.lost(self.lsweb))
         self.assertNotIn("Warning", out)
+        self.assertNotIn("No nginx", out)
 
     def test_a_link_in_place_of_the_lost_file_stops_the_start(self):
         target = self.data / "target"

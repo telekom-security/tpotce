@@ -19,7 +19,8 @@ Usage: $0 [options]
 Check the passwd files tpotinit writes from WEB_USER / LS_WEB_USER: a line whose user the
 .env no longer names is kept in <file>.lost (never twice) and the file is written in place;
 a SENSOR keeps nothing; a .lost that cannot take the lines stops the start with the file as it
-was; a HIVE without WEB_USER is told what nginxpasswd still holds. The
+was; a HIVE without WEB_USER is told what nginxpasswd still holds; a HIVE whose compose file
+has no nginx leaves both files as they are. The
 .lost files get the modes of nginx conf (664) and stay with TPOT_PERSISTENCE=off.
 
 The image only provides the tools (busybox base64, grep, chmod): create_web_users and the
@@ -75,6 +76,11 @@ content() { tr '\n' '|' < "$1"; }
 # the hash formats T-Pot takes, as tpotinit has them from env_validate.sh
 eval "$(grep '^myENV_HTPASSWD=' /opt/tpot/bin/env_validate.sh)"
 check "env_validate: the hash formats are there" "yes" "$([ -n "${myENV_HTPASSWD:-}" ] && echo yes || echo no)"
+eval "$(sed -n '/^fuCOMPOSE_HAS() {$/,/^}$/p' /opt/tpot/bin/env_validate.sh)"
+check "env_validate: fuCOMPOSE_HAS is there" "function" "$(type -t fuCOMPOSE_HAS)"
+# the compose file of the start, with nginx unless a case says otherwise
+COMPOSE=/tmp/compose.yml
+printf 'services:\n  nginx:\n    image: x\n' > "${COMPOSE}"
 eval "$(sed -n '/^write_passwd_file() {$/,/^}$/p; /^create_web_users() {$/,/^}$/p; /^web_users_hint() {$/,/^}$/p; /^\. \/opt\/tpot\/bin\/data_modes.sh$/p; /^update_permissions() {$/,/^}$/p' /work/entrypoint.sh)"
 check "entrypoint: the functions are there" "function function function function" \
       "$(type -t write_passwd_file) $(type -t create_web_users) $(type -t web_users_hint) $(type -t update_permissions)"
@@ -183,6 +189,17 @@ check "modes: after update_permissions as the passwd files" "664 664 664 664" \
 check "modes: owner tpot" "tpot:tpot tpot:tpot" "$(stat -c %U:%G "${CONF}/nginxpasswd.lost") $(stat -c %U:%G "${CONF}/lswebpasswd.lost")"
 bash /opt/tpot/bin/clean.sh off 30 > /tmp/clean-off.log 2>&1 || { echo "FAIL clean.sh off"; sed 's/^/     /' /tmp/clean-off.log; failed=1; }
 check "persistence off: the .lost files stay" "${BOB}| ${OTTER}|" "$(content "${CONF}/nginxpasswd.lost") $(content "${CONF}/lswebpasswd.lost")"
+
+# 9. a HIVE without nginx in its compose file: both files stay as they are, nothing kept
+fresh
+printf 'services:\n  cowrie:\n    image: x\n' > "${COMPOSE}"
+printf '%s\n' "${BOB}" > "${CONF}/nginxpasswd"
+printf '%s\n' "${LYNX}" > "${CONF}/lswebpasswd"
+TPOT_TYPE=HIVE WEB_USER="$(b64 "${ALICE}")" LS_WEB_USER=""
+out="$(create_web_users /data)"
+check "no nginx: the files stay" "${BOB}| ${LYNX}|" "$(content "${CONF}/nginxpasswd") $(content "${CONF}/lswebpasswd")"
+check "no nginx: nothing kept" "no no" "$( [ -e "${CONF}/nginxpasswd.lost" ] && echo yes || echo no) $( [ -e "${CONF}/lswebpasswd.lost" ] && echo yes || echo no)"
+check "no nginx: said" "1" "$(grep -cx '# No nginx in docker-compose.yml, the web users are left as they are\.' <<<"${out}")"
 exit "${failed}"
 EOF
   chmod 0755 "${TEST_TMP_ROOT}/run.sh"
