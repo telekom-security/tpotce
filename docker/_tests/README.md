@@ -111,7 +111,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/miniprint.sh
 ./docker/_tests/tests/miniprint.sh --image dtagdevsec/miniprint:24.04.2 --raw-port 19100 --http-port 18000
 ./docker/_tests/tests/nginx.sh
-./docker/_tests/tests/nginx.sh --image dtagdevsec/nginx:24.04.2 --https-port 16429
+./docker/_tests/tests/nginx.sh --image dtagdevsec/nginx:24.04.2 --init-image dtagdevsec/tpotinit:24.04.2 --https-port 16429
 ./docker/_tests/tests/p0f.sh
 ./docker/_tests/tests/p0f.sh --image dtagdevsec/p0f:24.04.2
 ./docker/_tests/tests/p0f.sh --skip-scanners
@@ -226,10 +226,15 @@ takes the format). `--cases 3,7` runs only some. All cases take about six
 minutes.
 
 The image builder's `-T` runs `logstash_fixtures` and `logstash_es` against the
-Logstash image it just built and `fluentbit` against its Fluent Bit image.
-`glutton`, `fluentbit` and `logstash_es` also take the tpotinit image of the run
+Logstash image it just built, `fluentbit` against its Fluent Bit image, and
+`nginx` and `nginx-package` against its nginx image.
+`glutton`, `fluentbit`, `nginx` and `logstash_es` also take the tpotinit image of the run
 (`--init-image`, `--tpotinit-image`), which the builder then builds for them
-too.
+too, with the same repository and tag, even for `-i nginx -a host -T`.
+The nginx test uses Python in tpotinit as a Logstash stand-in for the sensor-ingest
+checks; it does not start tpotinit's normal entrypoint. When running it directly,
+both images must already exist locally; use `--init-image` if the tpotinit image
+has a different name from the standalone Compose default.
 
 `./docker/_tests/run.sh sensor_heartbeat` tests the HIVE's real HTTP input and
 Elasticsearch outputs with the local official images pinned by the Dockerfiles,

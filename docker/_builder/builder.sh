@@ -1185,10 +1185,10 @@ fuDOCKER_READY () {
 
 fuLOAD_BUILD () {
   # the smoke tests need a build for this host loaded into docker: the run builds more
-  # than this host's platform, pushes, or Glutton, Fluent Bit or Logstash (logstash_es)
+  # than this host's platform, pushes, or Glutton, Fluent Bit, nginx or Logstash (logstash_es)
   # also needs an unselected tpotinit
   ! fuHOST_ONLY || fuPUSHING || \
-    { [[ " ${myLIST[*]} " =~ " "(glutton|fluentbit|logstash)" " ]] && [[ " ${myLIST[*]} " != *" tpotinit "* ]]; }
+    { [[ " ${myLIST[*]} " =~ " "(glutton|fluentbit|nginx|logstash)" " ]] && [[ " ${myLIST[*]} " != *" tpotinit "* ]]; }
 }
 
 fuLOAD_NEEDED () {
@@ -1453,8 +1453,9 @@ fuSMOKE_PLAN () {
   # mySMOKE_NAMES / mySMOKE_ARGS (one string each), the images they need into
   # mySMOKE_IMAGES (once each) and what has none into mySMOKE_NOTES. A test has the name
   # of its image, tpotinit has tpotinit_env, tpotinit_ilm, tpotinit_kibana,
-  # tpotinit_modes and tpotinit_users, logstash has logstash_fixtures and logstash_es;
-  # Elasticsearch, Kibana and the Attack Map have none. glutton, fluentbit and
+  # tpotinit_modes and tpotinit_users, logstash has logstash_fixtures and logstash_es,
+  # nginx has nginx and nginx-package.
+  # Elasticsearch, Kibana and the Attack Map have none. glutton, fluentbit, nginx and
   # logstash_es also take the tpotinit of the run (--init-image, --tpotinit-image),
   # which is then built for them too
   local myI myT myHAS
@@ -1464,6 +1465,7 @@ fuSMOKE_PLAN () {
     case "${myI}" in
       elasticsearch|kibana|map) continue ;;
       logstash) myTESTS=(logstash_fixtures logstash_es) ;;
+      nginx) myTESTS=(nginx nginx-package) ;;
       tpotinit) myTESTS=(tpotinit_env tpotinit_ilm tpotinit_kibana tpotinit_modes tpotinit_users) ;;
       *) myTESTS=("${myI}") ;;
     esac
@@ -1474,7 +1476,7 @@ fuSMOKE_PLAN () {
           mySMOKE_NAMES+=("${myT}")
           mySMOKE_ARGS+=("--image $(fuIMAGE_REF "${myI}")")
           case "${myT}" in
-            glutton|fluentbit) mySMOKE_ARGS[$((${#mySMOKE_ARGS[@]} - 1))]+=" --init-image $(fuIMAGE_REF tpotinit)" ;;
+            glutton|fluentbit|nginx) mySMOKE_ARGS[$((${#mySMOKE_ARGS[@]} - 1))]+=" --init-image $(fuIMAGE_REF tpotinit)" ;;
             logstash_es) mySMOKE_ARGS[$((${#mySMOKE_ARGS[@]} - 1))]+=" --tpotinit-image $(fuIMAGE_REF tpotinit)" ;;
           esac
           myHAS="1"
@@ -1483,7 +1485,7 @@ fuSMOKE_PLAN () {
     done
     [ -z "${myHAS}" ] || mySMOKE_IMAGES+=("${myI}")
   done
-  if [[ " ${mySMOKE_NAMES[*]} " =~ " "(glutton|fluentbit|logstash_es)" " ]] && [[ " ${mySMOKE_IMAGES[*]} " != *" tpotinit "* ]]; then
+  if [[ " ${mySMOKE_NAMES[*]} " =~ " "(glutton|fluentbit|nginx|logstash_es)" " ]] && [[ " ${mySMOKE_IMAGES[*]} " != *" tpotinit "* ]]; then
     mySMOKE_IMAGES+=(tpotinit)
   fi
   return 0

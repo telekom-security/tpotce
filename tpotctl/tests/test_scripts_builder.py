@@ -1131,7 +1131,7 @@ class SmokeTest(BuilderHarness):
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
         for name in ("cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes", "tpotinit_users",
-                     "logstash_fixtures", "logstash_es", "nginx", "glutton", "fluentbit", "redis"):
+                     "logstash_fixtures", "logstash_es", "nginx", "nginx-package", "glutton", "fluentbit", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
 
@@ -1146,11 +1146,12 @@ class SmokeTest(BuilderHarness):
         self.assertEqual([line[2:] for line in lines if line.startswith("N ")],
                          ["cowrie", "tpotinit_env", "tpotinit_ilm", "tpotinit_kibana", "tpotinit_modes",
                           "tpotinit_users",
-                          "logstash_fixtures", "logstash_es", "nginx", "glutton", "redis"])
+                          "logstash_fixtures", "logstash_es", "nginx", "nginx-package", "glutton", "redis"])
         self.assertEqual([line[2:] for line in lines if line.startswith("A ")],
                          ["--image hub/cowrie:1.0"] + ["--image hub/tpotinit:1.0"] * 5
                          + ["--image hub/logstash:1.0"]
-                         + ["--image hub/logstash:1.0 --tpotinit-image hub/tpotinit:1.0", "--image hub/nginx:1.0",
+                         + ["--image hub/logstash:1.0 --tpotinit-image hub/tpotinit:1.0",
+                            "--image hub/nginx:1.0 --init-image hub/tpotinit:1.0", "--image hub/nginx:1.0",
                             "--image hub/glutton:1.0 --init-image hub/tpotinit:1.0",
                             "--image hub/redis:1.0"])
         self.assertEqual([line[2:] for line in lines if line.startswith("I ")],
@@ -1182,9 +1183,9 @@ class SmokeTest(BuilderHarness):
         self.assertEqual(result.stdout.splitlines(),
                          ["A --image hub/fluentbit:1.0 --init-image hub/tpotinit:1.0", "I fluentbit", "I tpotinit"])
 
-    def test_glutton_needs_tpotinit_once_even_when_selected_later(self):
-        for image in ("glutton", "logstash", "fluentbit"):
-            for selection in (image, f"{image} tpotinit", f"tpotinit {image}", "glutton logstash fluentbit tpotinit"):
+    def test_smoke_needs_tpotinit_once_even_when_selected_later(self):
+        for image in ("glutton", "logstash", "fluentbit", "nginx"):
+            for selection in (image, f"{image} tpotinit", f"tpotinit {image}", "glutton logstash fluentbit nginx tpotinit"):
                 result = self.bash(f"myHUB=hub myVER=1.0\nfuSMOKE_PLAN {selection}\n"
                                    'printf "%s\\n" "${mySMOKE_IMAGES[@]}"',
                                    TPOT_BUILDER_TESTS_DIR=self.tests)
@@ -1192,8 +1193,8 @@ class SmokeTest(BuilderHarness):
                 self.assertEqual(images.count(image), 1, images)
                 self.assertEqual(images.count("tpotinit"), 1, images)
 
-    def test_glutton_host_smoke_builds_its_tpotinit_dependency(self):
-        for image in ("glutton", "fluentbit"):
+    def test_host_smoke_builds_its_tpotinit_dependency(self):
+        for image in ("glutton", "fluentbit", "nginx"):
             with self.subTest(image=image):
                 self.calls_reset()
                 rc, out = self.builder("-i", image, "-a", "host", "-T",
@@ -1203,6 +1204,29 @@ class SmokeTest(BuilderHarness):
                                     for line in self.calls()), self.calls())
                 self.assertTrue(any(f"test {image} --image " in line and " --init-image " in line
                                     for line in self.calls()), self.calls())
+
+    def test_nginx_push_smoke_uses_the_run_registry_and_tag(self):
+        for push, repo in (("-p", "hub"), ("--push-ghcr", "ghcr.io/me")):
+            with self.subTest(push=push):
+                self.calls_reset()
+                rc, out = self.builder("-i", "nginx", push, "-l", "off", "-n", "-T", "-t", "nginx-test",
+                                       "--docker-repo", "hub", "--ghcr-repo", "ghcr.io/me",
+                                       TPOT_BUILDER_TESTS_DIR=self.tests, STUB_TEST_FAIL="nginx-package")
+                self.assertEqual(rc, 4, out)
+                calls = self.calls()
+                load = [i for i, line in enumerate(calls) if "override-load.yml" in line]
+                tests = [i for i, line in enumerate(calls) if line.startswith("test ")]
+                self.assertEqual(len(load), 1, calls)
+                self.assertIn("build nginx tpotinit --builder mybuilder", calls[load[0]])
+                self.assertNotIn("--push", calls[load[0]])
+                self.assertLess(load[0], tests[0], calls)
+                self.assertEqual([calls[i] for i in tests],
+                                 [f"test nginx --image {repo}/nginx:nginx-test"
+                                  f" --init-image {repo}/tpotinit:nginx-test",
+                                  f"test nginx-package --image {repo}/nginx:nginx-test"])
+                override = self.override("override-load.yml")
+                for image in ("nginx", "tpotinit"):
+                    self.assertIn(f"  {image}:\n    image: {repo}/{image}:nginx-test\n", override)
 
     def test_every_test_the_plan_names_is_in_the_repo(self):
         names = set()
