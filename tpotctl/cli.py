@@ -24,7 +24,7 @@ KIBANA_COMMANDS = ("export", "import", "restore")
 
 class HelpFormatter(argparse.HelpFormatter):
     def _format_usage(self, usage, actions, groups, prefix):
-        return super()._format_usage(usage, actions, groups, prefix or "Usage: ")
+        return super()._format_usage(usage, actions, groups, "Usage: " if prefix is None else prefix)
 
     def _format_action(self, action):
         if isinstance(action, argparse._SubParsersAction) and action.dest == "command":

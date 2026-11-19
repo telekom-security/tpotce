@@ -1,5 +1,6 @@
 """Command discovery follows the same task groups as the Manager pages."""
 
+import argparse
 import unittest
 
 from tpotctl import cli
@@ -29,6 +30,20 @@ class ManagerOrderTest(unittest.TestCase):
         self.assertIn("Usage:", text)
         self.assertIn("Options:", text)
         self.assertEqual(parser.parse_args(["env", "get", "EXAMPLE"]).key, "EXAMPLE")
+
+    def test_nested_help_has_one_usage(self):
+        for path in [("sensors", "add"), ("users", "add"), ("env", "set"),
+                     ("check", "honeypots")]:
+            with self.subTest(path=path):
+                parser = cli.build_parser()
+                for name in path:
+                    subparsers = next(action for action in parser._actions
+                                      if isinstance(action, argparse._SubParsersAction))
+                    parser = subparsers.choices[name]
+                text = parser.format_help()
+                self.assertEqual(text.count("Usage:"), 1, text)
+                self.assertTrue(text.startswith("T-Pot Manager: tpot " + " ".join(path) + "\n"),
+                                text)
 
     def test_page_order_matches_the_grouped_help(self):
         from tpotctl.app import PANES
