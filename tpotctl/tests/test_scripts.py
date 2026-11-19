@@ -1144,6 +1144,41 @@ class RestoreSensorShipperTest(RestoreScriptHarness):
         out = self.restore(env="TPOT_TYPE=SENSOR\nTPOT_DOCKER_COMPOSE=./other.yml\n", compose=None)
         self.assertEqual(out.count(f"### [WARNING] - The configuration (.env and docker-compose.yml): {text}"), 1, out)
 
+    def test_env_only_archive_does_not_adapt_the_present_compose_file(self):
+        """An archive without docker-compose.yml: the checkout's docker-compose.yml that runs Logstash is no file
+        this restore wrote and no archive holds, so it is not adapted (no --adopt, no question), even with a yes
+        at hand; the summary warns."""
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), "w", encoding="utf-8") as out:
+            out.write(self.LOGSTASH)
+        open(os.path.join(self.home, "yes"), "w").close()
+        out = self.restore(compose=None, terminal=True)
+        self.assertEqual(self.compose(), self.LOGSTASH)
+        self.assertNotIn("ASKED:", out)
+        self.assertEqual(self.calls(), "")
+        self.assertNotIn("archive keeps", out)
+        self.assertIn("WARN: This SENSOR runs Logstash: from this release on a SENSOR sends with Fluent Bit", out)
+        self.assertIn("HINT: This restore did not write docker-compose.yml, so it is not adapted here.", out)
+        self.assertEqual(out.count(f"### [WARNING] - The configuration (.env and docker-compose.yml): {self.E9}"),
+                         1, out)
+
+    def test_no_check_when_the_configuration_was_not_restored(self):
+        """docker-compose.yml of the archive or its .env could not be restored: no shipper check at all."""
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=SENSOR\n")
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), "w", encoding="utf-8") as out:
+            out.write(self.LOGSTASH)
+        open(os.path.join(self.home, "yes"), "w").close()
+        real = shutil.which("tar") or "/usr/bin/tar"
+        for name, member in (("compose not restored", "docker-compose.yml"), ("env not restored", "env")):
+            with self.subTest(name):
+                self.fake("tar", f'#!/bin/sh\nfor a; do l="$a"; done\n[ "$1" = xf ] && [ "$l" = {member} ] '
+                                 f'&& exit 2\nexec {real} "$@"\n')
+                out = self.restore(terminal=True)
+                self.assertIn(f"Could not restore {'.env' if member == 'env' else member}.", out)
+                self.assertEqual(self.compose(), self.LOGSTASH)
+                self.assertEqual(self.calls(), "")
+                self.assertNotIn("Logstash", out)
+
     def test_nothing_to_do(self):
         """A HIVE with logstash, a SENSOR with fluentbit, a checkout without fluentbit: no question, no warning."""
         fluent = "# T-Pot: SENSOR\nservices:\n  fluentbit:\n    image: x\n"
