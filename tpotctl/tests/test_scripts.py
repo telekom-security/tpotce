@@ -19,6 +19,11 @@ import textwrap
 import time
 import unittest
 
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
 from tpotctl.tests import isolate, ptyhelper
 
 isolate()
@@ -1075,6 +1080,7 @@ class RestoreSensorShipperTest(RestoreScriptHarness):
         with open(path, encoding="utf-8") as handle:
             return handle.read()
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed")
     def test_at_a_terminal_yes_adapts_to_fluentbit(self):
         open(os.path.join(self.home, "yes"), "w").close()
         out = self.restore(terminal=True)
@@ -1087,6 +1093,7 @@ class RestoreSensorShipperTest(RestoreScriptHarness):
         self.assertIn("docker-compose.yml now sends with Fluent Bit instead of Logstash", out)
         self.assertNotIn(f"[WARNING] - The configuration (.env and docker-compose.yml): {self.E9}", out)
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed")
     def test_no_at_a_terminal_or_no_terminal_keeps_the_file_and_warns(self):
         for terminal in (True, False):
             with self.subTest(terminal=terminal):
