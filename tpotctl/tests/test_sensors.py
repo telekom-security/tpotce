@@ -2352,8 +2352,11 @@ class DeployComposeTest(unittest.TestCase):
         self.bin = os.path.join(self.tmp, "bin")
         os.makedirs(self.bin)
         os.symlink(sys.executable, os.path.join(self.bin, "python3"))
-        self.env = dict(os.environ, XDG_DATA_HOME=os.path.join(self.tmp, "data"),
+        # HOME is the sensor's for ~/tpot_backups; DOCKER_CONFIG keeps the compose plugin of the real one
+        self.env = dict(os.environ, XDG_DATA_HOME=os.path.join(self.tmp, "data"), HOME=self.tmp,
+                        DOCKER_CONFIG=os.environ.get("DOCKER_CONFIG") or os.path.expanduser("~/.docker"),
                         PATH=self.bin + os.pathsep + os.environ.get("PATH", ""))
+        self.backups = os.path.join(self.tmp, "tpot_backups")
 
     def task(self, name):
         found = [task for task in self.tasks if task.get("name") == name]
@@ -2402,6 +2405,30 @@ class DeployComposeTest(unittest.TestCase):
         text = self.read(self.compose)
         self.assertNotIn("\n  ewsposter:\n", text)
         self.assertRegex(text, r"(?m)^# customizer: version=\S+ base=SENSOR$")
+        self.assertFalse(os.path.exists(self.backups))
+
+    def test_comment_lines_are_kept_in_a_backup(self):
+        text = "# my sensor\n\n" + self.customize("SENSOR", "--remove", "ewsposter")
+        with open(self.compose, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        out = self.run_task()
+        self.assertTrue(out.startswith("rebuilt-kept "), out)
+        path = out.split(" ", 1)[1]
+        self.assertEqual(os.path.dirname(path), self.backups)
+        self.assertRegex(os.path.basename(path), r"^docker-compose_sensor_\d{14}\.yml$")
+        self.assertEqual(self.read(path), text)
+        rebuilt = self.read(self.compose)
+        self.assertNotIn("# my sensor", rebuilt)
+        self.assertNotIn("\n  ewsposter:\n", rebuilt)
+
+    def test_comment_lines_without_a_backup_keep_the_file(self):
+        text = "# my sensor\n\n" + self.customize("SENSOR", "--remove", "ewsposter")
+        with open(self.compose, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        with open(self.backups, "w", encoding="utf-8") as handle:
+            handle.write("not a folder\n")
+        self.assertEqual(self.run_task(), "kept-failed")
+        self.assertEqual(self.read(self.compose), text)
 
     def test_edited_customizer_file_is_kept(self):
         text = self.customize("SENSOR", "--remove", "ewsposter").replace("restart: always", "restart: no", 1)
@@ -2427,20 +2454,31 @@ class DeployComposeTest(unittest.TestCase):
     def test_only_a_written_file_is_stamped_and_a_kept_one_warned_about(self):
         compose = self.task(self.NAME)
         register = compose["register"]
-        self.assertIn("rebuilt", str(compose["changed_when"]))
-        self.assertIn("copied", str(compose["changed_when"]))
+        first = register + ".stdout.split() | first"
+        written = "['rebuilt', 'rebuilt-kept', 'copied']"
+        self.assertIn(first, str(compose["changed_when"]))
+        self.assertIn(written, str(compose["changed_when"]))
         names = [task.get("name") for task in self.tasks]
         stamp = self.task("Stamp the generated compose file on the sensor")
         self.assertLess(names.index(self.NAME), names.index(stamp["name"]))
         when = " and ".join(stamp["when"]) if isinstance(stamp["when"], list) else stamp["when"]
         self.assertIn("my_sensor_generated.stat.isreg", when)
-        self.assertIn(register, when)
-        self.assertIn("['rebuilt', 'copied']", when)
+        self.assertIn(first, when)
+        self.assertIn(written, when)
         warn = [task for task in self.tasks if "ansible.builtin.debug" in task
                 and register in str(task.get("when", ""))]
-        self.assertEqual(len(warn), 1)
-        self.assertIn("kept-", str(warn[0]["when"]))
-        self.assertIn("T-Pot runs it as it is", str(warn[0]["ansible.builtin.debug"]))
+        self.assertEqual(len(warn), 2)
+        kept = [task for task in warn if "kept-edited" in str(task["when"])]
+        self.assertEqual(len(kept), 1)
+        self.assertIn(first, str(kept[0]["when"]))
+        self.assertIn("T-Pot runs it as it is", str(kept[0]["ansible.builtin.debug"]))
+        backup = [task for task in warn if "rebuilt-kept" in str(task["when"])]
+        self.assertEqual(len(backup), 1)
+        self.assertIn(first, str(backup[0]["when"]))
+        message = str(backup[0]["ansible.builtin.debug"])
+        self.assertIn("The lines above '# T-Pot: CUSTOM' in the docker-compose.yml of the sensor "
+                      "are not in the rebuilt one, they are kept in ", message)
+        self.assertIn(register + ".stdout.split()[1]", message)
 
 
 class SensorCertPlayTest(unittest.TestCase):
