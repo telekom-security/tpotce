@@ -862,7 +862,10 @@ Every event names its sensor in `t-pot_sensor` and the log file it came from in 
 
 Before it sends anything, Fluent Bit asks the **Hive** whether it takes this format. An older **Hive**, or one whose
 Logstash is not ready yet, gets nothing: Fluent Bit reads no logs meanwhile, asks again every 5 minutes and
-`docker logs fluentbit` says why it waits. Only the logs since the last T-Pot start wait on the **Sensor**: every
+`docker logs fluentbit` says why it waits. nginx of the **Hive** answers these questions at most once a second per
+address (burst 5) and 10 times a second for all sensors together (burst 20); beyond that it answers HTTP 429 and
+`docker logs fluentbit` says that the **Hive** is busy (`The HIVE is busy (HTTP 429), next probe in 300 s.`), as
+`update.sh` on the **Sensor** does. Only the logs since the last T-Pot start wait on the **Sensor**: every
 T-Pot start (also the daily reboot) rotates the logs, so a restart of the **Sensor** before the **Hive** answers
 leaves the earlier lines in the rotated log files on the **Sensor**, they are not sent.
 While the **Hive** cannot be reached once Fluent Bit sends, it keeps the lines on the disk of the **Sensor**
@@ -872,6 +875,14 @@ its newest lines, the log of Fluent Bit names it (`no available chunk`). When th
 the lines wait no longer than a few minutes; lines Fluent Bit already retried often during a long outage wait for
 their next retry and can arrive up to about 35 minutes later (each retry waits longer, at most 2000 s, which spares
 a **Hive** that comes back under load).
+`TPOT_SENSOR_BUFFER_MB` takes 64 to 1048576 (Fluent Bit counts 1 MB as 10^6 bytes, `tpot env set` or the
+*Settings* page); the buffer shares the disk with the logs of the honeypots. A `docker-compose.yml` of your own
+needs the line `FLB_STORAGE_LIMIT=${TPOT_SENSOR_BUFFER_MB:-512}M` in the `environment` of `fluentbit`, without it
+Fluent Bit keeps 512 MB.
+Next to the buffer, the read positions of the log files (`~/tpotce/data/fluentbit/offsets.db.*`) keep about 32
+SQLite `-wal` files of about 4 MB each, about 123 MB together. They stay on purpose: they take little space, and
+the write-ahead log writes every change once and syncs rarely, so it probably spares the SD card of a small
+**Sensor**. This is not measured.
 Lines longer than 1 MB are skipped, each with a warning in `docker logs fluentbit`; Logstash had no such limit.
 
 **Update the Hive first.** A **Sensor** of 24.04.1 still sends with Logstash in the old format. The **Hive** refuses
@@ -895,7 +906,9 @@ format of 24.04.1 (see [Sensor Logs](#sensor-logs)); it is shown while that refu
 heartbeat and less than 15 minutes old.
 
 Reachability uses the Hive's receive time, not the sensor's clock; a backlog can therefore appear online when
-delivery resumes. Table timestamps are UTC. *Last event* is independent, using the last seven days by default
+delivery resumes. The status follows the time a heartbeat was made on the sensor: an older heartbeat of the
+backlog does not replace a newer one, unless the stored one was received more than 90 seconds before (so a
+sensor whose clock went back heals itself). Table timestamps are UTC. *Last event* is independent, using the last seven days by default
 (`tpot sensors list --days N`). The Manager refreshes the data every 30 seconds and ages the display every two
 seconds without moving the selected row. The *Status* page summarizes online, offline and behind sensors, and
 also names any unknown ones or retrieval errors.
