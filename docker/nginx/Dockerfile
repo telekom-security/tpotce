@@ -1,4 +1,4 @@
-ARG ALPINE_VERSION=3.23
+ARG ALPINE_VERSION=3.24
 
 FROM alpine:${ALPINE_VERSION} AS assets
 #
@@ -28,7 +28,7 @@ FROM alpine:${ALPINE_VERSION}
 # Install packages
 RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add \
-      nginx \
+      'nginx>=1.30.7-r0' \
       nginx-mod-http-brotli \
       nginx-mod-http-headers-more \
       nginx-mod-http-lua && \
