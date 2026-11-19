@@ -200,6 +200,13 @@ class LayoutTest(unittest.TestCase):
         self.assertRegex(heartbeat, r"ctx\._source = params\.event;\s*if \(refused != null\) \{\s*"
                                     r"ctx\._source\.refused = refused;\s*\}")
         self.assertIn("ctx.op = 'noop';", heartbeat)
+        # the sensor's time orders the status, a receipt 90 s after the stored one heals a clock that
+        # went back, a stored value the script cannot read is replaced
+        for part in ("params.event['@timestamp']", "ctx._source['@timestamp']", ".plusSeconds(90)",
+                     "try {", "catch (Exception e)"):
+            self.assertIn(part, heartbeat)
+        self.assertNotIn("the newest receipt wins",
+                         (PIPELINE_DIR / "21-sensors-output.conf").read_text(encoding="utf-8"))
         settings = dict(re.findall(r"^\s*(\w+) => (\S.*?)\s*$", refused.split("script =>")[0], re.M))
         self.assertEqual(settings, {"id": '"tpot_sensor_refused"', "hosts": '["elasticsearch:9200"]',
                                     "index": '"tpot-sensor-status"', "document_id": '"%{[t-pot_sensor]}"',

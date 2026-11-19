@@ -347,9 +347,11 @@ assert len(search("tpot-sensor-heartbeat-*")) == 2
 assert not any(hit["_source"].get("type") == "TPotSensorHeartbeat" for hit in search("logstash-*"))
 print("Malformed and unauthenticated heartbeats rejected without polluting attack indices")
 
-# Seed a newer receipt, then deliver an older one through Logstash's real update script.
+# Seed a status of a newer sensor time (received now), then deliver an older heartbeat through
+# Logstash's real update script: the sensor's time orders the status, the older one is a noop.
 saved = copy.deepcopy(status[0]["_source"])
-saved["heartbeat"]["received_at"] = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+saved["@timestamp"] = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+saved["heartbeat"]["received_at"] = datetime.now(timezone.utc).isoformat()
 saved["heartbeat"]["version"] = "newer-receipt"
 request(es + "/tpot-sensor-status/_doc/sensor-a?refresh=true", saved, method="PUT")
 older = copy.deepcopy(base)
@@ -362,7 +364,7 @@ def older_processed():
 
 wait_for(older_processed, "older receipt did not traverse the real ES outputs")
 assert request(es + "/tpot-sensor-status/_doc/sensor-a")["_source"]["heartbeat"]["version"] == "newer-receipt"
-print("Out-of-order receipt cannot replace newer sensor status")
+print("An older heartbeat after a newer one cannot replace the status")
 
 for index in ("tpot-sensor-status", "tpot-sensor-heartbeat-" + day):
     aggregations = request(es + "/" + index + "/_search", {
@@ -435,7 +437,7 @@ observed = sensors.fetch_status(url=es, opener=manager_open)
 assert not observed.problem, observed.problem
 assert len(observed.heartbeats) == 1004, len(observed.heartbeats)
 assert observed.heartbeats["sensor-a"].version == "newer-receipt"
-assert utc(observed.heartbeats["sensor-a"].sensor_at) == sensor_time
+assert utc(observed.heartbeats["sensor-a"].sensor_at) == utc(saved["@timestamp"])
 assert "sensor-a" in observed.sensors
 assert observed.heartbeats["batch-sensor-0000"].hostname == ""
 assert observed.heartbeats["batch-sensor-0000"].ip_ext == ""
@@ -454,6 +456,34 @@ refresh()
 assert all(hit["_id"] != "sensor-a" for hit in search("tpot-sensor-status"))
 assert history_documents() == history_before
 print("Manager reads 1004 real status documents, separates clocks/events and removes status without history")
+
+# C1: a stored status the sensor's time would keep is replaced when its receipt is more than 90 s
+# older (a sensor clock that went back) or when the script cannot read its @timestamp (a date
+# without a time, epoch millis: the mapping takes both, Instant.parse does not); refused stays
+refused_seed = {"last_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()}
+for number, (case, sensor_at, receipt) in enumerate((
+        ("stored receipt older than 90 s", (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+         datetime.now(timezone.utc) - timedelta(minutes=10)),
+        ("invalid stored @timestamp (no time)", "2026-01-01",
+         datetime.now(timezone.utc) + timedelta(minutes=10)),
+        ("invalid stored @timestamp (epoch millis)",
+         int((datetime.now(timezone.utc) + timedelta(minutes=5)).timestamp() * 1000),
+         datetime.now(timezone.utc) + timedelta(minutes=10)))):
+    seeded = copy.deepcopy(status[0]["_source"])
+    seeded.update({"t-pot_sensor": "sensor-order", "@timestamp": sensor_at, "refused": refused_seed})
+    seeded["heartbeat"].update(version="seeded", received_at=receipt.isoformat())
+    request(es + "/tpot-sensor-status/_doc/sensor-order?refresh=true", seeded, method="PUT")
+    fresh_heartbeat = copy.deepcopy(base)
+    fresh_heartbeat["heartbeat"]["sequence"] = 31 + number
+    send(fresh_heartbeat, "sensor-order")
+    wait_for(lambda: request(es + "/tpot-sensor-status/_doc/sensor-order")["_source"]["heartbeat"]["version"]
+             == "test-release", case + ": the heartbeat did not replace the status")
+    replaced = request(es + "/tpot-sensor-status/_doc/sensor-order")["_source"]
+    assert utc(replaced["@timestamp"]) == sensor_time, (case, replaced)
+    assert replaced["heartbeat"]["sequence"] == 31 + number, (case, replaced)
+    assert replaced["refused"] == refused_seed, (case, replaced)
+    print(f"C1: {case}: replaced, refused stays")
+request(es + "/tpot-sensor-status/_doc/sensor-order?refresh=true", method="DELETE")
 
 # E1, cases 1-3: Fluent Bit records of fixtures (raw line in log, the sensor's own t-pot fields and
 # file) through tpot_process: the documents of the HIVE (golden), the sensor's address, its file
@@ -600,4 +630,6 @@ UNNAMED="$(grep -c -F 'Dropped sensor events without an authenticated sensor nam
 (( UNNAMED >= 1 && UNNAMED <= (SECONDS - STARTED) / 60 + 1 )) \
   || test_die "Expected one warning a minute at most for events without a sensor name, got ${UNNAMED}"
 ! grep -q -F 'Downloading latest' "${TEST_TMP_ROOT}/logstash.log" || test_die "Logstash tried to reach Listbot"
+! grep -q -i -E 'script_exception|painless' "${TEST_TMP_ROOT}/logstash.log" \
+  || test_die "The status script of the sensors failed in Elasticsearch (see the Logstash log)"
 test_ok "HIVE heartbeat HTTP/Elasticsearch integration passed"
