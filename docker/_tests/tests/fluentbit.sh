@@ -64,7 +64,7 @@ hive.test through the hosts file of the stub). Cases:
      certificate without the address delivers nothing and the log names it.
   9  uid 2000, a read-only root, healthy, the plugins tail, dummy, lua and
      http, and the entrypoint refuses an empty TPOT_HIVE_IP / TPOT_HIVE_USER
-     or a wrong LS_SSL_VERIFICATION or FLB_PROBE_INTERVAL.
+     or a wrong LS_SSL_VERIFICATION, FLB_PROBE_INTERVAL or FLB_STORAGE_LIMIT.
  10  The HIVE answers 401 on /tpot-ingest (an old HIVE): no POST, the message
      names it, the container stays healthy for 3 checks in a row.
  11  Then 503 without the marker (its Logstash not ready): no POST, the message
@@ -814,14 +814,15 @@ run_image() {
   for plugin in tail dummy lua http; do
     grep -E "^[[:space:]]+${plugin}[[:space:]]" <<< "${help}" >/dev/null || test_die "fluent-bit -h does not list ${plugin}"
   done
-  for setting in "TPOT_HIVE_IP=" "TPOT_HIVE_USER=" "LS_SSL_VERIFICATION=sometimes" "FLB_PROBE_INTERVAL=0"; do
+  for setting in "TPOT_HIVE_IP=" "TPOT_HIVE_USER=" "LS_SSL_VERIFICATION=sometimes" "FLB_PROBE_INTERVAL=0" \
+    "FLB_STORAGE_LIMIT=512MB"; do
     rc=0
     out="$(docker run --rm --network none --read-only -e TPOT_HIVE_IP=127.0.0.1 -e "TPOT_HIVE_USER=${SMOKE_AUTH}" \
       -e "${setting}" "${IMAGE}" 2>&1)" || rc=$?
     [[ "${rc}" -eq 1 ]] || test_die "The entrypoint takes ${setting} (rc ${rc}): ${out}"
     grep -F "${setting%%=*}" <<< "${out}" >/dev/null || test_die "The entrypoint does not name ${setting%%=*}: ${out}"
   done
-  test_ok "9 plugins tail, dummy, lua, http; the entrypoint refuses an empty HIVE address or user, a wrong verification or probe interval"
+  test_ok "9 plugins tail, dummy, lua, http; the entrypoint refuses an empty HIVE address or user, a wrong verification, probe interval or storage limit"
 }
 
 # The healthy checks in a row at the end of the health log of Fluent Bit

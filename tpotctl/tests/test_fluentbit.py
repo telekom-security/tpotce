@@ -135,6 +135,9 @@ class ConfigTest(unittest.TestCase):
         for line in ('TPOT_HIVE_PORT="${TPOT_HIVE_PORT:-64294}"', 'FLB_STORAGE_LIMIT="${FLB_STORAGE_LIMIT:-512M}"'):
             self.assertIn(line, text)
         self.assertRegex(text, r"(?m)^exec fluent-bit -c /etc/fluent-bit/fluent-bit\.yaml$")
+        # C2: the storage limit comes from TPOT_SENSOR_BUFFER_MB, a wrong one stops the start
+        self.assertIn("^[1-9][0-9]*[KMG]?$", text)
+        self.assertRegex(text, r"FLB_STORAGE_LIMIT is .*TPOT_SENSOR_BUFFER_MB")
         # E2: the probe of the HIVE before Fluent Bit starts (the smoke test runs every answer)
         self.assertLess(text.index("\nfuPROBE\n"), text.index("\nexec fluent-bit"))
         for message in ("The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here.",

@@ -218,6 +218,24 @@ cases:
     set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: "fe80::1", LS_SSL_VERIFICATION: none}
   - name: sensor with a domain hive and empty ssl verification
     set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: hive.example.org, LS_SSL_VERIFICATION: ""}
+  - name: sensor log buffer at its lower limit
+    services: [fluentbit]
+    set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: 192.168.1.10, TPOT_SENSOR_BUFFER_MB: "64"}
+  - name: sensor log buffer at its upper limit
+    services: [fluentbit]
+    set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: 192.168.1.10, TPOT_SENSOR_BUFFER_MB: "1048576"}
+  - name: sensor log buffer too small
+    services: [fluentbit]
+    set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: 192.168.1.10, TPOT_SENSOR_BUFFER_MB: "63"}
+    errors: [TPOT_SENSOR_BUFFER_MB]
+  - name: sensor log buffer too large
+    services: [fluentbit]
+    set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: 192.168.1.10, TPOT_SENSOR_BUFFER_MB: "1048577"}
+    errors: [TPOT_SENSOR_BUFFER_MB]
+  - name: sensor log buffer with a unit
+    services: [fluentbit]
+    set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: 192.168.1.10, TPOT_SENSOR_BUFFER_MB: 512M}
+    errors: [TPOT_SENSOR_BUFFER_MB]
   - name: sensor without hive
     set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: "", TPOT_HIVE_IP: ""}
     errors: [TPOT_HIVE_USER, TPOT_HIVE_IP]

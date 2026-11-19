@@ -243,7 +243,7 @@ Use a dedicated host or VM, preferably Debian 13, without unrelated production s
 | Hive       | 16GB | 256GB SSD | As a rule of thumb, the more honeypots, sensors & data, the more RAM and storage is needed.      |
 | Sensor     | 8GB  | 128GB SSD | Since honeypot logs are persisted (~/tpotce/data) for 30 days, storage depends on attack volume. |
 
-A **Sensor** no longer runs Logstash, whose Java process alone took about 1.6 GiB of RAM there. Fluent Bit sends its logs instead, within a container limit of 256 MB, and keeps what the **Hive** has not taken yet on disk (up to 512 MB, see [Sensor Logs](#sensor-logs)). The **Hive** now parses and enriches the events of its sensors as well, so its CPU load grows with the event rate of its sensors.
+A **Sensor** no longer runs Logstash, whose Java process alone took about 1.6 GiB of RAM there. Fluent Bit sends its logs instead, within a container limit of 256 MB, and keeps what the **Hive** has not taken yet on disk (up to `TPOT_SENSOR_BUFFER_MB`, 512 MB by default, see [Sensor Logs](#sensor-logs)). The **Hive** now parses and enriches the events of its sensors as well, so its CPU load grows with the event rate of its sensors.
 
 T-Pot does require ...
 - an IPv4 address via DHCP or statically assigned
@@ -866,7 +866,7 @@ Logstash is not ready yet, gets nothing: Fluent Bit reads no logs meanwhile, ask
 T-Pot start (also the daily reboot) rotates the logs, so a restart of the **Sensor** before the **Hive** answers
 leaves the earlier lines in the rotated log files on the **Sensor**, they are not sent.
 While the **Hive** cannot be reached once Fluent Bit sends, it keeps the lines on the disk of the **Sensor**
-(`~/tpotce/data/fluentbit/storage`, up to 512 MB) and retries without a limit. Beyond 512 MB the oldest lines are
+(`~/tpotce/data/fluentbit/storage`, up to `TPOT_SENSOR_BUFFER_MB`, 512 MB by default) and retries without a limit. Beyond it the oldest lines are
 dropped. A single burst of lines larger than the limit before the first send loses its newest lines, the log of
 Fluent Bit names it (`no available chunk`). When the **Hive** answers again, most of the lines wait no longer than a
 few minutes; lines Fluent Bit already retried often during a long outage wait for their next retry and can arrive
