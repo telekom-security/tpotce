@@ -1170,6 +1170,7 @@ class CliTest(unittest.TestCase):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
                                       "--hive-address", "192.168.1.2", "--no-become-pass")
         self.assertEqual(code, 0, text)
+        self.assertIn("is deployed to 10.0.0.5 and sends to 192.168.1.2.", text)
         password = re.search(r"shown only now: (\S+)", text).group(1)
         deployed = [s for s in sensors.Registry(self.repo).sensors() if s.source == "deployed"]
         self.assertEqual(len(deployed), 1)
@@ -1226,6 +1227,16 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, text)
         self.assertEqual(steps, ["renew", "grant", "restart", "deploy"])
         self.assertNotIn("next start of T-Pot", text)           # the restart of this run covers the access
+        self.assertIn("and sends to 192.168.1.2.", text)
+
+    def test_add_renewed_without_restart_says_when_it_sends(self):
+        for kwargs in ({"linux": False}, {"restart_code": 1}):
+            with self.subTest(**kwargs):
+                code, text, _steps = self.add_renewing(**kwargs)
+                self.assertEqual(code, 0, text)
+                self.assertIn("is deployed to 10.0.0.5, it sends to 192.168.1.2 from the next start of T-Pot on "
+                              "(tpot restart).", text)
+                self.assertNotIn("and sends to", text)
 
     def test_add_without_restart_warns(self):
         code, text, steps = self.add_renewing(linux=False, note="nginx takes it after a restart")

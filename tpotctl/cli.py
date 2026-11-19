@@ -1775,12 +1775,13 @@ def run_sensor_add(args, registry, console) -> int:
 
     # 2. the sensor checks this HIVE against its certificate; T-Pot restarts only after the grant (step 3),
     # a restart before it would leave nginx without the access of the new sensor
-    restart = False
+    restart = renewed = False
     if not tsensors.covers(hive, tsensors.cert_sans(registry.cert)):
         console.print(Text(f"The certificate of this HIVE does not cover {hive}, the sensor would not trust it.",
                            style="yellow"))
         if not renew_certificate(registry, registry.hive_addresses() + [hive], console, args.yes, False):
             return 1
+        renewed = True
         restart = linux_host_ok() and confirm(
             "Restart T-Pot after the access is granted, so that nginx uses the new certificate?", args.yes)
         if not restart:
@@ -1850,6 +1851,10 @@ def run_sensor_add(args, registry, console) -> int:
     if "restart" in note and not restarted:
         say.warn(f"{name} is deployed to {host}. nginx takes its access from the next start of T-Pot on "
                  f"(tpot restart), it sends to {hive} after that.", console.file)
+    # the renewed certificate reaches nginx only with a restart this run did not make
+    elif renewed and not restarted:
+        say.warn(f"{name} is deployed to {host}, it sends to {hive} from the next start of T-Pot on "
+                 f"(tpot restart).", console.file)
     else:
         say.ok(f"{name} is deployed to {host} and sends to {hive}.", console.file)
     console.print(Text(f"Its password, shown only now: {password}", style=f"bold {MAGENTA}"))
