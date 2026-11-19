@@ -67,6 +67,8 @@ require_one_command_for() {
 }
 
 parse_args() {
+  # Only --quick turns the quick run on, an inherited TPOT_SMOKE_QUICK does not.
+  unset TPOT_SMOKE_QUICK
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --list)

@@ -139,10 +139,12 @@ class QuickTest(unittest.TestCase):
             full.pop("CDPATH", None)
             full.pop("TPOT_SMOKE_QUICK", None)
             full["PATH"] = stubs + os.pathsep + full["PATH"]
-            for args, expected in ((["--quick"], "quick=1"), ([], "quick=")):
-                with self.subTest(args=args):
+            inherited = dict(full, TPOT_SMOKE_QUICK="1")
+            for args, env, expected in ((["--quick"], full, "quick=1"), ([], full, "quick="),
+                                        ([], inherited, "quick=")):
+                with self.subTest(args=args, inherited=env is inherited):
                     done = subprocess.run(["bash", os.path.join(tests, "run.sh"), *args, "quickprobe"], cwd=folder,
-                                          env=full, capture_output=True, text=True, timeout=60)
+                                          env=env, capture_output=True, text=True, timeout=60)
                     self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
                     self.assertIn(expected, done.stdout.split())
 
