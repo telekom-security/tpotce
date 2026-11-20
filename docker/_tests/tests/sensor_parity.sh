@@ -492,7 +492,8 @@ printf '"0": "stand-in"\n' > "${TEST_TMP_ROOT}/listbot/cve.yaml"
 
 # nginx: a test certificate for the name Fluent Bit uses as TPOT_HIVE_IP (it is the SENSOR's hive.crt), the
 # sensor's access in lswebpasswd, a web user nobody uses
-openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 1 -subj "/CN=nginx" -addext "subjectAltName=DNS:nginx" \
+openssl req -x509 -nodes -newkey ec -pkeyopt ec_paramgen_curve:P-384 -sha384 -days 1 -subj "/CN=nginx" \
+  -addext "subjectAltName=DNS:nginx" \
   -keyout "${TEST_TMP_ROOT}/cert/nginx.key" -out "${TEST_TMP_ROOT}/cert/nginx.crt" >/dev/null 2>&1 \
   || test_die "Could not create a test certificate with openssl"
 cp "${TEST_TMP_ROOT}/cert/nginx.crt" "${TEST_TMP_ROOT}/sensor/data/hive.crt"

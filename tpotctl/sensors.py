@@ -587,8 +587,9 @@ def covers(address: str, sans: List[str]) -> bool:
 
 
 def renew_command(sans: List[str], key: str, cert: str) -> List[str]:
-    return ["openssl", "req", "-nodes", "-x509", "-sha512", "-newkey", "rsa:8192", "-keyout", key, "-out", cert,
-            "-days", "3650", "-subj", CERT_SUBJECT, "-addext", "subjectAltName = " + ",".join(sans)]
+    return ["openssl", "req", "-nodes", "-x509", "-sha384", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-384",
+            "-keyout", key, "-out", cert, "-days", "3650", "-subj", CERT_SUBJECT,
+            "-addext", "subjectAltName = " + ",".join(sans)]
 
 
 def renew_cert(registry: Registry, sans: List[str], run: Callable = subprocess.run) -> str:

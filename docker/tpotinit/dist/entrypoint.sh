@@ -359,8 +359,9 @@ if [ -f "/data/uuid" ];
     openssl req \
           -nodes \
           -x509 \
-          -sha512 \
-          -newkey rsa:8192 \
+          -sha384 \
+          -newkey ec \
+          -pkeyopt ec_paramgen_curve:P-384 \
           -keyout "/data/nginx/cert/nginx.key" \
           -out "/data/nginx/cert/nginx.crt" \
           -days 3650 \

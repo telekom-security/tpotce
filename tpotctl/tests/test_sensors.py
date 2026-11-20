@@ -6,6 +6,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -31,10 +32,24 @@ textual = importlib.util.find_spec("textual") and importlib.util.find_spec("rich
 WEB_USER = "dHNlYzokYXByMSRYUnE2SC5rbiRVRjZQM1VVQmJVNWJUQmNmSGRuUFQxCgo="
 # two sensors of 24.04.1, deployed with deploy.sh (apr1)
 OLD_SENSORS = [users.encode("sensor-old-otter:$apr1$abc$def"), users.encode("sensor-old-lynx:$apr1$ghi$jkl")]
+P384 = ["-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-384"]
 OPENSSL_TEXT = """        X509v3 extensions:
             X509v3 Subject Alternative Name:
                 IP Address:192.168.5.15, DNS:hive.example.org
 """
+
+
+def openssl_3() -> bool:
+    """OpenSSL 3 or later: the options of the certificate (LibreSSL of macOS takes others)."""
+    if not shutil.which("openssl"):
+        return False
+    try:
+        out = subprocess.run(["openssl", "version"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             universal_newlines=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    match = re.match(r"OpenSSL (\d+)\.", out or "")
+    return bool(match) and int(match.group(1)) >= 3
 
 
 def fake_hash(name, password, repo_dir=None):
@@ -175,16 +190,37 @@ class HelpersTest(unittest.TestCase):
         self.assertFalse(sensors.covers("192.168.64.41", sans))
         command = sensors.renew_command(sans + ["IP:192.168.64.41"], "k", "c")
         self.assertIn("subjectAltName = IP:192.168.5.15,DNS:hive.example.org,IP:192.168.64.41", command)
-        self.assertIn("rsa:8192", command)
+        newkey = command.index("-newkey")
+        self.assertEqual(command[newkey:newkey + 4], P384)
+        self.assertIn("-sha384", command)
+        self.assertFalse([part for part in command if "rsa:" in part], command)
 
-    @unittest.skipUnless(shutil.which("openssl"), "openssl is not installed")
+    @unittest.skipUnless(openssl_3(), "needs OpenSSL 3 or later")
     def test_certificate_with_openssl(self):
         with tempfile.TemporaryDirectory() as tmp:
             key, cert = os.path.join(tmp, "k"), os.path.join(tmp, "c")
             command = sensors.renew_command(["IP:10.1.2.3", "DNS:hive.test"], key, cert)
-            command[command.index("rsa:8192")] = "rsa:2048"                  # quicker, same command otherwise
             self.assertEqual(subprocess.call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL), 0)
             self.assertEqual(sensors.cert_sans(cert), ["IP:10.1.2.3", "DNS:hive.test"])
+            text = subprocess.run(["openssl", "x509", "-in", cert, "-noout", "-text"], stdout=subprocess.PIPE,
+                                  universal_newlines=True, check=True).stdout
+            self.assertIn("P-384", text)
+            self.assertIn("ecdsa-with-SHA384", text)
+
+    def test_tpotinit_issues_the_same_key(self):
+        # tpotinit's first start and tpot sensors cert --renew issue the certificate of the HIVE alike
+        with open(os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "entrypoint.sh")) as handle:
+            script = handle.read()
+        start = script.index("openssl req")
+        end = re.compile(r"[^\\]\n").search(script, start).end()
+        command = shlex.split(script[start:end].replace("\\\n", " "))
+        renew = sensors.renew_command(["IP:10.1.2.3"], "k", "c")
+        self.assertIn("-sha384", command)
+        newkey = command.index("-newkey")
+        self.assertEqual(command[newkey:newkey + 4], P384)
+        self.assertFalse([part for part in command if "rsa:" in part], command)
+        for option in ("-days", "-subj"):
+            self.assertEqual(command[command.index(option) + 1], renew[renew.index(option) + 1], option)
 
     def test_status(self):
         def bucket(key, host, ip):
