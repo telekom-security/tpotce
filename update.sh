@@ -1590,32 +1590,129 @@ function fuSTART_TPOT () {
 	return 1
 }
 
-# E2: does the HIVE of this SENSOR take its format? The same probe as the Fluent Bit of the SENSOR
-# (docker/fluentbit/dist/entrypoint.sh fuPROBE): nginx /tpot-ingest of the HIVE answers 204 with
-# X-TPot-Ingest 2 only while its Logstash runs the sensors pipeline. Anything else is a warning in the
-# summary - Fluent Bit keeps the logs on this SENSOR until then - and never fails the update.
-function fuHIVE_INGEST () {
-	local myENVFILE="$HOME/tpotce/.env"
-	local myHIVE myTLS myANSWER myCODE myMARK myTEXT myRC=0
-	[ "$(fuENV_VALUE "${myENVFILE}" TPOT_TYPE)" = "SENSOR" ] || return 0
-	myHIVE=$(fuENV_VALUE "${myENVFILE}" TPOT_HIVE_IP)
-	if [ "$(fuENV_VALUE "${myENVFILE}" LS_SSL_VERIFICATION)" = "none" ];
-	  then
-	    myTLS=(-k)
-	  else
-	    myTLS=(--cacert "$(fuDATA_PATH)/hive.crt")
-	fi
-	# the headers (-D -) and the error line of curl (curl: (N) ...) in one answer
-	myANSWER=$(curl -sS --max-time 10 "${myTLS[@]}" -o /dev/null -D - \
+# Does hive.crt hold the HIVE's own certificate? The trust rule of the SENSOR's Fluent Bit
+# (docker/fluentbit/dist/entrypoint.sh fuTRUST): one of its certificates alone verifies itself (the
+# HIVE's self-signed certificate or the root of its CA appended to it; an expired one too, the verdict
+# names that), a leaf of a CA does not (no partial chain). The blocks are split into a folder under $2.
+# rc 0 pins hive.crt, also when there is no folder for the blocks (as before the rule); needs OpenSSL 3.
+function fuHIVE_PINNED () {
+	local myCRT="$1" myDIR myPEM myRC=1
+	[ -s "${myCRT}" ] || return 1
+	myDIR=$(mktemp -d "$2/tpot-trust.XXXXXX") || return 0
+	awk -v out="${myDIR}/cert" '/-----BEGIN CERTIFICATE-----/{n++; file=out "." n ".pem"}
+	  file != "" {print > file}
+	  /-----END CERTIFICATE-----/{if (file != "") close(file); file=""}' "${myCRT}" 2>/dev/null
+	for myPEM in "${myDIR}"/cert.*.pem;
+	  do
+	    [ -f "${myPEM}" ] || continue
+	    if openssl verify -no-CApath -no-CAstore -no_check_time -CAfile "${myPEM}" "${myPEM}" >/dev/null 2>&1;
+	      then
+	        myRC=0
+	        break
+	    fi
+	done
+	rm -rf "${myDIR}"
+	return "${myRC}"
+}
+
+# One request of fuHIVE_INGEST to /tpot-ingest with the curl options given. Sets its myANSWER (the
+# headers of -D - and the error line of curl, curl: (N) ..., in one answer), myRC, myCODE and myMARK.
+function fuHIVE_ASK () {
+	myRC=0
+	myANSWER=$(curl -sS --max-time 10 "${myTLS[@]}" "$@" -o /dev/null -D - \
 	  "https://${myHIVE}:64294/tpot-ingest" 2>&1) || myRC=$?
 	myCODE=$(printf '%s\n' "${myANSWER}" | tr -d '\r' | awk '/^HTTP\//{code=$2} END{print code}')
 	myMARK=$(printf '%s\n' "${myANSWER}" | tr -d '\r' \
 	  | awk 'tolower($0) ~ /^x-tpot-ingest:/{sub(/^[^:]*:[ \t]*/, ""); sub(/[ \t]+$/, ""); mark=$0} END{print mark}')
-	if [ "${myRC}" = "0" ] && [ "${myCODE}" = "204" ] && [ "${myMARK}" = "2" ];
+}
+
+# E2 / I1: does the HIVE of this SENSOR take its format? The same probe as the Fluent Bit of the SENSOR
+# (docker/fluentbit/dist/entrypoint.sh fuPROBE), once: stage 1 asks without the login; only a HIVE of
+# this release answers it with 401 and X-TPot-Ingest login, and only that HIVE gets the login of
+# TPOT_HIVE_USER in stage 2 (an old HIVE never sees it), which nginx answers with 204 and X-TPot-Ingest 2
+# only while its Logstash runs the sensors pipeline. The trust is that of Fluent Bit (fuHIVE_PINNED, else
+# the default store of curl and openssl) and, before the stages, openssl s_client names a certificate it
+# does not verify; without OpenSSL 3 hive.crt stays pinned and there is no verdict. Anything else is a
+# warning in the summary - Fluent Bit keeps the logs on this SENSOR until then - and never fails the update.
+function fuHIVE_INGEST () {
+	local myENVFILE="$HOME/tpotce/.env"
+	local myHIVE myCRT myBASE myLOGIN myAUTH myREASON myANSWER myCODE myMARK myTEXT myRC=0 mySTAGE=1
+	local myTLS=() myCA=() myCHECK=() myOPENSSL3="" myPINNED=""
+	[ "$(fuENV_VALUE "${myENVFILE}" TPOT_TYPE)" = "SENSOR" ] || return 0
+	myHIVE=$(fuENV_VALUE "${myENVFILE}" TPOT_HIVE_IP)
+	myCRT="$(fuDATA_PATH)/hive.crt"
+	# the login lives in the run's working directory (made here if there is none yet, like fuTMPDIR but
+	# without stopping the update), which fuEND removes on every way out, ^C too
+	[ -n "${myTMPDIR}" ] && [ -d "${myTMPDIR}" ] \
+	  || myTMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/tmp.XXXXXXXXXX" 2>/dev/null) || myTMPDIR=""
+	myBASE="${myTMPDIR:-${TMPDIR:-/tmp}}"
+	if [ "$(fuENV_VALUE "${myENVFILE}" LS_SSL_VERIFICATION)" = "none" ];
+	  then
+	    myTLS=(-k)
+	  else
+	    # -no-CAstore of the rule and the verdict came with OpenSSL 3
+	    if [[ "$(openssl version 2>/dev/null)" =~ ^OpenSSL\ ([0-9]+)\. ]] && [ "${BASH_REMATCH[1]}" -ge 3 ];
+	      then
+	        myOPENSSL3="1"
+	    fi
+	    if [ -z "${myOPENSSL3}" ] || fuHIVE_PINNED "${myCRT}" "${myBASE}";
+	      then
+	        myPINNED="1"
+	        myTLS=(--cacert "${myCRT}")
+	        myCA=(-no-CApath -no-CAstore -CAfile "${myCRT}")
+	    fi
+	    if [ -n "${myOPENSSL3}" ];
+	      then
+	        if [[ "${myHIVE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]];
+	          then
+	            myCHECK=(-verify_ip "${myHIVE}")
+	          else
+	            myCHECK=(-servername "${myHIVE}" -verify_hostname "${myHIVE}")
+	        fi
+	        # without a verdict (no answer, a refused connection, the timeout) curl names what it finds
+	        myREASON=$(timeout 10 openssl s_client "${myCA[@]}" -verify_return_error \
+	          -connect "${myHIVE}:64294" "${myCHECK[@]}" </dev/null 2>&1 | tr -d '\r' \
+	          | awk '/verify error:num=[0-9]+:/{sub(/.*verify error:num=[0-9]+:/, ""); print; exit}')
+	        if [ -n "${myREASON}" ];
+	          then
+	            if [ -n "${myPINNED}" ];
+	              then
+	                myTEXT="The HIVE's certificate is not trusted (${myREASON}); on the HIVE, tpot sensors cert --distribute copies its certificate here (after --renew if it expired)."
+	              else
+	                myTEXT="The HIVE's certificate is not trusted (${myREASON}); with a certificate of your own CA, append the root of that CA to nginx.crt on the HIVE, then run tpot sensors cert --distribute there."
+	            fi
+	            fuUI_WARN "${myTEXT}"
+	            fuDID warn "${myTEXT}"
+	            return 0
+	        fi
+	    fi
+	fi
+	fuHIVE_ASK
+	if [ "${myCODE}" = "401" ] && [ "${myMARK}" = "login" ];
+	  then
+	    mySTAGE=2
+	    myLOGIN=$(fuENV_VALUE "${myENVFILE}" TPOT_HIVE_USER)
+	    # the login only in a 0600 file (printf is a builtin): never in the argv of curl, gone right after
+	    if ! myAUTH=$(umask 077 && mktemp "${myBASE}/tpot-ingest.XXXXXX") \
+	       || ! printf 'Authorization: Basic %s\n' "${myLOGIN}" > "${myAUTH}";
+	      then
+	        [ -z "${myAUTH}" ] || rm -f "${myAUTH}"
+	        myTEXT="No temporary file could be made for the login, the HIVE is not asked whether it takes this SENSOR's format."
+	        fuUI_WARN "${myTEXT}"
+	        fuDID warn "${myTEXT}"
+	        return 0
+	    fi
+	    fuHIVE_ASK -H @"${myAUTH}"
+	    rm -f "${myAUTH}"
+	fi
+	if [ "${myRC}" = "0" ] && [ "${mySTAGE}" = "2" ] && [ "${myCODE}" = "204" ] && [ "${myMARK}" = "2" ];
 	  then
 	    return 0
 	fi
-	if [ "${myCODE}" = "401" ];
+	if [ "${myCODE}" = "401" ] && [ "${myMARK}" = "login" ] && [ "${mySTAGE}" = "2" ];
+	  then
+	    myTEXT="The HIVE does not accept this SENSOR's login (TPOT_HIVE_USER); tpot sensors list on the HIVE shows its access; logs wait here."
+	elif [ "${myCODE}" = "401" ];
 	  then
 	    myTEXT="The HIVE does not take this SENSOR's format yet (update the HIVE first); logs wait here."
 	elif [ "${myCODE}" = "503" ] && [ -z "${myMARK}" ];
